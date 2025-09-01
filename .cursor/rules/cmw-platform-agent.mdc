@@ -4,6 +4,7 @@ alwaysApply: true
 
 - Be super smart, create super lean and dry code.
 - Use abstractions.
+- When refactoring code, change only the levant parts.
 - Group and isolate code based on its function in different files to avoid clutter.
 - Do not duplicate code, encapsulate any reused code in methods/functions.
 - Never break existing code.
