@@ -339,7 +339,7 @@ class GaiaAgent:
                     "temperature": 0
                 }
             ],
-            "token_per_minute_limit": None
+            "token_per_minute_limit": 500000
         },
     }
     
