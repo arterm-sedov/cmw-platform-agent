@@ -598,6 +598,60 @@ class GaiaAgent:
             print(f"⚠️ Error reading system_prompt.json: {e}")
         return "You are a helpful assistant. Please provide clear and accurate responses."
     
+    def _handle_rate_limit_throttling(self, error, llm_name, llm_type, max_retries=3):
+        """
+        Handle rate limit errors by throttling and retrying instead of immediate fallback.
+        
+        Args:
+            error: The rate limit error
+            llm_name: Name of the LLM
+            llm_type: Type of the LLM
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            bool: True if retry should be attempted, False if max retries exceeded
+        """
+        # Extract retry-after from error if available
+        retry_after = None
+        error_str = str(error)
+        
+        # Look for retry-after in error message or headers
+        if "retry-after" in error_str.lower():
+            import re
+            match = re.search(r'retry-after[:\s]*(\d+)', error_str, re.IGNORECASE)
+            if match:
+                retry_after = int(match.group(1))
+        
+        # Default retry delays for different error types
+        if "service_tier_capacity_exceeded" in error_str or "3505" in error_str:
+            # Mistral capacity exceeded - wait longer
+            retry_after = retry_after or 30
+        elif "429" in error_str or "rate limit" in error_str.lower():
+            # Generic rate limit - moderate wait
+            retry_after = retry_after or 10
+        else:
+            # Unknown rate limit - short wait
+            retry_after = retry_after or 5
+            
+        # Check if we've exceeded max retries
+        retry_key = f"{llm_type}_{llm_name}"
+        if not hasattr(self, '_rate_limit_retry_count'):
+            self._rate_limit_retry_count = {}
+            
+        current_retries = self._rate_limit_retry_count.get(retry_key, 0)
+        if current_retries >= max_retries:
+            print(f"⏰ Max retries ({max_retries}) exceeded for {llm_name} rate limiting. Falling back to next LLM.")
+            self._rate_limit_retry_count[retry_key] = 0  # Reset for future use
+            return False
+            
+        # Increment retry count
+        self._rate_limit_retry_count[retry_key] = current_retries + 1
+        
+        print(f"⏰ Rate limit hit for {llm_name}. Waiting {retry_after}s before retry ({current_retries + 1}/{max_retries})...")
+        time.sleep(retry_after)
+        
+        return True
+
     def _rate_limit(self):
         """
         Implement rate limiting to avoid hitting API limits.
@@ -1050,6 +1104,19 @@ class GaiaAgent:
             try:
                 response = llm.invoke(messages)
             except Exception as e:
+                # Check if this is a rate limit error that should be throttled
+                error_str = str(e)
+                if ("429" in error_str or "rate limit" in error_str.lower() or 
+                    "service_tier_capacity_exceeded" in error_str or "3505" in error_str):
+                    
+                    # Try throttling and retrying instead of immediate fallback
+                    if self._handle_rate_limit_throttling(e, llm_type, llm_type):
+                        print(f"🔄 [Tool Loop] Retrying {llm_type} after rate limit throttling...")
+                        # Continue the loop to retry the same LLM
+                        continue
+                    else:
+                        print(f"⏰ [Tool Loop] Rate limit retries exhausted for {llm_type}, falling back to error handler...")
+                
                 handled, result = self._handle_llm_error(e, llm_name=llm_type, llm_type=llm_type, phase="tool_loop",
                     messages=messages, llm=llm, tool_results_history=tool_results_history)
                 if handled:
@@ -1461,6 +1528,19 @@ class GaiaAgent:
             # Add error to trace
             execution_time = time.time() - start_time
             self._trace_add_llm_error(llm_type, call_id, e)
+            
+            # Check if this is a rate limit error that should be throttled
+            error_str = str(e)
+            if ("429" in error_str or "rate limit" in error_str.lower() or 
+                "service_tier_capacity_exceeded" in error_str or "3505" in error_str):
+                
+                # Try throttling and retrying instead of immediate fallback
+                if self._handle_rate_limit_throttling(e, llm_name, llm_type):
+                    print(f"🔄 Retrying {llm_name} after rate limit throttling...")
+                    # Recursive retry with the same LLM
+                    return self._make_llm_request(messages, use_tools, llm_type)
+                else:
+                    print(f"⏰ Rate limit retries exhausted for {llm_name}, falling back to error handler...")
             
             handled, result = self._handle_llm_error(e, llm_name, llm_type, phase="request", messages=messages, llm=llm)
             if handled:
