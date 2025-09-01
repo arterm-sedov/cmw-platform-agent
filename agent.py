@@ -209,7 +209,8 @@ class GaiaAgent:
             "tool_support": False,
             "force_tools": False,
             "models": [],
-            "token_per_minute_limit": None
+            "token_per_minute_limit": None,
+            "enable_chunking": True
         },
         "gemini": {
             "name": "Google Gemini",
@@ -226,7 +227,8 @@ class GaiaAgent:
                     "temperature": 0
                 }
             ],
-            "token_per_minute_limit": None
+            "token_per_minute_limit": None,
+            "enable_chunking": False
         },
         "groq": {
             "name": "Groq",
@@ -242,9 +244,24 @@ class GaiaAgent:
                     "max_tokens": 2048,
                     "temperature": 0,
                     "force_tools": True
+                },
+                {
+                    "model": "llama-3.1-8b-instant",
+                    "token_limit": 16000,
+                    "max_tokens": 2048,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "llama-3.3-70b-8192",
+                    "token_limit": 16000,
+                    "max_tokens": 2048,
+                    "temperature": 0,
+                    "force_tools": True
                 }
             ],
-            "token_per_minute_limit": 5500
+            "token_per_minute_limit": None,  # Model-specific limits used instead
+            "enable_chunking": False
         },
         "huggingface": {
             "name": "HuggingFace",
@@ -279,7 +296,8 @@ class GaiaAgent:
                     "temperature": 0
                 }
             ],
-            "token_per_minute_limit": None
+            "token_per_minute_limit": None,
+            "enable_chunking": True
         },
         "openrouter": {
             "name": "OpenRouter",
@@ -310,7 +328,8 @@ class GaiaAgent:
                     "temperature": 0
                 }
             ],
-            "token_per_minute_limit": None
+            "token_per_minute_limit": None,
+            "enable_chunking": False
         },
         "mistral": {
             "name": "Mistral AI",
@@ -339,7 +358,8 @@ class GaiaAgent:
                     "temperature": 0
                 }
             ],
-            "token_per_minute_limit": 500000
+            "token_per_minute_limit": 500000,
+            "enable_chunking": False
         },
     }
     
@@ -381,8 +401,9 @@ class GaiaAgent:
             # Global token limit for summaries
             # self.max_summary_tokens = 255
             self.last_request_time = 0
-            # Track the current LLM type for rate limiting
+            # Track the current LLM type and model for rate limiting
             self.current_llm_type = None
+            self.current_model_name = None
             self.token_limits = {}
             for provider_key, config in self.LLM_CONFIG.items():
                 models = config.get("models", [])
@@ -592,7 +613,21 @@ class GaiaAgent:
             time.sleep(sleep_time)
         llm_type = self.current_llm_type
         config = self.LLM_CONFIG.get(llm_type, {})
-        tpm_limit = config.get("token_per_minute_limit")
+        
+        # Check for model-specific rate limit first, then provider-level limit
+        tpm_limit = None
+        if hasattr(self, 'current_model_name') and self.current_model_name:
+            # Look for model-specific rate limit
+            models = config.get("models", [])
+            for model_config in models:
+                if model_config.get("model") == self.current_model_name:
+                    tpm_limit = model_config.get("token_per_minute_limit")
+                    break
+        
+        # Fall back to provider-level rate limit if no model-specific limit found
+        if tpm_limit is None:
+            tpm_limit = config.get("token_per_minute_limit")
+            
         if tpm_limit:
             # Initialize token usage tracker for this provider
             if llm_type not in self._provider_token_usage:
@@ -1027,11 +1062,19 @@ class GaiaAgent:
                 finish_reason = response.response_metadata.get('finish_reason')
                 if finish_reason == 'length':
                     print(f"[Tool Loop] ❌ Hit token limit for {llm_type} LLM. Response was truncated. Cannot complete reasoning.")
-                    # Handle response truncation using generic token limit error handler
-                    print(f"[Tool Loop] Applying chunking mechanism for {llm_type} response truncation")
-                    # Get the LLM name for proper logging
-                    _, llm_name, _ = self._select_llm(llm_type, True)
-                    return self._handle_token_limit_error(messages, llm, llm_name, Exception("Response truncated due to token limit"), llm_type)
+                    # Check if chunking is enabled for this provider
+                    config = self.LLM_CONFIG.get(llm_type, {})
+                    enable_chunking = config.get("enable_chunking", True)  # Default to True for backward compatibility
+                    
+                    if enable_chunking:
+                        # Handle response truncation using generic token limit error handler
+                        print(f"[Tool Loop] Applying chunking mechanism for {llm_type} response truncation")
+                        # Get the LLM name for proper logging
+                        _, llm_name, _ = self._select_llm(llm_type, True)
+                        return self._handle_token_limit_error(messages, llm, llm_name, Exception("Response truncated due to token limit"), llm_type)
+                    else:
+                        print(f"[Tool Loop] ⚠️ Chunking disabled for {llm_type}. Returning truncated response.")
+                        return response
 
             # === DEBUG OUTPUT ===
             # Print LLM response using the new helper function
@@ -1304,6 +1347,22 @@ class GaiaAgent:
         llm = self.llms_with_tools[idx] if use_tools else self.llms[idx]
         llm_name = self.LLM_CONFIG[llm_type]["name"]
         llm_type_str = self.LLM_CONFIG[llm_type]["type_str"]
+        
+        # Get the actual model name for rate limiting
+        model_name = None
+        if hasattr(llm, 'model_name'):
+            model_name = llm.model_name
+        elif hasattr(llm, 'model'):
+            model_name = llm.model
+        elif llm_type in self.active_model_config:
+            # Get the first model from the active config
+            models = self.active_model_config[llm_type].get("models", [])
+            if models:
+                model_name = models[0].get("model")
+        
+        # Set current model name for rate limiting
+        self.current_model_name = model_name
+        
         return llm, llm_name, llm_type_str
 
     @trace_prints_with_context("llm_call")
@@ -1422,6 +1481,16 @@ class GaiaAgent:
         Generic token limit error handling that can be used for any LLM.
         """
         print(f"🔄 Handling token limit error for {llm_name} ({llm_type})")
+        
+        # Check if chunking is enabled for this provider
+        config = self.LLM_CONFIG.get(llm_type, {})
+        enable_chunking = config.get("enable_chunking", True)  # Default to True for backward compatibility
+        
+        if not enable_chunking:
+            print(f"⚠️ Chunking disabled for {llm_type}. Cannot handle token limit error.")
+            # Return a simple error message instead of chunking
+            from langchain_core.messages import AIMessage
+            return AIMessage(content=f"Error: Token limit exceeded for {llm_name} and chunking is disabled. Please try with a shorter input or enable chunking for this provider.")
         
         # Extract tool results from messages
         tool_results = []
@@ -2860,8 +2929,16 @@ class GaiaAgent:
             return True, self._handle_groq_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e)
         # Special handling for HuggingFace router errors
         if llm_type == "huggingface" and self._is_token_limit_error(e):
-            print(f"⚠️ HuggingFace router error detected, applying chunking: {e}")
-            return True, self._handle_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e, llm_type)
+            # Check if chunking is enabled for HuggingFace
+            config = self.LLM_CONFIG.get(llm_type, {})
+            enable_chunking = config.get("enable_chunking", True)
+            
+            if enable_chunking:
+                print(f"⚠️ HuggingFace router error detected, applying chunking: {e}")
+                return True, self._handle_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e, llm_type)
+            else:
+                print(f"⚠️ HuggingFace router error detected, but chunking disabled: {e}")
+                raise e
         if llm_type == "huggingface" and "500 Server Error" in str(e) and "router.huggingface.co" in str(e):
             error_msg = f"HuggingFace router service error (500): {e}"
             print(f"⚠️ {error_msg}")
@@ -2880,13 +2957,29 @@ class GaiaAgent:
             raise Exception(error_msg)
         # Enhanced token limit error handling for all LLMs (tool loop context)
         if phase in ("tool_loop", "runtime", "request") and self._is_token_limit_error(e, llm_type):
-            print(f"[Tool Loop] Token limit error detected for {llm_type} in tool calling loop")
-            _, llm_name, _ = self._select_llm(llm_type, True)
-            return True, self._handle_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e, llm_type)
+            # Check if chunking is enabled for this provider
+            config = self.LLM_CONFIG.get(llm_type, {})
+            enable_chunking = config.get("enable_chunking", True)
+            
+            if enable_chunking:
+                print(f"[Tool Loop] Token limit error detected for {llm_type} in tool calling loop")
+                _, llm_name, _ = self._select_llm(llm_type, True)
+                return True, self._handle_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e, llm_type)
+            else:
+                print(f"[Tool Loop] Token limit error detected for {llm_type}, but chunking disabled")
+                raise e
         # Handle HuggingFace router errors with chunking (tool loop context)
         if phase in ("tool_loop", "runtime", "request") and llm_type == "huggingface" and self._is_token_limit_error(e):
-            print(f"⚠️ HuggingFace router error detected, applying chunking: {e}")
-            return True, self._handle_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e, llm_type)
+            # Check if chunking is enabled for HuggingFace
+            config = self.LLM_CONFIG.get(llm_type, {})
+            enable_chunking = config.get("enable_chunking", True)
+            
+            if enable_chunking:
+                print(f"⚠️ HuggingFace router error detected, applying chunking: {e}")
+                return True, self._handle_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e, llm_type)
+            else:
+                print(f"⚠️ HuggingFace router error detected, but chunking disabled: {e}")
+                raise e
         # Check for general token limit errors specifically (tool loop context)
         if phase in ("tool_loop", "runtime", "request") and ("413" in str(e) or "token" in str(e).lower() or "limit" in str(e).lower()):
             print(f"[Tool Loop] Token limit error detected. Forcing final answer with available information.")
