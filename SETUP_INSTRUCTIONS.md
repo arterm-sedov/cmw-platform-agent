@@ -85,17 +85,21 @@ GEMINI_KEY=your_gemini_api_key_here
 # Optional: File uploading and HuggingFace login (disabled by default)
 # FILE_UPLOAD_ENABLED=true
 # LOGIN_ENABLED=true
-# Optional: For HuggingFace, OpenRouter, Groq
+# Optional: For HuggingFace, OpenRouter, Groq, Mistral AI
 HUGGINGFACEHUB_API_TOKEN=your_hf_token
 OPENROUTER_API_KEY=your_openrouter_key
 GROQ_API_KEY=your_groq_key
+MISTRAL_API_KEY=your_mistral_api_key
 ```
 
 ### Getting API Keys
 
 - **Google Gemini:** [Google AI Studio](https://makersuite.google.com/app/apikey)
+- **Mistral AI:** [Mistral AI Platform](https://console.mistral.ai/) > API Keys
 - **Supabase:** [supabase.com](https://supabase.com) > Settings > API
 - **HuggingFace:** [HuggingFace Tokens](https://huggingface.co/settings/tokens)
+- **OpenRouter:** [OpenRouter](https://openrouter.ai/) > API Keys
+- **Groq:** [Groq Console](https://console.groq.com/) > API Keys
 
 ## Vector Store Setup (Optional)
 
