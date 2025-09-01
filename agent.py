@@ -2805,13 +2805,13 @@ class GaiaAgent:
         
         # Token limit and router error patterns for vector similarity
         error_patterns = [
-            "Error code: 413 - {'error': {'message': 'Request too large for model `qwen-qwq-32b` in organization `org_01jyfgv54ge5ste08j9248st66` service tier `on_demand` on tokens per minute (TPM): Limit 6000, Requested 9681, please reduce your message size and try again. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}"
+            "Error code: 413 - {'error': {'message': 'Request too large for model `qwen-qwq-32b` in organization `org_01jyfgv54ge5ste08j9248st66` service tier `on_demand` on tokens per minute (TPM): Limit 6000, Requested 9681, please reduce your message size and try again. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
             "500 Server Error: Internal Server Error for url: https://router.huggingface.co/hyperbolic/v1/chat/completions (Request ID: Root=1-6861ed33-7dd4232d49939c6f65f6e83d;164205eb-e591-4b20-8b35-5745a13f05aa)",
-            
+            "Error code: 429 - {'error': {'message': 'Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day', 'code': 429, 'metadata': {'headers': {'X-RateLimit-Limit': '50', 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1756771200000'}, 'provider_name': None}}, 'user_id': 'user_2zGr0yIHMzRxIJYcW8N0my40LIs'}"
         ]
         
         # Direct substring checks for efficiency
-        if any(term in error_str for term in ["413", "token", "limit", "tokens per minute", "truncated", "tpm", "router.huggingface.co", "402", "payment required"]):
+        if any(term in error_str for term in ["413", "429", "token", "limit", "tokens per minute", "truncated", "tpm", "router.huggingface.co", "402", "payment required", "rate limit", "rate_limit"]):
             return True
         
         # Check if error matches any pattern using vector similarity

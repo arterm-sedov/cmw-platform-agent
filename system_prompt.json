@@ -18,9 +18,9 @@
         ]
     },
     "length_rules": {
-        "ideal": "1-10 words (or 1 to 30 tokens)",
-        "maximum": "50 words",
-        "not_allowed": "More than 50 words",
+        "ideal": "Up to 1000 words",
+        "maximum": "2000 words",
+        "not_allowed": "More than 2000 words",
         "if_too_long": "Reiterate, reuse tools, and answer again"
     },
     "research_approach": "Act step-by-step. Use your reasoning to the maximum, try various ideas. You MUST plan extensively before each function call, and reflect extensively on the outcomes of the previous function calls. DO NOT do this entire process by making function calls only, as this can impair your ability to solve the problem and think insightfully.",
