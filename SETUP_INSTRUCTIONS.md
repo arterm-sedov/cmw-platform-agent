@@ -79,6 +79,12 @@ GEMINI_KEY=your_gemini_api_key_here
 # Optional: Supabase vector store (disabled by default)
 # SUPABASE_URL=your_supabase_url_here
 # SUPABASE_KEY=your_supabase_key_here
+# Optional: Dataset uploading (disabled by default)
+# HF_TOKEN=your_hf_token_here
+# DATASET_ENABLED=true
+# Optional: File uploading and HuggingFace login (disabled by default)
+# FILE_UPLOAD_ENABLED=true
+# LOGIN_ENABLED=true
 # Optional: For HuggingFace, OpenRouter, Groq
 HUGGINGFACEHUB_API_TOKEN=your_hf_token
 OPENROUTER_API_KEY=your_openrouter_key
@@ -116,6 +122,63 @@ The vector store functionality is disabled by default. To enable it:
    python setup_vector_store.py
    ```
    This loads reference Q&A into Supabase for similarity search.
+
+## Dataset Uploading Setup (Optional)
+
+The dataset uploading functionality is disabled by default. To enable it:
+
+1. **Install HuggingFace Hub dependency:**
+   ```bash
+   pip install huggingface_hub
+   ```
+
+2. **Set environment variables:**
+   ```bash
+   HF_TOKEN=your_hf_token_here
+   DATASET_ENABLED=true
+   ```
+
+3. **Enable in dataset_manager.py:**
+   ```python
+   DATASET_ENABLED = True
+   ```
+
+The dataset manager will automatically upload:
+- LLM initialization summaries to the "init" split
+- Evaluation run data to the "runs_new" split
+
+## File Uploading and Login Setup (Optional)
+
+The file uploading and HuggingFace login functionality is disabled by default. To enable it:
+
+1. **Install HuggingFace Hub dependency:**
+   ```bash
+   pip install huggingface_hub
+   ```
+
+2. **Set environment variables:**
+   ```bash
+   HF_TOKEN=your_hf_token_here
+   FILE_UPLOAD_ENABLED=true
+   LOGIN_ENABLED=true
+   ```
+
+3. **Enable in respective managers:**
+   ```python
+   # In file_manager.py
+   FILE_UPLOAD_ENABLED = True
+   
+   # In login_manager.py
+   LOGIN_ENABLED = True
+   ```
+
+The file manager will automatically upload:
+- CSV results files to the HuggingFace Space repository
+- Other generated files as needed
+
+The login manager will:
+- Enable HuggingFace login button in Gradio interface
+- Validate user authentication for operations requiring login
 
 ## Running the Agent
 
@@ -198,6 +261,30 @@ try:
     print(f"Vector store status: {status}")
 except ImportError:
     print("ℹ️ Vector store module not available")
+
+# Optional: Test dataset functionality
+try:
+    from dataset_manager import get_dataset_status
+    status = get_dataset_status()
+    print(f"Dataset manager status: {status}")
+except ImportError:
+    print("ℹ️ Dataset manager module not available")
+
+# Optional: Test file manager functionality
+try:
+    from file_manager import get_file_manager_status
+    status = get_file_manager_status()
+    print(f"File manager status: {status}")
+except ImportError:
+    print("ℹ️ File manager module not available")
+
+# Optional: Test login manager functionality
+try:
+    from login_manager import get_login_manager_status
+    status = get_login_manager_status()
+    print(f"Login manager status: {status}")
+except ImportError:
+    print("ℹ️ Login manager module not available")
 ```
 
 ## Project Structure
