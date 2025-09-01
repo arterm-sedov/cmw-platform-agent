@@ -70,6 +70,7 @@ The agent uses a sophisticated multi-LLM approach with the following providers i
 2. **Mistral AI** (Secondary)
    - Models: `mistral-small-latest`, `mistral-medium-latest`, `mistral-large-latest`
    - Token Limits: 32K tokens
+   - Rate Limit: 500,000 tokens per minute (free tier)
    - Tool Support: ✅ Full tool-calling capabilities
 
 3. **Google Gemini** (Fallback)
