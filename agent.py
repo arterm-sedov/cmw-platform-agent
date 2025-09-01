@@ -46,7 +46,9 @@ from langchain_core.tools import tool
 from vector_store import vector_store_manager, get_embeddings, get_vector_store, get_retriever_tool, get_reference_answer, vector_answers_match
 from langchain_openai import ChatOpenAI  # Add at the top with other imports
 # Import the utils helper
-from utils import TRACES_DIR, upload_init_summary, ensure_valid_answer
+from utils import TRACES_DIR, ensure_valid_answer
+# Dataset functionality moved to dataset_manager.py
+from dataset_manager import dataset_manager
 
 def trace_prints_with_context(context_type: str):
     """
@@ -289,7 +291,7 @@ class GaiaAgent:
             "force_tools": False,
             "models": [
                 {
-                    "model": "deepseek/deepseek-chat-v3-0324:free",
+                    "model": "deepseek/deepseek-chat-v3.1:free",
                     "token_limit": 100000,
                     "max_tokens": 2048,
                     "temperature": 0,
@@ -520,7 +522,7 @@ class GaiaAgent:
             }
             
             # Upload to dataset
-            success = upload_init_summary(init_data)
+            success = dataset_manager.upload_init_summary(init_data)
             if success:
                 print(f"✅ LLM initialization summary uploaded to dataset")
             else:
