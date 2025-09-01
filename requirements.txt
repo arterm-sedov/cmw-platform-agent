@@ -11,7 +11,8 @@ langchain-groq
 langchain-tavily
 langchain-chroma
 langgraph
-huggingface_hub
+# Optional: HuggingFace Hub for dataset and file operations (disabled by default)
+# huggingface_hub
 arxiv
 pymupdf
 wikipedia

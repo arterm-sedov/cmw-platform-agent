@@ -10,8 +10,18 @@ import json
 import re
 import base64
 from typing import Any
+from dotenv import load_dotenv
 from agent import GaiaAgent
-from utils import TRACES_DIR, upload_run_data, ensure_valid_answer
+from utils import TRACES_DIR, ensure_valid_answer
+# Dataset functionality moved to dataset_manager.py
+from dataset_manager import dataset_manager
+# File upload functionality moved to file_manager.py
+from file_manager import file_manager
+# Login functionality moved to login_manager.py
+from login_manager import login_manager
+
+# Load environment variables from .env file
+load_dotenv()
 
 # (Keep Constants as is)
 # --- Constants ---
@@ -35,7 +45,7 @@ def save_df_to_csv(df, path):
         csv_content = df.to_csv(index=False, encoding="utf-8")
         
         # Upload via API
-        success = save_and_commit_file(
+        success = file_manager.save_and_commit_file(
             file_path=path,
             content=csv_content,
             commit_message=f"Add results CSV {path}"
@@ -94,7 +104,7 @@ def upload_questions_with_results(results_log: list, timestamp: str, username: s
                 total_score
             )
             
-            success = upload_run_data(run_data, split="runs_new")
+            success = dataset_manager.upload_run_data(run_data, split="runs_new")
             if success:
                 print(f"✅ Uploaded question {idx+1} with {success_type}. Run ID: {run_id}")
                 successful_uploads += 1
@@ -175,12 +185,11 @@ def run_and_submit_all(profile: gr.OAuthProfile | None):
     and displays the results.
     """
     space_id = os.getenv("SPACE_ID")
-    if profile:
-        username = f"{profile.username}"
-        print(f"User logged in: {username}")
-    else:
-        print("User not logged in.")
-        return "Please Login to Hugging Face with the button.", None
+    
+    # Use login manager to validate login
+    is_valid, username, error_message = login_manager.validate_login_for_operation(profile, "evaluation")
+    if not is_valid:
+        return error_message, None
 
     api_url = DEFAULT_API_URL
     questions_url = f"{api_url}/questions"
@@ -658,7 +667,10 @@ with gr.Blocks() as demo:
             
             """
             )
-            gr.LoginButton()
+            # Use login manager to get login button (or None if disabled)
+            login_button = login_manager.get_login_button()
+            if login_button:
+                login_button
             run_button = gr.Button("Run Evaluation & Submit All Answers")
             status_output = gr.Textbox(label="Run Status / Submission Result", lines=5, interactive=False)
             results_table = gr.DataFrame(label="Questions and Agent Answers", wrap=True)
