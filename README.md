@@ -321,7 +321,7 @@ Every question generates a complete execution trace including:
 - **Token Management**: Automatic truncation and summarization
 - **Error Recovery**: Automatic retry with different LLMs
 - **Graceful Degradation**: Continues processing even if some components fail
-- **Smart Rate Limit Handling**: Uses provider-specific strategies (chunking for low limits, 429 error handling for high limits)
+- **Smart Rate Limit Handling**: Throttles and retries on 429 errors before falling back to other LLMs
 
 ## Usage
 
