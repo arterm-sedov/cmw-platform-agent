@@ -12,11 +12,9 @@ langchain-tavily
 langchain-chroma
 langgraph
 huggingface_hub
-supabase
 arxiv
 pymupdf
 wikipedia
-pgvector
 python-dotenv
 pytesseract
 matplotlib
@@ -41,3 +39,6 @@ tiktoken
 exa-py
 openai
 chess
+# Optional: Supabase vector store (disabled by default)
+supabase
+pgvector

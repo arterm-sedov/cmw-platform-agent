@@ -76,9 +76,9 @@ Create a `.env` file in the project root:
 ```env
 # Required for Google Gemini integration
 GEMINI_KEY=your_gemini_api_key_here
-# Required for Supabase vector store
-SUPABASE_URL=your_supabase_url_here
-SUPABASE_KEY=your_supabase_key_here
+# Optional: Supabase vector store (disabled by default)
+# SUPABASE_URL=your_supabase_url_here
+# SUPABASE_KEY=your_supabase_key_here
 # Optional: For HuggingFace, OpenRouter, Groq
 HUGGINGFACEHUB_API_TOKEN=your_hf_token
 OPENROUTER_API_KEY=your_openrouter_key
@@ -91,12 +91,31 @@ GROQ_API_KEY=your_groq_key
 - **Supabase:** [supabase.com](https://supabase.com) > Settings > API
 - **HuggingFace:** [HuggingFace Tokens](https://huggingface.co/settings/tokens)
 
-## Vector Store Setup
+## Vector Store Setup (Optional)
 
-```bash
-python setup_vector_store.py
-```
-This loads reference Q&A into Supabase for similarity search.
+The vector store functionality is disabled by default. To enable it:
+
+1. **Install Supabase dependencies:**
+   ```bash
+   pip install supabase pgvector
+   ```
+
+2. **Set environment variables:**
+   ```bash
+   SUPABASE_URL=your_supabase_url_here
+   SUPABASE_KEY=your_supabase_key_here
+   ```
+
+3. **Enable in vector_store.py:**
+   ```python
+   SUPABASE_ENABLED = True
+   ```
+
+4. **Setup vector store:**
+   ```bash
+   python setup_vector_store.py
+   ```
+   This loads reference Q&A into Supabase for similarity search.
 
 ## Running the Agent
 
@@ -171,6 +190,14 @@ import supabase
 import gradio
 print("✅ All core packages imported successfully!")
 print(f"Pandas version: {pd.__version__}")
+
+# Optional: Test vector store functionality
+try:
+    from vector_store import get_status
+    status = get_status()
+    print(f"Vector store status: {status}")
+except ImportError:
+    print("ℹ️ Vector store module not available")
 ```
 
 ## Project Structure

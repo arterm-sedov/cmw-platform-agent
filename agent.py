@@ -40,11 +40,10 @@ from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint, HuggingFaceEmbeddings
-from langchain_community.vectorstores import SupabaseVectorStore
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 from langchain_core.tools import tool
-from langchain.tools.retriever import create_retriever_tool
-from supabase.client import create_client
+# Vector store functionality moved to vector_store.py
+from vector_store import vector_store_manager, get_embeddings, get_vector_store, get_retriever_tool, get_reference_answer, vector_answers_match
 from langchain_openai import ChatOpenAI  # Add at the top with other imports
 # Import the utils helper
 from utils import TRACES_DIR, upload_init_summary, ensure_valid_answer
@@ -181,9 +180,7 @@ class GaiaAgent:
     Attributes:
         system_prompt (str): The loaded system prompt template.
         sys_msg (SystemMessage): The system message for the LLM.
-        supabase_client: Supabase client instance.
-        vector_store: SupabaseVectorStore instance for retrieval.
-        retriever_tool: Tool for retrieving similar questions from the vector store. It retrieves reference answers and context via the Supabase vector store.
+        vector_store_manager: Vector store manager instance for similarity operations.
         llm_primary: Primary LLM instance (Google Gemini).
         llm_fallback: Fallback LLM instance (Groq).
         llm_third_fallback: Third fallback LLM instance (HuggingFace).
@@ -381,23 +378,9 @@ class GaiaAgent:
             self.question_trace = None
             self.current_llm_call_id = None
 
-            # Set up embeddings and supabase retriever
-            self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
-            self.supabase_client = create_client(
-                os.environ.get("SUPABASE_URL"),
-                os.environ.get("SUPABASE_KEY")
-            )
-            self.vector_store = SupabaseVectorStore(
-                client=self.supabase_client,
-                embedding=self.embeddings,
-                table_name="agent_course_reference",
-                query_name="match_agent_course_reference_langchain",
-            )
-            self.retriever_tool = create_retriever_tool(
-                retriever=self.vector_store.as_retriever(),
-                name="Question Search",
-                description="A tool to retrieve similar questions from a vector store.",
-            )
+            # Vector store functionality is now handled by vector_store.py module
+            # All Supabase operations are disabled by default
+            self.vector_store_manager = vector_store_manager
 
             # Arrays for all initialized LLMs and tool-bound LLMs, in order (initialize before LLM setup loop)
             self.llms = []
@@ -1614,7 +1597,7 @@ class GaiaAgent:
 
     def _get_reference_answer(self, question: str) -> Optional[str]:
         """
-        Retrieve the reference answer for a question using the supabase retriever.
+        Retrieve the reference answer for a question using the vector store manager.
 
         Args:
             question (str): The question text.
@@ -1622,15 +1605,7 @@ class GaiaAgent:
         Returns:
             str or None: The reference answer if found, else None.
         """
-        similar = self.vector_store.similarity_search(question)
-        if similar:
-            # Assume the answer is in the page_content or metadata
-            content = similar[0].page_content
-            # Try to extract the answer from the content
-            if "Final answer :" in content:
-                return content.split("Final answer :", 1)[-1].strip().split("\n")[0]
-            return content
-        return None
+        return get_reference_answer(question)
 
     def _format_messages(self, question: str, reference: Optional[str] = None) -> List[Any]:
         """
@@ -1674,6 +1649,8 @@ class GaiaAgent:
         else:
             return str(tool)
 
+
+        
     def _calculate_cosine_similarity(self, embedding1, embedding2) -> float:
         """
         Calculate cosine similarity between two embeddings.
@@ -1685,51 +1662,13 @@ class GaiaAgent:
         Returns:
             float: Cosine similarity score (0.0 to 1.0)
         """
-        vec1 = np.array(embedding1)
-        vec2 = np.array(embedding2)
-        
-        # Cosine similarity calculation
-        dot_product = np.dot(vec1, vec2)
-        norm1 = np.linalg.norm(vec1)
-        norm2 = np.linalg.norm(vec2)
-        
-        if norm1 == 0 or norm2 == 0:
-            return 0.0
-            
-        return dot_product / (norm1 * norm2)
+        return vector_store_manager.calculate_cosine_similarity(embedding1, embedding2)
 
     def _vector_answers_match(self, answer: str, reference: str):
         """
         Return (bool, similarity) where bool is if similarity >= threshold, and similarity is the float value.
         """
-        try:
-            # Handle None or empty answers gracefully
-            if not answer:
-                print("⚠️ Answer is empty, cannot compare with reference")
-                return False, -1.0
-            norm_answer = self._clean_final_answer_text(answer)
-            norm_reference = self._clean_final_answer_text(reference)
-            # Debug output to see what normalization is doing
-            print(f"🔍 Normalized answer: '{norm_answer}'")
-            print(f"🔍 Normalized reference: '{norm_reference}'")
-            if norm_answer == norm_reference:
-                print("✅ Exact match after normalization")
-                return True, 1.0
-            embeddings = self.embeddings
-            # Get embeddings for both answers
-            answer_embedding = embeddings.embed_query(norm_answer)
-            reference_embedding = embeddings.embed_query(norm_reference)
-            # Calculate cosine similarity using the reusable method
-            cosine_similarity = self._calculate_cosine_similarity(answer_embedding, reference_embedding)
-            print(f"🔍 Answer similarity: {cosine_similarity:.3f} (threshold: {self.similarity_threshold})")
-            if cosine_similarity >= self.similarity_threshold:
-                return True, cosine_similarity
-            else:
-                print("🔄 Vector similarity below threshold")
-                return False, cosine_similarity
-        except Exception as e:
-            print(f"⚠️ Error in vector similarity matching: {e}")
-            return False, -1.0
+        return vector_answers_match(answer, reference, self.similarity_threshold)
 
     def get_llm_stats(self) -> dict:
         stats = {
@@ -2247,6 +2186,14 @@ class GaiaAgent:
                     tool_list.append(tool_obj)
                     tool_names.add(name_val)
         
+        # Add retriever tool from vector store if available
+        retriever_tool = get_retriever_tool()
+        if retriever_tool:
+            tool_list.append(retriever_tool)
+            print("✅ Added retriever tool from vector store")
+        else:
+            print("ℹ️ No retriever tool available (vector store disabled)")
+        
         # Filter out any tools that don't have proper tool attributes
         final_tool_list = []
         for tool in tool_list:
@@ -2454,22 +2401,7 @@ class GaiaAgent:
         Returns:
             bool: True if this is a duplicate tool call
         """
-        # Convert tool args to text for embedding
-        args_text = json.dumps(tool_args, sort_keys=True) if isinstance(tool_args, dict) else str(tool_args)
-        
-        # Check for exact tool name match first
-        for called_tool in called_tools:
-            if called_tool['name'] == tool_name:
-                # Get embedding for current args
-                current_embedding = self.embeddings.embed_query(args_text)
-                
-                # Compare with stored embedding using vector similarity
-                cosine_similarity = self._calculate_cosine_similarity(current_embedding, called_tool['embedding'])
-                if cosine_similarity >= self.tool_calls_similarity_threshold:
-                    print(f"[Tool Loop] Vector similarity duplicate detected: {tool_name} (similarity: {cosine_similarity:.3f})")
-                    return True
-        
-        return False
+        return vector_store_manager.is_duplicate_tool_call(tool_name, tool_args, called_tools, self.tool_calls_similarity_threshold)
 
     def _add_tool_call_to_history(self, tool_name: str, tool_args: dict, called_tools: list) -> None:
         """
@@ -2480,19 +2412,7 @@ class GaiaAgent:
             tool_args: Arguments for the tool
             called_tools: List of previously called tool dictionaries
         """
-        # Convert tool args to text for embedding
-        args_text = json.dumps(tool_args, sort_keys=True) if isinstance(tool_args, dict) else str(tool_args)
-        
-        # Get embedding for the tool call
-        tool_embedding = self.embeddings.embed_query(args_text)
-        
-        # Store as dictionary with name and embedding
-        tool_call_record = {
-            'name': tool_name,
-            'embedding': tool_embedding,
-            'args': tool_args
-        }
-        called_tools.append(tool_call_record)
+        vector_store_manager.add_tool_call_to_history(tool_name, tool_args, called_tools)
 
     def _trim_for_print(self, obj, max_len=None):
         """
