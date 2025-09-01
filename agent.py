@@ -312,11 +312,41 @@ class GaiaAgent:
             ],
             "token_per_minute_limit": None
         },
+        "mistral": {
+            "name": "Mistral AI",
+            "type_str": "mistral",
+            "api_key_env": "MISTRAL_API_KEY",
+            "max_history": 20,
+            "tool_support": True,
+            "force_tools": True,
+            "models": [
+                                {
+                    "model": "mistral-large-latest",
+                    "token_limit": 32000,
+                    "max_tokens": 2048,
+                    "temperature": 0
+                },
+                {
+                    "model": "mistral-small-latest",
+                    "token_limit": 32000,
+                    "max_tokens": 2048,
+                    "temperature": 0
+                },
+                {
+                    "model": "mistral-medium-latest",
+                    "token_limit": 32000,
+                    "max_tokens": 2048,
+                    "temperature": 0
+                }
+            ],
+            "token_per_minute_limit": None
+        },
     }
     
     # Default LLM sequence order - references LLM_CONFIG keys
     DEFAULT_LLM_SEQUENCE = [
         "openrouter",
+        "mistral",
         "gemini",
         "groq",
         "huggingface"
@@ -424,6 +454,8 @@ class GaiaAgent:
                                 return self._init_huggingface_llm(config, model_config)
                             elif llm_type == "openrouter":
                                 return self._init_openrouter_llm(config, model_config)
+                            elif llm_type == "mistral":
+                                return self._init_mistral_llm(config, model_config)
                             else:
                                 return None
                         llm_instance = get_llm_instance(llm_type, config, model_config)
@@ -2342,6 +2374,18 @@ class GaiaAgent:
             openai_api_key=api_key,
             openai_api_base=api_base,
             model_name=model_config["model"],
+            temperature=model_config["temperature"],
+            max_tokens=model_config["max_tokens"]
+        )
+
+    def _init_mistral_llm(self, config, model_config):
+        from langchain_mistralai.chat_models import ChatMistralAI
+        api_key = os.environ.get(config["api_key_env"])
+        if not api_key:
+            print(f"⚠️ {config['api_key_env']} not found in environment variables. Skipping Mistral AI...")
+            return None
+        return ChatMistralAI(
+            model=model_config["model"],
             temperature=model_config["temperature"],
             max_tokens=model_config["max_tokens"]
         )

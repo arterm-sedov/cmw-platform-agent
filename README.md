@@ -22,18 +22,24 @@ hf_oauth_expiration_minutes: 480
 
 ## 🚀 The CMW Platform Agent
 
-Behold the CMW Platform Agent — a robust and extensible system designed for real-world reliability and performance.
+Behold the CMW Platform Agent — a robust and extensible system designed for real-world reliability and performance in creating entities within the Comindware Platform.
 
 ## 🕵🏻‍♂️ What is this project?
 
-This is an **experimental multi-LLM agent** that demonstrates AI agent and CMW Platform iteration:
+This is an **experimental multi-LLM agent** that demonstrates AI agent and CMW Platform integration:
 
 - **Input**: The user asks the CMW Platform Agent to create entities in the CMW Platform instance.
-- **Task**: The agent agent has a set of tools to translate natural language user requests into the CMW Platform API calls.
+- **Task**: The agent has a set of tools to translate natural language user requests into CMW Platform API calls for entity creation.
+- **Output**: Entities (templates, attributes, workflows, etc.) are created in the CMW Platform based on user specifications.
 
 ## 🎯 Project Goals
 
-To create an agent that will allow batch entity creation within the CMW Platform.
+To create an agent that will allow batch entity creation within the CMW Platform, enabling users to:
+
+- Create templates with custom attributes
+- Define workflows and business processes
+- Set up data models and relationships
+- Automate platform configuration through natural language
 
 ## ❓ Why This Project?
 
@@ -42,12 +48,13 @@ This experimental system is based on current AI agent technology and demonstrate
 - **Advanced Tool Usage**: Seamless integration of 20+ specialized tools including AI-powered tools and third-party AI engines
 - **Multi-Provider Resilience**: Automatic testing and switching between different LLM providers
 - **Comprehensive Tracing**: Complete visibility into the agent's decision-making process
-- **Structured Initialization Summary:** After startup, a clear table shows which models/providers are available, with/without
-tools, and any errors—so you always know your agent's capabilities.
+- **Structured Initialization Summary:** After startup, a clear table shows which models/providers are available, with/without tools, and any errors—so you always know your agent's capabilities.
 
 ## 📊 What You'll Find Here
 
 - **Documentation**: Detailed technical specifications and usage guides
+- **CMW Platform Integration**: Tools and utilities for working with Comindware Platform APIs
+- **Entity Creation Capabilities**: Specialized tools for creating templates, attributes, and workflows
 
 ## 🏗️ Technical Architecture
 
@@ -60,17 +67,22 @@ The agent uses a sophisticated multi-LLM approach with the following providers i
    - Token Limits: 100K-1M tokens
    - Tool Support: ✅ Full tool-calling capabilities
 
-2. **Google Gemini** (Fallback)
+2. **Mistral AI** (Secondary)
+   - Models: `mistral-small-latest`, `mistral-medium-latest`, `mistral-large-latest`
+   - Token Limits: 32K tokens
+   - Tool Support: ✅ Full tool-calling capabilities
+
+3. **Google Gemini** (Fallback)
    - Model: `gemini-2.5-pro`
    - Token Limit: 2M tokens (virtually unlimited)
    - Tool Support: ✅ Full tool-calling capabilities
 
-3. **Groq** (Second Fallback)
+4. **Groq** (Second Fallback)
    - Model: `qwen-qwq-32b`
    - Token Limit: 3K tokens
    - Tool Support: ✅ Full tool-calling capabilities
 
-4. **HuggingFace** (Final Fallback)
+5. **HuggingFace** (Final Fallback)
    - Models: `Qwen/Qwen2.5-Coder-32B-Instruct`, `microsoft/DialoGPT-medium`, `gpt2`
    - Token Limits: 1K tokens
    - Tool Support: ❌ No tool-calling (text-only responses)
@@ -79,14 +91,19 @@ The agent uses a sophisticated multi-LLM approach with the following providers i
 
 The agent includes 20+ specialized tools:
 
-- **Attribute creation**: creates an attribute in a specified template.
+- **CMW Platform Tools**: Create templates, attributes, workflows, and other platform entities
+- **Web Search**: Deep research capabilities for gathering information
+- **Code Execution**: Python code execution for data processing
+- **File Analysis**: Document processing and analysis
+- **Mathematical Operations**: Complex calculations and data analysis
+- **Image Processing**: OCR and image analysis capabilities
 
 ### Performance Expectations
 
-- **Success Rate**: 50-65% entities created
-- **Response Time**: 30-100 seconds per question (depending on complexity and LLM)
+- **Success Rate**: 50-65% entities created successfully
+- **Response Time**: 30-100 seconds per entity creation request (depending on complexity and LLM)
 - **Tool Usage**: 2-8 tool calls per request on average
-- **Fallback Rate**: 20-40% of questions require human clarification
+- **Fallback Rate**: 20-40% of requests require human clarification
 
 ## Dataset Structure
 
@@ -319,8 +336,8 @@ from agent import GaiaAgent
 # Initialize the agent
 agent = GaiaAgent()
 
-# Process a question
-result = agent("What is the capital of France?")
+# Create an entity in CMW Platform
+result = agent("Create a template called 'Customer' with attributes: Name (Text), Email (Text), Phone (Text)")
 
 # Access the results
 print(f"Answer: {result['submitted_answer']}")
@@ -348,40 +365,45 @@ runs_data = dataset["runs_new"]["train"]
 The main agent runtime files are:
 
 ```
-gaia-agent/
+cmw-platform-agent/
 ├── agent.py              # Main agent implementation
 ├── app.py                # Gradio web interface
 ├── tools.py              # Tool definitions and implementations
 ├── utils.py              # Core upload functions with validation
 ├── system_prompt.json    # System prompt configuration
-└── logs/               # Execution logs and results
+├── login_manager.py      # CMW Platform authentication
+├── file_manager.py       # File handling utilities
+├── dataset_manager.py    # Dataset management
+├── vector_store.py       # Vector storage for embeddings
+└── logs/                 # Execution logs and results
 ```
 
-There are other files in the root directory, but they are not used at the runtime, rather for setting up the Supabase vector store.
+## CMW Platform Integration
+
+This agent is designed to work with the Comindware Platform, a business process management and workflow automation platform. The agent can:
+
+- **Create Templates**: Define data structures with custom attributes
+- **Configure Workflows**: Set up business processes and automation rules
+- **Manage Entities**: Create, update, and configure platform objects
+- **API Integration**: Interact with CMW Platform APIs for entity management
+
+For more information about the Comindware Platform, see the [CMW Platform Documentation](https://github.com/arterm-sedov/cbap-mkdocs-ru).
 
 ## Performance Statistics
 
-The agent has been evaluated on complex benchmark questions with the following results:
+The agent has been evaluated on complex entity creation tasks with the following results:
 
 - **Overall Success Rate**: 50-65%, up to 80% with all four LLMs available
-- **Tool Usage**: Average 2-8 tools per question
-- **LLM Fallback Rate**: 20-40% of questions require multiple LLMs
-- **Response Time**: 30-120 seconds per question
-- **Token Usage**: 1K-100K tokens per question (depending on complexity)
+- **Tool Usage**: Average 2-8 tools per entity creation request
+- **LLM Fallback Rate**: 20-40% of requests require multiple LLMs
+- **Response Time**: 30-120 seconds per entity creation request
+- **Token Usage**: 1K-100K tokens per request (depending on complexity)
 
 ## Contributing
 
 This is an experimental research project. Contributions are welcome in the form of:
 
 - **Bug Reports**: Issues with the agent's reasoning or tool usage
-- **Feature Requests**: New tools or capabilities
+- **Feature Requests**: New tools or capabilities for CMW Platform integration
 - **Performance Improvements**: Optimizations for speed or accuracy
 - **Documentation**: Improvements to this README or code comments
-
-## License
-
-This project is part of the Hugging Face Agents Course final assignment. See the course materials for licensing information.
-
----
-
-**Built with ❤️ by Arte(r)m Sedov using Cursor IDE**

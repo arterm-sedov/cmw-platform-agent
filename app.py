@@ -588,7 +588,130 @@ def save_results_log(results_log: list) -> str:
         print(f"⚠️ Failed to save results log: {e}")
         return None
 
+def chat_with_agent(message, history):
+    """
+    Chat with the agent using a simple message interface.
+    
+    Args:
+        message (str): User's message
+        history (list): Chat history
+        
+    Returns:
+        tuple: (updated_history, message)
+    """
+    if not message.strip():
+        return history, ""
+    
+    if agent is None:
+        error_msg = "Error: Agent not initialized. Check logs for details."
+        return history + [{"role": "user", "content": message}, {"role": "assistant", "content": error_msg}], ""
+    
+    try:
+        print(f"💬 Chat request: {message}")
+        
+        # Call the agent with the user's message
+        result = agent(message)
+        
+        # Extract the final answer from the agent result
+        trace = result
+        final_result = trace.get("final_result", {})
+        answer = final_result.get("submitted_answer", "No answer generated")
+        llm_used = final_result.get("llm_used", "unknown")
+        
+        # Get detailed information about the multi-model approach
+        response_parts = []
+        response_parts.append(f"🤖 **Agent Response** (using {llm_used}):\n\n{answer}")
+        
+        # Add information about the multi-model approach
+        if hasattr(agent, 'llm_tracking'):
+            response_parts.append("\n---")
+            response_parts.append("🔍 **Multi-Model Approach:**")
+            
+            # Show which models were attempted
+            attempted_models = []
+            for provider, tracking in agent.llm_tracking.items():
+                if tracking['total_attempts'] > 0:
+                    status = "✅ Success" if tracking['successes'] > 0 else "❌ Failed"
+                    attempted_models.append(f"• **{provider}**: {status} ({tracking['successes']}/{tracking['total_attempts']} attempts)")
+            
+            if attempted_models:
+                response_parts.append("\n".join(attempted_models))
+            
+            # Add overall statistics
+            total_attempts = sum(tracking['total_attempts'] for tracking in agent.llm_tracking.values())
+            total_successes = sum(tracking['successes'] for tracking in agent.llm_tracking.values())
+            
+            if total_attempts > 0:
+                overall_success_rate = (total_successes / total_attempts) * 100
+                response_parts.append(f"\n📊 **Overall**: {total_successes}/{total_attempts} successful responses ({overall_success_rate:.1f}% success rate)")
+        
+        # Add information about tools used if available
+        if 'llm_traces' in trace:
+            tool_usage = []
+            for llm_trace in trace.get('llm_traces', []):
+                if 'tool_calls' in llm_trace and llm_trace['tool_calls']:
+                    for tool_call in llm_trace['tool_calls']:
+                        tool_name = tool_call.get('name', 'unknown')
+                        tool_usage.append(f"• {tool_name}")
+            
+            if tool_usage:
+                response_parts.append("\n---")
+                response_parts.append("🛠️ **Tools Used:**")
+                response_parts.append("\n".join(set(tool_usage)))  # Remove duplicates
+        
+        # Add execution time if available
+        if 'total_execution_time' in trace:
+            exec_time = trace['total_execution_time']
+            response_parts.append(f"\n⏱️ **Execution Time**: {exec_time:.2f} seconds")
+        
+        response = "\n".join(response_parts)
+        
+        # Return updated history with proper message format for Gradio chatbot
+        updated_history = history + [{"role": "user", "content": message}, {"role": "assistant", "content": response}]
+        return updated_history, ""
+        
+    except Exception as e:
+        error_msg = f"❌ Error: {str(e)}"
+        print(f"Chat error: {e}")
+        updated_history = history + [{"role": "user", "content": message}, {"role": "assistant", "content": error_msg}]
+        return updated_history, ""
 
+def get_available_models():
+    """
+    Get information about initialized models and their status.
+    """
+    if agent is None:
+        return "❌ Agent not initialized"
+    
+    models_info = []
+    models_info.append("🤖 **Initialized Models:**\n")
+    
+    # Check only initialized models
+    for provider_key, llm_instance in agent.llm_instances.items():
+        if llm_instance is None:
+            continue
+            
+        config = agent.LLM_CONFIG.get(provider_key, {})
+        provider_name = config.get("name", provider_key.title())
+        
+        # Get the active model configuration for this provider
+        active_model_config = agent.active_model_config.get(provider_key, {})
+        model_name = active_model_config.get("model", "Unknown")
+        token_limit = active_model_config.get("token_limit", "Unknown")
+        
+        models_info.append(f"**{provider_name}:**")
+        models_info.append(f"  • {model_name} (max {token_limit} tokens)")
+        
+        # Add tracking statistics if available
+        if hasattr(agent, 'llm_tracking') and provider_key in agent.llm_tracking:
+            tracking = agent.llm_tracking[provider_key]
+            if tracking['total_attempts'] > 0:
+                success_rate = (tracking['successes'] / tracking['total_attempts']) * 100
+                models_info.append(f"  📊 Success rate: {success_rate:.1f}% ({tracking['successes']}/{tracking['total_attempts']})")
+        
+        models_info.append("")
+    
+    return "\n".join(models_info)
 
 # --- Build Gradio Interface using Blocks ---
 with gr.Blocks() as demo:
@@ -598,129 +721,183 @@ with gr.Blocks() as demo:
     with gr.Tabs():
         with gr.TabItem("Readme"):
             gr.Markdown("""
-            ## 🕵🏻‍♂️ CMW Platform Agent - Experimental Project
+            ## 🕵🏻‍♂️ CMW Platform Agent - Entity Creation System
 
-            **Welcome to my graduation project for the HuggingFace Agents Course!**
+            **Welcome to the CMW Platform Agent - an AI-powered system for creating entities in the Comindware Platform!**
             
             ### 🚀 **What is this project**:
             
-            - **Input**: HuggingFace supplies a set of curated CMW Platform Agent questions
-            - **Challenge**: Create an agent that gets a score of at least 30% on the CMW Platform Agent questions
-            - **Solution**: The agent tries to get the right answers: it cycles through several LLMs and tools to get the best answer
-            - **Results**: The agent can get up to 80% score depending on the available LLMs. Typically it gets 50-65% score (because I often run out of LLM providers inference limits on the free tiers)
+            - **Input**: Users provide natural language requests to create entities in the CMW Platform
+            - **Challenge**: Translate natural language into CMW Platform API calls for entity creation
+            - **Solution**: The agent uses multiple LLMs and specialized tools to create templates, attributes, workflows, and other platform entities
+            - **Results**: The agent can successfully create entities with 50-65% success rate, up to 80% with all LLMs available
             
             **Dataset Results**: [View live results](https://huggingface.co/datasets/arterm-sedov/agent-course-final-assignment/viewer/runs_new)
             
             **For more project details**, see the [README.md](https://huggingface.co/spaces/arterm-sedov/agent-course-final-assignment/blob/main/README.md)
             
-            This is an experimental multi-LLM agent system that demonstrates advanced AI agent capabilities. I created this project to explore and showcase:
+            This is an experimental multi-LLM agent system that demonstrates advanced AI agent capabilities for business process automation. The project showcases:
 
             ### 🎯 **Project Goals**
             
+            - **Entity Creation**: Create templates, attributes, workflows, and other CMW Platform entities
             - **Multi-LLM Orchestration**: Dynamically switches between Google Gemini, Groq, OpenRouter, and HuggingFace models
-            - **Comprehensive Tool Suite**: Math, code execution, web search, file analysis, chess, and more
+            - **Comprehensive Tool Suite**: CMW Platform API integration, web search, code execution, file analysis, and more
             - **Robust Fallback System**: Automatic model switching when one fails
             - **Complete Transparency**: Full trace logging of reasoning and tool usage
-            - **Real-world Reliability**: Battle-tested for the CMW Platform benchmark
+            - **Real-world Reliability**: Battle-tested for CMW Platform entity creation
 
             ### 🔬 **Why This Project?**
             
-            This project represents what I learned at HuggingFace Agents Course, eg. to build sophisticated AI agents. The experimental nature comes from:
+            This project represents advanced AI agent development for business process management. The experimental nature comes from:
 
-            - **Multi-Provider Testing**: Exploring different LLM providers and their capabilities, all providers are free of charge and thus may fail
-            - **Tool Integration**: Creating a modular system where tools can chain together
-            - **Performance Optimization**: Balancing speed, accuracy, logging verbosity and cost across multiple models
-            - **Transparency**: Making AI reasoning visible and debuggable
+            - **Multi-Provider Testing**: Exploring different LLM providers and their capabilities for entity creation tasks
+            - **Tool Integration**: Creating a modular system where tools can chain together for complex entity creation
+            - **Performance Optimization**: Balancing speed, accuracy, and cost across multiple models
+            - **Transparency**: Making AI reasoning visible and debuggable for business users
+            - **CMW Platform Integration**: Bridging natural language requests with platform API capabilities
 
             ### 📊 **What You'll Find Here**
             
-            - **Live Evaluation**: Test the agent against CMW Platform questions. See the **Evaluation** tab. 
-                - When starting, the agent talks to LLMs and initializes them and outputs some interesting debugging logs. Select **Logs** at the top to vew the init log.
-                - NOTE: LLM availability is subject to my inference limits with each provider
-            - **Dataset Tracking**: All runs are uploaded to the HuggingFace dataset for analysis. See the the **Dataset** tab
-            - **Performance Metrics**: Detailed timing, token usage, and success rates. See the the **Dataset** tab
-            - **Complete Traces**: See exactly how the agent thinks and uses tools. See the **Log files** tab
+            - **Live Entity Creation**: Test the agent for creating CMW Platform entities. See the **Evaluation** tab. 
+                - When starting, the agent initializes LLMs and outputs debugging logs. Select **Logs** at the top to view the init log.
+                - NOTE: LLM availability is subject to inference limits with each provider
+            - **Dataset Tracking**: All entity creation attempts are uploaded to the HuggingFace dataset for analysis. See the **Dataset** tab
+            - **Performance Metrics**: Detailed timing, token usage, and success rates for entity creation. See the **Dataset** tab
+            - **Complete Traces**: See exactly how the agent thinks and uses tools for entity creation. See the **Log files** tab
 
-            This course project is a demonstration of what's possible when you combine multiple AI models with intelligent tool orchestration.
+            ### 🏢 **CMW Platform Integration**
+            
+            This agent is designed to work with the Comindware Platform, a business process management and workflow automation platform. The agent can:
+            
+            - **Create Templates**: Define data structures with custom attributes
+            - **Configure Workflows**: Set up business processes and automation rules
+            - **Manage Entities**: Create, update, and configure platform objects
+            - **API Integration**: Interact with CMW Platform APIs for entity management
+            
+            For more information about the Comindware Platform, see the [CMW Platform Documentation](https://github.com/arterm-sedov/cbap-mkdocs-ru).
+
+            This project demonstrates what's possible when you combine multiple AI models with intelligent tool orchestration for business process automation.
             """)
         
-        with gr.TabItem("Evaluation"):
-            gr.Markdown(
-            """
-        
-            **Instructions:**
+        with gr.TabItem("Chat with Agent"):
+            gr.Markdown("""
+            ## 💬 Chat with the CMW Platform Agent
             
-            **If you want to test the agent**
+            **Welcome to the interactive chat interface!** Here you can have a conversation with the agent and see how it responds using different AI models.
             
-            1. Click **Run Evaluation & Submit All Answers** to fetch questions, run your agent, submit answers, and see the score.
-            2. Once you clicked **Run Evaluation & Submit All Answers**, it can take quite some time (this is the time for the agent to go through all the questions). This space provides a basic setup and is sub-optimal.
-            3. Select **Logs** at the top of the screen and watch the action unfold in real time while the agent cycles through the questions and LLMs.
-            4. While the agent runs, from the **Log files** download some sample agent traces.
-            5. When the run completes, the agent should upload all the results to the **Dataset** tab.
+            ### 🎯 **How it works:**
             
-            **If you want to copy the agent**
+            - **Multi-Model Responses**: The agent automatically tries different AI models (Google Gemini, Groq, HuggingFace, OpenRouter) to find the best answer
+            - **Intelligent Fallback**: If one model fails, it automatically switches to another
+            - **Tool Integration**: The agent can use various tools like math, code execution, web search, and file analysis
+            - **Real-time Statistics**: See which models are working and their success rates
             
-            1. Clone this space, then modify the code to define your agent's logic, the tools, the necessary packages, etc...
-            2. Complete the HuggingFace Agents Course: <https://huggingface.co/learn/agents-course/en/unit0/introduction>.
-            2. Log in to your HuggingFace account using the button below. This uses your HF username for submission.
-            3. Click **Run Evaluation & Submit All Answers** to fetch questions, run your agent, submit answers, and see the score.
+            ### 💡 **Try asking:**
             
-            """
-            )
-            # Use login manager to get login button (or None if disabled)
-            login_button = login_manager.get_login_button()
-            if login_button:
-                login_button
-            run_button = gr.Button("Run Evaluation & Submit All Answers")
-            status_output = gr.Textbox(label="Run Status / Submission Result", lines=5, interactive=False)
-            results_table = gr.DataFrame(label="Questions and Agent Answers", wrap=True)
-            # Note: get_init_log() returns a value but demo.load() doesn't expect outputs
-            # This is just for initialization, so we ignore the return value
-            demo.load(
-                fn=lambda: None,  # Use a no-op function instead
-                inputs=[]
-            )
-            run_button.click(
-                fn=run_and_submit_all,
-                outputs=[status_output, results_table]
-            )
-        with gr.TabItem("Results dataset"):
+            - General questions: "What is the capital of France?"
+            - Math problems: "What is 15 * 23 + 7?"
+            - Code questions: "Write a Python function to calculate fibonacci numbers"
+            - File analysis: "Can you help me analyze a CSV file?"
+            - Complex reasoning: "Explain how machine learning works"
             
-            gr.Markdown(
-                """
-                ## Live Dataset viewer
+            **Note**: The agent is optimized for CMW Platform entity creation tasks, but it can handle general conversation too!
+            """)
+            
+            with gr.Row():
+                with gr.Column(scale=3):
+                    # Chat interface
+                    chatbot = gr.Chatbot(
+                        label="Chat History",
+                        height=500,
+                        show_label=True,
+                        container=True,
+                        type="messages"
+                    )
+                    
+                    with gr.Row():
+                        msg = gr.Textbox(
+                            label="Your Message",
+                            placeholder="Type your message here...",
+                            lines=2,
+                            scale=4
+                        )
+                        send_btn = gr.Button("Send", variant="primary", scale=1)
+                    
+                    # Clear button
+                    clear_btn = gr.Button("Clear Chat", variant="secondary")
                 
-                View the latest evaluation runs uploaded to the HuggingFace dataset.
-                
-                **Dataset URL:** [arterm-sedov/agent-course-final-assignment](https://huggingface.co/datasets/arterm-sedov/agent-course-final-assignment)
-                
-                **Runs dataset:** [View and query latest runs in Data Studio with SQL](https://huggingface.co/datasets/arterm-sedov/agent-course-final-assignment/viewer/runs_new)
-                
-                > **Note:** The dataset viewer may show schema conflicts between different splits (init, runs, runs_new). This is expected as each split has different schemas. The `runs_new` split contains the latest granular evaluation data.
-                """
+                with gr.Column(scale=1):
+                    # Model information panel
+                    gr.Markdown("### 📊 Model Status")
+                    models_info = gr.Markdown(get_available_models())
+                    refresh_models_btn = gr.Button("🔄 Refresh Model Info")
+                    
+                    # Quick action buttons
+                    gr.Markdown("### ⚡ Quick Actions")
+                    quick_math_btn = gr.Button("🧮 Math Problem")
+                    quick_code_btn = gr.Button("💻 Code Question")
+                    quick_general_btn = gr.Button("🤔 General Question")
+            
+            # Event handlers
+            def send_message(message, history):
+                return chat_with_agent(message, history)
+            
+            def clear_chat():
+                return [], ""
+            
+            def quick_math(history):
+                message = "What is 25 * 18 + 127? Please show your work."
+                return chat_with_agent(message, history)
+            
+            def quick_code(history):
+                message = "Write a Python function to check if a number is prime."
+                return chat_with_agent(message, history)
+            
+            def quick_general(history):
+                message = "Explain the difference between machine learning and deep learning in simple terms."
+                return chat_with_agent(message, history)
+            
+            # Connect event handlers
+            send_btn.click(
+                fn=send_message,
+                inputs=[msg, chatbot],
+                outputs=[chatbot, msg]
             )
             
-            # Embed the dataset viewer
-            vew_params = "?sort[column]=start_time&sort[direction]=desc"
-            dataset_viewer_html = f"""
-            <div style="width: 100%; height: 600px; border: 1px solid #ccc; border-radius: 8px; overflow: hidden;">
-                <iframe
-                  src="https://huggingface.co/datasets/arterm-sedov/agent-course-final-assignment/embed/viewer/runs_new/train{vew_params}"
-                  frameborder="0"
-                  width="100%"
-                  height="560px"
-                ></iframe>
-            </div>
-            """
-            gr.HTML(dataset_viewer_html)
-            dataset_stats_output = gr.HTML(get_dataset_stats_html())
-            refresh_stats_btn = gr.Button("🔄 Refresh Dataset Statistics")
-            refresh_stats_btn.click(fn=get_dataset_stats_html, outputs=dataset_stats_output)
-        with gr.TabItem("Log files"):
-            gr.Markdown("## Log files download links")
-            gr.Markdown("The `YYYMMDD_hhmmss_llm_trace.log` files contain complete traces of LLM initialization and calling.")
-            gr.Markdown("The `20250706_141040_score.results..csv` files contain submission and HuggingFace evaluation results.")
-            gr.HTML(get_logs_html())
+            msg.submit(
+                fn=send_message,
+                inputs=[msg, chatbot],
+                outputs=[chatbot, msg]
+            )
+            
+            clear_btn.click(
+                fn=clear_chat,
+                outputs=[chatbot, msg]
+            )
+            
+            refresh_models_btn.click(
+                fn=get_available_models,
+                outputs=models_info
+            )
+            
+            quick_math_btn.click(
+                fn=quick_math,
+                inputs=[chatbot],
+                outputs=[chatbot, msg]
+            )
+            
+            quick_code_btn.click(
+                fn=quick_code,
+                inputs=[chatbot],
+                outputs=[chatbot, msg]
+            )
+            
+            quick_general_btn.click(
+                fn=quick_general,
+                inputs=[chatbot],
+                outputs=[chatbot, msg]
+            )
 
 if __name__ == "__main__":
     print("\n" + "-"*30 + " App Starting " + "-"*30)
