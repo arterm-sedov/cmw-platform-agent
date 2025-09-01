@@ -337,7 +337,7 @@ class GaiaAgent:
             "api_key_env": "MISTRAL_API_KEY",
             "max_history": 20,
             "tool_support": True,
-            "force_tools": True,
+            "force_tools": True,  # Keep tools enabled by default, disable only on consistent failures
             "models": [
                                 {
                     "model": "mistral-large-latest",
@@ -626,6 +626,9 @@ class GaiaAgent:
         if "service_tier_capacity_exceeded" in error_str or "3505" in error_str:
             # Mistral capacity exceeded - wait longer
             retry_after = retry_after or 30
+        elif "invalid_request_message_order" in error_str or "3230" in error_str:
+            # Mistral message ordering error - short wait and retry
+            retry_after = retry_after or 5
         elif "429" in error_str or "rate limit" in error_str.lower():
             # Generic rate limit - moderate wait
             retry_after = retry_after or 10
@@ -907,9 +910,10 @@ class GaiaAgent:
         
         # Add the reminder to the existing message history
         messages.append(HumanMessage(content=reminder))
+        
         try:
             print(f"[Tool Loop] Trying to force the final answer with {len(tool_results_history)} tool results.")
-            final_response = llm.invoke(messages)
+            final_response = self._invoke_llm_provider(llm, messages)
             if hasattr(final_response, 'content') and final_response.content:
                 print(f"[Tool Loop] ✅ Final answer generated: {final_response.content[:200]}...")
                 return final_response
@@ -938,8 +942,9 @@ class GaiaAgent:
                 "and follow the system prompt without any extra text numbers, just answer concisely and directly."
             )
             minimal_messages = [self.sys_msg, HumanMessage(content=prompt)]
+            
             try:
-                final_response = llm.invoke(minimal_messages)
+                final_response = self._invoke_llm_provider(llm, minimal_messages)
                 if hasattr(final_response, 'content') and final_response.content:
                     return final_response
                 else:
@@ -1020,59 +1025,6 @@ class GaiaAgent:
             print(f"\n[Tool Loop] Step {step+1}/{max_steps} - Using LLM: {llm_type}")
             current_step_tool_results = []  # Reset for this step
             
-            # --- Reference tool injection for text-only questions, first tool call only ---
-            if is_text_only_question and step == 0:
-                try:
-                    response = llm.invoke(messages)
-                except Exception as e:
-                    handled, result = self._handle_llm_error(e, llm_name=llm_type, llm_type=llm_type, phase="tool_loop",
-                        messages=messages, llm=llm, tool_results_history=tool_results_history)
-                    if handled:
-                        return result
-                    else:
-                        raise
-                tool_calls = getattr(response, 'tool_calls', []) or []
-                if tool_calls:
-                    first_tool_call = tool_calls[0]
-                    requested_tool_name = first_tool_call.get('name')
-                    requested_tool_args = first_tool_call.get('args', {})
-                    # Always call reference tool
-                    reference_tool_name = 'web_search_deep_research_exa_ai'
-                    reference_tool_args = {'instructions': original_question}
-                    reference_result = self._execute_tool(reference_tool_name, reference_tool_args, tool_registry, call_id)
-                    # If LLM also requested reference tool, just inject its result
-                    if requested_tool_name == reference_tool_name:
-                        messages.append(ToolMessage(
-                            content=reference_result,
-                            name=reference_tool_name,
-                            tool_call_id=reference_tool_name
-                        ))
-                        # Continue as normal (do not call twice)
-                    else:
-                        # Call requested tool as well
-                        requested_result = self._execute_tool(requested_tool_name, requested_tool_args, tool_registry, call_id)
-                        # Inject both ToolMessages
-                        messages.append(ToolMessage(
-                            content=reference_result,
-                            name=reference_tool_name,
-                            tool_call_id=reference_tool_name
-                        ))
-                        messages.append(ToolMessage(
-                            content=requested_result,
-                            name=requested_tool_name,
-                            tool_call_id=requested_tool_name
-                        ))
-                        # Inject the reference note
-                        messages.append(HumanMessage(
-                            content=(
-                                "REFERENCE NOTE: The `web_search_deep_research_exa_ai` tool was automatically called with the original question to provide reference material. "
-                                "You have both its result and your requested tool's result above. "
-                                "Do not call `web_search_deep_research_exa_ai` again. "
-                                "Use both results to answer the question as required."
-                            )
-                        ))
-                    # Skip the rest of this step and go to next LLM step
-                    continue
             # ... existing code ...
             # Check if we've exceeded the maximum total tool calls
             if total_tool_calls >= max_total_tool_calls:
@@ -1102,12 +1054,13 @@ class GaiaAgent:
             token_limit = self._get_token_limit(llm_type)
             
             try:
-                response = llm.invoke(messages)
+                response = self._invoke_llm_provider(llm, messages)
             except Exception as e:
                 # Check if this is a rate limit error that should be throttled
                 error_str = str(e)
                 if ("429" in error_str or "rate limit" in error_str.lower() or 
-                    "service_tier_capacity_exceeded" in error_str or "3505" in error_str):
+                    "service_tier_capacity_exceeded" in error_str or "3505" in error_str or
+                    "invalid_request_message_order" in error_str or "3230" in error_str):
                     
                     # Try throttling and retrying instead of immediate fallback
                     if self._handle_rate_limit_throttling(e, llm_type, llm_type):
@@ -1116,13 +1069,20 @@ class GaiaAgent:
                         continue
                     else:
                         print(f"⏰ [Tool Loop] Rate limit retries exhausted for {llm_type}, falling back to error handler...")
+                        if llm_type == "mistral":
+                            self._track_mistral_failure("rate_limit")
                 
-                handled, result = self._handle_llm_error(e, llm_name=llm_type, llm_type=llm_type, phase="tool_loop",
-                    messages=messages, llm=llm, tool_results_history=tool_results_history)
-                if handled:
-                    return result
+                # Check for Mistral AI specific message ordering error
+                if llm_type == "mistral" and ("invalid_request_message_order" in error_str or "3230" in error_str):
+                    return self._handle_mistral_message_ordering_error_in_tool_loop(e, llm_type, messages, llm, tool_results_history)
                 else:
-                    raise
+                    # Handle other errors normally
+                    handled, result = self._handle_llm_error(e, llm_name=llm_type, llm_type=llm_type, phase="tool_loop",
+                        messages=messages, llm=llm, tool_results_history=tool_results_history)
+                    if handled:
+                        return result
+                    else:
+                        raise
 
             # Check if response was truncated due to token limits
             if hasattr(response, 'response_metadata') and response.response_metadata:
@@ -1217,11 +1177,17 @@ class GaiaAgent:
                 # --- Check for 'FINAL ANSWER' marker ---
                 if self._has_final_answer_marker(response):
                     print(f"[Tool Loop] Final answer detected: {response.content}")
+                    # Track successful Mistral AI requests
+                    if llm_type == "mistral":
+                        self._track_mistral_success()
                     return response
                 else:
                     # If we have tool results but no FINAL ANSWER marker, force processing
                     if tool_results_history:
                         print(f"[Tool Loop] Content without FINAL ANSWER marker but we have {len(tool_results_history)} tool results. Forcing final answer.")
+                        # Track successful Mistral AI requests
+                        if llm_type == "mistral":
+                            self._track_mistral_success()
                         return self._force_final_answer(messages, tool_results_history, llm)
                     else:
                         print("[Tool Loop] 'FINAL ANSWER' marker not found. Reiterating with reminder.")
@@ -1240,7 +1206,7 @@ class GaiaAgent:
                         )
                         reiterate_messages = [self.system_prompt, HumanMessage(content=reminder)]
                         try:
-                            reiterate_response = llm.invoke(reiterate_messages)
+                            reiterate_response = self._invoke_llm_provider(llm, reiterate_messages)
                             print(f"[Tool Loop] Reiterated response: {reiterate_response.content if hasattr(reiterate_response, 'content') else reiterate_response}")
                             return reiterate_response
                         except Exception as e:
@@ -1326,6 +1292,10 @@ class GaiaAgent:
                     # Add tool result to messages - let LangChain handle the formatting
                     messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
                 
+                # Convert messages for Mistral AI if needed (after tool results are added)
+                if llm_type == "mistral":
+                    messages = self._convert_messages_for_mistral(messages)
+                
                 continue  # Next LLM call
             # Gemini (and some LLMs) may use 'function_call' instead of 'tool_calls'
             function_call = getattr(response, 'function_call', None)
@@ -1382,6 +1352,11 @@ class GaiaAgent:
                 # Report tool result (for function_call branch)
                 self._print_tool_result(tool_name, tool_result)
                 messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_name))
+                
+                # Convert messages for Mistral AI if needed (after tool results are added)
+                if llm_type == "mistral":
+                    messages = self._convert_messages_for_mistral(messages)
+                
                 continue
             if hasattr(response, 'content') and response.content:
                 return response
@@ -1507,21 +1482,25 @@ class GaiaAgent:
                                     tool_results_history=tool_results_history
                                 )
                                 enhanced_messages = [self.system_prompt, HumanMessage(content=reminder)]
-                                response = llm_no_tools.invoke(enhanced_messages)
+                                response = self._invoke_llm_provider(llm_no_tools, enhanced_messages)
                             else:
                                 print(f"⚠️ Retrying {llm_name} without tools (no tool results found)")
-                                response = llm_no_tools.invoke(messages)
+                                response = self._invoke_llm_provider(llm_no_tools, messages)
                     if not hasattr(response, 'content') or not response.content:
                         print(f"⚠️ {llm_name} still returning empty content even without tools. This may be a token limit issue.")
                         from langchain_core.messages import AIMessage
                         return AIMessage(content=f"Error: {llm_name} failed due to token limits. Cannot complete reasoning.")
             else:
-                response = llm.invoke(messages)
+                response = self._invoke_llm_provider(llm, messages)
             print(f"--- Raw response from {llm_name} ---")
             
             # Add output to trace
             execution_time = time.time() - start_time
             self._trace_add_llm_call_output(llm_type, call_id, response, execution_time)
+            
+            # Track successful Mistral AI requests
+            if llm_type == "mistral":
+                self._track_mistral_success()
             
             return response
         except Exception as e:
@@ -1532,7 +1511,8 @@ class GaiaAgent:
             # Check if this is a rate limit error that should be throttled
             error_str = str(e)
             if ("429" in error_str or "rate limit" in error_str.lower() or 
-                "service_tier_capacity_exceeded" in error_str or "3505" in error_str):
+                "service_tier_capacity_exceeded" in error_str or "3505" in error_str or
+                "invalid_request_message_order" in error_str or "3230" in error_str):
                 
                 # Try throttling and retrying instead of immediate fallback
                 if self._handle_rate_limit_throttling(e, llm_name, llm_type):
@@ -1541,12 +1521,19 @@ class GaiaAgent:
                     return self._make_llm_request(messages, use_tools, llm_type)
                 else:
                     print(f"⏰ Rate limit retries exhausted for {llm_name}, falling back to error handler...")
+                    if llm_type == "mistral":
+                        self._track_mistral_failure("rate_limit")
             
-            handled, result = self._handle_llm_error(e, llm_name, llm_type, phase="request", messages=messages, llm=llm)
-            if handled:
-                return result
+            # Check for Mistral AI specific message ordering error
+            if llm_type == "mistral" and ("invalid_request_message_order" in error_str or "3230" in error_str):
+                return self._handle_mistral_message_ordering_error(e, llm_name, llm_type, messages, llm)
             else:
-                raise Exception(f"{llm_name} failed: {e}")
+                # Handle other errors normally
+                handled, result = self._handle_llm_error(e, llm_name, llm_type, phase="request", messages=messages, llm=llm)
+                if handled:
+                    return result
+                else:
+                    raise Exception(f"{llm_name} failed: {e}")
 
     
 
@@ -1832,6 +1819,103 @@ class GaiaAgent:
         else:
             return str(tool)
 
+    def _convert_messages_for_mistral(self, messages: List) -> List:
+        """
+        Convert LangChain messages to Mistral AI compatible format.
+        Mistral AI requires specific message formatting for tool calls.
+        The key issue is that tool messages must immediately follow the assistant message
+        that made the tool calls, not after user messages.
+        
+        Args:
+            messages: List of LangChain message objects
+            
+        Returns:
+            List of messages in Mistral AI compatible format
+        """
+        converted_messages = []
+        i = 0
+        
+        while i < len(messages):
+            msg = messages[i]
+            
+            if hasattr(msg, 'type'):
+                if msg.type == 'system':
+                    converted_messages.append({
+                        "role": "system",
+                        "content": msg.content
+                    })
+                elif msg.type == 'human':
+                    converted_messages.append({
+                        "role": "user",
+                        "content": msg.content
+                    })
+                elif msg.type == 'ai':
+                    # For AI messages with tool calls, we need to handle them specially
+                    if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                        # Add the assistant message with tool calls
+                        converted_messages.append({
+                            "role": "assistant",
+                            "content": msg.content or "",
+                            "tool_calls": msg.tool_calls
+                        })
+                        
+                        # Look ahead for tool messages that should immediately follow
+                        j = i + 1
+                        while j < len(messages) and hasattr(messages[j], 'type') and messages[j].type == 'tool':
+                            tool_msg = messages[j]
+                            converted_messages.append({
+                                "role": "tool",
+                                "name": getattr(tool_msg, 'name', 'unknown'),
+                                "content": tool_msg.content,
+                                "tool_call_id": getattr(tool_msg, 'tool_call_id', getattr(tool_msg, 'name', 'unknown'))
+                            })
+                            j += 1
+                        
+                        # Skip the tool messages we've already processed
+                        i = j - 1
+                    else:
+                        converted_messages.append({
+                            "role": "assistant",
+                            "content": msg.content or ""
+                        })
+                elif msg.type == 'tool':
+                    # Tool messages should only appear after assistant messages with tool calls
+                    # If we encounter one here, it might be orphaned - skip it
+                    print(f"[Mistral Conversion] Warning: Orphaned tool message detected: {getattr(msg, 'name', 'unknown')}")
+                    # Don't add orphaned tool messages to avoid ordering issues
+            else:
+                # Handle raw message objects (fallback)
+                converted_messages.append(msg)
+            
+            i += 1
+        
+        return converted_messages
+
+    def _invoke_llm_provider(self, llm, messages, llm_type=None):
+        """
+        Helper function to invoke LLM with automatic Mistral-specific message conversion.
+        This centralizes the repetitive Mistral conversion logic and makes the code cleaner.
+        Note: This function assumes messages are already in the correct format for Mistral AI.
+        For tool loops where tool results are added after conversion, use manual conversion.
+        
+        Args:
+            llm: The LLM instance to invoke
+            messages: List of messages to send to the LLM
+            llm_type: Type of LLM (if None, will be auto-detected)
+            
+        Returns:
+            The LLM response
+        """
+        # Auto-detect LLM type if not provided
+        if llm_type is None:
+            llm_type = getattr(llm, 'llm_type', None) or getattr(llm, 'type_str', None) or ''
+        
+        # Convert messages for Mistral AI if needed
+        if llm_type == "mistral":
+            messages = self._convert_messages_for_mistral(messages)
+        
+        # Invoke the LLM
+        return llm.invoke(messages)
 
         
     def _calculate_cosine_similarity(self, embedding1, embedding2) -> float:
@@ -2567,7 +2651,7 @@ class GaiaAgent:
             test_message = [self.sys_msg, HumanMessage(content="What is the main question in the whole Galaxy and all. Max 150 words (250 tokens)")]
             print(f"🧪 Testing {llm_name} with 'Hello' message...")
             start_time = time.time()
-            test_response = llm.invoke(test_message)
+            test_response = self._invoke_llm_provider(llm, test_message)
             end_time = time.time()
             if test_response and hasattr(test_response, 'content') and test_response.content:
                 print(f"✅ {llm_name} test successful!")
@@ -3810,3 +3894,164 @@ class GaiaAgent:
             if model_name:
                 choices.append(f"{provider}: {model_name}")
         return choices
+
+    def _track_mistral_failure(self, error_type: str):
+        """
+        Track Mistral AI failures and automatically disable tool calling if it consistently fails.
+        
+        Args:
+            error_type: Type of error ("message_ordering", "rate_limit", "other")
+        """
+        if not hasattr(self, '_mistral_failure_tracker'):
+            self._mistral_failure_tracker = {
+                'message_ordering': 0,
+                'rate_limit': 0,
+                'other': 0,
+                'total_failures': 0,
+                'last_failure_time': None,
+                'consecutive_failures': 0,
+                'last_success_time': None
+            }
+        
+        self._mistral_failure_tracker[error_type] += 1
+        self._mistral_failure_tracker['total_failures'] += 1
+        self._mistral_failure_tracker['consecutive_failures'] += 1
+        self._mistral_failure_tracker['last_failure_time'] = time.time()
+        
+        # Reset consecutive failures if we had a recent success (within last 5 minutes)
+        if (self._mistral_failure_tracker.get('last_success_time') and 
+            time.time() - self._mistral_failure_tracker['last_success_time'] < 300):
+            self._mistral_failure_tracker['consecutive_failures'] = 0
+        
+        # If we have too many consecutive message ordering failures, disable tool calling for Mistral
+        if self._mistral_failure_tracker['message_ordering'] >= 3:
+            if self.LLM_CONFIG.get('mistral', {}).get('force_tools', True):
+                print(f"⚠️ Mistral AI has had {self._mistral_failure_tracker['message_ordering']} message ordering failures. Disabling tool calling.")
+                self.LLM_CONFIG['mistral']['force_tools'] = False
+                self.LLM_CONFIG['mistral']['tool_support'] = False
+        
+        # If we have too many consecutive failures overall, disable tool calling
+        elif self._mistral_failure_tracker['consecutive_failures'] >= 5:
+            if self.LLM_CONFIG.get('mistral', {}).get('force_tools', True):
+                print(f"⚠️ Mistral AI has had {self._mistral_failure_tracker['consecutive_failures']} consecutive failures. Disabling tool calling.")
+                self.LLM_CONFIG['mistral']['force_tools'] = False
+                self.LLM_CONFIG['mistral']['tool_support'] = False
+        
+        # If we have too many total failures, consider disabling Mistral entirely
+        if self._mistral_failure_tracker['total_failures'] >= 15:
+            print(f"⚠️ Mistral AI has had {self._mistral_failure_tracker['total_failures']} total failures. Consider using alternative providers.")
+
+    def _track_mistral_success(self):
+        """
+        Track successful Mistral AI requests to reset failure counters.
+        """
+        if hasattr(self, '_mistral_failure_tracker'):
+            self._mistral_failure_tracker['consecutive_failures'] = 0
+            self._mistral_failure_tracker['last_success_time'] = time.time()
+            
+            # If tools were disabled due to failures, consider re-enabling them after success
+            if (self.LLM_CONFIG.get('mistral', {}).get('force_tools', False) == False and 
+                self._mistral_failure_tracker['message_ordering'] < 2):
+                print(f"✅ Mistral AI success - considering re-enabling tool calling")
+                self.LLM_CONFIG['mistral']['force_tools'] = True
+                self.LLM_CONFIG['mistral']['tool_support'] = True
+
+    def _handle_mistral_message_ordering_error(self, error, llm_name, llm_type, messages, llm):
+        """
+        Handle Mistral AI message ordering errors by reconstructing the conversation.
+        
+        Args:
+            error: The original error
+            llm_name: Name of the LLM for logging
+            llm_type: Type of LLM
+            messages: Original message history
+            llm: LLM instance
+            
+        Returns:
+            Response from the retry attempt or raises exception
+        """
+        error_str = str(error)
+        print(f"❌ Mistral AI message ordering error detected: {error_str}")
+        self._track_mistral_failure("message_ordering")
+        print(f"🔄 Attempting to fix message ordering and retry...")
+        
+        # Try to fix the message ordering by reconstructing the conversation
+        try:
+            # Extract the original question and tool results
+            original_question = None
+            tool_results = []
+            
+            for msg in messages:
+                if hasattr(msg, 'type'):
+                    if msg.type == 'human' and not any('reminder' in str(msg.content).lower() for reminder in ['use tools', 'final answer', 'analyze']):
+                        original_question = msg.content
+                    elif msg.type == 'tool':
+                        tool_results.append({
+                            'name': getattr(msg, 'name', 'unknown'),
+                            'content': msg.content,
+                            'tool_call_id': getattr(msg, 'tool_call_id', getattr(msg, 'name', 'unknown'))
+                        })
+            
+            if original_question and tool_results:
+                # Reconstruct a clean conversation for Mistral
+                clean_messages = []
+                
+                # Add system message if present
+                for msg in messages:
+                    if hasattr(msg, 'type') and msg.type == 'system':
+                        clean_messages.append(msg)
+                        break
+                
+                # Add the original question
+                clean_messages.append(HumanMessage(content=original_question))
+                
+                # Add tool results as a single user message
+                if tool_results:
+                    tool_summary = "Tool results:\n" + "\n".join([f"{result['name']}: {result['content']}" for result in tool_results])
+                    clean_messages.append(HumanMessage(content=f"Please analyze these results and provide the final answer:\n{tool_summary}"))
+                
+                # Try the clean conversation
+                response = self._invoke_llm_provider(llm, clean_messages)
+                print(f"✅ Successfully retried with clean message ordering")
+                return response
+            else:
+                raise Exception("Could not reconstruct clean conversation for Mistral AI")
+                
+        except Exception as retry_error:
+            print(f"❌ Failed to fix Mistral AI message ordering: {retry_error}")
+            # Fall back to error handler
+            handled, result = self._handle_llm_error(error, llm_name, llm_type, phase="request", messages=messages, llm=llm)
+            if handled:
+                return result
+            else:
+                raise Exception(f"{llm_name} failed: {error}")
+
+    def _handle_mistral_message_ordering_error_in_tool_loop(self, error, llm_type, messages, llm, tool_results_history):
+        """
+        Handle Mistral AI message ordering errors specifically in the tool loop context.
+        
+        Args:
+            error: The original error
+            llm_type: Type of LLM
+            messages: Original message history
+            llm: LLM instance
+            tool_results_history: History of tool results
+            
+        Returns:
+            Response from the retry attempt or raises exception
+        """
+        error_str = str(error)
+        print(f"❌ [Tool Loop] Mistral AI message ordering error detected: {error_str}")
+        try:
+            response = self._handle_mistral_message_ordering_error(error, llm_type, llm_type, messages, llm)
+            print(f"✅ [Tool Loop] Successfully retried with clean message ordering")
+            return response
+        except Exception as retry_error:
+            print(f"❌ [Tool Loop] Failed to fix Mistral AI message ordering: {retry_error}")
+            # Fall back to error handler
+            handled, result = self._handle_llm_error(error, llm_name=llm_type, llm_type=llm_type, phase="tool_loop",
+                messages=messages, llm=llm, tool_results_history=tool_results_history)
+            if handled:
+                return result
+            else:
+                raise
