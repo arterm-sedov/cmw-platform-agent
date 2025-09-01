@@ -79,8 +79,9 @@ The agent uses a sophisticated multi-LLM approach with the following providers i
    - Tool Support: ✅ Full tool-calling capabilities
 
 4. **Groq** (Second Fallback)
-   - Model: `qwen-qwq-32b`
-   - Token Limit: 3K tokens
+   - Models: `qwen-qwq-32b`, `llama-3.1-8b-instant`, `llama-3.3-70b-8192`
+   - Token Limits: 16K tokens
+   - Rate Limits: Generous free tier limits (see [Groq docs](https://console.groq.com/docs/rate-limits))
    - Tool Support: ✅ Full tool-calling capabilities
 
 5. **HuggingFace** (Final Fallback)
@@ -316,10 +317,11 @@ Every question generates a complete execution trace including:
 
 ### Rate Limiting & Reliability
 
-- **Smart Rate Limiting**: Different intervals for different providers
+- **Smart Rate Limiting**: Model-specific and provider-specific rate limits
 - **Token Management**: Automatic truncation and summarization
 - **Error Recovery**: Automatic retry with different LLMs
 - **Graceful Degradation**: Continues processing even if some components fail
+- **Smart Rate Limit Handling**: Uses provider-specific strategies (chunking for low limits, 429 error handling for high limits)
 
 ## Usage
 
