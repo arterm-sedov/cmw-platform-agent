@@ -165,16 +165,17 @@ def create_text_attribute(
     return result
 
 
-results = create_text_attribute.invoke({
-    "name": "Test3",
-    "system_name": "Test3",
-    "application_system_name": "Malatik",
-    "template_system_name": "Test",
-    "display_format": "PlainText",
-    "description": None,
-    "custom_mask": None,
-    "control_uniqueness": False,
-    "use_as_record_title": True,
-    "attribute_type": "String"
-})
-print(results)
+if __name__ == "__main__":
+    results = create_text_attribute.invoke({
+        "name": "Test3",
+        "system_name": "Test5",
+        "application_system_name": "Malatik",
+        "template_system_name": "Test",
+        "display_format": "PlainText",
+        "description": None,
+        "custom_mask": None,
+        "control_uniqueness": False,
+        "use_as_record_title": True,
+        "attribute_type": "String"
+    })
+    print(results)
