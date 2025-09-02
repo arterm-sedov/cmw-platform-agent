@@ -1,10 +1,7 @@
 from typing import Any, Dict, List, Optional
 import json
 from typing import Optional
-from urllib import request
-from numpy import isin
 import requests
-from sqlalchemy.engine.base import ExceptionContextImpl
 import yaml
 import base64
 from langchain.tools import tool
@@ -51,59 +48,55 @@ def _remove_nones(obj: Any) -> Any:
 
 @tool("create_text_attribute", return_direct=False)
 def create_text_attribute(
-    solutionAlias: str,
-    owner: str,
-    alias: str,
-    format: str,
     name: str,
-    type: Optional[str] = "Undefined",
-    attribute_type: str = "String",
+    system_name: str,
+    application_system_name: str,
+    template_system_name: str,
+    display_format: str,
     description: Optional[str] = None,
-    isUnique: Optional[bool] = False,
-    isTitle: Optional[bool] = False,
-    validationMaskRegex: Optional[str] = None
+    custom_mask: Optional[str] = None,
+    control_uniqueness: Optional[bool] = False,
+    use_as_record_title: Optional[bool] = False,
+    attribute_type: Optional[str] = "String"
 ) -> Dict[str, Any]:
     r"""
-    Create an text attribute in Comindware Platform via API method /webapi/Attribute/solutionAlias.
+    Create a text attribute.
 
-    Tool description:
-        - Endpoint: webapi/Attribute/solutionAlias (POST)
-        - Auth: Basic ()
-        - Returns: dict with keys:
-            - succes: bool
-            - status_code: int      -> HTTP status code
-            - raw_response: str     -> raw response text for auditing
-            - error: str | None     -> error message if any
+    - Returns: dict with keys:
+        - succes: bool
+        - status_code: int      -> HTTP status code
+        - raw_response: str     -> raw response text for auditing
+        - error: str | None     -> error message if any
     
     Parameters:
-        - solutionAlias (string): Solution system name where the container (record template) where the attribute is created.
-        - owner (string): Container (record template) system name where the attribute is created.
-        - alias (string): Unique system name of the attribute.
-        - attribute_type (string): Attribute type ("String").
-        - format (string): Display format name.
-        - name (string): Human-readable name of the attribute.
-        - description (string | none): Human-readable description of the attribute.
-        - isUnique (bool | False): A parameter that displays whether the values of this attribute should be unique.
-        - isTitle (bool | False): A parameter that displays whether the values of this attribute should be displayed as a title.
-        - validationMaskRegex (str | None): A special fill mask for specific display formats.
+        - name (string): Human-readable name (Название) of the attribute.
+        - system_name (string): Unique system name (Системное имя) of the attribute.
+        - description (string | None): Human-readable description (Описание) of the attribute.
+        - application_system_name (string): System name (Системное имя приложения) of the application with the template where the attribute is created.
+        - template_system_name (string): System name of the template (Системное имя шаблона) where the attribute is created.
+        - display_format (string): Attribute display format (Формат отображения). Value mapping to Russian format names:
+            {
+                "PlainText": "Простой текст",
+                "MarkedText": "Размеченный текст",
+                "HtmlText": "HTML-текст",
+                "LicensePlateNumberRuMask": "Регистрация номера ТС (РФ)",
+                "IndexRuMask": "Индекс (РФ)",
+                "PassportRuMask": "Паспорт (РФ)",
+                "INNMask": "ИНН юрлица",
+                "OGRNMask": "ОГРН",
+                "IndividualINNMask": "ИНН физлица",
+                "PhoneRuMask": "Телефон (РФ)",
+                "EmailMask": "Адрес эл. почты",
+                "CustomMask": "Особая маска"
+            }
+        - custom_mask (str | None): A special formatting mask (Особая маска). Fill only if display_format=CustomMask.
+        - control_uniqueness (bool | False): Flag (Контролировать уникальность значения) to control whether the values of this attribute must be unique.
+        - use_as_record_title (bool | False): Flag (Использовать как заголовок записей) to control whether the values of this attribute will be displayed as a template record title.
+        
 
     Notes:
         - This tool only calls Attribute (POST) and does not perform subsequent operations.
         
-    Displaying formats mapping (API -> UI):
-        - PlainText -> 
-        - MarkedText -> 
-        - HtmlText -> 
-        - LicensePlateNumberRuMask -> 
-        - IndexRuMask -> 
-        - PassportRuMask -> 
-        - INNMask -> 
-        - OGRNMask -> 
-        - IndividualINNMask -> 
-        - PhoneRuMask -> 
-        - EmailMask -> 
-        - CustomMask -> 
-    
     Validation Masks mapping (Displaying format -> Validation Mask):
         - LicensePlateNumberRuMask -> ([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})
         - IndexRuMask -> r'([0-9]{6})'
@@ -118,22 +111,22 @@ def create_text_attribute(
     # Base URL from YAML (mandatory, validated in loader)
     cfg = _load_server_config()
     base_url = cfg.get("base_url")
-    url = f"{base_url}/webapi/Attribute/{solutionAlias}"
+    url = f"{base_url}/webapi/Attribute/{application_system_name}"
     headers = _basic_headers()
 
     request_body: Dict[str, Any] = {
         "globalAlias": {
-            "type": type,
-            "owner": owner,
-            "alias": alias
+            "owner": template_system_name,
+            "type": "Undefined",
+            "alias": system_name
         },
-        "type": attribute_type,
-        "format": format,
+        "type": "String",
+        "format": display_format,
         "name": name,
         "description": description,
-        "isUnique": isUnique,
-        "isTitle": isTitle,
-        "validationMaskRegex": validationMaskRegex
+        "isUnique": control_uniqueness,
+        "isTitle": use_as_record_title,
+        "validationMaskRegex": custom_mask if display_format == "CustomMask" else None
     }
 
     # Remove None values
@@ -172,27 +165,16 @@ def create_text_attribute(
     return result
 
 
-solutionAlias = "Malatik"
-owner = "Test"
-alias = "Test3"
-format = "PlainText"
-name = "Test3"
-type = "Undefined",
-attribute_type = "String",
-description = None,
-isUnique = False,
-isTitle = True,
-validationMaskRegex = None
 results = create_text_attribute.invoke({
-    "solutionAlias": "Malatik",
-    "owner": "Test",
-    "alias": "Test3",
-    "format": "PlainText",
     "name": "Test3",
-    "type": "Undefined",
-    "attribute_type": "String",
+    "system_name": "Test3",
+    "application_system_name": "Malatik",
+    "template_system_name": "Test",
+    "display_format": "PlainText",
     "description": None,
-    "isUnique": False,
-    "isTitle": True,
-    "validationMaskRegex": None})
+    "custom_mask": None,
+    "control_uniqueness": False,
+    "use_as_record_title": True,
+    "attribute_type": "String"
+})
 print(results)
