@@ -618,6 +618,10 @@ def chat_with_agent(message, history):
         answer = final_result.get("submitted_answer", "No answer generated")
         llm_used = final_result.get("llm_used", "unknown")
         
+        # Fix line breaks in the answer (convert \n to actual newlines)
+        # if isinstance(answer, str):
+        #     answer = answer.replace('\\n', '\n\n')
+        
         # Get detailed information about the multi-model approach
         response_parts = []
         response_parts.append(f"🤖 **Agent Response** (using {llm_used}):\n\n{answer}")
@@ -719,66 +723,7 @@ with gr.Blocks() as demo:
     
 
     with gr.Tabs():
-        with gr.TabItem("Readme"):
-            gr.Markdown("""
-            ## 🕵🏻‍♂️ CMW Platform Agent - Entity Creation System
-
-            **Welcome to the CMW Platform Agent - an AI-powered system for creating entities in the Comindware Platform!**
-            
-            ### 🚀 **What is this project**:
-            
-            - **Input**: Users provide natural language requests to create entities in the CMW Platform
-            - **Challenge**: Translate natural language into CMW Platform API calls for entity creation
-            - **Solution**: The agent uses multiple LLMs and specialized tools to create templates, attributes, workflows, and other platform entities
-            - **Results**: The agent can successfully create entities with 50-65% success rate, up to 80% with all LLMs available
-            
-            **Dataset Results**: [View live results](https://huggingface.co/datasets/arterm-sedov/agent-course-final-assignment/viewer/runs_new)
-            
-            **For more project details**, see the [README.md](https://huggingface.co/spaces/arterm-sedov/agent-course-final-assignment/blob/main/README.md)
-            
-            This is an experimental multi-LLM agent system that demonstrates advanced AI agent capabilities for business process automation. The project showcases:
-
-            ### 🎯 **Project Goals**
-            
-            - **Entity Creation**: Create templates, attributes, workflows, and other CMW Platform entities
-            - **Multi-LLM Orchestration**: Dynamically switches between Google Gemini, Groq, OpenRouter, and HuggingFace models
-            - **Comprehensive Tool Suite**: CMW Platform API integration, web search, code execution, file analysis, and more
-            - **Robust Fallback System**: Automatic model switching when one fails
-            - **Complete Transparency**: Full trace logging of reasoning and tool usage
-            - **Real-world Reliability**: Battle-tested for CMW Platform entity creation
-
-            ### 🔬 **Why This Project?**
-            
-            This project represents advanced AI agent development for business process management. The experimental nature comes from:
-
-            - **Multi-Provider Testing**: Exploring different LLM providers and their capabilities for entity creation tasks
-            - **Tool Integration**: Creating a modular system where tools can chain together for complex entity creation
-            - **Performance Optimization**: Balancing speed, accuracy, and cost across multiple models
-            - **Transparency**: Making AI reasoning visible and debuggable for business users
-            - **CMW Platform Integration**: Bridging natural language requests with platform API capabilities
-
-            ### 📊 **What You'll Find Here**
-            
-            - **Live Entity Creation**: Test the agent for creating CMW Platform entities. See the **Evaluation** tab. 
-                - When starting, the agent initializes LLMs and outputs debugging logs. Select **Logs** at the top to view the init log.
-                - NOTE: LLM availability is subject to inference limits with each provider
-            - **Dataset Tracking**: All entity creation attempts are uploaded to the HuggingFace dataset for analysis. See the **Dataset** tab
-            - **Performance Metrics**: Detailed timing, token usage, and success rates for entity creation. See the **Dataset** tab
-            - **Complete Traces**: See exactly how the agent thinks and uses tools for entity creation. See the **Log files** tab
-
-            ### 🏢 **CMW Platform Integration**
-            
-            This agent is designed to work with the Comindware Platform, a business process management and workflow automation platform. The agent can:
-            
-            - **Create Templates**: Define data structures with custom attributes
-            - **Configure Workflows**: Set up business processes and automation rules
-            - **Manage Entities**: Create, update, and configure platform objects
-            - **API Integration**: Interact with CMW Platform APIs for entity management
-            
-            For more information about the Comindware Platform, see the [CMW Platform Documentation](https://github.com/arterm-sedov/cbap-mkdocs-ru).
-
-            This project demonstrates what's possible when you combine multiple AI models with intelligent tool orchestration for business process automation.
-            """)
+        
         
         with gr.TabItem("Chat with Agent"):
             gr.Markdown("""
@@ -898,6 +843,66 @@ with gr.Blocks() as demo:
                 inputs=[chatbot],
                 outputs=[chatbot, msg]
             )
+        with gr.TabItem("Readme"):
+            gr.Markdown("""
+            ## 🕵🏻‍♂️ CMW Platform Agent - Entity Creation System
+
+            **Welcome to the CMW Platform Agent - an AI-powered system for creating entities in the Comindware Platform!**
+            
+            ### 🚀 **What is this project**:
+            
+            - **Input**: Users provide natural language requests to create entities in the CMW Platform
+            - **Challenge**: Translate natural language into CMW Platform API calls for entity creation
+            - **Solution**: The agent uses multiple LLMs and specialized tools to create templates, attributes, workflows, and other platform entities
+            - **Results**: The agent can successfully create entities with 50-65% success rate, up to 80% with all LLMs available
+            
+            **Dataset Results**: [View live results](https://huggingface.co/datasets/arterm-sedov/agent-course-final-assignment/viewer/runs_new)
+            
+            **For more project details**, see the [README.md](https://huggingface.co/spaces/arterm-sedov/agent-course-final-assignment/blob/main/README.md)
+            
+            This is an experimental multi-LLM agent system that demonstrates advanced AI agent capabilities for business process automation. The project showcases:
+
+            ### 🎯 **Project Goals**
+            
+            - **Entity Creation**: Create templates, attributes, workflows, and other CMW Platform entities
+            - **Multi-LLM Orchestration**: Dynamically switches between Google Gemini, Groq, OpenRouter, and HuggingFace models
+            - **Comprehensive Tool Suite**: CMW Platform API integration, web search, code execution, file analysis, and more
+            - **Robust Fallback System**: Automatic model switching when one fails
+            - **Complete Transparency**: Full trace logging of reasoning and tool usage
+            - **Real-world Reliability**: Battle-tested for CMW Platform entity creation
+
+            ### 🔬 **Why This Project?**
+            
+            This project represents advanced AI agent development for business process management. The experimental nature comes from:
+
+            - **Multi-Provider Testing**: Exploring different LLM providers and their capabilities for entity creation tasks
+            - **Tool Integration**: Creating a modular system where tools can chain together for complex entity creation
+            - **Performance Optimization**: Balancing speed, accuracy, and cost across multiple models
+            - **Transparency**: Making AI reasoning visible and debuggable for business users
+            - **CMW Platform Integration**: Bridging natural language requests with platform API capabilities
+
+            ### 📊 **What You'll Find Here**
+            
+            - **Live Entity Creation**: Test the agent for creating CMW Platform entities. See the **Evaluation** tab. 
+                - When starting, the agent initializes LLMs and outputs debugging logs. Select **Logs** at the top to view the init log.
+                - NOTE: LLM availability is subject to inference limits with each provider
+            - **Dataset Tracking**: All entity creation attempts are uploaded to the HuggingFace dataset for analysis. See the **Dataset** tab
+            - **Performance Metrics**: Detailed timing, token usage, and success rates for entity creation. See the **Dataset** tab
+            - **Complete Traces**: See exactly how the agent thinks and uses tools for entity creation. See the **Log files** tab
+
+            ### 🏢 **CMW Platform Integration**
+            
+            This agent is designed to work with the Comindware Platform, a business process management and workflow automation platform. The agent can:
+            
+            - **Create Templates**: Define data structures with custom attributes
+            - **Configure Workflows**: Set up business processes and automation rules
+            - **Manage Entities**: Create, update, and configure platform objects
+            - **API Integration**: Interact with CMW Platform APIs for entity management
+            
+            For more information about the Comindware Platform, see the [CMW Platform Documentation](https://github.com/arterm-sedov/cbap-mkdocs-ru).
+
+            This project demonstrates what's possible when you combine multiple AI models with intelligent tool orchestration for business process automation.
+            """)
 
 if __name__ == "__main__":
     print("\n" + "-"*30 + " App Starting " + "-"*30)
