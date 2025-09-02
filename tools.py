@@ -49,6 +49,8 @@ except ImportError:
 
 # Always import the tool decorator - it's essential
 from langchain_core.tools import tool
+# Expose Comindware Platform tool(s)
+from tool_create_text_attribute import create_text_attribute  # noqa: F401
 
 # Global configuration for search tools
 SEARCH_LIMIT = 5  # Maximum number of results for all search tools (Tavily, Wikipedia, Arxiv)
