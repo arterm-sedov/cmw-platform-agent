@@ -172,17 +172,17 @@ def create_text_attribute(
             },
             "control_uniqueness": {
                 "Russian name": "Контролировать уникальность значения",
-                "English name": "Control uniqueness",
+                "English name": "Validate for unique values",
                 "type": "boolean",
                 "default": false,
-                "description": "Whether attribute values must be unique"
+                "description": "Control whether attribute values must be unique"
             },
             "use_as_record_title": {
                 "Russian name": "Использовать как заголовок записей",
                 "English name": "Use as record title",
                 "type": "boolean",
                 "default": false,
-                "description": "Whether attribute values will be displayed as a template record title"
+                "description": "Control whether attribute values will be displayed as a template record title"
             }
         }
     }
