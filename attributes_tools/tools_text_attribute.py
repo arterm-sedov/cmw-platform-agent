@@ -230,7 +230,7 @@ def get_text_attribute(
         "Returns": {
             "success": {
                 "type": "boolean",
-                "description": "True if attribute was created successfully"
+                "description": "True if attribute was geted successfully"
             },
             "status_code": {
                 "type": "integer",
@@ -275,7 +275,7 @@ def get_text_attribute(
 
     result_body = result['raw_response']
 
-    keys_to_remove = ['isSystem', 'isDisabled', 'isIndexed', 'isTracked', 'isMultiValue', 'isMandatory', 'isOwnership', 'isCalculated', 'isReadonly', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio']
+    keys_to_remove = ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio']
 
     for key in keys_to_remove:
         if key in result_body['response']:
