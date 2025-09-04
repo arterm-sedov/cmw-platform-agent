@@ -67,6 +67,7 @@ def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]
         result["error"] = json.dumps(err_json, ensure_ascii=False)
     except Exception:
         result["error"] = response.text or f"HTTP {response.status_code}"
+    return result
 
 def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
 
@@ -104,6 +105,7 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
         result["error"] = json.dumps(err_json, ensure_ascii=False)
     except Exception:
         result["error"] = response.text or f"HTTP {response.status_code}"
+    return result
 
 def _get_request(endpoint: str) -> Dict[str, Any]:
 
@@ -139,4 +141,4 @@ def _get_request(endpoint: str) -> Dict[str, Any]:
         result["error"] = json.dumps(err_json, ensure_ascii=False)
     except Exception:
         result["error"] = response.text or f"HTTP {response.status_code}"
-    return
+    return result
