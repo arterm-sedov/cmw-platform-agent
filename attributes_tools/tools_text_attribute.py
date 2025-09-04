@@ -8,6 +8,9 @@ ATTRIBUTE_ENDPOINT = "webapi/Attribute"
 def _set_input_mask(display_format: str) -> str:
     # Setting validation mask via display format
     input_mask_mapping: Dict[str, str] = {
+        "PlainText": None,
+        "MarkedText": None,
+        "HtmlText": None,
         "LicensePlateNumberRuMask":"([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})",
         "IndexRuMask": "([0-9]{6})",
         "PassportRuMask": "([0-9]{4} [0-9]{6})",
@@ -19,10 +22,7 @@ def _set_input_mask(display_format: str) -> str:
         "CustomMask": None
     }
 
-    if input_mask_mapping[display_format]:
-        return input_mask_mapping[display_format]
-    else:
-        return None
+    return input_mask_mapping.get(display_format, None)
 
 def _remove_nones(obj: Any) -> Any:
     """
@@ -49,7 +49,7 @@ def edit_or_create_text_attribute(
 ) -> Dict[str, Any]:
     r"""
     {
-        "Decstiption": "Edit or Create a text attribute",
+        "Tool description": "Edit or Create a text attribute",
         "Returns": {
             "success": {
                 "type": "boolean",
@@ -74,7 +74,7 @@ def edit_or_create_text_attribute(
                 "Rusian names": ["Создать", "Редактировать"],
                 "variants": ["create", "edit"],
                 "description": "Choose operation: Creates or Edits the attribute."
-            }
+            },
             "name": {
                 "Russian name": "Название",
                 "English name": "Name",
@@ -202,19 +202,19 @@ def edit_or_create_text_attribute(
         # Remove None values
     request_body = _remove_nones(request_body) 
 
-    if operation == "create":
-
-        result = requests_._post_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
-
-        requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
-
-
-    elif operation == "edit":
-
-        result = requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
-    
-    else:
-        result = "Нет такой операции над атрибутом."
+    try:
+        if operation == "create":
+            result = requests_._post_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
+        elif operation == "edit" or operation == "create":
+            result = requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
+        else:
+            result = "Нет такой операции над атрибутом."
+    except Exception as e:
+        result = {
+            "success": False,
+            "error": f"Tool execution failed: {str(e)}",
+            "status_code": 500
+        }
 
     return result
 

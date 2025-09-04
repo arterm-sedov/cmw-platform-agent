@@ -609,8 +609,16 @@ def chat_with_agent(message, history):
     try:
         print(f"💬 Chat request: {message}")
         
-        # Call the agent with the user's message
-        result = agent(message)
+        # Build minimal chat history for agent: only user/assistant turns
+        chat_history = []
+        for turn in history:
+            role = turn.get("role")
+            content = turn.get("content", "")
+            if role in ("user", "assistant") and content:
+                chat_history.append({"role": role, "content": content})
+
+        # Call the agent with the user's message and history
+        result = agent(message, chat_history=chat_history)
         
         # Extract the final answer from the agent result
         trace = result
@@ -679,6 +687,49 @@ def chat_with_agent(message, history):
         print(f"Chat error: {e}")
         updated_history = history + [{"role": "user", "content": message}, {"role": "assistant", "content": error_msg}]
         return updated_history, ""
+
+def chat_with_agent_stream(message, history):
+    """
+    Stream assistant output by yielding partial responses. Compute once; reveal in small chunks.
+    """
+    if not message.strip():
+        yield history, ""
+        return
+    if agent is None:
+        yield history + [{"role": "user", "content": message}, {"role": "assistant", "content": "Error: Agent not initialized. Check logs for details."}], ""
+        return
+    try:
+        print(f"💬 Chat (stream) request: {message}")
+        working_history = history + [{"role": "user", "content": message}]
+        yield working_history, ""
+
+        # Build chat history for agent
+        chat_history = []
+        for turn in history:
+            role = turn.get("role")
+            content = turn.get("content", "")
+            if role in ("user", "assistant") and content:
+                chat_history.append({"role": role, "content": content})
+
+        # Single agent call
+        result = agent(message, chat_history=chat_history)
+        trace = result
+        final_result = trace.get("final_result", {})
+        answer_full = final_result.get("submitted_answer", "No answer generated")
+        llm_used = final_result.get("llm_used", "unknown")
+
+        chunk = ""
+        step = 80
+        for i in range(0, len(answer_full), step):
+            chunk = answer_full[: i + step]
+            yield working_history + [{"role": "assistant", "content": chunk}], ""
+
+        final_text = f"{answer_full}\n\n_(model: {llm_used})_"
+        yield working_history + [{"role": "assistant", "content": final_text}], ""
+    except Exception as e:
+        err = f"❌ Error: {e}"
+        print(f"Chat stream error: {e}")
+        yield history + [{"role": "user", "content": message}, {"role": "assistant", "content": err}], ""
 
 def get_available_models():
     """
@@ -805,13 +856,13 @@ with gr.Blocks() as demo:
             
             # Connect event handlers
             send_btn.click(
-                fn=send_message,
+                fn=chat_with_agent_stream,
                 inputs=[msg, chatbot],
                 outputs=[chatbot, msg]
             )
             
             msg.submit(
-                fn=send_message,
+                fn=chat_with_agent_stream,
                 inputs=[msg, chatbot],
                 outputs=[chatbot, msg]
             )
