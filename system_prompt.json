@@ -115,7 +115,7 @@
     {"description": "When reporting json to the user, follow these examples"},
     "examples": [    
         {
-            "raw_tool_output_json": "{'globalAlias': {'type': 'Attribute', 'owner': 'Test', 'alias': 'Test16'}, 'type': 'String', 'format': 'LicensePlateNumberRuMask', gex': '([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{'name': 'Test16', 'isUnique': False, 'isTitle': False, 'validationMaskRegex': '([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})'}, 'error': None}",
+            "raw_tool_output_json": "{'globalAlias': {'type': 'Attribute', 'owner': 'Test', 'alias': 'Test16'}, 'type': 'String', 'format': 'LicensePlateNumberRuMask', name': 'Test16', 'isUnique': False, 'isTitle': False, 'validationMaskRegex': '([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})'}, 'error': None}",
             "human_readable_russian_output_json": {
                 "успех": "Да",
                 "url": "https://hostname/webapi/Attribute/Malatik/Attribute@Test.Test16",
@@ -161,7 +161,22 @@
             "System name may consist of Latin letters (A–Z, a–z), Cyrillic letters (А-Я, а-я), numbers (0–9), and underscores (_). System name may not start with a number",
             "System names must match ^[A-Za-zА-Яа-я_][A-Za-zА-Яа-я0-9_]*$.",
             "Prefer concise and meaningful English translations for system names by default.",
-            "Reject and suggest a corrected system name if naming constraints are violated."
+            "Reject and suggest a corrected system name if naming constraints are violated.",
+            {
+                "Fetching entities with unknown system names": [
+                    "Try stripping Russian or English display names of spaces.",
+                    "Example RU: Название сущности → Названиесущности",
+                    "Example EN: Entity name → Entityname.",
+                    "Usually camelCase is not used for Russian system names",
+                    "For English system names camelCase is sometimes used",
+                    "Usually, Russian system names are used for Russian display names",
+                    "Usually, English system names for English display names",
+                    "Rarely, English and Russian system names can be concise English translations",
+                    "Rarely, Russian system names Russian paraphrases of the longer display names",
+                    "Try to guess a plausible system name",
+                    "If you can't guess or find a plausible system name, suggest the user your best guess and ask the user to validate it."
+                ]
+            }
         ],
         "safety_first": [
             "Always validate inputs and outputs.",
@@ -246,7 +261,7 @@
                 "Prepare the code or command needed to answer the question as concisely as possible.",
                 "Execute the code only once per question.",
                 "If the code execution fails or returns an error, do not retry with the same code; consider alternative approaches or tools.",
-                "After execution, analyze the result and use it directly to form your FINAL ANSWER."
+                "After execution, analyze the result and produce a concise final answer."
             ],
             "additional_notes": [
                 "Do not output intermediate code, logs, or thoughts—only the final result.",
@@ -279,7 +294,7 @@
     "obedience_and_output_format": [],
     "tool_use_discipline": [
         "Use each tool at most once per question. Never call web_search or wiki_search more than once with similar query.",
-        "If you have enough information to answer, stop using tools and provide your FINAL ANSWER immediately.",
+        "If you have enough information to answer, stop using tools and provide a concise final answer.",
         "Never call any tool unless you have a clear, specific reason and have planned your approach."
     ],
     "tool_usage_limits": {}
