@@ -1,10 +1,8 @@
 from typing import Any, Dict, List, Optional
 import json
-from typing import Optional
 import requests
 import yaml
 import base64
-from langchain.tools import tool
 
 # Load server config from YAML
 def _load_server_config() -> Dict[str, str]:
@@ -37,7 +35,7 @@ def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]
 
     cfg = _load_server_config()
     base_url = cfg.get("base_url")
-    url = f"{base_url}{endpoint}"
+    url = f"{base_url}/{endpoint}"
     headers = _basic_headers()
 
     response = requests.post(
@@ -46,6 +44,7 @@ def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]
         data=json.dumps(request_body),
         timeout=30
     )
+    response.raise_for_status()
 
     # Avoid printing sensitive headers
     result: Dict[str, Any] = {
@@ -73,7 +72,7 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
 
     cfg = _load_server_config()
     base_url = cfg.get("base_url")
-    url = f"{base_url}{endpoint}"
+    url = f"{base_url}/{endpoint}"
     headers = _basic_headers()
 
     response = requests.put(
@@ -82,6 +81,7 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
         data=json.dumps(request_body),
         timeout=30
     )
+    response.raise_for_status()
 
      # Avoid printing sensitive headers
     result: Dict[str, Any] = {
@@ -104,3 +104,39 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
         result["error"] = json.dumps(err_json, ensure_ascii=False)
     except Exception:
         result["error"] = response.text or f"HTTP {response.status_code}"
+
+def _get_request(endpoint: str) -> Dict[str, Any]:
+
+    cfg = _load_server_config()
+    base_url = cfg.get("base_url")
+    url = f"{base_url}/{endpoint}"
+    headers = _basic_headers()
+
+    response = requests.get(
+        url,
+        headers=headers,
+        timeout=30
+    )
+    response.raise_for_status()
+
+    # Avoid printing sensitive headers
+    result: Dict[str, Any] = {
+        "success": False,
+        "base_url": url,
+        "status_code": response.status_code,
+        "raw_response": response.json(),
+        "error": None
+    }
+
+     # Success: Platform returns 200 with response body being the created property id (often as quored string)
+    if response.status_code == 200:
+        result.update({"success": True})
+        return result
+
+    # Known error pattern: 500 with JSON body describing an issue (e.g., alias already exists)
+    try:
+        err_json = response.json()
+        result["error"] = json.dumps(err_json, ensure_ascii=False)
+    except Exception:
+        result["error"] = response.text or f"HTTP {response.status_code}"
+    return
