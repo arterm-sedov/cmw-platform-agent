@@ -794,6 +794,7 @@ class GaiaAgent:
         # Create truncated copy for logging only
         truncated_args = self._deep_trim_dict_max_length(tool_args)
         print(f"[Tool Loop] Running tool: {tool_name} with args: {truncated_args}")
+        print(f"[Tool Loop] Tool args type: {type(tool_args)}, Tool args value: {tool_args}")
         
         # Start timing for trace
         start_time = time.time()
@@ -1027,6 +1028,10 @@ class GaiaAgent:
             response = None
             print(f"\n[Tool Loop] Step {step+1}/{max_steps} - Using LLM: {llm_type}")
             current_step_tool_results = []  # Reset for this step
+            
+            # Reset Mistral conversion flag for each step
+            if hasattr(self, '_mistral_converted_this_step'):
+                delattr(self, '_mistral_converted_this_step')
             
             # ... existing code ...
             # Check if we've exceeded the maximum total tool calls
@@ -1282,9 +1287,10 @@ class GaiaAgent:
                     # Add tool result to messages - let LangChain handle the formatting
                     messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
                 
-                # Convert messages for Mistral AI if needed (after tool results are added)
-                if llm_type == "mistral":
+                # Convert messages for Mistral AI if needed (before next LLM call)
+                if llm_type == "mistral" and not hasattr(self, '_mistral_converted_this_step'):
                     messages = self._convert_messages_for_mistral(messages)
+                    self._mistral_converted_this_step = True
                 
                 continue  # Next LLM call
             # Gemini (and some LLMs) may use 'function_call' instead of 'tool_calls'
@@ -1767,18 +1773,36 @@ class GaiaAgent:
         """
         return get_reference_answer(question)
 
-    def _format_messages(self, question: str, reference: Optional[str] = None) -> List[Any]:
+    def _format_messages(self, question: str, reference: Optional[str] = None, chat_history: Optional[List[Dict[str, Any]]] = None) -> List[Any]:
         """
-        Format the message list for the LLM, including system prompt, question, and optional reference answer.
+        Format the message list for the LLM, including system prompt, optional prior chat history,
+        question, and optional reference answer.
 
         Args:
             question (str): The question to answer.
             reference (str, optional): The reference answer to include in context.
+            chat_history (list, optional): Prior conversation turns as list of {role, content}.
 
         Returns:
             list: List of message objects for the LLM.
         """
-        messages = [self.sys_msg, HumanMessage(content=question)]
+        messages = [self.sys_msg]
+        # Append prior chat history (user/assistant only) for continuity
+        if chat_history and isinstance(chat_history, list):
+            for turn in chat_history:
+                try:
+                    role = str(turn.get("role", "")).lower()
+                    content = str(turn.get("content", ""))
+                except Exception:
+                    continue
+                if not content:
+                    continue
+                if role in ("user", "human"):
+                    messages.append(HumanMessage(content=content))
+                elif role in ("assistant", "ai"):
+                    messages.append(AIMessage(content=content))
+        # Current question last
+        messages.append(HumanMessage(content=question))
         if reference:
             messages.append(HumanMessage(content=f"Reference answer: {reference}"))
         return messages
@@ -1824,6 +1848,7 @@ class GaiaAgent:
         """
         converted_messages = []
         i = 0
+        orphaned_count = 0
         
         while i < len(messages):
             msg = messages[i]
@@ -1871,8 +1896,13 @@ class GaiaAgent:
                 elif msg.type == 'tool':
                     # Tool messages should only appear after assistant messages with tool calls
                     # If we encounter one here, it might be orphaned - skip it
-                    print(f"[Mistral Conversion] Warning: Orphaned tool message detected: {getattr(msg, 'name', 'unknown')}")
+                    # Only log the first few orphaned messages to avoid spam
+                    if orphaned_count < 3:
+                        print(f"[Mistral Conversion] Warning: Orphaned tool message detected: {getattr(msg, 'name', 'unknown')}")
+                        orphaned_count += 1
                     # Don't add orphaned tool messages to avoid ordering issues
+                    # Skip this message
+                    continue
             else:
                 # Handle raw message objects (fallback)
                 converted_messages.append(msg)
@@ -2181,7 +2211,7 @@ class GaiaAgent:
                 self.llm_tracking[llm_type]["total_attempts"] += increment
 
     @trace_prints_with_context("question")
-    def __call__(self, question: str, file_data: str = None, file_name: str = None, llm_sequence: list = None) -> dict:
+    def __call__(self, question: str, file_data: str = None, file_name: str = None, llm_sequence: list = None, chat_history: Optional[List[Dict[str, Any]]] = None) -> dict:
         """
         Run the agent on a single question, using step-by-step reasoning and tools.
 
@@ -2190,6 +2220,7 @@ class GaiaAgent:
             file_data (str, optional): Base64 encoded file data if a file is attached.
             file_name (str, optional): Name of the attached file.
             llm_sequence (list, optional): List of LLM provider keys to use for this call.
+            chat_history (list, optional): Prior conversation to maintain continuity.
         Returns:
             dict: Dictionary containing:
                 - answer: The agent's final answer, formatted per system_prompt
@@ -2228,7 +2259,7 @@ class GaiaAgent:
         reference = self._get_reference_answer(question)
         
         # 2. Step-by-step reasoning with LLM sequence and similarity checking
-        messages = self._format_messages(question)
+        messages = self._format_messages(question, reference=reference, chat_history=chat_history)
         try:
             answer, llm_used = self._try_llm_sequence(messages, use_tools=True, reference=reference, llm_sequence=llm_sequence)
             print(f"🎯 Final answer from {llm_used}")
