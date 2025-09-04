@@ -205,7 +205,7 @@ class GaiaAgent:
         "default": {
             "type_str": "default",
             "token_limit": 2500,
-            "max_history": 15,
+            "max_history": 20,
             "tool_support": False,
             "force_tools": False,
             "models": [],
@@ -736,8 +736,11 @@ class GaiaAgent:
             messages: List of messages to truncate
             llm_type: Type of LLM for context-aware truncation
         """
-        # Always read max_history from LLM_CONFIG, using 'default' if not found
-        max_history = self.LLM_CONFIG.get(llm_type, {}).get("max_history", self.LLM_CONFIG["default"]["max_history"])
+        # Always read max_history from LLM_CONFIG, using global default when provider has none
+        max_history = self.LLM_CONFIG.get(llm_type, {}).get(
+            "max_history",
+            self.LLM_CONFIG["default"]["max_history"]
+        )
         
         if len(messages) <= max_history:
             return messages
@@ -3164,7 +3167,7 @@ class GaiaAgent:
                 "name": config.get("name", llm_type),
                 "models": config.get("models", []),
                 "tool_support": config.get("tool_support", False),
-                "max_history": config.get("max_history", 15)
+                "max_history": config.get("max_history", self.LLM_CONFIG["default"]["max_history"])
             }
         return available_models
 
