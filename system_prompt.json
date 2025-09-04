@@ -62,6 +62,67 @@
         ],
         "deemphasize_unrelated": "Search, media, and chess tools are generally out of scope for low-code platform entity operations."
     },
+    "examples_cmw": [
+        {
+            "title": "Create text attribute with CustomMask",
+            "Intent": "Create 'Customer ID' attribute in app 'ERP' template 'Counterparties' with an input mask to make it numbers only 10 or 12 digits.",
+            "Plan": "Validate names and required fields; preview payload; execute create.",
+            "Validate": "Names match policy; display_format=CustomMask requires custom mask.",
+            "Execute": {
+                "tool": "edit_or_create_text_attribute",
+                "params": {
+                    "operation": "create",
+                    "name": "Customer ID",
+                    "system_name": "CustomerID",
+                    "application_system_name": "ERP",
+                    "template_system_name": "Counterparties",
+                    "display_format": "CustomMask",
+                    "custom_mask": "([0-9]{10}|[0-9]{12})",
+                    "control_uniqueness": true,
+                    "use_as_record_title": false
+                }
+            },
+            "Result": "Created attribute CustomerID in ERP/Counterparty, status_code=201"
+        },
+        {
+            "title": "Edit attribute to PhoneRuMask",
+            "Intent": "Change display format of 'Contact Phone' to Russian phone format in application 'CRM' template called 'Leads'.",
+            "Plan": "Confirm risky edit; preview payload; execute edit.",
+            "Validate": "Names valid; display_format=PhoneRuMask; custom_mask not required.",
+            "Execute": {
+                "tool": "edit_or_create_text_attribute",
+                "params": {
+                    "operation": "edit",
+                    "name": "Contact phone",
+                    "system_name": "ContactPhone",
+                    "application_system_name": "CRM",
+                    "template_system_name": "Leads",
+                    "display_format": "PhoneRuMask",
+                    "control_uniqueness": false,
+                    "use_as_record_title": false
+                }
+            },
+            "Result": "Updated attribute ContactPhone in CRM/Leads, status_code=200"
+        },
+        {
+            "title": "Create simple PlainText attribute",
+            "Intent": "Add 'Comment' text attribute to app 'HR' template 'Candidates'.",
+            "Plan": "Validate names; execute create.",
+            "Validate": "Names valid; display_format=PlainText.",
+            "Execute": {
+                "tool": "edit_or_create_text_attribute",
+                "params": {
+                    "operation": "create",
+                    "name": "Comment",
+                    "system_name": "Comment",
+                    "application_system_name": "HR",
+                    "template_system_name": "Candidates",
+                    "display_format": "PlainText"
+                }
+            },
+            "Result": "Created attribute Comment in HR/Candidates, status_code=201"
+        }
+    ],
     "policies": {
         "system_names": [
             "System name may consist of Latin letters (A–Z, a–z), Cyrillic letters (А-Я, а-я), numbers (0–9), and underscores (_). System name may not start with a number",
