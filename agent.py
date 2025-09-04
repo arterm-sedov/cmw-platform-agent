@@ -17,38 +17,48 @@ Environment Variables:
 Files required in the same directory:
     - system_prompt.json
 """
-import os
-import json
+# Standard library imports
+import base64
+import builtins
 import csv
 import datetime
-import time
+import io
+import json
+import os
 import random
 import re
-import numpy as np
-import tempfile
-import base64
-import tiktoken
-import io
 import sys
+import tempfile
+import time
 from io import StringIO
-from typing import List, Dict, Any, Optional
-from tools import *
-# Import tools module to get its functions
-import tools
-from langchain_core.tools import BaseTool
-# For LLM and retriever integration
+from typing import Any, Dict, List, Optional
+
+# Third-party imports
+import numpy as np
+import tiktoken
+
+# LangChain imports
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.tools import BaseTool, tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint, HuggingFaceEmbeddings
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
-from langchain_core.tools import tool
-# Vector store functionality moved to vector_store.py
-from vector_store import vector_store_manager, get_embeddings, get_vector_store, get_retriever_tool, get_reference_answer, vector_answers_match
-from langchain_openai import ChatOpenAI  # Add at the top with other imports
-# Import the utils helper
-from utils import TRACES_DIR, ensure_valid_answer
-# Dataset functionality moved to dataset_manager.py
+from langchain_mistralai.chat_models import ChatMistralAI
+from langchain_openai import ChatOpenAI
+
+# Local imports
+import tools
 from dataset_manager import dataset_manager
+from tools import *
+from utils import TRACES_DIR, ensure_valid_answer
+from vector_store import (
+    get_embeddings,
+    get_reference_answer,
+    get_retriever_tool,
+    get_vector_store,
+    vector_answers_match,
+    vector_store_manager,
+)
 
 def trace_prints_with_context(context_type: str):
     """
@@ -86,7 +96,6 @@ def trace_prints_with_context(context_type: str):
                         original_print(f"[Trace Error] Failed to add log entry: {e}")
             
             # Override print for this function call
-            import builtins
             builtins.print = trace_print
             
             try:
@@ -138,7 +147,6 @@ def trace_prints(func):
                     original_print(f"[Trace Error] Failed to add log entry: {e}")
         
         # Override print for this function call
-        import builtins
         builtins.print = trace_print
         
         try:
@@ -617,7 +625,6 @@ class GaiaAgent:
         
         # Look for retry-after in error message or headers
         if "retry-after" in error_str.lower():
-            import re
             match = re.search(r'retry-after[:\s]*(\d+)', error_str, re.IGNORECASE)
             if match:
                 retry_after = int(match.group(1))
@@ -1484,7 +1491,6 @@ class GaiaAgent:
                                 response = self._invoke_llm_provider(llm_no_tools, messages)
                     if not hasattr(response, 'content') or not response.content:
                         print(f"⚠️ {llm_name} still returning empty content even without tools. This may be a token limit issue.")
-                        from langchain_core.messages import AIMessage
                         return AIMessage(content=f"Error: {llm_name} failed due to token limits. Cannot complete reasoning.")
             else:
                 response = self._invoke_llm_provider(llm, messages)
@@ -1552,7 +1558,6 @@ class GaiaAgent:
         if not enable_chunking:
             print(f"⚠️ Chunking disabled for {llm_type}. Cannot handle token limit error.")
             # Return a simple error message instead of chunking
-            from langchain_core.messages import AIMessage
             return AIMessage(content=f"Error: Token limit exceeded for {llm_name} and chunking is disabled. Please try with a shorter input or enable chunking for this provider.")
         
         # Extract tool results from messages
@@ -2620,7 +2625,6 @@ class GaiaAgent:
             raise
 
     def _init_openrouter_llm(self, config, model_config):
-        from langchain_openai import ChatOpenAI
         api_key = os.environ.get(config["api_key_env"])
         api_base = os.environ.get(config["api_base_env"])
         if not api_key or not api_base:
@@ -2635,7 +2639,6 @@ class GaiaAgent:
         )
 
     def _init_mistral_llm(self, config, model_config):
-        from langchain_mistralai.chat_models import ChatMistralAI
         api_key = os.environ.get(config["api_key_env"])
         if not api_key:
             print(f"⚠️ {config['api_key_env']} not found in environment variables. Skipping Mistral AI...")
@@ -3174,11 +3177,9 @@ class GaiaAgent:
             if tool_results_history:
                 return True, self._force_final_answer(kwargs.get('messages'), tool_results_history, kwargs.get('llm'))
             else:
-                from langchain_core.messages import AIMessage
                 return True, AIMessage(content=f"Error: Token limit exceeded for {llm_type} LLM. Cannot complete reasoning.")
         # Generic fallback for tool loop
         if phase in ("tool_loop", "runtime", "request"):
-            from langchain_core.messages import AIMessage
             return True, AIMessage(content=f"Error during LLM processing: {str(e)}")
         # Fallback: not handled here
         return False, None
