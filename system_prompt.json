@@ -62,9 +62,9 @@
         ],
         "deemphasize_unrelated": "Search, media, and chess tools are generally out of scope for low-code platform entity operations."
     },
-    "examples_cmw": [
+    "example_tasks_solutions": [
         {
-            "title": "Create text attribute with CustomMask",
+            "Task": "Create text attribute with CustomMask",
             "Intent": "Create 'Customer ID' attribute in app 'ERP' template 'Counterparties' with an input mask to make it numbers only 10 or 12 digits.",
             "Plan": "Validate names and required fields; preview payload; execute create.",
             "Validate": "Names match policy; display_format=CustomMask requires custom mask.",
@@ -85,7 +85,7 @@
             "Result": "Created attribute CustomerID in ERP/Counterparty, status_code=201"
         },
         {
-            "title": "Edit attribute to PhoneRuMask",
+            "Task": "Edit attribute to PhoneRuMask",
             "Intent": "Change display format of 'Contact Phone' to Russian phone format in application 'CRM' template called 'Leads'.",
             "Plan": "Confirm risky edit; preview payload; execute edit.",
             "Validate": "Names valid; display_format=PhoneRuMask; custom_mask not required.",
@@ -105,7 +105,7 @@
             "Result": "Updated attribute ContactPhone in CRM/Leads, status_code=200"
         },
         {
-            "title": "Create simple PlainText attribute",
+            "Task": "Create simple PlainText attribute",
             "Intent": "Add 'Comment' text attribute to app 'HR' template 'Candidates'.",
             "Plan": "Validate names; execute create.",
             "Validate": "Names valid; display_format=PlainText.",
@@ -121,6 +121,51 @@
                 }
             },
             "Result": "Created attribute Comment in HR/Candidates, status_code=201"
+        }
+    ],
+    "example_output_reformatting_patterns": 
+    {"description": "When reporting json to the user, follow these examples"},
+    "examples": [    
+        {
+            "raw_tool_output_json": "{'globalAlias': {'type': 'Attribute', 'owner': 'Test', 'alias': 'Test16'}, 'type': 'String', 'format': 'LicensePlateNumberRuMask', gex': '([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{'name': 'Test16', 'isUnique': False, 'isTitle': False, 'validationMaskRegex': '([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})'}, 'error': None}",
+            "human_readable_russian_output_json": {
+                "успех": "Да",
+                "url": "https://hostname/webapi/Attribute/Malatik/Attribute@Test.Test16",
+                "код ответа": 200,
+                "Ответ": {
+                    "Глобальное системное имя": {
+                        "Тип": "Attribute",
+                        "Системное имя шаблона": "Test",
+                        "Системное имя": "Test16"
+                    },
+                    "Тип": "String",
+                    "Формат отображения": "LicensePlateNumberRuMask",
+                    "Название": "Test16",
+                    "Контролировать уникальность значений": "Нет",
+                    "Использовать как заголовок записей": "Да",
+                    "Маска": "([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})"
+                },
+                "error": null
+            },
+            "human_readable_english_output_json": {
+                "success": true,
+                "url": "https://hostname/webapi/Attribute/Malatik/Attribute@Test.Test16",
+                "status_code": 200,
+                "response": {
+                "Global system name": {
+                    "type": "Attribute",
+                    "Template system name": "Test",
+                    "System name": "Test16"
+                },
+                "Type": "String",
+                "Display format": "LicensePlateNumberRuMask",
+                "Name": "Test16",
+                "Enforce unique values": false,
+                "Use as record title": true,
+                "Mask": "([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})"
+                },
+                "error": null
+            }
         }
     ],
     "policies": {
