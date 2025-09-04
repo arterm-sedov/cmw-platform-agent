@@ -273,7 +273,19 @@ def get_text_attribute(
 
     result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
 
-    result_body = result['raw_response']
+    # Check if the request was successful and has the expected structure
+    if not result.get('success', False):
+        return result
+    
+    result_body = result.get('raw_response')
+    if result_body is None:
+        result.update({"error": "No response data received from server"})
+        return result
+    
+    # Check if result_body has the expected 'response' key
+    if not isinstance(result_body, dict) or 'response' not in result_body:
+        result.update({"error": "Unexpected response structure from server"})
+        return result
 
     keys_to_remove = ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio']
 
