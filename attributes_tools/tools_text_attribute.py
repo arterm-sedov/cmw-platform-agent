@@ -230,7 +230,7 @@ def get_text_attribute(
         "Returns": {
             "success": {
                 "type": "boolean",
-                "description": "True if attribute was geted successfully"
+                "description": "True if attribute was fetched successfully"
             },
             "status_code": {
                 "type": "integer",
