@@ -1037,8 +1037,7 @@ class GaiaAgent:
             current_step_tool_results = []  # Reset for this step
             
             # Reset Mistral conversion flag for each step
-            if hasattr(self, '_mistral_converted_this_step'):
-                delattr(self, '_mistral_converted_this_step')
+            self._mistral_converted_this_step = False
             
             # ... existing code ...
             # Check if we've exceeded the maximum total tool calls
@@ -1295,7 +1294,7 @@ class GaiaAgent:
                     messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
                 
                 # Convert messages for Mistral AI if needed (before next LLM call)
-                if llm_type == "mistral" and not hasattr(self, '_mistral_converted_this_step'):
+                if llm_type == "mistral" and not self._mistral_converted_this_step:
                     messages = self._convert_messages_for_mistral(messages)
                     self._mistral_converted_this_step = True
                 
@@ -1357,8 +1356,9 @@ class GaiaAgent:
                 messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_name))
                 
                 # Convert messages for Mistral AI if needed (after tool results are added)
-                if llm_type == "mistral":
+                if llm_type == "mistral" and not self._mistral_converted_this_step:
                     messages = self._convert_messages_for_mistral(messages)
+                    self._mistral_converted_this_step = True
                 
                 continue
             if hasattr(response, 'content') and response.content:
@@ -1902,11 +1902,9 @@ class GaiaAgent:
                     # Tool messages should only appear after assistant messages with tool calls
                     # If we encounter one here, it might be orphaned - skip it
                     # Only log the first few orphaned messages to avoid spam
-                    if orphaned_count < 3:
+                    if orphaned_count < 2:
                         print(f"[Mistral Conversion] Warning: Orphaned tool message detected: {getattr(msg, 'name', 'unknown')}")
                         orphaned_count += 1
-                    # Don't add orphaned tool messages to avoid ordering issues
-                    # Skip this message
                     continue
             else:
                 # Handle raw message objects (fallback)
@@ -2583,7 +2581,6 @@ class GaiaAgent:
         return tool_args
 
     def _init_gemini_llm(self, config, model_config):
-        from langchain_google_genai import ChatGoogleGenerativeAI
         return ChatGoogleGenerativeAI(
             model=model_config["model"],
             temperature=model_config["temperature"],
