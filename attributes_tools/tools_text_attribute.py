@@ -1,13 +1,9 @@
 from typing import Any, Dict, List, Optional
-import json
 from typing import Optional
-import requests
-import yaml
-import base64
 from langchain.tools import tool
 import requests_
 
-ATTRIBUTE_ENDPOINT = "/webapi/Attribute/"
+ATTRIBUTE_ENDPOINT = "webapi/Attribute"
 
 def _set_input_mask(display_format: str) -> str:
     # Setting validation mask via display format
@@ -208,29 +204,90 @@ def create_text_attribute(
 
     if operation == "create":
 
-        result = requests_._post_request(request_body, f"{ATTRIBUTE_ENDPOINT}{application_system_name}")
+        result = requests_._post_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
 
-        requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}{application_system_name}")
+        requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
 
 
     elif operation == "edit":
 
-        result = requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}{application_system_name}")
+        result = requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
+    
+    else:
+        result = "Нет такой операции над атрибутом."
 
     return result
 
+@tool("get_text_attribute", return_direct=False)
+def get_text_attribute(
+    application_system_name: str,
+    template_system_name: str,
+    system_name: str
+    ) -> Dict[str, Any]:
+    """
+    {
+        "Decstiption": "Get a text attribute",
+        "Returns": {
+            "success": {
+                "type": "boolean",
+                "description": "True if attribute was geted successfully"
+            },
+            "status_code": {
+                "type": "integer",
+                "description": "HTTP response status code"
+            },
+            "raw_response": {
+                "type": "string",
+                "description": "Raw response text for auditing"
+            },
+            "error": {
+                "type": "string",
+                "default": null,
+                "description": "Error message if any"
+            }
+        },
+        "Parameters": {
+            "system_name": {
+                "Russian name": "Системное имя",
+                "English name": "System name",
+                "type": "string",
+                "description": "Unique system name of the attribute"
+            },
+            "application_system_name": {
+                "Russian name": "Системное имя приложения",
+                "English name": "Application system name",
+                "type": "string",
+                "description": "System name of the application with the template where the attribute is created"
+            },
+            "template_system_name": {
+                "Russian name": "Системное имя шаблона",
+                "English name": "Template system name",
+                "type": "string",
+                "description": "System name of the template where the attribute is created"
+            }
+        }
+    }
+    """
+
+    attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
+
+    result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
+
+    result_body = result['raw_response']
+
+    keys_to_remove = ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio']
+
+    for key in keys_to_remove:
+        if key in result_body['response']:
+            result_body['response'].pop(key, None)
+
+    result.update({"raw_response": result_body['response']})
+    return result
+
 if __name__ == "__main__":
-    results = create_text_attribute.invoke({
-        "operation": "create",
-        "name": "Test16",
+    results = get_text_attribute.invoke({
         "system_name": "Test16",
         "application_system_name": "Malatik",
         "template_system_name": "Test",
-        "display_format": "LicensePlateNumberRuMask",
-        "description": None,
-        "custom_mask": None,
-        "control_uniqueness": False,
-        "use_as_record_title": True,
-        "attribute_type": "String"
     })
     print(results)
