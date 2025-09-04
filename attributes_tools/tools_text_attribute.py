@@ -50,28 +50,9 @@ def edit_or_create_text_attribute(
     r"""
     {
         "Tool description": "Edit or Create a text attribute",
-        "Returns": {
-            "success": {
-                "type": "boolean",
-                "description": "True if attribute was created successfully"
-            },
-            "status_code": {
-                "type": "integer",
-                "description": "HTTP response status code"
-            },
-            "raw_response": {
-                "type": "string",
-                "description": "Raw response text for auditing"
-            },
-            "error": {
-                "type": "string",
-                "default": null,
-                "description": "Error message if any"
-            }
-        },
-        "Parameters": {
+        "Arguments": {
             "operation": {
-                "Rusian names": ["Создать", "Редактировать"],
+                "Russian names": ["Создать", "Редактировать"],
                 "variants": ["create", "edit"],
                 "description": "Choose operation: Creates or Edits the attribute."
             },
@@ -180,7 +161,27 @@ def edit_or_create_text_attribute(
                 "default": false,
                 "description": "Control whether attribute values will be displayed as a template record title"
             }
-        }
+        },
+        "Returns": {
+            "success": {
+                "type": "boolean",
+                "description": "True if attribute was created successfully"
+            },
+            "status_code": {
+                "type": "integer",
+                "description": "HTTP response status code"
+            },
+            "raw_response": {
+                "type": "string",
+                "description": "Raw response text for auditing"
+            },
+            "error": {
+                "type": "string",
+                "default": null,
+                "description": "Error message if any"
+            }
+        },
+
     }
     """
 
@@ -226,27 +227,8 @@ def get_text_attribute(
     ) -> Dict[str, Any]:
     """
     {
-        "Decstiption": "Get a text attribute",
-        "Returns": {
-            "success": {
-                "type": "boolean",
-                "description": "True if attribute was fetched successfully"
-            },
-            "status_code": {
-                "type": "integer",
-                "description": "HTTP response status code"
-            },
-            "raw_response": {
-                "type": "string",
-                "description": "Raw response text for auditing"
-            },
-            "error": {
-                "type": "string",
-                "default": null,
-                "description": "Error message if any"
-            }
-        },
-        "Parameters": {
+        "Description": "Get a text attribute",
+        "Arguments": {
             "system_name": {
                 "Russian name": "Системное имя",
                 "English name": "System name",
@@ -265,7 +247,26 @@ def get_text_attribute(
                 "type": "string",
                 "description": "System name of the template where the attribute is created"
             }
-        }
+        },
+        "Returns": {
+            "success": {
+                "type": "boolean",
+                "description": "True if attribute was fetched successfully"
+            },
+            "status_code": {
+                "type": "integer",
+                "description": "HTTP response status code"
+            },
+            "raw_response": {
+                "type": "string",
+                "description": "Raw response text for auditing"
+            },
+            "error": {
+                "type": "string",
+                "default": null,
+                "description": "Error message if any"
+            }
+        }        
     }
     """
 
