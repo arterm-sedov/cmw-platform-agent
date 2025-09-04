@@ -121,6 +121,16 @@
         "worker": "System service",
         "object": "Set of property/value pairs"
     },
+    "synonyms_english_russian": {
+        "scenario": ["trigger", "сценарий", "триггер"],
+        "button": ["user command", "кнопка"],
+        "attribute": "атрибут",
+        "table": ["dataset", "таблица"],
+        "template": ["container", "шаблон"],
+        "application": ["solution", "приложение", "бизнес-приложение"],
+        "process diagram": ["scheme", "схема", "диаграмма процесса"],
+        "N3": ["triples", "тройки", "триплеты", "Notation3"]
+    },
     "answer_length_rules": {
         "ideal": "Up to 1000 words",
         "maximum": "2000 words",
