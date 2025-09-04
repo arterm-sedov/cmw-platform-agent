@@ -33,11 +33,11 @@ def _basic_headers() -> Dict[str, str]:
         "Accept": "application/json"
     }
 
-def _create_attribute_request(request_body: Dict[str, Any], application_system_name: str) -> Dict[str, Any]:
+def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
 
     cfg = _load_server_config()
     base_url = cfg.get("base_url")
-    url = f"{base_url}/webapi/Attribute/{application_system_name}"
+    url = f"{base_url}{endpoint}"
     headers = _basic_headers()
 
     response = requests.post(
@@ -69,16 +69,38 @@ def _create_attribute_request(request_body: Dict[str, Any], application_system_n
     except Exception:
         result["error"] = response.text or f"HTTP {response.status_code}"
 
-def _edit_attribute_request(request_body: Dict[str, Any], application_system_name: str):
+def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
 
     cfg = _load_server_config()
     base_url = cfg.get("base_url")
-    url = f"{base_url}/webapi/Attribute/{application_system_name}"
+    url = f"{base_url}{endpoint}"
     headers = _basic_headers()
 
-    requests.put(
+    response = requests.put(
         url,
         headers=headers,
         data=json.dumps(request_body),
         timeout=30
     )
+
+     # Avoid printing sensitive headers
+    result: Dict[str, Any] = {
+        "success": False,
+        "base_url": url,
+        "body": request_body,
+        "status_code": response.status_code,
+        "raw_response": response.text,
+        "error": None
+    }
+
+    # Success: Platform returns 200 with response body being the created property id (often as quored string)
+    if response.status_code == 200:
+        result.update({"success": True})
+        return result
+
+    # Known error pattern: 500 with JSON body describing an issue (e.g., alias already exists)
+    try:
+        err_json = response.json()
+        result["error"] = json.dumps(err_json, ensure_ascii=False)
+    except Exception:
+        result["error"] = response.text or f"HTTP {response.status_code}"

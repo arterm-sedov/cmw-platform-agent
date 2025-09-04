@@ -7,27 +7,11 @@ import base64
 from langchain.tools import tool
 import requests_
 
-# Load server config from YAML
-def _load_server_config() -> Dict[str, str]:
-    with open("server_config.yml", "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f) or {}
-        base_url = (cfg.get("base_url") or "").rstrip("/")
-        login = cfg.get("login") or ""
-        password = cfg.get("password") or ""
-        if not base_url:
-            raise RuntimeError("'base_url' is required in server_config.yml")
-        if not login:
-            raise RuntimeError("'login' is required in server_config.yml")
-        if not password:
-            raise RuntimeError("'password' is required in server_config.yml")
-        return {"base_url": base_url, "login": login, "password": password}
+ATTRIBUTE_ENDPOINT = "/webapi/Attribute/"
 
-# ---- Configuration ----
-# Load connection settings at call time to always use the latest config
-
-def _set_validation_mask(display_format: str) -> str:
+def _set_input_mask(display_format: str) -> str:
     # Setting validation mask via display format
-    validation_mask_mapping: Dict[str, str] = {
+    input_mask_mapping: Dict[str, str] = {
         "LicensePlateNumberRuMask":"([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})",
         "IndexRuMask": "([0-9]{6})",
         "PassportRuMask": "([0-9]{4} [0-9]{6})",
@@ -39,23 +23,10 @@ def _set_validation_mask(display_format: str) -> str:
         "CustomMask": None
     }
 
-    if validation_mask_mapping[display_format]:
-        return validation_mask_mapping[display_format]
+    if input_mask_mapping[display_format]:
+        return input_mask_mapping[display_format]
     else:
         return None
-    
-
-def _basic_headers() -> Dict[str, str]:
-    # Basic authentication from YAML config
-    cfg = _load_server_config()
-    login = cfg.get("login")
-    password = cfg.get("password")
-    credentials = base64.b64encode(f"{login}:{password}".encode("ascii")).decode("ascii")
-    return {
-        "Authorization": f"Basic {credentials}",
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
 
 def _remove_nones(obj: Any) -> Any:
     """
@@ -69,6 +40,7 @@ def _remove_nones(obj: Any) -> Any:
 
 @tool("edit_or_create_text_attribute", return_direct=False)
 def create_text_attribute(
+    operation: str,
     name: str,
     system_name: str,
     application_system_name: str,
@@ -102,6 +74,11 @@ def create_text_attribute(
             }
         },
         "Parameters": {
+            "operation": {
+                "Rusian names": ["Создать", "Редактировать"],
+                "variants": ["create", "edit"],
+                "description": "Choose operation: Creates or Edits the attribute."
+            }
             "name": {
                 "Russian name": "Название",
                 "English name": "Name",
@@ -210,11 +187,6 @@ def create_text_attribute(
         }
     }
     """
-    # Base URL from YAML (mandatory, validated in loader)
-    cfg = _load_server_config()
-    base_url = cfg.get("base_url")
-    url = f"{base_url}/webapi/Attribute/{application_system_name}"
-    headers = _basic_headers()
 
     request_body: Dict[str, Any] = {
         "globalAlias": {
@@ -228,26 +200,33 @@ def create_text_attribute(
         "description": description,
         "isUnique": control_uniqueness,
         "isTitle": use_as_record_title,
-        "validationMaskRegex": custom_mask if display_format == "CustomMask" else _set_validation_mask(display_format)
+        "validationMaskRegex": custom_mask if display_format == "CustomMask" else _set_input_mask(display_format)
     }
 
-    # Remove None values
+        # Remove None values
     request_body = _remove_nones(request_body) 
 
-    result = requests_._create_attribute_request(request_body, application_system_name)
+    if operation == "create":
 
-    requests_._edit_attribute_request(request_body, application_system_name)
+        result = requests_._post_request(request_body, f"{ATTRIBUTE_ENDPOINT}{application_system_name}")
+
+        requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}{application_system_name}")
+
+
+    elif operation == "edit":
+
+        result = requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}{application_system_name}")
 
     return result
 
-
 if __name__ == "__main__":
     results = create_text_attribute.invoke({
-        "name": "Test15",
-        "system_name": "Test15",
+        "operation": "create",
+        "name": "Test16",
+        "system_name": "Test16",
         "application_system_name": "Malatik",
         "template_system_name": "Test",
-        "display_format": "INNMask",
+        "display_format": "LicensePlateNumberRuMask",
         "description": None,
         "custom_mask": None,
         "control_uniqueness": False,
