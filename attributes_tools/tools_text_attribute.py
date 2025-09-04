@@ -209,13 +209,30 @@ def edit_or_create_text_attribute(
         elif operation == "edit" or operation == "create":
             result = requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
         else:
-            result = "Нет такой операции над атрибутом."
+            result = {
+                "success": False,
+                "error": f"No such operation for attribute: {operation}. Available operations: create, edit",
+                "status_code": 400
+            }
     except Exception as e:
         result = {
             "success": False,
             "error": f"Tool execution failed: {str(e)}",
             "status_code": 500
         }
+
+    # Ensure result is always a dict with proper structure
+    if not isinstance(result, dict):
+        result = {
+            "success": False,
+            "error": f"Unexpected result type: {type(result)}",
+            "status_code": 500
+        }
+    
+    # Add additional error information if the API call failed
+    if not result.get("success", False) and result.get("error"):
+        error_info = result.get("error", "")
+        result["error"] = f"API operation failed: {error_info}"
 
     return result
 
