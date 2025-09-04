@@ -31,6 +31,26 @@ def _basic_headers() -> Dict[str, str]:
         "Accept": "application/json"
     }
 
+def _check_response_for_errors(response_text: str) -> Optional[str]:
+    """
+    Check if the response body contains an error even when HTTP status is 200.
+    
+    Args:
+        response_text: The raw response text from the API
+        
+    Returns:
+        Error message if an error is found, None if response is successful
+    """
+    try:
+        response_json = json.loads(response_text)
+        if isinstance(response_json, dict) and response_json.get("success") is False:
+            # API returned success: false, so this is actually an error
+            return json.dumps(response_json, ensure_ascii=False)
+    except (json.JSONDecodeError, AttributeError):
+        # Response is not JSON or doesn't have expected structure, treat as success
+        pass
+    return None
+
 def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
 
     cfg = _load_server_config()
@@ -58,6 +78,12 @@ def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]
 
     # Success: Platform returns 200 with response body being the created property id (often as quored string)
     if response.status_code == 200:
+        # Check if the response body contains an error
+        error_message = _check_response_for_errors(response.text)
+        if error_message:
+            result["error"] = error_message
+            return result
+        
         result.update({"success": True})
         return result
 
@@ -96,6 +122,12 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
 
     # Success: Platform returns 200 with response body being the created property id (often as quored string)
     if response.status_code == 200:
+        # Check if the response body contains an error
+        error_message = _check_response_for_errors(response.text)
+        if error_message:
+            result["error"] = error_message
+            return result
+        
         result.update({"success": True})
         return result
 
