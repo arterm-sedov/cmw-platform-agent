@@ -1,0 +1,12 @@
+---
+description: Apply this rule to git commit messages.
+---
+
+This rule applies to git commit messages in the version control pane and in the terminal.
+
+Generate the commit message text, but do no add files, stage or push the commit.
+
+## Commit Message Requirements
+
+- The message must be concise, structured, and strictly relevant to the changes in the commit.
+- Keep the length to the necessary minimum. Avoid blabber.
