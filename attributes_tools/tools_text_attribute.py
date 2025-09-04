@@ -35,7 +35,7 @@ def _remove_nones(obj: Any) -> Any:
     return obj
 
 @tool("edit_or_create_text_attribute", return_direct=False)
-def create_text_attribute(
+def edit_or_create_text_attribute(
     operation: str,
     name: str,
     system_name: str,
