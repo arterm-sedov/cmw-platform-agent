@@ -1190,28 +1190,15 @@ class GaiaAgent:
                             self._track_mistral_success()
                         return self._force_final_answer(messages, tool_results_history, llm)
                     else:
-                        print("[Tool Loop] 'FINAL ANSWER' marker not found. Reiterating with reminder.")
-                        # Find the original question
-                        original_question = None
-                        for msg in messages:
-                            if hasattr(msg, 'type') and msg.type == 'human':
-                                original_question = msg.content
-                                break
-                        if not original_question:
-                            original_question = "[Original question not found]"
-                        # Compose a reminder message
-                        reminder = self._get_reminder_prompt(
-                            reminder_type="final_answer_prompt",
-                            messages=messages
-                        )
-                        reiterate_messages = [self.system_prompt, HumanMessage(content=reminder)]
-                        try:
-                            reiterate_response = self._invoke_llm_provider(llm, reiterate_messages)
-                            print(f"[Tool Loop] Reiterated response: {reiterate_response.content if hasattr(reiterate_response, 'content') else reiterate_response}")
-                            return reiterate_response
-                        except Exception as e:
-                            print(f"[Tool Loop] ❌ Failed to reiterate: {e}")
-                            return response
+                        # Lean fallback: if the model produced a clear answer without the marker,
+                        # wrap it as a FINAL ANSWER to avoid unnecessary retries.
+                        print("[Tool Loop] 'FINAL ANSWER' marker not found. Wrapping current content as final answer.")
+                        final_text = self._extract_text_from_response(response).strip()
+                        wrapped = AIMessage(content=f"FINAL ANSWER: {final_text}")
+                        # Track successful Mistral AI requests
+                        if llm_type == "mistral":
+                            self._track_mistral_success()
+                        return wrapped
             tool_calls = getattr(response, 'tool_calls', None)
             if tool_calls:
                 print(f"[Tool Loop] Detected {len(tool_calls)} tool call(s)")
@@ -2344,13 +2331,13 @@ class GaiaAgent:
         Returns:
             str: The extracted final answer string with "FINAL ANSWER:" prefix removed, or default string if not found.
         """
-        # First check if there's a final answer marker
-        if not self._has_final_answer_marker(response):
-            return "No answer provided"
-        
-        # Extract text from response and clean it using the existing regex logic
+        # Extract text from response
         text = self._extract_text_from_response(response)
-        cleaned_answer = self._clean_final_answer_text(text)
+        # If marker exists, clean after marker; otherwise, use stripped text
+        if self._has_final_answer_marker(text):
+            cleaned_answer = self._clean_final_answer_text(text)
+        else:
+            cleaned_answer = (text or "").strip()
         
         # Use helper function to ensure valid answer
         return ensure_valid_answer(cleaned_answer)
