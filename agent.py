@@ -2592,7 +2592,6 @@ class GaiaAgent:
         )
 
     def _init_groq_llm(self, config, model_config):
-        from langchain_groq import ChatGroq
         if not os.environ.get(config["api_key_env"]):
             print(f"⚠️ {config['api_key_env']} not found in environment variables. Skipping Groq...")
             return None
@@ -2603,7 +2602,6 @@ class GaiaAgent:
         )
 
     def _init_huggingface_llm(self, config, model_config):
-        from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
         # Convert model to repo_id for HuggingFace
         model_config_with_repo = model_config.copy()
         model_config_with_repo['repo_id'] = model_config['model']
