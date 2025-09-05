@@ -1698,20 +1698,31 @@ class GaiaAgent:
             # ENFORCE: Never use tools for providers that do not support them
             llm_use_tools = use_tools and self._provider_supports_tools(llm_type)
             llm, llm_name, _ = self._select_llm(llm_type, llm_use_tools)
+            # Determine the actual model identifier for this LLM
+            model_name = None
+            if hasattr(llm, 'model_name'):
+                model_name = llm.model_name
+            elif hasattr(llm, 'model'):
+                model_name = llm.model
+            elif llm_type in self.active_model_config:
+                models_cfg = self.active_model_config[llm_type].get("models", [])
+                if models_cfg:
+                    model_name = models_cfg[0].get("model")
             if llm:
-                available_llms.append((llm_type, llm_name, llm_use_tools))
+                # Append provider type, human-readable provider name, tools flag, and actual model id
+                available_llms.append((llm_type, llm_name, llm_use_tools, model_name))
             else:
                 print(f"⚠️ {llm_name} not available, skipping...")
         if not available_llms:
             raise Exception("No LLMs are available. Please check your API keys and configuration.")
-        print(f"🔄 Available LLMs: {[name for _, name, _ in available_llms]}")
+        print(f"🔄 Available LLMs: {[name for _, name, _, _ in available_llms]}")
         original_question = ""
         for msg in messages:
             if hasattr(msg, 'type') and msg.type == 'human':
                 original_question = msg.content
                 break
         llm_results = []
-        for llm_type, llm_name, llm_use_tools in available_llms:
+        for llm_type, llm_name, llm_use_tools, model_name in available_llms:
             try:
                 response = self._make_llm_request(messages, use_tools=llm_use_tools, llm_type=llm_type)
                 answer = self._extract_final_answer(response)
@@ -1726,14 +1737,16 @@ class GaiaAgent:
                     print(f"✅ {llm_name} succeeded (no reference to compare)")
                     self._update_llm_tracking(llm_type, "success")
                     self._update_llm_tracking(llm_type, "submitted")  # Mark as submitted since it's the final answer
-                    llm_results.append((1.0, answer, llm_name, llm_type))
+                    # Store actual model identifier for downstream display
+                    llm_results.append((1.0, answer, model_name or llm_name, llm_type))
                     break
                 is_match, similarity = self._vector_answers_match(answer, reference)
                 if is_match:
                     print(f"✅ {llm_name} succeeded with similar answer to reference")
                 else:
                     print(f"⚠️ {llm_name} succeeded but answer doesn't match reference")
-                llm_results.append((similarity, answer, llm_name, llm_type))
+                # Prefer actual model id; fall back to provider name if unavailable
+                llm_results.append((similarity, answer, model_name or llm_name, llm_type))
                 if similarity >= self.similarity_threshold:
                     self._update_llm_tracking(llm_type, "threshold_pass")
                 if llm_type != available_llms[-1][0]:
