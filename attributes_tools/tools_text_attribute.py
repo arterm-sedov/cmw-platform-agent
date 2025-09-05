@@ -184,14 +184,14 @@ def edit_or_create_text_attribute(
                 "English name": "Calculate value",
                 "type": "boolean",
                 "default": false,
-                "description": "Control whether attribute value should be calculated automatically; fill only by user value"
+                "description": "Control whether attribute value should be calculated automatically; fill only if expression_for_calculation != None"
             },
             "expression_for_calculation": {
                 "Russian name": "Выражение для вычисления",
                 "English name": "Expression for calculation",
                 "type": "boolean",
                 "default": false,
-                "description": "Expression for automatically calculating attribute value; fill only by user value and if calculate_value = true"
+                "description": "Expression for automatically calculating attribute value; fill only by user value"
             }
         },
         "Returns": {
@@ -230,8 +230,8 @@ def edit_or_create_text_attribute(
         "isIndexed": use_for_search_records,
         "isTracked": write_changes_to_the_log,
         "isTitle": use_as_record_title,
-        "isCalculated": calculate_value,
-        "expression": expression_for_calculation if calculate_value == True else None,
+        "isCalculated": calculate_value if expression_for_calculation != None else False,
+        "expression": expression_for_calculation,
         "validationMaskRegex": custom_mask if display_format == "CustomMask" else _set_input_mask(display_format)
     }
 
