@@ -45,7 +45,9 @@ def edit_or_create_text_attribute(
     description: Optional[str] = None,
     custom_mask: Optional[str] = None,
     control_uniqueness: Optional[bool] = False,
-    use_as_record_title: Optional[bool] = False
+    use_as_record_title: Optional[bool] = False,
+    use_for_search_records: Optional[bool] = False,
+    write_changes_to_the_log: Optional[bool] = False
 ) -> Dict[str, Any]:
     r"""
     {
@@ -160,6 +162,20 @@ def edit_or_create_text_attribute(
                 "type": "boolean",
                 "default": false,
                 "description": "Control whether attribute values will be displayed as a template record title"
+            },
+            "use_for_search_records": {
+                "Russian name": "Использовать для поиска записей",
+                "English name": "Use for search records",
+                "type": "boolean",
+                "default": false,
+                "desciption": "Control whether attribute values will be used for search records"
+            },
+            "write_changes_to_the_log": {
+                "Russian name": "Записывать изменения в журнал",
+                "English name": "Write changes to the log",
+                "type": "boolean",
+                "default": false,
+                "description": "Control whether attribute changes should be logged"
             }
         },
         "Returns": {
@@ -180,8 +196,7 @@ def edit_or_create_text_attribute(
                 "default": null,
                 "description": "Error message if any"
             }
-        },
-
+        }
     }
     """
 
@@ -196,6 +211,8 @@ def edit_or_create_text_attribute(
         "name": name,
         "description": description,
         "isUnique": control_uniqueness,
+        "isIndexed": use_for_search_records,
+        "isTracked": write_changes_to_the_log,
         "isTitle": use_as_record_title,
         "validationMaskRegex": custom_mask if display_format == "CustomMask" else _set_input_mask(display_format)
     }
