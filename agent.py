@@ -2557,7 +2557,7 @@ class GaiaAgent:
                 'web_search_deep_research_exa_ai', 'exa_ai_helper', 
                 'wiki_search', 'arxiv_search', 'web_search',
                 # Comindware Platform tools
-                'edit_or_create_text_attribute', 'get_text_attribute'
+                'edit_or_create_text_attribute', 'get_text_attribute', 'delete_attribute', 'archive_or_unarchive_attribute'
         ]
         
         # Build a set of tool names for deduplication (handle both __name__ and .name attributes)
