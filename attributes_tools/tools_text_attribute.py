@@ -47,7 +47,9 @@ def edit_or_create_text_attribute(
     control_uniqueness: Optional[bool] = False,
     use_as_record_title: Optional[bool] = False,
     use_for_search_records: Optional[bool] = False,
-    write_changes_to_the_log: Optional[bool] = False
+    write_changes_to_the_log: Optional[bool] = False,
+    calculate_value: Optional[bool] = False,
+    expression_for_calculation: Optional[str] = None
 ) -> Dict[str, Any]:
     r"""
     {
@@ -176,6 +178,20 @@ def edit_or_create_text_attribute(
                 "type": "boolean",
                 "default": false,
                 "description": "Control whether attribute changes should be logged"
+            },
+            "calculate_value": {
+                "Russian name": "Вычислять автоматически",
+                "English name": "Calculate value",
+                "type": "boolean",
+                "default": false,
+                "description": "Control whether attribute value should be calculated automatically; fill only by user value"
+            },
+            "expression_for_calculation": {
+                "Russian name": "Выражение для вычисления",
+                "English name": "Expression for calculation",
+                "type": "boolean",
+                "default": false,
+                "description": "Expression for automatically calculating attribute value; fill only by user value and if calculate_value = true"
             }
         },
         "Returns": {
@@ -214,6 +230,8 @@ def edit_or_create_text_attribute(
         "isIndexed": use_for_search_records,
         "isTracked": write_changes_to_the_log,
         "isTitle": use_as_record_title,
+        "isCalculated": calculate_value,
+        "expression": expression_for_calculation if calculate_value == True else None,
         "validationMaskRegex": custom_mask if display_format == "CustomMask" else _set_input_mask(display_format)
     }
 
