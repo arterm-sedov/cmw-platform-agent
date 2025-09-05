@@ -369,11 +369,44 @@ class GaiaAgent:
             "token_per_minute_limit": 500000,
             "enable_chunking": False
         },
+        "gigachat": {
+            "name": "Sber GigaChat",
+            "type_str": "gigachat",
+            "api_key_env": "GIGACHAT_API_KEY",
+            "scope_env": "GIGACHAT_SCOPE",
+            "verify_ssl_env": "GIGACHAT_VERIFY_SSL",
+            "max_history": 20,
+            "tool_support": True,
+            "force_tools": True,
+            "models": [
+                {
+                    "model": "GigaChat-2",
+                    "token_limit": 128_000,
+                    "max_tokens": 2048,
+                    "temperature": 0
+                },
+                {
+                    "model": "GigaChat-2-Pro",
+                    "token_limit": 128_000,
+                    "max_tokens": 2048,
+                    "temperature": 0
+                },
+                {
+                    "model": "GigaChat-2-Max",
+                    "token_limit": 128_000,
+                    "max_tokens": 2048,
+                    "temperature": 0
+                }
+            ],
+            "token_per_minute_limit": None,
+            "enable_chunking": False
+        },
     }
     
     # Default LLM sequence order - references LLM_CONFIG keys
     DEFAULT_LLM_SEQUENCE = [
-        "openrouter",
+        #"openrouter",
+        "gigachat",
         # "mistral",
         # "gemini",
         # "groq",
@@ -485,6 +518,8 @@ class GaiaAgent:
                                 return self._init_openrouter_llm(config, model_config)
                             elif llm_type == "mistral":
                                 return self._init_mistral_llm(config, model_config)
+                            elif llm_type == "gigachat":
+                                return self._init_gigachat_llm(config, model_config)
                             else:
                                 return None
                         llm_instance = get_llm_instance(llm_type, config, model_config)
@@ -500,7 +535,9 @@ class GaiaAgent:
                             error_plain = "instantiation returned None"
                         if config.get("tool_support", False) and self.tools and llm_instance is not None and plain_ok:
                             try:
-                                llm_with_tools = llm_instance.bind_tools(self.tools)
+                                # Filter tools for provider-specific schema limitations (e.g., GigaChat JSON Schema)
+                                safe_tools = self._filter_tools_for_llm(self.tools, llm_type)
+                                llm_with_tools = llm_instance.bind_tools(safe_tools)
                                 try:
                                     tools_ok = self._ping_llm(f"{llm_name} (model: {model_id}) (with tools)", llm_type, use_tools=True, llm_instance=llm_with_tools)
                                 except Exception as e:
@@ -531,7 +568,9 @@ class GaiaAgent:
                             self.active_model_config[llm_type] = model_config
                             self.llm_instances[llm_type] = llm_instance
                             if config.get("tool_support", False):
-                                self.llm_instances_with_tools[llm_type] = llm_instance.bind_tools(self.tools)
+                                # Bind filtered tool set for this provider
+                                safe_tools = self._filter_tools_for_llm(self.tools, llm_type)
+                                self.llm_instances_with_tools[llm_type] = llm_instance.bind_tools(safe_tools)
                                 if force_tools and not tools_ok:
                                     print(f"⚠️ {llm_name} (model: {model_id}) (with tools) test returned empty or failed, but binding tools anyway (force_tools=True: tool-calling is known to work in real use).")
                             else:
@@ -735,9 +774,10 @@ class GaiaAgent:
     def _truncate_messages(self, messages: List[Any], llm_type: str = None) -> List[Any]:
         """
         Truncate message history to prevent token overflow.
-        Keeps system message, last human message, and most recent tool messages.
-        More lenient for Gemini due to its large context window.
-        More aggressive for Groq due to TPM limits.
+        Keeps system message and a recent chronological window of messages.
+        Ensures conversation order is preserved and that any 'tool' message
+        retains its preceding assistant tool-call message to satisfy providers
+        that require function-call continuity (e.g., GigaChat/OpenAI-style).
         
         Args:
             messages: List of messages to truncate
@@ -748,37 +788,70 @@ class GaiaAgent:
             "max_history",
             self.LLM_CONFIG["default"]["max_history"]
         )
-        
+
         if len(messages) <= max_history:
             return messages
-        
-        # Always keep system message and last human message
-        system_msg = messages[0] if messages and hasattr(messages[0], 'type') and messages[0].type == 'system' else None
-        last_human_msg = None
-        tool_messages = []
-        
-        # Find last human message and collect tool messages
-        for msg in reversed(messages):
-            if hasattr(msg, 'type'):
-                if msg.type == 'human' and last_human_msg is None:
-                    last_human_msg = msg
-                elif msg.type == 'tool':
-                    tool_messages.append(msg)
-        
-        # Keep most recent tool messages (limit to prevent overflow)
-        max_tool_messages = max_history - 3  # System + Human + AI
-        if len(tool_messages) > max_tool_messages:
-            tool_messages = tool_messages[-max_tool_messages:]
-        
 
-        # Reconstruct message list
+        # Identify system message (first message may be system)
+        system_msg = messages[0] if messages and hasattr(messages[0], 'type') and messages[0].type == 'system' else None
+
+        # Start with a simple tail window preserving chronological order
+        # Keep the last (max_history - 1) messages after the system message (if any)
+        keep_after_system = max_history - 1 if system_msg else max_history
+        tail_messages = messages[1:] if system_msg else messages
+        kept = tail_messages[-keep_after_system:]
+
+        # If the first kept message is a tool message, ensure we also include the
+        # immediately preceding assistant message that issued the tool call
+        def _has_tool_calls(ai_msg: Any) -> bool:
+            try:
+                return (hasattr(ai_msg, 'type') and ai_msg.type in ('ai', 'assistant')) and bool(getattr(ai_msg, 'tool_calls', None))
+            except Exception:
+                return False
+
+        if kept and hasattr(kept[0], 'type') and kept[0].type == 'tool':
+            # Find the original index of this tool message
+            first_tool_idx_global = (1 if system_msg else 0) + (len(tail_messages) - len(kept))
+            # Look one message back in the full list for the assistant tool-call
+            prev_idx = first_tool_idx_global - 1
+            if prev_idx >= 0:
+                prev_msg = messages[prev_idx]
+                if _has_tool_calls(prev_msg):
+                    # Prepend the assistant tool-call message to kept
+                    kept = [prev_msg] + kept
+                else:
+                    # Walk further back until we either find an assistant with tool_calls or hit a non-ai
+                    scan_idx = prev_idx
+                    while scan_idx >= 0:
+                        candidate = messages[scan_idx]
+                        if _has_tool_calls(candidate):
+                            kept = [candidate] + kept
+                            break
+                        # Stop if we encounter a human/system before an AI tool-call
+                        if hasattr(candidate, 'type') and candidate.type in ('human', 'system'):
+                            break
+                        scan_idx -= 1
+
+        # If we exceeded the allowed window due to pairing, trim from the start but never drop the paired assistant
+        # Keep chronological order: system (optional) + kept
         truncated_messages = []
         if system_msg:
             truncated_messages.append(system_msg)
-        truncated_messages.extend(tool_messages)
-        if last_human_msg:
-            truncated_messages.append(last_human_msg)
-        
+        # If still too long, drop earliest items after system, but do not start with a dangling tool message
+        if len(truncated_messages) + len(kept) > max_history:
+            drop = (len(truncated_messages) + len(kept)) - max_history
+            # Avoid starting with a tool message after drop by ensuring we don't drop the paired assistant
+            start_idx = 0
+            while drop > 0 and start_idx < len(kept):
+                # Do not drop if dropping would make the new first item a tool without preceding assistant
+                next_first = kept[start_idx + 1] if start_idx + 1 < len(kept) else None
+                if next_first is not None and hasattr(next_first, 'type') and next_first.type == 'tool':
+                    break
+                start_idx += 1
+                drop -= 1
+            kept = kept[start_idx:]
+
+        truncated_messages.extend(kept)
         return truncated_messages
 
     @trace_prints_with_context("tool_execution")
@@ -1221,6 +1294,10 @@ class GaiaAgent:
                 if call_id and self.question_trace:
                     self._add_tool_loop_data(llm_type, call_id, step + 1, tool_calls, consecutive_no_progress)
                 
+                # IMPORTANT: Preserve the assistant function call in history for providers
+                # like GigaChat/OpenAI that require pairing before tool results.
+                messages.append(response)
+
                 # Limit the number of tool calls per step to prevent token overflow
                 if len(tool_calls) > max_tool_calls_per_step:
                     print(f"[Tool Loop] Too many tool calls on a single step ({len(tool_calls)}). Limiting to first {max_tool_calls_per_step}.")
@@ -1304,6 +1381,9 @@ class GaiaAgent:
             if function_call:
                 tool_name = function_call.get('name')
                 tool_args = function_call.get('arguments', {})
+                
+                # Preserve assistant function call message in history
+                messages.append(response)
                 
                 # Check if this is a duplicate function call
                 if self._is_duplicate_tool_call(tool_name, tool_args, called_tools):
@@ -1946,8 +2026,8 @@ class GaiaAgent:
         if llm_type is None:
             llm_type = getattr(llm, 'llm_type', None) or getattr(llm, 'type_str', None) or ''
         
-        # Convert messages for Mistral AI if needed
-        if llm_type == "mistral":
+        # Convert messages for providers that require strict tool-call ordering (e.g., Mistral, GigaChat)
+        if llm_type in ("mistral", "gigachat"):
             messages = self._convert_messages_for_mistral(messages)
         
         # Invoke the LLM
@@ -2513,6 +2593,68 @@ class GaiaAgent:
         print(f"✅ Gathered {len(final_tool_list)} tools: {[self._get_tool_name(tool) for tool in final_tool_list]}")
         return final_tool_list
 
+    def _filter_tools_for_llm(self, tools_list: List[Any], llm_type: str) -> List[Any]:
+        """
+        Filter tools to avoid provider-specific JSON Schema issues.
+
+        - For providers like 'gigachat' that are strict about JSON schema, drop tools
+          whose argument schemas contain open-ended Dict/Any objects without defined properties
+          (e.g., parameters named 'params' typed as Dict[str, Any]).
+
+        Args:
+            tools_list: Tools gathered for binding
+            llm_type: Provider type string
+
+        Returns:
+            List[Any]: Filtered list of tools
+        """
+        if not tools_list:
+            return tools_list
+        if llm_type not in ("gigachat",):
+            return tools_list
+
+        filtered = []
+        for t in tools_list:
+            try:
+                # LangChain tools expose args schema via .args or .args_schema, fall back to __signature__
+                schema = None
+                if hasattr(t, "args") and isinstance(getattr(t, "args"), dict):
+                    schema = getattr(t, "args")
+                elif hasattr(t, "args_schema") and getattr(t, "args_schema") is not None:
+                    try:
+                        schema = getattr(t, "args_schema").schema().get("properties", {})
+                    except Exception:
+                        schema = None
+                if schema is None and hasattr(t, "__signature__") and getattr(t, "__signature__") is not None:
+                    # Build a simple schema-like view from signature annotations
+                    sig = getattr(t, "__signature__")
+                    pseudo = {}
+                    for p in sig.parameters.values():
+                        pseudo[p.name] = str(p.annotation) if p.annotation is not p.empty else "Any"
+                    schema = pseudo
+
+                # Decide if tool is safe: reject if any param looks like an unstructured dict
+                unsafe = False
+                if isinstance(schema, dict):
+                    for k, v in schema.items():
+                        v_str = str(v).lower()
+                        if k in ("params", "options", "kwargs") or ("dict" in v_str and ("any" in v_str or "typing.any" in v_str)):
+                            unsafe = True
+                            break
+                if not unsafe:
+                    filtered.append(t)
+                else:
+                    print(f"ℹ️ Skipping tool for {llm_type} due to open dict param: {self._get_tool_name(t)}")
+            except Exception as e:
+                # If inspection fails, keep the tool to avoid accidental removal
+                print(f"ℹ️ Tool inspection failed for {self._get_tool_name(t)}: {e}. Keeping tool.")
+                filtered.append(t)
+
+        if not filtered:
+            # Fallback: if filtering removed everything, return original list
+            return tools_list
+        return filtered
+
     def _inject_file_data_to_tool_args(self, tool_name: str, tool_args: dict) -> dict:
         """
         Automatically inject file data and system prompt into tool arguments if needed.
@@ -2655,6 +2797,27 @@ class GaiaAgent:
             model=model_config["model"],
             temperature=model_config["temperature"],
             max_tokens=model_config["max_tokens"]
+        )
+
+    def _init_gigachat_llm(self, config, model_config):
+        try:
+            from langchain_gigachat.chat_models import GigaChat as LC_GigaChat
+        except Exception as e:
+            print(f"⚠️ langchain-gigachat not installed or failed to import: {e}. Skipping GigaChat...")
+            return None
+        api_key = os.environ.get(config["api_key_env"]) or os.environ.get("GIGACHAT_API_KEY")
+        if not api_key:
+            print(f"⚠️ {config['api_key_env']} not found in environment variables. Skipping GigaChat...")
+            return None
+        scope = os.environ.get(config.get("scope_env", "GIGACHAT_SCOPE"))
+        verify_ssl_env = os.environ.get(config.get("verify_ssl_env", "GIGACHAT_VERIFY_SSL"), "false")
+        verify_ssl = str(verify_ssl_env).strip().lower() in ("1", "true", "yes", "y")
+        # Initialize LangChain GigaChat client
+        return LC_GigaChat(
+            credentials=api_key,
+            model=model_config["model"],
+            verify_ssl_certs=verify_ssl is True and True or False,
+            scope=scope
         )
 
     def _ping_llm(self, llm_name: str, llm_type: str, use_tools: bool = False, llm_instance=None) -> bool:
