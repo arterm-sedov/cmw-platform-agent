@@ -174,3 +174,38 @@ def _get_request(endpoint: str) -> Dict[str, Any]:
     except Exception:
         result["error"] = response.text or f"HTTP {response.status_code}"
     return result
+
+def _delete_request(endpoint: str) -> Dict[str, Any]:
+
+    cfg = _load_server_config()
+    base_url = cfg.get("base_url")
+    url = f"{base_url}/{endpoint}"
+    headers = _basic_headers()
+
+    response = requests.delete(
+        url,
+        headers=headers,
+        timeout=30
+    )
+    response.raise_for_status()
+
+    # Avoid printing sensitive headers
+    result: Dict[str, Any] = {
+        "success": False,
+        "base_url": url,
+        "status_code": response.status_code,
+        "error": None
+    }
+
+     # Success: Platform returns 200 with response body being the created property id (often as quored string)
+    if response.status_code == 200:
+        result.update({"success": True})
+        return result
+
+    # Known error pattern: 500 with JSON body describing an issue (e.g., alias already exists)
+    try:
+        err_json = response.json()
+        result["error"] = json.dumps(err_json, ensure_ascii=False)
+    except Exception:
+        result["error"] = response.text or f"HTTP {response.status_code}"
+    return result
