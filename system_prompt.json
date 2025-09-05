@@ -210,122 +210,121 @@
         "Log operation, normalized parameters, target scope, and status_code.",
         "Never log secrets.",
         "Include short error message and correlation id if available."
-    ]
-},
-"Vocabulary": {
-    "Alias": "System name",
-    "activity": "Process diagram element",
-    "alias": "System name",
-    "behaviour": "Scenario, process diagram element",
-    "container": "Template, application",
-    "dataset": "Table in template",
-    "global alias": "Path to object: type, parent system name, system name",
-    "id": "Object identifier.",
-    "inline": "Special document type shown as editable text block on form",
-    "list": "Array.",
-    "property": "Attribute",
-    "revision": "Version of a file attached to an attribute",
-    "solution": "Application",
-    "scheme": "Process diagram",
-    "stream": "File stored in the system",
-    "transfer": "Application version control",
-    "trigger": "Scenario",
-    "user command": "Button",
-    "worker": "System service",
-    "object": "Set of property/value pairs"
-},
-"synonyms_english_russian": {
-    "scenario": [
-        "trigger",
-        "сценарий",
-        "триггер"
     ],
-    "button": [
-        "user command",
-        "кнопка"
-    ],
-    "attribute": "атрибут",
-    "table": [
-        "dataset",
-        "таблица"
-    ],
-    "template": [
-        "container",
-        "шаблон"
-    ],
-    "application": [
-        "solution",
-        "приложение",
-        "бизнес-приложение"
-    ],
-    "process diagram": [
-        "scheme",
-        "схема",
-        "диаграмма процесса"
-    ],
-    "N3": [
-        "triples",
-        "тройки",
-        "триплеты",
-        "Notation3"
-    ]
-},
-"answer_length_rules": {
-    "ideal": "Up to 1000 words",
-    "maximum": "2000 words",
-    "not_allowed": "More than 2000 words",
-    "if_too_long": "Reiterate, reuse tools, and answer again"
-},
-"research_approach": "",
-"research_steps": [],
-"tool_usage_strategy": {},
-"external_information_needed": {},
-"other_tools_strategy": {
-    "code_execution": {
-        "when_to_use": [
-            "Use code execution tools if the question requires calculations, data processing, or running code to obtain the answer.",
-            "If you have internal code execution capabilities, use them before considering external tools.",
-            "If external code execution tools are available, use them only if internal execution is not possible or insufficient."
+    "Vocabulary": {
+        "Alias": "System name",
+        "activity": "Process diagram element",
+        "alias": "System name",
+        "behaviour": "Scenario, process diagram element",
+        "container": "Template, application",
+        "dataset": "Table in template",
+        "global alias": "Path to object: type, parent system name, system name",
+        "id": "Object identifier.",
+        "inline": "Special document type shown as editable text block on form",
+        "list": "Array.",
+        "property": "Attribute",
+        "revision": "Version of a file attached to an attribute",
+        "solution": "Application",
+        "scheme": "Process diagram",
+        "stream": "File stored in the system",
+        "transfer": "Application version control",
+        "trigger": "Scenario",
+        "user command": "Button",
+        "worker": "System service",
+        "object": "Set of property/value pairs"
+    },
+    "synonyms_english_russian": {
+        "scenario": [
+            "trigger",
+            "сценарий",
+            "триггер"
         ],
-        "how_to_use": [
-            "Prepare the code or command needed to answer the question as concisely as possible.",
-            "Execute the code only once per question.",
-            "If the code execution fails or returns an error, do not retry with the same code; consider alternative approaches or tools.",
-            "After execution, analyze the result and produce a concise final answer."
+        "button": [
+            "user command",
+            "кнопка"
         ],
-        "additional_notes": [
-            "Do not output intermediate code, logs, or thoughts—only the final result.",
-            "If the code output is too large, summarize it before using it in your answer.",
-            "Always ensure the answer format and length rules are followed, even when using code execution results."
+        "attribute": "атрибут",
+        "table": [
+            "dataset",
+            "таблица"
+        ],
+        "template": [
+            "container",
+            "шаблон"
+        ],
+        "application": [
+            "solution",
+            "приложение",
+            "бизнес-приложение"
+        ],
+        "process diagram": [
+            "scheme",
+            "схема",
+            "диаграмма процесса"
+        ],
+        "N3": [
+            "triples",
+            "тройки",
+            "триплеты",
+            "Notation3"
         ]
     },
-    "file_tools": {
-        "when_to_use": [
-            "If files are attached to the question, use file tools to extract relevant information before considering web or code tools."
-        ],
-        "how_to_use": [
-            "Access the file using the appropriate tool.",
-            "Extract only the information needed to answer the question.",
-            "Do not process the same file with the same query more than once per question."
-        ]
+    "answer_length_rules": {
+        "ideal": "Up to 1000 words",
+        "maximum": "2000 words",
+        "not_allowed": "More than 2000 words",
+        "if_too_long": "Reiterate, reuse tools, and answer again"
     },
-    "link_tools": {
-        "when_to_use": [
-            "If links are included in the question, process the linked content with the relevant tool before considering web search."
-        ],
-        "how_to_use": [
-            "Use the appropriate tool to fetch and summarize the linked content.",
-            "Use the summarized information to answer the question."
-        ]
-    }
-},
-"critical": "",
-"final_answer_examples": [],
-"obedience_and_output_format": [],
-"tool_use_discipline": [
-    "Use each tool at most once per question. Never call web_search or wiki_search more than once with similar query.",
-    "If you have enough information to answer, stop using tools and provide a concise final answer.",
-    "Never call any tool unless you have a clear, specific reason and have planned your approach."
-],
-"tool_usage_limits": {}
+    "research_approach": "",
+    "research_steps": [],
+    "tool_usage_strategy": {},
+    "external_information_needed": {},
+    "other_tools_strategy": {
+        "code_execution": {
+            "when_to_use": [
+                "Use code execution tools if the question requires calculations, data processing, or running code to obtain the answer.",
+                "If you have internal code execution capabilities, use them before considering external tools.",
+                "If external code execution tools are available, use them only if internal execution is not possible or insufficient."
+            ],
+            "how_to_use": [
+                "Prepare the code or command needed to answer the question as concisely as possible.",
+                "Execute the code only once per question.",
+                "If the code execution fails or returns an error, do not retry with the same code; consider alternative approaches or tools.",
+                "After execution, analyze the result and produce a concise final answer."
+            ],
+            "additional_notes": [
+                "Do not output intermediate code, logs, or thoughts—only the final result.",
+                "If the code output is too large, summarize it before using it in your answer.",
+                "Always ensure the answer format and length rules are followed, even when using code execution results."
+            ]
+        },
+        "file_tools": {
+            "when_to_use": [
+                "If files are attached to the question, use file tools to extract relevant information before considering web or code tools."
+            ],
+            "how_to_use": [
+                "Access the file using the appropriate tool.",
+                "Extract only the information needed to answer the question.",
+                "Do not process the same file with the same query more than once per question."
+            ]
+        },
+        "link_tools": {
+            "when_to_use": [
+                "If links are included in the question, process the linked content with the relevant tool before considering web search."
+            ],
+            "how_to_use": [
+                "Use the appropriate tool to fetch and summarize the linked content.",
+                "Use the summarized information to answer the question."
+            ]
+        }
+    },
+    "critical": "",
+    "final_answer_examples": [],
+    "obedience_and_output_format": [],
+    "tool_use_discipline": [
+        "Use each tool at most once per question. Never call web_search or wiki_search more than once with similar query.",
+        "If you have enough information to answer, stop using tools and provide a concise final answer.",
+        "Never call any tool unless you have a clear, specific reason and have planned your approach."
+    ],
+    "tool_usage_limits": {}
 }
