@@ -9,6 +9,8 @@ langchain-google-genai
 langchain-huggingface
 langchain-groq
 langchain-mistralai
+langchain-gigachat
+gigachat
 langchain-tavily
 langchain-chroma
 langgraph
