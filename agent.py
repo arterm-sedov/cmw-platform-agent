@@ -374,10 +374,10 @@ class GaiaAgent:
     # Default LLM sequence order - references LLM_CONFIG keys
     DEFAULT_LLM_SEQUENCE = [
         "openrouter",
-        "mistral",
-        "gemini",
-        "groq",
-        "huggingface"
+        # "mistral",
+        # "gemini",
+        # "groq",
+        # "huggingface"
     ]
     # Print truncation length for debug output
     MAX_PRINT_LEN = 1000
