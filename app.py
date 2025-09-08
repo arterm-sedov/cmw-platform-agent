@@ -1,5 +1,6 @@
 import os
 import gradio as gr
+from pathlib import Path
 import requests
 import inspect
 import pandas as pd
@@ -770,7 +771,7 @@ def get_available_models():
 
 # --- Build Gradio Interface using Blocks ---
 with gr.Blocks(css_paths=[Path(__file__).with_name("gradio_comindware.css")]) as demo:
-    gr.Markdown("# CMW Platform Agent Evaluation Runner by Arte(r)m Sedov")
+    gr.Markdown("# Comindware Analyst Copilot Evaluation Runner by Arte(r)m Sedov")
     
 
     with gr.Tabs():
@@ -778,26 +779,31 @@ with gr.Blocks(css_paths=[Path(__file__).with_name("gradio_comindware.css")]) as
         
         with gr.TabItem("Chat with Agent"):
             gr.Markdown("""
-            ## 💬 Chat with the CMW Platform Agent
+            ## 💬 Chat with the Comindware Analyst Copilot
             
-            **Welcome to the interactive chat interface!** Here you can have a conversation with the agent and see how it responds using different AI models.
+            **Welcome!** This agent focuses on CMW Platform entity operations (applications, templates, attributes) and uses tools to execute precise changes.
             
             ### 🎯 **How it works:**
             
-            - **Multi-Model Responses**: The agent automatically tries different AI models (Google Gemini, Groq, HuggingFace, OpenRouter) to find the best answer
-            - **Intelligent Fallback**: If one model fails, it automatically switches to another
-            - **Tool Integration**: The agent can use various tools like math, code execution, web search, and file analysis
-            - **Real-time Statistics**: See which models are working and their success rates
+            - **Platform Operations First**: Validates your intent and executes tools for entity changes (e.g., create/edit attributes)
+            - **Multi-Model Orchestration**: Tries multiple LLM providers with intelligent fallback
+            - **Compact Structured Output**: Intent → Plan → Validate → Execute → Result
             
-            ### 💡 **Try asking:**
+            ### 💡 **Try asking (platform-focused):**
             
-            - General questions: "What is the capital of France?"
-            - Math problems: "What is 15 * 23 + 7?"
-            - Code questions: "Write a Python function to calculate fibonacci numbers"
-            - File analysis: "Can you help me analyze a CSV file?"
-            - Complex reasoning: "Explain how machine learning works"
+            - Create text attribute with mask: "Create 'Customer ID' in app 'ERP', template 'Counterparties', CustomMask: ([0-9]{10}|[0-9]{12})"
+            - Edit display format: "Change 'Contact Phone' in app 'CRM', template 'Leads' to PhoneRuMask"
+            - Fetch attribute: "Get attribute 'Comment' from app 'HR', template 'Candidates'"
+            - Create simple text: "Add 'Comment' text attribute to app 'HR', template 'Candidates' (PlainText)"
             
-            **Note**: The agent is optimized for CMW Platform entity creation tasks, but it can handle general conversation too!
+            ### 💡 Other examples:
+            
+            - "Capital of France?"
+            - "15 * 23 + 7 = ?"
+            - "Python prime check function"
+            - "Explain ML vs DL briefly"
+            
+            **Note**: Platform operations take priority and follow strict validation and logging.
             """)
             
             with gr.Row():
@@ -831,9 +837,9 @@ with gr.Blocks(css_paths=[Path(__file__).with_name("gradio_comindware.css")]) as
                     
                     # Quick action buttons
                     gr.Markdown("### ⚡ Quick Actions")
-                    quick_math_btn = gr.Button("🧮 Math Problem")
-                    quick_code_btn = gr.Button("💻 Code Question")
-                    quick_general_btn = gr.Button("🤔 General Question")
+                    quick_math_btn = gr.Button("🧩 Create Text Attribute")
+                    quick_code_btn = gr.Button("🛠️ Edit Phone Mask")
+                    quick_general_btn = gr.Button("🔎 Get Attribute")
             
             # Event handlers
             def send_message(message, history):
@@ -843,15 +849,28 @@ with gr.Blocks(css_paths=[Path(__file__).with_name("gradio_comindware.css")]) as
                 return [], ""
             
             def quick_math(history):
-                message = "What is 25 * 18 + 127? Please show your work."
+                message = (
+                    "Draft a plan to CREATE a text attribute 'Customer ID' in application 'ERP', template 'Counterparties' "
+                    "with display_format=CustomMask and mask ([0-9]{10}|[0-9]{12}), system_name=CustomerID. "
+                    "Provide Intent, Plan, Validate, and a DRY-RUN payload preview (compact JSON) for the tool call, "
+                    "but DO NOT execute any changes yet. Wait for my confirmation."
+                )
                 return chat_with_agent(message, history)
             
             def quick_code(history):
-                message = "Write a Python function to check if a number is prime."
+                message = (
+                    "Prepare a safe EDIT plan for attribute 'Contact Phone' (system_name=ContactPhone) in application 'CRM', template 'Leads' "
+                    "to change display_format to PhoneRuMask. Provide Intent, Plan, Validate checklist (risk notes), and a DRY-RUN payload preview. "
+                    "Do NOT execute changes yet—await my approval."
+                )
                 return chat_with_agent(message, history)
             
             def quick_general(history):
-                message = "Explain the difference between machine learning and deep learning in simple terms."
+                message = (
+                    "Verify existence of attribute 'Comment' (system_name=Comment) in application 'HR', template 'Candidates'. "
+                    "Provide Intent, Plan, Validate, and show the exact GET request you would issue as a DRY-RUN preview only. "
+                    "Do NOT call any tools yet—wait for my confirmation."
+                )
                 return chat_with_agent(message, history)
             
             # Connect event handlers
@@ -896,9 +915,9 @@ with gr.Blocks(css_paths=[Path(__file__).with_name("gradio_comindware.css")]) as
             )
         with gr.TabItem("Readme"):
             gr.Markdown("""
-            ## 🕵🏻‍♂️ CMW Platform Agent - Entity Creation System
+            ## 🕵🏻‍♂️ Comindware Analyst Copilot - Entity Creation System
 
-            **Welcome to the CMW Platform Agent - an AI-powered system for creating entities in the Comindware Platform!**
+            **Welcome to the Comindware Analyst Copilot - an AI-powered system for creating entities in the Comindware Platform!**
             
             ### 🚀 **What is this project**:
             
@@ -975,6 +994,6 @@ if __name__ == "__main__":
 
     print("-"*(60 + len(" App Starting ")) + "\n")
 
-    print("Launching Gradio Interface for CMW Platform Agent Evaluation...")
+    print("Launching Gradio Interface for Comindware Analyst Copilot Evaluation...")
     
     demo.launch(debug=True, share=False)
