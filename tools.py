@@ -19,7 +19,8 @@ import cmath
 import time
 import re
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple, Literal
+from pydantic import BaseModel, Field
 import chess
 
 # Try to import matplotlib, but make it optional
@@ -1131,7 +1132,15 @@ def analyze_image(image_base64: str) -> str:
             "error": str(e)
         }, indent=2)
 
-@tool
+class TransformImageParams(BaseModel):
+    width: Optional[int] = Field(None, description="New width for resize operation")
+    height: Optional[int] = Field(None, description="New height for resize operation")
+    angle: Optional[int] = Field(None, description="Rotation angle in degrees")
+    direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Flip direction")
+    radius: Optional[float] = Field(None, description="Blur radius")
+    factor: Optional[float] = Field(None, description="Enhancement factor for brightness/contrast")
+
+@tool(args_schema=TransformImageParams)
 def transform_image(image_base64: str, operation: str, params: Optional[Dict[str, Any]] = None) -> str:
     """
     Transform an image using various operations like resize, rotate, filter, etc.
@@ -1193,7 +1202,19 @@ def transform_image(image_base64: str, operation: str, params: Optional[Dict[str
             "error": str(e)
         }, indent=2)
 
-@tool
+class DrawOnImageParams(BaseModel):
+    text: Optional[str] = Field(None, description="Text to draw")
+    position: Optional[Tuple[int, int]] = Field(None, description="Text position (x, y)")
+    color: Optional[Union[str, Tuple[int, int, int]]] = Field(None, description="Color name or RGB tuple")
+    size: Optional[int] = Field(None, description="Font size for text")
+    coords: Optional[List[int]] = Field(None, description="Rectangle coordinates [x1, y1, x2, y2]")
+    center: Optional[Tuple[int, int]] = Field(None, description="Circle center (x, y)")
+    radius: Optional[int] = Field(None, description="Circle radius")
+    start: Optional[Tuple[int, int]] = Field(None, description="Line start (x, y)")
+    end: Optional[Tuple[int, int]] = Field(None, description="Line end (x, y)")
+    width: Optional[int] = Field(None, description="Stroke width")
+
+@tool(args_schema=DrawOnImageParams)
 def draw_on_image(image_base64: str, drawing_type: str, params: Dict[str, Any]) -> str:
     """
     Draw shapes, text, or other elements on an image.
@@ -1258,7 +1279,16 @@ def draw_on_image(image_base64: str, drawing_type: str, params: Dict[str, Any]) 
             "error": str(e)
         }, indent=2)
 
-@tool
+class GenerateSimpleImageParams(BaseModel):
+    color: Optional[Union[str, Tuple[int, int, int]]] = Field(None, description="Solid color for 'solid' type")
+    start_color: Optional[Tuple[int, int, int]] = Field(None, description="Gradient start color")
+    end_color: Optional[Tuple[int, int, int]] = Field(None, description="Gradient end color")
+    direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Gradient direction")
+    square_size: Optional[int] = Field(None, description="Square size for checkerboard")
+    color1: Optional[str] = Field(None, description="First color for checkerboard")
+    color2: Optional[str] = Field(None, description="Second color for checkerboard")
+
+@tool(args_schema=GenerateSimpleImageParams)
 def generate_simple_image(image_type: str, width: int = 500, height: int = 500, 
                          params: Optional[Dict[str, Any]] = None) -> str:
     """

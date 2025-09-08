@@ -5,6 +5,7 @@ requests
 langchain-community
 langchain-openai
 langchain-core
+pydantic
 langchain-google-genai
 langchain-huggingface
 langchain-groq
