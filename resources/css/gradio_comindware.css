@@ -9,6 +9,8 @@
   --cmw-primary-strongest: #02375A; /* theme-colors__primary_strongest */
   --cmw-primary-text: #ffffff;
   --cmw-brand: #3697d4; /* docs primary for secondary usage */
+  /* HSL for alpha-based utilities (matches platform) */
+  --cmw-primary-hsl: 203, 95%, 38%;
 
   --cmw-secondary: #f5f5f5;
   --cmw-secondary-fade: #FFFFFF;
@@ -44,7 +46,7 @@
   --cmw-success-text: #ffffff;
   --cmw-error: #e1462c;
   --cmw-error-text: #ffffff;
-  --cmw-warning: #ffda44;
+  --cmw-warning: #F79437;
   --cmw-warning-text: #5a5a5a;
   --cmw-highlight: #e8f6ff;
   --cmw-highlight-text: #5a5a5a;
@@ -76,6 +78,14 @@
   --cmw-button-height-lg: 38px;
   --cmw-button-font-weight: 500;
 
+  /* Toolbar button (compact CMW style) */
+  --cmw-toolbar-btn-height: 26px;
+  --cmw-toolbar-btn-padding-x: 10px;
+  --cmw-toolbar-btn-radius: 4px;
+  --cmw-toolbar-btn-font-weight: 400;
+  --cmw-toolbar-btn-hover-bg: hsla(var(--cmw-primary-hsl), 0.08);
+  --cmw-toolbar-btn-hover-border: var(--cmw-primary);
+
   /* Tabs */
   --cmw-tab-height: 34px;
   --cmw-tab-gap: 6px;
@@ -88,6 +98,105 @@
 
   /* Assets (optional; set to your local resources if available) */
   --cmw-logo-url: url('/gradio_api/file=resources/img/comindware_logo.svg');
+  --cmw-logo-height: 28px;
+  --cmw-logo-gap: var(--cmw-space-3);
+  --cmw-logo-shadow: drop-shadow(0 1px 0 rgba(0,0,0,0.06));
+}
+
+/* Extended color scales with sRGB fallbacks */
+:root {
+  /* Blue scale */
+  --blue-1: #f7fbff; --blue-2: #eff7ff; --blue-3: #e1f0ff; --blue-4: #cde7ff; --blue-5: #b5dcff; --blue-6: #97cdff; --blue-7: #6fb7ff; --blue-8: #3a99f8; --blue-9: #0575bd; --blue-10: #045f98; --blue-11: #044e7e; --blue-12: #033960;
+  /* Slate/gray scale */
+  --slate-1: #fcfdfe; --slate-2: #f7f9fb; --slate-3: #f0f3f7; --slate-4: #e7edf3; --slate-5: #dfe6ee; --slate-6: #d2dbe6; --slate-7: #bcc8d6; --slate-8: #9fb0c2; --slate-9: #7a8ca3; --slate-10: #5e6f84; --slate-11: #485768; --slate-12: #2d3742;
+  /* Semantic scales */
+  --green-9: #74c365; --red-9: #e1462c; --amber-9: #ffda44;
+}
+
+/* Platform token compatibility: map platform variables to our theme tokens */
+:root,
+.js-theme-content-region {
+  --theme-colors__primary: var(--cmw-primary);
+  --theme-colors__primary_fade: var(--cmw-primary-fade);
+  --theme-colors__primary_fadest: var(--cmw-primary-fadest);
+  --theme-colors__primary_strong: var(--cmw-primary-dark);
+  --theme-colors__primary_strongest: var(--cmw-primary-strongest, var(--cmw-primary-dark));
+  --theme-colors__primary-hsl: var(--cmw-primary-hsl);
+  --theme-colors__primary-txt: var(--cmw-white);
+
+  --theme-colors__secondary: var(--cmw-secondary, #f5f5f5);
+  --theme-colors__secondary_fade: var(--cmw-secondary-fade, #fff);
+  --theme-colors__secondary_fadest: var(--cmw-secondary-fadest, #fff);
+  --theme-colors__secondary_strong: var(--cmw-secondary-strong, #dcdcdc);
+  --theme-colors__secondary_strongest: var(--cmw-secondary-strongest, #c2c2c2);
+  --theme-colors__secondary-txt: var(--cmw-text);
+  --theme-colors__secondary-txt_hover: var(--cmw-primary);
+
+  --theme-colors__text: var(--cmw-text);
+  --theme-colors__text_fade: var(--cmw-text-fade);
+  --theme-colors__text_fadest: var(--cmw-text-fadest);
+  --theme-colors__text_strong: var(--cmw-text-strong);
+
+  --theme-colors__link: var(--cmw-link);
+  --theme-colors__link_fade: var(--cmw-link-fade);
+  --theme-colors__link_fadest: var(--cmw-link-fadest);
+  --theme-colors__link_strong: var(--cmw-link-strong);
+
+  --theme-colors__highlight: var(--cmw-highlight);
+  --theme-colors__highlight-txt: var(--cmw-highlight-text);
+
+  --theme-colors__background: var(--cmw-surface-alt);
+  --theme-colors__background-txt: var(--cmw-primary);
+  --theme-colors__main: var(--cmw-main);
+  --theme-colors__main_fade: var(--cmw-main-fade, #efefef);
+  --theme-colors__main_fadest: var(--cmw-main-fadest, #f5f5f5);
+  --theme-colors__main_strong: var(--cmw-main-strong, #e6e6e6);
+  --theme-colors__main_strongest: var(--cmw-main-strongest, #c1c1c1);
+
+  --theme-colors__warning: var(--cmw-warning);
+  --theme-colors__warning-txt: var(--cmw-warning-text);
+  --theme-colors__error: var(--cmw-error);
+  --theme-colors__error-txt: var(--cmw-error-text, var(--cmw-white));
+  --theme-colors__success: var(--cmw-success);
+  --theme-colors__success-txt: var(--cmw-success-text, var(--cmw-white));
+
+  --link-color: var(--theme-colors__primary);
+  --link-hover-color: var(--theme-colors__primary_fade);
+}
+
+/* P3 gamut overrides when supported */
+@supports (color: color(display-p3 1 1 1)) {
+  :root {
+    --blue-9: color(display-p3 0.023 0.47 0.75);
+    --blue-10: color(display-p3 0.02 0.39 0.59);
+    --slate-9: color(display-p3 0.47 0.55 0.64);
+    --slate-12: color(display-p3 0.18 0.21 0.26);
+    --green-9: color(display-p3 0.44 0.72 0.39);
+    --red-9: color(display-p3 0.86 0.36 0.22);
+    --amber-9: color(display-p3 0.98 0.85 0.27);
+  }
+}
+
+/* Map core tokens (brand) */
+:root {
+  /* Brand blue */
+  --cmw-primary: #3698D4;
+  --cmw-primary-dark: #2B7DB1; /* darker companion for borders */
+  --cmw-primary-fade: #5EB1EF; /* lighter tint for hovers */
+  --cmw-primary-fadest: #8ECFF6; /* lightest tint */
+  --cmw-primary-hsl: 203, 65%, 52%;
+
+  /* Text and surfaces (keep from scale) */
+  --cmw-text: var(--slate-9);
+  --cmw-text-strong: var(--slate-12);
+  --cmw-border: var(--slate-4);
+  --cmw-border-strong: var(--slate-6);
+  --cmw-surface-alt: var(--slate-1);
+
+  /* Semantics */
+  --cmw-success: var(--green-9);
+  --cmw-error: var(--red-9);
+  --cmw-warning: #F79437; /* requested orange */
 }
 
 /* Optional: font-face declarations matching platform (paths must exist to take effect) */
@@ -96,6 +205,14 @@
   src: local('Open Sans'),
        url('/gradio_api/file=resources/fonts/OpenSans/OpenSans-Regular.ttf') format('truetype');
   font-weight: 400;
+  font-display: fallback;
+}
+@font-face {
+  font-family: OpenSans;
+  src: local('Open Sans Italic'),
+       url('/gradio_api/file=resources/fonts/OpenSans/OpenSans-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
   font-display: fallback;
 }
 @font-face {
@@ -138,20 +255,34 @@ body {
 .gradio-container h5,
 .gradio-container h6 {
   color: var(--cmw-text-strong) !important;
-  font-weight: 300;
+  font-weight: 600;
+  line-height: 1.25;
 }
+.gradio-container .prose h1 { font-size: 28px; }
+.gradio-container .prose h2 { font-size: 22px; }
+.gradio-container .prose h3 { font-size: 18px; }
 
-/* Logo before the main H1 (optional if logo asset present) */
+/* Logo + title alignment (matches platform header look) */
+.gradio-container .prose h1:first-of-type,
+.gradio-container h1:first-of-type {
+  display: flex;
+  align-items: center;
+  gap: var(--cmw-logo-gap);
+}
 .gradio-container h1:first-of-type::before {
   content: '';
   display: inline-block;
-  width: 140px;
-  height: 40px;
-  margin-right: var(--cmw-space-3);
+  width: auto;
+  height: var(--cmw-logo-height);
+  aspect-ratio: 7 / 2;
   background-image: var(--cmw-logo-url);
   background-repeat: no-repeat;
   background-size: contain;
-  vertical-align: middle;
+  background-position: left center;
+  filter: var(--cmw-logo-shadow);
+}
+@media (max-width: 640px) {
+  .gradio-container h1:first-of-type::before { height: 22px; }
 }
 
 /* Tabs (approximate CMW: active tab filled primary, others bordered) */
@@ -164,7 +295,7 @@ body {
 
 .gradio-container .tab-nav button {
   border: 1px solid var(--cmw-border) !important;
-  background: var(--cmw-white) !important;
+  background: transparent !important; /* passive tabs: no fill */
   color: var(--cmw-text) !important;
   border-radius: var(--cmw-tab-radius) !important;
   padding: 0 var(--cmw-tab-padding-x) !important;
@@ -176,7 +307,7 @@ body {
 }
 .gradio-container .tab-nav button[aria-selected="true"] {
   background: var(--cmw-primary) !important;
-  border-color: var(--cmw-primary-dark) !important;
+  border-color: transparent !important; /* active tabs: fill only, no border */
   color: var(--cmw-white) !important;
 }
 .gradio-container .tab-nav button[aria-selected="false"]:hover {
@@ -184,29 +315,46 @@ body {
   color: var(--cmw-white) !important;
 }
 
-/* Buttons */
+/* Buttons - compact toolbar-like look (CMW style) */
 .gradio-container button,
 .gradio-container .btn {
-  border: 1px solid var(--cmw-primary-dark) !important;
-  border-radius: var(--cmw-radius-md) !important;
-  padding: var(--cmw-button-padding-y) var(--cmw-button-padding-x) !important;
-  height: var(--cmw-button-height-lg) !important;
-  line-height: calc(var(--cmw-button-height-lg) - 2px) !important;
-  font-weight: var(--cmw-button-font-weight) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  min-width: var(--cmw-toolbar-btn-height) !important;
+  height: var(--cmw-toolbar-btn-height) !important;
+  padding: 0 var(--cmw-toolbar-btn-padding-x) !important;
+  /* Default: subtle fill, no visible border */
+  background: var(--cmw-toolbar-btn-hover-bg) !important;
+  color: var(--cmw-primary) !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--cmw-toolbar-btn-radius) !important;
+  font-family: var(--cmw-font-family) !important;
+  font-size: var(--cmw-font-size) !important;
+  font-weight: var(--cmw-toolbar-btn-font-weight) !important;
+  line-height: 1.3 !important;
+  white-space: nowrap !important;
+  text-decoration: none !important;
+  transition: all 0.3s ease-in-out !important;
 }
 .gradio-container button.primary,
-.gradio-container button[variant="primary"] {
-  background: var(--cmw-primary) !important;
-  color: var(--cmw-white) !important;
-}
+.gradio-container button[variant="primary"],
 .gradio-container button.secondary,
 .gradio-container button[variant="secondary"] {
-  background: var(--cmw-white) !important;
+  background: var(--cmw-toolbar-btn-hover-bg) !important;
   color: var(--cmw-primary) !important;
-  border: 1px solid var(--cmw-primary) !important;
+  border-color: transparent !important;
 }
-.gradio-container button:hover {
-  filter: brightness(0.96);
+.gradio-container button:hover,
+.gradio-container .btn:hover {
+  /* On hover: show brand blue border */
+  border-color: var(--cmw-primary) !important;
+  background: var(--cmw-toolbar-btn-hover-bg) !important;
+}
+.gradio-container button:focus-visible {
+  outline: none !important;
+  box-shadow: var(--cmw-shadow-focus) !important;
 }
 
 /* Inputs */
@@ -265,4 +413,9 @@ body {
 /* Misc spacing tweaks */
 .gradio-container .markdown { line-height: var(--cmw-line-height); }
 
+
+
+/* Removed platform alias button classes (.toolbar-btn, .btn-strong, .btn-pale) */
+
+/* Removed tab count/overflow helpers for minimalism */
 
