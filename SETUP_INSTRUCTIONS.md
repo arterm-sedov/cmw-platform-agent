@@ -2,7 +2,7 @@
 
 ## Overview
 
-Welcome to the arterm-sedov CMW Platform Agent project! This guide ensures a smooth setup for both Windows and Linux/macOS, leveraging robust multi-LLM orchestration, model-level tool support, and transparent initialization diagnostics.
+Welcome to the arterm-sedov Comindware Analyst Copilot project! This guide ensures a smooth setup for both Windows and Linux/macOS, leveraging robust multi-LLM orchestration, model-level tool support, and transparent initialization diagnostics.
 
 ## Prerequisites
 
@@ -334,7 +334,7 @@ The agent supports multiple LLM providers with robust fallback and model-level t
 
 1. **Test the agent** with sample questions
 2. **Run the evaluation** for performance metrics
-3. **Submit to CMW Platform Agent benchmark** for scoring
+3. **Submit to Comindware Analyst Copilot benchmark** for scoring
 4. **Customize the agent** for your needs
 
 The agent is now ready for the CMW Platform benchmark—battle-tested, transparent, and extensible. 🚀

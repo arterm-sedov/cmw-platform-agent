@@ -10,7 +10,7 @@ hf_oauth: true
 hf_oauth_expiration_minutes: 480
 ---
 
-# CMW Platform Agent
+# Comindware Analyst Copilot
 
 ---
 
@@ -20,15 +20,15 @@ hf_oauth_expiration_minutes: 480
 
 **This repo:** <https://github.com/arterm-sedov/cmw-platform-agent>
 
-## 🚀 The CMW Platform Agent
+## 🚀 The Comindware Analyst Copilot
 
-Behold the CMW Platform Agent — a robust and extensible system designed for real-world reliability and performance in creating entities within the Comindware Platform.
+Behold the Comindware Analyst Copilot — a robust and extensible system designed for real-world reliability and performance in creating entities within the Comindware Platform.
 
 ## 🕵🏻‍♂️ What is this project?
 
 This is an **experimental multi-LLM agent** that demonstrates AI agent and CMW Platform integration:
 
-- **Input**: The user asks the CMW Platform Agent to create entities in the CMW Platform instance.
+- **Input**: The user asks the Comindware Analyst Copilot to create entities in the CMW Platform instance.
 - **Task**: The agent has a set of tools to translate natural language user requests into CMW Platform API calls for entity creation.
 - **Output**: Entities (templates, attributes, workflows, etc.) are created in the CMW Platform based on user specifications.
 
