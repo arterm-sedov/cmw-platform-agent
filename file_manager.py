@@ -1,8 +1,8 @@
 """
-File Manager for CMW Platform Agent
+File Manager for Comindware Analyst Copilot
 ==================================
 
-This module handles all HuggingFace file upload operations for the CMW Platform Agent.
+This module handles all HuggingFace file upload operations for the Comindware Analyst Copilot.
 It provides a centralized way to manage file operations and can be easily
 enabled/disabled via configuration.
 
@@ -41,7 +41,7 @@ except ImportError:
 
 class FileManager:
     """
-    Manages file upload operations for the CMW Platform Agent.
+    Manages file upload operations for the Comindware Analyst Copilot.
     
     This class provides a centralized interface for uploading files to HuggingFace
     repositories. It can be easily disabled by setting the FILE_UPLOAD_ENABLED

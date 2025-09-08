@@ -1,8 +1,8 @@
 """
-Dataset Manager for CMW Platform Agent
+Dataset Manager for Comindware Analyst Copilot
 =====================================
 
-This module handles all dataset uploading functionality for the CMW Platform Agent.
+This module handles all dataset uploading functionality for the Comindware Analyst Copilot.
 It provides a centralized way to manage dataset operations and can be easily
 enabled/disabled via configuration.
 
@@ -44,7 +44,7 @@ except ImportError:
 
 class DatasetManager:
     """
-    Manages dataset uploading operations for the CMW Platform Agent.
+    Manages dataset uploading operations for the Comindware Analyst Copilot.
     
     This class provides a centralized interface for uploading initialization
     summaries and run data to HuggingFace datasets. It can be easily disabled

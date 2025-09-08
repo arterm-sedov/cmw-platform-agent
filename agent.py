@@ -1,9 +1,9 @@
 """
-CMW Platform Agent
+Comindware Analyst Copilot
 By Arte(r)m Sedov
 ==================================
 
-This module implements the main agent logic for the CMW Platform Agent.
+This module implements the main agent logic for the Comindware Analyst Copilot.
 
 Usage:
     agent = GaiaAgent(provider="google")

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Example usage of Mistral AI integration in the CMW Platform Agent
+Example usage of Mistral AI integration in the Comindware Analyst Copilot
 """
 
 import os

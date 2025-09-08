@@ -1,8 +1,8 @@
 """
-Login Manager for CMW Platform Agent
+Login Manager for Comindware Analyst Copilot
 ===================================
 
-This module handles all HuggingFace login operations for the CMW Platform Agent.
+This module handles all HuggingFace login operations for the Comindware Analyst Copilot.
 It provides a centralized way to manage login functionality and can be easily
 enabled/disabled via configuration.
 
@@ -28,7 +28,7 @@ LOGIN_ENABLED = os.getenv("LOGIN_ENABLED", "false").lower() == "true"
 
 class LoginManager:
     """
-    Manages HuggingFace login operations for the CMW Platform Agent.
+    Manages HuggingFace login operations for the Comindware Analyst Copilot.
     
     This class provides a centralized interface for handling login functionality,
     particularly for Gradio applications. It can be easily disabled by setting
