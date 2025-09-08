@@ -87,7 +87,7 @@
   --cmw-white: #ffffff;
 
   /* Assets (optional; set to your local resources if available) */
-  --cmw-logo-url: url('/gradio_api/file=resources/img/comindware_logo.png');
+  --cmw-logo-url: url('/gradio_api/file=resources/img/comindware_logo.svg');
 }
 
 /* Optional: font-face declarations matching platform (paths must exist to take effect) */
