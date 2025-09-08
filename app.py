@@ -770,7 +770,18 @@ def get_available_models():
     return "\n".join(models_info)
 
 # --- Build Gradio Interface using Blocks ---
-with gr.Blocks(css_paths=[Path(__file__).with_name("gradio_comindware.css")]) as demo:
+# Ensure Gradio can serve local static resources via /gradio_api/file=
+RESOURCES_DIR = Path(__file__).parent / "resources"
+try:
+    existing_allowed = os.environ.get("GRADIO_ALLOWED_PATHS", "")
+    parts = [p for p in existing_allowed.split(os.pathsep) if p]
+    if str(RESOURCES_DIR) not in parts:
+        parts.append(str(RESOURCES_DIR))
+    os.environ["GRADIO_ALLOWED_PATHS"] = os.pathsep.join(parts)
+    print(f"Gradio static allowed paths: {os.environ['GRADIO_ALLOWED_PATHS']}")
+except Exception as _e:
+    print(f"Warning: could not set GRADIO_ALLOWED_PATHS: {_e}")
+with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_comindware.css"]) as demo:
     gr.Markdown("# Comindware Analyst Copilot Evaluation Runner by Arte(r)m Sedov")
     
 
