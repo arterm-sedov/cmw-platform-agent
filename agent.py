@@ -2528,13 +2528,7 @@ class GaiaAgent:
                     # This is a regular function that might be a tool
                     # Only include if it's not an internal function
                     if not name.startswith("_") and name not in [
-                        "_convert_chess_move_internal", 
-                        "_get_best_chess_move_internal", 
-                        "_get_chess_board_fen_internal",
-                        "_expand_fen_rank",
-                        "_compress_fen_rank", 
-                        "_invert_mirror_fen",
-                        "_add_fen_game_state"
+                        # chess internals removed
                     ]:
                         tool_list.append(obj)
         
@@ -2549,12 +2543,11 @@ class GaiaAgent:
                 'extract_text_from_image', 'analyze_csv_file', 'analyze_excel_file',
                 'analyze_image', 'transform_image', 'draw_on_image', 'generate_simple_image', 'combine_images',
                 'understand_video', 'understand_audio',
-                # Chess tools
-                'convert_chess_move', 'get_best_chess_move', 'get_chess_board_fen', 'solve_chess_position',
+                # Chess tools removed
                 # Code execution
                 'execute_code_multilang',
                 # Research and search tools
-                'web_search_deep_research_exa_ai', 'exa_ai_helper', 
+                'web_search_deep_research_exa_ai', 
                 'wiki_search', 'arxiv_search', 'web_search',
                 # Comindware Platform tools
                 'edit_or_create_text_attribute', 'get_text_attribute', 'delete_attribute', 'archive_or_unarchive_attribute'
@@ -2676,8 +2669,7 @@ class GaiaAgent:
             'extract_text_from_image': 'image_path',
             'analyze_csv_file': 'file_path',
             'analyze_excel_file': 'file_path',
-            'get_chess_board_fen': 'image_path',
-            'solve_chess_position': 'image_path',
+            # chess tools removed
             'execute_code_multilang': 'code'  # Add support for code injection
         }
         
