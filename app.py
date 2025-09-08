@@ -782,7 +782,7 @@ try:
 except Exception as _e:
     print(f"Warning: could not set GRADIO_ALLOWED_PATHS: {_e}")
 with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_comindware.css"]) as demo:
-    gr.Markdown("# Comindware Analyst Copilot Evaluation Runner by Arte(r)m Sedov")
+    gr.Markdown("# Comindware Analyst Copilot")
     
 
     with gr.Tabs():
@@ -835,22 +835,22 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                             lines=2,
                             scale=4
                         )
-                        send_btn = gr.Button("Send", variant="primary", scale=1)
+                        send_btn = gr.Button("Send", variant="primary", scale=1, elem_classes=["cmw-button"])
                     
                     # Clear button
-                    clear_btn = gr.Button("Clear Chat", variant="secondary")
+                    clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
                 
                 with gr.Column(scale=1):
                     # Model information panel
                     gr.Markdown("### 📊 Model Status")
                     models_info = gr.Markdown(get_available_models())
-                    refresh_models_btn = gr.Button("🔄 Refresh Model Info")
+                    refresh_models_btn = gr.Button("🔄 Refresh Model Info", elem_classes=["cmw-button"])
                     
                     # Quick action buttons
                     gr.Markdown("### ⚡ Quick Actions")
-                    quick_math_btn = gr.Button("🧩 Create Text Attribute")
-                    quick_code_btn = gr.Button("🛠️ Edit Phone Mask")
-                    quick_general_btn = gr.Button("🔎 Get Attribute")
+                    quick_math_btn = gr.Button("🧩 Create Text Attribute", elem_classes=["cmw-button"])
+                    quick_code_btn = gr.Button("🛠️ Edit Phone Mask", elem_classes=["cmw-button"])
+                    quick_general_btn = gr.Button("🔎 Get Attribute", elem_classes=["cmw-button"])
             
             # Event handlers
             def send_message(message, history):
