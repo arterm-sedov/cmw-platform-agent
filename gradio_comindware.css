@@ -81,6 +81,7 @@
   --cmw-tab-gap: 6px;
   --cmw-tab-padding-x: 12px;
   --cmw-tab-font-weight: 500;
+  --cmw-tab-radius: 16px;
 
   /* Misc */
   --cmw-white: #ffffff;
@@ -157,18 +158,21 @@ body {
 .gradio-container .tab-nav {
   border-bottom: 1px solid var(--cmw-border) !important;
   gap: var(--cmw-tab-gap) !important;
+  justify-content: flex-start !important;
+  padding: 0 var(--cmw-space-2) !important;
 }
 
 .gradio-container .tab-nav button {
   border: 1px solid var(--cmw-border) !important;
   background: var(--cmw-white) !important;
   color: var(--cmw-text) !important;
-  border-radius: var(--cmw-radius-md) !important;
+  border-radius: var(--cmw-tab-radius) !important;
   padding: 0 var(--cmw-tab-padding-x) !important;
   height: var(--cmw-tab-height) !important;
   line-height: calc(var(--cmw-tab-height) - 2px) !important;
   font-weight: var(--cmw-tab-font-weight) !important;
   box-shadow: none !important;
+  margin-bottom: -1px !important;
 }
 .gradio-container .tab-nav button[aria-selected="true"] {
   background: var(--cmw-primary) !important;
