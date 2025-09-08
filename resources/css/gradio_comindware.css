@@ -293,6 +293,7 @@ body {
   padding: 0 var(--cmw-space-2) !important;
 }
 
+/* Tab button styling for Gradio tabs */
 .gradio-container .tab-nav button {
   border: 1px solid var(--cmw-border) !important;
   background: transparent !important; /* passive tabs: no fill */
@@ -304,20 +305,31 @@ body {
   font-weight: var(--cmw-tab-font-weight) !important;
   box-shadow: none !important;
   margin-bottom: -1px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  text-decoration: none !important;
+  transition: all 0.2s ease-in-out !important;
+  cursor: pointer !important;
 }
+
+/* Active tab state */
 .gradio-container .tab-nav button[aria-selected="true"] {
   background: var(--cmw-primary) !important;
   border-color: transparent !important; /* active tabs: fill only, no border */
   color: var(--cmw-white) !important;
 }
+
+/* Hover state for inactive tabs */
 .gradio-container .tab-nav button[aria-selected="false"]:hover {
   background: var(--cmw-primary-fade) !important;
   color: var(--cmw-white) !important;
 }
 
 /* Buttons - compact toolbar-like look (CMW style) */
-.gradio-container button,
-.gradio-container .btn {
+/* .gradio-container button:not(.tab-nav button), */
+.gradio-container .btn,
+.gradio-container .cmw-button {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -338,21 +350,25 @@ body {
   text-decoration: none !important;
   transition: all 0.3s ease-in-out !important;
 }
-.gradio-container button.primary,
-.gradio-container button[variant="primary"],
-.gradio-container button.secondary,
-.gradio-container button[variant="secondary"] {
+.gradio-container button.primary:not(.tab-nav button),
+.gradio-container button[variant="primary"]:not(.tab-nav button),
+.gradio-container button.secondary:not(.tab-nav button),
+.gradio-container button[variant="secondary"]:not(.tab-nav button),
+.gradio-container .cmw-button.primary,
+.gradio-container .cmw-button.secondary {
   background: var(--cmw-toolbar-btn-hover-bg) !important;
   color: var(--cmw-primary) !important;
   border-color: transparent !important;
 }
-.gradio-container button:hover,
-.gradio-container .btn:hover {
+.gradio-container button:hover:not(.tab-nav button),
+.gradio-container .btn:hover,
+.gradio-container .cmw-button:hover {
   /* On hover: show brand blue border */
   border-color: var(--cmw-primary) !important;
   background: var(--cmw-toolbar-btn-hover-bg) !important;
 }
-.gradio-container button:focus-visible {
+.gradio-container button:focus-visible:not(.tab-nav button),
+.gradio-container .cmw-button:focus-visible {
   outline: none !important;
   box-shadow: var(--cmw-shadow-focus) !important;
 }
@@ -392,6 +408,7 @@ body {
 .gradio-container .chatbot {
   background: var(--cmw-surface-alt) !important;
   border: 1px solid var(--cmw-border) !important;
+  border-radius: var(--cmw-radius-md) !important;
 }
 .gradio-container .message.user {
   background: rgba(5,117,189,0.08) !important;
