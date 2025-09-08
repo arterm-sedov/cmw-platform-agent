@@ -1,0 +1,264 @@
+/* Minimal Comindware-like theme for Gradio UI (local, no external imports) */
+
+:root {
+  /* Tokens approximating CMW Platform variables (see master-new.css) */
+  --cmw-primary: #0575bd; /* theme-colors__primary */
+  --cmw-primary-fade: #0694EF; /* theme-colors__primary_fade */
+  --cmw-primary-fadest: #2FAAF9; /* theme-colors__primary_fadest */
+  --cmw-primary-dark: #04568B; /* theme-colors__primary_strong */
+  --cmw-primary-strongest: #02375A; /* theme-colors__primary_strongest */
+  --cmw-primary-text: #ffffff;
+  --cmw-brand: #3697d4; /* docs primary for secondary usage */
+
+  --cmw-secondary: #f5f5f5;
+  --cmw-secondary-fade: #FFFFFF;
+  --cmw-secondary-fadest: #FFFFFF;
+  --cmw-secondary-strong: #DCDCDC;
+  --cmw-secondary-strongest: #C2C2C2;
+  --cmw-secondary-text: #5a5a5a;
+
+  --cmw-main: #ffffff;
+  --cmw-main-fade: #FFFFFF;
+  --cmw-main-fadest: #FFFFFF;
+  --cmw-main-strong: #E6E6E6;
+  --cmw-main-strongest: #CCCCCC;
+
+  --cmw-text: #5a5a5a;
+  --cmw-text-fade: #747474;
+  --cmw-text-fadest: #8D8D8D;
+  --cmw-text-strong: #404040;
+
+  --cmw-surface: #ffffff;
+  --cmw-surface-alt: #f5f8fc; /* panel bg */
+  --cmw-border: #dce2ea; /* border */
+  --cmw-border-strong: #b8c3d1; /* strong border */
+
+  /* Links */
+  --cmw-link: var(--cmw-primary);
+  --cmw-link-fade: var(--cmw-primary-fade);
+  --cmw-link-fadest: var(--cmw-primary-fadest);
+  --cmw-link-strong: var(--cmw-primary-dark);
+
+  /* Status */
+  --cmw-success: #74c365;
+  --cmw-success-text: #ffffff;
+  --cmw-error: #e1462c;
+  --cmw-error-text: #ffffff;
+  --cmw-warning: #ffda44;
+  --cmw-warning-text: #5a5a5a;
+  --cmw-highlight: #e8f6ff;
+  --cmw-highlight-text: #5a5a5a;
+
+  /* Radii, spacing, shadows */
+  --cmw-radius-sm: 3px;
+  --cmw-radius-md: 4px;
+  --cmw-radius-lg: 6px;
+
+  --cmw-space-1: 4px;
+  --cmw-space-2: 8px;
+  --cmw-space-3: 12px;
+  --cmw-space-4: 16px;
+  --cmw-space-5: 20px;
+
+  --cmw-shadow-soft: 0 2px 6px rgba(0,0,0,0.06);
+  --cmw-shadow-focus: 0 0 0 2px rgba(5,117,189,0.2);
+
+  /* Typography */
+  --cmw-font-family: OpenSans, Arial, sans-serif;
+  --cmw-font-weight-normal: 400;
+  --cmw-font-size: 14px;
+  --cmw-line-height: 1.6;
+
+  /* Buttons */
+  --cmw-button-radius: var(--cmw-radius-md);
+  --cmw-button-padding-x: 16px;
+  --cmw-button-padding-y: 8px;
+  --cmw-button-height-lg: 38px;
+  --cmw-button-font-weight: 500;
+
+  /* Tabs */
+  --cmw-tab-height: 34px;
+  --cmw-tab-gap: 6px;
+  --cmw-tab-padding-x: 12px;
+  --cmw-tab-font-weight: 500;
+
+  /* Misc */
+  --cmw-white: #ffffff;
+
+  /* Assets (optional; set to your local resources if available) */
+  --cmw-logo-url: url('/gradio_api/file=resources/img/comindware_logo.png');
+}
+
+/* Optional: font-face declarations matching platform (paths must exist to take effect) */
+@font-face {
+  font-family: OpenSans;
+  src: local('Open Sans'),
+       url('/gradio_api/file=resources/fonts/OpenSans/OpenSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: fallback;
+}
+@font-face {
+  font-family: OpenSans;
+  src: local('Open Sans Medium'),
+       url('/gradio_api/file=resources/fonts/OpenSans/OpenSans-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-display: fallback;
+}
+@font-face {
+  font-family: OpenSans;
+  src: local('Open Sans Light'),
+       url('/gradio_api/file=resources/fonts/OpenSans/OpenSans-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-display: fallback;
+}
+@font-face {
+  font-family: OpenSans;
+  src: local('Open Sans Bold'),
+       url('/gradio_api/file=resources/fonts/OpenSans/OpenSans-Bold.ttf') format('truetype');
+  font-weight: 600;
+  font-display: fallback;
+}
+
+/* App container */
+.gradio-container,
+body {
+  background: var(--cmw-surface) !important;
+  color: var(--cmw-text) !important;
+  font-weight: var(--cmw-font-weight-normal);
+  font-family: var(--cmw-font-family);
+  font-size: var(--cmw-font-size);
+}
+
+/* Headings */
+.gradio-container h1,
+.gradio-container h2,
+.gradio-container h3,
+.gradio-container h4,
+.gradio-container h5,
+.gradio-container h6 {
+  color: var(--cmw-text-strong) !important;
+  font-weight: 300;
+}
+
+/* Logo before the main H1 (optional if logo asset present) */
+.gradio-container h1:first-of-type::before {
+  content: '';
+  display: inline-block;
+  width: 140px;
+  height: 40px;
+  margin-right: var(--cmw-space-3);
+  background-image: var(--cmw-logo-url);
+  background-repeat: no-repeat;
+  background-size: contain;
+  vertical-align: middle;
+}
+
+/* Tabs (approximate CMW: active tab filled primary, others bordered) */
+.gradio-container .tab-nav {
+  border-bottom: 1px solid var(--cmw-border) !important;
+  gap: var(--cmw-tab-gap) !important;
+}
+
+.gradio-container .tab-nav button {
+  border: 1px solid var(--cmw-border) !important;
+  background: var(--cmw-white) !important;
+  color: var(--cmw-text) !important;
+  border-radius: var(--cmw-radius-md) !important;
+  padding: 0 var(--cmw-tab-padding-x) !important;
+  height: var(--cmw-tab-height) !important;
+  line-height: calc(var(--cmw-tab-height) - 2px) !important;
+  font-weight: var(--cmw-tab-font-weight) !important;
+  box-shadow: none !important;
+}
+.gradio-container .tab-nav button[aria-selected="true"] {
+  background: var(--cmw-primary) !important;
+  border-color: var(--cmw-primary-dark) !important;
+  color: var(--cmw-white) !important;
+}
+.gradio-container .tab-nav button[aria-selected="false"]:hover {
+  background: var(--cmw-primary-fade) !important;
+  color: var(--cmw-white) !important;
+}
+
+/* Buttons */
+.gradio-container button,
+.gradio-container .btn {
+  border: 1px solid var(--cmw-primary-dark) !important;
+  border-radius: var(--cmw-radius-md) !important;
+  padding: var(--cmw-button-padding-y) var(--cmw-button-padding-x) !important;
+  height: var(--cmw-button-height-lg) !important;
+  line-height: calc(var(--cmw-button-height-lg) - 2px) !important;
+  font-weight: var(--cmw-button-font-weight) !important;
+}
+.gradio-container button.primary,
+.gradio-container button[variant="primary"] {
+  background: var(--cmw-primary) !important;
+  color: var(--cmw-white) !important;
+}
+.gradio-container button.secondary,
+.gradio-container button[variant="secondary"] {
+  background: var(--cmw-white) !important;
+  color: var(--cmw-primary) !important;
+  border: 1px solid var(--cmw-primary) !important;
+}
+.gradio-container button:hover {
+  filter: brightness(0.96);
+}
+
+/* Inputs */
+.gradio-container input,
+.gradio-container textarea,
+.gradio-container select,
+.gradio-container .wrap.svelte-1y9cslw input,
+.gradio-container .wrap.svelte-1y9cslw textarea {
+  border: 1px solid var(--cmw-border) !important;
+  background: var(--cmw-surface) !important;
+  color: var(--cmw-text-strong) !important;
+}
+.gradio-container input:focus,
+.gradio-container textarea:focus,
+.gradio-container select:focus {
+  outline: none !important;
+  border-color: var(--cmw-primary) !important;
+  box-shadow: var(--cmw-shadow-focus) !important;
+}
+
+/* Cards and panels */
+.gradio-container .panel,
+.gradio-container .form,
+.gradio-container .block.padded,
+.gradio-container .box,
+.gradio-container .component,
+.gradio-container .container {
+  background: var(--cmw-surface) !important;
+  border: 1px solid var(--cmw-border) !important;
+  border-radius: var(--cmw-radius-md) !important;
+  box-shadow: var(--cmw-shadow-soft);
+}
+
+/* Chatbot */
+.gradio-container .chatbot {
+  background: var(--cmw-surface-alt) !important;
+  border: 1px solid var(--cmw-border) !important;
+}
+.gradio-container .message.user {
+  background: rgba(5,117,189,0.08) !important;
+}
+.gradio-container .message.bot {
+  background: var(--cmw-white) !important;
+}
+
+/* Links */
+.gradio-container a { color: var(--cmw-link) !important; }
+.gradio-container a:hover { color: var(--cmw-link-strong) !important; }
+
+/* Tables */
+.gradio-container table {
+  border-color: var(--cmw-border) !important;
+}
+.gradio-container th { background: var(--cmw-surface-alt) !important; }
+
+/* Misc spacing tweaks */
+.gradio-container .markdown { line-height: var(--cmw-line-height); }
+
+

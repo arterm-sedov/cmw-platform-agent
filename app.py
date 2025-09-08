@@ -769,7 +769,7 @@ def get_available_models():
     return "\n".join(models_info)
 
 # --- Build Gradio Interface using Blocks ---
-with gr.Blocks() as demo:
+with gr.Blocks(css_paths=[Path(__file__).with_name("gradio_comindware.css")]) as demo:
     gr.Markdown("# CMW Platform Agent Evaluation Runner by Arte(r)m Sedov")
     
 
