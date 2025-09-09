@@ -44,6 +44,9 @@ from langchain_core.tools import tool
 from attributes_tools.tools_text_attribute import edit_or_create_text_attribute, get_text_attribute  # noqa: F401
 from attributes_tools.tool_delete_attribute import delete_attribute
 from attributes_tools.tool_archive_or_unarchive_attribute import archive_or_unarchive_attribute
+from templates_tools.tool_list_attributes import list_attributes
+from applications_tools.tool_list_templates import list_templates
+from applications_tools.tool_list_applications import list_applications
 
 # Global configuration for search tools
 SEARCH_LIMIT = 5  # Maximum number of results for all search tools (Tavily, Wikipedia, Arxiv)

@@ -405,7 +405,7 @@ class GaiaAgent:
     
     # Default LLM sequence order - references LLM_CONFIG keys
     DEFAULT_LLM_SEQUENCE = [
-        "openrouter",
+        #"openrouter",
         #"gigachat",
         # "mistral",
         # "gemini",
@@ -2562,7 +2562,7 @@ class GaiaAgent:
                 'web_search_deep_research_exa_ai', 
                 'wiki_search', 'arxiv_search', 'web_search',
                 # Comindware Platform tools
-                'edit_or_create_text_attribute', 'get_text_attribute', 'delete_attribute', 'archive_or_unarchive_attribute'
+                'edit_or_create_text_attribute', 'get_text_attribute', 'delete_attribute', 'archive_or_unarchive_attribute', 'list_attributes', 'list_templates', 'list_applications'
         ]
         
         # Build a set of tool names for deduplication (handle both __name__ and .name attributes)
