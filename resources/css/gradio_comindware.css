@@ -62,6 +62,10 @@
   --cmw-space-4: 16px;
   --cmw-space-5: 20px;
 
+  /* Component-specific spacing */
+  --cmw-chat-hints-padding-x: var(--cmw-space-5);
+  --cmw-chat-hints-padding-y: var(--cmw-space-4);
+
   --cmw-shadow-soft: 0 2px 6px rgba(0,0,0,0.06);
   --cmw-shadow-focus: 0 0 0 2px rgba(5,117,189,0.2);
 
@@ -260,6 +264,29 @@ body {
   border: none !important;
   background: transparent !important;
 }
+.gradio-container .prose,
+.gradio-container .prose .md,
+.gradio-container [data-testid="markdown"],
+.gradio-container .md {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+/* Ensure hero title markdown block has no border/shadow/background */
+.gradio-container [data-testid="markdown"].hero-title,
+.gradio-container hero-title {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.gradio-container .prose h1,
+.gradio-container [data-testid="markdown"] h1,
+.gradio-container .md h1 {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
 .gradio-container .prose h1 { font-size: 28px; }
 .gradio-container .prose h2 { font-size: 22px; }
 .gradio-container .prose h3 { font-size: 18px; }
@@ -340,6 +367,30 @@ body {
   border: 1px solid var(--cmw-border) !important;
   border-top: none !important;
   border-radius: 0 0 var(--cmw-radius-md) var(--cmw-radius-md) !important;
+}
+
+/* Remove inner padding for tab items explicitly when needed */
+.gradio-container .tabitem[role="tabpanel"] {
+  padding: 0 !important;
+}
+
+/* Chat hints master block: remove inner padding via class */
+.gradio-container chat-hints,
+.gradio-container chat-hints.padded {
+  padding: 0 !important;
+}
+.gradio-container .prose.chat-hints,
+.gradio-container .md.chat-hints,
+.gradio-container [data-testid="markdown"].chat-hints {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Inner padding for chat hints content (theme-driven) */
+.gradio-container .prose.chat-hints > .md,
+.gradio-container [data-testid="markdown"].chat-hints > .md {
+  display: block;
+  padding: var(--cmw-chat-hints-padding-y) var(--cmw-chat-hints-padding-x) !important;
 }
 
 /* Buttons - compact toolbar-like look (CMW style) */
