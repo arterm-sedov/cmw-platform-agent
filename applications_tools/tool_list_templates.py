@@ -15,7 +15,7 @@ class ListTemplates(BaseModel):
     )
     application_system_name: str = Field(
         description=(
-            "System name of the application with the template where the attributes is created. "
+            "System name of the application where the template is created. "
             "Рус: 'Системное имя приложения'"
         )
     )
@@ -57,17 +57,17 @@ def list_templates(
     Returns (AttributeResult):
     - success (bool): True if templates list was fetched successfully
     - status_code (int): HTTP response status code
-    - raw_response (object|null): Attribute payload; sanitized (some keys may be removed)
+    - raw_response (object|null): Template payload; sanitized (some keys may be removed)
     - error (string|null): Error message if any
     """
 
     try:
         if template_type == "record":
-            result = requests_._grt_request(f"{ATTRIBUTE_ENDPOINT}/AccountTemplate/List/{application_system_name}")
+            result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/AccountTemplate/List/{application_system_name}")
         if template_type == "process":
-            result = requests_._grt_request(f"{ATTRIBUTE_ENDPOINT}/ProcessTemplate/List/{application_system_name}")
+            result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/ProcessTemplate/List/{application_system_name}")
         if template_type == "account":
-            result = requests_._grt_request(f"{ATTRIBUTE_ENDPOINT}/RecordTemplate/List/{application_system_name}")
+            result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/RecordTemplate/List/{application_system_name}")
         else:
             result = {
                 "success": False,
