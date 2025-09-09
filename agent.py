@@ -1983,6 +1983,18 @@ class GaiaAgent:
                                 "tool_call_id": getattr(tool_msg, 'tool_call_id', getattr(tool_msg, 'name', 'unknown'))
                             })
                             j += 1
+                        # If the next message is a user/system or we're at the end,
+                        # insert an assistant turn to properly close the tool-call block
+                        # per Mistral's expected ordering (no user directly after tool).
+                        if j >= len(messages) or (
+                            hasattr(messages[j], 'type') and messages[j].type in ('human', 'system')
+                        ):
+                            # Mistral requires assistant messages to have non-empty content.
+                            # Insert a minimal, meaningful acknowledgment to satisfy API constraints.
+                            converted_messages.append({
+                                "role": "assistant",
+                                "content": "[continue]"
+                            })
                         
                         # Skip the tool messages we've already processed
                         i = j - 1
