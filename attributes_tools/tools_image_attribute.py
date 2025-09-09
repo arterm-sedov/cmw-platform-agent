@@ -5,7 +5,7 @@ import requests_
 
 ATTRIBUTE_ENDPOINT = "webapi/Attribute"
 
-ALLOWED_EXTENSIONS_LIST = ['TXT', 'PNG', 'JPG', 'CSV', 'XLSX', 'DOCX', 'PPTX', 'VSDX', 'MSG', 'ZIP', 'BMP', 'EMF', 'DWG', 'BPMN', 'LOG', 'RAR', 'TAR', 'TAR.GZ(TGZ)', 'GZ', 'BZ2', 'TAR.BZ2', 'ENV', 'UNL', 'EML', 'SQL', 'ISO', 'CONF', 'ICO']
+ALLOWED_EXTENSIONS_LIST = ['PNG', 'JPG', 'BMP', 'EMF']
 
 ALLOWED_EXTENSIONS = Literal[tuple(ALLOWED_EXTENSIONS_LIST)]
 ALLOWED_EXTENSIONS_SET = set(ALLOWED_EXTENSIONS_LIST)
@@ -19,7 +19,7 @@ def _remove_nones(obj: Any) -> Any:
         return [ _remove_nones(v) for v in obj if v is not None]
     return obj
 
-class EditOrCreateDocumentAttributeSchema(BaseModel):
+class EditOrCreateImageAttributeSchema(BaseModel):
     operation: Literal["create", "edit"] = Field(
         description=(
             "Choose operation: Creates or Edits the attribute. Russian names allowed: "
@@ -41,13 +41,13 @@ class EditOrCreateDocumentAttributeSchema(BaseModel):
             "System name of the template where the attribute is created. Рус: 'Системное имя шаблона'"
         )
     )
-    display_format: Literal[
-        "Attachment",
-        "SignedDocument",
-        "InlineDocument"
+    rendering_color_mode: Literal[
+        "Original",
+        "Bitonal",
+        "GreyScale"
     ] = Field(
         description=(
-            "Attribute display format. Рус: 'Формат отображения'."
+            "Image color rendering mode. Рус: 'Цветовой режим'."
         )
     )
     description: Optional[str] = Field(
@@ -78,6 +78,24 @@ class EditOrCreateDocumentAttributeSchema(BaseModel):
         default=None,
         description=(
             "Filter of file extensions that can store an attribute. Рус: 'Фильтр расширений файлов'"
+        )
+    )
+    image_width: Optional[int] = Field(
+        default=None,
+        description=(
+            "Image width. Рус: 'Ширина'"
+        )
+    )
+    image_height: Optional[int] = Field(
+        default=None,
+        description=(
+            "Image height. Рус: 'Высота'"
+        )
+    )
+    save_image_aspect_ratio: bool = Field(
+        default=False,
+        description=(
+            "whether image should save aspect ratio. Рус: 'Сохранить соотношения сторон'"
         )
     )
 
@@ -124,22 +142,25 @@ class AttributeResult(BaseModel):
     error: Optional[str] = Field(default=None)
 
 
-@tool("edit_or_create_document_attribute", return_direct=False, args_schema=EditOrCreateDocumentAttributeSchema)
+@tool("edit_or_create_image_attribute", return_direct=False, args_schema=EditOrCreateImageAttributeSchema)
 def edit_or_create_document_attribute(
     operation: str,
     name: str,
     system_name: str,
     application_system_name: str,
     template_system_name: str,
-    display_format: str,
+    rendering_color_mode: str,
     description: Optional[str] = None,
     use_for_search_records: Optional[bool] = False,
     write_changes_to_the_log: Optional[bool] = False,
     store_multiple_values: Optional[bool] = False,
-    file_extensions_filter: Optional[List[str]] = None
+    file_extensions_filter: Optional[List[str]] = None,
+    save_image_aspect_ration: Optional[bool] = False,
+    image_width: Optional[int] = None,
+    image_height: Optional[int] = None
 ) -> Dict[str, Any]:
     r"""
-    Edit or Create a document attribute.
+    Edit or Create a image attribute.
 
     - Strictly follow argument schema and its built-in descriptions.
 
@@ -156,14 +177,17 @@ def edit_or_create_document_attribute(
             "type": "Undefined",
             "alias": system_name
         },
-        "type": "String",
-        "format": display_format,
+        "type": "Image",
         "name": name,
         "description": description,
         "isIndexed": use_for_search_records,
         "isTracked": write_changes_to_the_log,
         "isMultiValue": store_multiple_values,
-        "fileFormat": file_extensions_filter
+        "fileFormat": file_extensions_filter,
+        "imageWidth": image_width,
+        "imageHeight": image_height,
+        "imageColorType": rendering_color_mode,
+        "imagePreserveAspectRatio": save_image_aspect_ration
     }
 
         # Remove None values
@@ -204,7 +228,7 @@ def edit_or_create_document_attribute(
     validated = AttributeResult(**result)
     return validated.model_dump()
 
-class GetDocumentAttributeSchema(BaseModel):
+class GetImageAttributeSchema(BaseModel):
     application_system_name: str = Field(
         description=(
             "System name of the application with the template where the attribute is created. "
@@ -227,15 +251,14 @@ class GetDocumentAttributeSchema(BaseModel):
             raise ValueError("must be a non-empty string")
         return v
 
-
-@tool("get_document_attribute", return_direct=False, args_schema=GetDocumentAttributeSchema)
-def get_document_attribute(
+@tool("get_image_attribute", return_direct=False, args_schema=GetImageAttributeSchema)
+def get_image_attribute(
     application_system_name: str,
     template_system_name: str,
     system_name: str
     ) -> Dict[str, Any]:
     """
-    Get a document attribute by its `system_name` within a given `template_system_name` and `application_system_name`.
+    Get a image attribute by its `system_name` within a given `template_system_name` and `application_system_name`.
 
     Returns (AttributeResult):
     - success (bool): True if attribute was fetched successfully
@@ -262,7 +285,7 @@ def get_document_attribute(
         result.update({"error": "Unexpected response structure from server"})
         return result
 
-    keys_to_remove = ['isTitle', 'isUnique', 'isCalculated', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio']
+    keys_to_remove = ['isUnique', 'format', 'isCalculated', 'isTitle', 'isMandatory', 'isOwnership', 'instanceGlobalAlias']
 
     for key in keys_to_remove:
         if key in result_body['response']:
