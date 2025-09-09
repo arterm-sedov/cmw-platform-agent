@@ -45,7 +45,7 @@ def delete_attribute(
     Delete a text attribute by its `system_name` within a given `template_system_name` and `application_system_name`.
 
     Returns (AttributeResult):
-    - success (bool): True if attribute was fetched successfully
+    - success (bool): True if the operation completed successfully
     - status_code (int): HTTP response status code
     - raw_response (object|null): Attribute payload; sanitized (some keys may be removed)
     - error (string|null): Error message if any
