@@ -502,6 +502,24 @@ body {
 }
 
 
+/* Model card wrapper: one common border, padded; inner blocks borderless */
+.gradio-container .model-card, 
+.gradio-container .quick-actions-card {
+  border: 1px solid var(--cmw-border) !important;
+  border-radius: var(--cmw-radius-md) !important;
+  background: var(--cmw-surface) !important;
+  padding: var(--cmw-space-4) !important;
+  gap: var(--cmw-space-3) !important;
+}
+.gradio-container .model-card > .block,
+.gradio-container .quick-actions-card > .block {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* (Quick actions uses same styling as model-card; no extra overrides required) */
 
 
 /* Removed platform alias button classes (.toolbar-btn, .btn-strong, .btn-pale) */
