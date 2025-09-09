@@ -3,25 +3,24 @@ from langchain.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.v1.types import NoneBytes
 import requests_
+from models import AttributeResult
 
 ATTRIBUTE_ENDPOINT = "webapi/Solution"
 
-class AttributeResult(BaseModel):
-    success: bool
-    status_code: int
-    raw_response: dict | str | None = Field(default=None, description="Raw response for auditing or payload body")
-    error: Optional[str] = Field(default=None)
 
 @tool("list_applications", return_direct=False)
 def list_applications() -> Dict[str, Any]:
     """
-    List all applications.
-
-    Returns (AttributeResult):
-    - success (bool): True if applications list was fetched successfully
-    - status_code (int): HTTP response status code
-    - raw_response (object|null): Applications payload; sanitized (some keys may be removed)
-    - error (string|null): Error message if any
+    List all applications, configured in the Platform.
+    The resulting list depends on the user's access rights.
+    
+    Returns:
+        dict: {
+            "success": bool - True if application list was fetched successfully
+            "status_code": int - HTTP response status code  
+            "raw_response": dict|str|None - Raw response for auditing or payload body (sanitized)
+            "error": str|None - Error message if operation failed
+        }
     """
 
     result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}")
