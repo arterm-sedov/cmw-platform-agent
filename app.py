@@ -740,7 +740,6 @@ def get_available_models():
         return "❌ Agent not initialized"
     
     models_info = []
-    models_info.append("🤖 **Initialized Models:**\n")
     
     # Check only initialized models
     for provider_key, llm_instance in agent.llm_instances.items():
@@ -782,40 +781,38 @@ try:
 except Exception as _e:
     print(f"Warning: could not set GRADIO_ALLOWED_PATHS: {_e}")
 with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_comindware.css"]) as demo:
-    gr.Markdown("# Analyst Copilot")
+    gr.Markdown("# Analyst Copilot", elem_classes=["hero-title"]) 
     
 
     with gr.Tabs():
         
         
-        with gr.TabItem("Chat with Agent"):
-            gr.Markdown("""
-            ## 💬 Chat with the Comindware Analyst Copilot
-            
-            **Welcome!** This agent focuses on CMW Platform entity operations (applications, templates, attributes) and uses tools to execute precise changes.
-            
-            ### 🎯 **How it works:**
-            
-            - **Platform Operations First**: Validates your intent and executes tools for entity changes (e.g., create/edit attributes)
-            - **Multi-Model Orchestration**: Tries multiple LLM providers with intelligent fallback
-            - **Compact Structured Output**: Intent → Plan → Validate → Execute → Result
-            
-            ### 💡 **Try asking (platform-focused):**
-            
-            - Create text attribute with mask: "Create 'Customer ID' in app 'ERP', template 'Counterparties', CustomMask: ([0-9]{10}|[0-9]{12})"
-            - Edit display format: "Change 'Contact Phone' in app 'CRM', template 'Leads' to PhoneRuMask"
-            - Fetch attribute: "Get attribute 'Comment' from app 'HR', template 'Candidates'"
-            - Create simple text: "Add 'Comment' text attribute to app 'HR', template 'Candidates' (PlainText)"
-            
-            ### 💡 Other examples:
-            
-            - "Capital of France?"
-            - "15 * 23 + 7 = ?"
-            - "Python prime check function"
-            - "Explain ML vs DL briefly"
-            
-            **Note**: Platform operations take priority and follow strict validation and logging.
-            """)
+        with gr.TabItem("Chat with Agent"): 
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("""
+                    ## 💬 Chat with the Comindware Analyst Copilot
+                    
+                    **Welcome!** This agent focuses on the **Comindware Platform** entity operations (applications, templates, attributes) and uses deterministic tools to execute precise changes.
+                    
+                    ### 🎯 **How it works:**
+                    
+                    - **Platform Operations First**: Validates your intent and executes tools for entity changes (e.g., create/edit attributes)
+                    - **Multi-Model Orchestration**: Tries multiple LLM providers with intelligent fallback
+                    - **Compact Structured Output**: Intent → Plan → Validate → Execute → Result
+
+                    """, elem_classes=["chat-hints"]) 
+                with gr.Column():
+                    gr.Markdown("""
+                    ### 💡 **Try asking (platform-focused):**
+                    
+                    - Create text attribute with mask: "Create 'Customer ID' in app 'ERP', template 'Counterparties', CustomMask: ([0-9]{10}|[0-9]{12})"
+                    - Edit display format: "Change 'Contact Phone' in app 'CRM', template 'Leads' to PhoneRuMask"
+                    - Fetch attribute: "Get attribute 'Comment' from app 'HR', template 'Candidates'"
+                    - Create simple text: "Add 'Comment' text attribute to app 'HR', template 'Candidates' (PlainText)"
+                    
+                    **Note**: Platform operations take priority and follow strict validation and logging.
+                    """, elem_classes=["chat-hints"]) 
             
             with gr.Row():
                 with gr.Column(scale=3):
@@ -840,17 +837,22 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     # Clear button
                     clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
                 
-                with gr.Column(scale=1):
-                    # Model information panel
-                    gr.Markdown("### 📊 Model Status")
-                    models_info = gr.Markdown(get_available_models())
-                    refresh_models_btn = gr.Button("🔄 Refresh Model Info", elem_classes=["cmw-button"])
-                    
-                    # Quick action buttons
-                    gr.Markdown("### ⚡ Quick Actions")
-                    quick_math_btn = gr.Button("🧩 Create Text Attribute", elem_classes=["cmw-button"])
-                    quick_code_btn = gr.Button("🛠️ Edit Phone Mask", elem_classes=["cmw-button"])
-                    quick_general_btn = gr.Button("🔎 Get Attribute", elem_classes=["cmw-button"])
+                with gr.Column(scale=1, elem_classes=["sidebar-card"]):
+                    # Model information panel (single block)
+                    with gr.Column(elem_classes=["model-card"]):
+                        gr.Markdown("### 🤖 Model status & stats")
+                        models_info = gr.Markdown(get_available_models())
+                        refresh_models_btn = gr.Button("🔄 Refresh model info", elem_classes=["cmw-button"]) 
+                    # Quick action buttons (grouped like model card)
+                    with gr.Column(elem_classes=["quick-actions-card"]):
+                        gr.Markdown("### ⚡ Quick actions")
+                        quick_math_btn = gr.Button("🧩 Create text attribute", elem_classes=["cmw-button"]) 
+                        quick_code_btn = gr.Button("🛠️ Edit phone mask", elem_classes=["cmw-button"]) 
+                        quick_general_btn = gr.Button("🔎 Get attribute", elem_classes=["cmw-button"]) 
+                        qa_capital_btn = gr.Button("Capital of France?", elem_classes=["cmw-button"]) 
+                        qa_math_btn = gr.Button("15 * 23 + 7 = ?", elem_classes=["cmw-button"]) 
+                        qa_code_btn = gr.Button("Python prime check function", elem_classes=["cmw-button"]) 
+                        qa_explain_btn = gr.Button("Explain ML vs DL briefly", elem_classes=["cmw-button"]) 
             
             # Event handlers
             def send_message(message, history):
@@ -882,6 +884,22 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     "Provide Intent, Plan, Validate, and show the exact GET request you would issue as a DRY-RUN preview only. "
                     "Do NOT call any tools yet—wait for my confirmation."
                 )
+                return chat_with_agent(message, history)
+            
+            def qa_capital_example(history):
+                message = "Capital of France?"
+                return chat_with_agent(message, history)
+            
+            def qa_arith_example(history):
+                message = "15 * 23 + 7 = ?"
+                return chat_with_agent(message, history)
+            
+            def qa_prime_example(history):
+                message = "Write a Python function to check if a number is prime."
+                return chat_with_agent(message, history)
+            
+            def qa_explain_example(history):
+                message = "Explain ML vs DL briefly"
                 return chat_with_agent(message, history)
             
             # Connect event handlers
@@ -921,6 +939,48 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             
             quick_general_btn.click(
                 fn=quick_general,
+                inputs=[chatbot],
+                outputs=[chatbot, msg]
+            )
+            
+            qa_capital_btn.click(
+                fn=qa_capital_example,
+                inputs=[chatbot],
+                outputs=[chatbot, msg]
+            )
+            qa_math_btn.click(
+                fn=qa_arith_example,
+                inputs=[chatbot],
+                outputs=[chatbot, msg]
+            )
+            qa_code_btn.click(
+                fn=qa_prime_example,
+                inputs=[chatbot],
+                outputs=[chatbot, msg]
+            )
+            qa_explain_btn.click(
+                fn=qa_explain_example,
+                inputs=[chatbot],
+                outputs=[chatbot, msg]
+            )
+
+            qa_capital_btn.click(
+                fn=qa_capital_example,
+                inputs=[chatbot],
+                outputs=[chatbot, msg]
+            )
+            qa_math_btn.click(
+                fn=qa_arith_example,
+                inputs=[chatbot],
+                outputs=[chatbot, msg]
+            )
+            qa_code_btn.click(
+                fn=qa_prime_example,
+                inputs=[chatbot],
+                outputs=[chatbot, msg]
+            )
+            qa_explain_btn.click(
+                fn=qa_explain_example,
                 inputs=[chatbot],
                 outputs=[chatbot, msg]
             )
