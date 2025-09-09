@@ -1,9 +1,56 @@
-from typing import Any, Dict, List, Optional
-from typing import Optional
+from typing import Any, Dict, List, Optional, Literal
 from langchain.tools import tool
+from pydantic import BaseModel, Field, field_validator, model_validator
 import requests_
 
 ATTRIBUTE_ENDPOINT = "webapi/Attribute"
+
+class ArchiveOrUnarchiveAttribute(BaseModel):
+    operation: Literal["archive", "unarchive"] = Field(
+        description=(
+            "Choose operation: Archive or Unrachive the attribute. Russian names allowed: "
+            "['Архивировать', 'Разархивировать']"
+        )
+    )
+    application_system_name: str = Field(
+        description=(
+            "System name of the application with the template where the attribute is created. "
+            "Рус: 'Системное имя приложения'"
+        )
+    )
+    template_system_name: str = Field(
+        description=(
+            "System name of the template where the attribute is created. Рус: 'Системное имя шаблона'"
+        )
+    )
+    system_name: str = Field(
+        description="Unique system name of the attribute. Рус: 'Системное имя'"
+    )
+
+    @field_validator("operation", mode="before")
+    @classmethod
+    def normalize_operation(cls, v: str) -> str:
+        if v is None:
+            return v
+        value = str(v).strip().lower()
+        mapping = {
+            "архивировать": "archive",
+            "разархивировать": "unarchive"
+        }
+        return mapping.get(value, value)
+
+    @field_validator("system_name", "application_system_name", "template_system_name", mode="before")
+    @classmethod
+    def non_empty_str(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v    
+
+class AttributeResult(BaseModel):
+    success: bool
+    status_code: int
+    raw_response: dict | str | None = Field(default=None, description="Raw response for auditing or payload body")
+    error: Optional[str] = Field(default=None)
 
 @tool("archive_or_unarchive_attribute", return_direct=False)
 def archive_or_unarchive_attribute(
@@ -95,7 +142,9 @@ def archive_or_unarchive_attribute(
         error_info = result.get("error", "")
         result["error"] = f"API operation failed: {error_info}"
 
-    return result
+    validated = AttributeResult(**result)
+
+    return validated.model_dump()
 
 if __name__ == "__main__":
     results = archive_or_unarchive_attribute.invoke({
