@@ -990,18 +990,19 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     - **Platform Operations First**: Validates your intent and executes tools for entity changes (e.g., create/edit attributes)
                     - **Multi-Model Orchestration**: Tries multiple LLM providers with intelligent fallback
                     - **Compact Structured Output**: Intent → Plan → Validate → Execute → Result
-
                     """, elem_classes=["chat-hints"]) 
                 with gr.Column():
                     gr.Markdown("""
-                    ### 💡 **Try asking (platform-focused):**
+                    ### 💡 **Try asking:**
                     
-                    - Create text attribute with mask: "Create 'Customer ID' in app 'ERP', template 'Counterparties', CustomMask: ([0-9]{10}|[0-9]{12})"
-                    - Edit display format: "Change 'Contact Phone' in app 'CRM', template 'Leads' to PhoneRuMask"
-                    - Fetch attribute: "Get attribute 'Comment' from app 'HR', template 'Candidates'"
-                    - Create simple text: "Add 'Comment' text attribute to app 'HR', template 'Candidates' (PlainText)"
-                    
-                    **Note**: Platform operations take priority and follow strict validation and logging.
+                    - List all applications in the Platform
+                    - List all templates in app 'ERP'
+                    - List all attributes in template 'Counterparties', app 'ERP'
+                    - Create plain text attribute 'Comment', app 'HR', template 'Candidates'
+                    - Create 'Customer ID' text attribute, app 'ERP', template 'Counterparties', custom input mask: ([0-9]{10}|[0-9]{12})
+                    - For attribute 'Contact Phone' in app 'CRM', template 'Leads', change display format to Russian phone
+                    - Fetch attribute: system name 'Comment', app 'HR', template 'Candidates'
+                    - Archive/unarchive attribute, system name 'Comment', app 'HR', template 'Candidates'
                     """, elem_classes=["chat-hints"]) 
             
             with gr.Row():
@@ -1042,9 +1043,9 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     # Quick action buttons (grouped like model card)
                     with gr.Column(elem_classes=["quick-actions-card"]):
                         gr.Markdown("### ⚡ Quick actions")
+                        quick_list_apps_btn = gr.Button("🔎 List all apps", elem_classes=["cmw-button"])
                         quick_math_btn = gr.Button("🧩 Create text attribute", elem_classes=["cmw-button"]) 
                         quick_code_btn = gr.Button("🛠️ Edit phone mask", elem_classes=["cmw-button"]) 
-                        quick_general_btn = gr.Button("🔎 Get attribute", elem_classes=["cmw-button"]) 
                         qa_capital_btn = gr.Button("Capital of France?", elem_classes=["cmw-button"]) 
                         qa_math_btn = gr.Button("15 * 23 + 7 = ?", elem_classes=["cmw-button"]) 
                         qa_code_btn = gr.Button("Python prime check function", elem_classes=["cmw-button"]) 
@@ -1074,11 +1075,11 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                 )
                 return chat_with_agent(message, history)
             
-            def quick_general(history):
+            def quick_list_apps(history):
                 message = (
-                    "Verify existence of attribute 'Comment' (system_name=Comment) in application 'HR', template 'Candidates'. "
-                    "Provide Intent, Plan, Validate, and show the exact GET request you would issue as a DRY-RUN preview only. "
-                    "Do NOT call any tools yet—wait for my confirmation."
+                    "List all apps. "
+                    "Provide Intent, Plan, Validate. "
+                    "Format the response as a bullet list of apps."
                 )
                 return chat_with_agent(message, history)
             
@@ -1141,8 +1142,8 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                 outputs=[chatbot, msg]
             )
             
-            quick_general_btn.click(
-                fn=quick_general,
+            quick_list_apps_btn.click(
+                fn=quick_list_apps,
                 inputs=[chatbot],
                 outputs=[chatbot, msg]
             )
