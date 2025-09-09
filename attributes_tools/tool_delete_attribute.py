@@ -22,12 +22,12 @@ class DeleteAttribute(BaseModel):
         description="Unique system name of the attribute. Рус: 'Системное имя'"
     )
 
-@field_validator("system_name", "application_system_name", "template_system_name", mode="before")
-@classmethod
-def non_empty_str(cls, v: Any) -> Any:
-    if isinstance(v, str) and v.strip() == "":
-        raise ValueError("must be a non-empty string")
-    return v
+    @field_validator("system_name", "application_system_name", "template_system_name", mode="before")
+    @classmethod
+    def non_empty_str(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
 
 class AttributeResult(BaseModel):
     success: bool
