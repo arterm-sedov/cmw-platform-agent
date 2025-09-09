@@ -405,7 +405,7 @@ class GaiaAgent:
     
     # Default LLM sequence order - references LLM_CONFIG keys
     DEFAULT_LLM_SEQUENCE = [
-        "openrouter",
+        #"openrouter",
         #"gigachat",
         # "mistral",
         # "gemini",
