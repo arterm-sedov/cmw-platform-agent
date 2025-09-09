@@ -35,7 +35,7 @@ class AttributeResult(BaseModel):
     raw_response: dict | str | None = Field(default=None, description="Raw response for auditing or payload body")
     error: Optional[str] = Field(default=None)
 
-@tool("delete_attribute", return_direct=False)
+@tool("delete_attribute", return_direct=False, args_schema=DeleteAttribute)
 def delete_attribute(
     application_system_name: str,
     template_system_name: str,

@@ -52,7 +52,7 @@ class AttributeResult(BaseModel):
     raw_response: dict | str | None = Field(default=None, description="Raw response for auditing or payload body")
     error: Optional[str] = Field(default=None)
 
-@tool("archive_or_unarchive_attribute", return_direct=False)
+@tool("archive_or_unarchive_attribute", return_direct=False, args_schema=ArchiveOrUnarchiveAttribute)
 def archive_or_unarchive_attribute(
     operation: str,
     application_system_name: str,
