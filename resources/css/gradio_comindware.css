@@ -427,7 +427,7 @@ body {
   background: rgba(5,117,189,0.08) !important;
 }
 .gradio-container .message.bot {
-  background: var(--cmw-white) !important;
+  background: var(--cmw-surface) !important;
 }
 
 /* Links */
@@ -454,3 +454,26 @@ body {
 
 /* Removed tab count/overflow helpers for minimalism */
 
+
+
+/* --- Dark theme support (Gradio toggles data-theme="dark") --- */
+html[data-theme='dark'] .gradio-container,
+body[data-theme='dark'] .gradio-container,
+.dark .gradio-container {
+  --cmw-text: #cfd6e4;
+  --cmw-text-strong: #eef3fb;
+  --cmw-surface: #151a21;
+  --cmw-surface-alt: #0f141a;
+  --cmw-main: #151a21;
+  --cmw-border: #2a3340;
+  --cmw-border-strong: #3a4554;
+  --cmw-highlight: rgba(5,117,189,0.18);
+  --cmw-highlight-text: #d8e6f5;
+}
+
+/* Keep primary-filled active tabs readable in dark */
+html[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="true"],
+body[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="true"],
+.dark .gradio-container .tab-nav button[aria-selected="true"] {
+  color: var(--cmw-white) !important;
+}
