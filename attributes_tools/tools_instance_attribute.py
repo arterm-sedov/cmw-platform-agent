@@ -15,7 +15,7 @@ def _remove_nones(obj: Any) -> Any:
         return [ _remove_nones(v) for v in obj if v is not None]
     return obj
 
-class EditOrCreateAccountAttributeSchema(BaseModel):
+class EditOrCreateInstanceAttributeSchema(BaseModel):
     operation: Literal["create", "edit"] = Field(
         description=(
             "Choose operation: Creates or Edits the attribute. Russian names allowed: "
@@ -43,12 +43,6 @@ class EditOrCreateAccountAttributeSchema(BaseModel):
             "Human-readable description of the attribute (auto-generate if omitted). Рус: 'Описание'"
         ),
     )
-    use_as_record_title: bool = Field(
-        default=False,
-        description=(
-            "Whether attribute values will be displayed as a template record title. Рус: 'Использовать как заголовок записей'"
-        ),
-    )
     write_changes_to_the_log: bool = Field(
         default=False,
         description=(
@@ -68,7 +62,6 @@ class EditOrCreateAccountAttributeSchema(BaseModel):
         ),
     )
     related_template_system_name: str = Field(
-        default="_Account",
         description=(
             "System name of the template to associate withe attribute. Рус: 'Связанный шаблон'"
         )
@@ -77,6 +70,12 @@ class EditOrCreateAccountAttributeSchema(BaseModel):
         default=False,
         description=(
             "whether attribute should store multiple values or single values. Рус: 'Хранить несколько значений'"
+        )
+    )
+    related_attribute_system_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "System name of the attribute in related template to associate withe attribute. Рус: 'Взаимная связь с атрибутом'"
         )
     )
 
@@ -107,23 +106,23 @@ class AttributeResult(BaseModel):
     error: Optional[str] = Field(default=None)
 
 
-@tool("edit_or_create_account_attribute", return_direct=False, args_schema=EditOrCreateAccountAttributeSchema)
-def edit_or_create_account_attribute(
+@tool("edit_or_create_instance_attribute", return_direct=False, args_schema=EditOrCreateInstanceAttributeSchema)
+def edit_or_create_instance_attribute(
     operation: str,
     name: str,
     system_name: str,
     application_system_name: str,
     template_system_name: str,
+    related_template_system_name: str,
     description: Optional[str] = None,
-    use_as_record_title: Optional[bool] = False,
     write_changes_to_the_log: Optional[bool] = False,
     calculate_value: Optional[bool] = False,
     expression_for_calculation: Optional[str] = None,
-    related_template_system_name: Optional[str] = "_Account",
-    store_multiple_values: Optional[bool] = False
+    store_multiple_values: Optional[bool] = False,
+    related_attribute_system_name: Optional[str] = None
 ) -> Dict[str, Any]:
     r"""
-    Edit or Create a account attribute.
+    Edit or Create a instance attribute.
 
     - Strictly follow argument schema and its built-in descriptions.
 
@@ -140,17 +139,17 @@ def edit_or_create_account_attribute(
             "type": "Undefined",
             "alias": system_name
         },
-        "type": "Account",
+        "type": "Instance",
         "name": name,
         "description": description,
         "isTracked": write_changes_to_the_log,
         "isMultiValue": store_multiple_values,
-        "isTitle": use_as_record_title,
         "isCalculated": calculate_value if expression_for_calculation != None else False,
         "expression": expression_for_calculation,
         "instanceGlobalAlias": {
-            "type": "RecordTemplate",
-            "alias": related_template_system_name
+            "type": "Attribute" if related_attribute_system_name != None else "RecordTemplate",
+            "owner": related_attribute_system_name,
+            "alias": related_attribute_system_name if related_attribute_system_name != None else related_template_system_name
         }
     }
 
@@ -192,7 +191,7 @@ def edit_or_create_account_attribute(
     validated = AttributeResult(**result)
     return validated.model_dump()
 
-class GetAccountAttributeSchema(BaseModel):
+class GetInstanceAttributeSchema(BaseModel):
     application_system_name: str = Field(
         description=(
             "System name of the application with the template where the attribute is created. "
@@ -216,14 +215,14 @@ class GetAccountAttributeSchema(BaseModel):
         return v
 
 
-@tool("get_account_attribute", return_direct=False, args_schema=GetAccountAttributeSchema)
+@tool("get_instance_attribute", return_direct=False, args_schema=GetInstanceAttributeSchema)
 def get_text_attribute(
     application_system_name: str,
     template_system_name: str,
     system_name: str
     ) -> Dict[str, Any]:
     """
-    Get a account attribute by its `system_name` within a given `template_system_name` and `application_system_name`.
+    Get a instance attribute by its `system_name` within a given `template_system_name` and `application_system_name`.
 
     Returns (AttributeResult):
     - success (bool): True if attribute was fetched successfully
@@ -250,7 +249,7 @@ def get_text_attribute(
         result.update({"error": "Unexpected response structure from server"})
         return result
 
-    keys_to_remove = ['isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio']
+    keys_to_remove = ['isTitle', 'isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio']
 
     for key in keys_to_remove:
         if key in result_body['response']:
