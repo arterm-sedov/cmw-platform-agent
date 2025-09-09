@@ -840,16 +840,18 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
                 
                 with gr.Column(scale=1, elem_classes=["sidebar-card"]):
-                    # Model information panel
-                    gr.Markdown("### 🤖 Model status & stats")
-                    models_info = gr.Markdown(get_available_models())
-                    refresh_models_btn = gr.Button("🔄 Refresh Model Info", elem_classes=["cmw-button"])
+                    # Model information panel (single block)
+                    with gr.Column(elem_classes=["model-card"]):
+                        gr.Markdown("### 🤖 Model status & stats")
+                        models_info = gr.Markdown(get_available_models())
+                        refresh_models_btn = gr.Button("🔄 Refresh Model Info", elem_classes=["cmw-button"])
                     
-                    # Quick action buttons
-                    gr.Markdown("### ⚡ Quick Actions")
-                    quick_math_btn = gr.Button("🧩 Create Text Attribute", elem_classes=["cmw-button"])
-                    quick_code_btn = gr.Button("🛠️ Edit Phone Mask", elem_classes=["cmw-button"])
-                    quick_general_btn = gr.Button("🔎 Get Attribute", elem_classes=["cmw-button"])
+                    # Quick action buttons (grouped like model card)
+                    with gr.Column(elem_classes=["quick-actions-card"]):
+                        gr.Markdown("### ⚡ Quick actions")
+                        quick_math_btn = gr.Button("🧩 Create Text Attribute", elem_classes=["cmw-button"])
+                        quick_code_btn = gr.Button("🛠️ Edit Phone Mask", elem_classes=["cmw-button"])
+                        quick_general_btn = gr.Button("🔎 Get Attribute", elem_classes=["cmw-button"])
             
             # Event handlers
             def send_message(message, history):
