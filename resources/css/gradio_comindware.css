@@ -1,15 +1,15 @@
 /* Minimal Comindware-like theme for Gradio UI (local, no external imports) */
 
 :root {
-  /* Tokens approximating CMW Platform variables (see master-new.css) */
-  --cmw-primary: #0575bd; /* theme-colors__primary */
-  --cmw-primary-fade: #0694EF; /* theme-colors__primary_fade */
-  --cmw-primary-fadest: #2FAAF9; /* theme-colors__primary_fadest */
-  --cmw-primary-dark: #04568B; /* theme-colors__primary_strong */
-  --cmw-primary-strongest: #02375A; /* theme-colors__primary_strongest */
+  /* Tokens approximating CMW Platform variables */
+  --cmw-primary: #0575bd;
+  --cmw-primary-fade: #0694EF;
+  --cmw-primary-fadest: #2FAAF9;
+  --cmw-primary-dark: #04568B;
+  --cmw-primary-strongest: #02375A;
   --cmw-primary-text: #ffffff;
-  --cmw-brand: #3697d4; /* docs primary for secondary usage */
-  /* HSL for alpha-based utilities (matches platform) */
+  --cmw-brand: #3697d4;
+  /* HSL for alpha-based utilities */
   --cmw-primary-hsl: 203, 95%, 38%;
 
   --cmw-secondary: #f5f5f5;
@@ -31,9 +31,9 @@
   --cmw-text-strong: #404040;
 
   --cmw-surface: #ffffff;
-  --cmw-surface-alt: #f5f8fc; /* panel bg */
-  --cmw-border: #dce2ea; /* border */
-  --cmw-border-strong: #b8c3d1; /* strong border */
+  --cmw-surface-alt: #f5f8fc;
+  --cmw-border: #dce2ea;
+  --cmw-border-strong: #b8c3d1;
 
   /* Links */
   --cmw-link: var(--cmw-primary);
@@ -185,9 +185,9 @@
 :root {
   /* Brand blue */
   --cmw-primary: #3698D4;
-  --cmw-primary-dark: #2B7DB1; /* darker companion for borders */
-  --cmw-primary-fade: #5EB1EF; /* lighter tint for hovers */
-  --cmw-primary-fadest: #8ECFF6; /* lightest tint */
+  --cmw-primary-dark: #2B7DB1;
+  --cmw-primary-fade: #5EB1EF;
+  --cmw-primary-fadest: #8ECFF6;
   --cmw-primary-hsl: 203, 65%, 52%;
 
   /* Text and surfaces (keep from scale) */
@@ -200,7 +200,7 @@
   /* Semantics */
   --cmw-success: var(--green-9);
   --cmw-error: var(--red-9);
-  --cmw-warning: #F79437; /* requested orange */
+  --cmw-warning: #F79437;
 }
 
 /* Optional: font-face declarations matching platform (paths must exist to take effect) */
@@ -318,7 +318,7 @@ body {
   .gradio-container h1:first-of-type::before { height: 22px; }
 }
 
-/* Tabs (approximate CMW: active tab filled primary, others bordered) */
+/* Tabs: active tab filled primary, others bordered */
 .gradio-container .tab-nav {
   border-bottom: 1px solid var(--cmw-border) !important;
   gap: var(--cmw-tab-gap) !important;
@@ -329,7 +329,8 @@ body {
 /* Tab button styling for Gradio tabs */
 .gradio-container .tab-nav button {
   border: 1px solid var(--cmw-border) !important;
-  background: transparent !important; /* passive tabs: no fill */
+  /* passive tabs: no fill */
+  background: transparent !important;
   color: var(--cmw-text) !important;
   border-radius: var(--cmw-tab-radius) !important;
   padding: var(--cmw-tab-padding-x) !important;
@@ -348,7 +349,8 @@ body {
 /* Active tab state */
 .gradio-container .tab-nav button[aria-selected="true"] {
   background: var(--cmw-primary) !important;
-  border-color: transparent !important; /* active tabs: fill only, no border */
+  /* active tabs: fill only, no border */
+  border-color: transparent !important;
   color: var(--cmw-white) !important;
 }
 
@@ -433,9 +435,9 @@ body {
 .gradio-container .btn:hover,
 .gradio-container .cmw-button:hover {
   /* Hover colors aligned to platform tokens */
-  border-color: var(--theme-colors__primary) !important; /* #0575bd */
-  background: var(--theme-colors__highlight) !important; /* #e8f6ff */
-  color: var(--theme-colors__primary_strong) !important; /* #04568b */
+  border-color: var(--theme-colors__primary) !important;
+  background: var(--theme-colors__highlight) !important;
+  color: var(--theme-colors__primary_strong) !important;
 }
 .gradio-container button:focus-visible:not(.tab-nav button),
 .gradio-container .cmw-button:focus-visible {
@@ -502,7 +504,7 @@ body {
 }
 
 
-/* Model card wrapper: one common border, padded; inner blocks borderless */
+/* Model and quick-actions cards: one common border, padded; inner blocks borderless */
 .gradio-container .model-card, 
 .gradio-container .quick-actions-card {
   border: 1px solid var(--cmw-border) !important;
