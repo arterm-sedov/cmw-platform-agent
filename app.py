@@ -963,27 +963,6 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                 inputs=[chatbot],
                 outputs=[chatbot, msg]
             )
-
-            qa_capital_btn.click(
-                fn=qa_capital_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
-            )
-            qa_math_btn.click(
-                fn=qa_arith_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
-            )
-            qa_code_btn.click(
-                fn=qa_prime_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
-            )
-            qa_explain_btn.click(
-                fn=qa_explain_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
-            )
         with gr.TabItem("Readme"):
             gr.Markdown("""
             ## 🕵🏻‍♂️ Comindware Analyst Copilot - Entity Creation System
