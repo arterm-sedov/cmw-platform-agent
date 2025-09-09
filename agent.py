@@ -258,23 +258,24 @@ class GaiaAgent:
             "force_tools": True,
             "models": [
                 {
-                    "model": "qwen-qwq-32b",
-                    "token_limit": 16000,
-                    "max_tokens": 2048,
+                    "model": "groq/compound",
+                    "token_limit": 131072,
+                    "max_tokens": 8192,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
-                    "model": "llama-3.1-8b-instant",
-                    "token_limit": 16000,
-                    "max_tokens": 2048,
+                    "model": "llama-3.3-70b-versatile",
+                    "token_limit": 131072
+,
+                    "max_tokens": 32768,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
                     "model": "llama-3.3-70b-8192",
                     "token_limit": 16000,
-                    "max_tokens": 2048,
+                    "max_tokens": 4096,
                     "temperature": 0,
                     "force_tools": True
                 }
@@ -416,12 +417,12 @@ class GaiaAgent:
     
     # Default LLM sequence order - references LLM_CONFIG keys
     DEFAULT_LLM_SEQUENCE = [
-        #"openrouter",
-        #"gigachat",
-        # "mistral",
-        # "gemini",
-        # "groq",
-        # "huggingface"
+        "openrouter",
+        "gigachat",
+        "mistral",
+        "gemini",
+        "groq",
+        "huggingface"
     ]
     # Print truncation length for debug output
     MAX_PRINT_LEN = 1000
@@ -1485,7 +1486,8 @@ class GaiaAgent:
         if llm_type not in self.LLM_CONFIG:
             raise ValueError(f"Invalid llm_type: {llm_type}")
         if llm_type not in self.llm_provider_names:
-            raise ValueError(f"LLM {llm_type} not initialized")
+            available_providers = ", ".join(self.llm_provider_names) if self.llm_provider_names else "none"
+            raise ValueError(f"LLM {llm_type} not initialized. Available providers: {available_providers}")
         idx = self.llm_provider_names.index(llm_type)
         llm = self.llms_with_tools[idx] if use_tools else self.llms[idx]
         llm_name = self.LLM_CONFIG[llm_type]["name"]
@@ -4295,7 +4297,7 @@ class GaiaAgent:
         # Build a default llm_sequence if not provided
         if not llm_sequence:
             try:
-                llm_sequence = list(self.LLM_CONFIG.keys())
+                llm_sequence = self.DEFAULT_LLM_SEQUENCE.copy()
             except Exception:
                 llm_sequence = []
 
@@ -4305,9 +4307,15 @@ class GaiaAgent:
         # Try providers in order
         for llm_type in llm_sequence:
             try:
+                # Check if this LLM type was successfully initialized
+                if llm_type not in self.llm_provider_names:
+                    print(f"⚠️ Skipping {llm_type}: LLM not initialized")
+                    continue
+                    
                 # Select LLM without tools for pure answer streaming
                 llm, llm_name, _ = self._select_llm(llm_type, use_tools=False)
                 if llm is None:
+                    print(f"⚠️ Skipping {llm_type}: LLM instance is None")
                     continue
                 llm_used = llm_name or llm_type
 
@@ -4343,6 +4351,11 @@ class GaiaAgent:
             except Exception as e:
                 print(f"⚠️ Streaming failed on provider {llm_type}: {e}")
                 continue
+
+        # If no LLMs were available or all failed, provide a fallback message
+        if not accumulated:
+            accumulated = "⚠️ No LLM providers are currently available for streaming. Please check the initialization logs for details."
+            llm_used = "none"
 
         # Post-process and finalize trace
         try:
