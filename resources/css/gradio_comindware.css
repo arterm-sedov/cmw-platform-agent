@@ -372,16 +372,19 @@ body {
 .gradio-container button[variant="secondary"]:not(.tab-nav button),
 .gradio-container .cmw-button.primary,
 .gradio-container .cmw-button.secondary {
-  background: var(--cmw-toolbar-btn-hover-bg) !important;
   color: var(--cmw-primary) !important;
-  border-color: transparent !important;
+  background: transparent !important;
+  border-color: var(--cmw-border) !important;
+  color: var(--cmw-primary) !important;
 }
+
 .gradio-container button:hover:not(.tab-nav button),
 .gradio-container .btn:hover,
 .gradio-container .cmw-button:hover {
-  /* On hover: show brand blue border */
-  border-color: var(--cmw-primary) !important;
-  background: var(--cmw-toolbar-btn-hover-bg) !important;
+  /* Hover colors aligned to platform tokens */
+  border-color: var(--theme-colors__primary) !important; /* #0575bd */
+  background: var(--theme-colors__highlight) !important; /* #e8f6ff */
+  color: var(--theme-colors__primary_strong) !important; /* #04568b */
 }
 .gradio-container button:focus-visible:not(.tab-nav button),
 .gradio-container .cmw-button:focus-visible {

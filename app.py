@@ -740,7 +740,6 @@ def get_available_models():
         return "❌ Agent not initialized"
     
     models_info = []
-    models_info.append("🤖 **Initialized Models:**\n")
     
     # Check only initialized models
     for provider_key, llm_instance in agent.llm_instances.items():
@@ -782,7 +781,7 @@ try:
 except Exception as _e:
     print(f"Warning: could not set GRADIO_ALLOWED_PATHS: {_e}")
 with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_comindware.css"]) as demo:
-    gr.Markdown("# Analyst Copilot")
+    gr.Markdown("# Analyst Copilot", elem_classes=["hero-title"]) 
     
 
     with gr.Tabs():
@@ -815,7 +814,7 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             - "Explain ML vs DL briefly"
             
             **Note**: Platform operations take priority and follow strict validation and logging.
-            """)
+            """, elem_classes=["chat-hints"]) 
             
             with gr.Row():
                 with gr.Column(scale=3):
@@ -840,9 +839,9 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     # Clear button
                     clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
                 
-                with gr.Column(scale=1):
+                with gr.Column(scale=1, elem_classes=["sidebar-card"]):
                     # Model information panel
-                    gr.Markdown("### 📊 Model Status")
+                    gr.Markdown("### 🤖 Model status & stats")
                     models_info = gr.Markdown(get_available_models())
                     refresh_models_btn = gr.Button("🔄 Refresh Model Info", elem_classes=["cmw-button"])
                     
