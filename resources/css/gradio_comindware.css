@@ -395,6 +395,28 @@ body {
   padding: var(--cmw-chat-hints-padding-y) var(--cmw-chat-hints-padding-x) !important;
 }
 
+/* Two-column helper for chat hints block */
+.gradio-container .prose.chat-hints .two-col,
+.gradio-container [data-testid="markdown"].chat-hints .two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--cmw-space-4);
+}
+.gradio-container .prose.chat-hints .two-col .card,
+.gradio-container [data-testid="markdown"].chat-hints .two-col .card {
+  border: 1px solid var(--cmw-border);
+  border-radius: var(--cmw-radius-md);
+  background: var(--cmw-surface);
+  padding: var(--cmw-space-4);
+  box-shadow: var(--cmw-shadow-soft);
+}
+@media (max-width: 900px) {
+  .gradio-container .prose.chat-hints .two-col,
+  .gradio-container [data-testid="markdown"].chat-hints .two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Buttons - compact toolbar-like look (CMW style) */
 /* .gradio-container button:not(.tab-nav button), */
 .gradio-container .btn,
@@ -506,7 +528,8 @@ body {
 
 /* Model and quick-actions cards: one common border, padded; inner blocks borderless */
 .gradio-container .model-card, 
-.gradio-container .quick-actions-card {
+.gradio-container .quick-actions-card,
+.gradio-container .hint-column {
   border: 1px solid var(--cmw-border) !important;
   border-radius: var(--cmw-radius-md) !important;
   background: var(--cmw-surface) !important;
@@ -550,4 +573,92 @@ html[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="true"],
 body[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="true"],
 .dark .gradio-container .tab-nav button[aria-selected="true"] {
   color: var(--cmw-white) !important;
+}
+
+/* --- Gradio footer (buttons + links) styled with CMW theme --- */
+.gradio-container footer {
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--cmw-space-2) !important;
+  padding: var(--cmw-space-3) var(--cmw-space-4) !important;
+  border-top: 1px solid var(--cmw-border) !important;
+  background: transparent !important;
+  color: var(--cmw-text-fade) !important;
+  font-size: 13px !important;
+}
+
+.gradio-container footer .divider {
+  opacity: 1 !important;
+  color: var(--cmw-border-strong) !important;
+  margin: 0 var(--cmw-space-2) !important;
+  user-select: none !important;
+}
+.gradio-container footer .divider.hidden,
+.gradio-container footer .record.hidden { display: none !important; }
+
+/* Footer actions: unify as compact toolbar-like buttons */
+.gradio-container footer button,
+.gradio-container footer a.built-with,
+.gradio-container footer .show-api,
+.gradio-container footer .settings,
+.gradio-container footer .record {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: var(--cmw-space-2) !important;
+  height: var(--cmw-toolbar-btn-height) !important;
+  padding: 0 var(--cmw-toolbar-btn-padding-x) !important;
+  border-radius: var(--cmw-toolbar-btn-radius) !important;
+  border: 1px solid var(--cmw-border) !important;
+  background: transparent !important;
+  color: var(--cmw-text) !important;
+  text-decoration: none !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  transition: all .2s ease-in-out !important;
+}
+
+.gradio-container footer button:hover,
+.gradio-container footer a.built-with:hover,
+.gradio-container footer .show-api:hover,
+.gradio-container footer .settings:hover,
+.gradio-container footer .record:hover {
+  background: var(--cmw-toolbar-btn-hover-bg) !important;
+  border-color: var(--theme-colors__primary) !important;
+  color: var(--theme-colors__primary_strong) !important;
+}
+
+.gradio-container footer button:focus-visible,
+.gradio-container footer a.built-with:focus-visible {
+  outline: none !important;
+  box-shadow: var(--cmw-shadow-focus) !important;
+  border-color: var(--theme-colors__primary) !important;
+}
+
+/* Icons in footer buttons */
+.gradio-container footer img {
+  height: 1em !important;
+  width: auto !important;
+  margin-left: var(--cmw-space-1) !important;
+  filter: var(--cmw-logo-shadow);
+}
+
+/* Specific accents */
+.gradio-container footer .show-api { color: var(--cmw-primary) !important; }
+.gradio-container footer a.built-with { color: var(--cmw-text-fade) !important; }
+.gradio-container footer a.built-with:hover { color: var(--cmw-primary) !important; }
+
+/* Dark theme adjustments for footer */
+html[data-theme='dark'] .gradio-container footer,
+body[data-theme='dark'] .gradio-container footer,
+.dark .gradio-container footer {
+  border-top-color: var(--cmw-border) !important;
+  color: var(--cmw-text) !important;
+}
+html[data-theme='dark'] .gradio-container footer button,
+body[data-theme='dark'] .gradio-container footer button,
+.dark .gradio-container footer button,
+html[data-theme='dark'] .gradio-container footer a.built-with,
+body[data-theme='dark'] .gradio-container footer a.built-with,
+.dark .gradio-container footer a.built-with {
+  border-color: var(--cmw-border) !important;
 }
