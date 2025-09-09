@@ -38,7 +38,7 @@ def list_attributes(
     template_system_name: str,
     ) -> Dict[str, Any]:
     """
-    List all attributes by `template_system_name` within a given `application_system_name`.
+    List all attributes by its `template_system_name` within a given `application_system_name`.
 
     Returns (AttributeResult):
     - success (bool): True if attributes list was fetched successfully
@@ -64,12 +64,6 @@ def list_attributes(
     if not isinstance(result_body, dict) or 'response' not in result_body:
         result.update({"error": "Unexpected response structure from server"})
         return result
-
-    keys_to_remove = ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio']
-
-    for key in keys_to_remove:
-        if key in result_body['response']:
-            result_body['response'].pop(key, None)
 
     result.update({"raw_response": result_body['response']})
     validated = AttributeResult(**result)

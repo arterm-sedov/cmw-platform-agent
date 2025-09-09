@@ -60,53 +60,13 @@ def archive_or_unarchive_attribute(
     system_name: str
     ) -> Dict[str, Any]:
     """
-    {
-        "Description": "Archive or Unarchive a attribute",
-        "Arguments": {
-            "operation": {
-                "Russian names": ["Архивировать", "Разархивировать"],
-                "variants": ["archive", "unarchive"],
-                "description": "Choose operation: Archive or Unarchive the attribute."
-            },
-            "system_name": {
-                "Russian name": "Системное имя",
-                "English name": "System name",
-                "type": "string",
-                "description": "Unique system name of the attribute"
-            },
-            "application_system_name": {
-                "Russian name": "Системное имя приложения",
-                "English name": "Application system name",
-                "type": "string",
-                "description": "System name of the application with the template where the attribute is created"
-            },
-            "template_system_name": {
-                "Russian name": "Системное имя шаблона",
-                "English name": "Template system name",
-                "type": "string",
-                "description": "System name of the template where the attribute is created"
-            }
-        },
-        "Returns": {
-            "success": {
-                "type": "boolean",
-                "description": "True if attribute was fetched successfully"
-            },
-            "status_code": {
-                "type": "integer",
-                "description": "HTTP response status code"
-            },
-            "raw_response": {
-                "type": "string",
-                "description": "Raw response text for auditing"
-            },
-            "error": {
-                "type": "string",
-                "default": null,
-                "description": "Error message if any"
-            }
-        }        
-    }
+    Archive or Unarchive a attribute by its `system_name` within a given `template_system_name` and `application_system_name`.
+
+    Returns (AttributeResult):
+    - success (bool): True if the operation completed successfully
+    - status_code (int): HTTP response status code
+    - raw_response (object|null): Attribute payload; sanitized (some keys may be removed)
+    - error (string|null): Error message if any
     """
 
     attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
