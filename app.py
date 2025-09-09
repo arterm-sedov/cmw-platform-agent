@@ -35,9 +35,12 @@ AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "google")
 try:
     agent = None
     _agent_init_started = False
+    # Model selection state - will be populated from agent config
+    selected_models = {}
 except Exception as e:
     agent = None
     _agent_init_started = False
+    selected_models = {}
     print(f"Error initializing GaiaAgent: {e}")
 
 
@@ -636,8 +639,11 @@ def chat_with_agent(message, history):
             if role in ("user", "assistant") and content:
                 chat_history.append({"role": role, "content": content})
 
+        # Get selected model sequence
+        llm_sequence = get_selected_model_sequence()
+        
         # Call the agent with the user's message and history
-        result = agent(message, chat_history=chat_history)
+        result = agent(message, chat_history=chat_history, llm_sequence=llm_sequence)
         
         # Extract the final answer from the agent result
         trace = result
@@ -663,7 +669,7 @@ def chat_with_agent(message, history):
             for provider, tracking in agent.llm_tracking.items():
                 if tracking['total_attempts'] > 0:
                     status = "✅ Success" if tracking['successes'] > 0 else "❌ Failed"
-                    attempted_models.append(f"• **{provider}**: {status} ({tracking['successes']}/{tracking['total_attempts']} attempts)")
+                    attempted_models.append(f"**{provider}**: {status} ({tracking['successes']}/{tracking['total_attempts']} attempts)")
             
             if attempted_models:
                 response_parts.append("\n".join(attempted_models))
@@ -766,9 +772,12 @@ def chat_with_agent_stream(message, history):
 				# Fall back to non-streaming path
 				pass
 
+		# Get selected model sequence
+		llm_sequence = get_selected_model_sequence()
+		
 		# Prefer true streaming path
 		accum = ""
-		for delta in agent.stream(message, chat_history=chat_history):
+		for delta in agent.stream(message, chat_history=chat_history, llm_sequence=llm_sequence):
 			accum += delta
 			yield working_history + [{"role": "assistant", "content": accum}], ""
 
@@ -821,7 +830,7 @@ def chat_with_agent_stream(message, history):
 
 def get_available_models():
     """
-    Get information about initialized models and their status.
+    Get information about initialized models and their status from agent config.
     """
     if agent is None:
         status = "🟡 Initializing agent..." if '_agent_init_started' in globals() and _agent_init_started else "❌ Agent not initialized"
@@ -829,11 +838,12 @@ def get_available_models():
     
     models_info = []
     
-    # Check only initialized models
+    # Check only initialized models from agent config
     for provider_key, llm_instance in agent.llm_instances.items():
         if llm_instance is None:
             continue
         
+        # Get provider config from LLM_CONFIG
         config = agent.LLM_CONFIG.get(provider_key, {})
         provider_name = config.get("name", provider_key.title())
         
@@ -842,22 +852,175 @@ def get_available_models():
         model_name = active_model_config.get("model", "Unknown")
         token_limit = active_model_config.get("token_limit", "Unknown")
         
-        models_info.append(f"**{provider_name}:**\n• {model_name} (max {token_limit} tokens)\n")
+        # Add selection status indicator
+        is_selected = selected_models.get(provider_key, False)
+        status_icon = "✅" if is_selected else "❌"
+        
+        # Show tool support status from config
+        tool_support = config.get("tool_support", False)
+        tool_status = "🛠️" if tool_support else "📝"
+        
+        models_info.append(f"{status_icon} **{provider_name}:** {tool_status}\n• {model_name} (max {token_limit} tokens)\n")
     
     return "\n".join(models_info)
 
-# Timer poller to update status text and stop timer when ready
+def get_model_checkbox_values():
+    """
+    Get the current checkbox values for model selection from agent config.
+    Returns a list of boolean values in the order of DEFAULT_LLM_SEQUENCE.
+    Only returns values for models that are actually initialized and in config.
+    """
+    if agent is None:
+        return []
+    
+    # Only return values for initialized models from config
+    checkbox_values = []
+    for provider_key in agent.DEFAULT_LLM_SEQUENCE:
+        if (provider_key in agent.llm_instances and 
+            agent.llm_instances[provider_key] is not None and
+            provider_key in agent.LLM_CONFIG):
+            checkbox_values.append(selected_models.get(provider_key, True))  # Default to True for initialized models
+        else:
+            checkbox_values.append(False)  # False for uninitialized models
+    
+    return checkbox_values
+
+def update_model_selection(*checkbox_values):
+    """
+    Update the selected models based on checkbox values from agent config.
+    Args:
+        *checkbox_values: Boolean values for each checkbox (including hidden ones)
+    """
+    global selected_models
+    
+    if agent is None:
+        return "Agent not initialized"
+    
+    # Only update initialized models from config
+    initialized_models = []
+    for provider_key in agent.DEFAULT_LLM_SEQUENCE:
+        if (provider_key in agent.llm_instances and 
+            agent.llm_instances[provider_key] is not None and
+            provider_key in agent.LLM_CONFIG):
+            initialized_models.append(provider_key)
+    
+    # Update selected_models based on checkbox values for initialized models only
+    for i, provider_key in enumerate(initialized_models):
+        if i < len(checkbox_values):
+            selected_models[provider_key] = checkbox_values[i]
+    
+    # Count selected models (only initialized ones from config)
+    selected_count = sum(1 for provider_key in initialized_models 
+                        if selected_models.get(provider_key, False))
+    total_count = len(initialized_models)
+    
+    status_message = f"✅ Updated model selection: {selected_count}/{total_count} models from config selected"
+    
+    return status_message
+
+def initialize_selected_models():
+    """
+    Initialize selected_models from agent.LLM_CONFIG, only including initialized models.
+    This should be called after the agent is initialized.
+    """
+    global selected_models
+    
+    if agent is None:
+        return
+    
+    # Reset selected_models to only include initialized models from agent config
+    selected_models.clear()
+    for provider_key in agent.DEFAULT_LLM_SEQUENCE:
+        if (provider_key in agent.llm_instances and 
+            agent.llm_instances[provider_key] is not None):
+            # Check if this provider exists in LLM_CONFIG
+            if provider_key in agent.LLM_CONFIG:
+                selected_models[provider_key] = True  # Default to True for initialized models
+
+def update_model_checkboxes():
+    """
+    Update the model checkboxes to show initialized models from agent config.
+    Returns updates for all checkboxes and the init status.
+    """
+    if agent is None:
+        # Hide all checkboxes and show init status
+        updates = []
+        for i in range(6):
+            updates.append(gr.update(visible=False, label="", value=False))
+        updates.append(gr.update(value="🟡 Initializing agent...", visible=True))
+        return updates
+    
+    # Show initialized models from agent config
+    updates = []
+    initialized_count = 0
+    
+    for i, provider_key in enumerate(agent.DEFAULT_LLM_SEQUENCE):
+        if i < 6:  # We only have 6 checkboxes
+            if (provider_key in agent.llm_instances and 
+                agent.llm_instances[provider_key] is not None and
+                provider_key in agent.LLM_CONFIG):
+                # Model is initialized - show checkbox with config details
+                config = agent.LLM_CONFIG.get(provider_key, {})
+                provider_name = config.get("name", provider_key.title())
+                
+                # Get model details from active config
+                active_model_config = agent.active_model_config.get(provider_key, {})
+                model_name = active_model_config.get("model", "Unknown")
+                token_limit = active_model_config.get("token_limit", "Unknown")
+                
+                # Get tool support status from config
+                tool_support = config.get("tool_support", False)
+                tool_status = "🛠️" if tool_support else "📝"
+                
+                # Create checkbox label with model info from config (plain text)
+                # Use a format that makes the provider name stand out
+                label = f"• {provider_name}: {tool_status} {model_name} (max {token_limit} tokens)"
+                value = selected_models.get(provider_key, True)
+                
+                updates.append(gr.update(visible=True, label=label, value=value))
+                initialized_count += 1
+            else:
+                # Model not initialized - hide checkbox
+                updates.append(gr.update(visible=False, label="", value=False))
+    
+    # Update init status
+    if initialized_count > 0:
+        init_text = f"✅ Agent initialized with {initialized_count} models from config"
+    else:
+        init_text = "❌ No models initialized from config"
+    
+    updates.append(gr.update(value=init_text, visible=True))
+    
+    return updates
+
+def get_selected_model_sequence():
+    """
+    Get the list of selected model providers in sequence order.
+    Returns a list of provider keys that are currently selected AND initialized.
+    """
+    if agent is None:
+        return []
+    
+    return [provider_key for provider_key in agent.DEFAULT_LLM_SEQUENCE 
+            if (selected_models.get(provider_key, False) and 
+                provider_key in agent.llm_instances and 
+                agent.llm_instances[provider_key] is not None)]
+
+# Timer poller to update status and stop timer when ready
 def poll_models():
-    text = get_available_models()
     show_logs_btn = False
     try:
         show_logs_btn = (agent is None) and ('_agent_init_started' in globals() and _agent_init_started)
     except Exception:
         show_logs_btn = False
+    
+    # Get checkbox updates
+    checkbox_updates = update_model_checkboxes()
+    
     # Stop timer once agent is initialized
     if agent is not None:
-        return text, gr.update(active=False), gr.update(visible=False)
-    return text, gr.update(), gr.update(visible=show_logs_btn)
+        return gr.update(active=False), gr.update(visible=False), *checkbox_updates
+    return gr.update(), gr.update(visible=show_logs_btn), *checkbox_updates
 
 # Stream agent initialization logs into chatbot
 def stream_agent_init_logs(chat_history):
@@ -884,6 +1047,8 @@ def stream_agent_init_logs(chat_history):
 		try:
 			agent_local = GaiaAgent(provider=AGENT_PROVIDER, log_sink=sink)
 			agent = agent_local
+			# Initialize selected models after agent is created
+			initialize_selected_models()
 		except Exception as e:
 			log_queue.put(f"\n🔴 Agent init failed: {e}\n")
 	
@@ -932,6 +1097,8 @@ def _init_agent_background():
 		print("🟡 Initializing GaiaAgent in background...")
 		agent_local = GaiaAgent(provider=AGENT_PROVIDER)
 		agent = agent_local
+		# Initialize selected models after agent is created
+		initialize_selected_models()
 		print("🟢 GaiaAgent initialized.")
 	except Exception as e:
 		agent = None
@@ -956,6 +1123,8 @@ def _assign_agent():
 	# This relies on GaiaAgent writing to global when constructed; instead we construct here
 	agent_local = GaiaAgent(provider=AGENT_PROVIDER)
 	agent = agent_local
+	# Initialize selected models after agent is created
+	initialize_selected_models()
 	return None
 
 # --- Build Gradio Interface using Blocks ---
@@ -1029,17 +1198,38 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
                 
                 with gr.Column(scale=1, elem_classes=["sidebar-card"]):
-                    # Model information panel (single block)
+                    # Model information panel with integrated selection
                     with gr.Column(elem_classes=["model-card"]):
-                        gr.Markdown("### 🤖 Model status & stats")
-                        models_info = gr.Markdown(get_available_models())
-                        # Automatically refresh model info on load as well
-                        demo.load(get_available_models, outputs=models_info)
-                        status_timer = gr.Timer(1.0, active=True)
+                        gr.Markdown("### 🤖 Model status & selection")
+                        
+                        # Create individual model checkboxes with status info
+                        model_checkboxes = []
+                        model_labels = []
+                        
+                        # Create checkboxes for each model provider (will be populated dynamically)
+                        # We'll create empty checkboxes initially and populate them when agent initializes
+                        for i in range(6):  # Maximum number of models we might have
+                            checkbox = gr.Checkbox(
+                                label="",
+                                value=False,
+                                visible=False,  # Hidden until agent initializes
+                                elem_classes=["model-checkbox"]
+                            )
+                            model_checkboxes.append(checkbox)
+                        
+                        # Show placeholder when agent not initialized
+                        init_status = gr.Markdown("🟡 Initializing agent...", elem_classes=["init-status"])
+                        model_selection_status = gr.Markdown("", elem_classes=["model-status"])
+                        
+                        # Update button and status
                         with gr.Row():
                             open_logs_btn = gr.Button("📜 Open Init logs", elem_classes=["cmw-button"], visible=False)
-                            refresh_models_btn = gr.Button("🔄 Refresh model info", elem_classes=["cmw-button"]) 
-                        status_timer.tick(fn=poll_models, outputs=[models_info, status_timer, open_logs_btn])
+                            refresh_models_btn = gr.Button("🔄 Refresh", elem_classes=["cmw-button"])
+                        
+                        
+                        # Timer for auto-refresh
+                        status_timer = gr.Timer(1.0, active=True)
+                        status_timer.tick(fn=poll_models, outputs=[status_timer, open_logs_btn, *model_checkboxes, init_status])
                     # Quick action buttons (grouped like model card)
                     with gr.Column(elem_classes=["quick-actions-card"]):
                         gr.Markdown("### ⚡ Quick actions")
@@ -1119,8 +1309,16 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             
             refresh_models_btn.click(
                 fn=poll_models,
-                outputs=[models_info, status_timer, open_logs_btn]
+                outputs=[status_timer, open_logs_btn, *model_checkboxes, init_status]
             )
+            
+            # Add real-time change handlers for each checkbox
+            for checkbox in model_checkboxes:
+                checkbox.change(
+                    fn=update_model_selection,
+                    inputs=model_checkboxes,
+                    outputs=[model_selection_status]
+                )
             
             open_logs_btn.click(
                 fn=None,

@@ -540,6 +540,80 @@ body {
 
 /* (Quick actions uses same styling as model-card; no extra overrides required) */
 
+/* Model selection checkboxes - inherit button styles, only override what's different */
+.gradio-container .model-checkbox {
+  /* Only checkbox-specific overrides */
+  justify-content: flex-start !important;
+  margin: var(--cmw-space-2) 0 !important;
+  width: 100% !important;
+}
+
+.gradio-container .model-checkbox:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: var(--cmw-shadow-soft) !important;
+}
+
+.gradio-container .model-checkbox:has(input:checked) {
+  background: var(--cmw-primary) !important;
+  color: var(--cmw-white) !important;
+  border-color: var(--cmw-primary) !important;
+}
+
+/* Checkbox-specific layout */
+.gradio-container .model-checkbox label {
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--cmw-space-2) !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-weight: 500 !important;
+  color: inherit !important;
+}
+
+.gradio-container .model-checkbox input[type="checkbox"] {
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+.gradio-container .model-checkbox label span {
+  flex: 1 !important;
+}
+
+.gradio-container .model-checkbox .wrap {
+  display: none !important;
+}
+
+/* Model selection status styling */
+.gradio-container .model-status {
+  margin-top: var(--cmw-space-3) !important;
+  padding: var(--cmw-space-2) !important;
+  background: var(--cmw-highlight) !important;
+  border: 1px solid var(--cmw-primary) !important;
+  border-radius: var(--cmw-radius-sm) !important;
+  font-size: 13px !important;
+  color: var(--cmw-primary) !important;
+}
+
+/* Hide empty model status blocks */
+.gradio-container .model-status:empty,
+.gradio-container .model-status .prose:empty,
+.gradio-container .model-status .md:empty,
+.gradio-container .model-status .prose .md:empty {
+  display: none !important;
+}
+
+/* Init status styling */
+.gradio-container .init-status {
+  margin: var(--cmw-space-2) 0 !important;
+  padding: var(--cmw-space-3) !important;
+  background: var(--cmw-highlight) !important;
+  border: 1px solid var(--cmw-primary) !important;
+  border-radius: var(--cmw-radius-sm) !important;
+  font-size: 14px !important;
+  color: var(--cmw-primary) !important;
+  text-align: center !important;
+}
 
 /* Removed platform alias button classes (.toolbar-btn, .btn-strong, .btn-pale) */
 
@@ -658,9 +732,6 @@ body[data-theme='dark'] .gradio-container footer a.built-with,
 }
 
 /* Terminal-like styling for INIT chat (theme-aware) */
-.gradio-container .terminal-chat .wrap {
-  /* Follow theme background/border; do not override */
-}
 .gradio-container .terminal-chat .message,
 .gradio-container .terminal-chat .message .text,
 .gradio-container .terminal-chat [data-testid="bot_message"],
