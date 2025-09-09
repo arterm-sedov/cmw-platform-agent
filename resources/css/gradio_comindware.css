@@ -272,19 +272,12 @@ body {
   box-shadow: none !important;
   background: transparent !important;
 }
-/* Ensure hero title markdown block has no border/shadow/background */
-.gradio-container [data-testid="markdown"].hero-title,
-.gradio-container hero-title {
+/* Ensure hero title block has no border/shadow/background */
+.gradio-container .block.padded.hero-title,
+.gradio-container .hero-title  
+{
   border: none !important;
   box-shadow: none !important;
-  background: transparent !important;
-}
-.gradio-container .prose h1,
-.gradio-container [data-testid="markdown"] h1,
-.gradio-container .md h1 {
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
   background: transparent !important;
 }
 .gradio-container .prose h1 { font-size: 28px; }
@@ -494,6 +487,7 @@ body {
   border: 1px solid var(--cmw-border) !important;
   border-radius: var(--cmw-radius-md) !important;
 }
+
 
 /* Chatbot */
 .gradio-container .chatbot {
