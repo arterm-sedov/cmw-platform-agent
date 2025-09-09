@@ -98,7 +98,7 @@
 
   /* Assets (optional; set to your local resources if available) */
   --cmw-logo-url: url('/gradio_api/file=resources/img/comindware_logo.svg');
-  --cmw-logo-height: 28px;
+  --cmw-logo-height: 1.8em;
   --cmw-logo-gap: var(--cmw-space-3);
   --cmw-logo-shadow: drop-shadow(0 1px 0 rgba(0,0,0,0.06));
 }
@@ -257,6 +257,8 @@ body {
   color: var(--cmw-text-strong) !important;
   font-weight: 600;
   line-height: 1.25;
+  border: none !important;
+  background: transparent !important;
 }
 .gradio-container .prose h1 { font-size: 28px; }
 .gradio-container .prose h2 { font-size: 22px; }
@@ -268,6 +270,10 @@ body {
   display: flex;
   align-items: center;
   gap: var(--cmw-logo-gap);
+  color: var(--cmw-primary) !important;
+  font-weight: 500;
+  border: none !important;
+  box-shadow: none !important;
 }
 .gradio-container h1:first-of-type::before {
   content: '';
@@ -279,7 +285,7 @@ body {
   background-repeat: no-repeat;
   background-size: contain;
   background-position: left center;
-  filter: var(--cmw-logo-shadow);
+  border: none !important;
 }
 @media (max-width: 640px) {
   .gradio-container h1:first-of-type::before { height: 22px; }
@@ -290,7 +296,7 @@ body {
   border-bottom: 1px solid var(--cmw-border) !important;
   gap: var(--cmw-tab-gap) !important;
   justify-content: flex-start !important;
-  padding: 0 var(--cmw-space-2) !important;
+  padding: var(--cmw-space-2) !important;
 }
 
 /* Tab button styling for Gradio tabs */
@@ -299,11 +305,10 @@ body {
   background: transparent !important; /* passive tabs: no fill */
   color: var(--cmw-text) !important;
   border-radius: var(--cmw-tab-radius) !important;
-  padding: 0 var(--cmw-tab-padding-x) !important;
+  padding: var(--cmw-tab-padding-x) !important;
   height: var(--cmw-tab-height) !important;
   line-height: calc(var(--cmw-tab-height) - 2px) !important;
   font-weight: var(--cmw-tab-font-weight) !important;
-  box-shadow: none !important;
   margin-bottom: -1px !important;
   align-items: center !important;
   justify-content: center !important;
@@ -326,6 +331,17 @@ body {
   color: var(--cmw-white) !important;
 }
 
+/* Tab panel content */
+.gradio-container .tab-panel,
+.gradio-container [role="tabpanel"],
+.gradio-container .tab-content {
+  padding: var(--cmw-space-4) !important;
+  background: var(--cmw-surface) !important;
+  border: 1px solid var(--cmw-border) !important;
+  border-top: none !important;
+  border-radius: 0 0 var(--cmw-radius-md) var(--cmw-radius-md) !important;
+}
+
 /* Buttons - compact toolbar-like look (CMW style) */
 /* .gradio-container button:not(.tab-nav button), */
 .gradio-container .btn,
@@ -334,9 +350,9 @@ body {
   align-items: center !important;
   justify-content: center !important;
   box-sizing: border-box !important;
-  min-width: var(--cmw-toolbar-btn-height) !important;
-  height: var(--cmw-toolbar-btn-height) !important;
-  padding: 0 var(--cmw-toolbar-btn-padding-x) !important;
+  /* min-width: var(--cmw-toolbar-btn-height) !important; */
+  /* height: var(--cmw-toolbar-btn-height) !important; */
+  padding: var(--cmw-toolbar-btn-padding-x) !important;
   /* Default: subtle fill, no visible border */
   background: var(--cmw-toolbar-btn-hover-bg) !important;
   color: var(--cmw-primary) !important;
@@ -370,7 +386,6 @@ body {
 .gradio-container button:focus-visible:not(.tab-nav button),
 .gradio-container .cmw-button:focus-visible {
   outline: none !important;
-  box-shadow: var(--cmw-shadow-focus) !important;
 }
 
 /* Inputs */
@@ -388,7 +403,6 @@ body {
 .gradio-container select:focus {
   outline: none !important;
   border-color: var(--cmw-primary) !important;
-  box-shadow: var(--cmw-shadow-focus) !important;
 }
 
 /* Cards and panels */
@@ -401,7 +415,6 @@ body {
   background: var(--cmw-surface) !important;
   border: 1px solid var(--cmw-border) !important;
   border-radius: var(--cmw-radius-md) !important;
-  box-shadow: var(--cmw-shadow-soft);
 }
 
 /* Chatbot */
@@ -428,7 +441,12 @@ body {
 .gradio-container th { background: var(--cmw-surface-alt) !important; }
 
 /* Misc spacing tweaks */
-.gradio-container .markdown { line-height: var(--cmw-line-height); }
+.gradio-container .markdown { 
+  line-height: var(--cmw-line-height);
+  border: none !important;
+  background: transparent !important;
+}
+
 
 
 

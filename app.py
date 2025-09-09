@@ -782,7 +782,7 @@ try:
 except Exception as _e:
     print(f"Warning: could not set GRADIO_ALLOWED_PATHS: {_e}")
 with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_comindware.css"]) as demo:
-    gr.Markdown("# Comindware Analyst Copilot")
+    gr.Markdown("# Analyst Copilot")
     
 
     with gr.Tabs():
