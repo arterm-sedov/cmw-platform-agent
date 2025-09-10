@@ -12,7 +12,7 @@ import re
 import base64
 from typing import Any
 from dotenv import load_dotenv
-from agent import GaiaAgent
+from agent import CmwAgent
 from utils import TRACES_DIR, ensure_valid_answer
 # Dataset functionality moved to dataset_manager.py
 from dataset_manager import dataset_manager
@@ -28,17 +28,18 @@ load_dotenv()
 # (Keep Constants as is)
 # --- Constants ---
 DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
+DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() == "true"
 
 # --- Main Agent Definition ---
 # Instantiate the agent once (choose provider as needed)
-AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "gigachat")
+AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "gemini")
 try:
     agent = None
     _agent_init_started = False
 except Exception as e:
     agent = None
     _agent_init_started = False
-    print(f"Error initializing GaiaAgent: {e}")
+    print(f"Error initializing CmwAgent: {e}")
 
 # Helper to save DataFrame as CSV and upload via API
 def save_df_to_csv(df, path):
@@ -198,7 +199,7 @@ def create_run_data_for_runs_new(
 
 def run_and_submit_all(profile: gr.OAuthProfile | None):
     """
-    Fetches all questions, runs the GaiaAgent on them, submits all answers,
+    Fetches all questions, runs the CmwAgent on them, submits all answers,
     and displays the results.
     """
     space_id = os.getenv("SPACE_ID")
@@ -243,7 +244,7 @@ def run_and_submit_all(profile: gr.OAuthProfile | None):
     results_log = []
     results_log_df = []
     answers_payload = []
-    print(f"Running GaiaAgent on {len(questions_data)} questions...")
+    print(f"Running CmwAgent on {len(questions_data)} questions...")
     # Select all questions randomly
     questions_data = random.sample(questions_data, len(questions_data))
     # DEBUG: Select one random task instead of all
@@ -641,16 +642,63 @@ def chat_with_agent(message, history):
         
         result = agent(message, chat_history=chat_history)
         
-        # The agent now always returns a generator, so consume it to get the final result
+        # Handle the result properly - check if it's the problematic generator object
         accumulated_response = ""
-        for chunk in result:
-            if isinstance(chunk, str):
-                accumulated_response += chunk
-            elif isinstance(chunk, dict):
-                # If it's a dict, try to extract text content
-                text = chunk.get("content", chunk.get("text", chunk.get("delta", "")))
-                if text:
-                    accumulated_response += str(text)
+        if DEBUG_MODE:
+            print(f"chat_with_agent: Agent returned result type: {type(result)}")
+        
+        try:
+            # Check if we got a generator object that should be consumed
+            if hasattr(result, '__iter__') and hasattr(result, '__next__') and not isinstance(result, (str, dict, list)):
+                if DEBUG_MODE:
+                    print("chat_with_agent: Detected generator, attempting to consume...")
+                chunk_count = 0
+                for chunk in result:
+                    chunk_count += 1
+                    if DEBUG_MODE:
+                        print(f"chat_with_agent: Generator yielded chunk {chunk_count}: {type(chunk)} - {str(chunk)[:100]}")
+                    if isinstance(chunk, str):
+                        accumulated_response += chunk
+                    elif isinstance(chunk, dict):
+                        # If it's a dict, try to extract text content
+                        text = chunk.get("content", chunk.get("text", chunk.get("delta", "")))
+                        if text:
+                            accumulated_response += str(text)
+                
+                if DEBUG_MODE:
+                    print(f"chat_with_agent: Generator yielded {chunk_count} chunks, accumulated: '{accumulated_response[:100]}'")
+                
+                # If no chunks were yielded, the generator was empty
+                if chunk_count == 0:
+                    print("chat_with_agent: WARNING - Generator yielded no content")
+                    accumulated_response = "❌ No response generated. The LLM returned an empty response, likely due to API issues or rate limits."
+            else:
+                # Not a generator, handle as direct response
+                if DEBUG_MODE:
+                    print(f"chat_with_agent: Non-generator response: {str(result)[:100]}")
+                accumulated_response = str(result)
+        except Exception as e:
+            print(f"Error consuming generator: {e}")
+            # Fallback: try to get trace data directly from agent
+            if hasattr(agent, 'get_trace_data'):
+                trace = agent.get_trace_data()
+                final_result = trace.get("final_result", {})
+                accumulated_response = final_result.get("submitted_answer", f"Error processing response: {e}")
+            else:
+                accumulated_response = f"Error processing response: {e}"
+        
+        # Final safety check - catch any generator object representations
+        if not accumulated_response or accumulated_response.strip() == "" or "generator object" in accumulated_response.lower():
+            print("chat_with_agent: Final fallback - providing helpful error message")
+            # Try to get more info from the agent
+            if hasattr(agent, 'get_trace_data'):
+                trace = agent.get_trace_data()
+                final_result = trace.get("final_result", {})
+                llm_used = final_result.get("llm_used", "unknown")
+                error_info = final_result.get("error", "No error details available")
+                accumulated_response = f"❌ **No response generated**\n\n**Details:**\n- LLM used: {llm_used}\n- Error: {error_info}\n\n**Possible causes:**\n- API rate limits (OpenRouter: 429 error)\n- Authentication issues\n- Service unavailable\n\nPlease try again later or check the Init logs for more details."
+            else:
+                accumulated_response = "❌ **No response generated**\n\nThe LLM failed to produce a response. This usually indicates:\n- API rate limits\n- Authentication issues\n- Service unavailable\n\nPlease try again later."
         
         # Use the accumulated response as the answer
         answer = accumulated_response or "No answer generated"
@@ -784,11 +832,103 @@ def chat_with_agent_stream(message, history):
 				# Fall back to non-streaming path
 				pass
 
-		# Use unified streaming path
+		# Use unified streaming path with enhanced terminal output and error handling
 		accum = ""
-		if agent is not None and hasattr(agent, 'stream'):
-			for delta in agent.stream(message, chat_history=chat_history):
-				accum += delta
+		terminal_output = ""
+		chunk_count = 0
+		
+		if agent is not None:
+			# Try to use the agent's call method which should return a generator
+			try:
+				result = agent(message, chat_history=chat_history)
+				print(f"chat_with_agent_stream: Agent returned result type: {type(result)}")
+				
+				# Check if result is a generator and consume it properly
+				if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
+					print("chat_with_agent_stream: Consuming generator...")
+					has_content = False
+					for delta in result:
+						print(f"chat_with_agent_stream: Generator yielded: {type(delta)} - {str(delta)[:100]}")
+						if isinstance(delta, str) and delta.strip():
+							chunk_count += 1
+							accum += delta
+							has_content = True
+							# Yield partial updates for streaming
+							display_content = accum
+							if hasattr(agent, '_stream_terminal_output'):
+								terminal_chunk = agent._stream_terminal_output()
+								if terminal_chunk:
+									terminal_output += terminal_chunk
+									display_content += f"\n\n**Terminal Output:**\n{terminal_output}"
+							yield working_history + [{"role": "assistant", "content": display_content}], ""
+						elif isinstance(delta, dict):
+							# If it's a dict, try to extract text content
+							text = delta.get("content", delta.get("text", delta.get("delta", "")))
+							if text and str(text).strip():
+								chunk_count += 1
+								accum += str(text)
+								has_content = True
+								# Yield partial updates for streaming
+								display_content = accum
+								if hasattr(agent, '_stream_terminal_output'):
+									terminal_chunk = agent._stream_terminal_output()
+									if terminal_chunk:
+										terminal_output += terminal_chunk
+										display_content += f"\n\n**Terminal Output:**\n{terminal_output}"
+								yield working_history + [{"role": "assistant", "content": display_content}], ""
+					
+					# If no meaningful content was yielded, provide fallback message
+					if not has_content or chunk_count == 0:
+						print("chat_with_agent_stream: WARNING - Generator yielded no meaningful content")
+						# Try to get error information from the agent
+						if hasattr(agent, 'get_trace_data'):
+							trace = agent.get_trace_data()
+							final_result = trace.get("final_result", {})
+							llm_used = final_result.get("llm_used", "unknown")
+							error_info = final_result.get("error", "No error details available")
+							accum = f"❌ **No response generated**\n\n**Details:**\n- LLM used: {llm_used}\n- Error: {error_info}\n\n**Possible causes:**\n- API rate limits (OpenRouter: 429 error)\n- Authentication issues\n- Service unavailable\n\n**Fallback system:** The agent should try multiple LLM providers, but all may be currently unavailable.\n\nPlease try again later or check the Init logs for more details."
+						else:
+							accum = "❌ **No response generated**\n\nThe LLM failed to produce a response. This usually indicates:\n- API rate limits\n- Authentication issues\n- Service unavailable\n\nPlease try again later."
+						yield working_history + [{"role": "assistant", "content": accum}], ""
+				else:
+					# Not a generator, convert to string
+					chunk_count = 1
+					accum = str(result)
+					print(f"chat_with_agent_stream: Non-generator result: {accum}")
+					
+					# Check for and stream terminal output if available
+					if hasattr(agent, '_stream_terminal_output'):
+						terminal_chunk = agent._stream_terminal_output()
+						if terminal_chunk:
+							terminal_output += terminal_chunk
+					
+					# Combine main response with terminal output if present
+					display_content = accum
+					if terminal_output:
+						display_content += f"\n\n**Terminal Output:**\n{terminal_output}"
+					
+					yield working_history + [{"role": "assistant", "content": display_content}], ""
+				
+				# If no chunks were yielded, handle empty generator
+				if chunk_count == 0:
+					print("chat_with_agent_stream: WARNING - Generator yielded no content")
+					# Try to get trace data for error information
+					if hasattr(agent, 'get_trace_data'):
+						trace = agent.get_trace_data()
+						final_result = trace.get("final_result", {})
+						llm_used = final_result.get("llm_used", "unknown")
+						error_info = final_result.get("error", "No error details available")
+						accum = f"❌ **No response generated**\n\n**Details:**\n- LLM used: {llm_used}\n- Error: {error_info}\n\n**Possible causes:**\n- API rate limits (OpenRouter: 429 error)\n- Authentication issues\n- Service unavailable\n\nPlease try again later or check the Init logs for more details."
+					else:
+						accum = "❌ **No response generated**\n\nThe LLM failed to produce a response. This usually indicates:\n- API rate limits\n- Authentication issues\n- Service unavailable\n\nPlease try again later."
+					yield working_history + [{"role": "assistant", "content": accum}], ""
+			except Exception as e:
+				print(f"chat_with_agent_stream: Error in streaming: {e}")
+				# Check if the error might be related to generator object display
+				if "generator object" in str(e).lower() or chunk_count == 0:
+					accum = "❌ **No response generated**\n\nThe LLM failed to produce a response. This usually indicates:\n- API rate limits\n- Authentication issues\n- Service unavailable\n\nPlease try again later."
+				else:
+					accum = f"❌ Error processing response: {e}"
 				yield working_history + [{"role": "assistant", "content": accum}], ""
 		else:
 			# Fallback when agent is None or doesn't have stream method
@@ -919,7 +1059,7 @@ def stream_agent_init_logs(chat_history):
 	def worker():
 		global agent
 		try:
-			agent_local = GaiaAgent(provider=AGENT_PROVIDER, log_sink=sink)
+			agent_local = CmwAgent(provider=AGENT_PROVIDER, log_sink=sink)
 			agent = agent_local
 		except Exception as e:
 			log_queue.put(f"\n🔴 Agent init failed: {e}\n")
@@ -936,11 +1076,25 @@ def stream_agent_init_logs(chat_history):
 			chunk = log_queue.get(timeout=0.25)
 			last_activity = time.time()
 			accum_text += chunk
+			
+			# Add terminal output streaming section
+			terminal_section = ""
+			if agent is not None and hasattr(agent, '_stream_terminal_output'):
+				terminal_chunk = agent._stream_terminal_output()
+				if terminal_chunk:
+					if not hasattr(stream_agent_init_logs, '_terminal_buffer'):
+						stream_agent_init_logs._terminal_buffer = ""
+					stream_agent_init_logs._terminal_buffer += terminal_chunk
+					terminal_section = f"\n\n**🖥️ Terminal Output:**\n```\n{stream_agent_init_logs._terminal_buffer}\n```"
+			
+			# Combine initialization logs with terminal output
+			display_content = accum_text + terminal_section
+			
 			# Update the last assistant message or append a new one
 			if messages and messages[-1].get("role") == "assistant":
-				messages[-1] = {"role": "assistant", "content": accum_text}
+				messages[-1] = {"role": "assistant", "content": display_content}
 			else:
-				messages = messages + [{"role": "assistant", "content": accum_text}]
+				messages = messages + [{"role": "assistant", "content": display_content}]
 			yield messages
 		except queue.Empty:
 			# If thread finished or agent is set and we've been quiet long enough, stop streaming
@@ -966,13 +1120,13 @@ def _init_agent_background():
 		return
 	_agent_init_started = True
 	try:
-		print("🟡 Initializing GaiaAgent in background...")
-		agent_local = GaiaAgent(provider=AGENT_PROVIDER)
+		print("🟡 Initializing CmwAgent in background...")
+		agent_local = CmwAgent(provider=AGENT_PROVIDER)
 		agent = agent_local
-		print("🟢 GaiaAgent initialized.")
+		print("🟢 CmwAgent initialized.")
 	except Exception as e:
 		agent = None
-		print(f"🔴 Failed to initialize GaiaAgent: {e}")
+		print(f"🔴 Failed to initialize CmwAgent: {e}")
 
 def _start_agent_init_thread_with_sink(update_fn=None):
 	import threading
@@ -982,15 +1136,15 @@ def _start_agent_init_thread_with_sink(update_fn=None):
 				update_fn(text_chunk)
 		except Exception:
 			pass
-	thread = threading.Thread(target=lambda: GaiaAgent(provider=AGENT_PROVIDER, log_sink=_sink_writer) and _assign_agent(), daemon=True)
+	thread = threading.Thread(target=lambda: CmwAgent(provider=AGENT_PROVIDER, log_sink=_sink_writer) and _assign_agent(), daemon=True)
 	thread.start()
 	return None
 
 # Helper to assign the global agent if constructed in thread
 def _assign_agent():
 	global agent
-	# This relies on GaiaAgent writing to global when constructed; instead we construct here
-	agent_local = GaiaAgent(provider=AGENT_PROVIDER)
+	# This relies on CmwAgent writing to global when constructed; instead we construct here
+	agent_local = CmwAgent(provider=AGENT_PROVIDER)
 	agent = agent_local
 	return None
 
@@ -1138,13 +1292,13 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             
             # Connect event handlers
             send_btn.click(
-                fn=chat_with_agent_stream,
+                fn=chat_with_agent,  # Use the working non-streaming version
                 inputs=[msg, chatbot],
                 outputs=[chatbot, msg]
             )
             
             msg.submit(
-                fn=chat_with_agent_stream,
+                fn=chat_with_agent,  # Use the working non-streaming version
                 inputs=[msg, chatbot],
                 outputs=[chatbot, msg]
             )
