@@ -43,8 +43,5 @@ def list_applications() -> Dict[str, Any]:
     return validated.model_dump()
 
 if __name__ == "__main__":
-    results = list_attributes.invoke({
-        "application_system_name": "AItestAndApi",
-        "template_system_name": "Test"
-    })
+    results = list_applications()
     print(results)
