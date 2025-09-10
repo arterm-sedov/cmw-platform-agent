@@ -31,7 +31,7 @@ DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
 
 # --- Main Agent Definition ---
 # Instantiate the agent once (choose provider as needed)
-AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "google")
+AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "openrouter")
 try:
     agent = None
     _agent_init_started = False
@@ -39,8 +39,6 @@ except Exception as e:
     agent = None
     _agent_init_started = False
     print(f"Error initializing GaiaAgent: {e}")
-
-
 
 # Helper to save DataFrame as CSV and upload via API
 def save_df_to_csv(df, path):
@@ -348,7 +346,6 @@ def run_and_submit_all(profile: gr.OAuthProfile | None):
     if not answers_payload:
         print("Agent did not produce any answers to submit.")
         return "Agent did not produce any answers to submit.", results_df
-
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     
@@ -936,7 +933,6 @@ def _init_agent_background():
 	except Exception as e:
 		agent = None
 		print(f"🔴 Failed to initialize GaiaAgent: {e}")
-
 
 def _start_agent_init_thread_with_sink(update_fn=None):
 	import threading

@@ -38,7 +38,6 @@ except ImportError:
     HF_HUB_AVAILABLE = False
     print("Warning: huggingface_hub not available. Install with: pip install huggingface_hub")
 
-
 class FileManager:
     """
     Manages file upload operations for the Comindware Analyst Copilot.
@@ -199,7 +198,6 @@ class FileManager:
         except Exception as e:
             print(f"❌ Error reading local file: {e}")
             return False
-
 
 # Global file manager instance
 file_manager = FileManager()

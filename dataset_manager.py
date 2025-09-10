@@ -41,7 +41,6 @@ except ImportError:
     HF_HUB_AVAILABLE = False
     print("Warning: huggingface_hub not available. Install with: pip install huggingface_hub")
 
-
 class DatasetManager:
     """
     Manages dataset uploading operations for the Comindware Analyst Copilot.
@@ -344,7 +343,6 @@ class DatasetManager:
         except Exception as e:
             print(f"Error getting dataset info: {e}")
             return None
-
 
 # Global dataset manager instance
 dataset_manager = DatasetManager()

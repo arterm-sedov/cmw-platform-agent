@@ -139,8 +139,6 @@ def get_hf_api_client(token: Optional[str] = None):
         print(f"Error creating HfApi client: {e}")
         return None
 
-
-
 def upload_to_dataset(
     dataset_id: str,
     data: Union[Dict, List[Dict]],
