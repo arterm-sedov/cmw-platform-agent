@@ -42,6 +42,7 @@ except ImportError:
 from langchain_core.tools import tool
 # Expose Comindware Platform tool(s)
 from attributes_tools.tools_text_attribute import edit_or_create_text_attribute, get_text_attribute  # noqa: F401
+from attributes_tools.tools_enum_attribute import edit_or_create_enum_attribute, get_enum_attribute
 from attributes_tools.tool_delete_attribute import delete_attribute
 from attributes_tools.tool_archive_or_unarchive_attribute import archive_or_unarchive_attribute
 from templates_tools.tool_list_attributes import list_attributes

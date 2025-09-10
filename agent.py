@@ -418,11 +418,11 @@ class GaiaAgent:
     # Default LLM sequence order - references LLM_CONFIG keys
     DEFAULT_LLM_SEQUENCE = [
         "openrouter",
-        "gigachat",
-        "mistral",
-        "gemini",
-        "groq",
-        "huggingface"
+    #    "gigachat",
+    #    "mistral",
+    #    "gemini",
+    #    "groq",
+    #    "huggingface"
     ]
     # Print truncation length for debug output
     MAX_PRINT_LEN = 1000
@@ -2581,7 +2581,7 @@ class GaiaAgent:
                 'web_search_deep_research_exa_ai', 
                 'wiki_search', 'arxiv_search', 'web_search',
                 # Comindware Platform tools
-                'edit_or_create_text_attribute', 'get_text_attribute', 'delete_attribute', 'archive_or_unarchive_attribute', 'list_attributes', 'list_templates', 'list_applications'
+                'edit_or_create_text_attribute', 'get_text_attribute', 'edit_or_create_enum_attribute', 'get_enum_attribute', 'delete_attribute', 'archive_or_unarchive_attribute', 'list_attributes', 'list_templates', 'list_applications'
         ]
         
         # Build a set of tool names for deduplication (handle both __name__ and .name attributes)
