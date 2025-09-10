@@ -971,14 +971,6 @@ class GaiaAgent:
             tools=self.tools,
             tool_results_history=tool_results_history
         )
-        
-        # DEBUG: Print the current question being processed
-        current_question = None
-        for msg in reversed(messages):
-            if hasattr(msg, 'type') and msg.type == 'human':
-                current_question = msg.content
-                break
-        print(f"[Tool Loop] DEBUG: Current question being processed: {current_question}")
         # Gemini-specific: add explicit instructions for extracting numbers or lists
         if llm_type == "gemini":
             reminder += (
@@ -1002,7 +994,6 @@ class GaiaAgent:
         if include_tool_results:
             tool_results_text = "\n\nTOOL RESULTS:\n" + "\n".join([f"Result {i+1}: {result}" for i, result in enumerate(tool_results_history)])
             reminder += tool_results_text
-            print(f"[Tool Loop] DEBUG: Adding tool results to reminder: {tool_results_text[:200]}...")
         
         # Add the reminder to the existing message history
         messages.append(HumanMessage(content=reminder))
@@ -1893,6 +1884,7 @@ class GaiaAgent:
             list: List of message objects for the LLM.
         """
         messages = [self.sys_msg]
+        
         # Append prior chat history (user/assistant only) for continuity
         if chat_history and isinstance(chat_history, list):
             for turn in chat_history:
@@ -1907,8 +1899,9 @@ class GaiaAgent:
                     messages.append(HumanMessage(content=content))
                 elif role in ("assistant", "ai"):
                     messages.append(AIMessage(content=content))
-        # Current question last
-        messages.append(HumanMessage(content=question))
+        
+        # Current question last - ensure it's clearly separated
+        messages.append(HumanMessage(content=f"Current question: {question}"))
         if reference:
             messages.append(HumanMessage(content=f"Reference answer: {reference}"))
         return messages
