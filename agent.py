@@ -1041,10 +1041,13 @@ class CmwAgent:
                 return final_response
             else:
                 print("[Tool Loop] ❌ LLM returned empty response")
+                # If LLM returns empty response, return a generic message
                 return AIMessage(content="Unable to determine the answer from the available information.")
         except Exception as e:
             print(f"[Tool Loop] ❌ Failed to get final answer: {e}")
+            # If LLM fails, return a generic error message
             return AIMessage(content="Error occurred while processing the question.")
+
 
     @trace_prints_with_context("tool_loop")
     def _run_tool_calling_loop(self, llm, messages, tool_registry, llm_type="unknown", model_index: int = 0, call_id: str = None, streaming_generator=None):
@@ -1287,7 +1290,7 @@ class CmwAgent:
             # Check if we have tool results but no final answer yet
             has_tool_results = len(tool_results_history) > 0
             has_final_answer = (hasattr(response, 'content') and response.content and 
-                              self._has_final_answer_marker(response))
+                              not getattr(response, 'tool_calls', None))
             
             if has_tool_results and not has_final_answer and step >= 2:  # Increased from 1 to 2 to give more time
                 # We have information but no answer - provide explicit reminder to analyze tool results
@@ -1325,29 +1328,10 @@ class CmwAgent:
 
             # If response has content and no tool calls, return
             if hasattr(response, 'content') and response.content and not getattr(response, 'tool_calls', None):
-                
-                # --- Check for 'FINAL ANSWER' marker ---
-                if self._has_final_answer_marker(response):
-                    print(f"[Tool Loop] Final answer detected: {response.content}")
-                    # Track successful Mistral AI requests
-                    self._handle_provider_success(llm_type)
-                    return response
-                else:
-                    # If we have tool results but no FINAL ANSWER marker, force processing
-                    if tool_results_history:
-                        print(f"[Tool Loop] Content without FINAL ANSWER marker but we have {len(tool_results_history)} tool results. Forcing final answer.")
-                        # Track successful provider requests
-                        self._handle_provider_success(llm_type)
-                        return self._force_final_answer(messages, tool_results_history, llm)
-                    else:
-                        # Lean fallback: if the model produced a clear answer without the marker,
-                        # wrap it as a FINAL ANSWER to avoid unnecessary retries.
-                        print("[Tool Loop] 'FINAL ANSWER' marker not found. Wrapping current content as final answer.")
-                        final_text = self._extract_text_from_response(response).strip()
-                        wrapped = AIMessage(content=f"FINAL ANSWER: {final_text}")
-                        # Track successful provider requests
-                        self._handle_provider_success(llm_type)
-                        return wrapped
+                print(f"[Tool Loop] Final answer detected: {response.content}")
+                # Track successful provider requests
+                self._handle_provider_success(llm_type)
+                return response
             tool_calls = getattr(response, 'tool_calls', None)
             if tool_calls:
                 print(f"[Tool Loop] Detected {len(tool_calls)} tool call(s)")
@@ -1534,7 +1518,7 @@ class CmwAgent:
         print(f"[Tool Loop] Exiting after {step+1} steps. Last response: {response}")
         
         # If we have tool results but no final answer, force one
-        if tool_results_history and (not hasattr(response, 'content') or not response.content or not self._has_final_answer_marker(response)):
+        if tool_results_history and (not hasattr(response, 'content') or not response.content):
             print(f"[Tool Loop] Forcing final answer with {len(tool_results_history)} tool results at loop exit")
             return self._force_final_answer(messages, tool_results_history, llm)
         
@@ -1999,26 +1983,6 @@ class CmwAgent:
             messages.append(HumanMessage(content=f"Reference answer: {reference}"))
         return messages
 
-    def _clean_final_answer_text(self, text: str) -> str:
-        """
-        Extracts and cleans the answer after 'FINAL ANSWER' marker 
-        (case-insensitive, optional colon/space).
-        Strips and normalizes whitespace.
-        """
-        # Handle None text gracefully
-        if not text:
-            return ""
-        
-        # Remove everything before and including 'final answer' (case-insensitive, optional colon/space)
-        match = re.search(r'final answer\s*:?', text, flags=re.IGNORECASE)
-        if match:
-            text = text[match.end():]
-        
-        # Normalize whitespace and any JSON remainders
-        text = re.sub(r'\s+', ' ', text).strip()
-        text = text.lstrip('{[\'').rstrip(']]}"\'')
-        result = text.strip()
-        return result
 
     def _get_tool_name(self, tool):
         if hasattr(tool, 'name'):
@@ -2779,23 +2743,6 @@ class CmwAgent:
         else:
             return str(response)
 
-    def _has_final_answer_marker(self, response: Any) -> bool:
-        """
-        Check if the LLM response contains a "FINAL ANSWER:" marker.
-        This is used in the tool calling loop to determine if the response is a final answer.
-
-        Args:
-            response (Any): The LLM response object.
-
-        Returns:
-            bool: True if the response contains "FINAL ANSWER:" marker, False otherwise.
-        """
-        text = self._extract_text_from_response(response)
-        # Check if any line contains 'final answer' (case-insensitive, optional colon/space)
-        for line in text.splitlines():
-            if re.search(r'final answer\s*:?', line, flags=re.IGNORECASE):
-                return True
-        return False
 
     def _extract_final_answer(self, response: Any) -> str:
         """
@@ -2812,11 +2759,8 @@ class CmwAgent:
         # Extract text from response
         text = self._extract_text_from_response(response)
         
-        # If marker exists, clean after marker; otherwise, use stripped text
-        if self._has_final_answer_marker(text):
-            cleaned_answer = self._clean_final_answer_text(text)
-        else:
-            cleaned_answer = (text or "").strip()
+        # Use the full response text as the answer
+        cleaned_answer = (text or "").strip()
         
         # Use helper function to ensure valid answer
         final_answer = ensure_valid_answer(cleaned_answer)
