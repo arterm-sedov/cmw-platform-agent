@@ -769,7 +769,8 @@ def chat_with_agent_stream(message, history):
 			yield working_history + [{"role": "assistant", "content": accum}], ""
 
 		# After stream finishes, get the finalized trace and add tool information
-		if agent is not None:
+		# Only add metadata if we have a successful response
+		if agent is not None and accum.strip():
 			trace = getattr(agent, "_trace_get_full", None)
 			if callable(trace):
 				trace = trace()
