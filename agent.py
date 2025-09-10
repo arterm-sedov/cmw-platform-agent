@@ -1146,8 +1146,10 @@ class CmwAgent:
             current_step_tool_results = []  # Reset for this step
             
             # Stream step start immediately
-            stream_now(f"\n📍 **Step {step+1}/{max_steps}**\n", 
+            step_content = stream_now(f"\n📍 **Step {step+1}/{max_steps}**\n", 
                       "step_start", {"step": step + 1, "max_steps": max_steps})
+            if step_content and streaming_generator:
+                yield step_content
             
             # Reset Mistral conversion flag for each step
             self._mistral_converted_this_step = False
@@ -1181,13 +1183,17 @@ class CmwAgent:
             token_limit = self._get_token_limit(llm_type)
             
             # Stream LLM thinking immediately  
-            stream_now("🤖 **LLM is analyzing and planning...**\n", 
+            thinking_content = stream_now("🤖 **LLM is analyzing and planning...**\n", 
                       "llm_thinking", {"llm_type": llm_type})
+            if thinking_content and streaming_generator:
+                yield thinking_content
             
             try:
                 # Use streaming if supported - unified approach for LLM tokens
                 if streaming_generator and hasattr(llm, "stream") and callable(getattr(llm, "stream")):
-                    stream_now("💭 **LLM response:**\n", "llm_stream_start", {"streaming": True})
+                    response_start = stream_now("💭 **LLM response:**\n", "llm_stream_start", {"streaming": True})
+                    if response_start and streaming_generator:
+                        yield response_start
                     
                     llm_response_content = ""
                     for chunk in llm.stream(messages):
@@ -1196,7 +1202,9 @@ class CmwAgent:
                             if text:
                                 llm_response_content += text
                                 # Stream each token immediately - unified with other content
-                                stream_now(text, "llm_chunk", {"chunk_type": "streaming"})
+                                chunk_content = stream_now(text, "llm_chunk", {"chunk_type": "streaming"})
+                                if chunk_content and streaming_generator:
+                                    yield chunk_content
                         except Exception:
                             continue
                     
@@ -1208,7 +1216,9 @@ class CmwAgent:
                     response = self._invoke_llm_provider(llm, messages)
                     if streaming_generator and hasattr(response, 'content') and response.content:
                         # Stream non-streaming LLM response immediately too
-                        stream_now(response.content, "llm_response", {"streaming": False})
+                        response_content = stream_now(response.content, "llm_response", {"streaming": False})
+                        if response_content and streaming_generator:
+                            yield response_content
             except Exception as e:
                 # Check if this is a rate limit error that should be throttled
                 error_str = str(e)
@@ -1331,14 +1341,19 @@ class CmwAgent:
                 print(f"[Tool Loop] Final answer detected: {response.content}")
                 # Track successful provider requests
                 self._handle_provider_success(llm_type)
+                # If streaming, yield the final answer content
+                if streaming_generator:
+                    yield response.content
                 return response
             tool_calls = getattr(response, 'tool_calls', None)
             if tool_calls:
                 print(f"[Tool Loop] Detected {len(tool_calls)} tool call(s)")
                 
                 # Stream tool calls detected immediately
-                stream_now(f"🔧 **Detected {len(tool_calls)} tool call(s)**\n", 
+                tool_calls_content = stream_now(f"🔧 **Detected {len(tool_calls)} tool call(s)**\n", 
                           "tool_calls_detected", {"tool_count": len(tool_calls)})
+                if tool_calls_content and streaming_generator:
+                    yield tool_calls_content
                 
                 # Add tool loop data to trace
                 if call_id and self.question_trace:
@@ -1411,8 +1426,10 @@ class CmwAgent:
                     tool_args = tool_call.get('args', {})
                     
                     # Stream tool start immediately
-                    stream_now(f"🔧 **Executing {tool_name}**\n", 
+                    tool_start_content = stream_now(f"🔧 **Executing {tool_name}**\n", 
                               "tool_start", {"tool_name": tool_name, "tool_args": tool_args})
+                    if tool_start_content and streaming_generator:
+                        yield tool_start_content
                     
                     # Execute tool using helper method with call_id for tracing
                     tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
@@ -1427,8 +1444,10 @@ class CmwAgent:
                     
                     # Stream tool completion immediately
                     display_result = tool_result[:300] + "..." if len(tool_result) > 300 else tool_result
-                    stream_now(f"✅ **{tool_name} completed**\n```\n{display_result}\n```\n", 
+                    tool_end_content = stream_now(f"✅ **{tool_name} completed**\n```\n{display_result}\n```\n", 
                               "tool_end", {"tool_name": tool_name, "tool_result": tool_result})
+                    if tool_end_content and streaming_generator:
+                        yield tool_end_content
                     
                     # Add tool result to messages - let LangChain handle the formatting
                     messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
@@ -1520,15 +1539,19 @@ class CmwAgent:
         # If we have tool results but no final answer, force one
         if tool_results_history and (not hasattr(response, 'content') or not response.content):
             print(f"[Tool Loop] Forcing final answer with {len(tool_results_history)} tool results at loop exit")
-            return self._force_final_answer(messages, tool_results_history, llm)
+            forced_response = self._force_final_answer(messages, tool_results_history, llm)
+            if forced_response and hasattr(forced_response, 'content') and forced_response.content:
+                # Yield the forced response content
+                yield forced_response.content
+            return forced_response
         
         # If streaming, yield final response content
         if streaming_generator:
             final_content = getattr(response, 'content', str(response)) if response else ""
             if final_content:
-                content = stream_now(f"🏁 **Final answer:**\n{final_content}\n", "final_answer")
-                if content:
-                    yield content
+                final_answer_content = stream_now(f"🏁 **Final answer:**\n{final_content}\n", "final_answer")
+                if final_answer_content:
+                    yield final_answer_content
                     
         # Return the last response as-is, no partial answer extraction
         return response
@@ -2485,59 +2508,49 @@ class CmwAgent:
                 if use_tools:
                     # For tool-calling, use the new streaming loop for real-time visibility
                     tool_registry = {self._get_tool_name(tool): tool for tool in self.tools}
+                    call_id = self._trace_start_llm(llm_type)
                     
                     if streaming:
-                        # TRUE REAL-TIME STREAMING - no buffering, immediate yielding
-                        call_id = self._trace_start_llm(llm_type)
-                        
-                        # Create a streaming function that yields immediately
-                        def immediate_stream_yielder(content):
+                        # Create a streaming generator that yields content immediately
+                        def streaming_yielder(content):
                             nonlocal accumulated_response
-                            accumulated_response += content
-                            # This is the key: actually yield content here and now
-                            return content  # Will be yielded by the calling loop
+                            if content and content.strip():
+                                accumulated_response += content
+                                return content  # This will be yielded by the calling loop
+                            return None
                         
-                        # Execute with immediate streaming - content flows through as it happens
-                        result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, immediate_stream_yielder)
+                        # Execute tool loop with streaming
+                        result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, streaming_yielder)
                         
-                        # Consume the generator to get the actual result
-                        if hasattr(result, '__iter__') and not isinstance(result, str):
-                            # It's a generator, consume it
-                            final_result = None
+                        # Handle the result - it should be a generator for streaming
+                        if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
+                            # It's a generator, consume it and yield content
                             for chunk in result:
-                                if isinstance(chunk, str):
+                                if isinstance(chunk, str) and chunk.strip():
                                     accumulated_response += chunk
                                     yield chunk
-                                else:
-                                    final_result = chunk
-                            result = final_result
-                        
-                        # Extract the final answer from the result
-                        answer = self._extract_final_answer(result)
-                        if answer and answer not in accumulated_response:
-                            for char in answer:
-                                accumulated_response += char
-                                yield char
+                        else:
+                            # Not a generator, extract answer and yield it
+                            answer = self._extract_final_answer(result)
+                            if answer:
+                                accumulated_response = answer
+                                for char in answer:
+                                    yield char
                     else:
-                        # Silent streaming for consistency - still traces but doesn't yield events
-                        def silent_stream_handler(event_type, content, metadata=None):
-                            return {"type": event_type, "content": content, "metadata": metadata or {}}
+                        # Non-streaming: execute tool loop silently
+                        result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, None)
                         
-                        result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, silent_stream_handler)
-                        
-                        # Consume the generator to get the actual result
-                        if hasattr(result, '__iter__') and not isinstance(result, str):
-                            # It's a generator, consume it
-                            final_result = None
+                        # Handle the result
+                        if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
+                            # It's a generator, consume it silently
                             for chunk in result:
                                 if isinstance(chunk, str):
                                     accumulated_response += chunk
-                                else:
-                                    final_result = chunk
-                            result = final_result
-                        
-                        answer = self._extract_final_answer(result)
-                        accumulated_response = answer
+                        else:
+                            # Not a generator, extract answer
+                            answer = self._extract_final_answer(result)
+                            if answer:
+                                accumulated_response = answer
                 else:
                     # For non-tool calls, try native streaming first
                     if hasattr(llm, "stream") and callable(getattr(llm, "stream")):
