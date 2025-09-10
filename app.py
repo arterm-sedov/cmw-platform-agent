@@ -1429,8 +1429,8 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             def quick_list_apps(history):
                 message = (
                     "List all applications in the Platform. "
-                    "Format the response as a bullet list of apps. "
-                    "Use Markdown formatting."
+                    "Format nicely using Markdown. "
+                    "Show system names and descriptions if any."
                 )
                 return chat_with_agent(message, history)
             
