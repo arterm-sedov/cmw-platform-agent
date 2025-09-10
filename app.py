@@ -31,7 +31,7 @@ DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
 
 # --- Main Agent Definition ---
 # Instantiate the agent once (choose provider as needed)
-AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "openrouter")
+AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "gigachat")
 try:
     agent = None
     _agent_init_started = False
@@ -634,12 +634,33 @@ def chat_with_agent(message, history):
                 chat_history.append({"role": role, "content": content})
 
         # Call the agent with the user's message and history
+        # The agent now always returns a generator for streaming, but we can get trace data
+        if agent is None:
+            error_msg = "Error: Agent became unavailable during processing. Check logs for details."
+            return history + [{"role": "user", "content": message}, {"role": "assistant", "content": error_msg}], ""
+        
         result = agent(message, chat_history=chat_history)
         
-        # Extract the final answer from the agent result
-        trace = result
-        final_result = trace.get("final_result", {})
-        answer = final_result.get("submitted_answer", "No answer generated")
+        # The agent now always returns a generator, so consume it to get the final result
+        accumulated_response = ""
+        for chunk in result:
+            if isinstance(chunk, str):
+                accumulated_response += chunk
+            elif isinstance(chunk, dict):
+                # If it's a dict, try to extract text content
+                text = chunk.get("content", chunk.get("text", chunk.get("delta", "")))
+                if text:
+                    accumulated_response += str(text)
+        
+        # Use the accumulated response as the answer
+        answer = accumulated_response or "No answer generated"
+        
+        # Get the trace data from the agent (this is now collected internally)
+        if agent is not None and hasattr(agent, 'get_trace_data'):
+            trace = agent.get_trace_data()
+        else:
+            trace = {}
+        final_result = trace.get("final_result", {}) if trace else {}
         llm_used = final_result.get("llm_used", "unknown")
         
         # Fix line breaks in the answer (convert \n to actual newlines)
@@ -763,54 +784,73 @@ def chat_with_agent_stream(message, history):
 				# Fall back to non-streaming path
 				pass
 
-		# Prefer true streaming path
+		# Use unified streaming path
 		accum = ""
-		for delta in agent.stream(message, chat_history=chat_history):
-			accum += delta
+		if agent is not None and hasattr(agent, 'stream'):
+			for delta in agent.stream(message, chat_history=chat_history):
+				accum += delta
+				yield working_history + [{"role": "assistant", "content": accum}], ""
+		else:
+			# Fallback when agent is None or doesn't have stream method
+			accum = "Error: Agent not properly initialized. Please check the initialization logs."
 			yield working_history + [{"role": "assistant", "content": accum}], ""
 
-		# After stream finishes, get the finalized trace (agent updated it during stream)
-		trace = self_trace = getattr(agent, "_trace_get_full", None)
-		if callable(self_trace):
-			trace = self_trace()
+		# After stream finishes, get the finalized trace and add tool information
+		if agent is not None:
+			trace = getattr(agent, "_trace_get_full", None)
+			if callable(trace):
+				trace = trace()
+			else:
+				trace = {"final_result": {"submitted_answer": accum, "llm_used": "unknown"}}
 		else:
 			trace = {"final_result": {"submitted_answer": accum, "llm_used": "unknown"}}
-		final_result = trace.get("final_result", {})
-		answer_full = final_result.get("submitted_answer", accum or "No answer generated")
-		llm_used = final_result.get("llm_used", "unknown")
-
-		# Build collapsible details for tools, model, and timing
+		
+		# Extract tools, model, and execution time information
 		tools_list = []
+		llm_used = "unknown"
+		exec_time = None
+		
 		try:
+			# Extract tools
 			if 'llm_traces' in trace:
 				for llm_trace in trace.get('llm_traces', []) or []:
 					for tool_call in (llm_trace.get('tool_calls') or []):
 						tool_name = tool_call.get('name', 'unknown')
 						if tool_name:
 							tools_list.append(f"• {tool_name}")
+			
+			# Extract model and execution time
+			if 'final_result' in trace:
+				final_result = trace['final_result']
+				llm_used = final_result.get('llm_used', 'unknown')
+				exec_time = final_result.get('execution_time', None)
 		except Exception as _e:
 			pass
-		tools_html = ""
+		
+		# Combined metadata message with both tools and stats (no duplication)
+		combined_sections = []
+		
+		# Add tools section if tools were used
 		if tools_list:
 			unique_tools = sorted(set(tools_list))
-			tools_html = "\n".join(unique_tools)
-			tools_html = f"<details><summary>🛠️ Tools Used</summary>\n\n{tools_html}\n\n</details>"
-
-		# Timing
-		exec_time = trace.get('total_execution_time')
+			tools_text = "\n".join(unique_tools)
+			combined_sections.append(f"**🛠️ Tools Used:**\n{tools_text}")
+		
+		# Add stats section (model and execution time)
 		stats_lines = []
 		if llm_used and llm_used != "unknown":
 			stats_lines.append(f"Model: {llm_used}")
 		if isinstance(exec_time, (int, float)):
 			stats_lines.append(f"Execution Time: {exec_time:.2f} s")
-		stats_html = ""
+		
 		if stats_lines:
-			stats_html = "\n".join(f"• {line}" for line in stats_lines)
-			stats_html = f"<details><summary>ℹ️ Details</summary>\n\n{stats_html}\n\n</details>"
-
-		final_extras = "\n\n".join([part for part in [tools_html, stats_html] if part])
-		final_text = answer_full if not final_extras else f"{answer_full}\n\n{final_extras}"
-		yield working_history + [{"role": "assistant", "content": final_text}], ""
+			stats_text = "\n".join(stats_lines)
+			combined_sections.append(f"**ℹ️ Details:**\n{stats_text}")
+		
+		# Show combined information in one collapsible section
+		if combined_sections:
+			combined_text = "\n\n".join(combined_sections)
+			yield working_history + [{"role": "assistant", "content": combined_text, "metadata": {"title": "📊 Response Details"}}], ""
 	except Exception as e:
 		err = f"❌ Error: {e}"
 		print(f"Chat stream error: {e}")
@@ -992,7 +1032,7 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     ### 💡 **Try asking:**
                     
                     - List all applications in the Platform
-                    - List all templates in app 'ERP'
+                    - List all record templates in app 'ERP'
                     - List all attributes in template 'Counterparties', app 'ERP'
                     - Create plain text attribute 'Comment', app 'HR', template 'Candidates'
                     - Create 'Customer ID' text attribute, app 'ERP', template 'Counterparties', custom input mask: ([0-9]{10}|[0-9]{12})
@@ -1073,9 +1113,10 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             
             def quick_list_apps(history):
                 message = (
-                    "List all apps. "
+                    "List all applications in the Platform. "
                     "Provide Intent, Plan, Validate. "
-                    "Format the response as a bullet list of apps."
+                    "Format the response as a bullet list of apps. "
+                    "Use Markdown formatting."
                 )
                 return chat_with_agent(message, history)
             
