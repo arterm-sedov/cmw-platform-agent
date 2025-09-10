@@ -40,13 +40,32 @@ except ImportError:
 
 # Always import the tool decorator - it's essential
 from langchain_core.tools import tool
-# Expose Comindware Platform tool(s)
-from attributes_tools.tools_text_attribute import edit_or_create_text_attribute, get_text_attribute  # noqa: F401
-from attributes_tools.tool_delete_attribute import delete_attribute
-from attributes_tools.tool_archive_or_unarchive_attribute import archive_or_unarchive_attribute
+# Expose Comindware Platform tools from all directories
+# Templates tools
 from templates_tools.tool_list_attributes import list_attributes
+
+# Applications tools  
 from applications_tools.tool_list_templates import list_templates
 from applications_tools.tool_list_applications import list_applications
+
+# Attributes tools - Text attributes
+from attributes_tools.tools_text_attribute import edit_or_create_text_attribute, get_text_attribute 
+
+# Attributes tools - Other attribute types
+from attributes_tools.tools_datetime_attribute import edit_or_create_date_time_attribute, get_date_time_attribute 
+from attributes_tools.tools_decimal_attribute import edit_or_create_numeric_attribute, get_numeric_attribute 
+from attributes_tools.tools_instance_attribute import edit_or_create_record_attribute, get_record_attribute 
+from attributes_tools.tools_image_attribute import edit_or_create_image_attribute, get_image_attribute 
+from attributes_tools.tools_drawing_attribute import edit_or_create_drawing_attribute, get_drawing_attribute 
+from attributes_tools.tools_document_attribute import edit_or_create_document_attribute, get_document_attribute 
+from attributes_tools.tools_duration_attribute import edit_or_create_duration_attribute, get_duration_attribute 
+from attributes_tools.tools_account_attribute import edit_or_create_account_attribute, get_account_attribute 
+from attributes_tools.tools_boolean_attribute import edit_or_create_boolean_attribute, get_boolean_attribute 
+from attributes_tools.tools_role_attribute import edit_or_create_role_attribute, get_role_attribute 
+
+# Attributes tools - Utility functions
+from attributes_tools.tool_delete_attribute import delete_attribute
+from attributes_tools.tool_archive_or_unarchive_attribute import archive_or_unarchive_attribute
 
 # Global configuration for search tools
 SEARCH_LIMIT = 5  # Maximum number of results for all search tools (Tavily, Wikipedia, Arxiv)

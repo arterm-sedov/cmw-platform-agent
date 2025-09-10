@@ -1,31 +1,7 @@
-from typing import Any, Dict, List, Optional, Literal
-from langchain.tools import tool
-from pydantic import BaseModel, Field, field_validator, model_validator
-from pydantic.v1.types import NoneBytes
-import requests_
-from models import AttributeResult
+from tool_utils import *
 
-ATTRIBUTE_ENDPOINT = "webapi/Attribute"
 
-class DeleteAttribute(BaseModel):
-    application_system_name: str = Field(
-        description="System name of the application with the template where the attribute is deleted. RU: Системное имя приложения"
-    )
-    template_system_name: str = Field(
-        description="System name of the template where the attribute is deleted. RU: Системное имя шаблона"
-    )
-    system_name: str = Field(
-        description="Unique system name of the attribute to delete. RU: Системное имя атрибута"
-    )
-
-    @field_validator("system_name", "application_system_name", "template_system_name", mode="before")
-    @classmethod
-    def non_empty_str(cls, v: Any) -> Any:
-        if isinstance(v, str) and v.strip() == "":
-            raise ValueError("must be a non-empty string")
-        return v
-
-@tool("delete_attribute", return_direct=False, args_schema=DeleteAttribute)
+@tool("delete_attribute", return_direct=False, args_schema=CommonGetAttributeFields)
 def delete_attribute(
     application_system_name: str,
     template_system_name: str,

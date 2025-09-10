@@ -1,115 +1,43 @@
-from typing import Any, Dict, List, Optional, Literal
-from langchain.tools import tool
-from pydantic import BaseModel, Field, field_validator, model_validator
-import requests_
-
-ATTRIBUTE_ENDPOINT = "webapi/Attribute"
+from tool_utils import *
 
 ALLOWED_EXTENSIONS_LIST = ['PNG', 'JPG', 'BMP', 'EMF']
+ALLOWED_COLOR_RENDERING_MODES_LIST = ['Original', 'Bitonal', 'GreyScale']
 
-ALLOWED_EXTENSIONS = Literal[tuple(ALLOWED_EXTENSIONS_LIST)]
 ALLOWED_EXTENSIONS_SET = set(ALLOWED_EXTENSIONS_LIST)
-def _remove_nones(obj: Any) -> Any:
-    """
-    Recursively remove None values from dicts/lists to keep payload minimal and consistent with Platform expectations.
-    """
-    if isinstance(obj, dict):
-        return {k: _remove_nones(v) for k, v in obj.items() if v is not None}
-    if isinstance(obj, list):
-        return [ _remove_nones(v) for v in obj if v is not None]
-    return obj
+ALLOWED_COLOR_RENDERING_MODES_SET = set(ALLOWED_COLOR_RENDERING_MODES_LIST)
 
-class EditOrCreateImageAttributeSchema(BaseModel):
-    operation: Literal["create", "edit"] = Field(
-        description=(
-            "Choose operation: Creates or Edits the attribute. Russian names allowed: "
-            "['Создать', 'Редактировать']"
-        )
+class EditOrCreateImageAttributeSchema(CommonAttributeFields):
+    rendering_color_mode: str = Field(
+        description="Image color rendering mode. "
+                    "RU: Цветовой режим. "
+                    f"Allowed: {ALLOWED_COLOR_RENDERING_MODES_LIST}"
     )
-    name: str = Field(description="Human-readable name of the attribute. Рус: 'Название'")
-    system_name: str = Field(
-        description="Unique system name of the attribute. Рус: 'Системное имя'"
+    use_to_search_records: bool = Field(
+        default=False,
+        description="Set to `True` to allow the users to search the records by this attribute's value. "
+                    "RU: Использовать для поиска записей",
     )
-    application_system_name: str = Field(
-        description=(
-            "System name of the application with the template where the attribute is created. "
-            "Рус: 'Системное имя приложения'"
-        )
-    )
-    template_system_name: str = Field(
-        description=(
-            "System name of the template where the attribute is created. Рус: 'Системное имя шаблона'"
-        )
-    )
-    rendering_color_mode: Literal[
-        "Original",
-        "Bitonal",
-        "GreyScale"
-    ] = Field(
-        description=(
-            "Image color rendering mode. Рус: 'Цветовой режим'."
-        )
-    )
-    description: Optional[str] = Field(
+    file_extensions_filter: Optional[List[str]] = Field(
         default=None,
-        description=(
-            "Human-readable description of the attribute (auto-generate if omitted). Рус: 'Описание'"
-        ),
-    )
-    use_for_search_records: bool = Field(
-        default=False,
-        description=(
-            "Whether attribute values will be used for search. Рус: 'Использовать для поиска записей'"
-        ),
-    )
-    write_changes_to_the_log: bool = Field(
-        default=False,
-        description=(
-            "Whether attribute changes should be logged. Рус: 'Записывать изменения в журнал'"
-        ),
-    )
-    store_multiple_values: bool = Field(
-        default=False,
-        description=(
-            "whether attribute should store multiple values or single values. Рус: 'Хранить несколько значений'"
-        )
-    )
-    file_extensions_filter: Optional[List[Literal[ALLOWED_EXTENSIONS]]] = Field(
-        default=None,
-        description=(
-            "Filter of file extensions that can store an attribute. Рус: 'Фильтр расширений файлов'"
-        )
+        description="Filter of file extensions that can store an attribute. "
+                    "RU: Фильтр расширений файлов. "
+                    f"Allowed: {ALLOWED_EXTENSIONS_LIST}"
     )
     image_width: Optional[int] = Field(
         default=None,
-        description=(
-            "Image width. Рус: 'Ширина'"
-        )
+        description="Image width. "
+                    "RU: Ширина"
     )
     image_height: Optional[int] = Field(
         default=None,
-        description=(
-            "Image height. Рус: 'Высота'"
-        )
+        description="Image height. "
+                    "RU: Высота"
     )
     save_image_aspect_ratio: bool = Field(
         default=False,
-        description=(
-            "whether image should save aspect ratio. Рус: 'Сохранить соотношения сторон'"
-        )
+        description="Set to `True` to maintain the image's original aspect ratio. "
+                    "RU: Сохранить соотношения сторон"
     )
-
-    @field_validator("operation", mode="before")
-    @classmethod
-    def normalize_operation(cls, v: str) -> str:
-        if v is None:
-            return v
-        value = str(v).strip().lower()
-        mapping = {
-            "создать": "create",
-            "редактировать": "edit",
-        }
-        return mapping.get(value, value)
 
     @field_validator("file_extensions_filter", mode="before")
     @classmethod
@@ -127,23 +55,18 @@ class EditOrCreateImageAttributeSchema(BaseModel):
             raise ValueError(f"Invalid file extensions: {sorted(invalid)}. " f"Allowed: {sorted(ALLOWED_EXTENSIONS_SET)}")
         return normalized
 
-    @field_validator("name", "system_name", "application_system_name", "template_system_name", mode="before")
+    @field_validator("rendering_color_mode", mode="before")
     @classmethod
-    def non_empty_str(cls, v: Any) -> Any:
-        if isinstance(v, str) and v.strip() == "":
-            raise ValueError("must be a non-empty string")
-        return v
-
-
-class AttributeResult(BaseModel):
-    success: bool
-    status_code: int
-    raw_response: dict | str | None = Field(default=None, description="Raw response for auditing or payload body")
-    error: Optional[str] = Field(default=None)
-
+    def validate_rendering_color_mode(cls, v: Any) -> str:
+        if v is None:
+            raise ValueError("rendering_color_mode is required")
+        normalized = str(v).strip()
+        if normalized not in ALLOWED_COLOR_RENDERING_MODES_SET:
+            raise ValueError(f"Invalid color mode: {normalized}. Allowed: {sorted(ALLOWED_COLOR_RENDERING_MODES_SET)}")
+        return normalized
 
 @tool("edit_or_create_image_attribute", return_direct=False, args_schema=EditOrCreateImageAttributeSchema)
-def edit_or_create_document_attribute(
+def edit_or_create_image_attribute(
     operation: str,
     name: str,
     system_name: str,
@@ -151,7 +74,7 @@ def edit_or_create_document_attribute(
     template_system_name: str,
     rendering_color_mode: str,
     description: Optional[str] = None,
-    use_for_search_records: Optional[bool] = False,
+    use_to_search_records: Optional[bool] = False,
     write_changes_to_the_log: Optional[bool] = False,
     store_multiple_values: Optional[bool] = False,
     file_extensions_filter: Optional[List[str]] = None,
@@ -159,16 +82,16 @@ def edit_or_create_document_attribute(
     image_width: Optional[int] = None,
     image_height: Optional[int] = None
 ) -> Dict[str, Any]:
-    r"""
-    Edit or Create a image attribute.
-
-    - Strictly follow argument schema and its built-in descriptions.
-
-    Returns (AttributeResult):
-    - success (bool): True if the operation completed successfully
-    - status_code (int): HTTP response status code
-    - raw_response (object|string|null): Raw server response or payload used for the request
-    - error (string|null): Error message if any
+    """
+    Edit or Create an image attribute.
+    
+    Returns:
+        dict: {
+            "success": bool - True if the attribute was created or edited successfully
+            "status_code": int - HTTP response status code  
+            "raw_response": dict|str|None - Raw response for auditing or payload body (sanitized)
+            "error": str|None - Error message if operation failed
+        }
     """
 
     request_body: Dict[str, Any] = {
@@ -180,7 +103,7 @@ def edit_or_create_document_attribute(
         "type": "Image",
         "name": name,
         "description": description,
-        "isIndexed": use_for_search_records,
+        "isIndexed": use_to_search_records,
         "isTracked": write_changes_to_the_log,
         "isMultiValue": store_multiple_values,
         "fileFormat": file_extensions_filter,
@@ -191,7 +114,7 @@ def edit_or_create_document_attribute(
     }
 
         # Remove None values
-    request_body = _remove_nones(request_body) 
+    request_body = remove_nones(request_body) 
 
     try:
         if operation == "create":
@@ -228,43 +151,23 @@ def edit_or_create_document_attribute(
     validated = AttributeResult(**result)
     return validated.model_dump()
 
-class GetImageAttributeSchema(BaseModel):
-    application_system_name: str = Field(
-        description=(
-            "System name of the application with the template where the attribute is created. "
-            "Рус: 'Системное имя приложения'"
-        )
-    )
-    template_system_name: str = Field(
-        description=(
-            "System name of the template where the attribute is created. Рус: 'Системное имя шаблона'"
-        )
-    )
-    system_name: str = Field(
-        description="Unique system name of the attribute. Рус: 'Системное имя'"
-    )
 
-    @field_validator("application_system_name", "template_system_name", "system_name", mode="before")
-    @classmethod
-    def non_empty(cls, v: Any) -> Any:
-        if isinstance(v, str) and v.strip() == "":
-            raise ValueError("must be a non-empty string")
-        return v
-
-@tool("get_image_attribute", return_direct=False, args_schema=GetImageAttributeSchema)
+@tool("get_image_attribute", return_direct=False, args_schema=CommonGetAttributeFields)
 def get_image_attribute(
     application_system_name: str,
     template_system_name: str,
     system_name: str
     ) -> Dict[str, Any]:
     """
-    Get a image attribute by its `system_name` within a given `template_system_name` and `application_system_name`.
-
-    Returns (AttributeResult):
-    - success (bool): True if attribute was fetched successfully
-    - status_code (int): HTTP response status code
-    - raw_response (object|null): Attribute payload; sanitized (some keys may be removed)
-    - error (string|null): Error message if any
+    Get an image attribute in a given template and application.
+    
+    Returns:
+        dict: {
+            "success": bool - True if the attribute was fetched successfully
+            "status_code": int - HTTP response status code  
+            "raw_response": dict|str|None - Raw response payload for auditing or payload body (sanitized)
+            "error": str|None - Error message if operation failed
+        }
     """
 
     attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
@@ -296,15 +199,14 @@ def get_image_attribute(
     return validated.model_dump()
 
 if __name__ == "__main__":
-    results = edit_or_create_text_attribute.invoke({
+    results = edit_or_create_image_attribute.invoke({
         "operation": "create",
-        "name": "US Phone Number",
-        "system_name": "USPhoneNumber",
+        "name": "Product Image",
+        "system_name": "ProductImage",
         "application_system_name": "AItestAndApi",
         "template_system_name": "Test",
-        "display_format": "CustomMask",
-        "custom_mask": r"^+1-?\d{3}-?\d{3}-?\d{4}$",
-        "control_uniqueness": False,
-        "use_as_record_title": False
+        "rendering_color_mode": "Original",
+        "description": "Product image attachment",
+        "use_to_search_records": False
     })
     print(results)

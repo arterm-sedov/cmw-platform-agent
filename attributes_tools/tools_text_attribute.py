@@ -1,10 +1,4 @@
-from typing import Any, Dict, List, Optional, Literal
-from langchain.tools import tool
-from pydantic import BaseModel, Field, field_validator, model_validator
-import requests_
-from models import AttributeResult
-
-ATTRIBUTE_ENDPOINT = "webapi/Attribute"
+from tool_utils import *
 
 def _set_input_mask(display_format: str) -> str:
     # Setting validation mask via display format
@@ -25,32 +19,7 @@ def _set_input_mask(display_format: str) -> str:
 
     return input_mask_mapping.get(display_format, None)
 
-def _remove_nones(obj: Any) -> Any:
-    """
-    Recursively remove None values from dicts/lists to keep payload minimal and consistent with Platform expectations.
-    """
-    if isinstance(obj, dict):
-        return {k: _remove_nones(v) for k, v in obj.items() if v is not None}
-    if isinstance(obj, list):
-        return [ _remove_nones(v) for v in obj if v is not None]
-    return obj
-
-class EditOrCreateTextAttributeSchema(BaseModel):
-    operation: Literal["create", "edit"] = Field(
-        description="Choose operation: Create or Edit the attribute. RU: Создать, Редактировать"
-    )
-    name: str = Field(
-        description="Human-readable name of the attribute. RU: Название"
-    )
-    system_name: str = Field(
-        description="System name of the attribute. RU: Системное имя"
-    )
-    application_system_name: str = Field(
-        description="System name of the application with the template where the attribute is created or edited. RU: Системное имя приложения"
-    )
-    template_system_name: str = Field(
-        description="System name of the template where the attribute is created or edited. RU: Системное имя шаблона"
-    )
+class EditOrCreateTextAttributeSchema(CommonAttributeFields):
     display_format: Literal[
         "PlainText",
         "MarkedText",
@@ -65,59 +34,29 @@ class EditOrCreateTextAttributeSchema(BaseModel):
         "EmailMask",
         "CustomMask",
     ] = Field(
-        description="Attribute display format. RU: Формат отображения. When `display_format=CustomMask` provide `custom_mask`."
-    )
-    description: Optional[str] = Field(
-        default=None,
-        description="Human-readable business-oriented description of the attribute (auto-generate if empty). RU: Описание",
+        description="Attribute display format."
+            "RU: Формат отображения. When `display_format=CustomMask` provide `custom_mask`."
     )
     custom_mask: Optional[str] = Field(
         default=None,
-        description="A special formatting mask; fill only if `display_format=CustomMask`. RU: Особая маска. Do not escape back slashes.",
+        description="A special formatting mask; fill only if `display_format=CustomMask`."
+            "RU: Особая маска. Do not escape back slashes.",
     )
     control_uniqueness: bool = Field(
         default=False,
-        description="Set to `True` to control uniqueness of attribute values. RU: Контролировать уникальность значения",
+        description="Set to `True` to control uniqueness of attribute values."
+            "RU: Контролировать уникальность значения",
     )
     use_as_record_title: bool = Field(
         default=False,
-        description="Set to `True` to display as a template record title. RU: Использовать как заголовок записей",
+        description="Set to `True` to display as a template record title."
+            "RU: Использовать как заголовок записей",
     )
     use_to_search_records: bool = Field(
         default=False,
-        description="Set to `True` to use attribute values for search. RU: Использовать для поиска записей",
+        description="Set to `True` to allow the users to search the records by this attribute's value."
+            "RU: Использовать для поиска записей",
     )
-    write_changes_to_the_log: bool = Field(
-        default=False,
-        description="Set to `True` to log attribute value changes. RU: Записывать изменения в журнал",
-    )
-    calculate_value: bool = Field(
-        default=False,
-        description="Set to `True` to calculate the attribute value automatically. Relevant only when `expression_for_calculation` is provided. RU: Вычислять автоматически",
-    )
-    expression_for_calculation: Optional[str] = Field(
-        default=None,
-        description="Expression to calculate the attribute value automatically. User-provided. RU: Выражение для вычисления",
-    )
-
-    @field_validator("operation", mode="before")
-    @classmethod
-    def normalize_operation(cls, v: str) -> str:
-        if v is None:
-            return v
-        value = str(v).strip().lower()
-        mapping = {
-            "создать": "create",
-            "редактировать": "edit",
-        }
-        return mapping.get(value, value)
-
-    @field_validator("name", "system_name", "application_system_name", "template_system_name", mode="before")
-    @classmethod
-    def non_empty_str(cls, v: Any) -> Any:
-        if isinstance(v, str) and v.strip() == "":
-            raise ValueError("must be a non-empty string")
-        return v
 
     @model_validator(mode="after")
     def validate_masks_and_calc(self) -> "EditOrCreateTextAttributeSchema":
@@ -200,7 +139,7 @@ def edit_or_create_text_attribute(
     }
 
         # Remove None values
-    request_body = _remove_nones(request_body) 
+    request_body = remove_nones(request_body) 
 
     try:
         if operation == "create":
@@ -237,26 +176,8 @@ def edit_or_create_text_attribute(
     validated = AttributeResult(**result)
     return validated.model_dump()
 
-class GetTextAttributeSchema(BaseModel):
-    application_system_name: str = Field(
-        description="System name of the application with the template where the attribute is located. RU: Системное имя приложения"
-    )
-    template_system_name: str = Field(
-        description="System name of the template where the attribute is located. RU: Системное имя шаблона"
-    )
-    system_name: str = Field(
-        description="Unique system name of the attribute to fetch. RU: Системное имя атрибута"
-    )
 
-    @field_validator("application_system_name", "template_system_name", "system_name", mode="before")
-    @classmethod
-    def non_empty(cls, v: Any) -> Any:
-        if isinstance(v, str) and v.strip() == "":
-            raise ValueError("must be a non-empty string")
-        return v
-
-
-@tool("get_text_attribute", return_direct=False, args_schema=GetTextAttributeSchema)
+@tool("get_text_attribute", return_direct=False, args_schema=CommonGetAttributeFields)
 def get_text_attribute(
     application_system_name: str,
     template_system_name: str,
@@ -267,7 +188,7 @@ def get_text_attribute(
     
     Returns:
         dict: {
-            "success": bool - True if operation completed successfully
+            "success": bool - True if the attribute was fetched successfully
             "status_code": int - HTTP response status code  
             "raw_response": dict|str|None - Raw response payload for auditing or payload body (sanitized)
             "error": str|None - Error message if operation failed
