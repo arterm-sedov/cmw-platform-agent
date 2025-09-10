@@ -43,6 +43,14 @@ class EditOrCreateRoleAttributeSchema(BaseModel):
             "Human-readable description of the attribute (auto-generate if omitted). Рус: 'Описание'"
         ),
     )
+    display_format: Literal[
+        "Text",
+        "Link"
+    ] = Field(
+        description=(
+            "Attribute display format. Рус: 'Формат отображения'."
+        )
+    )
     write_changes_to_the_log: bool = Field(
         default=False,
         description=(
@@ -102,6 +110,7 @@ def edit_or_create_role_attribute(
     system_name: str,
     application_system_name: str,
     template_system_name: str,
+    display_format: str,
     description: Optional[str] = None,
     write_changes_to_the_log: Optional[bool] = False,
     calculate_value: Optional[bool] = False,
@@ -128,6 +137,7 @@ def edit_or_create_role_attribute(
         },
         "type": "Instance",
         "name": name,
+        "format": display_format,
         "description": description,
         "isTracked": write_changes_to_the_log,
         "isMultiValue": store_multiple_values,
