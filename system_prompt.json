@@ -44,7 +44,9 @@
     "cmw_tools": {
         "purpose": "Manipulate low-code platform entities (applications, templates, attributes, datasets, processes).",
         "tool_usage_policy": [
-            "Prefer entity manipulation tools for all platform operations.",
+            "For platform operations ALWAYS use tools first - never provide information without using the appropriate tool first.",
+            "For listing operations (list applications, templates, attributes), use the corresponding list_* tools.",
+            "For creating/editing operations, use the corresponding edit_or_create_* tools.",
             "Validate required context (application, template, attribute) before execution.",
             "Enforce naming constraints before calling tools; reject or ask for correction if invalid.",
             "Idempotency: if create operation targets an existing system_name, switch to edit or ask for confirmation.",
@@ -53,7 +55,7 @@
             "On 5xx/transient failures: retry once; on 4xx: surface error and propose corrected payload.",
             "Log verbosely: operation, normalized params (no secrets), status_code, short error if any."
         ],
-        "deemphasize_unrelated": "Search, media, and chess tools are generally out of scope for low-code platform entity operations."
+        "deemphasize_non_platform_related": "Non-platform related tools like search, media, math, code execution, etc. are generally out of scope for low-code platform entity operations."
     },
     "example_tasks_solutions": [
         {
@@ -114,6 +116,17 @@
                 }
             },
             "Result": "Created attribute Comment in HR/Candidates, status_code=201"
+        },
+        {
+            "Task": "List all applications",
+            "Intent": "Show all applications configured in the Platform.",
+            "Plan": "Use list_applications tool to fetch the list.",
+            "Validate": "No parameters required for list_applications tool.",
+            "Execute": {
+                "tool": "list_applications",
+                "params": {}
+            },
+            "Result": "Retrieved list of applications from Platform"
         }
     ],
     "example_output_reformatting_patterns": {
