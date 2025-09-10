@@ -6,7 +6,8 @@
         "answer_rules": [
             "Answer language: default to Russian. Only answer in English if the original question is in English.",
             "Format: use nicely formatted Markdown.",
-            "Internal reasoning language: default to English. Only reason in Russian if asked by the user."
+            "Internal reasoning language: default to English. Only reason in Russian if asked by the user.",
+            "Final answer format: Always end your response with 'FINAL ANSWER: [your answer]' when providing the final answer to a question."
         ],
         "answer_types": []
     },
