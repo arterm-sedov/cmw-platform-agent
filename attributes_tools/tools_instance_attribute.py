@@ -43,6 +43,16 @@ class EditOrCreateInstanceAttributeSchema(BaseModel):
             "Human-readable description of the attribute (auto-generate if omitted). Рус: 'Описание'"
         ),
     )
+    display_format: Literal[
+        "Text",
+        "Link",
+        "Indicator",
+        "Badge"
+    ] = Field(
+        description=(
+            "Attribute display format. Рус: 'Формат отображения'."
+        )
+    )
     write_changes_to_the_log: bool = Field(
         default=False,
         description=(
@@ -114,6 +124,7 @@ def edit_or_create_instance_attribute(
     application_system_name: str,
     template_system_name: str,
     related_template_system_name: str,
+    display_foramt: str,
     description: Optional[str] = None,
     write_changes_to_the_log: Optional[bool] = False,
     calculate_value: Optional[bool] = False,
@@ -141,6 +152,7 @@ def edit_or_create_instance_attribute(
         },
         "type": "Instance",
         "name": name,
+        "format": display_foramt,
         "description": description,
         "isTracked": write_changes_to_the_log,
         "isMultiValue": store_multiple_values,
