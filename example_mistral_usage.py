@@ -5,7 +5,7 @@ Example usage of Mistral AI integration in the Comindware Analyst Copilot
 
 import os
 from dotenv import load_dotenv
-from agent import GaiaAgent
+from agent import CmwAgent
 
 # Load environment variables
 load_dotenv()
@@ -22,7 +22,7 @@ def example_mistral_usage():
     print("🚀 Initializing agent with Mistral AI integration...")
     
     # Initialize the agent
-    agent = GaiaAgent(provider="groq")  # provider doesn't matter, it will try all LLMs
+    agent = CmwAgent(provider="groq")  # provider doesn't matter, it will try all LLMs
     
     # Check if Mistral was successfully initialized
     if "mistral" in agent.llm_provider_names:
