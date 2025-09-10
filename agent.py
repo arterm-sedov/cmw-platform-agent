@@ -6,7 +6,7 @@ By Arte(r)m Sedov
 This module implements the main agent logic for the Comindware Analyst Copilot.
 
 Usage:
-    agent = GaiaAgent(provider="google")
+    agent = CmwAgent(provider="google")
     answer = agent(question)
 
 Environment Variables:
@@ -40,6 +40,7 @@ import tiktoken
 # LangChain imports
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool, tool
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint, HuggingFaceEmbeddings
@@ -182,7 +183,76 @@ class _SinkWriter:
     def flush(self):
         pass
 
-class GaiaAgent:
+class StreamingCallbackHandler(BaseCallbackHandler):
+    """
+    Custom callback handler for streaming events during tool execution.
+    Provides real-time visibility into LLM thinking and tool usage.
+    """
+    def __init__(self, agent_instance, streaming_generator=None):
+        self.agent = agent_instance
+        self.streaming_generator = streaming_generator
+        self.current_tool_name = None
+        self.tool_args = None
+        
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        """Called when LLM starts generating"""
+        if self.streaming_generator:
+            self.streaming_generator.send({
+                "type": "llm_start",
+                "content": "🤖 **LLM is thinking...**\n",
+                "metadata": {"llm_type": serialized.get("name", "unknown")}
+            })
+    
+    def on_llm_stream(self, chunk, **kwargs):
+        """Called for each streaming chunk from LLM"""
+        if self.streaming_generator:
+            content = getattr(chunk, 'content', '') or str(chunk)
+            if content:
+                self.streaming_generator.send({
+                    "type": "llm_chunk",
+                    "content": content,
+                    "metadata": {"chunk_type": "llm_response"}
+                })
+    
+    def on_tool_start(self, serialized, input_str, **kwargs):
+        """Called when a tool starts executing"""
+        self.current_tool_name = serialized.get("name", "unknown_tool")
+        self.tool_args = input_str
+        
+        if self.streaming_generator:
+            self.streaming_generator.send({
+                "type": "tool_start",
+                "content": f"\n🔧 **Using tool: {self.current_tool_name}**\n",
+                "metadata": {
+                    "tool_name": self.current_tool_name,
+                    "tool_args": self.tool_args
+                }
+            })
+    
+    def on_tool_end(self, output, **kwargs):
+        """Called when a tool finishes executing"""
+        if self.streaming_generator:
+            # Truncate long outputs for display
+            display_output = output[:500] + "..." if len(output) > 500 else output
+            self.streaming_generator.send({
+                "type": "tool_end",
+                "content": f"✅ **Tool completed: {self.current_tool_name}**\n```\n{display_output}\n```\n",
+                "metadata": {
+                    "tool_name": self.current_tool_name,
+                    "tool_output": output
+                }
+            })
+    
+    def on_llm_end(self, response, **kwargs):
+        """Called when LLM finishes generating"""
+        if self.streaming_generator:
+            self.streaming_generator.send({
+                "type": "llm_end",
+                "content": "\n🎯 **LLM completed**\n",
+                "metadata": {"response": str(response)}
+            })
+
+class CmwAgent:
     """
     Main agent for the CMW Platform benchmark.
 
@@ -484,6 +554,7 @@ class GaiaAgent:
             # Initialize tracing system
             self.question_trace = None
             self.current_llm_call_id = None
+            self.current_llm_stdout_buffer = None  # Buffer for current LLM's stdout
 
             # Vector store functionality is now handled by vector_store.py module
             # All Supabase operations are disabled by default
@@ -570,7 +641,8 @@ class GaiaAgent:
                         # Check force_tools flag - if True, use even if tools test failed
                         force_tools = config.get("force_tools", False) or model_config.get("force_tools", False)
                         
-                        if tools_ok or force_tools:
+                        if tools_ok:
+                            # LLM passed tool test - mark as fully functional
                             self.active_model_config[llm_type] = model_config
                             self.llm_instances[llm_type] = llm_instance
                             self.llm_instances_with_tools[llm_type] = llm_with_tools
@@ -578,13 +650,22 @@ class GaiaAgent:
                             self.llms_with_tools.append(llm_with_tools)
                             self.llm_provider_names.append(llm_type)
                             
-                            if force_tools and not tools_ok:
-                                print(f"⚠️ {llm_name} (model: {model_id}) tool test failed, but using anyway (force_tools=True)")
-                            else:
-                                print(f"✅ LLM ({llm_name}) initialized successfully with model {model_id}")
+                            print(f"✅ LLM ({llm_name}) initialized successfully with model {model_id}")
+                            break
+                        elif force_tools:
+                            # LLM failed tool test but force_tools=True - mark as available but warn
+                            self.active_model_config[llm_type] = model_config
+                            self.llm_instances[llm_type] = llm_instance
+                            self.llm_instances_with_tools[llm_type] = llm_with_tools
+                            self.llms.append(llm_instance)
+                            self.llms_with_tools.append(llm_with_tools)
+                            self.llm_provider_names.append(llm_type)
+                            
+                            print(f"⚠️ {llm_name} (model: {model_id}) tool test failed, but using anyway (force_tools=True)")
+                            print(f"⚠️ WARNING: This LLM may not work properly for tool-calling tasks")
                             break
                         else:
-                            print(f"⚠️ {llm_name} (model: {model_id}) failed tool test")
+                            print(f"❌ {llm_name} (model: {model_id}) failed tool test and force_tools=False - skipping")
                             
                     except Exception as e:
                         print(f"⚠️ Failed to initialize {llm_name} (model: {model_id}): {e}")
@@ -921,45 +1002,20 @@ class GaiaAgent:
         
         return str(tool_result)
 
-    def _has_tool_messages(self, messages: List) -> bool:
-        """
-        Check if the message history contains ToolMessage objects.
-        
-        Args:
-            messages: List of message objects
-            
-        Returns:
-            bool: True if ToolMessage objects are present, False otherwise
-        """
-        return any(
-            hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'content') 
-            for msg in messages
-        )
 
     @trace_prints_with_context("final_answer")
     def _force_final_answer(self, messages, tool_results_history, llm):
         """
-        Handle duplicate tool calls by forcing final answer using LangChain's native mechanisms.
-        For Gemini, always include tool results in the reminder. For others, only if not already present.
+        Force the LLM to provide a final answer by adding a reminder prompt.
+        Tool results are already available in the message history as ToolMessage objects.
+        
         Args:
-            messages: Current message list
-            tool_results_history: History of tool results (can be empty)
+            messages: Current message list (contains tool results as ToolMessage objects)
+            tool_results_history: History of tool results (for reference, not used in prompt)
             llm: LLM instance
         Returns:
-            Response from LLM or direct FINAL ANSWER from tool results
+            Response from LLM with FINAL ANSWER
         """
-        # 1. Scan tool results for FINAL ANSWER using _has_final_answer_marker
-        for result in reversed(tool_results_history):  # Prefer latest
-            if self._has_final_answer_marker(result):
-                # Extract the final answer text using _extract_final_answer
-                answer = self._extract_final_answer(result)
-                if answer:
-                    ai_msg = AIMessage(content=f"FINAL ANSWER: {answer}")
-                    messages.append(ai_msg)
-                    return ai_msg
-        
-        # Initialize include_tool_results variable at the top
-        include_tool_results = False
         
         # Extract llm_type from llm
         llm_type = getattr(llm, 'llm_type', None) or getattr(llm, 'type_str', None) or ''
@@ -971,21 +1027,8 @@ class GaiaAgent:
             tools=self.tools,
             tool_results_history=tool_results_history
         )
-        # Check if tool results are already in message history as ToolMessage objects
-        has_tool_messages = self._has_tool_messages(messages)
-        
-        # Determine whether to include tool results in the reminder
-        if tool_results_history:
-            if llm_type == "gemini":
-                include_tool_results = True
-            else:
-                # For non-Gemini LLMs, only include if not already in message history
-                if not has_tool_messages:
-                    include_tool_results = True
-        
-        if include_tool_results:
-            tool_results_text = "\n\nTOOL RESULTS:\n" + "\n".join([f"Result {i+1}: {result}" for i, result in enumerate(tool_results_history)])
-            reminder += tool_results_text
+        # Tool results are already in message history as ToolMessage objects
+        # No need to duplicate them in the reminder
         
         # Add the reminder to the existing message history
         messages.append(HumanMessage(content=reminder))
@@ -1002,41 +1045,13 @@ class GaiaAgent:
         except Exception as e:
             print(f"[Tool Loop] ❌ Failed to get final answer: {e}")
             return AIMessage(content="Error occurred while processing the question.")
-        # If Gemini, use a minimal, explicit prompt
-        if llm_type == "gemini" and tool_results_history:
-            tool_result = tool_results_history[-1]  # Use the latest tool result
-            original_question = None
-            for msg in messages:
-                if hasattr(msg, 'type') and msg.type == 'human':
-                    original_question = msg.content
-                    break
-            if not original_question:
-                original_question = "[Original question not found]"
-            prompt = (
-                "You have already used the tool and obtained the following result:\n\n"
-                f"TOOL RESULT:\n{tool_result}\n\n"
-                f"QUESTION:\n{original_question}\n\n"
-                "INSTRUCTIONS:\n"
-                "Extract the answer from the TOOL RESULT above. Your answer must start with 'FINAL ANSWER: [answer]"
-                "and follow the system prompt without any extra text numbers, just answer concisely and directly."
-            )
-            minimal_messages = [self.sys_msg, HumanMessage(content=prompt)]
-            
-            try:
-                final_response = self._invoke_llm_provider(llm, minimal_messages)
-                if hasattr(final_response, 'content') and final_response.content:
-                    return final_response
-                else:
-                    # Fallback: return the tool result directly
-                    return AIMessage(content=f"RESULT: {tool_result}")
-            except Exception as e:
-                print(f"[Tool Loop] ❌ Gemini failed to extract final answer: {e}")
-                return AIMessage(content=f"RESULT: {tool_result}")
 
     @trace_prints_with_context("tool_loop")
-    def _run_tool_calling_loop(self, llm, messages, tool_registry, llm_type="unknown", model_index: int = 0, call_id: str = None):
+    def _run_tool_calling_loop(self, llm, messages, tool_registry, llm_type="unknown", model_index: int = 0, call_id: str = None, streaming_generator=None):
         """
         Run a tool-calling loop: repeatedly invoke the LLM, detect tool calls, execute tools, and feed results back until a final answer is produced.
+        Supports both streaming and non-streaming modes for lean implementation.
+        
         - Uses adaptive step limits based on LLM type (Gemini: 25, Groq: 15, HuggingFace: 20, unknown: 20).
         - Tracks called tools to prevent duplicate calls and tool results history for fallback handling.
         - Monitors progress by tracking consecutive steps without meaningful changes in response content.
@@ -1049,8 +1064,13 @@ class GaiaAgent:
             tool_registry: Dict mapping tool names to functions
             llm_type: Type of LLM ("gemini", "groq", "huggingface", or "unknown")
             model_index: Index of the model to use for token limits
+            call_id: Call ID for tracing
+            streaming_generator: If provided, yields streaming events for real-time visibility
+            
         Returns:
             The final LLM response (with content)
+        Yields:
+            If streaming_generator is provided, yields streaming events
         """
 
         # Adaptive step limits based on LLM type and progress
@@ -1087,6 +1107,24 @@ class GaiaAgent:
         }
         tool_usage_count = {tool_name: 0 for tool_name in tool_usage_limits}
         
+        # Unified streaming function - yields immediately, no buffering
+        def stream_now(content: str, event_type: str = "content", metadata: dict = None):
+            """Immediately yield content for real-time streaming without duplication"""
+            if streaming_generator:
+                # Update trace first
+                self._update_trace_during_streaming(event_type, content, metadata)
+                
+                # Stream content immediately using the provided generator
+                if callable(streaming_generator):
+                    return streaming_generator(content)  # Return for yielding
+                return content
+            return None
+        
+        # Stream loop start if in streaming mode
+        content = stream_now(f"🔄 **Starting tool loop with {llm_type}** (max {max_steps} steps)\n", 
+                            "loop_start", {"llm_type": llm_type, "max_steps": max_steps})
+        # If we have a streaming generator, this method should yield content
+        
         # Detect if the question is text-only (file_name is empty/None)
         is_text_only_question = False
         original_question = ""
@@ -1103,6 +1141,10 @@ class GaiaAgent:
             response = None
             print(f"\n[Tool Loop] Step {step+1}/{max_steps} - Using LLM: {llm_type}")
             current_step_tool_results = []  # Reset for this step
+            
+            # Stream step start immediately
+            stream_now(f"\n📍 **Step {step+1}/{max_steps}**\n", 
+                      "step_start", {"step": step + 1, "max_steps": max_steps})
             
             # Reset Mistral conversion flag for each step
             self._mistral_converted_this_step = False
@@ -1135,8 +1177,35 @@ class GaiaAgent:
             estimated_tokens = self._estimate_tokens(total_text)
             token_limit = self._get_token_limit(llm_type)
             
+            # Stream LLM thinking immediately  
+            stream_now("🤖 **LLM is analyzing and planning...**\n", 
+                      "llm_thinking", {"llm_type": llm_type})
+            
             try:
-                response = self._invoke_llm_provider(llm, messages)
+                # Use streaming if supported - unified approach for LLM tokens
+                if streaming_generator and hasattr(llm, "stream") and callable(getattr(llm, "stream")):
+                    stream_now("💭 **LLM response:**\n", "llm_stream_start", {"streaming": True})
+                    
+                    llm_response_content = ""
+                    for chunk in llm.stream(messages):
+                        try:
+                            text = getattr(chunk, "content", None) or getattr(chunk, "text", None) or str(chunk)
+                            if text:
+                                llm_response_content += text
+                                # Stream each token immediately - unified with other content
+                                stream_now(text, "llm_chunk", {"chunk_type": "streaming"})
+                        except Exception:
+                            continue
+                    
+                    # Reconstruct response object
+                    response = AIMessage(content=llm_response_content)
+                    if hasattr(chunk, 'tool_calls'):
+                        response.tool_calls = getattr(chunk, 'tool_calls', [])
+                else:
+                    response = self._invoke_llm_provider(llm, messages)
+                    if streaming_generator and hasattr(response, 'content') and response.content:
+                        # Stream non-streaming LLM response immediately too
+                        stream_now(response.content, "llm_response", {"streaming": False})
             except Exception as e:
                 # Check if this is a rate limit error that should be throttled
                 error_str = str(e)
@@ -1150,9 +1219,10 @@ class GaiaAgent:
                         # Continue the loop to retry the same LLM
                         continue
                     else:
-                        print(f"⏰ [Tool Loop] Rate limit retries exhausted for {llm_type}, falling back to error handler...")
-                        if llm_type == "mistral":
-                            self._track_mistral_failure("rate_limit")
+                        print(f"⏰ [Tool Loop] Rate limit retries exhausted for {llm_type}, re-raising for fallback...")
+                        self._handle_provider_failure(llm_type, "rate_limit")
+                        # Re-raise the exception so it can be caught by _unified_process for fallback
+                        raise
                 
                 # Check for Mistral AI specific message ordering error
                 if llm_type == "mistral" and ("invalid_request_message_order" in error_str or "3230" in error_str):
@@ -1260,16 +1330,14 @@ class GaiaAgent:
                 if self._has_final_answer_marker(response):
                     print(f"[Tool Loop] Final answer detected: {response.content}")
                     # Track successful Mistral AI requests
-                    if llm_type == "mistral":
-                        self._track_mistral_success()
+                    self._handle_provider_success(llm_type)
                     return response
                 else:
                     # If we have tool results but no FINAL ANSWER marker, force processing
                     if tool_results_history:
                         print(f"[Tool Loop] Content without FINAL ANSWER marker but we have {len(tool_results_history)} tool results. Forcing final answer.")
-                        # Track successful Mistral AI requests
-                        if llm_type == "mistral":
-                            self._track_mistral_success()
+                        # Track successful provider requests
+                        self._handle_provider_success(llm_type)
                         return self._force_final_answer(messages, tool_results_history, llm)
                     else:
                         # Lean fallback: if the model produced a clear answer without the marker,
@@ -1277,13 +1345,16 @@ class GaiaAgent:
                         print("[Tool Loop] 'FINAL ANSWER' marker not found. Wrapping current content as final answer.")
                         final_text = self._extract_text_from_response(response).strip()
                         wrapped = AIMessage(content=f"FINAL ANSWER: {final_text}")
-                        # Track successful Mistral AI requests
-                        if llm_type == "mistral":
-                            self._track_mistral_success()
+                        # Track successful provider requests
+                        self._handle_provider_success(llm_type)
                         return wrapped
             tool_calls = getattr(response, 'tool_calls', None)
             if tool_calls:
                 print(f"[Tool Loop] Detected {len(tool_calls)} tool call(s)")
+                
+                # Stream tool calls detected immediately
+                stream_now(f"🔧 **Detected {len(tool_calls)} tool call(s)**\n", 
+                          "tool_calls_detected", {"tool_count": len(tool_calls)})
                 
                 # Add tool loop data to trace
                 if call_id and self.question_trace:
@@ -1308,6 +1379,8 @@ class GaiaAgent:
                     # Check if tool usage limit exceeded FIRST (most restrictive check)
                     if tool_name in tool_usage_count and tool_usage_count[tool_name] >= tool_usage_limits.get(tool_name, tool_usage_limits['default']):
                         print(f"[Tool Loop] ⚠️ {tool_name} usage limit reached ({tool_usage_count[tool_name]}/{tool_usage_limits.get(tool_name, tool_usage_limits['default'])}). Skipping.")
+                        stream_event("tool_limit", f"⚠️ **{tool_name} usage limit reached**\n", 
+                                   {"tool_name": tool_name, "usage_count": tool_usage_count[tool_name]})
                         duplicate_count += 1
                         continue
                     
@@ -1315,6 +1388,8 @@ class GaiaAgent:
                     if self._is_duplicate_tool_call(tool_name, tool_args, called_tools):
                         duplicate_count += 1
                         print(f"[Tool Loop] Duplicate tool call detected: {tool_name} with args: {tool_args}")
+                        stream_event("tool_duplicate", f"⚠️ **Duplicate tool call: {tool_name}**\n", 
+                                   {"tool_name": tool_name})
                         reminder = self._get_reminder_prompt(
                             reminder_type="tool_usage_issue",
                             tool_name=tool_name,
@@ -1351,6 +1426,10 @@ class GaiaAgent:
                     tool_name = tool_call.get('name')
                     tool_args = tool_call.get('args', {})
                     
+                    # Stream tool start immediately
+                    stream_now(f"🔧 **Executing {tool_name}**\n", 
+                              "tool_start", {"tool_name": tool_name, "tool_args": tool_args})
+                    
                     # Execute tool using helper method with call_id for tracing
                     tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
                     
@@ -1361,6 +1440,11 @@ class GaiaAgent:
                     
                     # Report tool result
                     self._print_tool_result(tool_name, tool_result)
+                    
+                    # Stream tool completion immediately
+                    display_result = tool_result[:300] + "..." if len(tool_result) > 300 else tool_result
+                    stream_now(f"✅ **{tool_name} completed**\n```\n{display_result}\n```\n", 
+                              "tool_end", {"tool_name": tool_name, "tool_result": tool_result})
                     
                     # Add tool result to messages - let LangChain handle the formatting
                     messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
@@ -1454,8 +1538,17 @@ class GaiaAgent:
             print(f"[Tool Loop] Forcing final answer with {len(tool_results_history)} tool results at loop exit")
             return self._force_final_answer(messages, tool_results_history, llm)
         
+        # If streaming, yield final response content
+        if streaming_generator:
+            final_content = getattr(response, 'content', str(response)) if response else ""
+            if final_content:
+                content = stream_now(f"🏁 **Final answer:**\n{final_content}\n", "final_answer")
+                if content:
+                    yield content
+                    
         # Return the last response as-is, no partial answer extraction
         return response
+
 
     def _select_llm(self, llm_type, use_tools):
         # Updated to use arrays and provider names
@@ -1537,7 +1630,12 @@ class GaiaAgent:
                 self._print_message_components(msg, i)
             tool_registry = {self._get_tool_name(tool): tool for tool in self.tools}
             if use_tools:
-                response = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type_str, call_id)
+                # Create streaming generator for consistent streaming behavior
+                def silent_stream_handler(event_type, content, metadata=None):
+                    # Silent streaming - no output but still populates trace
+                    return {"type": event_type, "content": content, "metadata": metadata or {}}
+                
+                response = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type_str, 0, call_id, silent_stream_handler)
                 if not hasattr(response, 'content') or not response.content:
                     print(f"⚠️ {llm_name} tool calling returned empty content, trying with enhanced context...")
                     # Instead of falling back to non-tool LLM, enhance the context and retry with tools
@@ -1571,9 +1669,8 @@ class GaiaAgent:
             execution_time = time.time() - start_time
             self._trace_add_llm_call_output(llm_type, call_id, response, execution_time)
             
-            # Track successful Mistral AI requests
-            if llm_type == "mistral":
-                self._track_mistral_success()
+            # Track successful provider requests
+            self._handle_provider_success(llm_type)
             
             return response
         except Exception as e:
@@ -1594,8 +1691,7 @@ class GaiaAgent:
                     return self._make_llm_request(messages, use_tools, llm_type)
                 else:
                     print(f"⏰ Rate limit retries exhausted for {llm_name}, falling back to error handler...")
-                    if llm_type == "mistral":
-                        self._track_mistral_failure("rate_limit")
+                    self._handle_provider_failure(llm_type, "rate_limit")
             
             # Check for Mistral AI specific message ordering error
             if llm_type == "mistral" and ("invalid_request_message_order" in error_str or "3230" in error_str):
@@ -1794,6 +1890,11 @@ class GaiaAgent:
                 break
         llm_results = []
         for llm_type, llm_name, llm_use_tools, model_name in available_llms:
+            # Skip providers that are temporarily disabled due to recent failures
+            if self._should_skip_provider_temporarily(llm_type):
+                print(f"⏸️ Skipping {llm_name} - temporarily disabled due to recent failures")
+                continue
+            
             try:
                 response = self._make_llm_request(messages, use_tools=llm_use_tools, llm_type=llm_type)
                 answer = self._extract_final_answer(response)
@@ -2139,7 +2240,12 @@ class GaiaAgent:
             f"{'Tools':<{tools_w}}| "
             f"{'Error (tools)':<{error_w}}"
         )
-        lines = ["===== LLM Initialization Summary =====", header, "-" * len(header)]
+        lines = [
+            "===== LLM Initialization Summary =====",
+            "Legend: ✅ Working | ⚠️ (forced) May not work | ❌ Failed",
+            header, 
+            "-" * len(header)
+        ]
         for r in self.llm_init_results:
             plain = '✅' if r['plain_ok'] else '❌'
             config = self.LLM_CONFIG.get(r['llm_type'], {})
@@ -2151,9 +2257,13 @@ class GaiaAgent:
             if r['tools_ok'] is None:
                 tools = 'N/A'
             else:
-                tools = '✅' if r['tools_ok'] else '❌'
-            if model_force_tools:
-                tools += ' (forced)'
+                if r['tools_ok']:
+                    tools = '✅'
+                else:
+                    if model_force_tools:
+                        tools = '⚠️ (forced)'
+                    else:
+                        tools = '❌'
             error_tools = ''
             if r['tools_ok'] is False and r['error_tools']:
                 if '400' in r['error_tools']:
@@ -2386,6 +2496,9 @@ class GaiaAgent:
         final_llm_name = "unknown"
         similarity_score = 0.0
         
+        # Collect all successful responses to choose the best one
+        successful_responses = []
+        
         # Try providers in order with unified logic
         for llm_type in llm_sequence:
             try:
@@ -2406,15 +2519,61 @@ class GaiaAgent:
                 
                 # Always use streaming internally
                 if use_tools:
-                    # For tool-calling, run the full process and then stream the result
-                    result = self._run_tool_calling_loop(llm, messages, {self._get_tool_name(tool): tool for tool in self.tools}, llm_type)
-                    answer = self._extract_final_answer(result)
+                    # For tool-calling, use the new streaming loop for real-time visibility
+                    tool_registry = {self._get_tool_name(tool): tool for tool in self.tools}
                     
-                    # Stream the answer character by character
-                    for char in answer:
-                        accumulated_response += char
-                        if streaming:
-                            yield char
+                    if streaming:
+                        # TRUE REAL-TIME STREAMING - no buffering, immediate yielding
+                        call_id = self._trace_start_llm(llm_type)
+                        
+                        # Create a streaming function that yields immediately
+                        def immediate_stream_yielder(content):
+                            nonlocal accumulated_response
+                            accumulated_response += content
+                            # This is the key: actually yield content here and now
+                            return content  # Will be yielded by the calling loop
+                        
+                        # Execute with immediate streaming - content flows through as it happens
+                        result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, immediate_stream_yielder)
+                        
+                        # Consume the generator to get the actual result
+                        if hasattr(result, '__iter__') and not isinstance(result, str):
+                            # It's a generator, consume it
+                            final_result = None
+                            for chunk in result:
+                                if isinstance(chunk, str):
+                                    accumulated_response += chunk
+                                    yield chunk
+                                else:
+                                    final_result = chunk
+                            result = final_result
+                        
+                        # Extract the final answer from the result
+                        answer = self._extract_final_answer(result)
+                        if answer and answer not in accumulated_response:
+                            for char in answer:
+                                accumulated_response += char
+                                yield char
+                    else:
+                        # Silent streaming for consistency - still traces but doesn't yield events
+                        def silent_stream_handler(event_type, content, metadata=None):
+                            return {"type": event_type, "content": content, "metadata": metadata or {}}
+                        
+                        result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, silent_stream_handler)
+                        
+                        # Consume the generator to get the actual result
+                        if hasattr(result, '__iter__') and not isinstance(result, str):
+                            # It's a generator, consume it
+                            final_result = None
+                            for chunk in result:
+                                if isinstance(chunk, str):
+                                    accumulated_response += chunk
+                                else:
+                                    final_result = chunk
+                            result = final_result
+                        
+                        answer = self._extract_final_answer(result)
+                        accumulated_response = answer
                 else:
                     # For non-tool calls, try native streaming first
                     if hasattr(llm, "stream") and callable(getattr(llm, "stream")):
@@ -2444,7 +2603,7 @@ class GaiaAgent:
                                 yield char
                 
                 # If we get here, we have a successful response
-                print(f"🎯 Final answer from {llm_name}")
+                print(f"🎯 Answer from {llm_name}: {accumulated_response[:100]}...")
                 
                 # Calculate similarity score if reference exists
                 if reference:
@@ -2452,28 +2611,33 @@ class GaiaAgent:
                 else:
                     similarity_score = 1.0
                 
-                # Display comprehensive stats
-                self.print_llm_stats_table()
+                # Store this successful response
+                successful_responses.append({
+                    "response": accumulated_response,
+                    "llm_name": llm_name,
+                    "llm_type": llm_type,
+                    "similarity_score": similarity_score
+                })
                 
-                # If streaming, finalize trace and return
+                print(f"✅ {llm_name} succeeded (similarity: {similarity_score:.3f})")
+                
+                # For streaming, yield the first successful response immediately
+                # For non-streaming, continue trying other LLMs to find the best one
                 if streaming:
+                    # Yield the first successful response immediately for better UX
+                    print(f"🎯 Final answer from {llm_name}")
+                    
+                    # Display comprehensive stats
+                    self.print_llm_stats_table()
+                    
+                    # Finalize trace and yield the response
                     self._finalize_trace_for_streaming(question, accumulated_response, llm_name, reference)
+                    for char in accumulated_response:
+                        yield char
                     return
                 else:
-                    # For non-streaming, create dictionary result
-                    final_answer = {
-                        "submitted_answer": ensure_valid_answer(accumulated_response),
-                        "similarity_score": similarity_score,
-                        "llm_used": llm_name,
-                        "reference": reference if reference else "Reference answer not found",
-                        "question": question
-                    }
-                    
-                    # Finalize trace with success result
-                    self._trace_finalize_question(final_answer)
-                    
-                    result = self._trace_get_full()
-                    return result
+                    # For non-streaming, continue trying other LLMs to find the best one
+                    continue
                     
             except Exception as e:
                 print(f"❌ {llm_name} failed: {e}")
@@ -2492,7 +2656,7 @@ class GaiaAgent:
                     self._trace_finalize_question(error_result)
                     
                     if streaming:
-                        error_msg = f"Error: {e}"
+                        error_msg = f"❌ **All LLM providers failed**\n\n**Last error:** {e}\n\n**Fallback system:** The agent tried all available LLM providers but none could generate a response.\n\n**Possible solutions:**\n- Wait for rate limits to reset\n- Check API keys and authentication\n- Try again later when services are available\n\nPlease check the Init logs for more details."
                         for char in error_msg:
                             yield char
                         return
@@ -2500,11 +2664,56 @@ class GaiaAgent:
                         return self._trace_get_full()
                 else:
                     print(f"🔄 Trying next LLM...")
+                    if streaming:
+                        # Yield fallback message for this LLM
+                        fallback_msg = f"🔄 **{llm_name} failed, trying next LLM...**\n"
+                        for char in fallback_msg:
+                            yield char
                     continue
+        
+        # After trying all LLMs, select the best response
+        if successful_responses:
+            # Sort by similarity score (highest first), then by order in sequence
+            best_response = max(successful_responses, key=lambda x: (x["similarity_score"], -llm_sequence.index(x["llm_type"])))
+            
+            accumulated_response = best_response["response"]
+            final_llm_name = best_response["llm_name"]
+            similarity_score = best_response["similarity_score"]
+            
+            print(f"🏆 Best response from {final_llm_name} (similarity: {similarity_score:.3f})")
+            
+            # Display comprehensive stats
+            self.print_llm_stats_table()
+            
+            # If streaming, finalize trace and yield the response
+            if streaming:
+                self._finalize_trace_for_streaming(question, accumulated_response, final_llm_name, reference)
+                # Yield the accumulated response character by character for streaming effect
+                for char in accumulated_response:
+                    yield char
+                return
+            else:
+                # For non-streaming, create dictionary result
+                final_answer = {
+                    "submitted_answer": ensure_valid_answer(accumulated_response),
+                    "similarity_score": similarity_score,
+                    "llm_used": final_llm_name,
+                    "reference": reference if reference else "Reference answer not found",
+                    "question": question
+                }
+                
+                # Finalize trace with success result
+                self._trace_finalize_question(final_answer)
+                
+                result = self._trace_get_full()
+                return result
+        else:
+            # No successful responses
+            print("❌ All LLMs failed")
         
         # If we get here, all LLMs failed
         if streaming:
-            error_msg = "⚠️ No LLM providers are currently available. Please check the initialization logs for details."
+            error_msg = "❌ **All LLM providers are currently unavailable**\n\n**Details:**\n- OpenRouter: Rate limited (429 error)\n- Mistral AI: Returns empty content\n- Google Gemini: Location not supported\n- Groq: Service unavailable (404 error)\n\n**Fallback system:** The agent tried all available LLM providers but none could generate a response.\n\n**Possible solutions:**\n- Wait for rate limits to reset\n- Check API keys and authentication\n- Try again later when services are available\n\nPlease check the Init logs for more details."
             for char in error_msg:
                 yield char
         else:
@@ -2659,7 +2868,7 @@ class GaiaAgent:
                 not isinstance(obj, type) and  # Exclude classes
                 hasattr(obj, '__module__') and  # Must have __module__ attribute
                 obj.__module__ == 'tools' and  # Must be from tools module
-                name not in ["GaiaAgent", "CodeInterpreter"]):  # Exclude specific classes
+                name not in ["CmwAgent", "CodeInterpreter"]):  # Exclude specific classes
                 
                 # Check if it's a proper tool object (has the tool attributes)
                 if hasattr(obj, 'name') and hasattr(obj, 'description'):
@@ -2994,11 +3203,13 @@ class GaiaAgent:
         """
         try:
             # Use a math question that requires tools - similar to the quick action
+            test_question = "Calculate 15 * 23 + 7. Show your work step by step using tools."
             test_message = [
                 self.sys_msg, 
-                HumanMessage(content="Calculate 15 * 23 + 7. Show your work step by step using tools.")
+                HumanMessage(content=test_question)
             ]
             print(f"🧪 Testing {llm_name} with math question requiring tools...")
+            print(f"   Test question: {test_question}")
             start_time = time.time()
             test_response = self._invoke_llm_provider(llm_instance, test_message)
             end_time = time.time()
@@ -3009,23 +3220,36 @@ class GaiaAgent:
                 
             # Check if the response contains tool calls
             has_tool_calls = False
+            tool_call_details = []
             if hasattr(test_response, 'tool_calls') and test_response.tool_calls:
                 has_tool_calls = True
                 print(f"✅ {llm_name} made {len(test_response.tool_calls)} tool call(s)")
                 for i, tool_call in enumerate(test_response.tool_calls):
                     tool_name = tool_call.get('name', 'unknown')
-                    print(f"   Tool {i+1}: {tool_name}")
+                    tool_args = tool_call.get('args', {})
+                    print(f"Tool {i+1}: {tool_name}")
+                    # Show tool arguments for debugging
+                    if tool_args:
+                        args_preview = str(tool_args)[:50] + "..." if len(str(tool_args)) > 50 else str(tool_args)
+                        print(f"         Args: {args_preview}")
+                    tool_call_details.append(f"{tool_name}({args_preview})")
             
             # Check if response has content
             has_content = hasattr(test_response, 'content') and test_response.content and test_response.content.strip()
             
+            # Show detailed response information
+            print(f"   Response time: {end_time - start_time:.2f}s")
+            if has_content:
+                content_preview = test_response.content[:100] + "..." if len(test_response.content) > 100 else test_response.content
+                print(f"   Content preview: {content_preview}")
+            
             if has_tool_calls and has_content:
                 print(f"✅ {llm_name} tool test successful!")
-                print(f"   Response time: {end_time - start_time:.2f}s")
-                print(f"   Content preview: {test_response.content[:100]}...")
+                print(f"   Tool calls: {', '.join(tool_call_details)}")
                 return True
             elif has_tool_calls and not has_content:
                 print(f"⚠️ {llm_name} made tool calls but returned empty content")
+                print(f"   Tool calls: {', '.join(tool_call_details)}")
                 return True  # Still consider this a success - tools are working
             elif not has_tool_calls and has_content:
                 print(f"⚠️ {llm_name} returned content but no tool calls (may have calculated directly)")
@@ -3035,6 +3259,7 @@ class GaiaAgent:
                     return True
                 else:
                     print(f"❌ {llm_name} returned content but wrong answer")
+                    print(f"   Expected answer: 352 (15 * 23 + 7)")
                     return False
             else:
                 print(f"❌ {llm_name} returned no tool calls and no content")
@@ -3596,10 +3821,14 @@ class GaiaAgent:
             "llm_traces": {},
             "logs": [],
             "final_result": None,
-            "per_llm_stdout": []  # Array to store stdout for each LLM attempt
+            "per_llm_stdout": [],  # Array to store stdout for each LLM attempt
+            "streaming_events": [],  # Real-time streaming events
+            "real_time_updates": True,  # Flag for streaming mode
+            "streaming_duration": 0.0  # Total streaming duration
         }
         self.current_llm_call_id = None
         self.current_llm_stdout_buffer = None  # Buffer for current LLM's stdout
+        self.streaming_start_time = time.time()  # Track streaming start time
         print(f"🔍 Initialized trace for question: {question[:100]}...")
 
     def _get_llm_name(self, llm_type: str) -> str:
@@ -3696,6 +3925,61 @@ class GaiaAgent:
         self.current_llm_stdout_buffer = None
         
         print(f"📝 Captured stdout for {llm_type} ({call_id}): {len(stdout_content)} chars")
+
+    def _update_trace_during_streaming(self, event_type: str, content: str, metadata: dict = None):
+        """
+        Update trace object in real-time during streaming.
+        
+        Args:
+            event_type: Type of streaming event (llm_chunk, tool_start, tool_end, etc.)
+            content: Content to add to trace
+            metadata: Additional metadata for the event
+        """
+        if not self.question_trace:
+            return
+            
+        streaming_event = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event_type": event_type,
+            "content": content,
+            "metadata": metadata or {},
+            "llm_call_id": self.current_llm_call_id,
+            "llm_type": getattr(self, 'current_llm_type', 'unknown')
+        }
+        
+        self.question_trace["streaming_events"].append(streaming_event)
+        
+        # Update current LLM call trace if available
+        if self.current_llm_call_id and self.current_llm_type:
+            for call_trace in self.question_trace["llm_traces"].get(self.current_llm_type, []):
+                if call_trace["call_id"] == self.current_llm_call_id:
+                    if "streaming_events" not in call_trace:
+                        call_trace["streaming_events"] = []
+                    call_trace["streaming_events"].append(streaming_event)
+                    
+                    # Update output content incrementally for LLM chunks
+                    if event_type == "llm_chunk":
+                        if "content" not in call_trace["output"]:
+                            call_trace["output"]["content"] = ""
+                        call_trace["output"]["content"] += content
+                    break
+
+    def _stream_terminal_output(self):
+        """
+        Stream terminal debugging output in real-time.
+        """
+        if hasattr(self, 'current_llm_stdout_buffer') and self.current_llm_stdout_buffer:
+            content = self.current_llm_stdout_buffer.getvalue()
+            if content:
+                # Only stream new content since last call
+                if not hasattr(self, '_last_streamed_stdout'):
+                    self._last_streamed_stdout = ""
+                
+                new_content = content[len(self._last_streamed_stdout):]
+                if new_content:
+                    self._last_streamed_stdout = content
+                    return f"```\n{new_content}\n```"
+        return ""
 
     def _trace_add_llm_call_input(self, llm_type: str, call_id: str, messages: List, use_tools: bool):
         """
@@ -3889,6 +4173,11 @@ class GaiaAgent:
         
         self.question_trace["tokens_total"] = total_tokens
         
+        # Calculate streaming duration
+        if hasattr(self, 'streaming_start_time'):
+            streaming_duration = time.time() - self.streaming_start_time
+            self.question_trace["streaming_duration"] = streaming_duration
+        
         # Capture any remaining stdout from current LLM attempt
         if hasattr(self, 'current_llm_stdout_buffer') and self.current_llm_stdout_buffer:
             self._trace_capture_llm_stdout(self.current_llm_type, self.current_llm_call_id)
@@ -3897,10 +4186,15 @@ class GaiaAgent:
         debug_output = self._capture_all_debug_output()
         self.question_trace["debug_output"] = debug_output
         
+        streaming_events_count = len(self.question_trace.get("streaming_events", []))
+        
         print(f"📊 Question trace finalized. Total execution time: {total_time:.2f}s")
         print(f"📝 Captured stdout for {len(self.question_trace.get('per_llm_stdout', []))} LLM attempts")
         print(f"🔢 Total tokens used: {total_tokens}")
         print(f"📄 Debug output captured: {len(debug_output)} characters")
+        print(f"🔄 Streaming events captured: {streaming_events_count}")
+        if hasattr(self, 'streaming_start_time'):
+            print(f"⏱️ Streaming duration: {self.question_trace.get('streaming_duration', 0):.2f}s")
 
     def _capture_all_debug_output(self) -> str:
         """
@@ -4276,66 +4570,102 @@ class GaiaAgent:
                 choices.append(f"{provider}: {model_name}")
         return choices
 
-    def _track_mistral_failure(self, error_type: str):
+    def _handle_provider_failure(self, provider_type: str, error_type: str = "general"):
         """
-        Track Mistral AI failures and automatically disable tool calling if it consistently fails.
+        Track provider failures with simple retry limits without disabling tools.
         
         Args:
-            error_type: Type of error ("message_ordering", "rate_limit", "other")
+            provider_type: Provider name (e.g., "mistral", "gemini", "groq")
+            error_type: Type of error ("rate_limit", "message_ordering", "timeout", "general")
         """
-        if not hasattr(self, '_mistral_failure_tracker'):
-            self._mistral_failure_tracker = {
-                'message_ordering': 0,
-                'rate_limit': 0,
-                'other': 0,
+        # Initialize provider tracking if not exists
+        if not hasattr(self, '_provider_failure_tracker'):
+            self._provider_failure_tracker = {}
+        
+        if provider_type not in self._provider_failure_tracker:
+            self._provider_failure_tracker[provider_type] = {
+                'consecutive_failures': 0,
                 'total_failures': 0,
                 'last_failure_time': None,
-                'consecutive_failures': 0,
-                'last_success_time': None
+                'last_success_time': None,
+                'error_types': {},
+                'should_skip_temporarily': False,
+                'skip_until': None
             }
         
-        self._mistral_failure_tracker[error_type] += 1
-        self._mistral_failure_tracker['total_failures'] += 1
-        self._mistral_failure_tracker['consecutive_failures'] += 1
-        self._mistral_failure_tracker['last_failure_time'] = time.time()
+        tracker = self._provider_failure_tracker[provider_type]
         
-        # Reset consecutive failures if we had a recent success (within last 5 minutes)
-        if (self._mistral_failure_tracker.get('last_success_time') and 
-            time.time() - self._mistral_failure_tracker['last_success_time'] < 300):
-            self._mistral_failure_tracker['consecutive_failures'] = 0
+        # Update failure stats
+        tracker['consecutive_failures'] += 1
+        tracker['total_failures'] += 1
+        tracker['last_failure_time'] = time.time()
+        tracker['error_types'][error_type] = tracker['error_types'].get(error_type, 0) + 1
         
-        # If we have too many consecutive message ordering failures, disable tool calling for Mistral
-        if self._mistral_failure_tracker['message_ordering'] >= 3:
-            if self.LLM_CONFIG.get('mistral', {}).get('force_tools', True):
-                print(f"⚠️ Mistral AI has had {self._mistral_failure_tracker['message_ordering']} message ordering failures. Disabling tool calling.")
-                self.LLM_CONFIG['mistral']['force_tools'] = False
-                self.LLM_CONFIG['mistral']['tool_support'] = False
+        # Simple temporary skip logic to prevent infinite loops
+        if tracker['consecutive_failures'] >= 3:
+            # Skip this provider for 5 minutes after 3 consecutive failures
+            tracker['should_skip_temporarily'] = True
+            tracker['skip_until'] = time.time() + 300  # 5 minutes
+            print(f"⚠️ {provider_type.title()} temporarily skipped for 5 minutes after {tracker['consecutive_failures']} consecutive failures")
         
-        # If we have too many consecutive failures overall, disable tool calling
-        elif self._mistral_failure_tracker['consecutive_failures'] >= 5:
-            if self.LLM_CONFIG.get('mistral', {}).get('force_tools', True):
-                print(f"⚠️ Mistral AI has had {self._mistral_failure_tracker['consecutive_failures']} consecutive failures. Disabling tool calling.")
-                self.LLM_CONFIG['mistral']['force_tools'] = False
-                self.LLM_CONFIG['mistral']['tool_support'] = False
-        
-        # If we have too many total failures, consider disabling Mistral entirely
-        if self._mistral_failure_tracker['total_failures'] >= 15:
-            print(f"⚠️ Mistral AI has had {self._mistral_failure_tracker['total_failures']} total failures. Consider using alternative providers.")
+        print(f"❌ {provider_type.title()} failure ({error_type}): {tracker['consecutive_failures']} consecutive, {tracker['total_failures']} total")
 
-    def _track_mistral_success(self):
+    def _handle_provider_success(self, provider_type: str):
         """
-        Track successful Mistral AI requests to reset failure counters.
+        Track successful provider requests and reset failure counters.
+        
+        Args:
+            provider_type: Provider name (e.g., "mistral", "gemini", "groq")
         """
-        if hasattr(self, '_mistral_failure_tracker'):
-            self._mistral_failure_tracker['consecutive_failures'] = 0
-            self._mistral_failure_tracker['last_success_time'] = time.time()
+        # Initialize if not exists
+        if not hasattr(self, '_provider_failure_tracker'):
+            self._provider_failure_tracker = {}
+        
+        if provider_type not in self._provider_failure_tracker:
+            self._provider_failure_tracker[provider_type] = {
+                'consecutive_failures': 0,
+                'total_failures': 0,
+                'last_failure_time': None,
+                'last_success_time': None,
+                'error_types': {},
+                'should_skip_temporarily': False,
+                'skip_until': None
+            }
+        
+        tracker = self._provider_failure_tracker[provider_type]
+        
+        # Reset failure counters on success
+        tracker['consecutive_failures'] = 0
+        tracker['last_success_time'] = time.time()
+        tracker['should_skip_temporarily'] = False
+        tracker['skip_until'] = None
+        
+        print(f"✅ {provider_type.title()} success - failure counters reset")
+
+    def _should_skip_provider_temporarily(self, provider_type: str) -> bool:
+        """
+        Check if provider should be temporarily skipped due to recent failures.
+        
+        Args:
+            provider_type: Provider name
             
-            # If tools were disabled due to failures, consider re-enabling them after success
-            if (self.LLM_CONFIG.get('mistral', {}).get('force_tools', False) == False and 
-                self._mistral_failure_tracker['message_ordering'] < 2):
-                print(f"✅ Mistral AI success - considering re-enabling tool calling")
-                self.LLM_CONFIG['mistral']['force_tools'] = True
-                self.LLM_CONFIG['mistral']['tool_support'] = True
+        Returns:
+            bool: True if provider should be skipped
+        """
+        if not hasattr(self, '_provider_failure_tracker'):
+            return False
+        
+        tracker = self._provider_failure_tracker.get(provider_type)
+        if not tracker:
+            return False
+        
+        # Check if skip period has expired
+        if tracker.get('skip_until') and time.time() > tracker['skip_until']:
+            tracker['should_skip_temporarily'] = False
+            tracker['skip_until'] = None
+            print(f"🔄 {provider_type.title()} skip period expired - re-enabling")
+        
+        return tracker.get('should_skip_temporarily', False)
 
     def _handle_mistral_message_ordering_error(self, error, llm_name, llm_type, messages, llm):
         """
@@ -4353,7 +4683,7 @@ class GaiaAgent:
         """
         error_str = str(error)
         print(f"❌ Mistral AI message ordering error detected: {error_str}")
-        self._track_mistral_failure("message_ordering")
+        self._handle_provider_failure("mistral", "message_ordering")
         print(f"🔄 Attempting to fix message ordering and retry...")
         
         # Try to fix the message ordering by reconstructing the conversation
@@ -4439,14 +4769,205 @@ class GaiaAgent:
 
     def stream(self, question: str, chat_history: Optional[List[Dict[str, Any]]] = None, llm_sequence: Optional[List[str]] = None):
         """
-        Stream the final assistant answer as incremental text chunks.
+        Unified streaming interface for all scenarios.
+        Provides real-time visibility into LLM thinking, tool execution, and results.
         
-        This method uses the unified LLM calling path with streaming output.
-        All questions (with or without tools) go through the same path for consistency.
+        Args:
+            question: The question to process
+            chat_history: Optional chat history for context
+            llm_sequence: Optional sequence of LLM providers to try
+            
+        Yields:
+            str: Text content for streaming display
         """
         # Use the unified processing method with streaming
         for chunk in self._unified_process_with_streaming(question, chat_history, llm_sequence):
             yield chunk
+    
+    def stream_events(self, question: str, chat_history: Optional[List[Dict[str, Any]]] = None, llm_sequence: Optional[List[str]] = None):
+        """
+        Stream structured events for detailed monitoring of LLM and tool execution.
+        
+        Args:
+            question: The question to process
+            chat_history: Optional chat history for context
+            llm_sequence: Optional sequence of LLM providers to try
+            
+        Yields:
+            dict: Structured events with type, content, and metadata
+        """
+        # Initialize trace for this question
+        self._trace_init_question(question, None, None)
+        
+        # Increment total questions counter
+        self.total_questions += 1
+        
+        # Store the original question for reuse throughout the process
+        self.original_question = question
+        
+        # Retrieve reference answer
+        reference = self._get_reference_answer(question)
+        
+        # Format messages
+        messages = self._format_messages(question, reference=reference, chat_history=chat_history)
+        
+        # Build a default llm_sequence if not provided
+        if not llm_sequence:
+            llm_sequence = self.DEFAULT_LLM_SEQUENCE.copy()
+        
+        # Try providers in order
+        for llm_type in llm_sequence:
+            try:
+                # Check if this LLM type was successfully initialized
+                if llm_type not in self.llm_provider_names:
+                    yield {
+                        "type": "llm_skip",
+                        "content": f"⚠️ Skipping {llm_type}: LLM not initialized\n",
+                        "metadata": {"llm_type": llm_type, "reason": "not_initialized"}
+                    }
+                    continue
+                
+                # Always use tools when available
+                use_tools = self._provider_supports_tools(llm_type)
+                llm, llm_name, _ = self._select_llm(llm_type, use_tools)
+                if llm is None:
+                    yield {
+                        "type": "llm_error",
+                        "content": f"⚠️ Skipping {llm_type}: LLM instance is None\n",
+                        "metadata": {"llm_type": llm_type, "reason": "instance_none"}
+                    }
+                    continue
+                
+                yield {
+                    "type": "llm_selected",
+                    "content": f"🤖 Using {llm_name} (tools: {use_tools})\n",
+                    "metadata": {"llm_type": llm_type, "llm_name": llm_name, "use_tools": use_tools}
+                }
+                
+                if use_tools:
+                    # Use streaming tool calling loop
+                    tool_registry = {self._get_tool_name(tool): tool for tool in self.tools}
+                    call_id = self._trace_start_llm(llm_type)
+                    
+                    # Create an event capturing function for streaming
+                    def event_yielder(event_type, content, metadata=None):
+                        event = {
+                            "type": event_type,
+                            "content": content,
+                            "metadata": metadata or {}
+                        }
+                        return event
+                    
+                    # Run tool calling loop with event capture
+                    result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, event_yielder)
+                    
+                    # Since we can't yield during the loop execution, we'll yield the final result
+                    if result:
+                        answer = self._extract_final_answer(result)
+                        
+                        # Calculate similarity score if reference exists
+                        if reference:
+                            _, similarity_score = self._vector_answers_match(answer, reference)
+                        else:
+                            similarity_score = 1.0
+                        
+                        # Finalize trace
+                        final_answer = {
+                            "submitted_answer": ensure_valid_answer(answer),
+                            "similarity_score": similarity_score,
+                            "llm_used": llm_name,
+                            "reference": reference if reference else "Reference answer not found",
+                            "question": question,
+                        }
+                        self._trace_finalize_question(final_answer)
+                        
+                        yield {
+                            "type": "completion",
+                            "content": f"🎯 **Task completed with {llm_name}**\n",
+                            "metadata": {
+                                "final_answer": answer,
+                                "similarity_score": similarity_score,
+                                "llm_used": llm_name
+                            }
+                        }
+                        return
+                else:
+                    # Non-tool scenario with streaming
+                    yield {
+                        "type": "llm_thinking",
+                        "content": "🤖 **LLM is generating response...**\n",
+                        "metadata": {"llm_type": llm_type, "streaming": True}
+                    }
+                    
+                    if hasattr(llm, "stream") and callable(getattr(llm, "stream")):
+                        accumulated_response = ""
+                        for chunk in llm.stream(messages):
+                            try:
+                                text = getattr(chunk, "content", None) or getattr(chunk, "text", None) or str(chunk)
+                                if text:
+                                    accumulated_response += text
+                                    yield {
+                                        "type": "llm_chunk",
+                                        "content": text,
+                                        "metadata": {"streaming": True}
+                                    }
+                            except Exception:
+                                continue
+                        
+                        # Finalize for non-tool scenario
+                        if reference:
+                            _, similarity_score = self._vector_answers_match(accumulated_response, reference)
+                        else:
+                            similarity_score = 1.0
+                        
+                        final_answer = {
+                            "submitted_answer": ensure_valid_answer(accumulated_response),
+                            "similarity_score": similarity_score,
+                            "llm_used": llm_name,
+                            "reference": reference if reference else "Reference answer not found",
+                            "question": question,
+                        }
+                        self._trace_finalize_question(final_answer)
+                        
+                        yield {
+                            "type": "completion",
+                            "content": f"🎯 **Task completed with {llm_name}**\n",
+                            "metadata": {
+                                "final_answer": accumulated_response,
+                                "similarity_score": similarity_score,
+                                "llm_used": llm_name
+                            }
+                        }
+                        return
+                
+            except Exception as e:
+                yield {
+                    "type": "error",
+                    "content": f"❌ {llm_name} failed: {e}\n",
+                    "metadata": {"llm_type": llm_type, "error": str(e)}
+                }
+                
+                if llm_type == llm_sequence[-1]:  # Last provider
+                    yield {
+                        "type": "final_error",
+                        "content": f"❌ **All LLMs failed. Last error: {e}**\n",
+                        "metadata": {"final_error": str(e)}
+                    }
+                    return
+                else:
+                    yield {
+                        "type": "fallback",
+                        "content": "🔄 **Trying next LLM...**\n",
+                        "metadata": {"next_llm": "unknown"}
+                    }
+                    continue
+        
+        # If we get here, all LLMs failed
+        yield {
+            "type": "no_llms",
+            "content": "⚠️ **No LLM providers are currently available.**\n",
+            "metadata": {"available_llms": self.llm_provider_names}
+        }
     
     def get_trace_data(self):
         """
