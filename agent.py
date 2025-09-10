@@ -971,14 +971,6 @@ class GaiaAgent:
             tools=self.tools,
             tool_results_history=tool_results_history
         )
-        # Gemini-specific: add explicit instructions for extracting numbers or lists
-        if llm_type == "gemini":
-            reminder += (
-                "\n\nIMPORTANT: If the tool result contains a sentence with a number spelled out or as a digit, "
-                "extract only the number and provide it as the FINAL ANSWER in the required format. "
-                "If the tool result contains a list of items (such as ingredients, or any items), "
-                "extract the list and provide it as a comma-separated list in the FINAL ANSWER as required."
-            )
         # Check if tool results are already in message history as ToolMessage objects
         has_tool_messages = self._has_tool_messages(messages)
         
