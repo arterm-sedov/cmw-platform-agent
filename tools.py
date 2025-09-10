@@ -1128,14 +1128,14 @@ def transform_image(image_base64: str, operation: str, params: Optional[Dict[str
 
 class DrawOnImageParams(BaseModel):
     text: Optional[str] = Field(None, description="Text to draw")
-    position: Optional[Tuple[int, int]] = Field(None, description="Text position (x, y)")
-    color: Optional[Union[str, Tuple[int, int, int]]] = Field(None, description="Color name or RGB tuple")
+    position: Optional[List[int]] = Field(None, description="Text position [x, y]")
+    color: Optional[Union[str, List[int]]] = Field(None, description="Color name or RGB array [r, g, b]")
     size: Optional[int] = Field(None, description="Font size for text")
     coords: Optional[List[int]] = Field(None, description="Rectangle coordinates [x1, y1, x2, y2]")
-    center: Optional[Tuple[int, int]] = Field(None, description="Circle center (x, y)")
+    center: Optional[List[int]] = Field(None, description="Circle center [x, y]")
     radius: Optional[int] = Field(None, description="Circle radius")
-    start: Optional[Tuple[int, int]] = Field(None, description="Line start (x, y)")
-    end: Optional[Tuple[int, int]] = Field(None, description="Line end (x, y)")
+    start: Optional[List[int]] = Field(None, description="Line start [x, y]")
+    end: Optional[List[int]] = Field(None, description="Line end [x, y]")
     width: Optional[int] = Field(None, description="Stroke width")
 
 @tool(args_schema=DrawOnImageParams)
@@ -1156,21 +1156,21 @@ def draw_on_image(image_base64: str, drawing_type: str, params: Dict[str, Any]) 
         draw = ImageDraw.Draw(img)
         if drawing_type == "text":
             text = params.get("text", "")
-            position = params.get("position", (10, 10))
+            position = params.get("position", [10, 10])
             color = params.get("color", "black")
             size = params.get("size", 20)
             try:
                 font = ImageFont.truetype("arial.ttf", size)
             except:
                 font = ImageFont.load_default()
-            draw.text(position, text, fill=color, font=font)
+            draw.text(tuple(position), text, fill=color, font=font)
         elif drawing_type == "rectangle":
             coords = params.get("coords", [10, 10, 100, 100])
             color = params.get("color", "red")
             width = params.get("width", 2)
             draw.rectangle(coords, outline=color, width=width)
         elif drawing_type == "circle":
-            center = params.get("center", (50, 50))
+            center = params.get("center", [50, 50])
             radius = params.get("radius", 30)
             color = params.get("color", "blue")
             width = params.get("width", 2)
@@ -1178,11 +1178,11 @@ def draw_on_image(image_base64: str, drawing_type: str, params: Dict[str, Any]) 
                    center[0] + radius, center[1] + radius]
             draw.ellipse(bbox, outline=color, width=width)
         elif drawing_type == "line":
-            start = params.get("start", (10, 10))
-            end = params.get("end", (100, 100))
+            start = params.get("start", [10, 10])
+            end = params.get("end", [100, 100])
             color = params.get("color", "green")
             width = params.get("width", 2)
-            draw.line([start, end], fill=color, width=width)
+            draw.line([tuple(start), tuple(end)], fill=color, width=width)
         else:
             return json.dumps({
                 "type": "tool_response",
@@ -1204,9 +1204,9 @@ def draw_on_image(image_base64: str, drawing_type: str, params: Dict[str, Any]) 
         }, indent=2)
 
 class GenerateSimpleImageParams(BaseModel):
-    color: Optional[Union[str, Tuple[int, int, int]]] = Field(None, description="Solid color for 'solid' type")
-    start_color: Optional[Tuple[int, int, int]] = Field(None, description="Gradient start color")
-    end_color: Optional[Tuple[int, int, int]] = Field(None, description="Gradient end color")
+    color: Optional[Union[str, List[int]]] = Field(None, description="Solid color for 'solid' type")
+    start_color: Optional[List[int]] = Field(None, description="Gradient start color [r, g, b]")
+    end_color: Optional[List[int]] = Field(None, description="Gradient end color [r, g, b]")
     direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Gradient direction")
     square_size: Optional[int] = Field(None, description="Square size for checkerboard")
     color1: Optional[str] = Field(None, description="First color for checkerboard")
@@ -1230,11 +1230,13 @@ def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
     try:
         params = params or {}
         if image_type == "solid":
-            color = params.get("color", (255, 255, 255))
+            color = params.get("color", [255, 255, 255])
+            if isinstance(color, list):
+                color = tuple(color)
             img = Image.new("RGB", (width, height), color)
         elif image_type == "gradient":
-            start_color = params.get("start_color", (255, 0, 0))
-            end_color = params.get("end_color", (0, 0, 255))
+            start_color = params.get("start_color", [255, 0, 0])
+            end_color = params.get("end_color", [0, 0, 255])
             direction = params.get("direction", "horizontal")
             img = Image.new("RGB", (width, height))
             draw = ImageDraw.Draw(img)
