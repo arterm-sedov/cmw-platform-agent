@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional, Literal
 from langchain.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 import requests_
+from models import AttributeResult
 
 ATTRIBUTE_ENDPOINT = "webapi/Attribute"
 
@@ -105,13 +106,6 @@ class EditOrCreateDateTimeAttributeSchema(BaseModel):
         if isinstance(v, str) and v.strip() == "":
             raise ValueError("must be a non-empty string")
         return v
-
-class AttributeResult(BaseModel):
-    success: bool
-    status_code: int
-    raw_response: dict | str | None = Field(default=None, description="Raw response for auditing or payload body")
-    error: Optional[str] = Field(default=None)
-
 
 @tool("edit_or_create_datetime_attribute", return_direct=False, args_schema=EditOrCreateDateTimeAttributeSchema)
 def edit_or_create_datetime_attribute(
