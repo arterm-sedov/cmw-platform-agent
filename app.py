@@ -605,334 +605,6 @@ def save_results_log(results_log: list) -> str:
         print(f"⚠️ Failed to save results log: {e}")
         return None
 
-def chat_with_agent(message, history):
-    """
-    Chat with the agent using a simple message interface.
-    
-    Args:
-        message (str): User's message
-        history (list): Chat history
-        
-    Returns:
-        tuple: (updated_history, message)
-    """
-    if not message.strip():
-        return history, ""
-    
-    if agent is None:
-        error_msg = "Error: Agent not initialized. Check logs for details."
-        return history + [{"role": "user", "content": message}, {"role": "assistant", "content": error_msg}], ""
-    
-    try:
-        print(f"💬 Chat request: {message}")
-        
-        # Build minimal chat history for agent: only user/assistant turns
-        chat_history = []
-        for turn in history:
-            role = turn.get("role")
-            content = turn.get("content", "")
-            if role in ("user", "assistant") and content:
-                chat_history.append({"role": role, "content": content})
-
-        # Call the agent with the user's message and history
-        # The agent now always returns a generator for streaming, but we can get trace data
-        if agent is None:
-            error_msg = "Error: Agent became unavailable during processing. Check logs for details."
-            return history + [{"role": "user", "content": message}, {"role": "assistant", "content": error_msg}], ""
-        
-        result = agent(message, chat_history=chat_history)
-        
-        # Handle the result properly - check if it's the problematic generator object
-        accumulated_response = ""
-        if DEBUG_MODE:
-            print(f"chat_with_agent: Agent returned result type: {type(result)}")
-        
-        try:
-            # Check if we got a generator object that should be consumed
-            if hasattr(result, '__iter__') and hasattr(result, '__next__') and not isinstance(result, (str, dict, list)):
-                if DEBUG_MODE:
-                    print("chat_with_agent: Detected generator, attempting to consume...")
-                chunk_count = 0
-                for chunk in result:
-                    chunk_count += 1
-                    # Commented out verbose debug logging
-                    # if DEBUG_MODE:
-                    #     print(f"chat_with_agent: Generator yielded chunk {chunk_count}: {type(chunk)} - {str(chunk)[:100]}")
-                    if isinstance(chunk, str):
-                        accumulated_response += chunk
-                    elif isinstance(chunk, dict):
-                        # If it's a dict, try to extract text content
-                        text = chunk.get("content", chunk.get("text", chunk.get("delta", "")))
-                        if text:
-                            accumulated_response += str(text)
-                
-                # Commented out verbose debug logging
-                # if DEBUG_MODE:
-                #     print(f"chat_with_agent: Generator yielded {chunk_count} chunks, accumulated: '{accumulated_response[:100]}'")
-                
-                # If no chunks were yielded, the generator was empty
-                if chunk_count == 0:
-                    print("chat_with_agent: WARNING - Generator yielded no content")
-                    accumulated_response = "❌ No response generated. The LLM returned an empty response, likely due to API issues or rate limits."
-            else:
-                # Not a generator, handle as direct response
-                if DEBUG_MODE:
-                    print(f"chat_with_agent: Non-generator response: {str(result)[:100]}")
-                accumulated_response = str(result)
-        except Exception as e:
-            print(f"Error consuming generator: {e}")
-            # Fallback: try to get trace data directly from agent
-            if hasattr(agent, 'get_trace_data'):
-                trace = agent.get_trace_data()
-                final_result = trace.get("final_result", {})
-                accumulated_response = final_result.get("submitted_answer", f"Error processing response: {e}")
-            else:
-                accumulated_response = f"Error processing response: {e}"
-        
-        # Try to get the final answer from trace data if accumulated_response is empty or contains only step info
-        if not accumulated_response or accumulated_response.strip() == "" or "generator object" in accumulated_response.lower():
-            print("chat_with_agent: Trying to get final answer from trace data...")
-            if hasattr(agent, 'get_trace_data'):
-                trace = agent.get_trace_data()
-                final_result = trace.get("final_result", {})
-                submitted_answer = final_result.get("submitted_answer", "")
-                if submitted_answer and submitted_answer != "No answer provided":
-                    accumulated_response = submitted_answer
-                    print(f"chat_with_agent: Got final answer from trace: {submitted_answer[:100]}...")
-                else:
-                    # Try to extract from the full trace
-                    llm_traces = trace.get("llm_traces", [])
-                    for llm_trace in llm_traces:
-                        if "response" in llm_trace and llm_trace["response"]:
-                            response_text = str(llm_trace["response"])
-                            if "FINAL ANSWER" in response_text.upper():
-                                # Extract the final answer part
-                                import re
-                                match = re.search(r'FINAL ANSWER\s*:?\s*(.*)', response_text, re.IGNORECASE | re.DOTALL)
-                                if match:
-                                    accumulated_response = match.group(1).strip()
-                                    print(f"chat_with_agent: Extracted final answer from response: {accumulated_response[:100]}...")
-                                    break
-        
-        # Final safety check - catch any generator object representations
-        if not accumulated_response or accumulated_response.strip() == "" or "generator object" in accumulated_response.lower():
-            print("chat_with_agent: Final fallback - providing helpful error message")
-            # Try to get more info from the agent
-            if hasattr(agent, 'get_trace_data'):
-                trace = agent.get_trace_data()
-                final_result = trace.get("final_result", {})
-                llm_used = final_result.get("llm_used", "unknown")
-                error_info = final_result.get("error", "No error details available")
-                accumulated_response = f"❌ **No response generated**\n\n**Details:**\n- LLM used: {llm_used}\n- Error: {error_info}\n\n**Possible causes:**\n- API rate limits (OpenRouter: 429 error)\n- Authentication issues\n- Service unavailable\n\nPlease try again later or check the Init logs for more details."
-            else:
-                accumulated_response = "❌ **No response generated**\n\nThe LLM failed to produce a response. This usually indicates:\n- API rate limits\n- Authentication issues\n- Service unavailable\n\nPlease try again later."
-        
-        # Parse the accumulated response to separate step indicators from final answer
-        answer = accumulated_response or "No answer generated"
-        
-        # Get the trace data from the agent (this is now collected internally)
-        if agent is not None and hasattr(agent, 'get_trace_data'):
-            trace = agent.get_trace_data()
-        else:
-            trace = {}
-        final_result = trace.get("final_result", {}) if trace else {}
-        llm_used = final_result.get("llm_used", "unknown")
-        
-        # Parse the response to separate step indicators from the final answer
-        import re
-        
-        # Extract the final answer (look for the actual answer after step indicators)
-        # Try multiple patterns to catch the FINAL ANSWER
-        final_answer_patterns = [
-            r'FINAL ANSWER:\s*(.*)',
-            r'FINAL ANSWER\s*:\s*(.*)',
-            r'FINAL ANSWER:\s*(.*?)(?=\n\n|\n---|$)',
-            r'FINAL ANSWER\s*:\s*(.*?)(?=\n\n|\n---|$)'
-        ]
-        
-        final_answer_match = None
-        for pattern in final_answer_patterns:
-            final_answer_match = re.search(pattern, answer, re.DOTALL | re.IGNORECASE)
-            if final_answer_match:
-                break
-        
-        # Also try to extract from the accumulated response directly
-        if not final_answer_match:
-            for pattern in final_answer_patterns:
-                final_answer_match = re.search(pattern, accumulated_response, re.DOTALL | re.IGNORECASE)
-                if final_answer_match:
-                    break
-        
-        if final_answer_match:
-            final_answer = final_answer_match.group(1).strip()
-        else:
-            # If no FINAL ANSWER marker, try to extract the last meaningful content
-            # Look for content that's not step indicators or process info
-            lines = answer.split('\n')
-            final_answer = ""
-            
-            # First, try to find content that looks like a real answer (not process info)
-            for line in reversed(lines):
-                line = line.strip()
-                if (line and 
-                    not line.startswith('📍') and 
-                    not line.startswith('🔄') and 
-                    not line.startswith('🔧') and 
-                    not line.startswith('✅') and
-                    not line.startswith('Validate:') and
-                    not line.startswith('Intent:') and
-                    not line.startswith('Plan:') and
-                    not line.startswith('Execute:') and
-                    not line.startswith('Result:') and
-                    not line.startswith('No answer provided') and
-                    len(line) > 10):  # Only consider substantial content
-                    final_answer = line
-                    break
-            
-            # If still no answer, try to extract from the tool execution results
-            if not final_answer or final_answer == "No answer provided":
-                # Look for tool execution results in the accumulated response
-                if "list_applications" in answer and "success" in answer.lower():
-                    # Extract the actual data from the tool response
-                    # Look for the JSON data in the response
-                    json_pattern = r'\{.*?"success".*?"raw_response".*?\}'
-                    json_match = re.search(json_pattern, answer, re.DOTALL)
-                    if json_match:
-                        try:
-                            import json
-                            tool_data = json.loads(json_match.group(0))
-                            if tool_data.get("success") and "raw_response" in tool_data:
-                                apps = tool_data["raw_response"]
-                                if isinstance(apps, list) and len(apps) > 0:
-                                    # Format the applications list
-                                    app_list = []
-                                    for app in apps:
-                                        name = app.get("name", "Unknown")
-                                        alias = app.get("alias", "Unknown")
-                                        app_list.append(f"• **{name}** (system name: {alias})")
-                                    final_answer = "Here is the list of applications available in the Platform:\n\n" + "\n".join(app_list)
-                                    print(f"chat_with_agent: Extracted applications from tool response: {len(apps)} apps")
-                        except Exception as e:
-                            print(f"chat_with_agent: Error parsing tool response: {e}")
-            
-            # If still no answer, try to get it from the agent's trace data
-            if not final_answer or final_answer == "No answer provided":
-                if hasattr(agent, 'get_trace_data'):
-                    trace = agent.get_trace_data()
-                    final_result = trace.get("final_result", {})
-                    submitted_answer = final_result.get("submitted_answer", "")
-                    if submitted_answer and submitted_answer != "No answer provided":
-                        final_answer = submitted_answer
-                        print(f"chat_with_agent: Got final answer from trace: {submitted_answer[:100]}...")
-            
-            if not final_answer:
-                final_answer = answer
-        
-        # Debug: Print what we're about to display
-        print(f"chat_with_agent: Final answer to display: '{final_answer[:500]}...'")
-        print(f"chat_with_agent: Final answer length: {len(final_answer)}")
-        
-        # Create the main response with the final answer prominently displayed
-        response = f"🤖 **Agent Response** (using {llm_used}):\n\n{final_answer}"
-        
-        # Add step indicators as a collapsible section if they exist
-        step_content = ""
-        step_lines = []
-        for line in answer.split('\n'):
-            if '📍' in line or '🔄' in line or '🔧' in line or '✅' in line:
-                step_lines.append(line)
-        
-        if step_lines:
-            step_content = '\n'.join(step_lines)
-        
-        # Get detailed information about the multi-model approach
-        response_parts = []
-        response_parts.append(response)
-        
-        # Add step indicators as a collapsible section if they exist
-        if step_content.strip():
-            response_parts.append({
-                "role": "assistant",
-                "content": step_content,
-                "metadata": {"title": "🔍 Process Details"}
-            })
-        
-        # Add information about the multi-model approach
-        if hasattr(agent, 'llm_tracking'):
-            multi_model_info = []
-            multi_model_info.append("🔍 **Multi-Model Approach:**")
-            
-            # Show which models were attempted
-            attempted_models = []
-            for provider, tracking in agent.llm_tracking.items():
-                if tracking['total_attempts'] > 0:
-                    status = "✅ Success" if tracking['successes'] > 0 else "❌ Failed"
-                    attempted_models.append(f"• **{provider}**: {status} ({tracking['successes']}/{tracking['total_attempts']} attempts)")
-            
-            if attempted_models:
-                multi_model_info.append("\n".join(attempted_models))
-            
-            # Add overall statistics
-            total_attempts = sum(tracking['total_attempts'] for tracking in agent.llm_tracking.values())
-            total_successes = sum(tracking['successes'] for tracking in agent.llm_tracking.values())
-            
-            if total_attempts > 0:
-                overall_success_rate = (total_successes / total_attempts) * 100
-                multi_model_info.append(f"\n📊 **Overall**: {total_successes}/{total_attempts} successful responses ({overall_success_rate:.1f}% success rate)")
-            
-            if len(multi_model_info) > 1:
-                response_parts.append({
-                    "role": "assistant",
-                    "content": "\n".join(multi_model_info),
-                    "metadata": {"title": "🤖 Model Statistics"}
-                })
-        
-        # Add information about tools used if available
-        if 'llm_traces' in trace:
-            tool_usage = []
-            for llm_trace in trace.get('llm_traces', []):
-                if 'tool_calls' in llm_trace and llm_trace['tool_calls']:
-                    for tool_call in llm_trace['tool_calls']:
-                        tool_name = tool_call.get('name', 'unknown')
-                        tool_usage.append(f"• {tool_name}")
-            
-            if tool_usage:
-                tools_info = "🛠️ **Tools Used:**\n" + "\n".join(set(tool_usage))
-                response_parts.append({
-                    "role": "assistant",
-                    "content": tools_info,
-                    "metadata": {"title": "🛠️ Tools Used"}
-                })
-        
-        # Add execution time if available
-        if 'total_execution_time' in trace:
-            exec_time = trace['total_execution_time']
-            exec_info = f"⏱️ **Execution Time**: {exec_time:.2f} seconds"
-            response_parts.append({
-                "role": "assistant",
-                "content": exec_info,
-                "metadata": {"title": "⏱️ Performance"}
-            })
-        
-        # Return updated history with proper message format for Gradio chatbot
-        # For now, just return the main response and add collapsible sections as separate messages
-        updated_history = history + [{"role": "user", "content": message}]
-        
-        # Add the main response
-        updated_history.append({"role": "assistant", "content": response})
-        
-        # Add collapsible sections as separate messages
-        for part in response_parts[1:]:
-            if isinstance(part, dict):
-                updated_history.append(part)
-        
-        return updated_history, ""
-        
-    except Exception as e:
-        error_msg = f"❌ Error: {str(e)}"
-        print(f"Chat error: {e}")
-        updated_history = history + [{"role": "user", "content": message}, {"role": "assistant", "content": error_msg}]
-        return updated_history, ""
 
 def chat_with_agent_stream(message, history):
 	"""
@@ -1403,62 +1075,53 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                         qa_explain_btn = gr.Button("Explain ML vs DL briefly", elem_classes=["cmw-button"]) 
             
             # Event handlers
-            def send_message(message, history):
-                return chat_with_agent(message, history)
             
             def clear_chat():
                 return [], ""
             
-            def quick_math(history):
-                message = (
+            def quick_math():
+                return (
                     "Draft a plan to CREATE a text attribute 'Customer ID' in application 'ERP', template 'Counterparties' "
                     "with display_format=CustomMask and mask ([0-9]{10}|[0-9]{12}), system_name=CustomerID. "
                     "Provide Intent, Plan, Validate, and a DRY-RUN payload preview (compact JSON) for the tool call, "
                     "but DO NOT execute any changes yet. Wait for my confirmation."
                 )
-                return chat_with_agent(message, history)
             
-            def quick_code(history):
-                message = (
+            def quick_code():
+                return (
                     "Prepare a safe EDIT plan for attribute 'Contact Phone' (system_name=ContactPhone) in application 'CRM', template 'Leads' "
                     "to change display_format to PhoneRuMask. Provide Intent, Plan, Validate checklist (risk notes), and a DRY-RUN payload preview. "
                     "Do NOT execute changes yet—await my approval."
                 )
-                return chat_with_agent(message, history)
             
-            def quick_list_apps(history):
-                message = (
+            def quick_list_apps():
+                return (
                     "List all applications in the Platform. "
                     "Format nicely using Markdown. "
                     "Show system names and descriptions if any."
                 )
-                return chat_with_agent(message, history)
             
-            def qa_capital_example(history):
-                message = "Capital of France?"
-                return chat_with_agent(message, history)
+            def qa_capital_example():
+                return "Capital of France?"
             
-            def qa_arith_example(history):
-                message = "15 * 23 + 7 = ?"
-                return chat_with_agent(message, history)
+            def qa_arith_example():
+                return "15 * 23 + 7 = ?"
             
-            def qa_prime_example(history):
-                message = "Write a Python function to check if a number is prime."
-                return chat_with_agent(message, history)
+            def qa_prime_example():
+                return "Write a Python function to check if a number is prime."
             
-            def qa_explain_example(history):
-                message = "Explain ML vs DL briefly"
-                return chat_with_agent(message, history)
+            def qa_explain_example():
+                return "Explain ML vs DL briefly"
             
             # Connect event handlers
             send_btn.click(
-                fn=chat_with_agent,  # Use the working non-streaming version
+                fn=chat_with_agent_stream,  # Use the streaming version
                 inputs=[msg, chatbot],
                 outputs=[chatbot, msg]
             )
             
             msg.submit(
-                fn=chat_with_agent,  # Use the working non-streaming version
+                fn=chat_with_agent_stream,  # Use the streaming version
                 inputs=[msg, chatbot],
                 outputs=[chatbot, msg]
             )
@@ -1483,41 +1146,34 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             
             quick_math_btn.click(
                 fn=quick_math,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
+                outputs=[msg]
             )
             
             quick_code_btn.click(
                 fn=quick_code,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
+                outputs=[msg]
             )
             
             quick_list_apps_btn.click(
                 fn=quick_list_apps,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
+                outputs=[msg]
             )
             
             qa_capital_btn.click(
                 fn=qa_capital_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
+                outputs=[msg]
             )
             qa_math_btn.click(
                 fn=qa_arith_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
+                outputs=[msg]
             )
             qa_code_btn.click(
                 fn=qa_prime_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
+                outputs=[msg]
             )
             qa_explain_btn.click(
                 fn=qa_explain_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
+                outputs=[msg]
             )
         with gr.TabItem("Init logs"):
             init_chat = gr.Chatbot(label="Initialization logs", height=400, type="messages", render_markdown=False, elem_classes=["terminal-chat"])
@@ -1606,5 +1262,5 @@ if __name__ == "__main__":
 
     print("-"*(60 + len(" App Starting ")) + "\n")
 
-    print("Launching Gradio Interface for Comindware Analyst Copilot Evaluation...")
+    print("Launching Gradio Interface for Comindware Analyst Copilot...")
     demo.launch(debug=True, share=False)
