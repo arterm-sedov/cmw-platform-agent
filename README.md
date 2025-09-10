@@ -334,10 +334,10 @@ Visit the Gradio interface to test the agent interactively:
 ### Programmatic Usage
 
 ```python
-from agent import GaiaAgent
+from agent import CmwAgent
 
 # Initialize the agent
-agent = GaiaAgent()
+agent = CmwAgent()
 
 # Create an entity in CMW Platform
 result = agent("Create a template called 'Customer' with attributes: Name (Text), Email (Text), Phone (Text)")
