@@ -971,6 +971,14 @@ class GaiaAgent:
             tools=self.tools,
             tool_results_history=tool_results_history
         )
+        
+        # DEBUG: Print the current question being processed
+        current_question = None
+        for msg in reversed(messages):
+            if hasattr(msg, 'type') and msg.type == 'human':
+                current_question = msg.content
+                break
+        print(f"[Tool Loop] DEBUG: Current question being processed: {current_question}")
         # Gemini-specific: add explicit instructions for extracting numbers or lists
         if llm_type == "gemini":
             reminder += (
@@ -994,6 +1002,7 @@ class GaiaAgent:
         if include_tool_results:
             tool_results_text = "\n\nTOOL RESULTS:\n" + "\n".join([f"Result {i+1}: {result}" for i, result in enumerate(tool_results_history)])
             reminder += tool_results_text
+            print(f"[Tool Loop] DEBUG: Adding tool results to reminder: {tool_results_text[:200]}...")
         
         # Add the reminder to the existing message history
         messages.append(HumanMessage(content=reminder))
