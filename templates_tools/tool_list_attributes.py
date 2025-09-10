@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional, Literal
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.v1.types import NoneBytes
 import requests_
@@ -9,10 +9,12 @@ ATTRIBUTE_ENDPOINT = "webapi/Attribute/List"
 
 class ListAttributes(BaseModel):
     application_system_name: str = Field(
-        description="System name of the application with the template where the attributes are to be found. RU: Системное имя приложения"
+        description="System name of the application with the template where the attributes are to be found."
+            "RU: Системное имя приложения"
     )
     template_system_name: str = Field(
-        description="System name of the template where the attributes are to be found. RU: Системное имя шаблона"
+        description="System name of the template where the attributes are to be found."
+            "RU: Системное имя шаблона"
     )
 
     @field_validator("application_system_name", "template_system_name", mode="before")
@@ -21,7 +23,6 @@ class ListAttributes(BaseModel):
         if isinstance(v, str) and v.strip() == "":
             raise ValueError("must be a non-empty string")
         return v
-
 
 @tool("list_attributes", return_direct=False, args_schema=ListAttributes)
 def list_attributes(

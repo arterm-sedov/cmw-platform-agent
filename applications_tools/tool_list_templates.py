@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional, Literal
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.v1.types import NoneBytes
 import requests_
@@ -8,11 +8,14 @@ from models import AttributeResult
 ATTRIBUTE_ENDPOINT = "webapi/"
 
 class ListTemplates(BaseModel):
-    template_type: Literal["record", "process", "account"] = Field(
-        description="Choose template type: Record, Process, or Account. RU: Запись, Процесс, Аккаунт"
-    )
     application_system_name: str = Field(
-        description="System name of the application to fetch the templates from. RU: Системное имя приложения"
+        description="System name of the application to fetch the templates from. "
+                    "RU: Системное имя приложения"
+    )
+    template_type: Literal["record", "process", "account"] = Field(
+        default="record",
+        description="Choose template type: Record, Process, or Account. "
+                    "RU: Шаблон записи, Шаблон процесса, Шаблон аккаунта"
     )
 
     @field_validator("template_type", mode="before")
@@ -20,13 +23,15 @@ class ListTemplates(BaseModel):
     def normalize_operation(cls, v: str) -> str:
         if v is None:
             return v
-        value = str(v).strip().lower()
+        
         mapping = {
             "запись": "record",
             "процесс": "process",
             "аккаунт": "account"
         }
-        return mapping.get(value, value)
+        
+        normalized_value = str(v).strip().lower()
+        return mapping.get(normalized_value, normalized_value)
 
     @field_validator("application_system_name", mode="before")
     @classmethod
@@ -35,14 +40,15 @@ class ListTemplates(BaseModel):
             raise ValueError("must be a non-empty string")
         return v
 
-
 @tool("list_templates", return_direct=False, args_schema=ListTemplates)
 def list_templates(
-    template_type: str,
-    application_system_name: str
-    ) -> Dict[str, Any]:
+    application_system_name: str,
+    template_type: str = "record"
+) -> Dict[str, Any]:
     """
     List all templates of a given type in an application.
+    
+    Default template type is "record".
     
     Returns:
         dict: {
@@ -55,11 +61,11 @@ def list_templates(
 
     try:
         if template_type == "record":
-            result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/AccountTemplate/List/{application_system_name}")
-        if template_type == "process":
-            result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/ProcessTemplate/List/{application_system_name}")
-        if template_type == "account":
             result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/RecordTemplate/List/{application_system_name}")
+        elif template_type == "process":
+            result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/ProcessTemplate/List/{application_system_name}")
+        elif template_type == "account":
+            result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/AccountTemplate/List/{application_system_name}")
         else:
             result = {
                 "success": False,
@@ -92,8 +98,8 @@ def list_templates(
     return validated.model_dump()
 
 if __name__ == "__main__":
-    results = list_attributes.invoke({
+    results = list_templates.invoke({
         "application_system_name": "AItestAndApi",
-        "template_system_name": "Test"
+        "template_type": "record"
     })
     print(results)

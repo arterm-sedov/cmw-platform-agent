@@ -1,43 +1,17 @@
-from typing import Any, Dict, List, Optional, Literal
-from langchain.tools import tool
-from pydantic import BaseModel, Field, field_validator, model_validator
-import requests_
-from models import AttributeResult
+from tool_utils import *
 
-ATTRIBUTE_ENDPOINT = "webapi/Attribute"
 
-class ArchiveOrUnarchiveAttribute(BaseModel):
+class ArchiveOrUnarchiveAttribute(CommonGetAttributeFields):
     operation: Literal["archive", "unarchive"] = Field(
-        description="Choose operation: Archive or Unarchive the attribute. RU: Архивировать, Разархивировать"
-    )
-    application_system_name: str = Field(
-        description="System name of the application with the template where the attribute is archived or unarchived. RU: Системное имя приложения"
-    )
-    template_system_name: str = Field(
-        description="System name of the template where the attribute is archived or unarchived. RU: Системное имя шаблона"
-    )
-    system_name: str = Field(
-        description="System name of the attribute to archive or unarchive. RU: Системное имя атрибута"
+        description="Choose operation: Archive or Unarchive the attribute."
+                    "RU: Архивировать, Разархивировать"
     )
 
     @field_validator("operation", mode="before")
     @classmethod
-    def normalize_operation(cls, v: str) -> str:
-        if v is None:
-            return v
-        value = str(v).strip().lower()
-        mapping = {
-            "архивировать": "archive",
-            "разархивировать": "unarchive"
-        }
-        return mapping.get(value, value)
+    def normalize_operation_archive_unarchive(cls, v: str) -> str:
+        return normalize_operation_archive_unarchive(v)
 
-    @field_validator("system_name", "application_system_name", "template_system_name", mode="before")
-    @classmethod
-    def non_empty_str(cls, v: Any) -> Any:
-        if isinstance(v, str) and v.strip() == "":
-            raise ValueError("must be a non-empty string")
-        return v    
 
 @tool("archive_or_unarchive_attribute", return_direct=False, args_schema=ArchiveOrUnarchiveAttribute)
 def archive_or_unarchive_attribute(

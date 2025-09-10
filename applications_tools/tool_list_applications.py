@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional, Literal
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.v1.types import NoneBytes
 import requests_
