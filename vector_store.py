@@ -355,7 +355,6 @@ class VectorStoreManager:
             "supabase_key_configured": bool(os.environ.get("SUPABASE_KEY")),
         }
 
-
 # Global instance for easy access
 vector_store_manager = VectorStoreManager()
 
@@ -387,8 +386,6 @@ def embed_query(text: str):
 def vector_answers_match(answer: str, reference: str, threshold: float = 0.8):
     """Check if answers match using vector similarity."""
     return vector_store_manager.vector_answers_match(answer, reference, threshold)
-
-
 
 def get_status():
     """Get vector store status."""

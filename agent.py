@@ -2478,8 +2478,6 @@ class GaiaAgent:
                 return True
         return False
 
-
-
     def _extract_final_answer(self, response: Any) -> str:
         """
         Extract the final answer from the LLM response, removing the "FINAL ANSWER:" prefix.

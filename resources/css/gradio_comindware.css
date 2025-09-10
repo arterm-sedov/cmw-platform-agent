@@ -488,7 +488,6 @@ body {
   border-radius: var(--cmw-radius-md) !important;
 }
 
-
 /* Chatbot */
 .gradio-container .chatbot {
   background: var(--cmw-surface-alt) !important;
@@ -519,7 +518,6 @@ body {
   background: transparent !important;
 }
 
-
 /* Model and quick-actions cards: one common border, padded; inner blocks borderless */
 .gradio-container .model-card, 
 .gradio-container .quick-actions-card,
@@ -540,12 +538,9 @@ body {
 
 /* (Quick actions uses same styling as model-card; no extra overrides required) */
 
-
 /* Removed platform alias button classes (.toolbar-btn, .btn-strong, .btn-pale) */
 
 /* Removed tab count/overflow helpers for minimalism */
-
-
 
 /* --- Dark theme support (Gradio toggles data-theme="dark") --- */
 html[data-theme='dark'] .gradio-container,

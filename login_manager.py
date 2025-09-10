@@ -25,7 +25,6 @@ from typing import Optional, Any
 # Global flag to enable/disable login functionality
 LOGIN_ENABLED = os.getenv("LOGIN_ENABLED", "false").lower() == "true"
 
-
 class LoginManager:
     """
     Manages HuggingFace login operations for the Comindware Analyst Copilot.
@@ -131,7 +130,6 @@ class LoginManager:
         except ImportError:
             print("Warning: gradio not available for login button")
             return None
-
 
 # Global login manager instance
 login_manager = LoginManager()

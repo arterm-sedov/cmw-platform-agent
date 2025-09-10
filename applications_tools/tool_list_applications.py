@@ -7,7 +7,6 @@ from models import AttributeResult
 
 ATTRIBUTE_ENDPOINT = "webapi/Solution"
 
-
 @tool("list_applications", return_direct=False)
 def list_applications() -> Dict[str, Any]:
     """
