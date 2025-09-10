@@ -393,19 +393,19 @@ class GaiaAgent:
             "models": [
                 {
                     "model": "GigaChat-2",
-                    "token_limit": 128_000,
+                    "token_limit": 128000,
                     "max_tokens": 2048,
                     "temperature": 0
                 },
                 {
                     "model": "GigaChat-2-Pro",
-                    "token_limit": 128_000,
+                    "token_limit": 128000,
                     "max_tokens": 2048,
                     "temperature": 0
                 },
                 {
                     "model": "GigaChat-2-Max",
-                    "token_limit": 128_000,
+                    "token_limit": 128000,
                     "max_tokens": 2048,
                     "temperature": 0
                 }
@@ -427,7 +427,7 @@ class GaiaAgent:
     # Print truncation length for debug output
     MAX_PRINT_LEN = 1000
     
-    def __init__(self, provider: str = "groq", log_sink=None):
+    def __init__(self, provider: str = None, log_sink=None):
         """
         Initialize the agent, loading the system prompt, tools, retriever, and LLM.
 
@@ -498,10 +498,9 @@ class GaiaAgent:
             # Get the LLM types that should be initialized based on the sequence
             if provider and provider in self.LLM_CONFIG and provider != "default":
                 llm_types_to_init = [provider]
-            elif self.DEFAULT_LLM_SEQUENCE:
-                llm_types_to_init = self.DEFAULT_LLM_SEQUENCE
             else:
-                llm_types_to_init = [k for k in self.LLM_CONFIG.keys() if k != "default"]
+                # Use the full sequence when no specific provider is requested
+                llm_types_to_init = self.DEFAULT_LLM_SEQUENCE
             llm_names = [self.LLM_CONFIG[llm_type]["name"] for llm_type in llm_types_to_init]
             print(f"🔄 Initializing LLMs based on sequence:")
             for i, name in enumerate(llm_names, 1):
