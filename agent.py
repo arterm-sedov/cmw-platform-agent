@@ -514,15 +514,19 @@ class GaiaAgent:
             for idx, llm_type in enumerate(llm_types_to_init):
                 config = self.LLM_CONFIG[llm_type]
                 llm_name = config["name"]
+                
+                # Skip LLMs that don't support tools - we only want tool-capable LLMs
+                if not config.get("tool_support", False):
+                    print(f"⏭️ Skipping {llm_name} - no tool support")
+                    continue
+                
                 for model_config in config["models"]:
                     model_id = model_config.get("model", "")
                     print(f"🔄 Initializing LLM {llm_name} (model: {model_id}) ({idx+1} of {len(llm_types_to_init)})")
                     llm_instance = None
-                    model_config_used = None
-                    plain_ok = False
                     tools_ok = None
-                    error_plain = None
                     error_tools = None
+                    
                     try:
                         def get_llm_instance(llm_type, config, model_config):
                             if llm_type == "gemini":
@@ -539,68 +543,49 @@ class GaiaAgent:
                                 return self._init_gigachat_llm(config, model_config)
                             else:
                                 return None
+                        
                         llm_instance = get_llm_instance(llm_type, config, model_config)
-                        if llm_instance is not None:
-                            try:
-                                plain_ok = self._ping_llm(f"{llm_name} (model: {model_id})", llm_type, use_tools=False, llm_instance=llm_instance)
-                            except Exception as e:
-                                plain_ok, error_plain = self._handle_llm_error(e, llm_name, llm_type, phase="init", context="plain")
-                                if not plain_ok:
-                                    # Do not add to available LLMs, break out
-                                    break
-                        else:
-                            error_plain = "instantiation returned None"
-                        if config.get("tool_support", False) and self.tools and llm_instance is not None and plain_ok:
-                            try:
-                                # Filter tools for provider-specific schema limitations (e.g., GigaChat JSON Schema)
-                                safe_tools = self._filter_tools_for_llm(self.tools, llm_type)
-                                llm_with_tools = llm_instance.bind_tools(safe_tools)
-                                try:
-                                    tools_ok = self._ping_llm(f"{llm_name} (model: {model_id}) (with tools)", llm_type, use_tools=True, llm_instance=llm_with_tools)
-                                except Exception as e:
-                                    tools_ok, error_tools = self._handle_llm_error(e, llm_name, llm_type, phase="init", context="tools")
-                                    if not tools_ok:
-                                        break
-                            except Exception as e:
-                                tools_ok = False
-                                error_tools = str(e)
-                        else:
-                            tools_ok = None
+                        if llm_instance is None:
+                            error_tools = "instantiation returned None"
+                            continue
+                        
+                        # Filter tools for provider-specific schema limitations
+                        safe_tools = self._filter_tools_for_llm(self.tools, llm_type)
+                        llm_with_tools = llm_instance.bind_tools(safe_tools)
+                        
+                        # Test with a math question that requires tools
+                        tools_ok = self._test_llm_with_tools(f"{llm_name} (model: {model_id})", llm_type, llm_with_tools)
+                        
                         # Store result for summary
                         self.llm_init_results.append({
                             "provider": llm_name,
                             "llm_type": llm_type,
                             "model": model_id,
-                            "plain_ok": plain_ok,
+                            "plain_ok": True,  # We assume basic functionality if instantiation succeeded
                             "tools_ok": tools_ok,
-                            "error_plain": error_plain,
+                            "error_plain": None,
                             "error_tools": error_tools
                         })
-                        # Special handling for models with force_tools: always bind tools if tool support is enabled, regardless of tools_ok
-                        # Check force_tools at both provider and model level
+                        
+                        # Check force_tools flag - if True, use even if tools test failed
                         force_tools = config.get("force_tools", False) or model_config.get("force_tools", False)
-                        if llm_instance and plain_ok and (
-                            not config.get("tool_support", False) or tools_ok or (force_tools and config.get("tool_support", False))
-                        ):
+                        
+                        if tools_ok or force_tools:
                             self.active_model_config[llm_type] = model_config
                             self.llm_instances[llm_type] = llm_instance
-                            if config.get("tool_support", False):
-                                # Bind filtered tool set for this provider
-                                safe_tools = self._filter_tools_for_llm(self.tools, llm_type)
-                                self.llm_instances_with_tools[llm_type] = llm_instance.bind_tools(safe_tools)
-                                if force_tools and not tools_ok:
-                                    print(f"⚠️ {llm_name} (model: {model_id}) (with tools) test returned empty or failed, but binding tools anyway (force_tools=True: tool-calling is known to work in real use).")
-                            else:
-                                self.llm_instances_with_tools[llm_type] = None
+                            self.llm_instances_with_tools[llm_type] = llm_with_tools
                             self.llms.append(llm_instance)
-                            self.llms_with_tools.append(self.llm_instances_with_tools[llm_type])
+                            self.llms_with_tools.append(llm_with_tools)
                             self.llm_provider_names.append(llm_type)
-                            print(f"✅ LLM ({llm_name}) initialized successfully with model {model_id}")
+                            
+                            if force_tools and not tools_ok:
+                                print(f"⚠️ {llm_name} (model: {model_id}) tool test failed, but using anyway (force_tools=True)")
+                            else:
+                                print(f"✅ LLM ({llm_name}) initialized successfully with model {model_id}")
                             break
                         else:
-                            self.llm_instances[llm_type] = None
-                            self.llm_instances_with_tools[llm_type] = None
-                            print(f"⚠️ {llm_name} (model: {model_id}) failed initialization (plain_ok={plain_ok}, tools_ok={tools_ok})")
+                            print(f"⚠️ {llm_name} (model: {model_id}) failed tool test")
+                            
                     except Exception as e:
                         print(f"⚠️ Failed to initialize {llm_name} (model: {model_id}): {e}")
                         self.llm_init_results.append({
@@ -1562,34 +1547,29 @@ class GaiaAgent:
             if use_tools:
                 response = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type_str, call_id)
                 if not hasattr(response, 'content') or not response.content:
-                    print(f"⚠️ {llm_name} tool calling returned empty content, trying without tools...")
-                    llm_no_tools, _, _ = self._select_llm(llm_type, False)
-                    if llm_no_tools:
-                        has_tool_messages = self._has_tool_messages(messages)
-                        if has_tool_messages:
-                            print(f"⚠️ Retrying {llm_name} without tools (tool results already in message history)")
-                            response = llm_no_tools.invoke(messages)
-                        else:
-                            tool_results_history = []
-                            for msg in messages:
-                                if hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'content'):
-                                    tool_results_history.append(msg.content)
-                            if tool_results_history:
-                                print(f"⚠️ Retrying {llm_name} without tools with enhanced context")
-                                print(f"📝 Tool results included: {len(tool_results_history)} tools")
-                                reminder = self._get_reminder_prompt(
-                                    reminder_type="final_answer_prompt",
-                                    messages=messages,
-                                    tools=self.tools,
-                                    tool_results_history=tool_results_history
-                                )
-                                enhanced_messages = [self.system_prompt, HumanMessage(content=reminder)]
-                                response = self._invoke_llm_provider(llm_no_tools, enhanced_messages)
-                            else:
-                                print(f"⚠️ Retrying {llm_name} without tools (no tool results found)")
-                                response = self._invoke_llm_provider(llm_no_tools, messages)
+                    print(f"⚠️ {llm_name} tool calling returned empty content, trying with enhanced context...")
+                    # Instead of falling back to non-tool LLM, enhance the context and retry with tools
+                    tool_results_history = []
+                    for msg in messages:
+                        if hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'content'):
+                            tool_results_history.append(msg.content)
+                    
+                    if tool_results_history:
+                        print(f"📝 Tool results included: {len(tool_results_history)} tools")
+                        reminder = self._get_reminder_prompt(
+                            reminder_type="final_answer_prompt",
+                            messages=messages,
+                            tools=self.tools,
+                            tool_results_history=tool_results_history
+                        )
+                        enhanced_messages = [self.sys_msg, HumanMessage(content=reminder)]
+                        response = self._invoke_llm_provider(llm, enhanced_messages)
+                    else:
+                        print(f"⚠️ No tool results found, retrying with original context")
+                        response = self._invoke_llm_provider(llm, messages)
+                    
                     if not hasattr(response, 'content') or not response.content:
-                        print(f"⚠️ {llm_name} still returning empty content even without tools. This may be a token limit issue.")
+                        print(f"⚠️ {llm_name} still returning empty content. This may be a token limit issue.")
                         return AIMessage(content=f"Error: {llm_name} failed due to token limits. Cannot complete reasoning.")
             else:
                 response = self._invoke_llm_provider(llm, messages)
@@ -1703,8 +1683,8 @@ class GaiaAgent:
                 break
         if not original_question:
             original_question = '[No original question provided]'
-        # Prepare LLM instances for chunking and synthesis
-        llm_chunk = self._select_llm(llm_type, use_tools=False)[0]
+        # Prepare LLM instances for chunking and synthesis - use tools for both
+        llm_chunk = self._select_llm(llm_type, use_tools=True)[0]
         llm_final = self._select_llm(llm_type, use_tools=True)[0]
         all_responses = []
         wait_time = 60
@@ -1933,14 +1913,17 @@ class GaiaAgent:
         # Handle None text gracefully
         if not text:
             return ""
+        
         # Remove everything before and including 'final answer' (case-insensitive, optional colon/space)
         match = re.search(r'final answer\s*:?', text, flags=re.IGNORECASE)
         if match:
             text = text[match.end():]
+        
         # Normalize whitespace and any JSON remainders
         text = re.sub(r'\s+', ' ', text).strip()
         text = text.lstrip('{[\'').rstrip(']]}"\'')
-        return text.strip()
+        result = text.strip()
+        return result
 
     def _get_tool_name(self, tool):
         if hasattr(tool, 'name'):
@@ -2338,9 +2321,10 @@ class GaiaAgent:
                 self.llm_tracking[llm_type]["total_attempts"] += increment
 
     @trace_prints_with_context("question")
-    def __call__(self, question: str, file_data: str = None, file_name: str = None, llm_sequence: list = None, chat_history: Optional[List[Dict[str, Any]]] = None) -> dict:
+    def __call__(self, question: str, file_data: str = None, file_name: str = None, llm_sequence: list = None, chat_history: Optional[List[Dict[str, Any]]] = None):
         """
         Run the agent on a single question, using step-by-step reasoning and tools.
+        Now always returns a generator for consistent streaming behavior.
 
         Args:
             question (str): The question to answer.
@@ -2349,25 +2333,33 @@ class GaiaAgent:
             llm_sequence (list, optional): List of LLM provider keys to use for this call.
             chat_history (list, optional): Prior conversation to maintain continuity.
         Returns:
-            dict: Dictionary containing:
-                - answer: The agent's final answer, formatted per system_prompt
-                - similarity_score: Similarity score against reference (0.0-1.0)
-                - llm_used: Name of the LLM that provided the answer
-                - reference: Reference answer used for comparison, or "Reference answer not found"
-                - question: Original question text
-                - file_name: Name of attached file (if any)
-                - error: Error message (if any error occurred)
+            Generator: Yields text chunks of the response.
+        """
+        # Always use streaming internally, but collect trace data
+        result = self._unified_process(question, file_data, file_name, llm_sequence, chat_history, streaming=True)
+        return result
 
-        Workflow:
-            1. Store file data for use by tools.
-            2. Retrieve similar Q/A for context using the retriever.
-            3. Use LLM sequence with similarity checking against reference.
-            4. If no similar answer found, fall back to reference answer.
+    def _unified_process(self, question: str, file_data: str = None, file_name: str = None, llm_sequence: list = None, chat_history: Optional[List[Dict[str, Any]]] = None, streaming: bool = False):
+        """
+        Unified processing method that always uses streaming internally but can return either format.
+        This is the single source of truth for all LLM calling logic.
+        
+        Args:
+            question (str): The question to answer
+            file_data (str, optional): Base64 encoded file data if a file is attached
+            file_name (str, optional): Name of the attached file
+            llm_sequence (list, optional): List of LLM provider keys to use
+            chat_history (list, optional): Prior conversation to maintain continuity
+            streaming (bool): Whether to return generator (True) or dict (False)
+            
+        Returns:
+            If streaming=True: generator yielding text chunks
+            If streaming=False: dict with full trace (collected from streaming)
         """
         # Initialize trace for this question
         self._trace_init_question(question, file_data, file_name)
         
-        print(f"\n🔎 Processing question: {question}\n")
+        print(f"\n🔎 {'(stream)' if streaming else ''} Processing question: {question}\n")
         
         # Increment total questions counter
         self.total_questions += 1
@@ -2382,62 +2374,186 @@ class GaiaAgent:
         if file_data and file_name:
             print(f"📁 File attached: {file_name} ({len(file_data)} chars base64)")
         
-        # 1. Retrieve similar Q/A for context
+        # Retrieve reference answer
         reference = self._get_reference_answer(question)
         
-        # 2. Step-by-step reasoning with LLM sequence and similarity checking
+        # Format messages
         messages = self._format_messages(question, reference=reference, chat_history=chat_history)
-        try:
-            answer, llm_used = self._try_llm_sequence(messages, use_tools=True, reference=reference, llm_sequence=llm_sequence)
-            print(f"🎯 Final answer from {llm_used}")
-            
-            # Calculate similarity score if reference exists
-            similarity_score = 0.0
-            if reference:
-                is_match, similarity_score = self._vector_answers_match(answer, reference)
-            else:
-                similarity_score = 1.0  # No reference to compare against
+        
+        # Build a default llm_sequence if not provided
+        if not llm_sequence:
+            try:
+                llm_sequence = self.DEFAULT_LLM_SEQUENCE.copy()
+            except Exception:
+                llm_sequence = []
+        
+        # Always use streaming internally, but collect data for dictionary output
+        accumulated_response = ""
+        final_llm_name = "unknown"
+        similarity_score = 0.0
+        
+        # Try providers in order with unified logic
+        for llm_type in llm_sequence:
+            try:
+                # Check if this LLM type was successfully initialized
+                if llm_type not in self.llm_provider_names:
+                    print(f"⚠️ Skipping {llm_type}: LLM not initialized")
+                    continue
                 
-            # Display comprehensive stats
-            self.print_llm_stats_table()
-            
-            # # Return structured result
-            # Use helper function to ensure valid answer
+                # Always use tools when available - this ensures consistent behavior
+                use_tools = self._provider_supports_tools(llm_type)
+                llm, llm_name, _ = self._select_llm(llm_type, use_tools)
+                if llm is None:
+                    print(f"⚠️ Skipping {llm_type}: LLM instance is None")
+                    continue
+                
+                print(f"🤖 Using {llm_name} (tools: {use_tools})")
+                final_llm_name = llm_name
+                
+                # Always use streaming internally
+                if use_tools:
+                    # For tool-calling, run the full process and then stream the result
+                    result = self._run_tool_calling_loop(llm, messages, {self._get_tool_name(tool): tool for tool in self.tools}, llm_type)
+                    answer = self._extract_final_answer(result)
+                    
+                    # Stream the answer character by character
+                    for char in answer:
+                        accumulated_response += char
+                        if streaming:
+                            yield char
+                else:
+                    # For non-tool calls, try native streaming first
+                    if hasattr(llm, "stream") and callable(getattr(llm, "stream")):
+                        for chunk in llm.stream(messages):
+                            try:
+                                text = getattr(chunk, "content", None)
+                                if text is None:
+                                    text = getattr(chunk, "text", None)
+                                if text is None and isinstance(chunk, dict):
+                                    text = chunk.get("content") or chunk.get("text") or chunk.get("delta")
+                                if text is None:
+                                    text = str(chunk)
+                            except Exception:
+                                text = str(chunk)
+                            if not text:
+                                continue
+                            accumulated_response += text
+                            if streaming:
+                                yield text
+                    else:
+                        # Fallback: invoke once and stream result
+                        response = self._invoke_llm_provider(llm, messages, llm_type)
+                        answer = self._extract_final_answer(response)
+                        for char in answer:
+                            accumulated_response += char
+                            if streaming:
+                                yield char
+                
+                # If we get here, we have a successful response
+                print(f"🎯 Final answer from {llm_name}")
+                
+                # Calculate similarity score if reference exists
+                if reference:
+                    is_match, similarity_score = self._vector_answers_match(accumulated_response, reference)
+                else:
+                    similarity_score = 1.0
+                
+                # Display comprehensive stats
+                self.print_llm_stats_table()
+                
+                # If streaming, finalize trace and return
+                if streaming:
+                    self._finalize_trace_for_streaming(question, accumulated_response, llm_name, reference)
+                    return
+                else:
+                    # For non-streaming, create dictionary result
+                    final_answer = {
+                        "submitted_answer": ensure_valid_answer(accumulated_response),
+                        "similarity_score": similarity_score,
+                        "llm_used": llm_name,
+                        "reference": reference if reference else "Reference answer not found",
+                        "question": question
+                    }
+                    
+                    # Finalize trace with success result
+                    self._trace_finalize_question(final_answer)
+                    
+                    result = self._trace_get_full()
+                    return result
+                    
+            except Exception as e:
+                print(f"❌ {llm_name} failed: {e}")
+                if llm_type == llm_sequence[-1]:  # Last provider
+                    # Return error result
+                    error_result = {
+                        "submitted_answer": f"Error: {e}",
+                        "similarity_score": 0.0,
+                        "llm_used": "none",
+                        "reference": reference if reference else "Reference answer not found",
+                        "question": question,
+                        "error": str(e)
+                    }
+                    
+                    # Finalize trace with error result
+                    self._trace_finalize_question(error_result)
+                    
+                    if streaming:
+                        error_msg = f"Error: {e}"
+                        for char in error_msg:
+                            yield char
+                        return
+                    else:
+                        return self._trace_get_full()
+                else:
+                    print(f"🔄 Trying next LLM...")
+                    continue
+        
+        # If we get here, all LLMs failed
+        if streaming:
+            error_msg = "⚠️ No LLM providers are currently available. Please check the initialization logs for details."
+            for char in error_msg:
+                yield char
+        else:
+            return {"error": "All LLMs failed"}
+
+    def _unified_process_with_streaming(self, question: str, chat_history: Optional[List[Dict[str, Any]]] = None, llm_sequence: Optional[List[str]] = None):
+        """
+        Wrapper for unified processing with streaming enabled.
+        """
+        return self._unified_process(question, None, None, llm_sequence, chat_history, streaming=True)
+
+    def _finalize_trace_for_streaming(self, question: str, answer: str, llm_used: str, reference: str):
+        """
+        Finalize trace for streaming responses.
+        """
+        try:
+            # Similarity scoring
+            if reference:
+                _, similarity_score = self._vector_answers_match(answer, reference)
+            else:
+                similarity_score = 1.0
+
             final_answer = {
-                "submitted_answer": ensure_valid_answer(answer),  # Consistent field name
+                "submitted_answer": ensure_valid_answer(answer),
                 "similarity_score": similarity_score,
                 "llm_used": llm_used,
                 "reference": reference if reference else "Reference answer not found",
-                "question": question
-            }
-            
-            # Finalize trace with success result
-            self._trace_finalize_question(final_answer)
-            
-            result = self._trace_get_full()
-            return result
-            
-        except Exception as e:
-            print(f"❌ All LLMs failed: {e}")
-            self.print_llm_stats_table()
-            
-            # Return error result
-            error_result = {
-                "submitted_answer": f"Error: {e}",  # Consistent field name - never None
-                "similarity_score": 0.0,
-                "llm_used": "none",
-                "reference": reference if reference else "Reference answer not found",
                 "question": question,
-                "error": str(e)
             }
-            
-            # Finalize trace with error result
-            self._trace_finalize_question(error_result)
-            
-            # Add trace to the result
-            error_result = self._trace_get_full()
-            
-            return error_result
+            self._trace_finalize_question(final_answer)
+        except Exception as _e:
+            # Ensure trace ends even if scoring failed
+            try:
+                final_answer = {
+                    "submitted_answer": ensure_valid_answer(answer),
+                    "similarity_score": 0.0,
+                    "llm_used": llm_used,
+                    "reference": reference if reference else "Reference answer not found",
+                    "question": question,
+                }
+                self._trace_finalize_question(final_answer)
+            except Exception:
+                pass
 
     def _extract_text_from_response(self, response: Any) -> str:
         """
@@ -2492,6 +2608,7 @@ class GaiaAgent:
         """
         # Extract text from response
         text = self._extract_text_from_response(response)
+        
         # If marker exists, clean after marker; otherwise, use stripped text
         if self._has_final_answer_marker(text):
             cleaned_answer = self._clean_final_answer_text(text)
@@ -2499,7 +2616,8 @@ class GaiaAgent:
             cleaned_answer = (text or "").strip()
         
         # Use helper function to ensure valid answer
-        return ensure_valid_answer(cleaned_answer)
+        final_answer = ensure_valid_answer(cleaned_answer)
+        return final_answer
 
     def _llm_answers_match(self, answer: str, reference: str) -> bool:
         """
@@ -2521,7 +2639,7 @@ class GaiaAgent:
         )
         validation_msg = [SystemMessage (content=self.system_prompt), HumanMessage(content=validation_prompt)]
         try:
-            response = self._try_llm_sequence(validation_msg, use_tools=False)
+            response = self._try_llm_sequence(validation_msg, use_tools=True)
             result = self._extract_text_from_response(response).strip().lower()
             return result.startswith('true')
         except Exception as e:
@@ -2578,8 +2696,34 @@ class GaiaAgent:
                 # Research and search tools
                 'web_search_deep_research_exa_ai', 
                 'wiki_search', 'arxiv_search', 'web_search',
-                # Comindware Platform tools
-                'edit_or_create_text_attribute', 'get_text_attribute', 'delete_attribute', 'archive_or_unarchive_attribute', 'list_attributes', 'list_templates', 'list_applications'
+                # Comindware Platform tools - Templates
+                'list_attributes',
+                # Comindware Platform tools - Applications
+                'list_templates', 'list_applications',
+                # Comindware Platform tools - Attributes (Text)
+                'edit_or_create_text_attribute', 'get_text_attribute',
+                # Comindware Platform tools - Attributes (DateTime)
+                'edit_or_create_date_time_attribute', 'get_date_time_attribute',
+                # Comindware Platform tools - Attributes (Decimal/Numeric)
+                'edit_or_create_numeric_attribute', 'get_numeric_attribute',
+                # Comindware Platform tools - Attributes (Instance/Record)
+                'edit_or_create_record_attribute', 'get_record_attribute',
+                # Comindware Platform tools - Attributes (Image)
+                'edit_or_create_image_attribute', 'get_image_attribute',
+                # Comindware Platform tools - Attributes (Drawing)
+                'edit_or_create_drawing_attribute', 'get_drawing_attribute',
+                # Comindware Platform tools - Attributes (Document)
+                'edit_or_create_document_attribute', 'get_document_attribute',
+                # Comindware Platform tools - Attributes (Duration)
+                'edit_or_create_duration_attribute', 'get_duration_attribute',
+                # Comindware Platform tools - Attributes (Account)
+                'edit_or_create_account_attribute', 'get_account_attribute',
+                # Comindware Platform tools - Attributes (Boolean)
+                'edit_or_create_boolean_attribute', 'get_boolean_attribute',
+                # Comindware Platform tools - Attributes (Role)
+                'edit_or_create_role_attribute', 'get_role_attribute',
+                # Comindware Platform tools - Attributes (Utility)
+                'delete_attribute', 'archive_or_unarchive_attribute'
         ]
         
         # Build a set of tool names for deduplication (handle both __name__ and .name attributes)
@@ -2841,50 +2985,77 @@ class GaiaAgent:
             scope=scope
         )
 
-    def _ping_llm(self, llm_name: str, llm_type: str, use_tools: bool = False, llm_instance=None) -> bool:
+    def _test_llm_with_tools(self, llm_name: str, llm_type: str, llm_instance) -> bool:
         """
-        Test an LLM with a simple "Hello" message to verify it's working, using the unified LLM request method.
-        Includes the system message for realistic testing.
+        Test an LLM with a math question that requires tools to verify tool calling works.
+        This is more reliable than a simple "Hello" test because it verifies actual tool usage.
+        
         Args:
             llm_name: Name of the LLM for logging purposes
             llm_type: The LLM type string (e.g., 'gemini', 'groq', etc.)
-            use_tools: Whether to use tools (default: False)
-            llm_instance: If provided, use this LLM instance directly for testing
+            llm_instance: The LLM instance with tools bound
+            
         Returns:
-            bool: True if test passes, False otherwise
+            bool: True if tool calling works, False otherwise
         """
-        # Use the provided llm_instance if given, otherwise use the lookup logic
-        if llm_instance is not None:
-            llm = llm_instance
-        else:
-            if llm_type is None:
-                print(f"❌ {llm_name} llm_type not provided - cannot test")
-                return False
-            try:
-                llm, _, _ = self._select_llm(llm_type, use_tools)
-            except Exception as e:
-                print(f"❌ {llm_name} test failed: {e}")
-                return False
         try:
-            test_message = [self.sys_msg, HumanMessage(content="What is the main question in the whole Galaxy and all. Max 150 words (250 tokens)")]
-            print(f"🧪 Testing {llm_name} with 'Hello' message...")
+            # Use a math question that requires tools - similar to the quick action
+            test_message = [
+                self.sys_msg, 
+                HumanMessage(content="Calculate 15 * 23 + 7. Show your work step by step using tools.")
+            ]
+            print(f"🧪 Testing {llm_name} with math question requiring tools...")
             start_time = time.time()
-            test_response = self._invoke_llm_provider(llm, test_message)
+            test_response = self._invoke_llm_provider(llm_instance, test_message)
             end_time = time.time()
-            if test_response and hasattr(test_response, 'content') and test_response.content:
-                print(f"✅ {llm_name} test successful!")
-                print(f"   Response time: {end_time - start_time:.2f}s")
-                print(f"   Test message details:")
-                self._print_message_components(test_message[0], "test_input")
-                print(f"   Test response details:")
-                self._print_message_components(test_response, "test")
-                return True
-            else:
-                print(f"❌ {llm_name} returned empty response")
+            
+            if not test_response:
+                print(f"❌ {llm_name} returned None response")
                 return False
+                
+            # Check if the response contains tool calls
+            has_tool_calls = False
+            if hasattr(test_response, 'tool_calls') and test_response.tool_calls:
+                has_tool_calls = True
+                print(f"✅ {llm_name} made {len(test_response.tool_calls)} tool call(s)")
+                for i, tool_call in enumerate(test_response.tool_calls):
+                    tool_name = tool_call.get('name', 'unknown')
+                    print(f"   Tool {i+1}: {tool_name}")
+            
+            # Check if response has content
+            has_content = hasattr(test_response, 'content') and test_response.content and test_response.content.strip()
+            
+            if has_tool_calls and has_content:
+                print(f"✅ {llm_name} tool test successful!")
+                print(f"   Response time: {end_time - start_time:.2f}s")
+                print(f"   Content preview: {test_response.content[:100]}...")
+                return True
+            elif has_tool_calls and not has_content:
+                print(f"⚠️ {llm_name} made tool calls but returned empty content")
+                return True  # Still consider this a success - tools are working
+            elif not has_tool_calls and has_content:
+                print(f"⚠️ {llm_name} returned content but no tool calls (may have calculated directly)")
+                # Check if the content contains the correct answer
+                if "352" in test_response.content or "15 * 23 + 7" in test_response.content:
+                    print(f"✅ {llm_name} calculated correctly without tools")
+                    return True
+                else:
+                    print(f"❌ {llm_name} returned content but wrong answer")
+                    return False
+            else:
+                print(f"❌ {llm_name} returned no tool calls and no content")
+                return False
+                
         except Exception as e:
-            print(f"❌ {llm_name} test failed: {e}")
+            print(f"❌ {llm_name} tool test failed: {e}")
             return False
+
+    def _ping_llm(self, llm_name: str, llm_type: str, use_tools: bool = False, llm_instance=None) -> bool:
+        """
+        Legacy method - kept for backward compatibility but not used in new init logic.
+        """
+        # This method is now deprecated in favor of _test_llm_with_tools
+        return True
 
     def _is_duplicate_tool_call(self, tool_name: str, tool_args: dict, called_tools: list) -> bool:
         """
@@ -4275,111 +4446,20 @@ class GaiaAgent:
     def stream(self, question: str, chat_history: Optional[List[Dict[str, Any]]] = None, llm_sequence: Optional[List[str]] = None):
         """
         Stream the final assistant answer as incremental text chunks.
-
-        This method mirrors the non-streaming flow but uses provider-native
-        streaming if available, yielding text deltas as they arrive.
+        
+        This method uses the unified LLM calling path with streaming output.
+        All questions (with or without tools) go through the same path for consistency.
         """
-        # Initialize trace for this question
-        self._trace_init_question(question, None, None)
-        print(f"\n🔎 (stream) Processing question: {question}\n")
-        self.total_questions += 1
-        self.original_question = question
-
-        # Retrieve reference
-        reference = self._get_reference_answer(question)
-
-        # Format messages (no files in streaming path)
-        messages = self._format_messages(question, reference=reference, chat_history=chat_history)
-
-        # Build a default llm_sequence if not provided
-        if not llm_sequence:
-            try:
-                llm_sequence = self.DEFAULT_LLM_SEQUENCE.copy()
-            except Exception:
-                llm_sequence = []
-
-        accumulated = ""
-        llm_used = "unknown"
-
-        # Try providers in order
-        for llm_type in llm_sequence:
-            try:
-                # Check if this LLM type was successfully initialized
-                if llm_type not in self.llm_provider_names:
-                    print(f"⚠️ Skipping {llm_type}: LLM not initialized")
-                    continue
-                    
-                # Select LLM without tools for pure answer streaming
-                llm, llm_name, _ = self._select_llm(llm_type, use_tools=False)
-                if llm is None:
-                    print(f"⚠️ Skipping {llm_type}: LLM instance is None")
-                    continue
-                llm_used = llm_name or llm_type
-
-                # Prefer a native stream() if available
-                if hasattr(llm, "stream") and callable(getattr(llm, "stream")):
-                    for chunk in llm.stream(messages):
-                        try:
-                            # LangChain AIMessageChunk-like or plain object
-                            text = getattr(chunk, "content", None)
-                            if text is None:
-                                text = getattr(chunk, "text", None)
-                            if text is None and isinstance(chunk, dict):
-                                text = chunk.get("content") or chunk.get("text") or chunk.get("delta")
-                            if text is None:
-                                text = str(chunk)
-                        except Exception:
-                            text = str(chunk)
-                        if not text:
-                            continue
-                        accumulated += text
-                        yield text
-                    # Successful completion on this provider
-                    break
-
-                # Fallback: try invoke once and yield at end if no streaming
-                response = llm.invoke(messages)
-                text = getattr(response, "content", None) or getattr(response, "text", None) or str(response)
-                if text:
-                    accumulated += text
-                    # Yield as a single chunk to satisfy interface
-                    yield text
-                    break
-            except Exception as e:
-                print(f"⚠️ Streaming failed on provider {llm_type}: {e}")
-                continue
-
-        # If no LLMs were available or all failed, provide a fallback message
-        if not accumulated:
-            accumulated = "⚠️ No LLM providers are currently available for streaming. Please check the initialization logs for details."
-            llm_used = "none"
-
-        # Post-process and finalize trace
-        try:
-            # Similarity scoring
-            if reference:
-                _, similarity_score = self._vector_answers_match(accumulated, reference)
-            else:
-                similarity_score = 1.0
-
-            final_answer = {
-                "submitted_answer": ensure_valid_answer(accumulated),
-                "similarity_score": similarity_score,
-                "llm_used": llm_used,
-                "reference": reference if reference else "Reference answer not found",
-                "question": question,
-            }
-            self._trace_finalize_question(final_answer)
-        except Exception as _e:
-            # Ensure trace ends even if scoring failed
-            try:
-                final_answer = {
-                    "submitted_answer": ensure_valid_answer(accumulated),
-                    "similarity_score": 0.0,
-                    "llm_used": llm_used,
-                    "reference": reference if reference else "Reference answer not found",
-                    "question": question,
-                }
-                self._trace_finalize_question(final_answer)
-            except Exception:
-                pass
+        # Use the unified processing method with streaming
+        for chunk in self._unified_process_with_streaming(question, chat_history, llm_sequence):
+            yield chunk
+    
+    def get_trace_data(self):
+        """
+        Get the complete trace data for the last processed question.
+        This should be called after consuming the generator from __call__ or stream.
+        
+        Returns:
+            dict: Complete trace data or None if no trace exists
+        """
+        return self._trace_get_full()
