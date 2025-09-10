@@ -1129,7 +1129,7 @@ def transform_image(image_base64: str, operation: str, params: Optional[Dict[str
 class DrawOnImageParams(BaseModel):
     text: Optional[str] = Field(None, description="Text to draw")
     position: Optional[List[int]] = Field(None, description="Text position [x, y]")
-    color: Optional[Union[str, List[int]]] = Field(None, description="Color name or RGB array [r, g, b]")
+    color: Optional[str] = Field(None, description="Color name (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
     size: Optional[int] = Field(None, description="Font size for text")
     coords: Optional[List[int]] = Field(None, description="Rectangle coordinates [x1, y1, x2, y2]")
     center: Optional[List[int]] = Field(None, description="Circle center [x, y]")
@@ -1139,7 +1139,7 @@ class DrawOnImageParams(BaseModel):
     width: Optional[int] = Field(None, description="Stroke width")
 
 @tool(args_schema=DrawOnImageParams)
-def draw_on_image(image_base64: str, drawing_type: str, params: Dict[str, Any]) -> str:
+def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParams) -> str:
     """
     Draw shapes, text, or other elements on an image.
 
@@ -1154,34 +1154,49 @@ def draw_on_image(image_base64: str, drawing_type: str, params: Dict[str, Any]) 
     try:
         img = decode_image(image_base64)
         draw = ImageDraw.Draw(img)
+        def parse_color(color_str):
+            """Parse color string to RGB tuple or color name"""
+            if not color_str:
+                return "black"
+            # Check if it's RGB values as comma-separated string
+            if "," in color_str and color_str.replace(",", "").replace(" ", "").isdigit():
+                try:
+                    rgb_values = [int(x.strip()) for x in color_str.split(",")]
+                    if len(rgb_values) == 3 and all(0 <= v <= 255 for v in rgb_values):
+                        return tuple(rgb_values)
+                except ValueError:
+                    pass
+            # Return as color name
+            return color_str
+
         if drawing_type == "text":
-            text = params.get("text", "")
-            position = params.get("position", [10, 10])
-            color = params.get("color", "black")
-            size = params.get("size", 20)
+            text = params.text or ""
+            position = params.position or [10, 10]
+            color = parse_color(params.color) or "black"
+            size = params.size or 20
             try:
                 font = ImageFont.truetype("arial.ttf", size)
             except:
                 font = ImageFont.load_default()
             draw.text(tuple(position), text, fill=color, font=font)
         elif drawing_type == "rectangle":
-            coords = params.get("coords", [10, 10, 100, 100])
-            color = params.get("color", "red")
-            width = params.get("width", 2)
+            coords = params.coords or [10, 10, 100, 100]
+            color = parse_color(params.color) or "red"
+            width = params.width or 2
             draw.rectangle(coords, outline=color, width=width)
         elif drawing_type == "circle":
-            center = params.get("center", [50, 50])
-            radius = params.get("radius", 30)
-            color = params.get("color", "blue")
-            width = params.get("width", 2)
+            center = params.center or [50, 50]
+            radius = params.radius or 30
+            color = parse_color(params.color) or "blue"
+            width = params.width or 2
             bbox = [center[0] - radius, center[1] - radius, 
                    center[0] + radius, center[1] + radius]
             draw.ellipse(bbox, outline=color, width=width)
         elif drawing_type == "line":
-            start = params.get("start", [10, 10])
-            end = params.get("end", [100, 100])
-            color = params.get("color", "green")
-            width = params.get("width", 2)
+            start = params.start or [10, 10]
+            end = params.end or [100, 100]
+            color = parse_color(params.color) or "green"
+            width = params.width or 2
             draw.line([tuple(start), tuple(end)], fill=color, width=width)
         else:
             return json.dumps({
@@ -1204,7 +1219,7 @@ def draw_on_image(image_base64: str, drawing_type: str, params: Dict[str, Any]) 
         }, indent=2)
 
 class GenerateSimpleImageParams(BaseModel):
-    color: Optional[Union[str, List[int]]] = Field(None, description="Solid color for 'solid' type")
+    color: Optional[str] = Field(None, description="Solid color for 'solid' type (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
     start_color: Optional[List[int]] = Field(None, description="Gradient start color [r, g, b]")
     end_color: Optional[List[int]] = Field(None, description="Gradient end color [r, g, b]")
     direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Gradient direction")
@@ -1230,9 +1245,23 @@ def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
     try:
         params = params or {}
         if image_type == "solid":
-            color = params.get("color", [255, 255, 255])
-            if isinstance(color, list):
-                color = tuple(color)
+            color_str = params.get("color", "255,255,255")
+            # Parse color string to RGB tuple
+            if "," in color_str and color_str.replace(",", "").replace(" ", "").isdigit():
+                try:
+                    rgb_values = [int(x.strip()) for x in color_str.split(",")]
+                    if len(rgb_values) == 3 and all(0 <= v <= 255 for v in rgb_values):
+                        color = tuple(rgb_values)
+                    else:
+                        color = (255, 255, 255)
+                except ValueError:
+                    color = (255, 255, 255)
+            else:
+                # Try as color name, fallback to white
+                try:
+                    color = color_str
+                except:
+                    color = (255, 255, 255)
             img = Image.new("RGB", (width, height), color)
         elif image_type == "gradient":
             start_color = params.get("start_color", [255, 0, 0])
@@ -1287,9 +1316,15 @@ def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
             "error": str(e)
         }, indent=2)
 
-@tool
+class CombineImagesParams(BaseModel):
+    spacing: Optional[int] = Field(None, description="Spacing between images in pixels")
+    background_color: Optional[str] = Field(None, description="Background color for collage (e.g., 'white', 'black') or RGB string (e.g., '255,255,255')")
+    blend_mode: Optional[str] = Field(None, description="Blend mode for blending operations")
+    opacity: Optional[float] = Field(None, description="Opacity for overlay operations (0.0-1.0)")
+
+@tool(args_schema=CombineImagesParams)
 def combine_images(images_base64: List[str], operation: str, 
-                  params: Optional[Dict[str, Any]] = None) -> str:
+                  params: Optional[CombineImagesParams] = None) -> str:
     """
     Combine multiple images using various operations (collage, stack, blend, horizontal, vertical, overlay, etc.).
 
@@ -1309,7 +1344,8 @@ def combine_images(images_base64: List[str], operation: str,
                 "error": "At least 2 images required for combination"
             }, indent=2)
         images = [decode_image(b64) for b64 in images_base64]
-        params = params or {}
+        if params is None:
+            params = CombineImagesParams()
         if operation == "horizontal":
             # Combine images side by side
             total_width = sum(img.width for img in images)
@@ -1338,7 +1374,7 @@ def combine_images(images_base64: List[str], operation: str,
             result = base_img.convert("RGB")
         elif operation == "stack":
             # Original stack operation with direction parameter
-            direction = params.get("direction", "horizontal")
+            direction = params.direction or "horizontal"
             if direction == "horizontal":
                 total_width = sum(img.width for img in images)
                 max_height = max(img.height for img in images)
