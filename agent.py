@@ -171,6 +171,17 @@ class Tee:
         for s in self.streams:
             s.flush()
 
+class _SinkWriter:
+    def __init__(self, sink):
+        self.sink = sink
+    def write(self, data):
+        try:
+            self.sink(data)
+        except Exception:
+            pass
+    def flush(self):
+        pass
+
 class GaiaAgent:
     """
     Main agent for the CMW Platform benchmark.
@@ -247,23 +258,24 @@ class GaiaAgent:
             "force_tools": True,
             "models": [
                 {
-                    "model": "qwen-qwq-32b",
-                    "token_limit": 16000,
-                    "max_tokens": 2048,
+                    "model": "groq/compound",
+                    "token_limit": 131072,
+                    "max_tokens": 8192,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
-                    "model": "llama-3.1-8b-instant",
-                    "token_limit": 16000,
-                    "max_tokens": 2048,
+                    "model": "llama-3.3-70b-versatile",
+                    "token_limit": 131072
+,
+                    "max_tokens": 32768,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
                     "model": "llama-3.3-70b-8192",
                     "token_limit": 16000,
-                    "max_tokens": 2048,
+                    "max_tokens": 4096,
                     "temperature": 0,
                     "force_tools": True
                 }
@@ -405,30 +417,31 @@ class GaiaAgent:
     
     # Default LLM sequence order - references LLM_CONFIG keys
     DEFAULT_LLM_SEQUENCE = [
-        #"openrouter",
-        #"gigachat",
-        # "mistral",
-        # "gemini",
-        # "groq",
-        # "huggingface"
+        "openrouter",
+        "gigachat",
+        "mistral",
+        "gemini",
+        "groq",
+        "huggingface"
     ]
     # Print truncation length for debug output
     MAX_PRINT_LEN = 1000
     
-    def __init__(self, provider: str = "groq"):
+    def __init__(self, provider: str = "groq", log_sink=None):
         """
         Initialize the agent, loading the system prompt, tools, retriever, and LLM.
 
         Args:
             provider (str): LLM provider to use. One of "google", "groq", or "huggingface".
-
-        Raises:
-            ValueError: If an invalid provider is specified.
+            log_sink (callable | None): Optional callable accepting str chunks for real-time init logs.
         """
         # --- Capture stdout for debug output and tee to console ---
         debug_buffer = io.StringIO()
         old_stdout = sys.stdout
-        sys.stdout = Tee(old_stdout, debug_buffer)
+        tee_streams = [old_stdout, debug_buffer]
+        if log_sink is not None:
+            tee_streams.append(_SinkWriter(log_sink))
+        sys.stdout = Tee(*tee_streams)
         try:
             # Store the config of the successfully initialized model per provider
             self.active_model_config = {} 
@@ -483,7 +496,12 @@ class GaiaAgent:
             # Track initialization results for summary
             self.llm_init_results = []
             # Get the LLM types that should be initialized based on the sequence
-            llm_types_to_init = self.DEFAULT_LLM_SEQUENCE
+            if provider and provider in self.LLM_CONFIG and provider != "default":
+                llm_types_to_init = [provider]
+            elif self.DEFAULT_LLM_SEQUENCE:
+                llm_types_to_init = self.DEFAULT_LLM_SEQUENCE
+            else:
+                llm_types_to_init = [k for k in self.LLM_CONFIG.keys() if k != "default"]
             llm_names = [self.LLM_CONFIG[llm_type]["name"] for llm_type in llm_types_to_init]
             print(f"🔄 Initializing LLMs based on sequence:")
             for i, name in enumerate(llm_names, 1):
@@ -600,6 +618,7 @@ class GaiaAgent:
             # Legacy assignments for backward compatibility
             self.tools = self._gather_tools()
             # Print summary table after all initializations
+            print(self._format_llm_init_summary(as_str=True))
             self._print_llm_init_summary()
         finally:
             sys.stdout = old_stdout
@@ -1467,7 +1486,8 @@ class GaiaAgent:
         if llm_type not in self.LLM_CONFIG:
             raise ValueError(f"Invalid llm_type: {llm_type}")
         if llm_type not in self.llm_provider_names:
-            raise ValueError(f"LLM {llm_type} not initialized")
+            available_providers = ", ".join(self.llm_provider_names) if self.llm_provider_names else "none"
+            raise ValueError(f"LLM {llm_type} not initialized. Available providers: {available_providers}")
         idx = self.llm_provider_names.index(llm_type)
         llm = self.llms_with_tools[idx] if use_tools else self.llms[idx]
         llm_name = self.LLM_CONFIG[llm_type]["name"]
@@ -1983,6 +2003,18 @@ class GaiaAgent:
                                 "tool_call_id": getattr(tool_msg, 'tool_call_id', getattr(tool_msg, 'name', 'unknown'))
                             })
                             j += 1
+                        # If the next message is a user/system or we're at the end,
+                        # insert an assistant turn to properly close the tool-call block
+                        # per Mistral's expected ordering (no user directly after tool).
+                        if j >= len(messages) or (
+                            hasattr(messages[j], 'type') and messages[j].type in ('human', 'system')
+                        ):
+                            # Mistral requires assistant messages to have non-empty content.
+                            # Insert a minimal, meaningful acknowledgment to satisfy API constraints.
+                            converted_messages.append({
+                                "role": "assistant",
+                                "content": "[continue]"
+                            })
                         
                         # Skip the tool messages we've already processed
                         i = j - 1
@@ -4242,3 +4274,115 @@ class GaiaAgent:
                 return result
             else:
                 raise
+
+    def stream(self, question: str, chat_history: Optional[List[Dict[str, Any]]] = None, llm_sequence: Optional[List[str]] = None):
+        """
+        Stream the final assistant answer as incremental text chunks.
+
+        This method mirrors the non-streaming flow but uses provider-native
+        streaming if available, yielding text deltas as they arrive.
+        """
+        # Initialize trace for this question
+        self._trace_init_question(question, None, None)
+        print(f"\n🔎 (stream) Processing question: {question}\n")
+        self.total_questions += 1
+        self.original_question = question
+
+        # Retrieve reference
+        reference = self._get_reference_answer(question)
+
+        # Format messages (no files in streaming path)
+        messages = self._format_messages(question, reference=reference, chat_history=chat_history)
+
+        # Build a default llm_sequence if not provided
+        if not llm_sequence:
+            try:
+                llm_sequence = self.DEFAULT_LLM_SEQUENCE.copy()
+            except Exception:
+                llm_sequence = []
+
+        accumulated = ""
+        llm_used = "unknown"
+
+        # Try providers in order
+        for llm_type in llm_sequence:
+            try:
+                # Check if this LLM type was successfully initialized
+                if llm_type not in self.llm_provider_names:
+                    print(f"⚠️ Skipping {llm_type}: LLM not initialized")
+                    continue
+                    
+                # Select LLM without tools for pure answer streaming
+                llm, llm_name, _ = self._select_llm(llm_type, use_tools=False)
+                if llm is None:
+                    print(f"⚠️ Skipping {llm_type}: LLM instance is None")
+                    continue
+                llm_used = llm_name or llm_type
+
+                # Prefer a native stream() if available
+                if hasattr(llm, "stream") and callable(getattr(llm, "stream")):
+                    for chunk in llm.stream(messages):
+                        try:
+                            # LangChain AIMessageChunk-like or plain object
+                            text = getattr(chunk, "content", None)
+                            if text is None:
+                                text = getattr(chunk, "text", None)
+                            if text is None and isinstance(chunk, dict):
+                                text = chunk.get("content") or chunk.get("text") or chunk.get("delta")
+                            if text is None:
+                                text = str(chunk)
+                        except Exception:
+                            text = str(chunk)
+                        if not text:
+                            continue
+                        accumulated += text
+                        yield text
+                    # Successful completion on this provider
+                    break
+
+                # Fallback: try invoke once and yield at end if no streaming
+                response = llm.invoke(messages)
+                text = getattr(response, "content", None) or getattr(response, "text", None) or str(response)
+                if text:
+                    accumulated += text
+                    # Yield as a single chunk to satisfy interface
+                    yield text
+                    break
+            except Exception as e:
+                print(f"⚠️ Streaming failed on provider {llm_type}: {e}")
+                continue
+
+        # If no LLMs were available or all failed, provide a fallback message
+        if not accumulated:
+            accumulated = "⚠️ No LLM providers are currently available for streaming. Please check the initialization logs for details."
+            llm_used = "none"
+
+        # Post-process and finalize trace
+        try:
+            # Similarity scoring
+            if reference:
+                _, similarity_score = self._vector_answers_match(accumulated, reference)
+            else:
+                similarity_score = 1.0
+
+            final_answer = {
+                "submitted_answer": ensure_valid_answer(accumulated),
+                "similarity_score": similarity_score,
+                "llm_used": llm_used,
+                "reference": reference if reference else "Reference answer not found",
+                "question": question,
+            }
+            self._trace_finalize_question(final_answer)
+        except Exception as _e:
+            # Ensure trace ends even if scoring failed
+            try:
+                final_answer = {
+                    "submitted_answer": ensure_valid_answer(accumulated),
+                    "similarity_score": 0.0,
+                    "llm_used": llm_used,
+                    "reference": reference if reference else "Reference answer not found",
+                    "question": question,
+                }
+                self._trace_finalize_question(final_answer)
+            except Exception:
+                pass

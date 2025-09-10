@@ -3,21 +3,16 @@ from langchain.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.v1.types import NoneBytes
 import requests_
+from models import AttributeResult
 
 ATTRIBUTE_ENDPOINT = "webapi/"
 
 class ListTemplates(BaseModel):
     template_type: Literal["record", "process", "account"] = Field(
-        description=(
-            "Choose type of template: Record, Process or Account. Russian names allowed: "
-            "['Запись', 'Процесс', 'Аккаунт']"
-        )
+        description="Choose template type: Record, Process, or Account. RU: Запись, Процесс, Аккаунт"
     )
     application_system_name: str = Field(
-        description=(
-            "System name of the application where the template is created. "
-            "Рус: 'Системное имя приложения'"
-        )
+        description="System name of the application to fetch the templates from. RU: Системное имя приложения"
     )
 
     @field_validator("template_type", mode="before")
@@ -40,11 +35,6 @@ class ListTemplates(BaseModel):
             raise ValueError("must be a non-empty string")
         return v
 
-class AttributeResult(BaseModel):
-    success: bool
-    status_code: int
-    raw_response: dict | str | None = Field(default=None, description="Raw response for auditing or payload body")
-    error: Optional[str] = Field(default=None)
 
 @tool("list_templates", return_direct=False, args_schema=ListTemplates)
 def list_templates(
@@ -52,13 +42,15 @@ def list_templates(
     application_system_name: str
     ) -> Dict[str, Any]:
     """
-    List all template by its `template_type` within a given `application_system_name`.
-
-    Returns (AttributeResult):
-    - success (bool): True if templates list was fetched successfully
-    - status_code (int): HTTP response status code
-    - raw_response (object|null): Template payload; sanitized (some keys may be removed)
-    - error (string|null): Error message if any
+    List all templates of a given type in an application.
+    
+    Returns:
+        dict: {
+            "success": bool - True if operation completed successfully
+            "status_code": int - HTTP response status code  
+            "raw_response": dict|str|None - Raw response payload for auditing or payload body (sanitized)
+            "error": str|None - Error message if operation failed
+        }
     """
 
     try:

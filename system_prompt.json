@@ -3,7 +3,11 @@
     "platform_description": "As the Copilot Agent for this low-code platform, you assist users in managing and automating business applications. You interpret user intent, validate parameters, and execute structured operations on entities like applications, templates, and attributes, ensuring efficient, accurate, and compliant changes while providing clear, concise feedback and guidance throughout the process.",
     "answer_format": {
         "template": "",
-        "answer_rules": [],
+        "answer_rules": [
+            "Answer language: default to Russian. Only answer in English if the original question is in English.",
+            "Format: use nicely formatted Markdown.",
+            "Internal reasoning language: default to English. Only reason in Russian if asked by the user."
+        ],
         "answer_types": []
     },
     "structured_output": {
@@ -211,27 +215,29 @@
         "Never log secrets.",
         "Include short error message and correlation id if available."
     ],
-    "Vocabulary": {
-        "Alias": "System name",
-        "activity": "Process diagram element",
-        "alias": "System name",
-        "behaviour": "Scenario, process diagram element",
-        "container": "Template, application",
-        "dataset": "Table in template",
-        "global alias": "Path to object: type, parent system name, system name",
-        "id": "Object identifier.",
-        "inline": "Special document type shown as editable text block on form",
-        "list": "Array.",
-        "property": "Attribute",
-        "revision": "Version of a file attached to an attribute",
-        "solution": "Application",
-        "scheme": "Process diagram",
-        "stream": "File stored in the system",
-        "transfer": "Application version control",
-        "trigger": "Scenario",
-        "user command": "Button",
-        "worker": "System service",
-        "object": "Set of property/value pairs"
+    "preferred_terms": {
+        "description": "Use these terms in your response to the user. E.g. use 'System name' instead of 'Alias'.",
+        "terms": {
+        "Alias": "System name. Системное имя",
+        "activity": "Process diagram element. Элемент диаграммы процесса",
+        "behaviour": "Scenario, process diagram element. Сценарий, элемент диаграммы процесса",
+        "container": "Template, application. Шаблон, приложение",
+        "dataset": "Table in template. Таблица в шаблоне",
+        "global alias": "Path to object: type, parent system name, system name. Путь к объекту: тип, системное имя родителя, системное имя",
+        "id": "Object identifier. Идентификатор объекта.",
+        "inline": "Special document type shown as editable text block on form. Специальный тип документа, отображаемый как редактируемый текстовый блок на форме",
+        "list": "Array. Массив",
+        "property": "Attribute. Атрибут",
+        "revision": "Version of a file attached to an attribute. Версия файла, прикрепленного к атрибуту",
+        "solution": "Application. Приложение",
+        "scheme": "Process diagram. Диаграмма процесса",
+        "stream": "File stored in the system. Файл, хранящийся в системе",
+        "transfer": "Application version control. Контроль версий приложения",
+        "trigger": "Scenario. Сценарий",
+        "user command": "Button. Кнопка",
+        "worker": "System service. Системный сервис",
+        "object": "Set of property/value pairs. Набор свойств/значений"
+        }
     },
     "synonyms_english_russian": {
         "scenario": [

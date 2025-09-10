@@ -20,6 +20,7 @@ from dataset_manager import dataset_manager
 from file_manager import file_manager
 # Login functionality moved to login_manager.py
 from login_manager import login_manager
+import queue
 
 # Load environment variables from .env file
 load_dotenv()
@@ -32,9 +33,11 @@ DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
 # Instantiate the agent once (choose provider as needed)
 AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "google")
 try:
-    agent = GaiaAgent(provider=AGENT_PROVIDER)
+    agent = None
+    _agent_init_started = False
 except Exception as e:
     agent = None
+    _agent_init_started = False
     print(f"Error initializing GaiaAgent: {e}")
 
 
@@ -70,6 +73,21 @@ def get_init_log():
     if init_log_path and os.path.exists(init_log_path):
         return init_log_path
     return None
+
+# --- Provide init log content for display ---
+def get_init_log_content():
+    try:
+        path = get_init_log()
+        if path and os.path.exists(path):
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+                return content if content.strip() else "(Init log is empty)"
+        # Fallback: quick status if no file
+        if agent is None:
+            return "🟡 Initializing agent..."
+        return "✅ Agent initialized. (No init log file found)"
+    except Exception as _e:
+        return "(Failed to read init log)"
 
 def generate_run_id(timestamp: str, idx: int) -> str:
     """Generate a unique run ID for a question."""
@@ -690,54 +708,124 @@ def chat_with_agent(message, history):
         return updated_history, ""
 
 def chat_with_agent_stream(message, history):
-    """
-    Stream assistant output by yielding partial responses. Compute once; reveal in small chunks.
-    """
-    if not message.strip():
-        yield history, ""
-        return
-    if agent is None:
-        yield history + [{"role": "user", "content": message}, {"role": "assistant", "content": "Error: Agent not initialized. Check logs for details."}], ""
-        return
-    try:
-        print(f"💬 Chat (stream) request: {message}")
-        working_history = history + [{"role": "user", "content": message}]
-        yield working_history, ""
+	"""
+	Stream assistant output by yielding partial responses. Compute once; reveal in small chunks.
+	"""
+	if not message.strip():
+		yield history, ""
+		return
+	if agent is None:
+		yield history + [{"role": "user", "content": message}, {"role": "assistant", "content": "Error: Agent not initialized. Check logs for details."}], ""
+		return
+	try:
+		print(f"💬 Chat (stream) request: {message}")
+		working_history = history + [{"role": "user", "content": message}]
+		yield working_history, ""
 
-        # Build chat history for agent
-        chat_history = []
-        for turn in history:
-            role = turn.get("role")
-            content = turn.get("content", "")
-            if role in ("user", "assistant") and content:
-                chat_history.append({"role": role, "content": content})
+		# Build chat history for agent
+		chat_history = []
+		for turn in history:
+			role = turn.get("role")
+			content = turn.get("content", "")
+			if role in ("user", "assistant") and content:
+				chat_history.append({"role": role, "content": content})
 
-        # Single agent call
-        result = agent(message, chat_history=chat_history)
-        trace = result
-        final_result = trace.get("final_result", {})
-        answer_full = final_result.get("submitted_answer", "No answer generated")
-        llm_used = final_result.get("llm_used", "unknown")
+		# Try true streaming if agent exposes a streaming generator
+		stream_gen = None
+		for method_name in ("stream", "stream_response", "stream_chat", "stream_answer"):
+			candidate = getattr(agent, method_name, None)
+			if callable(candidate):
+				try:
+					stream_gen = candidate(message, chat_history=chat_history)
+					break
+				except TypeError:
+					# Different signature; try calling with just message
+					try:
+						stream_gen = candidate(message)
+						break
+					except Exception:
+						pass
 
-        chunk = ""
-        step = 80
-        for i in range(0, len(answer_full), step):
-            chunk = answer_full[: i + step]
-            yield working_history + [{"role": "assistant", "content": chunk}], ""
+		if stream_gen is not None:
+			accum = ""
+			try:
+				for chunk in stream_gen:
+					# Accept either plain string chunks or dict events with an answer delta
+					if isinstance(chunk, dict):
+						text = chunk.get("answer_delta") or chunk.get("delta") or chunk.get("text") or ""
+					else:
+						text = str(chunk)
+					if not text:
+						continue
+					accum += text
+					yield working_history + [{"role": "assistant", "content": accum}], ""
+				# Finish without extras (no second full call)
+				yield working_history + [{"role": "assistant", "content": accum}], ""
+				return
+			except Exception:
+				# Fall back to non-streaming path
+				pass
 
-        final_text = f"{answer_full}\n\n_(model: {llm_used})_"
-        yield working_history + [{"role": "assistant", "content": final_text}], ""
-    except Exception as e:
-        err = f"❌ Error: {e}"
-        print(f"Chat stream error: {e}")
-        yield history + [{"role": "user", "content": message}, {"role": "assistant", "content": err}], ""
+		# Prefer true streaming path
+		accum = ""
+		for delta in agent.stream(message, chat_history=chat_history):
+			accum += delta
+			yield working_history + [{"role": "assistant", "content": accum}], ""
+
+		# After stream finishes, get the finalized trace (agent updated it during stream)
+		trace = self_trace = getattr(agent, "_trace_get_full", None)
+		if callable(self_trace):
+			trace = self_trace()
+		else:
+			trace = {"final_result": {"submitted_answer": accum, "llm_used": "unknown"}}
+		final_result = trace.get("final_result", {})
+		answer_full = final_result.get("submitted_answer", accum or "No answer generated")
+		llm_used = final_result.get("llm_used", "unknown")
+
+		# Build collapsible details for tools, model, and timing
+		tools_list = []
+		try:
+			if 'llm_traces' in trace:
+				for llm_trace in trace.get('llm_traces', []) or []:
+					for tool_call in (llm_trace.get('tool_calls') or []):
+						tool_name = tool_call.get('name', 'unknown')
+						if tool_name:
+							tools_list.append(f"• {tool_name}")
+		except Exception as _e:
+			pass
+		tools_html = ""
+		if tools_list:
+			unique_tools = sorted(set(tools_list))
+			tools_html = "\n".join(unique_tools)
+			tools_html = f"<details><summary>🛠️ Tools Used</summary>\n\n{tools_html}\n\n</details>"
+
+		# Timing
+		exec_time = trace.get('total_execution_time')
+		stats_lines = []
+		if llm_used and llm_used != "unknown":
+			stats_lines.append(f"Model: {llm_used}")
+		if isinstance(exec_time, (int, float)):
+			stats_lines.append(f"Execution Time: {exec_time:.2f} s")
+		stats_html = ""
+		if stats_lines:
+			stats_html = "\n".join(f"• {line}" for line in stats_lines)
+			stats_html = f"<details><summary>ℹ️ Details</summary>\n\n{stats_html}\n\n</details>"
+
+		final_extras = "\n\n".join([part for part in [tools_html, stats_html] if part])
+		final_text = answer_full if not final_extras else f"{answer_full}\n\n{final_extras}"
+		yield working_history + [{"role": "assistant", "content": final_text}], ""
+	except Exception as e:
+		err = f"❌ Error: {e}"
+		print(f"Chat stream error: {e}")
+		yield history + [{"role": "user", "content": message}, {"role": "assistant", "content": err}], ""
 
 def get_available_models():
     """
     Get information about initialized models and their status.
     """
     if agent is None:
-        return "❌ Agent not initialized"
+        status = "🟡 Initializing agent..." if '_agent_init_started' in globals() and _agent_init_started else "❌ Agent not initialized"
+        return status
     
     models_info = []
     
@@ -745,7 +833,7 @@ def get_available_models():
     for provider_key, llm_instance in agent.llm_instances.items():
         if llm_instance is None:
             continue
-            
+        
         config = agent.LLM_CONFIG.get(provider_key, {})
         provider_name = config.get("name", provider_key.title())
         
@@ -754,19 +842,121 @@ def get_available_models():
         model_name = active_model_config.get("model", "Unknown")
         token_limit = active_model_config.get("token_limit", "Unknown")
         
-        models_info.append(f"**{provider_name}:**")
-        models_info.append(f"  • {model_name} (max {token_limit} tokens)")
-        
-        # Add tracking statistics if available
-        if hasattr(agent, 'llm_tracking') and provider_key in agent.llm_tracking:
-            tracking = agent.llm_tracking[provider_key]
-            if tracking['total_attempts'] > 0:
-                success_rate = (tracking['successes'] / tracking['total_attempts']) * 100
-                models_info.append(f"  📊 Success rate: {success_rate:.1f}% ({tracking['successes']}/{tracking['total_attempts']})")
-        
-        models_info.append("")
+        models_info.append(f"**{provider_name}:**\n• {model_name} (max {token_limit} tokens)\n")
     
     return "\n".join(models_info)
+
+# Timer poller to update status text and stop timer when ready
+def poll_models():
+    text = get_available_models()
+    show_logs_btn = False
+    try:
+        show_logs_btn = (agent is None) and ('_agent_init_started' in globals() and _agent_init_started)
+    except Exception:
+        show_logs_btn = False
+    # Stop timer once agent is initialized
+    if agent is not None:
+        return text, gr.update(active=False), gr.update(visible=False)
+    return text, gr.update(), gr.update(visible=show_logs_btn)
+
+# Stream agent initialization logs into chatbot
+def stream_agent_init_logs(chat_history):
+	log_queue = queue.Queue()
+	accum_text = ""
+	messages = chat_history or []
+	
+	# Mark initialization as started so status shows a proper message
+	global _agent_init_started
+	try:
+		_agent_init_started = True
+	except Exception:
+		pass
+	
+	def sink(chunk: str):
+		try:
+			log_queue.put(chunk)
+		except Exception:
+			pass
+	
+	import threading, time
+	def worker():
+		global agent
+		try:
+			agent_local = GaiaAgent(provider=AGENT_PROVIDER, log_sink=sink)
+			agent = agent_local
+		except Exception as e:
+			log_queue.put(f"\n🔴 Agent init failed: {e}\n")
+	
+	thread = threading.Thread(target=worker, daemon=True)
+	thread.start()
+	
+	last_activity = time.time()
+	quiet_seconds_to_finish = 1.0
+	
+	# Continuously flush chunks into the chatbot
+	while True:
+		try:
+			chunk = log_queue.get(timeout=0.25)
+			last_activity = time.time()
+			accum_text += chunk
+			# Update the last assistant message or append a new one
+			if messages and messages[-1].get("role") == "assistant":
+				messages[-1] = {"role": "assistant", "content": accum_text}
+			else:
+				messages = messages + [{"role": "assistant", "content": accum_text}]
+			yield messages
+		except queue.Empty:
+			# If thread finished or agent is set and we've been quiet long enough, stop streaming
+			if (not thread.is_alive()) or (agent is not None and (time.time() - last_activity) > quiet_seconds_to_finish):
+				break
+			continue
+	# Append completion line if agent initialized
+	if agent is not None:
+		completion_note = "\n✅ Initialization complete."
+		if completion_note not in accum_text:
+			accum_text += completion_note
+			if messages and messages[-1].get("role") == "assistant":
+				messages[-1] = {"role": "assistant", "content": accum_text}
+			else:
+				messages = messages + [{"role": "assistant", "content": accum_text}]
+	# Final yield to ensure UI has the latest
+	yield messages
+
+# Background agent initializer (lazy)
+def _init_agent_background():
+	global agent, _agent_init_started
+	if _agent_init_started or agent is not None:
+		return
+	_agent_init_started = True
+	try:
+		print("🟡 Initializing GaiaAgent in background...")
+		agent_local = GaiaAgent(provider=AGENT_PROVIDER)
+		agent = agent_local
+		print("🟢 GaiaAgent initialized.")
+	except Exception as e:
+		agent = None
+		print(f"🔴 Failed to initialize GaiaAgent: {e}")
+
+
+def _start_agent_init_thread_with_sink(update_fn=None):
+	import threading
+	def _sink_writer(text_chunk: str):
+		try:
+			if update_fn:
+				update_fn(text_chunk)
+		except Exception:
+			pass
+	thread = threading.Thread(target=lambda: GaiaAgent(provider=AGENT_PROVIDER, log_sink=_sink_writer) and _assign_agent(), daemon=True)
+	thread.start()
+	return None
+
+# Helper to assign the global agent if constructed in thread
+def _assign_agent():
+	global agent
+	# This relies on GaiaAgent writing to global when constructed; instead we construct here
+	agent_local = GaiaAgent(provider=AGENT_PROVIDER)
+	agent = agent_local
+	return None
 
 # --- Build Gradio Interface using Blocks ---
 # Ensure Gradio can serve local static resources via /gradio_api/file=
@@ -782,7 +972,7 @@ except Exception as _e:
     print(f"Warning: could not set GRADIO_ALLOWED_PATHS: {_e}")
 with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_comindware.css"]) as demo:
     gr.Markdown("# Analyst Copilot", elem_classes=["hero-title"]) 
-    
+    # Start agent initialization when the app loads
 
     with gr.Tabs():
         
@@ -800,18 +990,19 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     - **Platform Operations First**: Validates your intent and executes tools for entity changes (e.g., create/edit attributes)
                     - **Multi-Model Orchestration**: Tries multiple LLM providers with intelligent fallback
                     - **Compact Structured Output**: Intent → Plan → Validate → Execute → Result
-
                     """, elem_classes=["chat-hints"]) 
                 with gr.Column():
                     gr.Markdown("""
-                    ### 💡 **Try asking (platform-focused):**
+                    ### 💡 **Try asking:**
                     
-                    - Create text attribute with mask: "Create 'Customer ID' in app 'ERP', template 'Counterparties', CustomMask: ([0-9]{10}|[0-9]{12})"
-                    - Edit display format: "Change 'Contact Phone' in app 'CRM', template 'Leads' to PhoneRuMask"
-                    - Fetch attribute: "Get attribute 'Comment' from app 'HR', template 'Candidates'"
-                    - Create simple text: "Add 'Comment' text attribute to app 'HR', template 'Candidates' (PlainText)"
-                    
-                    **Note**: Platform operations take priority and follow strict validation and logging.
+                    - List all applications in the Platform
+                    - List all templates in app 'ERP'
+                    - List all attributes in template 'Counterparties', app 'ERP'
+                    - Create plain text attribute 'Comment', app 'HR', template 'Candidates'
+                    - Create 'Customer ID' text attribute, app 'ERP', template 'Counterparties', custom input mask: ([0-9]{10}|[0-9]{12})
+                    - For attribute 'Contact Phone' in app 'CRM', template 'Leads', change display format to Russian phone
+                    - Fetch attribute: system name 'Comment', app 'HR', template 'Candidates'
+                    - Archive/unarchive attribute, system name 'Comment', app 'HR', template 'Candidates'
                     """, elem_classes=["chat-hints"]) 
             
             with gr.Row():
@@ -842,13 +1033,19 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     with gr.Column(elem_classes=["model-card"]):
                         gr.Markdown("### 🤖 Model status & stats")
                         models_info = gr.Markdown(get_available_models())
-                        refresh_models_btn = gr.Button("🔄 Refresh model info", elem_classes=["cmw-button"]) 
+                        # Automatically refresh model info on load as well
+                        demo.load(get_available_models, outputs=models_info)
+                        status_timer = gr.Timer(1.0, active=True)
+                        with gr.Row():
+                            open_logs_btn = gr.Button("📜 Open Init logs", elem_classes=["cmw-button"], visible=False)
+                            refresh_models_btn = gr.Button("🔄 Refresh model info", elem_classes=["cmw-button"]) 
+                        status_timer.tick(fn=poll_models, outputs=[models_info, status_timer, open_logs_btn])
                     # Quick action buttons (grouped like model card)
                     with gr.Column(elem_classes=["quick-actions-card"]):
                         gr.Markdown("### ⚡ Quick actions")
+                        quick_list_apps_btn = gr.Button("🔎 List all apps", elem_classes=["cmw-button"])
                         quick_math_btn = gr.Button("🧩 Create text attribute", elem_classes=["cmw-button"]) 
                         quick_code_btn = gr.Button("🛠️ Edit phone mask", elem_classes=["cmw-button"]) 
-                        quick_general_btn = gr.Button("🔎 Get attribute", elem_classes=["cmw-button"]) 
                         qa_capital_btn = gr.Button("Capital of France?", elem_classes=["cmw-button"]) 
                         qa_math_btn = gr.Button("15 * 23 + 7 = ?", elem_classes=["cmw-button"]) 
                         qa_code_btn = gr.Button("Python prime check function", elem_classes=["cmw-button"]) 
@@ -878,11 +1075,11 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                 )
                 return chat_with_agent(message, history)
             
-            def quick_general(history):
+            def quick_list_apps(history):
                 message = (
-                    "Verify existence of attribute 'Comment' (system_name=Comment) in application 'HR', template 'Candidates'. "
-                    "Provide Intent, Plan, Validate, and show the exact GET request you would issue as a DRY-RUN preview only. "
-                    "Do NOT call any tools yet—wait for my confirmation."
+                    "List all apps. "
+                    "Provide Intent, Plan, Validate. "
+                    "Format the response as a bullet list of apps."
                 )
                 return chat_with_agent(message, history)
             
@@ -921,9 +1118,17 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             )
             
             refresh_models_btn.click(
-                fn=get_available_models,
-                outputs=models_info
+                fn=poll_models,
+                outputs=[models_info, status_timer, open_logs_btn]
             )
+            
+            open_logs_btn.click(
+                fn=None,
+                inputs=None,
+                outputs=None,
+                js="() => { const t=[...document.querySelectorAll('button[role=tab]')].find(b=>b.textContent.trim()==='Init logs'); if(t) t.click(); }"
+            )
+
             
             quick_math_btn.click(
                 fn=quick_math,
@@ -937,8 +1142,8 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                 outputs=[chatbot, msg]
             )
             
-            quick_general_btn.click(
-                fn=quick_general,
+            quick_list_apps_btn.click(
+                fn=quick_list_apps,
                 inputs=[chatbot],
                 outputs=[chatbot, msg]
             )
@@ -963,27 +1168,12 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                 inputs=[chatbot],
                 outputs=[chatbot, msg]
             )
+        with gr.TabItem("Init logs"):
+            init_chat = gr.Chatbot(label="Initialization logs", height=400, type="messages", render_markdown=False, elem_classes=["terminal-chat"])
+            # Show a starting message
+            init_chat.value = [{"role": "assistant", "content": "Starting agent initialization..."}]
+            demo.load(stream_agent_init_logs, inputs=init_chat, outputs=init_chat)
 
-            qa_capital_btn.click(
-                fn=qa_capital_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
-            )
-            qa_math_btn.click(
-                fn=qa_arith_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
-            )
-            qa_code_btn.click(
-                fn=qa_prime_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
-            )
-            qa_explain_btn.click(
-                fn=qa_explain_example,
-                inputs=[chatbot],
-                outputs=[chatbot, msg]
-            )
         with gr.TabItem("Readme"):
             gr.Markdown("""
             ## 🕵🏻‍♂️ Comindware Analyst Copilot - Entity Creation System
@@ -1066,5 +1256,4 @@ if __name__ == "__main__":
     print("-"*(60 + len(" App Starting ")) + "\n")
 
     print("Launching Gradio Interface for Comindware Analyst Copilot Evaluation...")
-    
     demo.launch(debug=True, share=False)

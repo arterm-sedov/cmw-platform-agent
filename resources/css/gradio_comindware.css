@@ -272,19 +272,12 @@ body {
   box-shadow: none !important;
   background: transparent !important;
 }
-/* Ensure hero title markdown block has no border/shadow/background */
-.gradio-container [data-testid="markdown"].hero-title,
-.gradio-container hero-title {
+/* Ensure hero title block has no border/shadow/background */
+.gradio-container .block.padded.hero-title,
+.gradio-container .hero-title  
+{
   border: none !important;
   box-shadow: none !important;
-  background: transparent !important;
-}
-.gradio-container .prose h1,
-.gradio-container [data-testid="markdown"] h1,
-.gradio-container .md h1 {
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
   background: transparent !important;
 }
 .gradio-container .prose h1 { font-size: 28px; }
@@ -495,6 +488,7 @@ body {
   border-radius: var(--cmw-radius-md) !important;
 }
 
+
 /* Chatbot */
 .gradio-container .chatbot {
   background: var(--cmw-surface-alt) !important;
@@ -661,4 +655,31 @@ html[data-theme='dark'] .gradio-container footer a.built-with,
 body[data-theme='dark'] .gradio-container footer a.built-with,
 .dark .gradio-container footer a.built-with {
   border-color: var(--cmw-border) !important;
+}
+
+/* Terminal-like styling for INIT chat (theme-aware) */
+.gradio-container .terminal-chat .wrap {
+  /* Follow theme background/border; do not override */
+}
+.gradio-container .terminal-chat .message,
+.gradio-container .terminal-chat .message .text,
+.gradio-container .terminal-chat [data-testid="bot_message"],
+.gradio-container .terminal-chat [data-testid="user_message"] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  white-space: pre-wrap !important;
+}
+/* Do not override colors/backgrounds so theme applies */
+.gradio-container .terminal-chat .message.bot,
+.gradio-container .terminal-chat .message.user {
+  border: none !important;
+}
+/* Reset markdown headings inside init chat to avoid huge H1/H2 */
+.gradio-container .terminal-chat .prose h1,
+.gradio-container .terminal-chat .prose h2,
+.gradio-container .terminal-chat .prose h3,
+.gradio-container .terminal-chat .prose p,
+.gradio-container .terminal-chat [data-testid="markdown"] {
+  all: unset !important;
+  font: inherit !important;
+  color: inherit !important;
 }

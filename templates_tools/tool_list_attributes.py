@@ -3,20 +3,16 @@ from langchain.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.v1.types import NoneBytes
 import requests_
+from models import AttributeResult
 
 ATTRIBUTE_ENDPOINT = "webapi/Attribute/List"
 
 class ListAttributes(BaseModel):
     application_system_name: str = Field(
-        description=(
-            "System name of the application with the template where the attributes is created. "
-            "Рус: 'Системное имя приложения'"
-        )
+        description="System name of the application with the template where the attributes are to be found. RU: Системное имя приложения"
     )
     template_system_name: str = Field(
-        description=(
-            "System name of the template where the attributes is created. Рус: 'Системное имя шаблона'"
-        )
+        description="System name of the template where the attributes are to be found. RU: Системное имя шаблона"
     )
 
     @field_validator("application_system_name", "template_system_name", mode="before")
@@ -26,11 +22,6 @@ class ListAttributes(BaseModel):
             raise ValueError("must be a non-empty string")
         return v
 
-class AttributeResult(BaseModel):
-    success: bool
-    status_code: int
-    raw_response: dict | str | None = Field(default=None, description="Raw response for auditing or payload body")
-    error: Optional[str] = Field(default=None)
 
 @tool("list_attributes", return_direct=False, args_schema=ListAttributes)
 def list_attributes(
@@ -38,13 +29,15 @@ def list_attributes(
     template_system_name: str,
     ) -> Dict[str, Any]:
     """
-    List all attributes by its `template_system_name` within a given `application_system_name`.
-
-    Returns (AttributeResult):
-    - success (bool): True if attributes list was fetched successfully
-    - status_code (int): HTTP response status code
-    - raw_response (object|null): Attribute payload; sanitized (some keys may be removed)
-    - error (string|null): Error message if any
+    List all attributes in the given template and application.
+    
+    Returns:
+        dict: {
+            "success": bool - True if attribute list was fetched successfully
+            "status_code": int - HTTP response status code  
+            "raw_response": dict|str|None - Raw response for auditing or payload body (sanitized)
+            "error": str|None - Error message if operation failed
+        }
     """
 
     template_global_alias = f"Template@{application_system_name}.{template_system_name}"

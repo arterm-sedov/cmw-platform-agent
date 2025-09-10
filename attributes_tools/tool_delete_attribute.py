@@ -3,23 +3,19 @@ from langchain.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.v1.types import NoneBytes
 import requests_
+from models import AttributeResult
 
 ATTRIBUTE_ENDPOINT = "webapi/Attribute"
 
 class DeleteAttribute(BaseModel):
     application_system_name: str = Field(
-        description=(
-            "System name of the application with the template where the attribute is created. "
-            "Рус: 'Системное имя приложения'"
-        )
+        description="System name of the application with the template where the attribute is deleted. RU: Системное имя приложения"
     )
     template_system_name: str = Field(
-        description=(
-            "System name of the template where the attribute is created. Рус: 'Системное имя шаблона'"
-        )
+        description="System name of the template where the attribute is deleted. RU: Системное имя шаблона"
     )
     system_name: str = Field(
-        description="Unique system name of the attribute. Рус: 'Системное имя'"
+        description="Unique system name of the attribute to delete. RU: Системное имя атрибута"
     )
 
     @field_validator("system_name", "application_system_name", "template_system_name", mode="before")
@@ -29,12 +25,6 @@ class DeleteAttribute(BaseModel):
             raise ValueError("must be a non-empty string")
         return v
 
-class AttributeResult(BaseModel):
-    success: bool
-    status_code: int
-    raw_response: dict | str | None = Field(default=None, description="Raw response for auditing or payload body")
-    error: Optional[str] = Field(default=None)
-
 @tool("delete_attribute", return_direct=False, args_schema=DeleteAttribute)
 def delete_attribute(
     application_system_name: str,
@@ -42,13 +32,15 @@ def delete_attribute(
     system_name: str
     ) -> Dict[str, Any]:
     """
-    Delete a text attribute by its `system_name` within a given `template_system_name` and `application_system_name`.
-
-    Returns (AttributeResult):
-    - success (bool): True if the operation completed successfully
-    - status_code (int): HTTP response status code
-    - raw_response (object|null): Attribute payload; sanitized (some keys may be removed)
-    - error (string|null): Error message if any
+    Delete a text attribute by from the given template and application.
+    
+    Returns:
+        dict: {
+            "success": bool - True if the attribute was deleted successfully
+            "status_code": int - HTTP response status code  
+            "raw_response": dict|str|None - Raw response for auditing or payload body (sanitized)
+            "error": str|None - Error message if operation failed
+        }
     """
 
     attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
