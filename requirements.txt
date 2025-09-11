@@ -13,37 +13,38 @@ langchain-mistralai
 langchain-gigachat
 gigachat
 langchain-tavily
-langchain-chroma
-langgraph
+#langchain-chroma  # Not used in current codebase
+langgraph  # Not used in current codebase
 # Optional: HuggingFace Hub for dataset and file operations (disabled by default)
-# huggingface_hub
+huggingface_hub
 arxiv
-pymupdf
+#pymupdf  # Not used in current codebase
 wikipedia
 python-dotenv
-pytesseract
-matplotlib
+#pytesseract  # Not used in current codebase
+matplotlib  # Not used in current codebase
 pandas
 numpy
 pillow
-jupyter
+#jupyter  # Not used in current codebase
 openpyxl
-beautifulsoup4
-lxml
-sentence-transformers
+beautifulsoup4  # Not used in current codebase
+#lxml  # Not used in current codebase
+#sentence-transformers  # Not used in current codebase
 google-genai
-litellm
-scipy
-scikit-learn
-sympy
-networkx
-nltk
-opencv-python
-python-chess
+#litellm  # Not used in current codebase
+#scipy  # Not used in current codebase
+#scikit-learn  # Not used in current codebase
+#sympy  # Not used in current codebase
+#networkx  # Not used in current codebase
+#nltk  # Not used in current codebase
+#opencv-python  # Not used in current codebase
+#python-chess  # Not used in current codebase
 tiktoken
-exa-py
+#exa-py  # Not used in current codebase
 openai
-chess
+#chess  # Not used in current codebase
 # Optional: Supabase vector store (disabled by default)
 supabase
 pgvector
+PyYAML
