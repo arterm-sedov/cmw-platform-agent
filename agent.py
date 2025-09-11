@@ -1033,7 +1033,7 @@ class CmwAgent:
             tool_results_history: History of tool results (for reference, not used in prompt)
             llm: LLM instance
         Returns:
-            Response from LLM with FINAL ANSWER
+            Response from LLM with structured answer via submit_final_answer tool
         """
         
         # Extract llm_type from llm
@@ -1854,7 +1854,7 @@ class CmwAgent:
         final_prompt = (
             f"Question: {original_question}\n\nCombine these analyses into a final answer:\n\n"
             + "\n\n".join(all_responses)
-            + "\n\nProvide your FINAL ANSWER based on all content, following the system prompt format."
+            + "\n\nUse the submit_final_answer tool based on all content, following the system prompt format."
         )
         final_messages = [self.sys_msg, HumanMessage(content=final_prompt)]
         try:
@@ -2803,8 +2803,8 @@ class CmwAgent:
 
     def _extract_final_answer(self, response: Any) -> str:
         """
-        Extract the final answer from the LLM response using modern structured output approach.
-        Falls back to legacy FINAL ANSWER marker parsing if structured output fails.
+        Extract the final answer from the LLM response using structured output approach.
+        This agent is tool-only and requires the submit_final_answer tool to be used.
 
         Args:
             response (Any): The LLM response object.
@@ -2812,16 +2812,14 @@ class CmwAgent:
         Returns:
             str: The extracted final answer string.
         """
-        # Try structured output first (modern approach)
-        try:
-            structured_answer = self._extract_structured_final_answer(response)
-            if structured_answer:
-                return structured_answer
-        except Exception as e:
-            print(f"[Response Extractor] Structured extraction failed: {e}")
+        # Extract using structured output (tool-only approach)
+        structured_answer = self._extract_structured_final_answer(response)
+        if structured_answer:
+            return structured_answer
         
-        # Fallback to legacy FINAL ANSWER marker parsing
-        return self._extract_legacy_final_answer(response)
+        # If no structured answer found, this is an error condition for a tool-only agent
+        print(f"[Response Extractor] No structured answer found - agent requires submit_final_answer tool usage")
+        return "Error: Agent requires submit_final_answer tool usage. No structured answer found."
     
     def _extract_structured_final_answer(self, response: Any) -> Optional[str]:
         """
@@ -2863,26 +2861,6 @@ class CmwAgent:
         
         return None
     
-    def _extract_legacy_final_answer(self, response: Any) -> str:
-        """
-        Legacy FINAL ANSWER marker extraction (fallback method).
-        This maintains backward compatibility with the existing approach.
-        
-        Args:
-            response (Any): The LLM response object.
-
-        Returns:
-            str: The extracted final answer string with "FINAL ANSWER:" prefix removed.
-        """
-        # Extract text from response
-        text = self._extract_text_from_response(response)
-        
-        # Use the full response text as the answer
-        cleaned_answer = (text or "").strip()
-        
-        # Use helper function to ensure valid answer
-        final_answer = ensure_valid_answer(cleaned_answer)
-        return final_answer
 
     def _llm_answers_match(self, answer: str, reference: str) -> bool:
         """
@@ -3564,16 +3542,16 @@ class CmwAgent:
         
         # Build the prompt message (slim, direct)
         prompt = (
-            "TASK: Extract the FINAL answer from the given LLM response. "
-            "If a **question** is present, extract the most likely FINAL ANSWER according to the system prompt's answer formatting rules. "
-            "Return only the most likely final answer, formatted exactly as required by the system prompt.\n\n"
+            "TASK: Extract the answer from the given LLM response. "
+            "If a **question** is present, extract the most likely answer according to the system prompt's answer formatting rules. "
+            "Return only the most likely answer, formatted exactly as required by the system prompt.\n\n"
             "FOCUS: Focus on the most relevant facts, numbers, and names, related to the question if present.\n\n"
-            "PURPOSE: Extract the FINAL ANSWER per the system prompt.\n\n"
+            "PURPOSE: Extract the answer per the system prompt.\n\n"
             "INSTRUCTIONS: Do not use tools.\n\n"
         )
         if original_question:
             prompt += f"QUESTION: {original_question}\n\n"
-        prompt += "RESPONSE TO ANALYZE:\nAnalyze the previous response and provide your FINAL ANSWER."
+        prompt += "RESPONSE TO ANALYZE:\nAnalyze the previous response and provide your answer."
         
         # Inject the message into the queue
         messages.append(HumanMessage(content=prompt))
@@ -3632,23 +3610,23 @@ class CmwAgent:
             
         reminders = {
             "final_answer_prompt": (
-                    "Analyse existing tool results, then provide your FINAL ANSWER.\n"
+                    "Analyse existing tool results, then use the submit_final_answer tool.\n"
                 + (
-                    "Use VARIOUS tools to gather missing information, then provide your FINAL ANSWER.\n"
+                    "Use VARIOUS tools to gather missing information, then use the submit_final_answer tool.\n"
                     f"Available tools include: {tool_names or 'various tools'}.\n"
                     if not tool_count or tool_count == 0 else ""
                   )
                 + (
                     f"\n\nIMPORTANT: You have gathered information from {tool_count} tool calls.\n"
                     "The tool results are available in the conversation.\n"
-                    "Carefully analyze tool results and provide your FINAL ANSWER to the ORIGINAL QUESTION.\n"
+                    "Carefully analyze tool results and use the submit_final_answer tool to provide your answer to the ORIGINAL QUESTION.\n"
                     "Follow the system prompt.\n"
-                    "Do not call any more tools - analyze the existing results and provide your answer now.\n"
+                    "Do not call any more tools - analyze the existing results and use submit_final_answer tool now.\n"
                     if tool_count and tool_count > 0 else ""
                   )
-                + "\n\nPlease answer the following question in the required format:\n\n"
+                + "\n\nPlease answer the following question using the submit_final_answer tool:\n\n"
                 + f"ORIGINAL QUESTION:\n{original_question}\n\n"
-                + "Your answer must start with 'FINAL ANSWER:' and follow the system prompt.\n"
+                + "Use the submit_final_answer tool with your answer and follow the system prompt.\n"
             ),
             "tool_usage_issue": (
                 "Call a DIFFERENT TOOL.\n"
@@ -3662,10 +3640,10 @@ class CmwAgent:
                 + "Do not call the tools repeately with the same arguments.\n"
                 + "Consider any results you have.\n"
                 + f"ORIGINAL QUESTION:\n{original_question}\n\n"
-                + "Provide your FINAL ANSWER based on the information you have or call OTHER TOOLS.\n"
+                + "Use the submit_final_answer tool based on the information you have or call OTHER TOOLS.\n"
             ),
         }
-        return reminders.get(reminder_type, "Please analyse the tool results and provide your FINAL ANSWER.")
+        return reminders.get(reminder_type, "Please analyse the tool results and use the submit_final_answer tool.")
 
     def _create_simple_chunk_prompt(self, messages, chunk_results, chunk_num, total_chunks):
         """Create a simple prompt for processing a chunk."""
@@ -3691,7 +3669,7 @@ class CmwAgent:
         if chunk_num < total_chunks:
             prompt += "Analyze these results and provide key findings."
         else:
-            prompt += "Provide your FINAL ANSWER based on all content, when you receive it, following the system prompt format."
+            prompt += "Use the submit_final_answer tool based on all content, when you receive it, following the system prompt format."
         
         return prompt
 
