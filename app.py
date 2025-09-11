@@ -34,6 +34,8 @@ DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
 # --- Main Agent Definition ---
 # Instantiate the agent once (choose provider as needed)
 AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "mistral")
+# Vector similarity can be disabled for faster startup (read from .env file)
+ENABLE_VECTOR_SIMILARITY = os.environ.get("ENABLE_VECTOR_SIMILARITY", "true").lower() == "true"
 
 # Global lock to prevent concurrent agent calls
 agent_lock = Lock()
@@ -614,6 +616,7 @@ def save_results_log(results_log: list) -> str:
 def chat_with_agent_stream(message, history):
 	"""
 	Stream assistant output by yielding partial responses. Compute once; reveal in small chunks.
+	Uses Gradio's ChatMessage format with metadata for better streaming display.
 	"""
 	if not message.strip():
 		yield history, ""
@@ -692,30 +695,55 @@ def chat_with_agent_stream(message, history):
 		accum = ""
 		terminal_output = ""
 		chunk_count = 0
+		current_thinking = ""
+		current_step = ""
+		last_yielded_length = 0
 		
 		if agent is not None:
 			# Try to use the agent's call method which should return a generator
 			try:
 				result = agent(message, chat_history=chat_history)
-				print(f"chat_with_agent_stream: Agent returned result type: {type(result)}")
 				
 				# Check if result is a generator and consume it properly
 				if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
 					print("chat_with_agent_stream: Consuming generator...")
 					has_content = False
 					for delta in result:
-						print(f"chat_with_agent_stream: Generator yielded: {type(delta)} - {str(delta)[:100]}")
 						if isinstance(delta, str) and delta.strip():
 							chunk_count += 1
 							accum += delta
 							has_content = True
-							# Yield partial updates for streaming
+							
+							# Clean up the accumulated content for better display
 							display_content = accum
+							
+							# Fix formatting issues by adding proper spacing and line breaks
+							display_content = display_content.replace("📍Step", "\n📍 **Step")
+							display_content = display_content.replace("🤖LLM", "\n🤖 **LLM")
+							display_content = display_content.replace("💭**LLMresponse:**", "\n💭 **LLM response:**")
+							display_content = display_content.replace("🔧**Detected", "\n🔧 **Detected")
+							display_content = display_content.replace("🔧**Executing", "\n🔧 **Executing")
+							display_content = display_content.replace("✅**", "\n✅ **")
+							
+							# Add proper line breaks after step indicators
+							display_content = display_content.replace("**Step", "**Step\n")
+							display_content = display_content.replace("**LLM is analyzing", "**LLM is analyzing...\n")
+							display_content = display_content.replace("**LLM response:**", "**LLM response:**\n")
+							display_content = display_content.replace("**Detected", "**Detected\n")
+							display_content = display_content.replace("**Executing", "**Executing\n")
+							display_content = display_content.replace("**completed**", "**completed**\n")
+							
+							# Clean up multiple newlines
+							display_content = display_content.replace("\n\n\n", "\n\n")
+							display_content = display_content.strip()
+							
 							if hasattr(agent, '_stream_terminal_output'):
 								terminal_chunk = agent._stream_terminal_output()
 								if terminal_chunk:
 									terminal_output += terminal_chunk
 									display_content += f"\n\n**Terminal Output:**\n{terminal_output}"
+							
+							# Yield immediately for real-time display
 							yield working_history + [{"role": "assistant", "content": display_content}], ""
 						elif isinstance(delta, dict):
 							# If it's a dict, try to extract text content
@@ -724,13 +752,14 @@ def chat_with_agent_stream(message, history):
 								chunk_count += 1
 								accum += str(text)
 								has_content = True
-								# Yield partial updates for streaming
+								# Yield immediately for real-time streaming - show accumulated content
 								display_content = accum
 								if hasattr(agent, '_stream_terminal_output'):
 									terminal_chunk = agent._stream_terminal_output()
 									if terminal_chunk:
 										terminal_output += terminal_chunk
 										display_content += f"\n\n**Terminal Output:**\n{terminal_output}"
+								# Yield immediately for real-time display
 								yield working_history + [{"role": "assistant", "content": display_content}], ""
 					
 					# If no meaningful content was yielded, provide fallback message
@@ -932,7 +961,7 @@ def stream_agent_init_logs(chat_history):
     def worker():
         global agent
         try:
-            agent_local = CmwAgent(provider=AGENT_PROVIDER, log_sink=sink)
+            agent_local = CmwAgent(provider=AGENT_PROVIDER, log_sink=sink, enable_vector_similarity=ENABLE_VECTOR_SIMILARITY)
             agent = agent_local
         except Exception as e:
             log_queue.put(f"\n🔴 Agent init failed: {e}\n")
@@ -994,7 +1023,7 @@ def _init_agent_background():
 	_agent_init_started = True
 	try:
 		print("🟡 Initializing CmwAgent in background...")
-		agent_local = CmwAgent(provider=AGENT_PROVIDER)
+		agent_local = CmwAgent(provider=AGENT_PROVIDER, enable_vector_similarity=ENABLE_VECTOR_SIMILARITY)
 		agent = agent_local
 		print("🟢 CmwAgent initialized.")
 	except Exception as e:
@@ -1009,7 +1038,7 @@ def _start_agent_init_thread_with_sink(update_fn=None):
 				update_fn(text_chunk)
 		except Exception:
 			pass
-	thread = threading.Thread(target=lambda: CmwAgent(provider=AGENT_PROVIDER, log_sink=_sink_writer) and _assign_agent(), daemon=True)
+	thread = threading.Thread(target=lambda: CmwAgent(provider=AGENT_PROVIDER, log_sink=_sink_writer, enable_vector_similarity=ENABLE_VECTOR_SIMILARITY) and _assign_agent(), daemon=True)
 	thread.start()
 	return None
 
@@ -1017,7 +1046,7 @@ def _start_agent_init_thread_with_sink(update_fn=None):
 def _assign_agent():
 	global agent
 	# This relies on CmwAgent writing to global when constructed; instead we construct here
-	agent_local = CmwAgent(provider=AGENT_PROVIDER)
+	agent_local = CmwAgent(provider=AGENT_PROVIDER, enable_vector_similarity=ENABLE_VECTOR_SIMILARITY)
 	agent = agent_local
 	return None
 
