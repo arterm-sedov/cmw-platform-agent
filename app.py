@@ -33,7 +33,7 @@ DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
 
 # --- Main Agent Definition ---
 # Instantiate the agent once (choose provider as needed)
-AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", 'gigachat')
+AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", None)
 
 # Global lock to prevent concurrent agent calls
 agent_lock = Lock()
@@ -632,13 +632,25 @@ def chat_with_agent_stream(message, history):
 		working_history = history + [{"role": "user", "content": message}]
 		yield working_history, ""
 
-		# Build chat history for agent
+		# Build chat history for agent - now includes complete tool execution context
 		chat_history = []
 		for turn in history:
 			role = turn.get("role")
 			content = turn.get("content", "")
-			if role in ("user", "assistant") and content:
-				chat_history.append({"role": role, "content": content})
+			tool_calls = turn.get("tool_calls", [])
+			tool_call_id = turn.get("tool_call_id")
+			name = turn.get("name")
+			
+			# Include all message types for complete context
+			if content or tool_calls:
+				turn_dict = {"role": role, "content": content}
+				if tool_calls:
+					turn_dict["tool_calls"] = tool_calls
+				if tool_call_id:
+					turn_dict["tool_call_id"] = tool_call_id
+				if name:
+					turn_dict["name"] = name
+				chat_history.append(turn_dict)
 
 		# Try true streaming if agent exposes a streaming generator
 		stream_gen = None
@@ -832,10 +844,22 @@ def chat_with_agent_stream(message, history):
 			stats_text = "\n".join(stats_lines)
 			combined_sections.append(f"**ℹ️ Details:**\n{stats_text}")
 		
+		# Get complete conversation history from agent (including tool results)
+		complete_history = []
+		if agent and hasattr(agent, 'get_conversation_history'):
+			try:
+				complete_history = agent.get_conversation_history()
+				print(f"📚 Retrieved complete conversation history: {len(complete_history)} messages")
+			except Exception as e:
+				print(f"⚠️ Failed to get conversation history: {e}")
+				complete_history = working_history
+		else:
+			complete_history = working_history
+		
 		# Show combined information in one collapsible section
 		if combined_sections:
 			combined_text = "\n\n".join(combined_sections)
-			yield working_history + [{"role": "assistant", "content": combined_text, "metadata": {"title": "📊 Response Details"}}], ""
+			yield complete_history + [{"role": "assistant", "content": combined_text, "metadata": {"title": "📊 Response Details"}}], ""
 	except Exception as e:
 		err = f"❌ Error: {e}"
 		print(f"Chat stream error: {e}")
