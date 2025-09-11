@@ -1,5 +1,5 @@
 .env
-venv/
+.venv**/
 __pycache__/
 !logs/*.log
 server_config.yml
