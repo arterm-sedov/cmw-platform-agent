@@ -1,0 +1,10 @@
+---
+description: Rules for writing docs
+globs: .md
+alwaysApply: true
+---
+
+When generating reports about changes, readmes, explanations:
+
+1. Place the .md files to @/docs folder
+2. Follow GitHub Markdown format
