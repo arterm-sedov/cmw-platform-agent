@@ -94,7 +94,7 @@ def check_python_version():
 
 def create_virtual_environment():
     """Create a virtual environment."""
-    venv_path = Path("venv")
+    venv_path = Path(".venv")
     
     if venv_path.exists():
         print_status("Virtual environment already exists", "WARNING")
@@ -110,7 +110,7 @@ def create_virtual_environment():
     python_cmd = get_python_command()
     
     try:
-        run_command([python_cmd, "-m", "venv", "venv"])
+        run_command([python_cmd, "-m", "venv", ".venv"])
         print_status("Virtual environment created successfully", "SUCCESS")
         return True
     except subprocess.CalledProcessError:
@@ -120,23 +120,23 @@ def create_virtual_environment():
 def get_activation_command():
     """Get the activation command for the current platform."""
     if platform.system() == "Windows":
-        return "venv\\Scripts\\activate"
+        return ".venv\\Scripts\\activate"
     else:
-        return "source venv/bin/activate"
+        return "source .venv/bin/activate"
 
 def get_python_path():
     """Get the path to the virtual environment's Python executable."""
     if platform.system() == "Windows":
-        return "venv\\Scripts\\python.exe"
+        return ".venv\\Scripts\\python.exe"
     else:
-        return "venv/bin/python"
+        return ".venv/bin/python"
 
 def get_pip_path():
     """Get the path to the virtual environment's pip executable."""
     if platform.system() == "Windows":
-        return "venv\\Scripts\\pip.exe"
+        return ".venv\\Scripts\\pip.exe"
     else:
-        return "venv/bin/pip"
+        return ".venv/bin/pip"
 
 def get_requirements_file():
     """Get the appropriate requirements file based on the platform."""
