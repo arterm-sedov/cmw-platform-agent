@@ -490,19 +490,25 @@ class CmwAgent:
                     "model": "GigaChat-2",
                     "token_limit": 128000,
                     "max_tokens": 2048,
-                    "temperature": 0
+                    "temperature": 0,
+                    "top_p": 0.9,
+                    "repetition_penalty": 1.0
                 },
                 {
                     "model": "GigaChat-2-Pro",
                     "token_limit": 128000,
                     "max_tokens": 2048,
-                    "temperature": 0
+                    "temperature": 0,
+                    "top_p": 0.9,
+                    "repetition_penalty": 1.0
                 },
                 {
                     "model": "GigaChat-2-Max",
                     "token_limit": 128000,
                     "max_tokens": 2048,
-                    "temperature": 0
+                    "temperature": 0,
+                    "top_p": 0.9,
+                    "repetition_penalty": 1.0
                 }
             ],
             "token_per_minute_limit": None,
@@ -522,13 +528,14 @@ class CmwAgent:
     # Print truncation length for debug output
     MAX_PRINT_LEN = 1000
     
-    def __init__(self, provider: str = None, log_sink=None):
+    def __init__(self, provider: str = None, log_sink=None, enable_vector_similarity: bool = True):
         """
         Initialize the agent, loading the system prompt, tools, retriever, and LLM.
 
         Args:
             provider (str): LLM provider to use. One of "google", "groq", or "huggingface".
             log_sink (callable | None): Optional callable accepting str chunks for real-time init logs.
+            enable_vector_similarity (bool): Whether to enable vector similarity calculations. Defaults to True.
         """
         # --- Capture stdout for debug output and tee to console ---
         debug_buffer = io.StringIO()
@@ -543,6 +550,8 @@ class CmwAgent:
             self.system_prompt = self._load_system_prompt()
             self.sys_msg = SystemMessage(content=self.system_prompt)
             self.original_question = None
+            # Vector similarity control flag
+            self.enable_vector_similarity = enable_vector_similarity
             # Global threshold. Minimum similarity score (0.0-1.0) to consider answers similar
             self.similarity_threshold = 0.95
             # Tool calls deduplication threshold
@@ -583,7 +592,12 @@ class CmwAgent:
 
             # Vector store functionality is now handled by vector_store.py module
             # All Supabase operations are disabled by default
-            self.vector_store_manager = vector_store_manager
+            # Initialize managers with the vector similarity flag
+            from vector_store import get_vector_store_manager
+            from similarity_manager import get_similarity_manager
+            self.vector_store_manager = get_vector_store_manager(enable_vector_similarity=self.enable_vector_similarity)
+            # Also initialize similarity manager for tool call manager
+            get_similarity_manager(enabled=self.enable_vector_similarity)
 
             # Arrays for all initialized LLMs and tool-bound LLMs, in order (initialize before LLM setup loop)
             self.llms = []
@@ -647,7 +661,19 @@ class CmwAgent:
                         
                         # Filter tools for provider-specific schema limitations
                         safe_tools = self._filter_tools_for_llm(self.tools, llm_type)
-                        llm_with_tools = llm_instance.bind_tools(safe_tools)
+                        
+                        # Special handling for GigaChat - check if tool calling is supported
+                        if llm_type == "gigachat":
+                            try:
+                                # Test basic tool binding first
+                                llm_with_tools = llm_instance.bind_tools(safe_tools)
+                                print(f"   ✅ GigaChat tool binding successful")
+                            except Exception as e:
+                                print(f"   ⚠️ GigaChat tool binding failed: {e}")
+                                print(f"   ℹ️ Check your GigaChat configuration and API key")
+                                llm_with_tools = llm_instance  # Use without tools
+                        else:
+                            llm_with_tools = llm_instance.bind_tools(safe_tools)
                         
                         # Test tool calling directly since our agent only works with tools
                         tools_ok, tools_error = self._test_llm_tool_calling(f"{llm_name} (model: {model_id})", llm_type, llm_with_tools)
@@ -1155,10 +1181,9 @@ class CmwAgent:
                 # Update trace first
                 self._update_trace_during_streaming(event_type, content, metadata)
                 
-                # Stream content immediately using the provided generator
-                if callable(streaming_generator):
-                    return streaming_generator(content)  # Return for yielding
-                return content
+                # Don't call streaming_generator directly - let the caller handle yielding
+                # This prevents duplication since the content will be yielded by the caller
+                return content  # Return content for yielding
             return None
         
         # Stream loop start if in streaming mode
@@ -2196,6 +2221,7 @@ class CmwAgent:
     def _calculate_cosine_similarity(self, embedding1, embedding2) -> float:
         """
         Calculate cosine similarity between two embeddings.
+        If vector similarity is disabled, returns 1.0 to indicate perfect match.
         
         Args:
             embedding1: First embedding vector
@@ -2204,12 +2230,17 @@ class CmwAgent:
         Returns:
             float: Cosine similarity score (0.0 to 1.0)
         """
+        if not self.enable_vector_similarity:
+            return 1.0
         return vector_store_manager.calculate_cosine_similarity(embedding1, embedding2)
 
     def _vector_answers_match(self, answer: str, reference: str):
         """
         Return (bool, similarity) where bool is if similarity >= threshold, and similarity is the float value.
+        If vector similarity is disabled, returns (True, 1.0) to always consider answers as matching.
         """
+        if not self.enable_vector_similarity:
+            return True, 1.0
         return vector_answers_match(answer, reference, self.similarity_threshold)
 
     def get_llm_stats(self) -> dict:
@@ -2592,7 +2623,8 @@ class CmwAgent:
                             nonlocal accumulated_response
                             if content and content.strip():
                                 accumulated_response += content
-                                return content  # This will be yielded by the calling loop
+                                # Don't return content here - let the calling loop handle yielding
+                                # This prevents duplication
                             return None
                         
                         # Execute tool loop with streaming
@@ -3246,24 +3278,60 @@ class CmwAgent:
 
     def _init_gigachat_llm(self, config, model_config):
         try:
+            # Use the newer langchain-gigachat package (recommended)
             from langchain_gigachat.chat_models import GigaChat as LC_GigaChat
-        except Exception as e:
-            print(f"⚠️ langchain-gigachat not installed or failed to import: {e}. Skipping GigaChat...")
-            return None
+        except ImportError:
+            try:
+                # Fallback to langchain-community (deprecated but still works)
+                from langchain_community.chat_models import GigaChat as LC_GigaChat
+                print("⚠️ Using deprecated langchain-community.GigaChat. Consider upgrading to langchain-gigachat")
+            except ImportError as e:
+                print(f"⚠️ Neither langchain-gigachat nor langchain-community is installed: {e}")
+                print(f"   Install with: pip install langchain-gigachat")
+                print(f"   Or: pip install langchain-community")
+                return None
+        
+        # Check for required environment variables
         api_key = os.environ.get(config["api_key_env"]) or os.environ.get("GIGACHAT_API_KEY")
         if not api_key:
             print(f"⚠️ {config['api_key_env']} not found in environment variables. Skipping GigaChat...")
+            print(f"   To use GigaChat, set GIGACHAT_API_KEY in your environment variables.")
             return None
+        
         scope = os.environ.get(config.get("scope_env", "GIGACHAT_SCOPE"))
+        if not scope:
+            print(f"⚠️ GIGACHAT_SCOPE not found in environment variables. Using default scope...")
+            print(f"   Available scopes: GIGACHAT_API_PERS, GIGACHAT_API_B2B, GIGACHAT_API_CORP")
+            scope = "GIGACHAT_API_PERS"  # Default scope
+        
         verify_ssl_env = os.environ.get(config.get("verify_ssl_env", "GIGACHAT_VERIFY_SSL"), "false")
         verify_ssl = str(verify_ssl_env).strip().lower() in ("1", "true", "yes", "y")
-        # Initialize LangChain GigaChat client
-        return LC_GigaChat(
-            credentials=api_key,
-            model=model_config["model"],
-            verify_ssl_certs=verify_ssl is True and True or False,
-            scope=scope
-        )
+        
+        # Get additional optional parameters
+        base_url = os.environ.get("GIGACHAT_BASE_URL", "https://gigachat.devices.sberbank.ru/api/v1")
+        timeout = int(os.environ.get("GIGACHAT_TIMEOUT", "30"))
+        
+        try:
+            # Initialize LangChain GigaChat client with proper parameters
+            giga_chat = LC_GigaChat(
+                credentials=api_key,
+                model=model_config["model"],
+                verify_ssl_certs=verify_ssl,
+                scope=scope,
+                base_url=base_url,
+                timeout=timeout,
+                temperature=model_config.get("temperature", 0),
+                max_tokens=model_config.get("max_tokens", 2048),
+                top_p=model_config.get("top_p", 0.9),
+                repetition_penalty=model_config.get("repetition_penalty", 1.0)
+            )
+            
+            return giga_chat
+        except Exception as e:
+            print(f"⚠️ Failed to initialize GigaChat: {e}")
+            print(f"   Check your GIGACHAT_API_KEY and GIGACHAT_SCOPE configuration.")
+            print(f"   Ensure you have the correct langchain-community or langchain-gigachat package installed.")
+            return None
 
     def _interpret_llm_response(self, response: Any, llm_name: str, llm_type: str, test_type: str) -> dict:
         """
@@ -3299,6 +3367,14 @@ class CmwAgent:
             })
             return response_info
         
+        # Check for tool calls first (valid even without content)
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            response_info.update({
+                'response_type': 'tool_calls',
+                'capabilities': ['tool_calling']
+            })
+            response_info['is_successful'] = True
+        
         # Check if response has content
         if hasattr(response, 'content') and response.content:
             content = str(response.content).strip()
@@ -3322,26 +3398,27 @@ class CmwAgent:
                 })
                 return response_info
             
-            # Check for tool calls
-            if hasattr(response, 'tool_calls') and response.tool_calls:
-                response_info.update({
-                    'response_type': 'tool_calls',
-                    'capabilities': ['tool_calling']
-                })
-            
             # Check for streaming response
             if hasattr(response, 'response_metadata') and response.response_metadata:
                 response_info['capabilities'].append('streaming')
             
-            # Successful response
+            # Successful response with content
             response_info.update({
                 'is_successful': True,
                 'response_type': 'successful',
                 'capabilities': response_info['capabilities'] + ['text_generation', 'api_communication']
             })
             
+        elif hasattr(response, 'tool_calls') and response.tool_calls:
+            # Tool calls without content - this is valid for tool-calling scenarios
+            response_info.update({
+                'is_successful': True,
+                'response_type': 'tool_calls_only',
+                'capabilities': response_info['capabilities'] + ['api_communication']
+            })
+            
         else:
-            # No content attribute
+            # No content attribute and no tool calls
             response_info.update({
                 'response_type': 'no_content',
                 'error_description': 'Response has no content attribute',
@@ -3373,7 +3450,7 @@ class CmwAgent:
             print(f"🧪 Testing {llm_name} with tool-calling test...")
             print(f"   Test question: {test_question}")
             start_time = time.time()
-            test_response = self._invoke_llm_provider(llm_instance, test_message)
+            test_response = self._invoke_llm_provider(llm_instance, test_message, llm_type)
             end_time = time.time()
             
             # Interpret the actual response
@@ -3382,9 +3459,28 @@ class CmwAgent:
             print(f"   Response time: {end_time - start_time:.2f}s")
             print(f"   Response type: {response_info['response_type']}")
             
+            # Debug: Show response structure
+            if hasattr(test_response, 'tool_calls') and test_response.tool_calls:
+                print(f"   Tool calls detected: {len(test_response.tool_calls)}")
+                for i, tool_call in enumerate(test_response.tool_calls):
+                    print(f"     Tool {i+1}: {tool_call.get('name', 'unknown')}")
+            if hasattr(test_response, 'content'):
+                print(f"   Content attribute exists: {bool(test_response.content)}")
+                if test_response.content:
+                    print(f"   Content length: {len(str(test_response.content))}")
+            else:
+                print(f"   No content attribute found")
+            
             if not response_info['is_successful']:
                 error_msg = f"{llm_name} tool test failed: {response_info['error_description']}"
                 print(f"❌ {error_msg}")
+                
+                # Special handling for GigaChat 500 errors - check configuration
+                if llm_type == "gigachat" and "Internal Server Error" in error_msg:
+                    print(f"   ℹ️ GigaChat Internal Server Error - check your API configuration")
+                    print(f"   ℹ️ Verify GIGACHAT_API_KEY, GIGACHAT_SCOPE, and base URL settings")
+                    return False, error_msg  # Don't accept as text-only mode
+                
                 return False, error_msg
             
             # Check for tool calling capabilities
@@ -3425,6 +3521,13 @@ class CmwAgent:
             error_info = self._interpret_llm_error(e, llm_name, llm_type)
             error_msg = f"{llm_name} tool test failed: {error_info['description']}"
             print(f"❌ {error_msg}")
+            
+            # Special handling for GigaChat 500 errors - check configuration
+            if llm_type == "gigachat" and "Internal Server Error" in error_msg:
+                print(f"   ℹ️ GigaChat Internal Server Error - check your API configuration")
+                print(f"   ℹ️ Verify GIGACHAT_API_KEY, GIGACHAT_SCOPE, and base URL settings")
+                return False, error_msg  # Don't accept as text-only mode
+            
             return False, error_msg
 
     def _interpret_llm_error(self, error: Exception, llm_name: str, llm_type: str) -> dict:

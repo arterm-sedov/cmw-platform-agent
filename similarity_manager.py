@@ -40,16 +40,21 @@ class SimilarityManager:
     text matching without external dependencies.
     """
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", enabled: bool = True):
         """
         Initialize the similarity manager.
 
         Args:
             model_name: Name of the sentence transformer model to use
+            enabled: Whether to enable vector similarity (loads heavy models if True)
         """
         self.model_name = model_name
         self.model = None
-        self._load_model()
+        self.enabled = enabled
+        if self.enabled:
+            self._load_model()
+        else:
+            print("ℹ️ Vector similarity disabled - skipping heavy model loading")
 
     def _load_model(self):
         """Load the sentence transformer model if available."""
@@ -65,7 +70,7 @@ class SimilarityManager:
 
     def is_enabled(self) -> bool:
         """Check if the similarity manager is enabled and working."""
-        return self.model is not None
+        return self.enabled and self.model is not None
 
     def generate_embedding(self, text: str) -> Optional[np.ndarray]:
         """
@@ -269,28 +274,45 @@ class SimilarityManager:
         }
 
 
-# Global instance for easy access
-similarity_manager = SimilarityManager()
+# Global instance for easy access - will be initialized lazily
+similarity_manager = None
+
+def get_similarity_manager(enabled: bool = True):
+    """Get or create the global similarity manager instance."""
+    global similarity_manager
+    if similarity_manager is None:
+        similarity_manager = SimilarityManager(enabled=enabled)
+    return similarity_manager
 
 # Convenience functions for similarity operations
 def calculate_similarity(text1: str, text2: str) -> float:
     """Calculate similarity between two texts."""
+    if similarity_manager is None:
+        get_similarity_manager()  # Initialize with default enabled=True
     return similarity_manager.calculate_similarity(text1, text2)
 
 def vector_answers_match(answer: str, reference: str, threshold: float = 0.8) -> Tuple[bool, float]:
     """Check if answers match using vector similarity."""
+    if similarity_manager is None:
+        get_similarity_manager()  # Initialize with default enabled=True
     return similarity_manager.vector_answers_match(answer, reference, threshold)
 
 def calculate_cosine_similarity(embedding1, embedding2) -> float:
     """Calculate cosine similarity between two embeddings."""
+    if similarity_manager is None:
+        get_similarity_manager()  # Initialize with default enabled=True
     return similarity_manager.calculate_cosine_similarity(embedding1, embedding2)
 
 def embed_query(text: str) -> Optional[List[float]]:
     """Generate embedding for a text query."""
+    if similarity_manager is None:
+        get_similarity_manager()  # Initialize with default enabled=True
     return similarity_manager.embed_query(text)
 
 def get_embeddings():
     """Get the embeddings instance."""
+    if similarity_manager is None:
+        get_similarity_manager()  # Initialize with default enabled=True
     return similarity_manager.get_embeddings()
 
 def get_similarity_status() -> Dict[str, Any]:

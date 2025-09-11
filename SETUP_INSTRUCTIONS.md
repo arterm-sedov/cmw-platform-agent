@@ -85,11 +85,18 @@ GEMINI_KEY=your_gemini_api_key_here
 # Optional: File uploading and HuggingFace login (disabled by default)
 # FILE_UPLOAD_ENABLED=true
 # LOGIN_ENABLED=true
-# Optional: For HuggingFace, OpenRouter, Groq, Mistral AI
+# Optional: For HuggingFace, OpenRouter, Groq, Mistral AI, GigaChat
 HUGGINGFACEHUB_API_TOKEN=your_hf_token
+# GigaChat Configuration
+GIGACHAT_API_KEY=your_gigachat_api_key
+GIGACHAT_SCOPE=GIGACHAT_API_PERS
+GIGACHAT_VERIFY_SSL=false
 OPENROUTER_API_KEY=your_openrouter_key
 GROQ_API_KEY=your_groq_key
 MISTRAL_API_KEY=your_mistral_api_key
+# Optional GigaChat parameters
+GIGACHAT_BASE_URL=https://gigachat.devices.sberbank.ru/api/v1
+GIGACHAT_TIMEOUT=30
 ```
 
 ### Getting API Keys
@@ -100,6 +107,12 @@ MISTRAL_API_KEY=your_mistral_api_key
 - **HuggingFace:** [HuggingFace Tokens](https://huggingface.co/settings/tokens)
 - **OpenRouter:** [OpenRouter](https://openrouter.ai/) > API Keys
 - **Groq:** [Groq Console](https://console.groq.com/) > API Keys
+- **GigaChat (Sber):** [GigaChat Developer Portal](https://developers.sber.ru/portal/products/gigachat) > API Keys
+
+**Note:** GigaChat requires the `langchain-gigachat` package (already included in requirements.txt):
+```bash
+pip install langchain-gigachat
+```
 
 ## Vector Store Setup (Optional)
 

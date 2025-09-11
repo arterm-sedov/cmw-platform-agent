@@ -30,7 +30,8 @@ class ToolCallManager:
 
     def __init__(self):
         """Initialize the tool call manager."""
-        self.similarity_manager = similarity_manager
+        # Use lazy initialization - similarity_manager will be set when needed
+        self.similarity_manager = None
 
     def is_duplicate_tool_call(self, tool_name: str, tool_args: dict, called_tools: list, threshold: float = 0.9) -> bool:
         """
@@ -66,6 +67,10 @@ class ToolCallManager:
                     return True
 
         # If no exact matches, use semantic similarity if available
+        if self.similarity_manager is None:
+            from similarity_manager import get_similarity_manager
+            self.similarity_manager = get_similarity_manager()
+        
         if self.similarity_manager.is_enabled():
             try:
                 # Convert current args to text for similarity comparison
