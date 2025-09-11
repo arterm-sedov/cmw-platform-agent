@@ -17,8 +17,12 @@ import numpy as np
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 
-# Global flag to disable Supabase functionality
-SUPABASE_ENABLED = False
+# Import similarity manager for similarity operations
+from similarity_manager import similarity_manager
+
+# Global flag to enable Supabase functionality if environment variables are set
+import os
+SUPABASE_ENABLED = bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_KEY"))
 
 # Try to import Supabase dependencies
 try:
@@ -94,9 +98,6 @@ class VectorStoreManager:
         """Check if vector store functionality is enabled."""
         return self.enabled and self.vector_store is not None
     
-    def get_embeddings(self):
-        """Get the embeddings instance."""
-        return self.embeddings if self.is_enabled() else None
     
     def get_vector_store(self):
         """Get the vector store instance."""
@@ -164,43 +165,6 @@ class VectorStoreManager:
             print(f"❌ Failed to get reference answer: {e}")
             return None
     
-    def calculate_cosine_similarity(self, embedding1, embedding2) -> float:
-        """
-        Calculate cosine similarity between two embeddings.
-        
-        Args:
-            embedding1: First embedding vector
-            embedding2: Second embedding vector
-            
-        Returns:
-            float: Cosine similarity score
-        """
-        try:
-            vec1 = np.array(embedding1)
-            vec2 = np.array(embedding2)
-            return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
-        except Exception as e:
-            print(f"❌ Failed to calculate cosine similarity: {e}")
-            return 0.0
-    
-    def embed_query(self, text: str) -> Optional[List[float]]:
-        """
-        Generate embedding for a text query.
-        
-        Args:
-            text (str): Text to embed
-            
-        Returns:
-            Embedding vector or None if disabled
-        """
-        if not self.is_enabled() or not self.embeddings:
-            return None
-        
-        try:
-            return self.embeddings.embed_query(text)
-        except Exception as e:
-            print(f"❌ Failed to generate embedding: {e}")
-            return None
     
     def vector_answers_match(self, answer: str, reference: str, threshold: float = 0.8) -> Tuple[bool, float]:
         """
@@ -230,15 +194,15 @@ class VectorStoreManager:
             if norm_answer == norm_reference:
                 return True, 1.0
             
-            # Generate embeddings
-            answer_embedding = self.embed_query(norm_answer)
-            reference_embedding = self.embed_query(norm_reference)
-            
+            # Generate embeddings using similarity manager
+            answer_embedding = similarity_manager.embed_query(norm_answer)
+            reference_embedding = similarity_manager.embed_query(norm_reference)
+
             if not answer_embedding or not reference_embedding:
                 return False, 0.0
-            
-            # Calculate similarity
-            similarity = self.calculate_cosine_similarity(answer_embedding, reference_embedding)
+
+            # Calculate similarity using similarity manager
+            similarity = similarity_manager.calculate_cosine_similarity(answer_embedding, reference_embedding)
             return similarity >= threshold, similarity
             
         except Exception as e:
@@ -269,76 +233,7 @@ class VectorStoreManager:
         text = " ".join(text.split())
         
         return text
-    
-    def is_duplicate_tool_call(self, tool_name: str, tool_args: dict, called_tools: list, threshold: float = 0.9) -> bool:
-        """
-        Check if a tool call is a duplicate using vector similarity.
-        
-        Args:
-            tool_name (str): Name of the tool
-            tool_args (dict): Tool arguments
-            called_tools (list): List of previously called tools
-            threshold (float): Similarity threshold for duplicates
-            
-        Returns:
-            bool: True if duplicate detected
-        """
-        if not self.is_enabled():
-            return False
-        
-        try:
-            # Convert tool args to text for embedding
-            args_text = json.dumps(tool_args, sort_keys=True) if isinstance(tool_args, dict) else str(tool_args)
-            
-            # Check for exact tool name match first
-            for called_tool in called_tools:
-                if called_tool.get('name') == tool_name:
-                    # Get embedding for current args
-                    current_embedding = self.embed_query(args_text)
-                    stored_embedding = called_tool.get('embedding')
-                    
-                    if current_embedding and stored_embedding:
-                        similarity = self.calculate_cosine_similarity(current_embedding, stored_embedding)
-                        if similarity >= threshold:
-                            return True
-            
-            return False
-            
-        except Exception as e:
-            print(f"❌ Failed to check tool call duplication: {e}")
-            return False
-    
-    def add_tool_call_to_history(self, tool_name: str, tool_args: dict, called_tools: list) -> None:
-        """
-        Add a tool call to the history with embedding.
-        
-        Args:
-            tool_name (str): Name of the tool
-            tool_args (dict): Tool arguments
-            called_tools (list): List to append to
-        """
-        if not self.is_enabled():
-            return
-        
-        try:
-            # Convert tool args to text for embedding
-            args_text = json.dumps(tool_args, sort_keys=True) if isinstance(tool_args, dict) else str(tool_args)
-            
-            # Get embedding for the tool call
-            tool_embedding = self.embed_query(args_text)
-            
-            if tool_embedding:
-                # Store as dictionary with name and embedding
-                tool_call_record = {
-                    'name': tool_name,
-                    'embedding': tool_embedding,
-                    'args': tool_args
-                }
-                called_tools.append(tool_call_record)
-                
-        except Exception as e:
-            print(f"❌ Failed to add tool call to history: {e}")
-    
+
     def get_status(self) -> Dict[str, Any]:
         """
         Get the current status of the vector store manager.
@@ -358,11 +253,7 @@ class VectorStoreManager:
 # Global instance for easy access
 vector_store_manager = VectorStoreManager()
 
-# Convenience functions for backward compatibility
-def get_embeddings():
-    """Get embeddings instance."""
-    return vector_store_manager.get_embeddings()
-
+# Convenience functions for vector store operations
 def get_vector_store():
     """Get vector store instance."""
     return vector_store_manager.get_vector_store()
@@ -378,14 +269,6 @@ def similarity_search(query: str, k: int = 1):
 def get_reference_answer(question: str):
     """Get reference answer for a question."""
     return vector_store_manager.get_reference_answer(question)
-
-def embed_query(text: str):
-    """Generate embedding for text."""
-    return vector_store_manager.embed_query(text)
-
-def vector_answers_match(answer: str, reference: str, threshold: float = 0.8):
-    """Check if answers match using vector similarity."""
-    return vector_store_manager.vector_answers_match(answer, reference, threshold)
 
 def get_status():
     """Get vector store status."""

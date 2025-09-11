@@ -21,6 +21,7 @@ from file_manager import file_manager
 # Login functionality moved to login_manager.py
 from login_manager import login_manager
 import queue
+from threading import Lock
 
 # Load environment variables from .env file
 load_dotenv()
@@ -33,6 +34,10 @@ DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() == "true"
 # --- Main Agent Definition ---
 # Instantiate the agent once (choose provider as needed)
 AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "gemini")
+
+# Global lock to prevent concurrent agent calls
+agent_lock = Lock()
+
 try:
     agent = None
     _agent_init_started = False
@@ -616,6 +621,12 @@ def chat_with_agent_stream(message, history):
 	if agent is None:
 		yield history + [{"role": "user", "content": message}, {"role": "assistant", "content": "Error: Agent not initialized. Check logs for details."}], ""
 		return
+
+	# Acquire lock to prevent concurrent agent calls
+	if not agent_lock.acquire(blocking=False):
+		yield history + [{"role": "user", "content": message}, {"role": "assistant", "content": "⚠️ Another request is being processed. Please wait..."}], ""
+		return
+
 	try:
 		print(f"💬 Chat (stream) request: {message}")
 		working_history = history + [{"role": "user", "content": message}]
@@ -872,80 +883,81 @@ def poll_models():
 
 # Stream agent initialization logs into chatbot
 def stream_agent_init_logs(chat_history):
-	log_queue = queue.Queue()
-	accum_text = ""
-	messages = chat_history or []
-	
-	# Mark initialization as started so status shows a proper message
-	global _agent_init_started
-	try:
-		_agent_init_started = True
-	except Exception:
-		pass
-	
-	def sink(chunk: str):
-		try:
-			log_queue.put(chunk)
-		except Exception:
-			pass
-	
-	import threading, time
-	def worker():
-		global agent
-		try:
-			agent_local = CmwAgent(provider=AGENT_PROVIDER, log_sink=sink)
-			agent = agent_local
-		except Exception as e:
-			log_queue.put(f"\n🔴 Agent init failed: {e}\n")
-	
-	thread = threading.Thread(target=worker, daemon=True)
-	thread.start()
-	
-	last_activity = time.time()
-	quiet_seconds_to_finish = 1.0
-	
-	# Continuously flush chunks into the chatbot
-	while True:
-		try:
-			chunk = log_queue.get(timeout=0.25)
-			last_activity = time.time()
-			accum_text += chunk
-			
-			# Add terminal output streaming section
-			terminal_section = ""
-			if agent is not None and hasattr(agent, '_stream_terminal_output'):
-				terminal_chunk = agent._stream_terminal_output()
-				if terminal_chunk:
-					if not hasattr(stream_agent_init_logs, '_terminal_buffer'):
-						stream_agent_init_logs._terminal_buffer = ""
-					stream_agent_init_logs._terminal_buffer += terminal_chunk
-					terminal_section = f"\n\n**🖥️ Terminal Output:**\n```\n{stream_agent_init_logs._terminal_buffer}\n```"
-			
-			# Combine initialization logs with terminal output
-			display_content = accum_text + terminal_section
-			
-			# Update the last assistant message or append a new one
-			if messages and messages[-1].get("role") == "assistant":
-				messages[-1] = {"role": "assistant", "content": display_content}
-			else:
-				messages = messages + [{"role": "assistant", "content": display_content}]
-			yield messages
-		except queue.Empty:
-			# If thread finished or agent is set and we've been quiet long enough, stop streaming
-			if (not thread.is_alive()) or (agent is not None and (time.time() - last_activity) > quiet_seconds_to_finish):
-				break
-			continue
-	# Append completion line if agent initialized
-	if agent is not None:
-		completion_note = "\n✅ Initialization complete."
-		if completion_note not in accum_text:
-			accum_text += completion_note
-			if messages and messages[-1].get("role") == "assistant":
-				messages[-1] = {"role": "assistant", "content": accum_text}
-			else:
-				messages = messages + [{"role": "assistant", "content": accum_text}]
-	# Final yield to ensure UI has the latest
-	yield messages
+    log_queue = queue.Queue()
+    accum_text = ""
+    messages = chat_history or []
+
+    # Mark initialization as started so status shows a proper message
+    global _agent_init_started
+    try:
+        _agent_init_started = True
+    except Exception:
+        pass
+
+    def sink(chunk: str):
+        try:
+            log_queue.put(chunk)
+        except Exception:
+            pass
+
+    import threading, time
+    from threading import Lock
+    def worker():
+        global agent
+        try:
+            agent_local = CmwAgent(provider=AGENT_PROVIDER, log_sink=sink)
+            agent = agent_local
+        except Exception as e:
+            log_queue.put(f"\n🔴 Agent init failed: {e}\n")
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+    last_activity = time.time()
+    quiet_seconds_to_finish = 1.0
+
+    # Continuously flush chunks into the chatbot
+    while True:
+        try:
+            chunk = log_queue.get(timeout=0.25)
+            last_activity = time.time()
+            accum_text += chunk
+
+            # Add terminal output streaming section
+            terminal_section = ""
+            if agent is not None and hasattr(agent, '_stream_terminal_output'):
+                terminal_chunk = agent._stream_terminal_output()
+                if terminal_chunk:
+                    if not hasattr(stream_agent_init_logs, '_terminal_buffer'):
+                        stream_agent_init_logs._terminal_buffer = ""
+                    stream_agent_init_logs._terminal_buffer += terminal_chunk
+                    terminal_section = f"\n\n**🖥️ Terminal Output:**\n```\n{stream_agent_init_logs._terminal_buffer}\n```"
+
+            # Combine initialization logs with terminal output
+            display_content = accum_text + terminal_section
+
+            # Update the last assistant message or append a new one
+            if messages and messages[-1].get("role") == "assistant":
+                messages[-1] = {"role": "assistant", "content": display_content}
+            else:
+                messages = messages + [{"role": "assistant", "content": display_content}]
+            yield messages
+        except queue.Empty:
+            # If thread finished or agent is set and we've been quiet long enough, stop streaming
+            if (not thread.is_alive()) or (agent is not None and (time.time() - last_activity) > quiet_seconds_to_finish):
+                break
+            continue
+    # Append completion line if agent initialized
+    if agent is not None:
+        completion_note = "\n✅ Initialization complete."
+        if completion_note not in accum_text:
+            accum_text += completion_note
+            if messages and messages[-1].get("role") == "assistant":
+                messages[-1] = {"role": "assistant", "content": accum_text}
+            else:
+                messages = messages + [{"role": "assistant", "content": accum_text}]
+    # Final yield to ensure UI has the latest
+    yield messages
 
 # Background agent initializer (lazy)
 def _init_agent_background():
