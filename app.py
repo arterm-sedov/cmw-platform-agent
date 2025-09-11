@@ -961,7 +961,7 @@ def stream_agent_init_logs(chat_history):
     def worker():
         global agent
         try:
-            agent_local = CmwAgent(provider=AGENT_PROVIDER, log_sink=sink, enable_vector_similarity=ENABLE_VECTOR_SIMILARITY)
+            agent_local = CmwAgent(provider=AGENT_PROVIDER, log_sink=sink, ENABLE_VECTOR_SIMILARITY=ENABLE_VECTOR_SIMILARITY)
             agent = agent_local
         except Exception as e:
             log_queue.put(f"\n🔴 Agent init failed: {e}\n")
@@ -1023,7 +1023,7 @@ def _init_agent_background():
 	_agent_init_started = True
 	try:
 		print("🟡 Initializing CmwAgent in background...")
-		agent_local = CmwAgent(provider=AGENT_PROVIDER, enable_vector_similarity=ENABLE_VECTOR_SIMILARITY)
+		agent_local = CmwAgent(provider=AGENT_PROVIDER, ENABLE_VECTOR_SIMILARITY=ENABLE_VECTOR_SIMILARITY)
 		agent = agent_local
 		print("🟢 CmwAgent initialized.")
 	except Exception as e:
@@ -1038,7 +1038,7 @@ def _start_agent_init_thread_with_sink(update_fn=None):
 				update_fn(text_chunk)
 		except Exception:
 			pass
-	thread = threading.Thread(target=lambda: CmwAgent(provider=AGENT_PROVIDER, log_sink=_sink_writer, enable_vector_similarity=ENABLE_VECTOR_SIMILARITY) and _assign_agent(), daemon=True)
+	thread = threading.Thread(target=lambda: CmwAgent(provider=AGENT_PROVIDER, log_sink=_sink_writer, ENABLE_VECTOR_SIMILARITY=ENABLE_VECTOR_SIMILARITY) and _assign_agent(), daemon=True)
 	thread.start()
 	return None
 
@@ -1046,7 +1046,7 @@ def _start_agent_init_thread_with_sink(update_fn=None):
 def _assign_agent():
 	global agent
 	# This relies on CmwAgent writing to global when constructed; instead we construct here
-	agent_local = CmwAgent(provider=AGENT_PROVIDER, enable_vector_similarity=ENABLE_VECTOR_SIMILARITY)
+	agent_local = CmwAgent(provider=AGENT_PROVIDER, ENABLE_VECTOR_SIMILARITY=ENABLE_VECTOR_SIMILARITY)
 	agent = agent_local
 	return None
 
