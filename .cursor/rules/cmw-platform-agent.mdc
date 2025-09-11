@@ -15,3 +15,4 @@ alwaysApply: true
 - Place imports always on top.
 - Use environment variables for secrets.
 - Ensure testability and extensibility.
+- Put any test scripts into @/misc_files folder.
