@@ -375,7 +375,7 @@ class CmwAgent:
         "huggingface": {
             "name": "HuggingFace",
             "type_str": "huggingface",
-            "api_key_env": "HUGGINGFACEHUB_API_TOKEN",
+            "api_key_env": "HUGGINGFACE_API_KEY",
             "max_history": 20,
             "tool_support": False,
             "force_tools": False,

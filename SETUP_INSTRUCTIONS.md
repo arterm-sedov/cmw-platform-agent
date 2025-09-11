@@ -86,7 +86,7 @@ GEMINI_KEY=your_gemini_api_key_here
 # FILE_UPLOAD_ENABLED=true
 # LOGIN_ENABLED=true
 # Optional: For HuggingFace, OpenRouter, Groq, Mistral AI, GigaChat
-HUGGINGFACEHUB_API_TOKEN=your_hf_token
+HUGGINGFACE_API_KEY=your_hf_token
 # GigaChat Configuration
 GIGACHAT_API_KEY=your_gigachat_api_key
 GIGACHAT_SCOPE=GIGACHAT_API_PERS

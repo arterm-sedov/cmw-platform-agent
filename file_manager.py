@@ -80,10 +80,10 @@ class FileManager:
         try:
             # Use provided token or get from environment
             if not token:
-                token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN")
+                token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_API_KEY")
             
             if not token:
-                print("Error: HuggingFace token not provided and HF_TOKEN/HUGGINGFACEHUB_API_TOKEN not set")
+                print("Error: HuggingFace token not provided and HF_TOKEN/HUGGINGFACE_API_KEY not set")
                 return None
             
             return HfApi(token=token)
