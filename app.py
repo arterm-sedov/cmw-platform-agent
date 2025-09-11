@@ -840,6 +840,9 @@ def chat_with_agent_stream(message, history):
 		err = f"❌ Error: {e}"
 		print(f"Chat stream error: {e}")
 		yield history + [{"role": "user", "content": message}, {"role": "assistant", "content": err}], ""
+	finally:
+		# Always release the lock to prevent deadlock
+		agent_lock.release()
 
 def get_available_models():
     """
