@@ -649,25 +649,26 @@ class CmwAgent:
                         safe_tools = self._filter_tools_for_llm(self.tools, llm_type)
                         llm_with_tools = llm_instance.bind_tools(safe_tools)
                         
-                        # Test with a math question that requires tools
-                        tools_ok = self._test_llm_with_tools(f"{llm_name} (model: {model_id})", llm_type, llm_with_tools)
+                        # Test tool calling directly since our agent only works with tools
+                        tools_ok, tools_error = self._test_llm_tool_calling(f"{llm_name} (model: {model_id})", llm_type, llm_with_tools)
+                        basic_ok = tools_ok  # If tools work, basic functionality works too
                         
                         # Store result for summary
                         self.llm_init_results.append({
                             "provider": llm_name,
                             "llm_type": llm_type,
                             "model": model_id,
-                            "plain_ok": True,  # We assume basic functionality if instantiation succeeded
+                            "plain_ok": basic_ok,
                             "tools_ok": tools_ok,
-                            "error_plain": None,
-                            "error_tools": error_tools
+                            "error_plain": tools_error if not basic_ok else None,
+                            "error_tools": tools_error
                         })
                         
-                        # Check force_tools flag - if True, use even if tools test failed
+                        # Check force_tools flag - if True, use even if tools test failed (but only if basic works)
                         force_tools = config.get("force_tools", False) or model_config.get("force_tools", False)
                         
-                        if tools_ok:
-                            # LLM passed tool test - mark as fully functional
+                        if basic_ok and tools_ok:
+                            # LLM passed both basic and tool tests - mark as fully functional
                             self.active_model_config[llm_type] = model_config
                             self.llm_instances[llm_type] = llm_instance
                             self.llm_instances_with_tools[llm_type] = llm_with_tools
@@ -677,8 +678,8 @@ class CmwAgent:
                             
                             print(f"✅ LLM ({llm_name}) initialized successfully with model {model_id}")
                             break
-                        elif force_tools:
-                            # LLM failed tool test but force_tools=True - mark as available but warn
+                        elif basic_ok and force_tools:
+                            # LLM passed basic test but failed tool test, force_tools=True - mark as available but warn
                             self.active_model_config[llm_type] = model_config
                             self.llm_instances[llm_type] = llm_instance
                             self.llm_instances_with_tools[llm_type] = llm_with_tools
@@ -689,19 +690,31 @@ class CmwAgent:
                             print(f"⚠️ {llm_name} (model: {model_id}) tool test failed, but using anyway (force_tools=True)")
                             print(f"⚠️ WARNING: This LLM may not work properly for tool-calling tasks")
                             break
+                        elif not basic_ok:
+                            print(f"❌ {llm_name} (model: {model_id}) failed tool calling test - skipping")
+                            if tools_error:
+                                print(f"   Error: {tools_error}")
                         else:
                             print(f"❌ {llm_name} (model: {model_id}) failed tool test and force_tools=False - skipping")
+                            if tools_error:
+                                print(f"   Error: {tools_error}")
                             
                     except Exception as e:
                         print(f"⚠️ Failed to initialize {llm_name} (model: {model_id}): {e}")
+                        # Interpret the actual error to get real details
+                        error_info = self._interpret_llm_error(e, llm_name, llm_type)
                         self.llm_init_results.append({
                             "provider": llm_name,
                             "llm_type": llm_type,
                             "model": model_id,
                             "plain_ok": False,
                             "tools_ok": False,
-                            "error_plain": str(e),
-                            "error_tools": str(e)
+                            "error_plain": error_info['description'],
+                            "error_tools": error_info['description'],
+                            "error_type": error_info['error_type'],
+                            "suggested_action": error_info['suggested_action'],
+                            "is_temporary": error_info['is_temporary'],
+                            "requires_config_change": error_info['requires_config_change']
                         })
                         self.llm_instances[llm_type] = None
                         self.llm_instances_with_tools[llm_type] = None
@@ -2536,12 +2549,20 @@ class CmwAgent:
         # Collect all successful responses to choose the best one
         successful_responses = []
         
+        # Track failed LLMs for dynamic error reporting
+        failed_llms = []
+        
         # Try providers in order with unified logic
         for llm_type in llm_sequence:
             try:
                 # Check if this LLM type was successfully initialized
                 if llm_type not in self.llm_provider_names:
                     print(f"⚠️ Skipping {llm_type}: LLM not initialized")
+                    failed_llms.append({
+                        'provider': llm_type,
+                        'error': 'LLM not initialized',
+                        'status': 'Not initialized'
+                    })
                     continue
                 
                 # Always use tools when available - this ensures consistent behavior
@@ -2549,6 +2570,11 @@ class CmwAgent:
                 llm, llm_name, _ = self._select_llm(llm_type, use_tools)
                 if llm is None:
                     print(f"⚠️ Skipping {llm_type}: LLM instance is None")
+                    failed_llms.append({
+                        'provider': llm_type,
+                        'error': 'LLM instance is None',
+                        'status': 'Not available'
+                    })
                     continue
                 
                 print(f"🤖 Using {llm_name} (tools: {use_tools})")
@@ -2668,6 +2694,9 @@ class CmwAgent:
                     
             except Exception as e:
                 print(f"❌ {llm_name} failed: {e}")
+                # Interpret the actual error to get real details
+                error_info = self._interpret_llm_error(e, llm_name, llm_type)
+                failed_llms.append(error_info)
                 if llm_type == llm_sequence[-1]:  # Last provider
                     # Return error result
                     error_result = {
@@ -2683,7 +2712,7 @@ class CmwAgent:
                     self._trace_finalize_question(error_result)
                     
                     if streaming:
-                        error_msg = f"❌ **All LLM providers failed**\n\n**Last error:** {e}\n\n**Fallback system:** The agent tried all available LLM providers but none could generate a response.\n\n**Possible solutions:**\n- Wait for rate limits to reset\n- Check API keys and authentication\n- Try again later when services are available\n\nPlease check the Init logs for more details."
+                        error_msg = self._generate_llm_failure_summary(failed_llms)
                         for char in error_msg:
                             yield char
                         return
@@ -2740,11 +2769,11 @@ class CmwAgent:
         
         # If we get here, all LLMs failed
         if streaming:
-            error_msg = "❌ **All LLM providers are currently unavailable**\n\n**Details:**\n- OpenRouter: Rate limited (429 error)\n- Mistral AI: Returns empty content\n- Google Gemini: Location not supported\n- Groq: Service unavailable (404 error)\n\n**Fallback system:** The agent tried all available LLM providers but none could generate a response.\n\n**Possible solutions:**\n- Wait for rate limits to reset\n- Check API keys and authentication\n- Try again later when services are available\n\nPlease check the Init logs for more details."
+            error_msg = self._generate_llm_failure_summary(failed_llms)
             for char in error_msg:
                 yield char
         else:
-            return {"error": "All LLMs failed"}
+            return {"error": "All LLMs failed", "failed_llms": failed_llms}
 
     def _unified_process_with_streaming(self, question: str, chat_history: Optional[List[Dict[str, Any]]] = None, llm_sequence: Optional[List[str]] = None):
         """
@@ -3236,10 +3265,95 @@ class CmwAgent:
             scope=scope
         )
 
-    def _test_llm_with_tools(self, llm_name: str, llm_type: str, llm_instance) -> bool:
+    def _interpret_llm_response(self, response: Any, llm_name: str, llm_type: str, test_type: str) -> dict:
         """
-        Test an LLM with a math question that requires tools to verify tool calling works.
-        This is more reliable than a simple "Hello" test because it verifies actual tool usage.
+        Interpret actual LLM API responses to determine real capabilities.
+        
+        Args:
+            response: The actual response from the LLM API
+            llm_name: Name of the LLM provider
+            llm_type: Type of the LLM
+            test_type: Type of test being performed
+            
+        Returns:
+            dict: Interpreted response information
+        """
+        response_info = {
+            'provider': llm_name,
+            'llm_type': llm_type,
+            'test_type': test_type,
+            'is_successful': False,
+            'response_type': 'unknown',
+            'content': '',
+            'error_description': '',
+            'capabilities': [],
+            'limitations': []
+        }
+        
+        # Check if response is None
+        if response is None:
+            response_info.update({
+                'response_type': 'null_response',
+                'error_description': 'API returned null response',
+                'limitations': ['null_responses']
+            })
+            return response_info
+        
+        # Check if response has content
+        if hasattr(response, 'content') and response.content:
+            content = str(response.content).strip()
+            response_info['content'] = content
+            
+            # Check for empty content
+            if not content:
+                response_info.update({
+                    'response_type': 'empty_content',
+                    'error_description': 'API returned empty content',
+                    'limitations': ['empty_responses']
+                })
+                return response_info
+            
+            # Check for error messages in content
+            if any(term in content.lower() for term in ['error', 'failed', 'unavailable', 'not supported']):
+                response_info.update({
+                    'response_type': 'error_content',
+                    'error_description': f'API returned error in content: {content[:100]}',
+                    'limitations': ['error_responses']
+                })
+                return response_info
+            
+            # Check for tool calls
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                response_info.update({
+                    'response_type': 'tool_calls',
+                    'capabilities': ['tool_calling']
+                })
+            
+            # Check for streaming response
+            if hasattr(response, 'response_metadata') and response.response_metadata:
+                response_info['capabilities'].append('streaming')
+            
+            # Successful response
+            response_info.update({
+                'is_successful': True,
+                'response_type': 'successful',
+                'capabilities': response_info['capabilities'] + ['text_generation', 'api_communication']
+            })
+            
+        else:
+            # No content attribute
+            response_info.update({
+                'response_type': 'no_content',
+                'error_description': 'Response has no content attribute',
+                'limitations': ['no_content_support']
+            })
+        
+        return response_info
+
+    def _test_llm_tool_calling(self, llm_name: str, llm_type: str, llm_instance) -> tuple[bool, str]:
+        """
+        Test LLM tool calling capabilities by interpreting actual API responses.
+        This is the primary test since our agent only works with tools.
         
         Args:
             llm_name: Name of the LLM for logging purposes
@@ -3247,7 +3361,7 @@ class CmwAgent:
             llm_instance: The LLM instance with tools bound
             
         Returns:
-            bool: True if tool calling works, False otherwise
+            tuple: (success: bool, error_message: str)
         """
         try:
             # Use a math question that requires tools - similar to the quick action
@@ -3256,66 +3370,1092 @@ class CmwAgent:
                 self.sys_msg, 
                 HumanMessage(content=test_question)
             ]
-            print(f"🧪 Testing {llm_name} with math question requiring tools...")
+            print(f"🧪 Testing {llm_name} with tool-calling test...")
             print(f"   Test question: {test_question}")
             start_time = time.time()
             test_response = self._invoke_llm_provider(llm_instance, test_message)
             end_time = time.time()
             
-            if not test_response:
-                print(f"❌ {llm_name} returned None response")
-                return False
-                
-            # Check if the response contains tool calls
-            has_tool_calls = False
-            tool_call_details = []
-            if hasattr(test_response, 'tool_calls') and test_response.tool_calls:
-                has_tool_calls = True
-                print(f"✅ {llm_name} made {len(test_response.tool_calls)} tool call(s)")
-                for i, tool_call in enumerate(test_response.tool_calls):
-                    tool_name = tool_call.get('name', 'unknown')
-                    tool_args = tool_call.get('args', {})
-                    print(f"Tool {i+1}: {tool_name}")
-                    # Show tool arguments for debugging
-                    if tool_args:
-                        args_preview = str(tool_args)[:50] + "..." if len(str(tool_args)) > 50 else str(tool_args)
-                        print(f"         Args: {args_preview}")
-                    tool_call_details.append(f"{tool_name}({args_preview})")
+            # Interpret the actual response
+            response_info = self._interpret_llm_response(test_response, llm_name, llm_type, "tool_calling")
             
-            # Check if response has content
-            has_content = hasattr(test_response, 'content') and test_response.content and test_response.content.strip()
-            
-            # Show detailed response information
             print(f"   Response time: {end_time - start_time:.2f}s")
+            print(f"   Response type: {response_info['response_type']}")
+            
+            if not response_info['is_successful']:
+                error_msg = f"{llm_name} tool test failed: {response_info['error_description']}"
+                print(f"❌ {error_msg}")
+                return False, error_msg
+            
+            # Check for tool calling capabilities
+            has_tool_calls = 'tool_calling' in response_info['capabilities']
+            has_content = bool(response_info['content'])
+            
             if has_content:
-                content_preview = test_response.content[:100] + "..." if len(test_response.content) > 100 else test_response.content
+                content_preview = response_info['content'][:100] + "..." if len(response_info['content']) > 100 else response_info['content']
                 print(f"   Content preview: {content_preview}")
             
-            if has_tool_calls and has_content:
-                print(f"✅ {llm_name} tool test successful!")
-                print(f"   Tool calls: {', '.join(tool_call_details)}")
-                return True
-            elif has_tool_calls and not has_content:
-                print(f"⚠️ {llm_name} made tool calls but returned empty content")
-                print(f"   Tool calls: {', '.join(tool_call_details)}")
-                return True  # Still consider this a success - tools are working
-            elif not has_tool_calls and has_content:
-                print(f"⚠️ {llm_name} returned content but no tool calls (may have calculated directly)")
-                # Check if the content contains the correct answer
-                if "352" in test_response.content or "15 * 23 + 7" in test_response.content:
-                    print(f"✅ {llm_name} calculated correctly without tools")
-                    return True
-                else:
-                    print(f"❌ {llm_name} returned content but wrong answer")
-                    print(f"   Expected answer: 352 (15 * 23 + 7)")
-                    return False
+            # Success cases for tool calling
+            if has_tool_calls:
+                print(f"✅ {llm_name} tool calling successful!")
+                print(f"   Capabilities: {', '.join(response_info['capabilities'])}")
+                if not has_content:
+                    print(f"   Note: LLM made tool calls but returned empty content (this is acceptable)")
+                return True, None
+            
+            # Fallback: Check if LLM calculated correctly without tools
+            elif has_content and ("352" in response_info['content'] or "15 * 23 + 7" in response_info['content']):
+                print(f"⚠️ {llm_name} calculated correctly without tools")
+                print(f"   Note: LLM may not support tool calling but can perform calculations")
+                return True, None
+            
+            # Failure cases
+            elif has_content:
+                error_msg = f"{llm_name} returned content but wrong answer (expected: 352, got: {response_info['content'][:50]}...)"
+                print(f"❌ {error_msg}")
+                print(f"   Expected answer: 352 (15 * 23 + 7)")
+                return False, error_msg
             else:
-                print(f"❌ {llm_name} returned no tool calls and no content")
-                return False
+                error_msg = f"{llm_name} returned no tool calls and no content"
+                print(f"❌ {error_msg}")
+                return False, error_msg
                 
         except Exception as e:
-            print(f"❌ {llm_name} tool test failed: {e}")
-            return False
+            # Interpret the actual error
+            error_info = self._interpret_llm_error(e, llm_name, llm_type)
+            error_msg = f"{llm_name} tool test failed: {error_info['description']}"
+            print(f"❌ {error_msg}")
+            return False, error_msg
+
+    def _interpret_llm_error(self, error: Exception, llm_name: str, llm_type: str) -> dict:
+        """
+        Interpret actual LLM API error responses using official API error structures.
+        
+        Args:
+            error: The actual exception/error from the LLM API
+            llm_name: Name of the LLM provider
+            llm_type: Type of the LLM
+            
+        Returns:
+            dict: Interpreted error information with real details
+        """
+        error_info = {
+            'provider': llm_name,
+            'llm_type': llm_type,
+            'raw_error': str(error),
+            'error_type': 'unknown',
+            'description': 'Unknown error',
+            'suggested_action': 'Check logs for details',
+            'retry_after': None,
+            'is_temporary': False,
+            'requires_config_change': False
+        }
+        
+        # Try to extract HTTP status code from the error
+        status_code = self._extract_http_status_code(error)
+        
+        if status_code:
+            # Use official HTTP status codes for error classification
+            error_info.update(self._classify_error_by_status_code(status_code, error, llm_name))
+        else:
+            # Fallback to analyzing error message for known patterns
+            error_info.update(self._classify_error_by_message(str(error), llm_name))
+        
+        return error_info
+
+    def _extract_http_status_code(self, error: Exception) -> int:
+        """Extract HTTP status code from various error types."""
+        error_str = str(error)
+        
+        # Look for HTTP status codes in the error message
+        import re
+        import json
+        
+        # Pattern 1: "HTTP 429" or "429 error"
+        status_match = re.search(r'HTTP\s+(\d{3})|(\d{3})\s+error', error_str, re.IGNORECASE)
+        if status_match:
+            return int(status_match.group(1) or status_match.group(2))
+        
+        # Pattern 2: "status: 429" or "code: 429"
+        status_match = re.search(r'(?:status|code):\s*(\d{3})', error_str, re.IGNORECASE)
+        if status_match:
+            return int(status_match.group(1))
+        
+        # Pattern 3: Try to parse JSON error responses
+        try:
+            # Look for JSON error structures in the error message
+            json_match = re.search(r'\{[^}]*"status"[^}]*\d{3}[^}]*\}|\{[^}]*"code"[^}]*\d{3}[^}]*\}', error_str)
+            if json_match:
+                error_data = json.loads(json_match.group(0))
+                if 'status' in error_data:
+                    return int(error_data['status'])
+                elif 'code' in error_data:
+                    return int(error_data['code'])
+        except (json.JSONDecodeError, ValueError, KeyError):
+            pass
+        
+        # Pattern 4: Look for common HTTP status codes in the message
+        for status in [400, 401, 402, 403, 404, 408, 413, 422, 429, 500, 502, 503]:
+            if str(status) in error_str:
+                return status
+        
+        return None
+
+    def _extract_retry_after_timing(self, error_str: str) -> int:
+        """Extract retry-after timing from error messages."""
+        import re
+        
+        # Look for retry-after in various formats
+        patterns = [
+            r'retry-after[:\s]*(\d+)',
+            r'retry[:\s]*after[:\s]*(\d+)',
+            r'wait[:\s]*(\d+)[:\s]*seconds?',
+            r'(\d+)[:\s]*seconds?[:\s]*before[:\s]*retry'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, error_str, re.IGNORECASE)
+            if match:
+                return int(match.group(1))
+        
+        return None
+
+    def _classify_gemini_error(self, status_code: int, error_str: str) -> dict:
+        """Classify Gemini-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        if status_code == 400:
+            if 'invalid_argument' in error_str_lower:
+                return {
+                    'error_type': 'invalid_argument',
+                    'description': 'INVALID_ARGUMENT - Request body is malformed',
+                    'suggested_action': 'Check API reference for request format and supported versions',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'failed_precondition' in error_str_lower or 'free tier' in error_str_lower:
+                return {
+                    'error_type': 'failed_precondition',
+                    'description': 'FAILED_PRECONDITION - Free tier not available in your country',
+                    'suggested_action': 'Enable billing on your project in Google AI Studio',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 403:
+            if 'permission_denied' in error_str_lower:
+                return {
+                    'error_type': 'permission_denied',
+                    'description': 'PERMISSION_DENIED - API key lacks required permissions',
+                    'suggested_action': 'Check API key access and authentication for tuned models',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 404:
+            if 'not_found' in error_str_lower:
+                return {
+                    'error_type': 'not_found',
+                    'description': 'NOT_FOUND - Requested resource was not found',
+                    'suggested_action': 'Check if all parameters in your request are valid for your API version',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 429:
+            if 'resource_exhausted' in error_str_lower:
+                retry_after = self._extract_retry_after_timing(error_str)
+                return {
+                    'error_type': 'resource_exhausted',
+                    'description': 'RESOURCE_EXHAUSTED - Rate limit exceeded',
+                    'suggested_action': 'Verify rate limits and request quota increase if needed',
+                    'is_temporary': True,
+                    'requires_config_change': False,
+                    'retry_after': retry_after
+                }
+        
+        elif status_code == 500:
+            if 'internal' in error_str_lower or 'context' in error_str_lower:
+                return {
+                    'error_type': 'internal_context_error',
+                    'description': 'INTERNAL - Input context too long',
+                    'suggested_action': 'Reduce input context or switch to Gemini 1.5 Flash',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 503:
+            if 'unavailable' in error_str_lower:
+                return {
+                    'error_type': 'unavailable',
+                    'description': 'UNAVAILABLE - Service temporarily overloaded',
+                    'suggested_action': 'Switch to Gemini 1.5 Flash or wait and retry',
+                    'is_temporary': True,
+                    'requires_config_change': False
+                }
+        
+        elif status_code == 504:
+            if 'deadline_exceeded' in error_str_lower:
+                return {
+                    'error_type': 'deadline_exceeded',
+                    'description': 'DEADLINE_EXCEEDED - Service unable to finish processing within deadline',
+                    'suggested_action': 'Set larger timeout or reduce prompt size',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        return None
+
+    def _classify_groq_error(self, status_code: int, error_str: str) -> dict:
+        """Classify Groq-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        if status_code == 400:
+            return {
+                'error_type': 'bad_request',
+                'description': 'Bad Request - Invalid syntax in request',
+                'suggested_action': 'Check request format and parameters',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 401:
+            return {
+                'error_type': 'unauthorized',
+                'description': 'Unauthorized - Invalid authentication credentials',
+                'suggested_action': 'Check API key configuration',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 404:
+            return {
+                'error_type': 'not_found',
+                'description': 'Not Found - Requested resource not found',
+                'suggested_action': 'Check model name and endpoint configuration',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 413:
+            return {
+                'error_type': 'request_too_large',
+                'description': 'Request Entity Too Large - Request body exceeds size limits',
+                'suggested_action': 'Reduce request size or enable chunking',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 422:
+            return {
+                'error_type': 'unprocessable_entity',
+                'description': 'Unprocessable Entity - Semantic errors in request',
+                'suggested_action': 'Check request parameters and model compatibility',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 429:
+            retry_after = self._extract_retry_after_timing(error_str)
+            return {
+                'error_type': 'rate_limit_exceeded',
+                'description': 'Too Many Requests - Rate limit exceeded',
+                'suggested_action': 'Wait before retrying or reduce request frequency',
+                'is_temporary': True,
+                'requires_config_change': False,
+                'retry_after': retry_after
+            }
+        
+        elif status_code == 498:
+            return {
+                'error_type': 'flex_tier_capacity_exceeded',
+                'description': 'Flex Tier Capacity Exceeded - Service at capacity',
+                'suggested_action': 'Wait for capacity to free up or upgrade to higher tier',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 499:
+            return {
+                'error_type': 'request_cancelled',
+                'description': 'Request Cancelled - Request was cancelled by caller',
+                'suggested_action': 'Retry the request if needed',
+                'is_temporary': False,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 500:
+            return {
+                'error_type': 'internal_server_error',
+                'description': 'Internal Server Error - Generic server error',
+                'suggested_action': 'Try again later or contact support',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 502:
+            return {
+                'error_type': 'bad_gateway',
+                'description': 'Bad Gateway - Invalid response from upstream server',
+                'suggested_action': 'Try again later or use different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 503:
+            return {
+                'error_type': 'service_unavailable',
+                'description': 'Service Unavailable - Server not ready to handle request',
+                'suggested_action': 'Wait for maintenance to complete or try different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        return None
+
+    def _classify_mistral_error(self, status_code: int, error_str: str) -> dict:
+        """Classify Mistral-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        # Check for Mistral-specific error codes first
+        if 'invalid_request_message_order' in error_str_lower or '3230' in error_str:
+            return {
+                'error_type': 'invalid_message_order',
+                'description': 'Invalid Request Message Order - Message sequence is incorrect',
+                'suggested_action': 'Reconstruct conversation with proper message ordering',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        # Standard HTTP status codes for Mistral
+        if status_code == 400:
+            return {
+                'error_type': 'bad_request',
+                'description': 'Bad Request - Invalid or missing parameters',
+                'suggested_action': 'Check request parameters and format',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 401:
+            return {
+                'error_type': 'unauthorized',
+                'description': 'Unauthorized - Invalid API key',
+                'suggested_action': 'Check API key configuration',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 403:
+            return {
+                'error_type': 'forbidden',
+                'description': 'Forbidden - Server refuses to authorize the request',
+                'suggested_action': 'Check API key permissions and access rights',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 404:
+            return {
+                'error_type': 'not_found',
+                'description': 'Not Found - Requested resource could not be found',
+                'suggested_action': 'Check if the requested resource exists and is accessible',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 422:
+            return {
+                'error_type': 'validation_error',
+                'description': 'Validation Error - Request validation failed',
+                'suggested_action': 'Check request parameters and ensure they meet validation requirements',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 429:
+            retry_after = self._extract_retry_after_timing(error_str)
+            return {
+                'error_type': 'rate_limit_exceeded',
+                'description': 'Too Many Requests - Rate limit exceeded',
+                'suggested_action': 'Wait before retrying or reduce request frequency',
+                'is_temporary': True,
+                'requires_config_change': False,
+                'retry_after': retry_after
+            }
+        
+        elif status_code == 500:
+            return {
+                'error_type': 'internal_server_error',
+                'description': 'Internal Server Error - Service temporarily unavailable',
+                'suggested_action': 'Try again later or contact support',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 503:
+            return {
+                'error_type': 'service_unavailable',
+                'description': 'Service Unavailable - Server temporarily unable to handle requests',
+                'suggested_action': 'Wait and retry later or contact support',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        return None
+
+    def _classify_gigachat_error(self, status_code: int, error_str: str) -> dict:
+        """Classify GigaChat-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        if status_code == 400:
+            # Check for specific GigaChat 400 error patterns
+            if 'rquid' in error_str_lower or 'uuid4' in error_str_lower:
+                return {
+                    'error_type': 'invalid_rquid',
+                    'description': 'Invalid RqUID header - Missing or malformed request ID',
+                    'suggested_action': 'Add RqUID header with valid UUID4 format',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'scope is empty' in error_str_lower or 'code": 5' in error_str:
+                return {
+                    'error_type': 'empty_scope',
+                    'description': 'Empty scope - API version not specified',
+                    'suggested_action': 'Specify API version: GIGACHAT_API_PERS, GIGACHAT_API_B2B, or GIGACHAT_API_CORP',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'scope data format invalid' in error_str_lower or 'code": 1' in error_str:
+                return {
+                    'error_type': 'invalid_scope_format',
+                    'description': 'Invalid scope format - Malformed API version',
+                    'suggested_action': 'Check scope parameter format and try again',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'id must not be empty' in error_str_lower:
+                return {
+                    'error_type': 'missing_id',
+                    'description': 'Missing ID parameter - Required field is empty',
+                    'suggested_action': 'Provide valid ID parameter in request',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            else:
+                return {
+                    'error_type': 'bad_request',
+                    'description': 'Bad Request - Invalid parameters or request format',
+                    'suggested_action': 'Check request parameters and format',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 401:
+            if 'can\'t decode \'authorization\' header' in error_str_lower or 'code": 4' in error_str:
+                return {
+                    'error_type': 'invalid_auth_header',
+                    'description': 'Invalid Authorization header - Cannot decode credentials',
+                    'suggested_action': 'Check API key format and ensure it\'s correctly encoded',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'credentials doesn\'t match db data' in error_str_lower or 'code": 6' in error_str:
+                return {
+                    'error_type': 'credential_mismatch',
+                    'description': 'Credential mismatch - API key doesn\'t match database',
+                    'suggested_action': 'Regenerate API key in personal cabinet and try again',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'scope from db not fully includes consumed scope' in error_str_lower or 'code": 7' in error_str:
+                return {
+                    'error_type': 'scope_mismatch',
+                    'description': 'Scope mismatch - API key doesn\'t match requested scope',
+                    'suggested_action': 'Ensure API key matches the specified scope version',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            else:
+                return {
+                    'error_type': 'unauthorized',
+                    'description': 'Unauthorized - Invalid or expired authentication',
+                    'suggested_action': 'Check API key and ensure token is not older than 30 minutes',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 402:
+            return {
+                'error_type': 'payment_required',
+                'description': 'Payment Required - Model tokens exhausted',
+                'suggested_action': 'Check token balance in personal cabinet and add credits',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 403:
+            return {
+                'error_type': 'permission_denied',
+                'description': 'Permission Denied - Access to resource not allowed',
+                'suggested_action': 'Check if you\'re using pay-as-you-go billing (GET /balance not available)',
+                'is_temporary': False,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 413:
+            return {
+                'error_type': 'payload_too_large',
+                'description': 'Payload Too Large - Input exceeds maximum size',
+                'suggested_action': 'Reduce prompt size to fit within model context window',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 422:
+            if 'requested model does not support functions' in error_str_lower:
+                return {
+                    'error_type': 'functions_not_supported',
+                    'description': 'Functions Not Supported - Model doesn\'t support custom functions',
+                    'suggested_action': 'Contact support or use a different model',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'system message must be the first message' in error_str_lower:
+                return {
+                    'error_type': 'invalid_message_order',
+                    'description': 'Invalid Message Order - System message must be first',
+                    'suggested_action': 'Reorder messages to put system prompt first',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'unprocessable entity' in error_str_lower and 'attachments' in error_str_lower:
+                return {
+                    'error_type': 'attachment_too_large',
+                    'description': 'Attachment Too Large - File content exceeds context window',
+                    'suggested_action': 'Split or reduce file content size',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            else:
+                return {
+                    'error_type': 'unprocessable_entity',
+                    'description': 'Unprocessable Entity - Request format is invalid',
+                    'suggested_action': 'Check message order, field names, and parameter values',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 429:
+            return {
+                'error_type': 'rate_limit_exceeded',
+                'description': 'Too Many Requests - Concurrent request limit exceeded',
+                'suggested_action': 'Reduce concurrent requests (1 for individuals, 10 for businesses)',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 500:
+            return {
+                'error_type': 'internal_server_error',
+                'description': 'Internal Server Error - Service error occurred',
+                'suggested_action': 'Contact support or try again later',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        return None
+
+    def _classify_openrouter_error(self, status_code: int, error_str: str) -> dict:
+        """Classify OpenRouter-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        if status_code == 400:
+            return {
+                'error_type': 'bad_request',
+                'description': 'Bad Request - Invalid or missing parameters, CORS issues',
+                'suggested_action': 'Check request parameters, format, and CORS settings',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 401:
+            if 'oauth' in error_str_lower or 'session expired' in error_str_lower:
+                return {
+                    'error_type': 'oauth_expired',
+                    'description': 'OAuth session expired - Authentication token has expired',
+                    'suggested_action': 'Refresh OAuth token or re-authenticate',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'disabled' in error_str_lower or 'invalid api key' in error_str_lower:
+                return {
+                    'error_type': 'invalid_api_key',
+                    'description': 'Invalid API key - Key is disabled or invalid',
+                    'suggested_action': 'Check API key validity and ensure it\'s enabled',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            else:
+                return {
+                    'error_type': 'unauthorized',
+                    'description': 'Unauthorized - Invalid credentials or API key',
+                    'suggested_action': 'Check API key configuration and authentication',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 402:
+            return {
+                'error_type': 'insufficient_credits',
+                'description': 'Insufficient Credits - Account or API key has insufficient credits',
+                'suggested_action': 'Add more credits to your account and retry the request',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 403:
+            # Check for moderation error metadata
+            if 'moderation' in error_str_lower or 'flagged' in error_str_lower:
+                return {
+                    'error_type': 'moderation_flagged',
+                    'description': 'Content Flagged - Input was flagged by moderation system',
+                    'suggested_action': 'Review and modify input content to comply with moderation policies',
+                    'is_temporary': False,
+                    'requires_config_change': False,
+                    'metadata': self._extract_openrouter_moderation_metadata(error_str)
+                }
+            else:
+                return {
+                    'error_type': 'forbidden',
+                    'description': 'Forbidden - Access denied to chosen model',
+                    'suggested_action': 'Check model availability and permissions',
+                    'is_temporary': False,
+                    'requires_config_change': False
+                }
+        
+        elif status_code == 408:
+            return {
+                'error_type': 'request_timeout',
+                'description': 'Request Timeout - Request took too long to process',
+                'suggested_action': 'Try again with shorter input or different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 429:
+            return {
+                'error_type': 'rate_limited',
+                'description': 'Rate Limited - Too many requests in given timeframe',
+                'suggested_action': 'Wait before retrying or reduce request frequency',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 502:
+            # Check for provider error metadata
+            if 'provider' in error_str_lower or 'model' in error_str_lower:
+                return {
+                    'error_type': 'model_down',
+                    'description': 'Model Down - Chosen model is down or returned invalid response',
+                    'suggested_action': 'Try again later or use a different model',
+                    'is_temporary': True,
+                    'requires_config_change': False,
+                    'metadata': self._extract_openrouter_provider_metadata(error_str)
+                }
+            else:
+                return {
+                    'error_type': 'bad_gateway',
+                    'description': 'Bad Gateway - Invalid response from upstream server',
+                    'suggested_action': 'Try again later or contact support',
+                    'is_temporary': True,
+                    'requires_config_change': False
+                }
+        
+        elif status_code == 503:
+            return {
+                'error_type': 'no_available_provider',
+                'description': 'No Available Provider - No model provider meets routing requirements',
+                'suggested_action': 'Try again later or adjust routing requirements',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        return None
+
+    def _extract_openrouter_moderation_metadata(self, error_str: str) -> dict:
+        """Extract moderation error metadata from OpenRouter error response."""
+        try:
+            import json
+            # Look for JSON metadata in error string
+            if 'metadata' in error_str:
+                # Try to extract metadata from error string
+                start = error_str.find('"metadata":')
+                if start != -1:
+                    # Find the end of metadata object
+                    brace_count = 0
+                    start += len('"metadata":')
+                    for i, char in enumerate(error_str[start:], start):
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                metadata_str = error_str[start:i+1]
+                                return json.loads(metadata_str)
+        except (json.JSONDecodeError, ValueError, AttributeError):
+            pass
+        
+        return {
+            'reasons': ['Content flagged by moderation'],
+            'flagged_input': 'Unable to extract',
+            'provider_name': 'Unknown',
+            'model_slug': 'Unknown'
+        }
+
+    def _extract_openrouter_provider_metadata(self, error_str: str) -> dict:
+        """Extract provider error metadata from OpenRouter error response."""
+        try:
+            import json
+            # Look for JSON metadata in error string
+            if 'metadata' in error_str:
+                # Try to extract metadata from error string
+                start = error_str.find('"metadata":')
+                if start != -1:
+                    # Find the end of metadata object
+                    brace_count = 0
+                    start += len('"metadata":')
+                    for i, char in enumerate(error_str[start:], start):
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                metadata_str = error_str[start:i+1]
+                                return json.loads(metadata_str)
+        except (json.JSONDecodeError, ValueError, AttributeError):
+            pass
+        
+        return {
+            'provider_name': 'Unknown',
+            'raw': 'Unable to extract raw error'
+        }
+
+    def _classify_huggingface_error(self, status_code: int, error_str: str) -> dict:
+        """Classify HuggingFace-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        if status_code == 400:
+            return {
+                'error_type': 'bad_request',
+                'description': 'Bad Request - Malformed syntax or invalid parameters',
+                'suggested_action': 'Check request parameters and format',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 402:
+            return {
+                'error_type': 'payment_required',
+                'description': 'Payment Required - Exceeded monthly included credits or payment issue',
+                'suggested_action': 'Check HuggingFace account billing and add credits if needed',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 404:
+            if 'model' in error_str_lower or 'not found' in error_str_lower:
+                return {
+                    'error_type': 'model_not_found',
+                    'description': 'Model Not Found - Requested model could not be found',
+                    'suggested_action': 'Check model ID spelling, ensure model exists, or verify access permissions',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            else:
+                return {
+                    'error_type': 'not_found',
+                    'description': 'Not Found - Requested resource could not be found',
+                    'suggested_action': 'Check if the requested resource exists and is accessible',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 503:
+            if 'router.huggingface.co' in error_str:
+                return {
+                    'error_type': 'router_service_unavailable',
+                    'description': 'Router Service Unavailable - HuggingFace router service is down',
+                    'suggested_action': 'Try again later or use a different model provider',
+                    'is_temporary': True,
+                    'requires_config_change': False
+                }
+            else:
+                return {
+                    'error_type': 'service_unavailable',
+                    'description': 'Service Unavailable - Inference API temporarily unable to handle requests',
+                    'suggested_action': 'Wait and retry later or try a different model',
+                    'is_temporary': True,
+                    'requires_config_change': False
+                }
+        
+        elif status_code == 504:
+            return {
+                'error_type': 'gateway_timeout',
+                'description': 'Gateway Timeout - Server did not receive timely response from upstream',
+                'suggested_action': 'Try again with shorter input or use a faster model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        return None
+
+    def _classify_error_by_status_code(self, status_code: int, error: Exception, llm_name: str) -> dict:
+        """Classify error based on official HTTP status codes."""
+        error_str = str(error)
+        
+        # Check for provider-specific error status codes first
+        if 'gemini' in llm_name.lower():
+            gemini_error = self._classify_gemini_error(status_code, error_str)
+            if gemini_error:
+                return gemini_error
+        elif 'groq' in llm_name.lower():
+            groq_error = self._classify_groq_error(status_code, error_str)
+            if groq_error:
+                return groq_error
+        elif 'mistral' in llm_name.lower():
+            mistral_error = self._classify_mistral_error(status_code, error_str)
+            if mistral_error:
+                return mistral_error
+        elif 'gigachat' in llm_name.lower():
+            gigachat_error = self._classify_gigachat_error(status_code, error_str)
+            if gigachat_error:
+                return gigachat_error
+        elif 'openrouter' in llm_name.lower():
+            openrouter_error = self._classify_openrouter_error(status_code, error_str)
+            if openrouter_error:
+                return openrouter_error
+        elif 'huggingface' in llm_name.lower():
+            huggingface_error = self._classify_huggingface_error(status_code, error_str)
+            if huggingface_error:
+                return huggingface_error
+        
+        if status_code == 400:
+            return {
+                'error_type': 'bad_request',
+                'description': 'Bad Request - Invalid or missing parameters',
+                'suggested_action': 'Check request parameters and format',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 401:
+            return {
+                'error_type': 'authentication',
+                'description': 'Unauthorized - Invalid credentials or API key',
+                'suggested_action': 'Check API key configuration and authentication',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 402:
+            return {
+                'error_type': 'payment_required',
+                'description': 'Payment Required - Insufficient credits or quota',
+                'suggested_action': 'Add credits or check quota limits',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 403:
+            return {
+                'error_type': 'forbidden',
+                'description': 'Forbidden - Access denied or content flagged',
+                'suggested_action': 'Check permissions or modify content',
+                'is_temporary': False,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 404:
+            return {
+                'error_type': 'not_found',
+                'description': 'Not Found - Model or endpoint not available',
+                'suggested_action': 'Check model name and endpoint configuration',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 408:
+            return {
+                'error_type': 'timeout',
+                'description': 'Request Timeout - Request took too long',
+                'suggested_action': 'Try again with shorter input or different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 413:
+            return {
+                'error_type': 'payload_too_large',
+                'description': 'Payload Too Large - Input exceeds size limits',
+                'suggested_action': 'Reduce input size or enable chunking',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 422:
+            return {
+                'error_type': 'unprocessable_entity',
+                'description': 'Unprocessable Entity - Invalid request format',
+                'suggested_action': 'Check request format and parameters',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 429:
+            # Extract retry-after timing if available
+            retry_after = self._extract_retry_after_timing(error_str)
+            return {
+                'error_type': 'rate_limit',
+                'description': 'Too Many Requests - Rate limit exceeded',
+                'suggested_action': 'Wait before retrying or reduce request frequency',
+                'is_temporary': True,
+                'requires_config_change': False,
+                'retry_after': retry_after
+            }
+        
+        elif status_code == 500:
+            return {
+                'error_type': 'internal_server_error',
+                'description': 'Internal Server Error - Service temporarily unavailable',
+                'suggested_action': 'Try again later or contact support',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 502:
+            return {
+                'error_type': 'bad_gateway',
+                'description': 'Bad Gateway - Model provider is down',
+                'suggested_action': 'Try again later or use different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 503:
+            return {
+                'error_type': 'service_unavailable',
+                'description': 'Service Unavailable - No available model providers',
+                'suggested_action': 'Try again later or use different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        else:
+            return {
+                'error_type': 'unknown_http_error',
+                'description': f'HTTP {status_code} - Unknown error',
+                'suggested_action': 'Check logs and try again',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+
+    def _classify_error_by_message(self, error_message: str, llm_name: str) -> dict:
+        """Fallback classification based on error message content."""
+        error_lower = error_message.lower()
+        
+        # Only use this for very specific, well-known error patterns
+        if 'location is not supported' in error_lower:
+            return {
+                'error_type': 'location_restriction',
+                'description': 'Service not available in your location',
+                'suggested_action': 'Use a different region or VPN',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif 'rate limit' in error_lower or 'too many requests' in error_lower:
+            return {
+                'error_type': 'rate_limit',
+                'description': 'Rate limit exceeded',
+                'suggested_action': 'Wait before retrying',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        else:
+            return {
+                'error_type': 'unknown',
+                'description': f'Unexpected error: {error_message[:100]}{"..." if len(error_message) > 100 else ""}',
+                'suggested_action': 'Check logs and try again',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+
+    def _generate_llm_failure_summary(self, failed_llms: list) -> str:
+        """
+        Generate a dynamic error message based on actual LLM failure reasons.
+        
+        Args:
+            failed_llms: List of dicts with 'provider', 'error', 'status' keys
+            
+        Returns:
+            str: Formatted error message with actual failure details
+        """
+        if not failed_llms:
+            return "❌ **All LLM providers are currently unavailable**\n\nNo specific error details available."
+        
+        error_msg = "❌ **All LLM providers are currently unavailable**\n\n**Details:**\n"
+        
+        # Group errors by type for better organization
+        error_groups = {}
+        for llm_info in failed_llms:
+            error_type = llm_info.get('error_type', 'unknown')
+            if error_type not in error_groups:
+                error_groups[error_type] = []
+            error_groups[error_type].append(llm_info)
+        
+        # Display errors grouped by type
+        for error_type, errors in error_groups.items():
+            if error_type == 'location_restriction':
+                error_msg += f"\n**🌍 Location Restrictions:**\n"
+                for error in errors:
+                    error_msg += f"- {error['provider']}: {error['description']}\n"
+                error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
+            
+            elif error_type == 'rate_limit':
+                error_msg += f"\n**⏱️ Rate Limits:**\n"
+                for error in errors:
+                    retry_info = f" (retry after {error['retry_after']}s)" if error.get('retry_after') else ""
+                    error_msg += f"- {error['provider']}: {error['description']}{retry_info}\n"
+                error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
+            
+            elif error_type == 'authentication':
+                error_msg += f"\n**🔑 Authentication Issues:**\n"
+                for error in errors:
+                    error_msg += f"- {error['provider']}: {error['description']}\n"
+                error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
+            
+            elif error_type == 'service_unavailable':
+                error_msg += f"\n**🔧 Service Issues:**\n"
+                for error in errors:
+                    error_msg += f"- {error['provider']}: {error['description']}\n"
+                error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
+            
+            else:
+                error_msg += f"\n**❓ Other Issues:**\n"
+                for error in errors:
+                    error_msg += f"- {error['provider']}: {error['description']}\n"
+        
+        error_msg += "\n**Fallback system:** The agent tried all available LLM providers but none could generate a response.\n\n"
+        error_msg += "**Next steps:**\n"
+        error_msg += "- Check the specific error types above for targeted solutions\n"
+        error_msg += "- Review API key configuration if authentication issues\n"
+        error_msg += "- Wait for rate limits to reset if applicable\n"
+        error_msg += "- Try again later for temporary service issues\n\n"
+        error_msg += "Please check the Init logs for more details."
+        
+        return error_msg
 
     def _ping_llm(self, llm_name: str, llm_type: str, use_tools: bool = False, llm_instance=None) -> bool:
         """
