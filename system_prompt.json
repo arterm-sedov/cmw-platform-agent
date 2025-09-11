@@ -7,7 +7,8 @@
             "Answer language: default to Russian. Only answer in English if the original question is in English.",
             "Format: use nicely formatted Markdown.",
             "Internal reasoning language: default to English. Only reason in Russian if asked by the user.",
-            "Final answer format: Always end your response with 'FINAL ANSWER: [your answer]' when providing the final answer to a question."
+            "Final answer format: Use the submit_final_answer tool when providing the final answer to a question. This ensures structured, reliable response handling.",
+            "Legacy format: If submit_final_answer tool is not available, fall back to 'FINAL ANSWER: [your answer]' format."
         ],
         "answer_types": []
     },

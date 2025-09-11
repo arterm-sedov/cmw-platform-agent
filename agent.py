@@ -36,6 +36,7 @@ from typing import Any, Dict, List, Optional
 # Third-party imports
 import numpy as np
 import tiktoken
+from pydantic import BaseModel, Field
 
 # LangChain imports
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -60,6 +61,24 @@ from vector_store import (
     vector_answers_match,
     vector_store_manager,
 )
+
+# Structured output models for modern response handling
+class FinalAnswer(BaseModel):
+    """Structured model for final answers with metadata"""
+    answer: str = Field(description="The final answer to the user's question")
+    confidence: float = Field(description="Confidence level from 0.0 to 1.0", ge=0.0, le=1.0)
+    sources: List[str] = Field(description="List of sources or tools used to generate this answer", default_factory=list)
+    reasoning: Optional[str] = Field(description="Brief explanation of the reasoning process", default=None)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "answer": "The powerhouse of the cell is the mitochondrion.",
+                "confidence": 0.95,
+                "sources": ["biology_knowledge", "web_search"],
+                "reasoning": "Based on established biological facts and recent research"
+            }
+        }
 
 def trace_prints_with_context(context_type: str):
     """
@@ -1336,14 +1355,28 @@ class CmwAgent:
                 
             last_response_content = current_content
 
-            # If response has content and no tool calls, return
+            # Check for submit_final_answer tool call (modern structured approach)
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                for tool_call in response.tool_calls:
+                    if tool_call.get('name') == 'submit_final_answer':
+                        print(f"[Tool Loop] Structured final answer detected via submit_final_answer tool")
+                        # Track successful provider requests
+                        self._handle_provider_success(llm_type)
+                        # Extract the answer
+                        answer = tool_call.get('args', {}).get('answer', '')
+                        if streaming_generator:
+                            # Use the streaming generator instead of direct yield
+                            streaming_generator(answer)
+                        return response
+            
+            # If response has content and no tool calls, return (legacy approach)
             if hasattr(response, 'content') and response.content and not getattr(response, 'tool_calls', None):
                 print(f"[Tool Loop] Final answer detected: {response.content}")
                 # Track successful provider requests
                 self._handle_provider_success(llm_type)
-                # If streaming, yield the final answer content
+                # If streaming, use the streaming generator
                 if streaming_generator:
-                    yield response.content
+                    streaming_generator(response.content)
                 return response
             tool_calls = getattr(response, 'tool_calls', None)
             if tool_calls:
@@ -1374,6 +1407,11 @@ class CmwAgent:
                 for tool_call in tool_calls:
                     tool_name = tool_call.get('name')
                     tool_args = tool_call.get('args', {})
+                    
+                    # Special handling for submit_final_answer - should not be processed as regular tool
+                    if tool_name == 'submit_final_answer':
+                        print(f"[Tool Loop] submit_final_answer detected - this should have been handled earlier")
+                        continue
                     
                     # Check if tool usage limit exceeded FIRST (most restrictive check)
                     if tool_name in tool_usage_count and tool_usage_count[tool_name] >= tool_usage_limits.get(tool_name, tool_usage_limits['default']):
@@ -1424,6 +1462,12 @@ class CmwAgent:
                 for tool_call in new_tool_calls:
                     tool_name = tool_call.get('name')
                     tool_args = tool_call.get('args', {})
+                    
+                    # submit_final_answer should have been filtered out earlier
+                    # This is a safety check in case it somehow gets through
+                    if tool_name == 'submit_final_answer':
+                        print(f"[Tool Loop] ERROR: submit_final_answer reached execution - this should not happen")
+                        continue
                     
                     # Stream tool start immediately
                     tool_start_content = stream_now(f"🔧 **Executing {tool_name}**\n", 
@@ -2759,15 +2803,76 @@ class CmwAgent:
 
     def _extract_final_answer(self, response: Any) -> str:
         """
-        Extract the final answer from the LLM response, removing the "FINAL ANSWER:" prefix.
-        The LLM is responsible for following the system prompt formatting rules.
-        This method is used for validation against reference answers and submission.
+        Extract the final answer from the LLM response using modern structured output approach.
+        Falls back to legacy FINAL ANSWER marker parsing if structured output fails.
 
         Args:
             response (Any): The LLM response object.
 
         Returns:
-            str: The extracted final answer string with "FINAL ANSWER:" prefix removed, or default string if not found.
+            str: The extracted final answer string.
+        """
+        # Try structured output first (modern approach)
+        try:
+            structured_answer = self._extract_structured_final_answer(response)
+            if structured_answer:
+                return structured_answer
+        except Exception as e:
+            print(f"[Response Extractor] Structured extraction failed: {e}")
+        
+        # Fallback to legacy FINAL ANSWER marker parsing
+        return self._extract_legacy_final_answer(response)
+    
+    def _extract_structured_final_answer(self, response: Any) -> Optional[str]:
+        """
+        Extract final answer using structured output (tool calls or JSON mode).
+        This is the modern SOTA approach.
+        
+        Args:
+            response (Any): The LLM response object.
+            
+        Returns:
+            Optional[str]: Extracted answer if found, None otherwise.
+        """
+        # Check for tool calls first (most reliable)
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            for tool_call in response.tool_calls:
+                if tool_call.get('name') == 'submit_final_answer':
+                    args = tool_call.get('args', {})
+                    if 'answer' in args:
+                        return args['answer']
+        
+        # Check for structured content in response metadata
+        if hasattr(response, 'response_metadata') and response.response_metadata:
+            metadata = response.response_metadata
+            if 'structured_output' in metadata:
+                structured_data = metadata['structured_output']
+                if isinstance(structured_data, dict) and 'answer' in structured_data:
+                    return structured_data['answer']
+        
+        # Check for JSON content in response
+        text = self._extract_text_from_response(response)
+        if text:
+            try:
+                # Try to parse as JSON
+                json_data = json.loads(text)
+                if isinstance(json_data, dict) and 'answer' in json_data:
+                    return json_data['answer']
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        return None
+    
+    def _extract_legacy_final_answer(self, response: Any) -> str:
+        """
+        Legacy FINAL ANSWER marker extraction (fallback method).
+        This maintains backward compatibility with the existing approach.
+        
+        Args:
+            response (Any): The LLM response object.
+
+        Returns:
+            str: The extracted final answer string with "FINAL ANSWER:" prefix removed.
         """
         # Extract text from response
         text = self._extract_text_from_response(response)
@@ -2842,6 +2947,8 @@ class CmwAgent:
         # Add specific tools that might be missed
         specific_tools = [
             # List of specific tool names to ensure inclusion (grouped by category for clarity)
+                # Response handling tools
+                'submit_final_answer',
                 # Math tools
                 'multiply', 'add', 'subtract', 'divide', 'modulus', 'power', 'square_root',
                 # File and data tools
