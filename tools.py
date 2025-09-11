@@ -24,11 +24,14 @@ from pydantic import BaseModel, Field, field_validator
 
 # Try to import matplotlib, but make it optional
 try:
+    import matplotlib
+    matplotlib.use('Agg')  # Use non-interactive backend
     import matplotlib.pyplot as plt
     MATPLOTLIB_AVAILABLE = True
-except ImportError:
+except (ImportError, Exception) as e:
     MATPLOTLIB_AVAILABLE = False
     plt = None
+    print(f"Warning: matplotlib not available: {e}")
 
 # Try to import pytesseract for OCR
 try:
