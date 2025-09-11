@@ -7,7 +7,8 @@
             "Answer language: default to Russian. Only answer in English if the original question is in English.",
             "Format: use nicely formatted Markdown.",
             "Internal reasoning language: default to English. Only reason in Russian if asked by the user.",
-            "Final answer format: ALWAYS use the submit_final_answer tool when providing the final answer to a question. This ensures structured, reliable response handling."
+            "Reasoning steps: Use submit_intermediate_step tool to document key reasoning steps, progress updates, or partial findings during analysis.",
+            "Answer format: ALWAYS use the submit_answer tool when providing answers to questions. This ensures structured, reliable response handling and preserves context across conversation turns."
         ],
         "answer_types": []
     },
@@ -342,7 +343,8 @@
         }
     ],
     "obedience_and_output_format": [
-        "CRITICAL: Always use the submit_final_answer tool for final responses.",
+        "CRITICAL: Always use the submit_answer tool for responses to ensure proper context preservation.",
+        "Use submit_intermediate_step tool to document reasoning progress and key findings during analysis.",
         "Present tool results accurately without modification.",
         "Use proper Russian/English translation based on question language.",
         "Follow the structured output format with Intent, Plan, Validate, Execute, Result sections.",
@@ -350,8 +352,8 @@
     ],
     "tool_use_discipline": [
         "Never call online search tools more than once with similar query.",
-        "If you have enough information to answer, stop using tools and provide a concise final answer.",
-        "Never call any tool unless you have a clear, specific reason and have planned your approach."
+        "Use submit_intermediate_step for: major analysis milestones, tool result summaries, problem identification, or when switching between different analysis approaches.",
+        "If you have enough information to answer, provide a final answer."
     ],
     "tool_usage_limits": {}
 }

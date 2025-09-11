@@ -20,7 +20,7 @@ import time
 import re
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 from typing import Any, Dict, List, Optional, Union, Tuple, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Try to import matplotlib, but make it optional
 try:
@@ -1626,45 +1626,229 @@ def web_search_deep_research_exa_ai(instructions: str) -> str:
             "error": f"Error in Exa research: {str(e)}"
         })
 
-@tool
-def submit_final_answer(answer: str, confidence: float = 1.0, sources: List[str] = None, reasoning: str = None) -> str:
+# ========== PYDANTIC SCHEMAS ==========
+
+class SubmitAnswerSchema(BaseModel):
     """
-    Submit the final answer with structured metadata.
+    Schema for submitting final answers with structured metadata.
     
-    Use this tool when ready to provide a final answer and the analysis is complete.
+    Use this when ready to provide a final answer and the analysis is complete.
+    """
+    answer: str = Field(
+        description="The final answer to the user's question",
+        min_length=1
+    )
+    confidence: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Confidence level from 0.0 to 1.0 (default: 1.0)"
+    )
+    sources: Optional[List[str]] = Field(
+        default=None,
+        description="List of sources or tools used to generate this answer"
+    )
+    reasoning: Optional[str] = Field(
+        default=None,
+        description="Brief explanation of the reasoning process"
+    )
+
+    @field_validator('sources')
+    @classmethod
+    def validate_sources(cls, v):
+        if v is not None and len(v) == 0:
+            return None
+        return v
+
+class SubmitIntermediateStepSchema(BaseModel):
+    """
+    Schema for submitting intermediate reasoning steps or progress updates.
     
-    Args:
-        answer: The final answer to the user's question
-        confidence: Confidence level from 0.0 to 1.0 (default: 1.0)
-        sources: List of sources or tools used to generate this answer (optional)
-        reasoning: Brief explanation of the reasoning process (optional)
+    Use this to document intermediate steps in your reasoning process, 
+    progress updates, or partial findings before reaching a final conclusion.
+    """
+    step_name: str = Field(
+        description="Short name/identifier for this step (e.g., 'data_analysis', 'search_results')",
+        min_length=1,
+        max_length=100
+    )
+    description: str = Field(
+        description="Detailed description of what was accomplished in this step",
+        min_length=1
+    )
+    status: Literal["in_progress", "completed", "failed", "blocked"] = Field(
+        default="in_progress",
+        description="Current status of this step"
+    )
+    data: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional dictionary containing relevant data, findings, or results from this step"
+    )
+    next_steps: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of planned next steps or actions"
+    )
+    confidence: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional confidence level from 0.0 to 1.0 for this step's results"
+    )
+    issues: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of issues, concerns, or limitations encountered"
+    )
+
+    @field_validator('next_steps', 'issues')
+    @classmethod
+    def validate_lists(cls, v):
+        if v is not None and len(v) == 0:
+            return None
+        return v
+
+class SubmitAnswerResult(BaseModel):
+    """
+    Structured result model for submit_answer operations.
+    
+    This model standardizes the response format for final answer submissions,
+    providing consistent success/error handling and response structure.
+    """
+    success: bool
+    status_code: int = Field(default=200)
+    raw_response: dict | str | None = Field(default=None)
+    error: Optional[str] = Field(default=None)
+
+class SubmitIntermediateStepResult(BaseModel):
+    """
+    Structured result model for submit_intermediate_step operations.
+    
+    This model standardizes the response format for intermediate step submissions,
+    providing consistent success/error handling and response structure.
+    """
+    success: bool
+    status_code: int = Field(default=200)
+    raw_response: dict | str | None = Field(default=None)
+    error: Optional[str] = Field(default=None)
+
+# ========== TOOL FUNCTIONS ==========
+
+@tool("submit_answer", return_direct=False, args_schema=SubmitAnswerSchema)
+def submit_answer(answer: str, confidence: float = 1.0, sources: List[str] = None, reasoning: str = None) -> Dict[str, Any]:
+    """
+    Submit an answer with structured metadata for the current question or sub-question.
+    
+    Use this tool when ready to provide an answer for the current question. This can be:
+    - A final answer after completing all reasoning steps
+    - An answer to a sub-question in a multi-turn conversation
+    - A response that concludes the current analysis phase
+    
+    This tool preserves context across multiple conversation turns.
     
     Returns:
-        JSON string confirming the final answer submission
+        dict: {
+            "success": bool - True if the final answer was submitted successfully
+            "status_code": int - HTTP response status code (200 for success)
+            "raw_response": dict|None - Structured response containing the submitted answer data
+            "error": str|None - Error message if operation failed
+        }
     """
     try:
-        # Validate confidence range
-        confidence = max(0.0, min(1.0, confidence))
-        
-        # Prepare sources list
-        if sources is None:
-            sources = []
+        # Validate input using Pydantic schema
+        schema = SubmitAnswerSchema(
+            answer=answer,
+            confidence=confidence,
+            sources=sources,
+            reasoning=reasoning
+        )
         
         # Create structured response
-        response = {
+        response_data = {
             "type": "final_answer",
-            "answer": answer,
-            "confidence": confidence,
-            "sources": sources,
-            "reasoning": reasoning,
+            "answer": schema.answer,
+            "confidence": schema.confidence,
+            "sources": schema.sources or [],
+            "reasoning": schema.reasoning,
             "timestamp": time.time()
         }
         
-        return json.dumps(response)
+        # Create result using Pydantic model
+        result = SubmitAnswerResult(
+            success=True,
+            status_code=200,
+            raw_response=response_data
+        )
+        
+        validated = SubmitAnswerResult(**result.model_dump())
+        return validated.model_dump()
     except Exception as e:
-        return json.dumps({
-            "type": "error",
-            "error": f"Error submitting final answer: {str(e)}"
-        })
+        result = SubmitAnswerResult(
+            success=False,
+            status_code=500,
+            error=f"Error submitting final answer: {str(e)}"
+        )
+        validated = SubmitAnswerResult(**result.model_dump())
+        return validated.model_dump()
+
+@tool("submit_intermediate_step", return_direct=False, args_schema=SubmitIntermediateStepSchema)
+def submit_intermediate_step(step_name: str, description: str, status: str = "in_progress", 
+                           data: Dict[str, Any] = None, next_steps: List[str] = None, 
+                           confidence: float = None, issues: List[str] = None) -> Dict[str, Any]:
+    """
+    Submit an intermediate reasoning step or progress update.
+    
+    Use this tool to document intermediate steps in your reasoning process, 
+    progress updates, or partial findings before reaching a final conclusion.
+    This tool helps track the agent's thought process and enables better debugging.
+    
+    Returns:
+        dict: {
+            "success": bool - True if the intermediate step was submitted successfully
+            "status_code": int - HTTP response status code (200 for success)
+            "raw_response": dict|None - Structured response containing the submitted step data
+            "error": str|None - Error message if operation failed
+        }
+    """
+    try:
+        # Validate input using Pydantic schema
+        schema = SubmitIntermediateStepSchema(
+            step_name=step_name,
+            description=description,
+            status=status,
+            data=data,
+            next_steps=next_steps,
+            confidence=confidence,
+            issues=issues
+        )
+        
+        # Create structured response
+        response_data = {
+            "type": "intermediate_step",
+            "step_name": schema.step_name,
+            "description": schema.description,
+            "status": schema.status,
+            "data": schema.data or {},
+            "next_steps": schema.next_steps or [],
+            "confidence": schema.confidence,
+            "issues": schema.issues or [],
+            "timestamp": time.time()
+        }
+        
+        # Create result using Pydantic model
+        result = SubmitIntermediateStepResult(
+            success=True,
+            status_code=200,
+            raw_response=response_data
+        )
+        
+        validated = SubmitIntermediateStepResult(**result.model_dump())
+        return validated.model_dump()
+    except Exception as e:
+        result = SubmitIntermediateStepResult(
+            success=False,
+            status_code=500,
+            error=f"Error submitting intermediate step: {str(e)}"
+        )
+        validated = SubmitIntermediateStepResult(**result.model_dump())
+        return validated.model_dump()
 
 # ========== END OF TOOLS.PY ========== 
