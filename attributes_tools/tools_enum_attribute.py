@@ -18,9 +18,34 @@ def _remove_nones(obj: Any) -> Any:
         return [ _remove_nones(v) for v in obj if v is not None]
     return obj
 
-class VariantAliasModel(BaseModel):
+class PlainEnumValueModel(BaseModel):
+    system_name: str = Field(
+        description="Enum value system name. RU: Системное имя значения",
+        alias="alias"
+    )
+    russian_name: str = Field(
+        description="Enum value Russian name. RU: Русское название значения",
+        alias="ru"
+    )
+    english_name: Optional[str] = Field(
+        default=None,
+        description="Enum value English name. RU: Английское название значения",
+        alias="en"
+    )
+    deutsche_name: Optional[str] = Field(
+        default=None,
+        description="Enum value Deutsche name. RU: Немецкое название значения",
+        alias="de"
+    )
+    color: Optional[str] = Field(
+        default=None,
+        description="Enum value display color via hex code. RU: Цвет отображения значения"
+    )
+
+class EnumValueSystemNameModel(BaseModel):
     variant_type: Literal["Variant"] = Field(
-        description="Variant type. RU: Тип значения",
+        default="Variant",
+        description="EnumValue type. RU: Тип значения",
         alias="type"
     )
     attribute_system_name: str = Field(
@@ -28,44 +53,48 @@ class VariantAliasModel(BaseModel):
         alias="owner"
     )
     system_name: str = Field(
-        description="Variant system name. Ru: Системное имя значения",
+        description="Variant system name. RU: Системное имя значения",
         alias="alias"
     )
 
-    @model_validator(mode='before')
-    def set_attribute_system_name_later(cls, values):
-        return values
 
-class VariantNameModel(BaseModel):
+class EnumValueNameModel(BaseModel):
     english_name: Optional[str] = Field(
         default=None,
-        description="Variant English name. RU: Английское название значения",
+        description="EnumValue English name. RU: Английское название значения",
         alias="en"
     )
     russian_name: str = Field(
-        description="Variant Russian name. RU: Русское название значения",
+        description="EnumValue Russian name. RU: Русское название значения",
         alias="ru"
     )
     deutsche_name: Optional[str] = Field(
         default=None,
-        description="Variant Deutsche name. RU: Немецкое название значения",
+        description="EnumValue Deutsche name. RU: Немецкое название значения",
         alias="de"
     )
 
-class VariantModel(BaseModel):
-    sytem_name: VariantAliasModel = Field(
-        alias="alias"
-    )
-    name: VariantNameModel
-    color: Optional[str] = Field(
-        default=None,
-        description="Variant display color via hex code. RU: Цвет отображения значения"
-    )
+
+class EnumValueModel(BaseModel):
+    sytem_name: EnumValueSystemNameModel = Field(alias="alias")
+    name: EnumValueNameModel
+    color: Optional[str] = Field(default=None)
 
     @field_validator('color')
     def validate_hex_color(cls, v):
+        if v is None:
+            return v
         if not re.match(r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$', v):
             raise ValueError('Color must be a valid hex color code, e.g. #RRGGBB')
+        return v
+
+    @field_validator('color')
+    def validate_hex_color(cls, v):
+        if v is None:
+            return v
+        if not re.match(r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$', v):
+            raise ValueError('Color must be a valid hex color code, e.g. #RRGGBB or #RGB')
+        return v
 
 class EditOrCreateEnumAttributeSchema(BaseModel):
     operation: Literal["create", "edit"] = Field(
@@ -106,13 +135,35 @@ class EditOrCreateEnumAttributeSchema(BaseModel):
         default=None,
         description="Expression to calculate the attribute value automatically. User-provided. RU: Выражение для вычисления",
     )
-    variants: List['VariantModel'] = Field(
-        description="Attribute value variants. Ru: Варианты значений атрибута"
+    enum_values: List[PlainEnumValueModel] = Field(
+        description="""Attribute value enum_values. Ru: Варианты значений атрибута
+
+IMPORTANT EXAMPLE (you MUST follow this structure):
+[
+  {
+    "alias": "status_active",
+    "ru": "Активен",
+    "en": "Active",
+    "de": "Aktiv",
+    "color": "#4CAF50"
+  },
+  {
+    "alias": "status_inactive",
+    "ru": "Неактивен",
+    "color": "#F44336"
+  }
+]
+
+Note:
+- `ru` is REQUIRED.
+- `alias` is the system name of the variant.
+- `color` must be valid hex (e.g. #RRGGBB or #RGB) or omitted.
+"""
     )
 
     @model_validator(mode='after')
     def inject_attribute_system_name_into_aliases(self) -> 'EditOrCreateEnumAttributeSchema':
-        for variant in self.variants:
+        for variant in self.enum_values:
             variant.sytem_name.attribute_system_name = self.system_name
         return self
 
@@ -154,6 +205,21 @@ class EditOrCreateEnumAttributeSchema(BaseModel):
 
         return self
 
+def convert_plain_to_enum_value(plain: PlainEnumValueModel, attr_system_name: str) -> EnumValueModel:
+    return EnumValueModel(
+        alias=EnumValueSystemNameModel(
+            type="Variant",
+            owner=attr_system_name,  # ← инжектится из system_name атрибута
+            alias=plain.system_name
+        ),
+        name=EnumValueNameModel(
+            ru=plain.russian_name,
+            en=plain.english_name,
+            de=plain.deutsche_name
+        ),
+        color=plain.color
+    )
+
 @tool("edit_or_create_enum_attribute", return_direct=False, args_schema=EditOrCreateEnumAttributeSchema)
 def edit_or_create_enum_attribute(
     operation: str,
@@ -162,7 +228,7 @@ def edit_or_create_enum_attribute(
     application_system_name: str,
     template_system_name: str,
     display_format: str,
-    variants: List[VariantModel],
+    enum_values: List[PlainEnumValueModel],
     description: Optional[str] = None,
     write_changes_to_the_log: Optional[bool] = False,
     calculate_value: Optional[bool] = False,
@@ -171,29 +237,22 @@ def edit_or_create_enum_attribute(
     r"""
     Edit or Create a enum attribute.
     
-    IMPORTANT: When providing `variants`, you MUST follow this exact structure (with aliases!):
+    IMPORTANT: When providing `enum_values`, you MUST follow this exact structure (see schema description for example):
 
-    Example `variants`:
+    Example `enum_values`:
     [
-        {
-            "alias": {
-                "type": "Variant",
-                "owner": "<system_name of the attribute>",  # ← will be auto-filled, but you can omit or set to placeholder
-                "alias": "variant_system_name_1"
-            },
-            "name": {
-                "ru": "Название на русском",
-                "en": "English name",
-                "de": "Deutscher Name"
-            },
-            "color": "#FF5733"
-        }
+      {
+        "system_name": "status_active",
+        "ru": "Активен",
+        "en": "Active",
+        "de": "Aktiv",
+        "color": "#4CAF50"
+      }
     ]
 
-    - `owner` in `alias` will be automatically set to the attribute's `system_name` — you may omit it or set to any placeholder.
-    - `color` must be a valid hex color, e.g. "#RRGGBB" or "#RGB".
-    - At least one variant is required.
-    - `ru` field in `name` is REQUIRED. `en` and `de` are optional.
+    - `ru` is REQUIRED.
+    - `system_name` is the system name of the enum value.
+    - `color` must be valid hex (e.g. #RRGGBB or #RGB) or omitted.
 
     Returns:
         dict: {
@@ -203,6 +262,11 @@ def edit_or_create_enum_attribute(
             "error": str|None - Error message if operation failed
         }
     """
+
+    convert_enum_values = [
+        convert_plain_to_enum_value(plain_enum_value, system_name)
+        for plain_enum_value in enum_values
+    ]
 
     request_body: Dict[str, Any] = {
         "globalAlias": {
@@ -219,11 +283,11 @@ def edit_or_create_enum_attribute(
         "expression": expression_for_calculation,
         "variants": [
             {
-                "alias": variant.system_name.model_dump(),
-                "name": variant.name.model_dump(),
+                "alias": variant.system_name.model_dump(by_alias=True, exclude_none=True),
+                "name": variant.name.model_dump(by_alias=True, exclude_none=True),
                 "color": variant.color
             }
-            for variant in variants
+            for variant in convert_enum_values
         ]
     }
 
