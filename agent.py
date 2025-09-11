@@ -533,14 +533,14 @@ class CmwAgent:
     # Print truncation length for debug output
     MAX_PRINT_LEN = 1000
     
-    def __init__(self, provider: str = None, log_sink=None, enable_vector_similarity: bool = True):
+    def __init__(self, provider: str = None, log_sink=None, ENABLE_VECTOR_SIMILARITY: bool = True):
         """
         Initialize the agent, loading the system prompt, tools, retriever, and LLM.
 
         Args:
             provider (str): LLM provider to use. One of "google", "groq", or "huggingface".
             log_sink (callable | None): Optional callable accepting str chunks for real-time init logs.
-            enable_vector_similarity (bool): Whether to enable vector similarity calculations. Defaults to True.
+            ENABLE_VECTOR_SIMILARITY (bool): Whether to enable vector similarity calculations. Defaults to True.
         """
         # --- Capture stdout for debug output and tee to console ---
         debug_buffer = io.StringIO()
@@ -556,7 +556,7 @@ class CmwAgent:
             self.sys_msg = SystemMessage(content=self.system_prompt)
             self.original_question = None
             # Vector similarity control flag
-            self.enable_vector_similarity = enable_vector_similarity
+            self.ENABLE_VECTOR_SIMILARITY = ENABLE_VECTOR_SIMILARITY
             # Global threshold. Minimum similarity score (0.0-1.0) to consider answers similar
             self.similarity_threshold = 0.95
             # Tool calls deduplication threshold
@@ -606,9 +606,9 @@ class CmwAgent:
             # Initialize managers with the vector similarity flag
             from vector_store import get_vector_store_manager
             from similarity_manager import get_similarity_manager
-            self.vector_store_manager = get_vector_store_manager(enable_vector_similarity=self.enable_vector_similarity)
+            self.vector_store_manager = get_vector_store_manager(ENABLE_VECTOR_SIMILARITY=self.ENABLE_VECTOR_SIMILARITY)
             # Also initialize similarity manager for tool call manager
-            get_similarity_manager(enabled=self.enable_vector_similarity)
+            get_similarity_manager(enabled=self.ENABLE_VECTOR_SIMILARITY)
 
             # Arrays for all initialized LLMs and tool-bound LLMs, in order (initialize before LLM setup loop)
             self.llms = []
@@ -2469,7 +2469,7 @@ class CmwAgent:
         Returns:
             float: Cosine similarity score (0.0 to 1.0)
         """
-        if not self.enable_vector_similarity:
+        if not self.ENABLE_VECTOR_SIMILARITY:
             return 1.0
         return vector_store_manager.calculate_cosine_similarity(embedding1, embedding2)
 
@@ -2478,7 +2478,7 @@ class CmwAgent:
         Return (bool, similarity) where bool is if similarity >= threshold, and similarity is the float value.
         If vector similarity is disabled, returns (True, 1.0) to always consider answers as matching.
         """
-        if not self.enable_vector_similarity:
+        if not self.ENABLE_VECTOR_SIMILARITY:
             return True, 1.0
         return vector_answers_match(answer, reference, self.similarity_threshold)
 
@@ -6919,7 +6919,7 @@ class CmwAgent:
             "total_questions_processed": getattr(self, 'total_questions', 0),
             "llm_providers_available": list(self.llm_provider_names),
             "tools_available": len(self.tools) if hasattr(self, 'tools') else 0,
-            "vector_store_enabled": self.enable_vector_similarity,
+            "vector_store_enabled": self.ENABLE_VECTOR_SIMILARITY,
             "agent_lock_locked": self.agent_lock.locked(),
             "memory_usage": {
                 "conversation_states": len(self.conversation_states),

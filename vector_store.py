@@ -42,25 +42,25 @@ class VectorStoreManager:
     and can be disabled when Supabase is not available or configured.
     """
     
-    def __init__(self, enabled: bool = None, enable_vector_similarity: bool = True):
+    def __init__(self, enabled: bool = None, ENABLE_VECTOR_SIMILARITY: bool = True):
         """
         Initialize the vector store manager.
         
         Args:
             enabled (bool, optional): Override the global SUPABASE_ENABLED setting
-            enable_vector_similarity (bool): Whether to enable vector similarity (loads heavy models if True)
+            ENABLE_VECTOR_SIMILARITY (bool): Whether to enable vector similarity (loads heavy models if True)
         """
         self.enabled = enabled if enabled is not None else SUPABASE_ENABLED
-        self.enable_vector_similarity = enable_vector_similarity
+        self.ENABLE_VECTOR_SIMILARITY = ENABLE_VECTOR_SIMILARITY
         self.embeddings = None
         self.supabase_client = None
         self.vector_store = None
         self.retriever_tool = None
         
-        if self.enabled and SUPABASE_AVAILABLE and self.enable_vector_similarity:
+        if self.enabled and SUPABASE_AVAILABLE and self.ENABLE_VECTOR_SIMILARITY:
             self._initialize_supabase()
         else:
-            if not self.enable_vector_similarity:
+            if not self.ENABLE_VECTOR_SIMILARITY:
                 print("ℹ️ Vector similarity disabled - skipping heavy model loading")
             else:
                 print("ℹ️ Vector store functionality is disabled")
@@ -258,11 +258,11 @@ class VectorStoreManager:
 # Global instance for easy access - will be initialized lazily
 vector_store_manager = None
 
-def get_vector_store_manager(enabled: bool = None, enable_vector_similarity: bool = True):
+def get_vector_store_manager(enabled: bool = None, ENABLE_VECTOR_SIMILARITY: bool = True):
     """Get or create the global vector store manager instance."""
     global vector_store_manager
     if vector_store_manager is None:
-        vector_store_manager = VectorStoreManager(enabled=enabled, enable_vector_similarity=enable_vector_similarity)
+        vector_store_manager = VectorStoreManager(enabled=enabled, ENABLE_VECTOR_SIMILARITY=ENABLE_VECTOR_SIMILARITY)
     return vector_store_manager
 
 # Convenience functions for vector store operations
