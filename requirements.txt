@@ -34,7 +34,7 @@ beautifulsoup4  # Not used in current codebase
 google-genai
 #litellm  # Not used in current codebase
 #scipy  # Not used in current codebase
-#scikit-learn  # Not used in current codebase
+scikit-learn  # Required for error handler vector similarity
 #sympy  # Not used in current codebase
 #networkx  # Not used in current codebase
 #nltk  # Not used in current codebase
