@@ -6,7 +6,7 @@ This script tests the Core Agent functionality to ensure it works correctly.
 """
 
 import time
-from core_agent import get_agent, reset_agent
+from agent_ng.core_agent import get_agent, reset_agent
 
 
 def test_core_agent():

@@ -12,7 +12,7 @@ os.environ["AGENT_PROVIDER"] = "gemini"
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agent_ng import NextGenAgent
+from agent_ng.agent_ng import NextGenAgent
 
 async def test_provider_switching():
     """Test that different providers can be selected"""

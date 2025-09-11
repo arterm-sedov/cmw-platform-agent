@@ -12,8 +12,8 @@ from pathlib import Path
 # Add the current directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from agent_ng import NextGenAgent, AgentConfig
-from app_ng import NextGenApp
+from agent_ng.agent_ng import NextGenAgent, AgentConfig
+from agent_ng.app_ng import NextGenApp
 
 
 async def test_agent():
