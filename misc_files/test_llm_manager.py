@@ -7,7 +7,7 @@ This script tests the LLM Manager functionality to ensure it works correctly.
 
 import os
 import sys
-from llm_manager import get_llm_manager, LLMProvider, reset_llm_manager
+from agent_ng.llm_manager import get_llm_manager, LLMProvider, reset_llm_manager
 
 
 def test_llm_manager():

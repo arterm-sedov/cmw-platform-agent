@@ -11,9 +11,9 @@ sys.path.append('..')
 # Add the parent directory to the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from llm_manager import LLMManager
-from langchain_wrapper import LangChainWrapper
-from core_agent import CoreAgent
+from agent_ng.llm_manager import LLMManager
+from agent_ng.langchain_wrapper import LangChainWrapper
+from agent_ng.core_agent import CoreAgent
 
 def test_single_provider():
     """Test the single provider system"""

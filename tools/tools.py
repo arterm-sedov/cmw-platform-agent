@@ -1,0 +1,1857 @@
+# tools.py - Consolidated tools
+# Dependencies are included
+
+import os
+import io
+import json
+import uuid
+import base64
+import shutil
+import requests
+import tempfile
+import urllib.parse
+import numpy as np
+import pandas as pd
+import subprocess
+import sys
+import sqlite3
+import cmath
+import time
+import re
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
+from typing import Any, Dict, List, Optional, Union, Tuple, Literal
+from pydantic import BaseModel, Field, field_validator
+
+# Try to import matplotlib, but make it optional
+try:
+    import matplotlib
+    matplotlib.use('Agg')  # Use non-interactive backend
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except (ImportError, Exception) as e:
+    MATPLOTLIB_AVAILABLE = False
+    plt = None
+    print(f"Warning: matplotlib not available: {e}")
+
+# Try to import pytesseract for OCR
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
+    pytesseract = None
+
+# Always import the tool decorator - it's essential
+from langchain_core.tools import tool
+# Expose Comindware Platform tools from all directories
+# Templates tools
+from .templates_tools.tool_list_attributes import list_attributes
+
+# Applications tools  
+from .applications_tools.tool_list_templates import list_templates
+from .applications_tools.tool_list_applications import list_applications
+
+# Attributes tools - Text attributes
+from .attributes_tools.tools_text_attribute import edit_or_create_text_attribute, get_text_attribute 
+
+# Attributes tools - Other attribute types
+from .attributes_tools.tools_datetime_attribute import edit_or_create_date_time_attribute, get_date_time_attribute 
+from .attributes_tools.tools_decimal_attribute import edit_or_create_numeric_attribute, get_numeric_attribute 
+from .attributes_tools.tools_instance_attribute import edit_or_create_record_attribute, get_record_attribute 
+from .attributes_tools.tools_image_attribute import edit_or_create_image_attribute, get_image_attribute 
+from .attributes_tools.tools_drawing_attribute import edit_or_create_drawing_attribute, get_drawing_attribute 
+from .attributes_tools.tools_document_attribute import edit_or_create_document_attribute, get_document_attribute 
+from .attributes_tools.tools_duration_attribute import edit_or_create_duration_attribute, get_duration_attribute 
+from .attributes_tools.tools_account_attribute import edit_or_create_account_attribute, get_account_attribute 
+from .attributes_tools.tools_boolean_attribute import edit_or_create_boolean_attribute, get_boolean_attribute 
+from .attributes_tools.tools_role_attribute import edit_or_create_role_attribute, get_role_attribute 
+
+# Attributes tools - Utility functions
+from .attributes_tools.tool_delete_attribute import delete_attribute
+from .attributes_tools.tool_archive_or_unarchive_attribute import archive_or_unarchive_attribute
+
+# Global configuration for search tools
+SEARCH_LIMIT = 5  # Maximum number of results for all search tools (Tavily, Wikipedia, Arxiv)
+
+# LangChain imports for search tools
+try:
+    from langchain_tavily import TavilySearch
+    TAVILY_AVAILABLE = True
+except ImportError:
+    TAVILY_AVAILABLE = False
+    print("Warning: TavilySearch not available. Install with: pip install langchain-tavily")
+
+# Try to import wikipedia-api as it's a common dependency
+try:
+    import wikipedia
+    WIKIPEDIA_AVAILABLE = True
+except ImportError as e:
+    WIKIPEDIA_AVAILABLE = False
+    print(f"Wikipedia search requires additional dependencies. Install with: pip install wikipedia-api. Error: {str(e)}")
+
+try:
+    from langchain_community.document_loaders import WikipediaLoader
+    WIKILOADER_AVAILABLE = True
+except ImportError:
+    WIKILOADER_AVAILABLE = False
+    print("Warning: WikipediaLoader not available. Install with: pip install langchain-community")
+
+# Try to import arxiv as it's a common dependency
+try:
+    import arxiv
+    ARXIV_AVAILABLE = True
+except ImportError as e:
+    ARXIV_AVAILABLE = False
+    print(f"Arxiv search requires additional dependencies. Install with: pip install arxiv. Error: {str(e)}")
+
+try:
+    from langchain_community.document_loaders import ArxivLoader
+    ARXIVLOADER_AVAILABLE = True
+except ImportError:
+    ARXIVLOADER_AVAILABLE = False
+    print("Warning: ArxivLoader not available. Install with: pip install langchain-community")
+
+# Try to import Exa for AI-powered answers
+try:
+    from exa_py import Exa
+    EXA_AVAILABLE = True
+except ImportError:
+    EXA_AVAILABLE = False
+    print("Warning: Exa not available. Install with: pip install exa-py")
+
+# Google Gemini imports for video/audio understanding
+try:
+    from google import genai
+    from google.genai import types
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    print("Warning: Google Gemini not available. Install with: pip install google-genai")
+
+# ========== GEMINI HELPER FUNCTIONS ==========
+def _get_gemini_client():
+    """
+    Initialize and return a Gemini client with proper error handling.
+    Args:
+        model_name (str, optional): The Gemini model to use. If None, defaults to gemini-2.5-flash.
+    Returns:
+        client or None: The Gemini client if initialization succeeds, None otherwise.
+    """
+    if not GEMINI_AVAILABLE:
+        print("Warning: Google Gemini not available. Install with: pip install google-genai")
+        return None
+    try:
+        gemini_key = os.environ.get("GEMINI_KEY")
+        if not gemini_key:
+            print("Warning: GEMINI_KEY not found in environment variables.")
+            return None
+        client = genai.Client(api_key=gemini_key)
+        return client
+    except Exception as e:
+        print(f"Error initializing Gemini client: {str(e)}")
+        return None
+
+def _get_gemini_response(prompt, error_prefix="Gemini", model_name="gemini-2.5-flash"):
+    """
+    Get a response from Gemini with proper error handling.
+    Args:
+        prompt: The prompt to send to Gemini
+        error_prefix (str): Prefix for error messages to identify the calling context
+        model_name (str, optional): The Gemini model to use.
+    Returns:
+        str: The Gemini response text, or an error message if the request fails.
+    """
+    client = _get_gemini_client()
+    if not client:
+        return f"{error_prefix} client not available. Check installation and API key configuration."
+    try:
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt
+        )
+        return response.text
+    except Exception as e:
+        return f"Error in {error_prefix.lower()} request: {str(e)}"
+
+# ========== IMAGE PROCESSING HELPERS ==========
+def encode_image(image_path: str) -> str:
+    """
+    Convert an image file to a base64-encoded string.
+
+    Args:
+        image_path (str): The path to the image file to encode.
+
+    Returns:
+        str: The base64-encoded string representation of the image file.
+    """
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
+
+def decode_image(base64_string: str) -> Any:
+    """
+    Convert a base64-encoded string to a PIL Image object.
+
+    Args:
+        base64_string (str): The base64-encoded string representing the image.
+
+    Returns:
+        Any: The decoded PIL Image object.
+    """
+    image_data = base64.b64decode(base64_string)
+    return Image.open(io.BytesIO(image_data))
+
+def save_image(image: Any, directory: str = "image_outputs") -> str:
+    """
+    Save a PIL Image object to disk in the specified directory and return the file path.
+
+    Args:
+        image (Any): The PIL Image object to save.
+        directory (str, optional): The directory to save the image in. Defaults to "image_outputs".
+
+    Returns:
+        str: The file path where the image was saved.
+    """
+    os.makedirs(directory, exist_ok=True)
+    image_id = str(uuid.uuid4())
+    image_path = os.path.join(directory, f"{image_id}.png")
+    image.save(image_path)
+    return image_path
+
+# ========== CODE INTERPRETER ==========
+class CodeInterpreter:
+    """
+    A code interpreter for executing code in various languages (Python, Bash, SQL, C, Java) with safety and resource controls.
+
+    Args:
+        allowed_modules (list, optional): List of allowed module names for Python execution.
+        max_execution_time (int, optional): Maximum execution time in seconds for code blocks.
+        working_directory (str, optional): Directory for temporary files and execution context.
+
+    Attributes:
+        globals (dict): Global variables for code execution.
+        temp_sqlite_db (str): Path to a temporary SQLite database for SQL code.
+    """
+    def __init__(self, allowed_modules=None, max_execution_time=30, working_directory=None):
+        self.allowed_modules = allowed_modules or [
+            "numpy", "pandas", "matplotlib", "scipy", "sklearn", 
+            "math", "random", "statistics", "datetime", "collections",
+            "itertools", "functools", "operator", "re", "json",
+            "sympy", "networkx", "nltk", "PIL", "pytesseract", 
+            "cmath", "uuid", "tempfile", "requests", "urllib"
+        ]
+        self.max_execution_time = max_execution_time
+        self.working_directory = working_directory or os.path.join(os.getcwd()) 
+        if not os.path.exists(self.working_directory):
+            os.makedirs(self.working_directory)
+        
+        # Use global imports that are already available
+        self.globals = {
+            "__builtins__": __builtins__,
+            "np": np,
+            "pd": pd,
+            "Image": Image,
+        }
+        
+        # Only add plt to globals if it's available
+        if MATPLOTLIB_AVAILABLE:
+            self.globals["plt"] = plt
+        
+        self.temp_sqlite_db = os.path.join(tempfile.gettempdir(), "code_exec.db")
+    
+    def execute_code(self, code: str, language: str = "python") -> Dict[str, Any]:
+        """
+        Execute code in the specified language with safety controls.
+        
+        Args:
+            code (str): The source code to execute
+            language (str): The programming language
+            
+        Returns:
+            Dict containing execution results, status, and outputs
+        """
+        try:
+            if language.lower() == "python":
+                return self._execute_python(code)
+            elif language.lower() == "bash":
+                return self._execute_bash(code)
+            elif language.lower() == "sql":
+                return self._execute_sql(code)
+            elif language.lower() == "c":
+                return self._execute_c(code)
+            elif language.lower() == "java":
+                return self._execute_java(code)
+            else:
+                return {"status": "error", "stderr": f"Unsupported language: {language}"}
+        except Exception as e:
+            return {"status": "error", "stderr": str(e)}
+    
+    def _execute_python(self, code: str) -> Dict[str, Any]:
+        """Execute Python code with safety controls."""
+        try:
+            # Capture stdout and stderr
+            # Create string buffers to capture output
+            stdout_buffer = io.StringIO()
+            stderr_buffer = io.StringIO()
+            
+            # Store original stdout/stderr
+            old_stdout = sys.stdout
+            old_stderr = sys.stderr
+            
+            # Redirect stdout/stderr to our buffers
+            sys.stdout = stdout_buffer
+            sys.stderr = stderr_buffer
+            
+            try:
+                # Create a copy of globals for this execution
+                local_globals = self.globals.copy()
+                local_globals['__name__'] = '__main__'
+                
+                # Execute the code
+                exec(code, local_globals)
+                
+                # Get captured output
+                stdout_content = stdout_buffer.getvalue()
+                stderr_content = stderr_buffer.getvalue()
+                
+                # Capture any variables that might be dataframes or plots
+                result = {"status": "success", "stdout": stdout_content, "stderr": stderr_content, "result": None}
+                
+                # Check for dataframes
+                dataframes = []
+                for name, value in local_globals.items():
+                    if isinstance(value, pd.DataFrame):
+                        dataframes.append({
+                            "name": name,
+                            "shape": value.shape,
+                            "head": value.head().to_dict('records')
+                        })
+                if dataframes:
+                    result["dataframes"] = dataframes
+                
+                # Check for plots (only if matplotlib is available)
+                plots = []
+                if MATPLOTLIB_AVAILABLE and plt is not None:
+                    try:
+                        # Save any current plots
+                        if plt.get_fignums():
+                            for fig_num in plt.get_fignums():
+                                fig = plt.figure(fig_num)
+                                plot_path = os.path.join(self.working_directory, f"plot_{fig_num}.png")
+                                fig.savefig(plot_path)
+                                plots.append(plot_path)
+                                plt.close(fig)
+                    except Exception as plot_error:
+                        # If plot handling fails, just continue without plots
+                        print(f"Warning: Plot handling failed: {plot_error}")
+                if plots:
+                    result["plots"] = plots
+                
+                return result
+                
+            finally:
+                # Restore original stdout/stderr
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+                stdout_buffer.close()
+                stderr_buffer.close()
+            
+        except Exception as e:
+            return {"status": "error", "stderr": str(e)}
+    
+    def _execute_bash(self, code: str) -> Dict[str, Any]:
+        """Execute Bash code."""
+        try:
+            result = subprocess.run(
+                code, 
+                shell=True, 
+                capture_output=True, 
+                text=True, 
+                timeout=self.max_execution_time
+            )
+            return {
+                "status": "success" if result.returncode == 0 else "error",
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "returncode": result.returncode
+            }
+        except subprocess.TimeoutExpired:
+            return {"status": "error", "stderr": "Execution timed out"}
+        except Exception as e:
+            return {"status": "error", "stderr": str(e)}
+    
+    def _execute_sql(self, code: str) -> Dict[str, Any]:
+        """Execute SQL code using SQLite."""
+        try:
+            conn = sqlite3.connect(self.temp_sqlite_db)
+            cursor = conn.cursor()
+            
+            # Execute SQL
+            cursor.execute(code)
+            
+            # Fetch results if it's a SELECT
+            if code.strip().upper().startswith('SELECT'):
+                results = cursor.fetchall()
+                columns = [description[0] for description in cursor.description]
+                result = {"status": "success", "results": results, "columns": columns}
+            else:
+                conn.commit()
+                result = {"status": "success", "message": f"Executed: {code}"}
+            
+            conn.close()
+            return result
+            
+        except Exception as e:
+            return {"status": "error", "stderr": str(e)}
+    
+    def _execute_c(self, code: str) -> Dict[str, Any]:
+        """Execute C code by compiling and running."""
+        try:
+            # Create temporary C file
+            c_file = os.path.join(self.working_directory, "temp_code.c")
+            with open(c_file, 'w') as f:
+                f.write(code)
+            
+            # Compile
+            compile_result = subprocess.run(
+                ["gcc", "-o", os.path.join(self.working_directory, "temp_program"), c_file],
+                capture_output=True,
+                text=True
+            )
+            
+            if compile_result.returncode != 0:
+                return {"status": "error", "stderr": f"Compilation failed: {compile_result.stderr}"}
+            
+            # Run
+            run_result = subprocess.run(
+                [os.path.join(self.working_directory, "temp_program")],
+                capture_output=True,
+                text=True,
+                timeout=self.max_execution_time
+            )
+            
+            return {
+                "status": "success",
+                "stdout": run_result.stdout,
+                "stderr": run_result.stderr,
+                "returncode": run_result.returncode
+            }
+            
+        except subprocess.TimeoutExpired:
+            return {"status": "error", "stderr": "Execution timed out"}
+        except Exception as e:
+            return {"status": "error", "stderr": str(e)}
+    
+    def _execute_java(self, code: str) -> Dict[str, Any]:
+        """Execute Java code by compiling and running."""
+        try:
+            # Create temporary Java file
+            java_file = os.path.join(self.working_directory, "TempCode.java")
+            with open(java_file, 'w') as f:
+                f.write(code)
+            
+            # Compile
+            compile_result = subprocess.run(
+                ["javac", java_file],
+                capture_output=True,
+                text=True
+            )
+            
+            if compile_result.returncode != 0:
+                return {"status": "error", "stderr": f"Compilation failed: {compile_result.stderr}"}
+            
+            # Run
+            run_result = subprocess.run(
+                ["java", "-cp", self.working_directory, "TempCode"],
+                capture_output=True,
+                text=True,
+                timeout=self.max_execution_time
+            )
+            
+            return {
+                "status": "success",
+                "stdout": run_result.stdout,
+                "stderr": run_result.stderr,
+                "returncode": run_result.returncode
+            }
+            
+        except subprocess.TimeoutExpired:
+            return {"status": "error", "stderr": "Execution timed out"}
+        except Exception as e:
+            return {"status": "error", "stderr": str(e)}
+
+# Create a global instance for use by tools
+interpreter_instance = CodeInterpreter()
+
+@tool
+def execute_code_multilang(code: str, language: str = "python") -> str:
+    """Execute code in multiple languages (Python, Bash, SQL, C, Java) and return results.
+
+    Args:
+        code (str): The source code to execute.
+        language (str): The language of the code. Supported: "python", "bash", "sql", "c", "java".
+
+    Returns:
+        A string summarizing the execution results (stdout, stderr, errors, plots, dataframes if any).
+    """
+    supported_languages = ["python", "bash", "sql", "c", "java"]
+    language = language.lower()
+
+    if language not in supported_languages:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "execute_code_multilang",
+            "error": f"❌ Unsupported language: {language}. Supported languages are: {', '.join(supported_languages)}"
+        })
+
+    result = interpreter_instance.execute_code(code, language=language)
+
+    response = []
+
+    if result["status"] == "success":
+        response.append(f"✅ Code executed successfully in **{language.upper()}**")
+
+        if result.get("stdout"):
+            response.append(
+                "\n**Standard Output:**\n```\n" + result["stdout"].strip() + "\n```"
+            )
+
+        if result.get("stderr"):
+            response.append(
+                "\n**Standard Error (if any):**\n```\n"
+                + result["stderr"].strip()
+                + "\n```"
+            )
+
+        if result.get("result") is not None:
+            response.append(
+                "\n**Execution Result:**\n```\n"
+                + str(result["result"]).strip()
+                + "\n```"
+            )
+
+        if result.get("dataframes"):
+            for df_info in result["dataframes"]:
+                response.append(
+                    f"\n**DataFrame `{df_info['name']}` (Shape: {df_info['shape']})**"
+                )
+                df_preview = pd.DataFrame(df_info["head"])
+                response.append("First 5 rows:\n```\n" + str(df_preview) + "\n```")
+
+        if result.get("plots"):
+            response.append(
+                f"\n**Generated {len(result['plots'])} plot(s)** (Image data returned separately)"
+            )
+
+    else:
+        response.append(f"❌ Code execution failed in **{language.upper()}**")
+        if result.get("stderr"):
+            response.append(
+                "\n**Error Log:**\n```\n" + result["stderr"].strip() + "\n```"
+            )
+
+    return json.dumps({
+        "type": "tool_response",
+        "tool_name": "execute_code_multilang",
+        "result": "\n".join(response)
+    })
+
+# ========== MATH TOOLS ==========
+@tool
+def multiply(a: float, b: float) -> float:
+    """
+    Multiply two numbers and return the result.
+
+    Args:
+        a (float): The first number.
+        b (float): The second number.
+
+    Returns:
+        float: The product of a and b.
+    """
+    return a * b
+
+@tool
+def add(a: float, b: float) -> float:
+    """
+    Add two numbers and return the result.
+
+    Args:
+        a (float): The first number.
+        b (float): The second number.
+
+    Returns:
+        float: The sum of a and b.
+    """
+    return a + b
+
+@tool
+def subtract(a: float, b: float) -> float:
+    """
+    Subtract the second number from the first and return the result.
+
+    Args:
+        a (float): The number to subtract from.
+        b (float): The number to subtract.
+
+    Returns:
+        float: The result of a - b.
+    """
+    return a - b
+
+@tool
+def divide(a: float, b: float) -> float:
+    """
+    Divide the first number by the second and return the result.
+
+    Args:
+        a (float): The numerator.
+        b (float): The denominator. Must not be zero.
+
+    Returns:
+        float: The quotient of a and b.
+    """
+    if b == 0:
+        raise ValueError("Cannot divide by zero")
+    return a / b
+
+@tool
+def modulus(a: int, b: int) -> int:
+    """
+    Compute the modulus (remainder) of two integers.
+
+    Args:
+        a (int): The dividend.
+        b (int): The divisor.
+
+    Returns:
+        int: The remainder when a is divided by b.
+    """
+    if b == 0:
+        raise ValueError("Cannot divide by zero")
+    return a % b
+
+@tool
+def power(a: float, b: float) -> float:
+    """
+    Raise the first number to the power of the second and return the result.
+
+    Args:
+        a (float): The base number.
+        b (float): The exponent.
+
+    Returns:
+        float: a raised to the power of b.
+    """
+    return a ** b
+
+@tool
+def square_root(a: float) -> float:
+    """
+    Compute the square root of a number. Returns a complex number if input is negative.
+
+    Args:
+        a (float): The number to compute the square root of.
+
+    Returns:
+        float or complex: The square root of a. If a < 0, returns a complex number.
+    """
+    if a >= 0:
+        return a ** 0.5
+    return cmath.sqrt(a)
+
+# ========== WEB/SEARCH TOOLS ==========
+@tool
+def wiki_search(input: str) -> str:
+    """
+    Search Wikipedia for a query and return up to 3 results as formatted text.
+
+    Args:
+        input (str): The search query string for Wikipedia.
+
+    Returns:
+        str: Formatted search results from Wikipedia with source information and content.
+    """
+    try:
+        if not WIKILOADER_AVAILABLE:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "wiki_search",
+                "error": "Wikipedia search not available. Install with: pip install langchain-community"
+            })
+        search_docs = WikipediaLoader(query=input, load_max_docs=SEARCH_LIMIT).load()
+        formatted_results = "\n\n---\n\n".join(
+            [
+                f'<Document source="{doc.metadata["source"]}" page="{doc.metadata.get("page", "")}"/>\n{doc.page_content}'
+                for doc in search_docs
+            ]
+        )
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "wiki_search",
+            "wiki_results": formatted_results
+        })
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "wiki_search",
+            "error": f"Error in Wikipedia search: {str(e)}"
+        })
+
+@tool
+def web_search(input: str) -> str:
+    """
+    Search the web using Tavily for a query and return up to 3 results as formatted text.
+    
+    Tavily is a search API that provides real-time web search results. This tool is useful for:
+    - Finding current information about recent events
+    - Searching for specific facts, statistics, or data
+    - Getting up-to-date information from various websites
+    - Researching topics that may not be covered in Wikipedia or academic papers
+
+    Args:
+        input (str): The search query string to search for on the web.
+
+    Returns:
+        str: Formatted search results from Tavily with source URLs and content snippets.
+             Returns an error message if Tavily is not available or if the search fails.
+
+    """
+    if not TAVILY_AVAILABLE:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "web_search",
+            "error": "Tavily search not available. Install with: pip install langchain-tavily"
+        })
+    try:
+        if not os.environ.get("TAVILY_API_KEY"):
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "web_search",
+                "error": "TAVILY_API_KEY not found in environment variables. Please set it in your .env file."
+            })
+        search_result = TavilySearch(max_results=SEARCH_LIMIT).invoke(input)
+        
+        # Handle different response types
+        if isinstance(search_result, str):
+            # If Tavily returned a string (error message or direct answer)
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "web_search",
+                "web_results": search_result
+            })
+        elif isinstance(search_result, list):
+            # If Tavily returned a list of Document objects
+            formatted_results = "\n\n---\n\n".join(
+                [
+                    f'<Document source="{doc.metadata["source"]}" page="{doc.metadata.get("page", "")}"/>\n{doc.page_content}'
+                    for doc in search_result
+                ]
+            )
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "web_search",
+                "web_results": formatted_results
+            })
+        else:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "web_search",
+                    "web_results": str(search_result)
+            })
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "web_search",
+            "error": f"Error in web search: {str(e)}"
+        })
+
+@tool
+def arxiv_search(input: str) -> str:
+    """
+    Search Arxiv for academic papers and return up to 3 results as formatted text.
+
+    Args:
+        input (str): The search query string for academic papers.
+
+    Returns:
+        str: Formatted search results from Arxiv with paper metadata and abstracts.
+    """
+    try:
+        if not ARXIVLOADER_AVAILABLE:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "arxiv_search",
+                "error": "Arxiv search not available. Install with: pip install langchain-community"
+            })
+        search_docs = ArxivLoader(query=input, load_max_docs=SEARCH_LIMIT).load()
+        formatted_results = "\n\n---\n\n".join(
+            [
+                f'<Document source="{doc.metadata["source"]}" page="{doc.metadata.get("page", "")}"/>\n{doc.page_content}'
+                for doc in search_docs
+            ]
+        )
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "arxiv_search",
+            "arxiv_results": formatted_results
+        })
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "arxiv_search",
+            "error": f"Error in Arxiv search: {str(e)}"
+        })
+
+ 
+
+# ========== FILE/DATA TOOLS ==========
+@tool
+def save_and_read_file(content: str, filename: Optional[str] = None) -> str:
+    """
+    Save the provided content to a file and return the file path.
+
+    Args:
+        content (str): The content to write to the file.
+        filename (str, optional): The name of the file. If not provided, a random file name is generated.
+
+    Returns:
+        str: The file path where the content was saved.
+    """
+    temp_dir = tempfile.gettempdir()
+    if filename is None:
+        temp_file = tempfile.NamedTemporaryFile(delete=False, dir=temp_dir)
+        filepath = temp_file.name
+    else:
+        filepath = os.path.join(temp_dir, filename)
+    with open(filepath, "w") as f:
+        f.write(content)
+    return json.dumps({
+        "type": "tool_response",
+        "tool_name": "save_and_read_file",
+        "result": f"File saved to {filepath}. You can read this file to process its contents."
+    })
+
+@tool
+def download_file_from_url(url: str, filename: Optional[str] = None) -> str:
+    """
+    Download a file from a URL and save it to a temporary location. Returns the file path.
+
+    Args:
+        url (str): The URL of the file to download.
+        filename (str, optional): The name of the file. If not provided, a name is inferred or generated.
+
+    Returns:
+        str: The file path where the file was downloaded.
+    """
+    try:
+        if not filename:
+            from urllib.parse import urlparse
+            path = urlparse(url).path
+            filename = os.path.basename(path)
+            if not filename:
+                filename = f"downloaded_{uuid.uuid4().hex[:8]}"
+        temp_dir = tempfile.gettempdir()
+        filepath = os.path.join(temp_dir, filename)
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        with open(filepath, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "download_file_from_url",
+            "result": f"File downloaded to {filepath}. You can read this file to process its contents."
+        })
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "download_file_from_url",
+            "error": f"Error downloading file: {str(e)}"
+        })
+
+@tool
+def get_task_file(task_id: str, file_name: str) -> str:
+    """
+    Download a file associated with a given task_id from the evaluation API, with a local fallback.
+    
+    This tool is used to download files that are part of Comindware Analyst Copilot benchmark tasks.
+    It first tries to download from the evaluation API, and if that fails
+    (e.g., due to network issues or rate limits),
+    it falls back to local files in the 'files' directory.
+    The file is always saved to a 'downloads' directory.
+
+    Args:
+        task_id (str): The task ID for the file to download.
+        file_name (str): The name of the file to download.
+
+    Returns:
+        str: The absolute file path where the file was downloaded, or an error message if not found.
+    """
+    directory_name = "downloads"
+    os.makedirs(directory_name, exist_ok=True)
+    try:
+        # Try to download from evaluation API
+        evaluation_api_base_url = os.environ.get("EVALUATION_API_BASE_URL", "https://api.gaia-benchmark.com")
+        response = requests.get(f"{evaluation_api_base_url}/files/{task_id}", timeout=15)
+        response.raise_for_status()
+        filepath = os.path.join(directory_name, file_name)
+        with open(filepath, 'wb') as file:
+            file.write(response.content)
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "get_task_file",
+            "result": os.path.abspath(filepath)
+        })
+    except Exception as e:
+        # Fallback to local files
+        try:
+            local_filepath = os.path.join("files", file_name)
+            if os.path.exists(local_filepath):
+                filepath = os.path.join(directory_name, file_name)
+                shutil.copy2(local_filepath, filepath)
+                return json.dumps({
+                    "type": "tool_response",
+                    "tool_name": "get_task_file",
+                    "result": os.path.abspath(filepath)
+                })
+            else:
+                return json.dumps({
+                    "type": "tool_response",
+                    "tool_name": "get_task_file",
+                    "error": f"Error: File {file_name} not found locally or via API"
+                })
+        except Exception as local_error:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "get_task_file",
+                "error": f"Error downloading file: {str(e)}. Local fallback also failed: {str(local_error)}"
+            })
+
+@tool
+def extract_text_from_image(image_path: str) -> str:
+    """
+    Extract text from an image file using OCR (pytesseract) and return the extracted text.
+
+    Args:
+        image_path (str): The path to the image file to process.
+
+    Returns:
+        str: The extracted text, or an error message if extraction fails.
+    """
+    try:
+        image = Image.open(image_path)
+        if PYTESSERACT_AVAILABLE:
+            text = pytesseract.image_to_string(image)
+        else:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "extract_text_from_image",
+                "error": "OCR not available. Install with: pip install pytesseract"
+            })
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "extract_text_from_image",
+            "result": f"Extracted text from image:\n\n{text}"
+        })
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "extract_text_from_image",
+            "error": f"Error extracting text from image: {str(e)}"
+        })
+
+@tool
+def analyze_csv_file(file_path: str, query: str) -> str:
+    """
+    Analyze a CSV file using pandas and return summary statistics and column info.
+
+    Args:
+        file_path (str): The path to the CSV file.
+        query (str): A question or description of the analysis to perform (currently unused).
+
+    Returns:
+        str: Summary statistics and column information, or an error message if analysis fails.
+    """
+    try:
+        df = pd.read_csv(file_path)
+        result = f"CSV file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
+        result += f"Columns: {', '.join(df.columns)}\n\n"
+        result += "Summary statistics:\n"
+        result += str(df.describe())
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "analyze_csv_file",
+            "result": result
+        })
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "analyze_csv_file",
+            "error": f"Error analyzing CSV file: {str(e)}"
+        })
+
+@tool
+def analyze_excel_file(file_path: str, query: str) -> str:
+    """
+    Analyze an Excel file using pandas and return summary statistics and column info.
+
+    Args:
+        file_path (str): The path to the Excel file.
+        query (str): A question or description of the analysis to perform (currently unused).
+
+    Returns:
+        str: Summary statistics and column information, or an error message if analysis fails.
+    """
+    try:
+        df = pd.read_excel(file_path)
+        result = f"Excel file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
+        result += f"Columns: {', '.join(df.columns)}\n\n"
+        result += "Summary statistics:\n"
+        result += str(df.describe())
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "analyze_excel_file",
+            "result": result
+        })
+    except Exception as e:
+        # Enhanced error reporting: print columns and head if possible
+        try:
+            df = pd.read_excel(file_path)
+            columns = list(df.columns)
+            head = df.head().to_dict('records')
+            error_details = f"Error analyzing Excel file: {str(e)}\nColumns: {columns}\nHead: {head}"
+        except Exception as inner_e:
+            error_details = f"Error analyzing Excel file: {str(e)}\nAdditionally, failed to read columns/head: {str(inner_e)}"
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "analyze_excel_file",
+            "error": error_details
+        })
+
+# ========== IMAGE ANALYSIS/GENERATION TOOLS ==========
+@tool
+def analyze_image(image_base64: str) -> str:
+    """
+    Analyze basic properties of an image (size, mode, color analysis, thumbnail preview) from a base64-encoded image string.
+
+    Args:
+        image_base64 (str): The base64-encoded string of the image to analyze.
+
+    Returns:
+        str: JSON string with analysis results including dimensions, mode, color_analysis, and thumbnail.
+    """
+    try:
+        img = decode_image(image_base64)
+        width, height = img.size
+        mode = img.mode
+        if mode in ("RGB", "RGBA"):
+            arr = np.array(img)
+            avg_colors = arr.mean(axis=(0, 1))
+            dominant = ["Red", "Green", "Blue"][np.argmax(avg_colors[:3])]
+            brightness = avg_colors.mean()
+            color_analysis = {
+                "average_rgb": avg_colors.tolist(),
+                "brightness": brightness,
+                "dominant_color": dominant,
+            }
+        else:
+            color_analysis = {"note": f"No color analysis for mode {mode}"}
+        thumbnail = img.copy()
+        thumbnail.thumbnail((100, 100))
+        thumb_path = save_image(thumbnail, "thumbnails")
+        thumbnail_base64 = encode_image(thumb_path)
+        result = {
+            "dimensions": (width, height),
+            "mode": mode,
+            "color_analysis": color_analysis,
+            "thumbnail": thumbnail_base64,
+        }
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "analyze_image",
+            "result": result
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "analyze_image",
+            "error": str(e)
+        }, indent=2)
+
+class TransformImageParams(BaseModel):
+    width: Optional[int] = Field(None, description="New width for resize operation")
+    height: Optional[int] = Field(None, description="New height for resize operation")
+    angle: Optional[int] = Field(None, description="Rotation angle in degrees")
+    direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Flip direction")
+    radius: Optional[float] = Field(None, description="Blur radius")
+    factor: Optional[float] = Field(None, description="Enhancement factor for brightness/contrast")
+
+@tool(args_schema=TransformImageParams)
+def transform_image(image_base64: str, operation: str, params: Optional[Dict[str, Any]] = None) -> str:
+    """
+    Transform an image using various operations like resize, rotate, filter, etc.
+
+    Args:
+        image_base64 (str): The base64-encoded string of the image to transform.
+        operation (str): The transformation operation to apply.
+        params (Dict[str, Any], optional): Parameters for the transformation.
+
+    Returns:
+        str: JSON string with the transformed image as base64 or error message.
+    """
+    try:
+        img = decode_image(image_base64)
+        params = params or {}
+        if operation == "resize":
+            width = params.get("width", img.width)
+            height = params.get("height", img.height)
+            img = img.resize((width, height), Image.Resampling.LANCZOS)
+        elif operation == "rotate":
+            angle = params.get("angle", 0)
+            img = img.rotate(angle, expand=True)
+        elif operation == "flip":
+            direction = params.get("direction", "horizontal")
+            if direction == "horizontal":
+                img = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+            else:
+                img = img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+        elif operation == "blur":
+            radius = params.get("radius", 2)
+            img = img.filter(ImageFilter.GaussianBlur(radius=radius))
+        elif operation == "sharpen":
+            img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+        elif operation == "brightness":
+            factor = params.get("factor", 1.0)
+            enhancer = ImageEnhance.Brightness(img)
+            img = enhancer.enhance(factor)
+        elif operation == "contrast":
+            factor = params.get("factor", 1.0)
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(factor)
+        else:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "transform_image",
+                "error": f"Unsupported operation: {operation}"
+            }, indent=2)
+        result_path = save_image(img)
+        result_base64 = encode_image(result_path)
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "transform_image",
+            "transformed_image": result_base64
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "transform_image",
+            "error": str(e)
+        }, indent=2)
+
+class DrawOnImageParams(BaseModel):
+    text: Optional[str] = Field(None, description="Text to draw")
+    position: Optional[List[int]] = Field(None, description="Text position [x, y]")
+    color: Optional[str] = Field(None, description="Color name (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
+    size: Optional[int] = Field(None, description="Font size for text")
+    coords: Optional[List[int]] = Field(None, description="Rectangle coordinates [x1, y1, x2, y2]")
+    center: Optional[List[int]] = Field(None, description="Circle center [x, y]")
+    radius: Optional[int] = Field(None, description="Circle radius")
+    start: Optional[List[int]] = Field(None, description="Line start [x, y]")
+    end: Optional[List[int]] = Field(None, description="Line end [x, y]")
+    width: Optional[int] = Field(None, description="Stroke width")
+
+@tool(args_schema=DrawOnImageParams)
+def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParams) -> str:
+    """
+    Draw shapes, text, or other elements on an image.
+
+    Args:
+        image_base64 (str): The base64-encoded string of the image to draw on.
+        drawing_type (str): The type of drawing to perform.
+        params (Dict[str, Any]): Parameters for the drawing operation.
+
+    Returns:
+        str: JSON string with the modified image as base64 or error message.
+    """
+    try:
+        img = decode_image(image_base64)
+        draw = ImageDraw.Draw(img)
+        def parse_color(color_str):
+            """Parse color string to RGB tuple or color name"""
+            if not color_str:
+                return "black"
+            # Check if it's RGB values as comma-separated string
+            if "," in color_str and color_str.replace(",", "").replace(" ", "").isdigit():
+                try:
+                    rgb_values = [int(x.strip()) for x in color_str.split(",")]
+                    if len(rgb_values) == 3 and all(0 <= v <= 255 for v in rgb_values):
+                        return tuple(rgb_values)
+                except ValueError:
+                    pass
+            # Return as color name
+            return color_str
+
+        if drawing_type == "text":
+            text = params.text or ""
+            position = params.position or [10, 10]
+            color = parse_color(params.color) or "black"
+            size = params.size or 20
+            try:
+                font = ImageFont.truetype("arial.ttf", size)
+            except:
+                font = ImageFont.load_default()
+            draw.text(tuple(position), text, fill=color, font=font)
+        elif drawing_type == "rectangle":
+            coords = params.coords or [10, 10, 100, 100]
+            color = parse_color(params.color) or "red"
+            width = params.width or 2
+            draw.rectangle(coords, outline=color, width=width)
+        elif drawing_type == "circle":
+            center = params.center or [50, 50]
+            radius = params.radius or 30
+            color = parse_color(params.color) or "blue"
+            width = params.width or 2
+            bbox = [center[0] - radius, center[1] - radius, 
+                   center[0] + radius, center[1] + radius]
+            draw.ellipse(bbox, outline=color, width=width)
+        elif drawing_type == "line":
+            start = params.start or [10, 10]
+            end = params.end or [100, 100]
+            color = parse_color(params.color) or "green"
+            width = params.width or 2
+            draw.line([tuple(start), tuple(end)], fill=color, width=width)
+        else:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "draw_on_image",
+                "error": f"Unsupported drawing type: {drawing_type}"
+            }, indent=2)
+        result_path = save_image(img)
+        result_base64 = encode_image(result_path)
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "draw_on_image",
+            "modified_image": result_base64
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "draw_on_image",
+            "error": str(e)
+        }, indent=2)
+
+class GenerateSimpleImageParams(BaseModel):
+    color: Optional[str] = Field(None, description="Solid color for 'solid' type (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
+    start_color: Optional[List[int]] = Field(None, description="Gradient start color [r, g, b]")
+    end_color: Optional[List[int]] = Field(None, description="Gradient end color [r, g, b]")
+    direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Gradient direction")
+    square_size: Optional[int] = Field(None, description="Square size for checkerboard")
+    color1: Optional[str] = Field(None, description="First color for checkerboard")
+    color2: Optional[str] = Field(None, description="Second color for checkerboard")
+
+@tool(args_schema=GenerateSimpleImageParams)
+def generate_simple_image(image_type: str, width: int = 500, height: int = 500, 
+                         params: Optional[Dict[str, Any]] = None) -> str:
+    """
+    Generate simple images like gradients, solid colors, checkerboard, or noise patterns.
+
+    Args:
+        image_type (str): The type of image to generate.
+        width (int): The width of the generated image.
+        height (int): The height of the generated image.
+        params (Dict[str, Any], optional): Additional parameters for image generation.
+
+    Returns:
+        str: JSON string with the generated image as base64 or error message.
+    """
+    try:
+        params = params or {}
+        if image_type == "solid":
+            color_str = params.get("color", "255,255,255")
+            # Parse color string to RGB tuple
+            if "," in color_str and color_str.replace(",", "").replace(" ", "").isdigit():
+                try:
+                    rgb_values = [int(x.strip()) for x in color_str.split(",")]
+                    if len(rgb_values) == 3 and all(0 <= v <= 255 for v in rgb_values):
+                        color = tuple(rgb_values)
+                    else:
+                        color = (255, 255, 255)
+                except ValueError:
+                    color = (255, 255, 255)
+            else:
+                # Try as color name, fallback to white
+                try:
+                    color = color_str
+                except:
+                    color = (255, 255, 255)
+            img = Image.new("RGB", (width, height), color)
+        elif image_type == "gradient":
+            start_color = params.get("start_color", [255, 0, 0])
+            end_color = params.get("end_color", [0, 0, 255])
+            direction = params.get("direction", "horizontal")
+            img = Image.new("RGB", (width, height))
+            draw = ImageDraw.Draw(img)
+            if direction == "horizontal":
+                for x in range(width):
+                    r = int(start_color[0] + (end_color[0] - start_color[0]) * x / width)
+                    g = int(start_color[1] + (end_color[1] - start_color[1]) * x / width)
+                    b = int(start_color[2] + (end_color[2] - start_color[2]) * x / width)
+                    draw.line([(x, 0), (x, height)], fill=(r, g, b))
+            else:
+                for y in range(height):
+                    r = int(start_color[0] + (end_color[0] - start_color[0]) * y / height)
+                    g = int(start_color[1] + (end_color[1] - start_color[1]) * y / height)
+                    b = int(start_color[2] + (end_color[2] - start_color[2]) * y / height)
+                    draw.line([(0, y), (width, y)], fill=(r, g, b))
+        elif image_type == "noise":
+            noise_array = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
+            img = Image.fromarray(noise_array, "RGB")
+        elif image_type == "checkerboard":
+            square_size = params.get("square_size", 50)
+            color1 = params.get("color1", "white")
+            color2 = params.get("color2", "black")
+            img = Image.new("RGB", (width, height))
+            for y in range(0, height, square_size):
+                for x in range(0, width, square_size):
+                    color = color1 if ((x // square_size) + (y // square_size)) % 2 == 0 else color2
+                    for dy in range(square_size):
+                        for dx in range(square_size):
+                            if x + dx < width and y + dy < height:
+                                img.putpixel((x + dx, y + dy), color)
+        else:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "generate_simple_image",
+                "error": f"Unsupported image_type {image_type}"
+            }, indent=2)
+        result_path = save_image(img)
+        result_base64 = encode_image(result_path)
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "generate_simple_image",
+            "generated_image": result_base64
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "generate_simple_image",
+            "error": str(e)
+        }, indent=2)
+
+class CombineImagesParams(BaseModel):
+    spacing: Optional[int] = Field(None, description="Spacing between images in pixels")
+    background_color: Optional[str] = Field(None, description="Background color for collage (e.g., 'white', 'black') or RGB string (e.g., '255,255,255')")
+    blend_mode: Optional[str] = Field(None, description="Blend mode for blending operations")
+    opacity: Optional[float] = Field(None, description="Opacity for overlay operations (0.0-1.0)")
+
+@tool(args_schema=CombineImagesParams)
+def combine_images(images_base64: List[str], operation: str, 
+                  params: Optional[CombineImagesParams] = None) -> str:
+    """
+    Combine multiple images using various operations (collage, stack, blend, horizontal, vertical, overlay, etc.).
+
+    Args:
+        images_base64 (List[str]): List of base64-encoded image strings.
+        operation (str): The combination operation to perform.
+        params (Dict[str, Any], optional): Parameters for the combination.
+
+    Returns:
+        str: JSON string with the combined image as base64 or error message.
+    """
+    try:
+        if len(images_base64) < 2:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "combine_images",
+                "error": "At least 2 images required for combination"
+            }, indent=2)
+        images = [decode_image(b64) for b64 in images_base64]
+        if params is None:
+            params = CombineImagesParams()
+        if operation == "horizontal":
+            # Combine images side by side
+            total_width = sum(img.width for img in images)
+            max_height = max(img.height for img in images)
+            result = Image.new("RGB", (total_width, max_height))
+            x_offset = 0
+            for img in images:
+                result.paste(img, (x_offset, 0))
+                x_offset += img.width
+        elif operation == "vertical":
+            # Stack images vertically
+            max_width = max(img.width for img in images)
+            total_height = sum(img.height for img in images)
+            result = Image.new("RGB", (max_width, total_height))
+            y_offset = 0
+            for img in images:
+                result.paste(img, (0, y_offset))
+                y_offset += img.height
+        elif operation == "overlay":
+            # Overlay images on top of each other
+            base_img = images[0]
+            for overlay_img in images[1:]:
+                if overlay_img.size != base_img.size:
+                    overlay_img = overlay_img.resize(base_img.size, Image.Resampling.LANCZOS)
+                base_img = Image.alpha_composite(base_img.convert("RGBA"), overlay_img.convert("RGBA"))
+            result = base_img.convert("RGB")
+        elif operation == "stack":
+            # Original stack operation with direction parameter
+            direction = params.direction or "horizontal"
+            if direction == "horizontal":
+                total_width = sum(img.width for img in images)
+                max_height = max(img.height for img in images)
+                result = Image.new("RGB", (total_width, max_height))
+                x = 0
+                for img in images:
+                    result.paste(img, (x, 0))
+                    x += img.width
+            else:
+                max_width = max(img.width for img in images)
+                total_height = sum(img.height for img in images)
+                result = Image.new("RGB", (max_width, total_height))
+                y = 0
+                for img in images:
+                    result.paste(img, (0, y))
+                    y += img.height
+        else:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "combine_images",
+                "error": f"Unsupported combination operation: {operation}"
+            }, indent=2)
+        result_path = save_image(result)
+        result_base64 = encode_image(result_path)
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "combine_images",
+            "combined_image": result_base64
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "combine_images",
+            "error": str(e)
+        }, indent=2)
+
+# ========== VIDEO/AUDIO UNDERSTANDING TOOLS ==========
+@tool
+def understand_video(youtube_url: str, prompt: str, system_prompt: str = None) -> str:
+    """
+    Analyze a YouTube video using Google Gemini's video understanding capabilities.
+    
+    This tool can understand video content, extract information, and answer questions
+    about what happens in the video.
+    It uses the Gemini API and requires the GEMINI_KEY environment variable to be set.
+    
+    Args:
+        youtube_url (str): The URL of the YouTube video to analyze.
+        prompt (str): A question or request regarding the video content.
+        system_prompt (str, optional): System prompt for formatting guidance.
+    
+    Returns:
+        str: Analysis of the video content based on the prompt, or error message.
+    """
+    try:
+        client = _get_gemini_client()
+        
+        # Create enhanced prompt with system prompt if provided
+        if system_prompt:
+            enhanced_prompt = f"{system_prompt}\n\nAnalyze the video at {youtube_url} and answer the following question:\n{prompt}\n\nProvide your answer in the required FINAL ANSWER format."
+        else:
+            enhanced_prompt = prompt
+        
+        video_description = client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=types.Content(
+                parts=[
+                    types.Part(file_data=types.FileData(file_uri=youtube_url)),
+                    types.Part(text=enhanced_prompt)
+                ]
+            )
+        )
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "understand_video",
+            "result": video_description.text
+        })
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "understand_video",
+            "error": f"Error understanding video: {str(e)}"
+        })
+
+@tool
+def understand_audio(file_path: str, prompt: str, system_prompt: str = None) -> str:
+    """
+    Analyze an audio file using Google Gemini's audio understanding capabilities.
+    
+    This tool can transcribe audio, understand spoken content, and answer questions
+    about the audio content.
+    It uses the Gemini API and requires the GEMINI_KEY environment variable to be set.
+    The audio file is uploaded to Gemini and then analyzed with the provided prompt.
+    
+    Args:
+        file_path (str): The path to the local audio file to analyze, or base64 encoded audio data.
+        prompt (str): A question or request regarding the audio content.
+        system_prompt (str, optional): System prompt for formatting guidance.
+    
+    Returns:
+        str: Analysis of the audio content based on the prompt, or error message.
+    """
+    try:
+        client = _get_gemini_client()
+        
+        # Check if file_path is base64 data or actual file path
+        if file_path.startswith('/') or os.path.exists(file_path):
+            # It's a file path
+            mp3_file = client.files.upload(file=file_path)
+        else:
+            # Assume it's base64 data
+            try:
+                # Decode base64 and create temporary file
+                audio_data = base64.b64decode(file_path)
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+                    temp_file.write(audio_data)
+                    temp_file_path = temp_file.name
+                
+                try:
+                    mp3_file = client.files.upload(file=temp_file_path)
+                finally:
+                    # Clean up temporary file
+                    os.unlink(temp_file_path)
+            except Exception as decode_error:
+                return json.dumps({
+                    "type": "tool_response",
+                    "tool_name": "understand_audio",
+                    "error": f"Error processing audio data: {str(decode_error)}. Expected base64 encoded audio data or valid file path."
+                })
+        
+        # Create enhanced prompt with system prompt if provided
+        if system_prompt:
+            enhanced_prompt = f"{system_prompt}\n\nAnalyze the audio file and answer the following question:\n{prompt}\n\nProvide your answer in the required FINAL ANSWER format."
+        else:
+            enhanced_prompt = prompt
+        
+        contents = [enhanced_prompt, mp3_file]
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-pro",
+                contents=contents
+            )
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "understand_audio",
+                "result": response.text
+            })
+        except Exception as e:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "understand_audio",
+                "error": f"Error in audio understanding request: {str(e)}"
+            })
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "understand_audio",
+            "error": f"Error understanding audio: {str(e)}"
+        })
+
+@tool
+def web_search_deep_research_exa_ai(instructions: str) -> str:
+    """
+    Search the web and site content using deep research tool.
+    Ask a query and get a well-researched answer with references.
+    Can provide FINAL ANSWER candidate.
+    Ideal for research tasks on any topic that require fact searching.
+    Can find answers and reference about science, scholars, sports, events, books, films, movies, mems, citations, etc.
+
+    The tool researches a topic, verifies facts and outputs a structured answer.
+    It deeply crawls websites to find the right answer, results and links.
+    
+    RESPONSE STRUCTURE:
+    The tool returns a structured response with the following format:
+    1. Task ID and Status
+    2. Original Instructions
+    3. Inferred Schema (JSON schema describing the response data structure)
+    4. Data (JSON object containing the answer according to the schema)
+    5. Citations (source references)
+    
+    SCHEMA INFERENCE:
+    The tool automatically infers the appropriate schema based on your question.
+    For example, a schema might include:
+    - Person data: {"firstName", "lastName", "nationality", "year", etc.}
+    - Event data: {"event", "date", "location", "participants", etc.}
+    - Fact data: {"fact", "source", "context", etc.}
+    
+    DATA EXTRACTION:
+    To extract the answer from the response:
+    1. Look for the "Data" section in the response
+    2. Parse the JSON object in the "Data" field  according to the schema
+    3. Extract the relevant fields based on your question
+    
+    Args:
+        instructions (str): Direct question or research instructions.
+
+    Returns:
+        str: The research result as a structured JSON string with schema, data, and citations, or an error message.
+    """
+    if not EXA_AVAILABLE:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "web_search_deep_research_exa_ai",
+            "error": "Exa not available. Install with: pip install exa-py"
+        })
+    try:
+        exa_api_key = os.environ.get("EXA_API_KEY")
+        if not exa_api_key:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "web_search_deep_research_exa_ai",
+                "error": "EXA_API_KEY not found in environment variables. Please set it in your .env file."
+            })
+        exa = Exa(exa_api_key)
+        task_stub = exa.research.create_task(
+            instructions=instructions,
+            model="exa-research-pro",
+            output_infer_schema = True
+        )
+        task = exa.research.poll_task(task_stub.id)
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "web_search_deep_research_exa_ai",
+            "result": str(task)
+        })
+    except Exception as e:
+        return json.dumps({
+            "type": "tool_response",
+            "tool_name": "web_search_deep_research_exa_ai",
+            "error": f"Error in Exa research: {str(e)}"
+        })
+
+# ========== PYDANTIC SCHEMAS ==========
+
+class SubmitAnswerSchema(BaseModel):
+    """
+    Schema for submitting final answers with structured metadata.
+    
+    Use this when ready to provide a final answer and the analysis is complete.
+    """
+    answer: str = Field(
+        description="The final answer to the user's question",
+        min_length=1
+    )
+    confidence: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Confidence level from 0.0 to 1.0 (default: 1.0)"
+    )
+    sources: Optional[List[str]] = Field(
+        default=None,
+        description="List of sources or tools used to generate this answer"
+    )
+    reasoning: Optional[str] = Field(
+        default=None,
+        description="Brief explanation of the reasoning process"
+    )
+
+    @field_validator('sources')
+    @classmethod
+    def validate_sources(cls, v):
+        if v is not None and len(v) == 0:
+            return None
+        return v
+
+class SubmitIntermediateStepSchema(BaseModel):
+    """
+    Schema for submitting intermediate reasoning steps or progress updates.
+    
+    Use this to document intermediate steps in your reasoning process, 
+    progress updates, or partial findings before reaching a final conclusion.
+    """
+    step_name: str = Field(
+        description="Short name/identifier for this step (e.g., 'data_analysis', 'search_results')",
+        min_length=1,
+        max_length=100
+    )
+    description: str = Field(
+        description="Detailed description of what was accomplished in this step",
+        min_length=1
+    )
+    status: Literal["in_progress", "completed", "failed", "blocked"] = Field(
+        default="in_progress",
+        description="Current status of this step"
+    )
+    data: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional dictionary containing relevant data, findings, or results from this step"
+    )
+    next_steps: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of planned next steps or actions"
+    )
+    confidence: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional confidence level from 0.0 to 1.0 for this step's results"
+    )
+    issues: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of issues, concerns, or limitations encountered"
+    )
+
+    @field_validator('next_steps', 'issues')
+    @classmethod
+    def validate_lists(cls, v):
+        if v is not None and len(v) == 0:
+            return None
+        return v
+
+class SubmitAnswerResult(BaseModel):
+    """
+    Structured result model for submit_answer operations.
+    
+    This model standardizes the response format for final answer submissions,
+    providing consistent success/error handling and response structure.
+    """
+    success: bool
+    status_code: int = Field(default=200)
+    raw_response: dict | str | None = Field(default=None)
+    error: Optional[str] = Field(default=None)
+
+class SubmitIntermediateStepResult(BaseModel):
+    """
+    Structured result model for submit_intermediate_step operations.
+    
+    This model standardizes the response format for intermediate step submissions,
+    providing consistent success/error handling and response structure.
+    """
+    success: bool
+    status_code: int = Field(default=200)
+    raw_response: dict | str | None = Field(default=None)
+    error: Optional[str] = Field(default=None)
+
+# ========== TOOL FUNCTIONS ==========
+
+@tool("submit_answer", return_direct=False, args_schema=SubmitAnswerSchema)
+def submit_answer(answer: str, confidence: float = 1.0, sources: List[str] = None, reasoning: str = None) -> Dict[str, Any]:
+    """
+    Submit an answer with structured metadata for the current question or sub-question.
+    
+    Use this tool when ready to provide an answer for the current question. This can be:
+    - A final answer after completing all reasoning steps
+    - An answer to a sub-question in a multi-turn conversation
+    - A response that concludes the current analysis phase
+    
+    This tool preserves context across multiple conversation turns.
+    
+    Returns:
+        dict: {
+            "success": bool - True if the final answer was submitted successfully
+            "status_code": int - HTTP response status code (200 for success)
+            "raw_response": dict|None - Structured response containing the submitted answer data
+            "error": str|None - Error message if operation failed
+        }
+    """
+    try:
+        # Validate input using Pydantic schema
+        schema = SubmitAnswerSchema(
+            answer=answer,
+            confidence=confidence,
+            sources=sources,
+            reasoning=reasoning
+        )
+        
+        # Create structured response
+        response_data = {
+            "type": "final_answer",
+            "answer": schema.answer,
+            "confidence": schema.confidence,
+            "sources": schema.sources or [],
+            "reasoning": schema.reasoning,
+            "timestamp": time.time()
+        }
+        
+        # Create result using Pydantic model
+        result = SubmitAnswerResult(
+            success=True,
+            status_code=200,
+            raw_response=response_data
+        )
+        
+        validated = SubmitAnswerResult(**result.model_dump())
+        return validated.model_dump()
+    except Exception as e:
+        result = SubmitAnswerResult(
+            success=False,
+            status_code=500,
+            error=f"Error submitting final answer: {str(e)}"
+        )
+        validated = SubmitAnswerResult(**result.model_dump())
+        return validated.model_dump()
+
+@tool("submit_intermediate_step", return_direct=False, args_schema=SubmitIntermediateStepSchema)
+def submit_intermediate_step(step_name: str, description: str, status: str = "in_progress", 
+                           data: Dict[str, Any] = None, next_steps: List[str] = None, 
+                           confidence: float = None, issues: List[str] = None) -> Dict[str, Any]:
+    """
+    Submit an intermediate reasoning step or progress update.
+    
+    Use this tool to document intermediate steps in your reasoning process, 
+    progress updates, or partial findings before reaching a final conclusion.
+    This tool helps track the agent's thought process and enables better debugging.
+    
+    Returns:
+        dict: {
+            "success": bool - True if the intermediate step was submitted successfully
+            "status_code": int - HTTP response status code (200 for success)
+            "raw_response": dict|None - Structured response containing the submitted step data
+            "error": str|None - Error message if operation failed
+        }
+    """
+    try:
+        # Validate input using Pydantic schema
+        schema = SubmitIntermediateStepSchema(
+            step_name=step_name,
+            description=description,
+            status=status,
+            data=data,
+            next_steps=next_steps,
+            confidence=confidence,
+            issues=issues
+        )
+        
+        # Create structured response
+        response_data = {
+            "type": "intermediate_step",
+            "step_name": schema.step_name,
+            "description": schema.description,
+            "status": schema.status,
+            "data": schema.data or {},
+            "next_steps": schema.next_steps or [],
+            "confidence": schema.confidence,
+            "issues": schema.issues or [],
+            "timestamp": time.time()
+        }
+        
+        # Create result using Pydantic model
+        result = SubmitIntermediateStepResult(
+            success=True,
+            status_code=200,
+            raw_response=response_data
+        )
+        
+        validated = SubmitIntermediateStepResult(**result.model_dump())
+        return validated.model_dump()
+    except Exception as e:
+        result = SubmitIntermediateStepResult(
+            success=False,
+            status_code=500,
+            error=f"Error submitting intermediate step: {str(e)}"
+        )
+        validated = SubmitIntermediateStepResult(**result.model_dump())
+        return validated.model_dump()
+
+# ========== END OF TOOLS.PY ========== 
