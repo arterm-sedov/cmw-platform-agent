@@ -32,6 +32,8 @@ from dataclasses import asdict
 # Local imports
 from agent_ng import NextGenAgent, ChatMessage, get_agent_ng
 from llm_manager import get_llm_manager
+from debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
+from streaming_chat import get_chat_interface
 
 
 class NextGenApp:
@@ -43,6 +45,11 @@ class NextGenApp:
         self.initialization_logs = []
         self.is_initializing = False
         self.initialization_complete = False
+        
+        # Initialize debug system
+        self.debug_streamer = get_debug_streamer("app_ng")
+        self.log_handler = get_log_handler("app_ng")
+        self.chat_interface = get_chat_interface("app_ng")
         
         # Initialize synchronously first, then start async initialization
         self._start_async_initialization()
@@ -66,10 +73,12 @@ class NextGenApp:
     async def _initialize_agent(self):
         """Initialize the agent asynchronously"""
         self.is_initializing = True
+        self.debug_streamer.info("Starting agent initialization", LogCategory.INIT)
         self.initialization_logs.append("🚀 Starting agent initialization...")
         
         try:
             # Initialize agent (uses single provider from AGENT_PROVIDER)
+            self.debug_streamer.info("Creating agent instance", LogCategory.INIT)
             self.agent = await get_agent_ng()
             
             # Wait for agent to be ready
@@ -78,24 +87,34 @@ class NextGenApp:
             while not self.agent.is_ready() and wait_time < max_wait:
                 await asyncio.sleep(0.5)
                 wait_time += 0.5
+                self.debug_streamer.debug(f"Waiting for agent... ({wait_time:.1f}s)", LogCategory.INIT)
                 self.initialization_logs.append(f"⏳ Waiting for agent... ({wait_time:.1f}s)")
             
             if self.agent.is_ready():
                 status = self.agent.get_status()
+                self.debug_streamer.success(f"Agent ready with {status['current_llm']}", LogCategory.INIT)
                 self.initialization_logs.append(f"✅ Agent ready with {status['current_llm']}")
                 self.initialization_logs.append(f"🔧 Tools available: {status['tools_count']}")
                 self.initialization_complete = True
             else:
+                self.debug_streamer.error("Agent initialization timeout", LogCategory.INIT)
                 self.initialization_logs.append("❌ Agent initialization timeout")
                 
         except Exception as e:
+            self.debug_streamer.error(f"Initialization failed: {str(e)}", LogCategory.INIT)
             self.initialization_logs.append(f"❌ Initialization failed: {str(e)}")
         
         self.is_initializing = False
     
     def get_initialization_logs(self) -> str:
         """Get initialization logs as formatted string"""
-        return "\n".join(self.initialization_logs)
+        # Combine static logs with real-time debug logs
+        static_logs = "\n".join(self.initialization_logs)
+        debug_logs = self.log_handler.get_current_logs()
+        
+        if debug_logs and debug_logs != "No logs available yet.":
+            return f"{static_logs}\n\n--- Real-time Debug Logs ---\n\n{debug_logs}"
+        return static_logs
     
     def get_agent_status(self) -> str:
         """Get current agent status"""
@@ -109,55 +128,58 @@ class NextGenApp:
         else:
             return "❌ Agent not ready"
     
-    async def chat_with_agent(self, message: str, history: List[Tuple[str, str]]) -> Tuple[List[Tuple[str, str]], str]:
+    async def chat_with_agent(self, message: str, history: List[Dict[str, str]]) -> Tuple[List[Dict[str, str]], str]:
         """
-        Chat with the agent using modern streaming.
+        Chat with the agent using modern streaming with thinking transparency.
         
         Args:
             message: User message
-            history: Chat history as list of tuples
+            history: Chat history as list of message dicts
             
         Returns:
             Updated history and empty message
         """
         if not self.agent or not self.agent.is_ready():
             error_msg = "Agent not ready. Please wait for initialization to complete."
-            history.append((message, error_msg))
+            history.append({"role": "user", "content": message})
+            history.append({"role": "assistant", "content": error_msg})
             return history, ""
         
-        # Convert history to ChatMessage format
-        chat_history = []
-        for user_msg, assistant_msg in history:
-            chat_history.append(ChatMessage(role="user", content=user_msg))
-            chat_history.append(ChatMessage(role="assistant", content=assistant_msg))
-        
-        # Add current user message
-        chat_history.append(ChatMessage(role="user", content=message))
-        
-        # Stream response
-        response_content = ""
-        thinking_content = ""
-        tool_usage = []
+        self.debug_streamer.info(f"Starting chat with message: {message[:50]}...", LogCategory.STREAM)
         
         try:
-            async for event in self.agent.stream_chat(message, chat_history[:-1]):  # Exclude current message
-                if event["type"] == "content":
-                    response_content += event["content"]
-                elif event["type"] == "thinking":
-                    thinking_content = event["content"]
-                elif event["type"] == "tool_use":
-                    tool_usage.append(event["content"])
-                elif event["type"] == "error":
-                    response_content = f"❌ {event['content']}"
-                    break
-        
+            # Convert tuple history to dict format for internal processing
+            tuple_history = []
+            for msg in history:
+                if isinstance(msg, dict):
+                    if msg.get("role") == "user":
+                        tuple_history.append((msg["content"], ""))
+                    elif msg.get("role") == "assistant":
+                        if tuple_history:
+                            tuple_history[-1] = (tuple_history[-1][0], msg["content"])
+                        else:
+                            tuple_history.append(("", msg["content"]))
+                elif isinstance(msg, tuple):
+                    tuple_history.append(msg)
+            
+            # Use the streaming chat interface
+            updated_tuple_history, _ = await self.chat_interface.chat_with_agent(message, tuple_history, self.agent)
+            
+            # Convert back to dict format for Gradio
+            dict_history = []
+            for user_msg, assistant_msg in updated_tuple_history:
+                if user_msg:
+                    dict_history.append({"role": "user", "content": user_msg})
+                if assistant_msg:
+                    dict_history.append({"role": "assistant", "content": assistant_msg})
+            
+            return dict_history, ""
         except Exception as e:
-            response_content = f"❌ Error: {str(e)}"
-        
-        # Add response to history
-        history.append((message, response_content))
-        
-        return history, ""
+            self.debug_streamer.error(f"Error in chat_with_agent: {str(e)}", LogCategory.STREAM)
+            error_msg = f"❌ Error: {str(e)}"
+            history.append({"role": "user", "content": message})
+            history.append({"role": "assistant", "content": error_msg})
+            return history, ""
     
     def create_interface(self) -> gr.Blocks:
         """Create the Gradio interface"""
@@ -247,13 +269,15 @@ class NextGenApp:
                 with gr.TabItem("💬 Chat", id="chat"):
                     with gr.Row():
                         with gr.Column(scale=3):
-                            # Chat interface
+                            # Chat interface with metadata support for thinking transparency
                             chatbot = gr.Chatbot(
                                 label="Chat with the Agent",
                                 height=500,
                                 show_label=True,
                                 container=True,
-                                show_copy_button=True
+                                show_copy_button=True,
+                                type="messages",  # Enable metadata support
+                                bubble_full_width=False
                             )
                             
                             with gr.Row():
@@ -292,8 +316,12 @@ class NextGenApp:
                     
                     def copy_last_response(history):
                         if history and len(history) > 0:
-                            last_response = history[-1][1]  # Get last assistant message
-                            return last_response
+                            # Find the last assistant message
+                            for msg in reversed(history):
+                                if isinstance(msg, dict) and msg.get("role") == "assistant":
+                                    return msg.get("content", "")
+                                elif isinstance(msg, tuple):
+                                    return msg[1]  # Get last assistant message from tuple
                         return ""
                     
                     def quick_math():
@@ -345,8 +373,8 @@ class NextGenApp:
                     )
                 
                 # Logs Tab
-                with gr.TabItem("📜 Initialization Logs", id="logs"):
-                    gr.Markdown("### Agent Initialization Logs")
+                with gr.TabItem("📜 Logs", id="logs"):
+                    gr.Markdown("### Initialization Logs")
                     logs_display = gr.Markdown(
                         "🟡 Starting initialization...",
                         elem_classes=["status-card"]
@@ -357,8 +385,18 @@ class NextGenApp:
                     def refresh_logs():
                         return self.get_initialization_logs()
                     
+                    def clear_logs():
+                        self.log_handler.clear_logs()
+                        return "Logs cleared."
+                    
                     refresh_logs_btn.click(
                         fn=refresh_logs,
+                        outputs=[logs_display]
+                    )
+                    
+                    clear_logs_btn = gr.Button("🗑️ Clear Logs", elem_classes=["cmw-button"])
+                    clear_logs_btn.click(
+                        fn=clear_logs,
                         outputs=[logs_display]
                     )
                 
@@ -418,6 +456,13 @@ class NextGenApp:
             status_timer.tick(
                 fn=update_model_info,
                 outputs=[model_info]
+            )
+            
+            # Auto-refresh logs every 3 seconds
+            logs_timer = gr.Timer(3.0, active=True)
+            logs_timer.tick(
+                fn=refresh_logs,
+                outputs=[logs_display]
             )
             
             # Load initial logs
