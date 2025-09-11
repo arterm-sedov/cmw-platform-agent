@@ -1626,4 +1626,45 @@ def web_search_deep_research_exa_ai(instructions: str) -> str:
             "error": f"Error in Exa research: {str(e)}"
         })
 
+@tool
+def submit_final_answer(answer: str, confidence: float = 1.0, sources: List[str] = None, reasoning: str = None) -> str:
+    """
+    Submit the final answer with structured metadata.
+    
+    Use this tool when ready to provide a final answer and the analysis is complete.
+    
+    Args:
+        answer: The final answer to the user's question
+        confidence: Confidence level from 0.0 to 1.0 (default: 1.0)
+        sources: List of sources or tools used to generate this answer (optional)
+        reasoning: Brief explanation of the reasoning process (optional)
+    
+    Returns:
+        JSON string confirming the final answer submission
+    """
+    try:
+        # Validate confidence range
+        confidence = max(0.0, min(1.0, confidence))
+        
+        # Prepare sources list
+        if sources is None:
+            sources = []
+        
+        # Create structured response
+        response = {
+            "type": "final_answer",
+            "answer": answer,
+            "confidence": confidence,
+            "sources": sources,
+            "reasoning": reasoning,
+            "timestamp": time.time()
+        }
+        
+        return json.dumps(response)
+    except Exception as e:
+        return json.dumps({
+            "type": "error",
+            "error": f"Error submitting final answer: {str(e)}"
+        })
+
 # ========== END OF TOOLS.PY ========== 
