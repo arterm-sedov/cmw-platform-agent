@@ -68,6 +68,11 @@ from similarity_manager import (
 )
 from tool_call_manager import tool_call_manager
 
+# Enhanced imports for conversation management
+from collections import defaultdict
+from threading import Lock
+import uuid
+
 # Structured output models for modern response handling
 class FinalAnswer(BaseModel):
     """Structured model for final answers with metadata"""
@@ -572,6 +577,12 @@ class CmwAgent:
             
             # Initialize token usage tracking for rate limiting
             self._provider_token_usage = {}
+            
+            # Enhanced conversation state management
+            self.conversation_states = defaultdict(dict)  # conversation_id -> state
+            self.conversation_histories = defaultdict(list)  # conversation_id -> chat_history
+            self.agent_lock = Lock()  # Thread safety for concurrent requests
+            self.conversation_metadata = defaultdict(dict)  # conversation_id -> metadata
             # Unified LLM tracking system
             self.llm_tracking = {}
             for llm_type in self.DEFAULT_LLM_SEQUENCE:
@@ -2276,6 +2287,60 @@ class CmwAgent:
                         "tool_call_id": getattr(msg, 'tool_call_id', 'unknown')
                     })
         return history
+    
+    def get_conversation_history_by_id(self, conversation_id: str = "default") -> List[Dict[str, Any]]:
+        """
+        Get the conversation history for a specific conversation ID.
+        
+        Args:
+            conversation_id (str): The conversation ID to get history for
+            
+        Returns:
+            List[Dict[str, Any]]: List of conversation turns with 'role' and 'content' keys
+        """
+        return self.conversation_histories[conversation_id].copy()
+    
+    def clear_conversation(self, conversation_id: str = "default") -> None:
+        """
+        Clear the conversation history for a specific conversation.
+        
+        Args:
+            conversation_id (str): The conversation ID to clear
+        """
+        self.conversation_histories[conversation_id] = []
+        self.conversation_states[conversation_id] = {}
+        self.conversation_metadata[conversation_id] = {}
+    
+    def get_conversation_metadata(self, conversation_id: str = "default") -> Dict[str, Any]:
+        """
+        Get metadata for a specific conversation.
+        
+        Args:
+            conversation_id (str): The conversation ID to get metadata for
+            
+        Returns:
+            Dict[str, Any]: Conversation metadata
+        """
+        return self.conversation_metadata[conversation_id].copy()
+    
+    def set_conversation_metadata(self, conversation_id: str, metadata: Dict[str, Any]) -> None:
+        """
+        Set metadata for a specific conversation.
+        
+        Args:
+            conversation_id (str): The conversation ID to set metadata for
+            metadata (Dict[str, Any]): Metadata to set
+        """
+        self.conversation_metadata[conversation_id].update(metadata)
+    
+    def get_all_conversation_ids(self) -> List[str]:
+        """
+        Get all active conversation IDs.
+        
+        Returns:
+            List[str]: List of all conversation IDs
+        """
+        return list(self.conversation_histories.keys())
 
     def _convert_messages_for_mistral(self, messages: List) -> List:
         """
@@ -6477,3 +6542,464 @@ class CmwAgent:
             dict: Complete trace data or None if no trace exists
         """
         return self._trace_get_full()
+    
+    # ========== LANGCHAIN-COMPATIBLE METHODS ==========
+    
+    def invoke(self, input_data: dict, config: dict = None) -> dict:
+        """
+        LangChain-compatible invoke method with enhanced thread safety and conversation management.
+        
+        Args:
+            input_data (dict): Input data containing 'input' or 'messages'
+            config (dict, optional): Configuration parameters
+            
+        Returns:
+            dict: Response with 'output' key containing the agent's response
+        """
+        # Extract question from various input formats
+        if "input" in input_data:
+            question = input_data["input"]
+        elif "messages" in input_data and input_data["messages"]:
+            # Handle LangChain message format
+            last_message = input_data["messages"][-1]
+            if hasattr(last_message, 'content'):
+                question = last_message.content
+            elif isinstance(last_message, dict):
+                question = last_message.get("content", "")
+            else:
+                question = str(last_message)
+        else:
+            question = str(input_data)
+        
+        # Extract additional parameters
+        file_data = input_data.get("file_data")
+        file_name = input_data.get("file_name")
+        llm_sequence = input_data.get("llm_sequence")
+        chat_history = input_data.get("chat_history")
+        conversation_id = input_data.get("conversation_id", "default")
+        
+        # Thread-safe execution
+        if not self.agent_lock.acquire(blocking=False):
+            return {"output": "⚠️ Another request is being processed. Please wait...", "error": "concurrent_request"}
+        
+        try:
+            # Update conversation history if provided
+            if chat_history:
+                self.conversation_histories[conversation_id] = chat_history.copy()
+            
+            # Use streaming mode and consume the generator to get final result
+            accumulated_response = ""
+            for chunk in self._unified_process(
+                question=question,
+                file_data=file_data,
+                file_name=file_name,
+                llm_sequence=llm_sequence,
+                chat_history=self.conversation_histories[conversation_id],
+                streaming=True
+            ):
+                if isinstance(chunk, str):
+                    accumulated_response += chunk
+            
+            # Update conversation history with the new exchange
+            self.conversation_histories[conversation_id].extend([
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": accumulated_response}
+            ])
+            
+            # Update conversation metadata
+            self.conversation_metadata[conversation_id].update({
+                "last_updated": datetime.now().isoformat(),
+                "message_count": len(self.conversation_histories[conversation_id]),
+                "last_question": question
+            })
+            
+            # Return the accumulated response
+            return {"output": accumulated_response}
+            
+        except Exception as e:
+            error_msg = f"Error: {str(e)}"
+            # Update conversation history with error
+            self.conversation_histories[conversation_id].extend([
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": error_msg}
+            ])
+            return {"output": error_msg, "error": str(e)}
+        finally:
+            self.agent_lock.release()
+    
+    def astream(self, input_data: dict, config: dict = None):
+        """
+        LangChain-compatible async streaming method with enhanced conversation management.
+        
+        Args:
+            input_data (dict): Input data containing 'input' or 'messages'
+            config (dict, optional): Configuration parameters
+            
+        Yields:
+            dict: Streaming chunks with 'chunk' key and metadata
+        """
+        # Extract question from various input formats
+        if "input" in input_data:
+            question = input_data["input"]
+        elif "messages" in input_data and input_data["messages"]:
+            # Handle LangChain message format
+            last_message = input_data["messages"][-1]
+            if hasattr(last_message, 'content'):
+                question = last_message.content
+            elif isinstance(last_message, dict):
+                question = last_message.get("content", "")
+            else:
+                question = str(last_message)
+        else:
+            question = str(input_data)
+        
+        # Extract additional parameters
+        file_data = input_data.get("file_data")
+        file_name = input_data.get("file_name")
+        llm_sequence = input_data.get("llm_sequence")
+        chat_history = input_data.get("chat_history")
+        conversation_id = input_data.get("conversation_id", "default")
+        
+        # Thread-safe execution
+        if not self.agent_lock.acquire(blocking=False):
+            yield {"chunk": "⚠️ Another request is being processed. Please wait...", "type": "error"}
+            return
+        
+        try:
+            # Update conversation history if provided
+            if chat_history:
+                self.conversation_histories[conversation_id] = chat_history.copy()
+            
+            # Track accumulated response for conversation history
+            accumulated_response = ""
+            
+            # Use streaming mode with enhanced chunk handling
+            for chunk in self._unified_process(
+                question=question,
+                file_data=file_data,
+                file_name=file_name,
+                llm_sequence=llm_sequence,
+                chat_history=self.conversation_histories[conversation_id],
+                streaming=True
+            ):
+                if isinstance(chunk, str):
+                    accumulated_response += chunk
+                    yield {
+                        "chunk": chunk,
+                        "type": "content",
+                        "conversation_id": conversation_id,
+                        "metadata": {
+                            "question": question,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                    }
+            
+            # Update conversation history with the new exchange
+            self.conversation_histories[conversation_id].extend([
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": accumulated_response}
+            ])
+            
+            # Update conversation metadata
+            self.conversation_metadata[conversation_id].update({
+                "last_updated": datetime.now().isoformat(),
+                "message_count": len(self.conversation_histories[conversation_id]),
+                "last_question": question
+            })
+            
+            # Yield final chunk with completion metadata
+            yield {
+                "chunk": "",
+                "type": "complete",
+                "conversation_id": conversation_id,
+                "metadata": {
+                    "total_length": len(accumulated_response),
+                    "message_count": len(self.conversation_histories[conversation_id])
+                }
+            }
+            
+        except Exception as e:
+            error_msg = f"Error: {str(e)}"
+            # Update conversation history with error
+            self.conversation_histories[conversation_id].extend([
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": error_msg}
+            ])
+            yield {
+                "chunk": error_msg,
+                "type": "error",
+                "conversation_id": conversation_id,
+                "metadata": {"error": str(e)}
+            }
+        finally:
+            self.agent_lock.release()
+    
+    def get_graph(self):
+        """
+        Return a simple LangGraph representation for compatibility.
+        This creates a basic state graph that delegates to your existing logic.
+        
+        Returns:
+            Compiled LangGraph: A simple graph that uses your existing agent logic
+        """
+        try:
+            from langgraph.graph import StateGraph, END
+            from typing import TypedDict, Annotated
+            from langchain_core.messages import BaseMessage
+            
+            class AgentState(TypedDict):
+                messages: Annotated[List[BaseMessage], "The messages in the conversation"]
+                current_question: str
+                file_data: Optional[str]
+                file_name: Optional[str]
+                llm_sequence: Optional[List[str]]
+                chat_history: Optional[List[Dict[str, Any]]]
+            
+            def agent_node(state: AgentState):
+                """Agent node that delegates to your existing sophisticated logic"""
+                # Extract the latest question from messages
+                if state["messages"]:
+                    last_message = state["messages"][-1]
+                    if hasattr(last_message, 'content'):
+                        question = last_message.content
+                    else:
+                        question = str(last_message)
+                else:
+                    question = state.get("current_question", "")
+                
+                # Convert messages to chat_history format for your agent
+                chat_history = []
+                for msg in state["messages"][:-1]:  # Exclude the latest message
+                    if hasattr(msg, 'type'):
+                        if msg.type == 'human':
+                            chat_history.append({"role": "user", "content": msg.content})
+                        elif msg.type in ('ai', 'assistant'):
+                            chat_history.append({"role": "assistant", "content": msg.content})
+                        elif msg.type == 'tool':
+                            chat_history.append({
+                                "role": "tool", 
+                                "content": msg.content,
+                                "name": getattr(msg, 'name', 'unknown'),
+                                "tool_call_id": getattr(msg, 'tool_call_id', 'unknown')
+                            })
+                
+                # Use your existing agent logic
+                result = self._unified_process(
+                    question=question,
+                    file_data=state.get("file_data"),
+                    file_name=state.get("file_name"),
+                    llm_sequence=state.get("llm_sequence"),
+                    chat_history=chat_history,
+                    streaming=False
+                )
+                
+                # Extract the final answer
+                if isinstance(result, dict) and "final_answer" in result:
+                    response_content = result["final_answer"]
+                else:
+                    response_content = str(result)
+                
+                # Create AI message response
+                from langchain_core.messages import AIMessage
+                response_message = AIMessage(content=response_content)
+                
+                return {
+                    "messages": state["messages"] + [response_message],
+                    "current_question": question,
+                    "file_data": state.get("file_data"),
+                    "file_name": state.get("file_name"),
+                    "llm_sequence": state.get("llm_sequence"),
+                    "chat_history": chat_history
+                }
+            
+            # Build the graph
+            graph = StateGraph(AgentState)
+            graph.add_node("agent", agent_node)
+            graph.set_entry_point("agent")
+            graph.add_edge("agent", END)
+            
+            return graph.compile()
+            
+        except ImportError as e:
+            print(f"Warning: LangGraph not available. Install with: pip install langgraph. Error: {e}")
+            return None
+    
+    def get_langchain_tools(self):
+        """
+        Get all tools in LangChain format for compatibility.
+        
+        Returns:
+            List[Tool]: List of LangChain tool objects
+        """
+        try:
+            from langchain_core.tools import Tool
+            
+            # Get your existing tools using the method from the agent
+            if hasattr(self, '_gather_tools'):
+                tools_list = self._gather_tools()
+            else:
+                # Fallback: try to get tools from the tools module
+                try:
+                    from tools import _gather_tools
+                    tools_list = _gather_tools()
+                except ImportError:
+                    # If _gather_tools doesn't exist, try to get tools from the agent's tools attribute
+                    tools_list = getattr(self, 'tools', [])
+            
+            # Convert to LangChain Tool format
+            langchain_tools = []
+            for tool in tools_list:
+                if hasattr(tool, 'name') and hasattr(tool, 'description'):
+                    langchain_tools.append(tool)
+            
+            return langchain_tools
+            
+        except Exception as e:
+            print(f"Warning: Could not get LangChain tools: {e}")
+            return []
+    
+    def bind_tools(self, tools=None):
+        """
+        Bind tools to the agent for LangChain compatibility.
+        
+        Args:
+            tools (list, optional): List of tools to bind. If None, uses all available tools.
+            
+        Returns:
+            CmwAgent: Self for method chaining
+        """
+        if tools is None:
+            tools = self.get_langchain_tools()
+        
+        # Your existing tool binding logic is already in place
+        # This method is mainly for LangChain compatibility
+        self.tools = tools
+        return self
+    
+    # ========== ENHANCED DEBUGGING AND MONITORING ==========
+    
+    def get_conversation_stats(self, conversation_id: str = "default") -> Dict[str, Any]:
+        """
+        Get comprehensive statistics for a conversation.
+        
+        Args:
+            conversation_id (str): The conversation ID to get stats for
+            
+        Returns:
+            Dict[str, Any]: Conversation statistics
+        """
+        history = self.conversation_histories[conversation_id]
+        metadata = self.conversation_metadata[conversation_id]
+        
+        user_messages = [msg for msg in history if msg.get("role") == "user"]
+        assistant_messages = [msg for msg in history if msg.get("role") == "assistant"]
+        
+        return {
+            "conversation_id": conversation_id,
+            "total_messages": len(history),
+            "user_messages": len(user_messages),
+            "assistant_messages": len(assistant_messages),
+            "last_updated": metadata.get("last_updated"),
+            "message_count": metadata.get("message_count", 0),
+            "last_question": metadata.get("last_question"),
+            "average_user_message_length": sum(len(msg.get("content", "")) for msg in user_messages) / max(len(user_messages), 1),
+            "average_assistant_message_length": sum(len(msg.get("content", "")) for msg in assistant_messages) / max(len(assistant_messages), 1)
+        }
+    
+    def get_agent_health_status(self) -> Dict[str, Any]:
+        """
+        Get comprehensive health status of the agent.
+        
+        Returns:
+            Dict[str, Any]: Agent health information
+        """
+        return {
+            "active_conversations": len(self.conversation_histories),
+            "conversation_ids": list(self.conversation_histories.keys()),
+            "total_questions_processed": getattr(self, 'total_questions', 0),
+            "llm_providers_available": list(self.llm_provider_names),
+            "tools_available": len(self.tools) if hasattr(self, 'tools') else 0,
+            "vector_store_enabled": self.enable_vector_similarity,
+            "agent_lock_locked": self.agent_lock.locked(),
+            "memory_usage": {
+                "conversation_states": len(self.conversation_states),
+                "conversation_histories": len(self.conversation_histories),
+                "conversation_metadata": len(self.conversation_metadata)
+            }
+        }
+    
+    def export_conversation(self, conversation_id: str = "default", format: str = "json") -> str:
+        """
+        Export a conversation in various formats.
+        
+        Args:
+            conversation_id (str): The conversation ID to export
+            format (str): Export format ("json", "txt", "markdown")
+            
+        Returns:
+            str: Exported conversation data
+        """
+        history = self.conversation_histories[conversation_id]
+        metadata = self.conversation_metadata[conversation_id]
+        
+        if format == "json":
+            return json.dumps({
+                "conversation_id": conversation_id,
+                "metadata": metadata,
+                "history": history,
+                "exported_at": datetime.now().isoformat()
+            }, indent=2)
+        elif format == "txt":
+            lines = [f"Conversation: {conversation_id}"]
+            lines.append(f"Exported: {datetime.now().isoformat()}")
+            lines.append("=" * 50)
+            for msg in history:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                lines.append(f"{role.upper()}: {content}")
+            return "\n".join(lines)
+        elif format == "markdown":
+            lines = [f"# Conversation: {conversation_id}"]
+            lines.append(f"**Exported:** {datetime.now().isoformat()}")
+            lines.append("")
+            for msg in history:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                if role == "user":
+                    lines.append(f"**User:** {content}")
+                elif role == "assistant":
+                    lines.append(f"**Assistant:** {content}")
+                lines.append("")
+            return "\n".join(lines)
+        else:
+            raise ValueError(f"Unsupported format: {format}")
+    
+    def cleanup_old_conversations(self, max_age_hours: int = 24) -> int:
+        """
+        Clean up old conversations to free memory.
+        
+        Args:
+            max_age_hours (int): Maximum age in hours before cleanup
+            
+        Returns:
+            int: Number of conversations cleaned up
+        """
+        current_time = datetime.now()
+        cutoff_time = current_time - datetime.timedelta(hours=max_age_hours)
+        cleaned_count = 0
+        
+        for conv_id in list(self.conversation_histories.keys()):
+            metadata = self.conversation_metadata[conv_id]
+            last_updated = metadata.get("last_updated")
+            
+            if last_updated:
+                try:
+                    last_updated_dt = datetime.fromisoformat(last_updated)
+                    if last_updated_dt < cutoff_time:
+                        self.clear_conversation(conv_id)
+                        cleaned_count += 1
+                except ValueError:
+                    # If we can't parse the date, skip this conversation
+                    continue
+        
+        return cleaned_count

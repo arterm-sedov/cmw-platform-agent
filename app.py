@@ -33,7 +33,7 @@ DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
 
 # --- Main Agent Definition ---
 # Instantiate the agent once (choose provider as needed)
-AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", None)
+AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "mistral")
 
 # Global lock to prevent concurrent agent calls
 agent_lock = Lock()
