@@ -37,8 +37,23 @@ from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from langchain_mistralai.chat_models import ChatMistralAI
 from langchain_openai import ChatOpenAI
 
-# Local imports
-from ..agent_old.utils import ensure_valid_answer
+# Local imports with robust fallback handling
+import sys
+import os
+
+# Add current directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+try:
+    from .utils import ensure_valid_answer
+except ImportError:
+    try:
+        from agent_ng.utils import ensure_valid_answer
+    except ImportError:
+        ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
 
 
 class LLMProvider(Enum):
@@ -680,9 +695,9 @@ class LLMManager:
     def get_tools(self) -> List[Any]:
         """Get all available tools from tools.py"""
         try:
-            import tools.tools
+            import tools.tools as tools_module
             tool_list = []
-            for name, obj in tools.__dict__.items():
+            for name, obj in tools_module.__dict__.items():
                 # Skip private attributes and classes
                 if name.startswith("_") or isinstance(obj, type):
                     continue

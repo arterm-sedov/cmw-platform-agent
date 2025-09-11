@@ -32,16 +32,56 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_core.tools import BaseTool
 from langchain_core.callbacks import BaseCallbackHandler
 
-# Local modular imports
-from core_agent import CoreAgent, get_agent
-from llm_manager import get_llm_manager, LLMInstance
-from error_handler import get_error_handler
-from streaming_manager import get_streaming_manager, StreamingEvent
-from message_processor import get_message_processor, MessageContext
-from response_processor import get_response_processor, ProcessedResponse
-from stats_manager import get_stats_manager
-from trace_manager import get_trace_manager
-from utils import ensure_valid_answer
+# Local modular imports with robust fallback handling
+import sys
+import os
+
+# Add current directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# Try absolute imports first (works from root directory)
+try:
+    from agent_ng.core_agent import CoreAgent, get_agent
+    from agent_ng.llm_manager import get_llm_manager, LLMInstance
+    from agent_ng.error_handler import get_error_handler
+    from agent_ng.streaming_manager import get_streaming_manager, StreamingEvent
+    from agent_ng.message_processor import get_message_processor, MessageContext
+    from agent_ng.response_processor import get_response_processor, ProcessedResponse
+    from agent_ng.stats_manager import get_stats_manager
+    from agent_ng.trace_manager import get_trace_manager
+    from agent_ng.utils import ensure_valid_answer
+except ImportError:
+    # Fallback to relative imports (when running as module)
+    try:
+        from .core_agent import CoreAgent, get_agent
+        from .llm_manager import get_llm_manager, LLMInstance
+        from .error_handler import get_error_handler
+        from .streaming_manager import get_streaming_manager, StreamingEvent
+        from .message_processor import get_message_processor, MessageContext
+        from .response_processor import get_response_processor, ProcessedResponse
+        from .stats_manager import get_stats_manager
+        from .trace_manager import get_trace_manager
+        from .utils import ensure_valid_answer
+    except ImportError as e:
+        print(f"Warning: Could not import required modules: {e}")
+        # Set defaults to prevent further errors
+        CoreAgent = None
+        get_agent = lambda: None
+        get_llm_manager = lambda: None
+        LLMInstance = None
+        get_error_handler = lambda: None
+        get_streaming_manager = lambda: None
+        StreamingEvent = None
+        get_message_processor = lambda: None
+        MessageContext = None
+        get_response_processor = lambda: None
+        ProcessedResponse = None
+        get_stats_manager = lambda: None
+        get_trace_manager = lambda: None
+        ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
 
 
 @dataclass
@@ -55,10 +95,8 @@ class ChatMessage:
 @dataclass
 class AgentConfig:
     """Configuration for the next-gen agent"""
-    enable_vector_similarity: bool = True
     max_conversation_history: int = 50
     max_tool_calls: int = 10
-    similarity_threshold: float = 0.95
     streaming_chunk_size: int = 100
     enable_tool_calling: bool = True
     enable_streaming: bool = True

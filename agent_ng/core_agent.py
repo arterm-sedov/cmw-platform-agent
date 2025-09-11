@@ -46,42 +46,24 @@ try:
     # Try relative imports first (when running as module)
     from .llm_manager import get_llm_manager, LLMInstance
     from .error_handler import get_error_handler, ErrorInfo
-    from ..agent_old.utils import ensure_valid_answer, TRACES_DIR
-    from ..tools.tools import tools
-    from ..agent_old.tool_call_manager import tool_call_manager
+    from .utils import ensure_valid_answer
+    from ..tools import tools as tools_module
 except ImportError:
     # Fallback for when running from root directory
     try:
         from agent_ng.llm_manager import get_llm_manager, LLMInstance
         from agent_ng.error_handler import get_error_handler, ErrorInfo
-        from agent_old.utils import ensure_valid_answer, TRACES_DIR
-        from tools.tools import tools
-        from agent_old.tool_call_manager import tool_call_manager
+        from agent_ng.utils import ensure_valid_answer
+        from tools import tools as tools_module
     except ImportError as e:
         print(f"Warning: Could not import required modules: {e}")
         # Set defaults to prevent further errors
         get_llm_manager = lambda: None
         get_error_handler = lambda: None
-        ensure_valid_answer = lambda x: x
-        TRACES_DIR = "traces"
-        tools = None
-        tool_call_manager = None
+        ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
+        tools_module = None
         LLMInstance = None
 
-# Vector store imports (conditional)
-try:
-    from ..agent_old.similarity_manager import similarity_manager
-    from ..agent_old.vector_store import vector_store
-    VECTOR_STORE_AVAILABLE = True
-except ImportError:
-    try:
-        from agent_old.similarity_manager import similarity_manager
-        from agent_old.vector_store import vector_store
-        VECTOR_STORE_AVAILABLE = True
-    except ImportError:
-        VECTOR_STORE_AVAILABLE = False
-        similarity_manager = None
-        vector_store = None
 
 
 @dataclass
@@ -151,16 +133,12 @@ class CoreAgent:
     using the modular LLM manager and error handler.
     """
     
-    def __init__(self, enable_vector_similarity: bool = True):
+    def __init__(self):
         """
         Initialize the core agent.
-        
-        Args:
-            enable_vector_similarity: Whether to enable vector similarity calculations
         """
         self.llm_manager = get_llm_manager()
         self.error_handler = get_error_handler()
-        self.enable_vector_similarity = enable_vector_similarity and VECTOR_STORE_AVAILABLE
         
         # Conversation management
         self.conversations: Dict[str, List[ConversationMessage]] = defaultdict(list)
@@ -175,7 +153,6 @@ class CoreAgent:
         
         # Configuration
         self.max_conversation_history = 50
-        self.similarity_threshold = 0.95
         self.tool_calls_similarity_threshold = 0.90
         self.max_tool_calls = 10
         self.max_consecutive_no_progress = 3
@@ -188,10 +165,6 @@ class CoreAgent:
         self.tools = self._initialize_tools()
         
         print(f"🤖 Core Agent initialized with {len(self.tools)} tools")
-        if self.enable_vector_similarity:
-            print("📊 Vector similarity enabled")
-        else:
-            print("📊 Vector similarity disabled")
     
     def _load_system_prompt(self) -> str:
         """Load the system prompt from system_prompt.json"""
@@ -214,12 +187,17 @@ class CoreAgent:
     def _initialize_tools(self) -> List[Any]:
         """Initialize available tools"""
         tool_list = []
-        for name, obj in tools.__dict__.items():
+        
+        if tools_module is None:
+            print("Warning: Tools module not available")
+            return tool_list
+            
+        for name, obj in tools_module.__dict__.items():
             if (callable(obj) and 
                 not name.startswith("_") and 
                 not isinstance(obj, type) and
                 hasattr(obj, '__module__') and
-                obj.__module__ == 'tools' and
+                obj.__module__ == 'tools.tools' and
                 name not in ["CmwAgent", "CodeInterpreter"]):
                 
                 if hasattr(obj, 'name') and hasattr(obj, 'description'):
@@ -229,20 +207,6 @@ class CoreAgent:
         
         return tool_list
     
-    def _get_reference_answer(self, question: str) -> Optional[str]:
-        """Get reference answer using vector similarity if available"""
-        if not self.enable_vector_similarity:
-            return None
-        
-        try:
-            # Use similarity manager to find similar questions
-            similar_questions = similarity_manager.find_similar_questions(question, top_k=1)
-            if similar_questions and similar_questions[0]['similarity'] > self.similarity_threshold:
-                return similar_questions[0]['answer']
-        except Exception as e:
-            print(f"Warning: Vector similarity lookup failed: {e}")
-        
-        return None
     
     def _format_messages(self, question: str, reference: Optional[str] = None, 
                         chat_history: Optional[List[Dict[str, Any]]] = None) -> List[Any]:
@@ -435,11 +399,8 @@ class CoreAgent:
         if file_data and file_name:
             print(f"📁 File attached: {file_name}")
         
-        # Get reference answer
-        reference = self._get_reference_answer(question)
-        
         # Format messages
-        messages = self._format_messages(question, reference, chat_history)
+        messages = self._format_messages(question, None, chat_history)
         
         # Update conversation history
         self._add_to_conversation(conversation_id, "user", question)
@@ -531,11 +492,8 @@ class CoreAgent:
         if file_data and file_name:
             yield {"event_type": "file_info", "content": f"File attached: {file_name}"}
         
-        # Get reference answer
-        reference = self._get_reference_answer(question)
-        
         # Format messages
-        messages = self._format_messages(question, reference, chat_history)
+        messages = self._format_messages(question, None, chat_history)
         
         # Update conversation history
         self._add_to_conversation(conversation_id, "user", question)
@@ -650,7 +608,6 @@ class CoreAgent:
             "total_questions": self.total_questions,
             "active_conversations": len(self.conversations),
             "tools_available": len(self.tools),
-            "vector_similarity_enabled": self.enable_vector_similarity,
             "llm_manager_stats": self.llm_manager.get_stats(),
             "error_handler_stats": self.error_handler.get_provider_failure_stats()
         }

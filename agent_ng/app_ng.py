@@ -29,11 +29,41 @@ import json
 import time
 from dataclasses import asdict
 
-# Local imports
-from .agent_ng import NextGenAgent, ChatMessage, get_agent_ng
-from .llm_manager import get_llm_manager
-from .debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
-from .streaming_chat import get_chat_interface
+# Local imports with robust fallback handling
+import sys
+import os
+
+# Add current directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# Try absolute imports first (works from root directory)
+try:
+    from agent_ng.agent_ng import NextGenAgent, ChatMessage, get_agent_ng
+    from agent_ng.llm_manager import get_llm_manager
+    from agent_ng.debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
+    from agent_ng.streaming_chat import get_chat_interface
+except ImportError:
+    # Fallback to relative imports (when running as module)
+    try:
+        from .agent_ng import NextGenAgent, ChatMessage, get_agent_ng
+        from .llm_manager import get_llm_manager
+        from .debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
+        from .streaming_chat import get_chat_interface
+    except ImportError as e:
+        print(f"Warning: Could not import required modules: {e}")
+        # Set defaults to prevent further errors
+        NextGenAgent = None
+        ChatMessage = None
+        get_agent_ng = lambda: None
+        get_llm_manager = lambda: None
+        get_debug_streamer = lambda x: None
+        get_log_handler = lambda: None
+        LogLevel = None
+        LogCategory = None
+        get_chat_interface = lambda: None
 
 
 class NextGenApp:

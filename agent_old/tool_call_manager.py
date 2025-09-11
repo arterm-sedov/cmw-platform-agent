@@ -19,7 +19,12 @@ Usage:
 
 import json
 from typing import List, Dict, Any, Optional
-from similarity_manager import similarity_manager
+
+# Conditional import for similarity_manager
+try:
+    from similarity_manager import similarity_manager
+except ImportError:
+    similarity_manager = None
 
 
 class ToolCallManager:
@@ -67,11 +72,14 @@ class ToolCallManager:
                     return True
 
         # If no exact matches, use semantic similarity if available
-        if self.similarity_manager is None:
-            from similarity_manager import get_similarity_manager
-            self.similarity_manager = get_similarity_manager()
+        if self.similarity_manager is None and similarity_manager is not None:
+            try:
+                from similarity_manager import get_similarity_manager
+                self.similarity_manager = get_similarity_manager()
+            except ImportError:
+                self.similarity_manager = None
         
-        if self.similarity_manager.is_enabled():
+        if self.similarity_manager is not None and self.similarity_manager.is_enabled():
             try:
                 # Convert current args to text for similarity comparison
                 current_args_text = json.dumps(tool_args, sort_keys=True) if isinstance(tool_args, dict) else str(tool_args)
