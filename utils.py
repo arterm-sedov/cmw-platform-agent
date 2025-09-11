@@ -127,7 +127,7 @@ def get_hf_api_client(token: Optional[str] = None):
         
     try:
         # Get token from parameter or environment
-        hf_token = token or os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+        hf_token = token or os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_API_KEY")
         if not hf_token:
             print("Warning: No HuggingFace token found. API operations will fail.")
             return None
