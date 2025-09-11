@@ -1066,6 +1066,9 @@ class CmwAgent:
             llm_type = self.current_llm_type
             self._add_tool_execution_trace(llm_type, call_id, tool_name, tool_args, tool_result, execution_time)
         
+        # Convert tool result to string for message history, handling structured results properly
+        if isinstance(tool_result, dict):
+            return self._extract_main_text_from_tool_result(tool_result)
         return str(tool_result)
 
 
@@ -1080,7 +1083,7 @@ class CmwAgent:
             tool_results_history: History of tool results (for reference, not used in prompt)
             llm: LLM instance
         Returns:
-            Response from LLM with structured answer via submit_final_answer tool
+            Response from LLM with structured answer via submit_answer tool
         """
         
         # Extract llm_type from llm
@@ -1160,6 +1163,8 @@ class CmwAgent:
         max_total_tool_calls = 10  # Reduced from 15 to 8 to prevent excessive tool usage
         max_tool_calls_per_step = 5  # Maximum tool calls allowed per step
         total_tool_calls = 2  # Track total tool calls to prevent infinite loops
+        consecutive_identical_tool_calls = 0  # Track consecutive identical tool calls
+        last_tool_call_signature = None  # Track the signature of the last tool call
         
         # Simplified tool usage tracking - no special handling for search tools
         tool_usage_limits = {
@@ -1360,7 +1365,22 @@ class CmwAgent:
             # Check for progress (new content or tool calls)
             current_content = getattr(response, 'content', '') or ''
             current_tool_calls = getattr(response, 'tool_calls', []) or []
-            has_progress = (current_content != last_response_content or len(current_tool_calls) > 0)
+            
+            # Check if we have new tool calls that are different from the last ones
+            has_new_tool_calls = len(current_tool_calls) > 0
+            has_different_tool_calls = False
+            if has_new_tool_calls and last_tool_call_signature:
+                # Check if any of the current tool calls are different from the last one
+                for tool_call in current_tool_calls:
+                    tool_name = tool_call.get('name')
+                    tool_args = tool_call.get('args', {})
+                    current_signature = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
+                    if current_signature != last_tool_call_signature:
+                        has_different_tool_calls = True
+                        break
+            
+            has_progress = (current_content != last_response_content or 
+                          (has_new_tool_calls and has_different_tool_calls))
             
             # Check if we have tool results but no final answer yet
             has_tool_results = len(tool_results_history) > 0
@@ -1399,17 +1419,47 @@ class CmwAgent:
             else:
                 consecutive_no_progress = 0  # Reset counter on progress
                 
+            # Additional check: if we have too many consecutive identical tool calls, force exit
+            if consecutive_identical_tool_calls >= 2:
+                print(f"[Tool Loop] Detected {consecutive_identical_tool_calls} consecutive identical tool calls. Forcing exit.")
+                if tool_results_history:
+                    return self._force_final_answer(messages, tool_results_history, llm)
+                else:
+                    return AIMessage(content="Error: LLM is stuck making identical tool calls. Cannot complete reasoning.")
+                
             last_response_content = current_content
 
-            # Check for submit_final_answer tool call (modern structured approach)
-            if hasattr(response, 'tool_calls') and response.tool_calls:
-                for tool_call in response.tool_calls:
-                    if tool_call.get('name') == 'submit_final_answer':
-                        print(f"[Tool Loop] Structured final answer detected via submit_final_answer tool")
+        # Check for submit_answer tool call (modern structured approach)
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            for tool_call in response.tool_calls:
+                if tool_call.get('name') == 'submit_answer':
+                        print(f"[Tool Loop] Structured answer detected via submit_answer tool")
                         # Track successful provider requests
                         self._handle_provider_success(llm_type)
-                        # Extract the answer
-                        answer = tool_call.get('args', {}).get('answer', '')
+                        
+                        # Execute the tool to get structured result and add to chat history
+                        tool_name = tool_call.get('name')
+                        tool_args = tool_call.get('args', {})
+                        
+                        # Execute the tool using helper method with call_id for tracing
+                        tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
+                        
+                        # Store the raw result for this step
+                        current_step_tool_results.append(tool_result)
+                        tool_results_history.append(tool_result)
+                        total_tool_calls += 1  # Increment total tool call counter
+                        
+                        # Report tool result
+                        self._print_tool_result(tool_name, tool_result)
+                        
+                        # Add tool result to messages for chat history continuity
+                        messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
+                        
+                        # Update the stored conversation history
+                        self._update_conversation_history(messages)
+                        
+                        # Extract the answer for immediate display
+                        answer = self._extract_main_text_from_tool_result(tool_result)
                         if streaming_generator:
                             # Use the streaming generator instead of direct yield
                             streaming_generator(answer)
@@ -1454,16 +1504,15 @@ class CmwAgent:
                     tool_name = tool_call.get('name')
                     tool_args = tool_call.get('args', {})
                     
-                    # Special handling for submit_final_answer - should not be processed as regular tool
-                    if tool_name == 'submit_final_answer':
-                        print(f"[Tool Loop] submit_final_answer detected - this should have been handled earlier")
-                        continue
+                    # submit_answer is now handled earlier in the flow, but if it somehow gets here, process it normally
+                    if tool_name == 'submit_answer':
+                        print(f"[Tool Loop] submit_answer detected in regular flow - processing normally")
                     
                     # Check if tool usage limit exceeded FIRST (most restrictive check)
                     if tool_name in tool_usage_count and tool_usage_count[tool_name] >= tool_usage_limits.get(tool_name, tool_usage_limits['default']):
                         print(f"[Tool Loop] ⚠️ {tool_name} usage limit reached ({tool_usage_count[tool_name]}/{tool_usage_limits.get(tool_name, tool_usage_limits['default'])}). Skipping.")
-                        stream_event("tool_limit", f"⚠️ **{tool_name} usage limit reached**\n", 
-                                   {"tool_name": tool_name, "usage_count": tool_usage_count[tool_name]})
+                        stream_now(f"⚠️ **{tool_name} usage limit reached**\n", 
+                                   "tool_limit", {"tool_name": tool_name, "usage_count": tool_usage_count[tool_name]})
                         duplicate_count += 1
                         continue
                     
@@ -1471,15 +1520,15 @@ class CmwAgent:
                     if self._is_duplicate_tool_call(tool_name, tool_args, called_tools):
                         duplicate_count += 1
                         print(f"[Tool Loop] Duplicate tool call detected: {tool_name} with args: {tool_args}")
-                        stream_event("tool_duplicate", f"⚠️ **Duplicate tool call: {tool_name}**\n", 
-                                   {"tool_name": tool_name})
+                        stream_now(f"⚠️ **Duplicate tool call: {tool_name}**\n", 
+                                   "tool_duplicate", {"tool_name": tool_name})
                         reminder = self._get_reminder_prompt(
                             reminder_type="tool_usage_issue",
                             tool_name=tool_name,
                             tool_args=tool_args
                         )
                         messages.append(HumanMessage(content=reminder))
-                        continue
+                        return response
                     
                     # New tool call - add it (LAST)
                     print(f"[Tool Loop] New tool call: {tool_name} with args: {tool_args}")
@@ -1502,18 +1551,33 @@ class CmwAgent:
                     print(f"[Tool Loop] All tool calls were duplicates but no previous results. Adding reminder to use available tools.")
                     reminder = self._get_reminder_prompt(reminder_type="tool_usage_issue", tool_name=tool_name)
                     messages.append(HumanMessage(content=reminder))
-                    continue
+                    return response
                 
                 # Execute only new tool calls
                 for tool_call in new_tool_calls:
                     tool_name = tool_call.get('name')
                     tool_args = tool_call.get('args', {})
                     
-                    # submit_final_answer should have been filtered out earlier
-                    # This is a safety check in case it somehow gets through
-                    if tool_name == 'submit_final_answer':
-                        print(f"[Tool Loop] ERROR: submit_final_answer reached execution - this should not happen")
-                        continue
+                    # Check for consecutive identical tool calls
+                    current_tool_signature = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
+                    if current_tool_signature == last_tool_call_signature:
+                        consecutive_identical_tool_calls += 1
+                        print(f"[Tool Loop] Consecutive identical tool call detected: {tool_name} (count: {consecutive_identical_tool_calls})")
+                        
+                        # If we have too many consecutive identical tool calls, force exit
+                        if consecutive_identical_tool_calls >= 2:
+                            print(f"[Tool Loop] Too many consecutive identical tool calls ({consecutive_identical_tool_calls}). Forcing final answer.")
+                            if tool_results_history:
+                                return self._force_final_answer(messages, tool_results_history, llm)
+                            else:
+                                return AIMessage(content="Error: LLM is stuck in a loop making identical tool calls. Cannot complete reasoning.")
+                    else:
+                        consecutive_identical_tool_calls = 0
+                        last_tool_call_signature = current_tool_signature
+                    
+                    # submit_answer is now handled earlier, but if it reaches here, process it normally
+                    if tool_name == 'submit_answer':
+                        print(f"[Tool Loop] submit_answer reached execution - processing normally")
                     
                     # Stream tool start immediately
                     tool_start_content = stream_now(f"🔧 **Executing {tool_name}**\n", 
@@ -1533,7 +1597,12 @@ class CmwAgent:
                     self._print_tool_result(tool_name, tool_result)
                     
                     # Stream tool completion immediately
-                    display_result = tool_result[:300] + "..." if len(tool_result) > 300 else tool_result
+                    if isinstance(tool_result, str):
+                        display_result = tool_result[:300] + "..." if len(tool_result) > 300 else tool_result
+                    else:
+                        # For structured results, extract the main text
+                        display_result = self._extract_main_text_from_tool_result(tool_result)
+                        display_result = display_result[:300] + "..." if len(display_result) > 300 else display_result
                     tool_end_content = stream_now(f"✅ **{tool_name} completed**\n```\n{display_result}\n```\n", 
                               "tool_end", {"tool_name": tool_name, "tool_result": tool_result})
                     if tool_end_content and streaming_generator:
@@ -1541,13 +1610,16 @@ class CmwAgent:
                     
                     # Add tool result to messages - let LangChain handle the formatting
                     messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
+                    
+                    # Update the stored conversation history
+                    self._update_conversation_history(messages)
                 
                 # Convert messages for Mistral AI if needed (before next LLM call)
                 if llm_type == "mistral" and not self._mistral_converted_this_step:
                     messages = self._convert_messages_for_mistral(messages)
                     self._mistral_converted_this_step = True
                 
-                continue  # Next LLM call
+                return response  # Next LLM call
             # Gemini (and some LLMs) may use 'function_call' instead of 'tool_calls'
             function_call = getattr(response, 'function_call', None)
             if function_call:
@@ -1577,7 +1649,7 @@ class CmwAgent:
                         # No previous results - add reminder and continue
                         reminder = self._get_reminder_prompt(reminder_type="tool_usage_issue", tool_name=tool_name)
                         messages.append(HumanMessage(content=reminder))
-                    continue
+                    return response
                 
                 # Check if tool usage limit exceeded
                 if tool_name in tool_usage_count and tool_usage_count[tool_name] >= tool_usage_limits.get(tool_name, tool_usage_limits['default']):
@@ -1588,7 +1660,7 @@ class CmwAgent:
                         count=tool_usage_count[tool_name]
                     )
                     messages.append(HumanMessage(content=reminder))
-                    continue
+                    return response
                 
                 # Add to history and track usage
                 self._add_tool_call_to_history(tool_name, tool_args, called_tools)
@@ -1607,12 +1679,15 @@ class CmwAgent:
                 self._print_tool_result(tool_name, tool_result)
                 messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_name))
                 
+                # Update the stored conversation history
+                self._update_conversation_history(messages)
+                
                 # Convert messages for Mistral AI if needed (after tool results are added)
                 if llm_type == "mistral" and not self._mistral_converted_this_step:
                     messages = self._convert_messages_for_mistral(messages)
                     self._mistral_converted_this_step = True
                 
-                continue
+                return response
             if hasattr(response, 'content') and response.content:
                 return response
             print(f"[Tool Loop] No tool calls or final answer detected. Exiting loop.")
@@ -1621,7 +1696,7 @@ class CmwAgent:
             # Add a reminder to use tools or provide an answer
             reminder = self._get_reminder_prompt(reminder_type="final_answer_prompt", tools=self.tools)
             messages.append(HumanMessage(content=reminder))
-            continue
+            return response
         
         # If we reach here, we've exhausted all steps or hit progress limits
         print(f"[Tool Loop] Exiting after {step+1} steps. Last response: {response}")
@@ -1900,7 +1975,7 @@ class CmwAgent:
         final_prompt = (
             f"Question: {original_question}\n\nCombine these analyses into a final answer:\n\n"
             + "\n\n".join(all_responses)
-            + "\n\nUse the submit_final_answer tool based on all content, following the system prompt format."
+            + "\n\nUse the submit_answer tool based on all content, following the system prompt format."
         )
         final_messages = [self.sys_msg, HumanMessage(content=final_prompt)]
         try:
@@ -2063,32 +2138,57 @@ class CmwAgent:
     def _format_messages(self, question: str, reference: Optional[str] = None, chat_history: Optional[List[Dict[str, Any]]] = None) -> List[Any]:
         """
         Format the message list for the LLM, including system prompt, optional prior chat history,
-        question, and optional reference answer.
+        question, and optional reference answer. Now supports complete tool execution history.
 
         Args:
             question (str): The question to answer.
             reference (str, optional): The reference answer to include in context.
-            chat_history (list, optional): Prior conversation turns as list of {role, content}.
+            chat_history (list, optional): Prior conversation turns as list of {role, content, tool_calls, tool_call_id}.
 
         Returns:
             list: List of message objects for the LLM.
         """
         messages = [self.sys_msg]
         
-        # Append prior chat history (user/assistant only) for continuity
+        # Append prior chat history with full tool execution context
         if chat_history and isinstance(chat_history, list):
             for turn in chat_history:
                 try:
                     role = str(turn.get("role", "")).lower()
-                    content = str(turn.get("content", ""))
+                    content = turn.get("content", "")
+                    tool_calls = turn.get("tool_calls", [])
+                    tool_call_id = turn.get("tool_call_id")
+                    name = turn.get("name")
                 except Exception:
                     continue
-                if not content:
+                
+                if not content and not tool_calls:
                     continue
+                
                 if role in ("user", "human"):
-                    messages.append(HumanMessage(content=content))
+                    messages.append(HumanMessage(content=str(content)))
                 elif role in ("assistant", "ai"):
-                    messages.append(AIMessage(content=content))
+                    # Handle assistant messages with potential tool calls
+                    if tool_calls:
+                        # Convert tool calls to the format expected by LangChain
+                        formatted_tool_calls = []
+                        for tc in tool_calls:
+                            if isinstance(tc, dict):
+                                formatted_tool_calls.append({
+                                    "name": tc.get("name", ""),
+                                    "args": tc.get("args", {}),
+                                    "id": tc.get("id", "")
+                                })
+                        messages.append(AIMessage(content=str(content), tool_calls=formatted_tool_calls))
+                    else:
+                        messages.append(AIMessage(content=str(content)))
+                elif role == "tool":
+                    # Handle tool execution results
+                    if tool_call_id and name:
+                        messages.append(ToolMessage(content=str(content), name=name, tool_call_id=tool_call_id))
+                    else:
+                        # Fallback for tool messages without proper metadata
+                        messages.append(ToolMessage(content=str(content), name=name or "unknown", tool_call_id=tool_call_id or "unknown"))
         
         # Current question last - ensure it's clearly separated
         messages.append(HumanMessage(content=f"Current question: {question}"))
@@ -2104,6 +2204,78 @@ class CmwAgent:
             return tool.__name__
         else:
             return str(tool)
+
+    def _update_conversation_history(self, messages: List[Any]) -> None:
+        """
+        Update the conversation history with new messages, ensuring no duplicates.
+        This method maintains a clean, deduplicated conversation history.
+        
+        Args:
+            messages: List of message objects to add to history
+        """
+        if not hasattr(self, '_current_conversation_history'):
+            self._current_conversation_history = []
+        
+        # Create a set to track unique tool results to prevent duplicates
+        if not hasattr(self, '_seen_tool_results'):
+            self._seen_tool_results = set()
+        
+        # Process each message and add only if not duplicate
+        for msg in messages:
+            if hasattr(msg, 'type') and msg.type == 'tool':
+                # For tool messages, create a unique identifier to prevent duplicates
+                tool_id = f"{getattr(msg, 'name', 'unknown')}_{getattr(msg, 'tool_call_id', 'unknown')}_{str(msg.content)[:100]}"
+                if tool_id not in self._seen_tool_results:
+                    self._current_conversation_history.append(msg)
+                    self._seen_tool_results.add(tool_id)
+            else:
+                # For non-tool messages, add them normally
+                self._current_conversation_history.append(msg)
+
+    def get_conversation_history(self) -> List[Dict[str, Any]]:
+        """
+        Get the complete conversation history including tool execution results.
+        This can be used to maintain context across multiple conversation turns.
+        
+        Returns:
+            List[Dict]: Complete conversation history with role, content, tool_calls, etc.
+        """
+        if not hasattr(self, '_current_conversation_history'):
+            return []
+        
+        # Convert the internal message objects to a serializable format
+        history = []
+        for msg in self._current_conversation_history:
+            if hasattr(msg, 'type'):
+                if msg.type == 'human':
+                    history.append({
+                        "role": "user",
+                        "content": str(msg.content)
+                    })
+                elif msg.type in ('ai', 'assistant'):
+                    # Handle assistant messages with potential tool calls
+                    msg_dict = {
+                        "role": "assistant", 
+                        "content": str(msg.content)
+                    }
+                    if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                        msg_dict["tool_calls"] = [
+                            {
+                                "name": tc.get("name", ""),
+                                "args": tc.get("args", {}),
+                                "id": tc.get("id", "")
+                            } for tc in msg.tool_calls
+                        ]
+                    history.append(msg_dict)
+                elif msg.type == 'tool':
+                    # Handle tool execution results
+                    history.append({
+                        "role": "tool",
+                        "content": str(msg.content),
+                        "name": getattr(msg, 'name', 'unknown'),
+                        "tool_call_id": getattr(msg, 'tool_call_id', 'unknown')
+                    })
+        return history
 
     def _convert_messages_for_mistral(self, messages: List) -> List:
         """
@@ -2578,6 +2750,9 @@ class CmwAgent:
         # Format messages
         messages = self._format_messages(question, reference=reference, chat_history=chat_history)
         
+        # Initialize the complete conversation history for later retrieval
+        self._update_conversation_history(messages)
+        
         # Build a default llm_sequence if not provided
         if not llm_sequence:
             try:
@@ -2884,7 +3059,7 @@ class CmwAgent:
     def _extract_final_answer(self, response: Any) -> str:
         """
         Extract the final answer from the LLM response using structured output approach.
-        This agent is tool-only and requires the submit_final_answer tool to be used.
+        This agent is tool-only and requires the submit_answer tool to be used.
 
         Args:
             response (Any): The LLM response object.
@@ -2898,8 +3073,8 @@ class CmwAgent:
             return structured_answer
         
         # If no structured answer found, this is an error condition for a tool-only agent
-        print(f"[Response Extractor] No structured answer found - agent requires submit_final_answer tool usage")
-        return "Error: Agent requires submit_final_answer tool usage. No structured answer found."
+        print(f"[Response Extractor] No structured answer found - agent requires submit_answer tool usage")
+        return "Error: Agent requires submit_answer tool usage. No structured answer found."
     
     def _extract_structured_final_answer(self, response: Any) -> Optional[str]:
         """
@@ -2915,7 +3090,7 @@ class CmwAgent:
         # Check for tool calls first (most reliable)
         if hasattr(response, 'tool_calls') and response.tool_calls:
             for tool_call in response.tool_calls:
-                if tool_call.get('name') == 'submit_final_answer':
+                if tool_call.get('name') == 'submit_answer':
                     args = tool_call.get('args', {})
                     if 'answer' in args:
                         return args['answer']
@@ -3006,7 +3181,8 @@ class CmwAgent:
         specific_tools = [
             # List of specific tool names to ensure inclusion (grouped by category for clarity)
                 # Response handling tools
-                'submit_final_answer',
+                'submit_answer',
+                'submit_intermediate_step',
                 # Math tools
                 'multiply', 'add', 'subtract', 'divide', 'modulus', 'power', 'square_root',
                 # File and data tools
@@ -4781,11 +4957,30 @@ class CmwAgent:
     def _extract_main_text_from_tool_result(self, tool_result):
         """
         Extract the main text from a tool result dict (e.g., wiki_results, web_results, arxiv_results, etc.).
+        Also handles structured tool results from submit_answer and submit_intermediate_step.
         """
         if isinstance(tool_result, dict):
+            # Handle structured tool results (submit_answer, submit_intermediate_step)
+            if "raw_response" in tool_result and isinstance(tool_result["raw_response"], dict):
+                raw_response = tool_result["raw_response"]
+                # For submit_answer, extract the answer
+                if "answer" in raw_response:
+                    return raw_response["answer"]
+                # For submit_intermediate_step, extract the description
+                if "description" in raw_response:
+                    return raw_response["description"]
+                # Fallback: convert raw_response to readable string
+                return str(raw_response)
+            
+            # Handle error cases in structured results
+            if "error" in tool_result and tool_result["error"]:
+                return f"Error: {tool_result['error']}"
+            
+            # Handle legacy tool results
             for key in ("wiki_results", "web_results", "arxiv_results", "result", "text", "content"):
                 if key in tool_result and isinstance(tool_result[key], str):
                     return tool_result[key]
+            
             # Fallback: join all string values
             return " ".join(str(v) for v in tool_result.values() if isinstance(v, str))
         return str(tool_result)
@@ -4872,23 +5067,23 @@ class CmwAgent:
             
         reminders = {
             "final_answer_prompt": (
-                    "Analyse existing tool results, then use the submit_final_answer tool.\n"
+                    "Analyse existing tool results, then use the submit_answer tool.\n"
                 + (
-                    "Use VARIOUS tools to gather missing information, then use the submit_final_answer tool.\n"
+                    "Use VARIOUS tools to gather missing information, then use the submit_answer tool.\n"
                     f"Available tools include: {tool_names or 'various tools'}.\n"
                     if not tool_count or tool_count == 0 else ""
                   )
                 + (
                     f"\n\nIMPORTANT: You have gathered information from {tool_count} tool calls.\n"
                     "The tool results are available in the conversation.\n"
-                    "Carefully analyze tool results and use the submit_final_answer tool to provide your answer to the ORIGINAL QUESTION.\n"
+                    "Carefully analyze tool results and use the submit_answer tool to provide your answer to the ORIGINAL QUESTION.\n"
                     "Follow the system prompt.\n"
-                    "Do not call any more tools - analyze the existing results and use submit_final_answer tool now.\n"
+                    "Do not call any more tools - analyze the existing results and use submit_answer tool now.\n"
                     if tool_count and tool_count > 0 else ""
                   )
-                + "\n\nPlease answer the following question using the submit_final_answer tool:\n\n"
+                + "\n\nPlease answer the following question using the submit_answer tool:\n\n"
                 + f"ORIGINAL QUESTION:\n{original_question}\n\n"
-                + "Use the submit_final_answer tool with your answer and follow the system prompt.\n"
+                + "Use the submit_answer tool with your answer and follow the system prompt.\n"
             ),
             "tool_usage_issue": (
                 "Call a DIFFERENT TOOL.\n"
@@ -4902,10 +5097,10 @@ class CmwAgent:
                 + "Do not call the tools repeately with the same arguments.\n"
                 + "Consider any results you have.\n"
                 + f"ORIGINAL QUESTION:\n{original_question}\n\n"
-                + "Use the submit_final_answer tool based on the information you have or call OTHER TOOLS.\n"
+                + "Use the submit_answer tool based on the information you have or call OTHER TOOLS.\n"
             ),
         }
-        return reminders.get(reminder_type, "Please analyse the tool results and use the submit_final_answer tool.")
+        return reminders.get(reminder_type, "Please analyse the tool results and use the submit_answer tool.")
 
     def _create_simple_chunk_prompt(self, messages, chunk_results, chunk_num, total_chunks):
         """Create a simple prompt for processing a chunk."""
@@ -4931,7 +5126,7 @@ class CmwAgent:
         if chunk_num < total_chunks:
             prompt += "Analyze these results and provide key findings."
         else:
-            prompt += "Use the submit_final_answer tool based on all content, when you receive it, following the system prompt format."
+            prompt += "Use the submit_answer tool based on all content, when you receive it, following the system prompt format."
         
         return prompt
 
