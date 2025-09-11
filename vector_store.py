@@ -42,23 +42,28 @@ class VectorStoreManager:
     and can be disabled when Supabase is not available or configured.
     """
     
-    def __init__(self, enabled: bool = None):
+    def __init__(self, enabled: bool = None, enable_vector_similarity: bool = True):
         """
         Initialize the vector store manager.
         
         Args:
             enabled (bool, optional): Override the global SUPABASE_ENABLED setting
+            enable_vector_similarity (bool): Whether to enable vector similarity (loads heavy models if True)
         """
         self.enabled = enabled if enabled is not None else SUPABASE_ENABLED
+        self.enable_vector_similarity = enable_vector_similarity
         self.embeddings = None
         self.supabase_client = None
         self.vector_store = None
         self.retriever_tool = None
         
-        if self.enabled and SUPABASE_AVAILABLE:
+        if self.enabled and SUPABASE_AVAILABLE and self.enable_vector_similarity:
             self._initialize_supabase()
         else:
-            print("ℹ️ Vector store functionality is disabled")
+            if not self.enable_vector_similarity:
+                print("ℹ️ Vector similarity disabled - skipping heavy model loading")
+            else:
+                print("ℹ️ Vector store functionality is disabled")
     
     def _initialize_supabase(self):
         """Initialize Supabase client and vector store."""
@@ -250,26 +255,43 @@ class VectorStoreManager:
             "supabase_key_configured": bool(os.environ.get("SUPABASE_KEY")),
         }
 
-# Global instance for easy access
-vector_store_manager = VectorStoreManager()
+# Global instance for easy access - will be initialized lazily
+vector_store_manager = None
+
+def get_vector_store_manager(enabled: bool = None, enable_vector_similarity: bool = True):
+    """Get or create the global vector store manager instance."""
+    global vector_store_manager
+    if vector_store_manager is None:
+        vector_store_manager = VectorStoreManager(enabled=enabled, enable_vector_similarity=enable_vector_similarity)
+    return vector_store_manager
 
 # Convenience functions for vector store operations
 def get_vector_store():
     """Get vector store instance."""
+    if vector_store_manager is None:
+        get_vector_store_manager()  # Initialize with defaults
     return vector_store_manager.get_vector_store()
 
 def get_retriever_tool():
     """Get retriever tool instance."""
+    if vector_store_manager is None:
+        get_vector_store_manager()  # Initialize with defaults
     return vector_store_manager.get_retriever_tool()
 
 def similarity_search(query: str, k: int = 1):
     """Perform similarity search."""
+    if vector_store_manager is None:
+        get_vector_store_manager()  # Initialize with defaults
     return vector_store_manager.similarity_search(query, k)
 
 def get_reference_answer(question: str):
     """Get reference answer for a question."""
+    if vector_store_manager is None:
+        get_vector_store_manager()  # Initialize with defaults
     return vector_store_manager.get_reference_answer(question)
 
 def get_status():
     """Get vector store status."""
+    if vector_store_manager is None:
+        get_vector_store_manager()  # Initialize with defaults
     return vector_store_manager.get_status()

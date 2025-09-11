@@ -29,11 +29,11 @@ load_dotenv()
 # (Keep Constants as is)
 # --- Constants ---
 DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
-DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() == "true"
+# DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() == "true"
 
 # --- Main Agent Definition ---
 # Instantiate the agent once (choose provider as needed)
-AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "gemini")
+AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", 'gigachat')
 
 # Global lock to prevent concurrent agent calls
 agent_lock = Lock()
