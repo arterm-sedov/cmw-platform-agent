@@ -35,7 +35,7 @@ DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
 # Instantiate the agent once (choose provider as needed)
 AGENT_PROVIDER = os.environ.get("AGENT_PROVIDER", "mistral")
 # Vector similarity can be disabled for faster startup (read from .env file)
-ENABLE_VECTOR_SIMILARITY = os.environ.get("ENABLE_VECTOR_SIMILARITY", "true").lower() == "fakse"
+ENABLE_VECTOR_SIMILARITY = os.environ.get("ENABLE_VECTOR_SIMILARITY", "true").lower() == "true"
 
 # Global lock to prevent concurrent agent calls
 agent_lock = Lock()
@@ -714,28 +714,8 @@ def chat_with_agent_stream(message, history):
 							accum += delta
 							has_content = True
 							
-							# Clean up the accumulated content for better display
+							# Use the accumulated content as-is for better display
 							display_content = accum
-							
-							# Fix formatting issues by adding proper spacing and line breaks
-							display_content = display_content.replace("📍Step", "\n📍 **Step")
-							display_content = display_content.replace("🤖LLM", "\n🤖 **LLM")
-							display_content = display_content.replace("💭**LLMresponse:**", "\n💭 **LLM response:**")
-							display_content = display_content.replace("🔧**Detected", "\n🔧 **Detected")
-							display_content = display_content.replace("🔧**Executing", "\n🔧 **Executing")
-							display_content = display_content.replace("✅**", "\n✅ **")
-							
-							# Add proper line breaks after step indicators
-							display_content = display_content.replace("**Step", "**Step\n")
-							display_content = display_content.replace("**LLM is analyzing", "**LLM is analyzing...\n")
-							display_content = display_content.replace("**LLM response:**", "**LLM response:**\n")
-							display_content = display_content.replace("**Detected", "**Detected\n")
-							display_content = display_content.replace("**Executing", "**Executing\n")
-							display_content = display_content.replace("**completed**", "**completed**\n")
-							
-							# Clean up multiple newlines
-							display_content = display_content.replace("\n\n\n", "\n\n")
-							display_content = display_content.strip()
 							
 							if hasattr(agent, '_stream_terminal_output'):
 								terminal_chunk = agent._stream_terminal_output()

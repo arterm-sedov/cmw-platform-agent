@@ -53,19 +53,8 @@ import tools
 from dataset_manager import dataset_manager
 from tools import *
 from utils import TRACES_DIR, ensure_valid_answer
-from vector_store import (
-    get_reference_answer,
-    get_retriever_tool,
-    get_vector_store,
-    vector_store_manager,
-)
-from similarity_manager import (
-    similarity_manager,
-    get_embeddings,
-    vector_answers_match,
-    calculate_cosine_similarity,
-    embed_query,
-)
+# Vector store and similarity manager imports are now conditional
+# They will be imported only when ENABLE_VECTOR_SIMILARITY is True
 from tool_call_manager import tool_call_manager
 
 # Enhanced imports for conversation management
@@ -604,11 +593,16 @@ class CmwAgent:
             # Vector store functionality is now handled by vector_store.py module
             # All Supabase operations are disabled by default
             # Initialize managers with the vector similarity flag
-            from vector_store import get_vector_store_manager
-            from similarity_manager import get_similarity_manager
-            self.vector_store_manager = get_vector_store_manager(ENABLE_VECTOR_SIMILARITY=self.ENABLE_VECTOR_SIMILARITY)
-            # Also initialize similarity manager for tool call manager
-            get_similarity_manager(enabled=self.ENABLE_VECTOR_SIMILARITY)
+            if self.ENABLE_VECTOR_SIMILARITY:
+                from vector_store import get_vector_store_manager
+                from similarity_manager import get_similarity_manager
+                self.vector_store_manager = get_vector_store_manager(enable_vector_similarity=True)
+                # Also initialize similarity manager for tool call manager
+                get_similarity_manager(enabled=True)
+            else:
+                # Create dummy managers when vector similarity is disabled
+                self.vector_store_manager = None
+                print("ℹ️ Vector similarity disabled - skipping vector store and similarity manager initialization")
 
             # Arrays for all initialized LLMs and tool-bound LLMs, in order (initialize before LLM setup loop)
             self.llms = []
@@ -1188,7 +1182,8 @@ class CmwAgent:
             'analyze_image': 2,
             'extract_text_from_image': 2,
             'exa_ai_helper': 1,
-            'web_search_deep_research_exa_ai': 1
+            'web_search_deep_research_exa_ai': 1,
+            'submit_intermediate_step': 10  # Limit intermediate steps to prevent excessive reasoning loops
         }
         tool_usage_count = {tool_name: 0 for tool_name in tool_usage_limits}
         
@@ -1227,7 +1222,7 @@ class CmwAgent:
             current_step_tool_results = []  # Reset for this step
             
             # Stream step start immediately
-            step_content = stream_now(f"\n📍 **Step {step+1}/{max_steps}**\n", 
+            step_content = stream_now(f"\n\n📍 **Step {step+1}/{max_steps}**\n", 
                       "step_start", {"step": step + 1, "max_steps": max_steps})
             if step_content and streaming_generator:
                 yield step_content
@@ -1264,7 +1259,7 @@ class CmwAgent:
             token_limit = self._get_token_limit(llm_type)
             
             # Stream LLM thinking immediately  
-            thinking_content = stream_now("🤖 **LLM is analyzing and planning...**\n", 
+            thinking_content = stream_now("\n🤖 **LLM is analyzing and planning...**\n", 
                       "llm_thinking", {"llm_type": llm_type})
             if thinking_content and streaming_generator:
                 yield thinking_content
@@ -1272,7 +1267,7 @@ class CmwAgent:
             try:
                 # Use streaming if supported - unified approach for LLM tokens
                 if streaming_generator and hasattr(llm, "stream") and callable(getattr(llm, "stream")):
-                    response_start = stream_now("💭 **LLM response:**\n", "llm_stream_start", {"streaming": True})
+                    response_start = stream_now("\n💭 **LLM response:**\n", "llm_stream_start", {"streaming": True})
                     if response_start and streaming_generator:
                         yield response_start
                     
@@ -1380,18 +1375,37 @@ class CmwAgent:
             # Check if we have new tool calls that are different from the last ones
             has_new_tool_calls = len(current_tool_calls) > 0
             has_different_tool_calls = False
-            if has_new_tool_calls and last_tool_call_signature:
+            has_intermediate_step = False
+            has_final_answer_tool = False
+            
+            if has_new_tool_calls:
                 # Check if any of the current tool calls are different from the last one
                 for tool_call in current_tool_calls:
                     tool_name = tool_call.get('name')
                     tool_args = tool_call.get('args', {})
                     current_signature = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
-                    if current_signature != last_tool_call_signature:
+                    
+                    # Check for intermediate step tool calls
+                    if tool_name == 'submit_intermediate_step':
+                        has_intermediate_step = True
+                    
+                    # Check for final answer tool calls
+                    if tool_name == 'submit_answer':
+                        has_final_answer_tool = True
+                    
+                    # Check if tool call is different from last one
+                    if last_tool_call_signature and current_signature != last_tool_call_signature:
                         has_different_tool_calls = True
                         break
             
+            # Progress detection logic:
+            # - New content is always progress
+            # - Different tool calls are progress
+            # - Intermediate steps are progress but don't count as much toward completion
+            # - Final answer tools are progress and indicate completion
             has_progress = (current_content != last_response_content or 
-                          (has_new_tool_calls and has_different_tool_calls))
+                          (has_new_tool_calls and has_different_tool_calls) or
+                          has_intermediate_step or has_final_answer_tool)
             
             # Check if we have tool results but no final answer yet
             has_tool_results = len(tool_results_history) > 0
@@ -1440,41 +1454,75 @@ class CmwAgent:
                 
             last_response_content = current_content
 
-        # Check for submit_answer tool call (modern structured approach)
+        # Check for submit_answer and submit_intermediate_step tool calls (modern structured approach)
         if hasattr(response, 'tool_calls') and response.tool_calls:
             for tool_call in response.tool_calls:
-                if tool_call.get('name') == 'submit_answer':
-                        print(f"[Tool Loop] Structured answer detected via submit_answer tool")
-                        # Track successful provider requests
-                        self._handle_provider_success(llm_type)
-                        
-                        # Execute the tool to get structured result and add to chat history
-                        tool_name = tool_call.get('name')
-                        tool_args = tool_call.get('args', {})
-                        
-                        # Execute the tool using helper method with call_id for tracing
-                        tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
-                        
-                        # Store the raw result for this step
-                        current_step_tool_results.append(tool_result)
-                        tool_results_history.append(tool_result)
-                        total_tool_calls += 1  # Increment total tool call counter
-                        
-                        # Report tool result
-                        self._print_tool_result(tool_name, tool_result)
-                        
-                        # Add tool result to messages for chat history continuity
-                        messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
-                        
-                        # Update the stored conversation history
-                        self._update_conversation_history(messages)
-                        
-                        # Extract the answer for immediate display
-                        answer = self._extract_main_text_from_tool_result(tool_result)
-                        if streaming_generator:
-                            # Use the streaming generator instead of direct yield
-                            streaming_generator(answer)
-                        return response
+                tool_name = tool_call.get('name')
+                
+                if tool_name == 'submit_answer':
+                    print(f"[Tool Loop] Structured answer detected via submit_answer tool")
+                    # Track successful provider requests
+                    self._handle_provider_success(llm_type)
+                    
+                    # Execute the tool to get structured result and add to chat history
+                    tool_args = tool_call.get('args', {})
+                    
+                    # Execute the tool using helper method with call_id for tracing
+                    tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
+                    
+                    # Store the raw result for this step
+                    current_step_tool_results.append(tool_result)
+                    tool_results_history.append(tool_result)
+                    total_tool_calls += 1  # Increment total tool call counter
+                    
+                    # Report tool result
+                    self._print_tool_result(tool_name, tool_result)
+                    
+                    # Add tool result to messages for chat history continuity
+                    messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
+                    
+                    # Update the stored conversation history
+                    self._update_conversation_history(messages)
+                    
+                    # Extract the answer for immediate display
+                    answer = self._extract_main_text_from_tool_result(tool_result)
+                    if streaming_generator:
+                        # Use the streaming generator instead of direct yield
+                        streaming_generator(answer)
+                    return response
+                
+                elif tool_name == 'submit_intermediate_step':
+                    print(f"[Tool Loop] Intermediate step detected via submit_intermediate_step tool")
+                    
+                    # Execute the tool to get structured result and add to chat history
+                    tool_args = tool_call.get('args', {})
+                    
+                    # Execute the tool using helper method with call_id for tracing
+                    tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
+                    
+                    # Store the raw result for this step
+                    current_step_tool_results.append(tool_result)
+                    tool_results_history.append(tool_result)
+                    total_tool_calls += 1  # Increment total tool call counter
+                    
+                    # Report tool result
+                    self._print_tool_result(tool_name, tool_result)
+                    
+                    # Add tool result to messages for chat history continuity
+                    messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
+                    
+                    # Update the stored conversation history
+                    self._update_conversation_history(messages)
+                    
+                    # Extract the step description for display
+                    step_description = self._extract_main_text_from_tool_result(tool_result)
+                    if streaming_generator:
+                        # Use the streaming generator instead of direct yield
+                        streaming_generator(step_description)
+                    
+                    # IMPORTANT: Don't return here - continue the loop for intermediate steps
+                    # Only return for submit_answer which indicates completion
+                    continue
             
             # If response has content and no tool calls, return (legacy approach)
             if hasattr(response, 'content') and response.content and not getattr(response, 'tool_calls', None):
@@ -1490,7 +1538,7 @@ class CmwAgent:
                 print(f"[Tool Loop] Detected {len(tool_calls)} tool call(s)")
                 
                 # Stream tool calls detected immediately
-                tool_calls_content = stream_now(f"🔧 **Detected {len(tool_calls)} tool call(s)**\n", 
+                tool_calls_content = stream_now(f"\n🔧 **Detected {len(tool_calls)} tool call(s)**\n", 
                           "tool_calls_detected", {"tool_count": len(tool_calls)})
                 if tool_calls_content and streaming_generator:
                     yield tool_calls_content
@@ -1515,9 +1563,11 @@ class CmwAgent:
                     tool_name = tool_call.get('name')
                     tool_args = tool_call.get('args', {})
                     
-                    # submit_answer is now handled earlier in the flow, but if it somehow gets here, process it normally
+                    # submit_answer and submit_intermediate_step are now handled earlier in the flow, but if they somehow get here, process them normally
                     if tool_name == 'submit_answer':
                         print(f"[Tool Loop] submit_answer detected in regular flow - processing normally")
+                    elif tool_name == 'submit_intermediate_step':
+                        print(f"[Tool Loop] submit_intermediate_step detected in regular flow - processing normally")
                     
                     # Check if tool usage limit exceeded FIRST (most restrictive check)
                     if tool_name in tool_usage_count and tool_usage_count[tool_name] >= tool_usage_limits.get(tool_name, tool_usage_limits['default']):
@@ -1591,7 +1641,7 @@ class CmwAgent:
                         print(f"[Tool Loop] submit_answer reached execution - processing normally")
                     
                     # Stream tool start immediately
-                    tool_start_content = stream_now(f"🔧 **Executing {tool_name}**\n", 
+                    tool_start_content = stream_now(f"\n🔧 **Executing {tool_name}**\n", 
                               "tool_start", {"tool_name": tool_name, "tool_args": tool_args})
                     if tool_start_content and streaming_generator:
                         yield tool_start_content
@@ -1614,7 +1664,7 @@ class CmwAgent:
                         # For structured results, extract the main text
                         display_result = self._extract_main_text_from_tool_result(tool_result)
                         display_result = display_result[:300] + "..." if len(display_result) > 300 else display_result
-                    tool_end_content = stream_now(f"✅ **{tool_name} completed**\n```\n{display_result}\n```\n", 
+                    tool_end_content = stream_now(f"\n✅ **{tool_name} completed**\n```\n{display_result}\n```\n", 
                               "tool_end", {"tool_name": tool_name, "tool_result": tool_result})
                     if tool_end_content and streaming_generator:
                         yield tool_end_content
@@ -1630,7 +1680,9 @@ class CmwAgent:
                     messages = self._convert_messages_for_mistral(messages)
                     self._mistral_converted_this_step = True
                 
-                return response  # Next LLM call
+                # Make new LLM call with tool results instead of returning old response
+                # This will be handled by the next iteration of the loop
+                pass
             # Gemini (and some LLMs) may use 'function_call' instead of 'tool_calls'
             function_call = getattr(response, 'function_call', None)
             if function_call:
@@ -1698,7 +1750,9 @@ class CmwAgent:
                     messages = self._convert_messages_for_mistral(messages)
                     self._mistral_converted_this_step = True
                 
-                return response
+                # Make new LLM call with tool results instead of returning old response
+                # This will be handled by the next iteration of the loop
+                pass
             if hasattr(response, 'content') and response.content:
                 return response
             print(f"[Tool Loop] No tool calls or final answer detected. Exiting loop.")
@@ -1725,7 +1779,7 @@ class CmwAgent:
         if streaming_generator:
             final_content = getattr(response, 'content', str(response)) if response else ""
             if final_content:
-                final_answer_content = stream_now(f"🏁 **Final answer:**\n{final_content}\n", "final_answer")
+                final_answer_content = stream_now(f"\n\n🏁 **Final answer:**\n{final_content}\n", "final_answer")
                 if final_answer_content:
                     yield final_answer_content
                     
@@ -2144,6 +2198,10 @@ class CmwAgent:
         Returns:
             str or None: The reference answer if found, else None.
         """
+        if not self.ENABLE_VECTOR_SIMILARITY or self.vector_store_manager is None:
+            return None
+        
+        from vector_store import get_reference_answer
         return get_reference_answer(question)
 
     def _format_messages(self, question: str, reference: Optional[str] = None, chat_history: Optional[List[Dict[str, Any]]] = None) -> List[Any]:
@@ -2469,17 +2527,21 @@ class CmwAgent:
         Returns:
             float: Cosine similarity score (0.0 to 1.0)
         """
-        if not self.ENABLE_VECTOR_SIMILARITY:
+        if not self.ENABLE_VECTOR_SIMILARITY or self.vector_store_manager is None:
             return 1.0
-        return vector_store_manager.calculate_cosine_similarity(embedding1, embedding2)
+        
+        from similarity_manager import calculate_cosine_similarity
+        return calculate_cosine_similarity(embedding1, embedding2)
 
     def _vector_answers_match(self, answer: str, reference: str):
         """
         Return (bool, similarity) where bool is if similarity >= threshold, and similarity is the float value.
         If vector similarity is disabled, returns (True, 1.0) to always consider answers as matching.
         """
-        if not self.ENABLE_VECTOR_SIMILARITY:
+        if not self.ENABLE_VECTOR_SIMILARITY or self.vector_store_manager is None:
             return True, 1.0
+        
+        from similarity_manager import vector_answers_match
         return vector_answers_match(answer, reference, self.similarity_threshold)
 
     def get_llm_stats(self) -> dict:
@@ -3305,12 +3367,16 @@ class CmwAgent:
                     tool_names.add(name_val)
         
         # Add retriever tool from vector store if available
-        retriever_tool = get_retriever_tool()
-        if retriever_tool:
-            tool_list.append(retriever_tool)
-            print("✅ Added retriever tool from vector store")
+        if self.ENABLE_VECTOR_SIMILARITY and self.vector_store_manager is not None:
+            from vector_store import get_retriever_tool
+            retriever_tool = get_retriever_tool()
+            if retriever_tool:
+                tool_list.append(retriever_tool)
+                print("✅ Added retriever tool from vector store")
+            else:
+                print("ℹ️ No retriever tool available (vector store disabled)")
         else:
-            print("ℹ️ No retriever tool available (vector store disabled)")
+            print("ℹ️ No retriever tool available (vector similarity disabled)")
         
         # Filter out any tools that don't have proper tool attributes
         final_tool_list = []
