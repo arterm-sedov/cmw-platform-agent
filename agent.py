@@ -54,13 +54,19 @@ from dataset_manager import dataset_manager
 from tools import *
 from utils import TRACES_DIR, ensure_valid_answer
 from vector_store import (
-    get_embeddings,
     get_reference_answer,
     get_retriever_tool,
     get_vector_store,
-    vector_answers_match,
     vector_store_manager,
 )
+from similarity_manager import (
+    similarity_manager,
+    get_embeddings,
+    vector_answers_match,
+    calculate_cosine_similarity,
+    embed_query,
+)
+from tool_call_manager import tool_call_manager
 
 # Structured output models for modern response handling
 class FinalAnswer(BaseModel):
@@ -1097,7 +1103,7 @@ class CmwAgent:
 
         # Adaptive step limits based on LLM type and progress
         base_max_steps = {
-            "gemini": 25,    # More steps for Gemini due to better reasoning
+            "gemini": 10,    # Reduced from 25 to prevent excessive repetition
             "groq": 5,       # Reduced from 10 to 5 to prevent infinite loops
             "huggingface": 20,  # Conservative for HuggingFace
             "unknown": 20
@@ -3321,27 +3327,27 @@ class CmwAgent:
     def _is_duplicate_tool_call(self, tool_name: str, tool_args: dict, called_tools: list) -> bool:
         """
         Check if a tool call is a duplicate based on tool name and vector similarity of arguments.
-        
+
         Args:
             tool_name: Name of the tool
             tool_args: Arguments for the tool
             called_tools: List of previously called tool dictionaries
-            
+
         Returns:
             bool: True if this is a duplicate tool call
         """
-        return vector_store_manager.is_duplicate_tool_call(tool_name, tool_args, called_tools, self.tool_calls_similarity_threshold)
+        return tool_call_manager.is_duplicate_tool_call(tool_name, tool_args, called_tools, self.tool_calls_similarity_threshold)
 
     def _add_tool_call_to_history(self, tool_name: str, tool_args: dict, called_tools: list) -> None:
         """
         Add a tool call to the history of called tools.
-        
+
         Args:
             tool_name: Name of the tool
             tool_args: Arguments for the tool
             called_tools: List of previously called tool dictionaries
         """
-        vector_store_manager.add_tool_call_to_history(tool_name, tool_args, called_tools)
+        tool_call_manager.add_tool_call_to_history(tool_name, tool_args, called_tools)
 
     def _trim_for_print(self, obj, max_len=None):
         """
