@@ -9,3 +9,6 @@ When running commands in the terminal:
 1. Understand what is the default terminal in Cursor and use it
 2. Initialize the venv using appropriate commands for Powershell or WSL depending on the terminal
 3. Then execute the commands
+
+Before running any Python code activate .venv for WSL/Lunux or Windows.
+Do not try to execute Python without active venv.
