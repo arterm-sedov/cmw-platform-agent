@@ -676,7 +676,7 @@ class CmwAgent:
                             llm_with_tools = llm_instance.bind_tools(safe_tools)
                         
                         # Test tool calling directly since our agent only works with tools
-                        tools_ok, tools_error = self._test_llm_tool_calling(f"{llm_name} (model: {model_id})", llm_type, llm_with_tools)
+                        tools_ok, tools_error, test_answer = self._test_llm_tool_calling(f"{llm_name} (model: {model_id})", llm_type, llm_with_tools)
                         basic_ok = tools_ok  # If tools work, basic functionality works too
                         
                         # Store result for summary
@@ -687,7 +687,8 @@ class CmwAgent:
                             "plain_ok": basic_ok,
                             "tools_ok": tools_ok,
                             "error_plain": tools_error if not basic_ok else None,
-                            "error_tools": tools_error
+                            "error_tools": tools_error,
+                            "test_answer": test_answer
                         })
                         
                         # Check force_tools flag - if True, use even if tools test failed (but only if basic works)
@@ -740,7 +741,8 @@ class CmwAgent:
                             "error_type": error_info['error_type'],
                             "suggested_action": error_info['suggested_action'],
                             "is_temporary": error_info['is_temporary'],
-                            "requires_config_change": error_info['requires_config_change']
+                            "requires_config_change": error_info['requires_config_change'],
+                            "test_answer": ""
                         })
                         self.llm_instances[llm_type] = None
                         self.llm_instances_with_tools[llm_type] = None
@@ -2314,11 +2316,13 @@ class CmwAgent:
         plain_w = max(5, len('Plain'))
         tools_w = max(5, len('Tools (forced)'))
         error_w = max(20, len('Error (tools)'))
+        answer_w = max(30, max(len(r.get('test_answer', '')[:30]) for r in self.llm_init_results) + 2)
         header = (
             f"{'Provider':<{provider_w}}| "
             f"{'Model':<{model_w}}| "
             f"{'Plain':<{plain_w}}| "
             f"{'Tools':<{tools_w}}| "
+            f"{'Test Answer':<{answer_w}}| "
             f"{'Error (tools)':<{error_w}}"
         )
         lines = [
@@ -2351,7 +2355,15 @@ class CmwAgent:
                     error_tools = '400'
                 else:
                     error_tools = r['error_tools'][:18]
-            lines.append(f"{r['provider']:<{provider_w}}| {r['model']:<{model_w}}| {plain:<{plain_w}}| {tools:<{tools_w}}| {error_tools:<{error_w}}")
+            
+            # Format test answer - truncate if too long
+            test_answer = r.get('test_answer', '')
+            if test_answer:
+                test_answer_display = test_answer[:30] + "..." if len(test_answer) > 30 else test_answer
+            else:
+                test_answer_display = "N/A"
+            
+            lines.append(f"{r['provider']:<{provider_w}}| {r['model']:<{model_w}}| {plain:<{plain_w}}| {tools:<{tools_w}}| {test_answer_display:<{answer_w}}| {error_tools:<{error_w}}")
         lines.append("=" * len(header))
         return "\n".join(lines) if as_str else lines
 
@@ -2382,7 +2394,8 @@ class CmwAgent:
                 "tools_ok": r['tools_ok'],
                 "force_tools": model_force_tools,
                 "error_tools": r.get('error_tools', ''),
-                "error_plain": r.get('error_plain', '')
+                "error_plain": r.get('error_plain', ''),
+                "test_answer": r.get('test_answer', '')
             }
             summary_data["results"].append(result_entry)
         
@@ -3427,7 +3440,7 @@ class CmwAgent:
         
         return response_info
 
-    def _test_llm_tool_calling(self, llm_name: str, llm_type: str, llm_instance) -> tuple[bool, str]:
+    def _test_llm_tool_calling(self, llm_name: str, llm_type: str, llm_instance) -> tuple[bool, str, str]:
         """
         Test LLM tool calling capabilities by interpreting actual API responses.
         This is the primary test since our agent only works with tools.
@@ -3438,7 +3451,7 @@ class CmwAgent:
             llm_instance: The LLM instance with tools bound
             
         Returns:
-            tuple: (success: bool, error_message: str)
+            tuple: (success: bool, error_message: str, test_answer: str)
         """
         try:
             # Use a math question that requires tools - similar to the quick action
@@ -3479,9 +3492,9 @@ class CmwAgent:
                 if llm_type == "gigachat" and "Internal Server Error" in error_msg:
                     print(f"   ℹ️ GigaChat Internal Server Error - check your API configuration")
                     print(f"   ℹ️ Verify GIGACHAT_API_KEY, GIGACHAT_SCOPE, and base URL settings")
-                    return False, error_msg  # Don't accept as text-only mode
+                    return False, error_msg, ""  # Don't accept as text-only mode
                 
-                return False, error_msg
+                return False, error_msg, ""
             
             # Check for tool calling capabilities
             has_tool_calls = 'tool_calling' in response_info['capabilities']
@@ -3497,24 +3510,24 @@ class CmwAgent:
                 print(f"   Capabilities: {', '.join(response_info['capabilities'])}")
                 if not has_content:
                     print(f"   Note: LLM made tool calls but returned empty content (this is acceptable)")
-                return True, None
+                return True, None, response_info['content']
             
             # Fallback: Check if LLM calculated correctly without tools
             elif has_content and ("352" in response_info['content'] or "15 * 23 + 7" in response_info['content']):
                 print(f"⚠️ {llm_name} calculated correctly without tools")
                 print(f"   Note: LLM may not support tool calling but can perform calculations")
-                return True, None
+                return True, None, response_info['content']
             
             # Failure cases
             elif has_content:
                 error_msg = f"{llm_name} returned content but wrong answer (expected: 352, got: {response_info['content'][:50]}...)"
                 print(f"❌ {error_msg}")
                 print(f"   Expected answer: 352 (15 * 23 + 7)")
-                return False, error_msg
+                return False, error_msg, response_info['content']
             else:
                 error_msg = f"{llm_name} returned no tool calls and no content"
                 print(f"❌ {error_msg}")
-                return False, error_msg
+                return False, error_msg, ""
                 
         except Exception as e:
             # Interpret the actual error
@@ -3526,9 +3539,9 @@ class CmwAgent:
             if llm_type == "gigachat" and "Internal Server Error" in error_msg:
                 print(f"   ℹ️ GigaChat Internal Server Error - check your API configuration")
                 print(f"   ℹ️ Verify GIGACHAT_API_KEY, GIGACHAT_SCOPE, and base URL settings")
-                return False, error_msg  # Don't accept as text-only mode
+                return False, error_msg, ""  # Don't accept as text-only mode
             
-            return False, error_msg
+            return False, error_msg, ""
 
     def _interpret_llm_error(self, error: Exception, llm_name: str, llm_type: str) -> dict:
         """
