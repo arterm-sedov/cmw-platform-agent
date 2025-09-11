@@ -107,6 +107,22 @@ The agent includes 20+ specialized tools:
 - **Tool Usage**: 2-8 tool calls per request on average
 - **Fallback Rate**: 20-40% of requests require human clarification
 
+## 🏗️ Modular Architecture
+
+The codebase follows a clean modular design with clear separation of concerns:
+
+### Core Modules
+- **`similarity_manager.py`**: Handles vector similarity operations and text matching with optional local embeddings
+- **`tool_call_manager.py`**: Manages tool call deduplication and history tracking
+- **`vector_store.py`**: Optional Supabase vector storage operations
+- **`agent.py`**: Main orchestration logic using the above modules
+
+### Key Benefits
+- **No External Dependencies**: Core features work without Supabase or sentence-transformers
+- **Graceful Degradation**: Falls back to basic text similarity when embeddings unavailable
+- **Clean Separation**: Each module has a single responsibility with no circular dependencies
+- **Backward Compatibility**: Existing functionality remains unchanged
+
 ## Dataset Structure
 
 The output trace facilitates:
