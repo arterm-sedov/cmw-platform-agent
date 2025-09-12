@@ -192,8 +192,13 @@ class NextGenApp:
                 elif isinstance(msg, tuple):
                     tuple_history.append(msg)
             
-            # Use the streaming chat interface
-            updated_tuple_history, _ = await self.chat_interface.chat_with_agent(message, tuple_history, self.agent)
+            # Use the streaming chat interface with enhanced error handling
+            try:
+                updated_tuple_history, _ = await self.chat_interface.chat_with_agent(message, tuple_history, self.agent)
+            except Exception as stream_error:
+                self.debug_streamer.warning(f"Streaming error handled: {str(stream_error)}", LogCategory.STREAM)
+                # Return a safe fallback response
+                updated_tuple_history = tuple_history + [(message, f"⚠️ Streaming error occurred: {str(stream_error)}")]
             
             # Convert back to dict format for Gradio
             dict_history = []
