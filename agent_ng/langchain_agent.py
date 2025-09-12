@@ -263,7 +263,7 @@ class CmwAgent:
                     not isinstance(obj, type) and  # Exclude classes
                     hasattr(obj, '__module__') and  # Must have __module__ attribute
                     (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
-                    name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step"]):  # Exclude specific classes and internal tools
+                    name not in ["submit_answer", "submit_intermediate_step"]):  # Exclude specific classes and internal tools
                     
                     # Check if it's a proper tool object (has the tool attributes)
                     if hasattr(obj, 'name') and hasattr(obj, 'description'):
