@@ -306,8 +306,7 @@ class NextGenApp:
                                 show_label=True,
                                 container=True,
                                 show_copy_button=True,
-                                type="messages",  # Enable metadata support
-                                bubble_full_width=False
+                                type="messages"  # Enable metadata support
                             )
                             
                             with gr.Row():
@@ -504,15 +503,27 @@ class NextGenApp:
         return demo
 
 
+# Global demo variable for Gradio reload functionality
+demo = None
+
+def get_demo():
+    """Get or create the demo interface"""
+    global demo
+    if demo is None:
+        app = NextGenApp()
+        demo = app.create_interface()
+    return demo
+
+# Initialize demo for Gradio reload functionality
+# This ensures demo is available for Gradio's reload mechanism
+demo = get_demo()
+
 def main():
     """Main function to run the application"""
     print("🚀 Starting Next-Gen LLM Agent App...")
     
-    # Create the app
-    app = NextGenApp()
-    
-    # Create and launch the interface
-    demo = app.create_interface()
+    # Get the demo interface
+    demo = get_demo()
     
     print("🌐 Launching Gradio interface...")
     demo.launch(
