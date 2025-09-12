@@ -706,8 +706,9 @@ class LLMManager:
                 if name in ["CmwAgent", "CodeInterpreter"]:
                     continue
                 
-                # For now, only include simple math tools to avoid JsonValue issues
-                if name in ["multiply", "add", "subtract", "divide", "modulus", "power", "square_root"]:
+                # Include math tools and answer submission tools
+                if name in ["multiply", "add", "subtract", "divide", "modulus", "power", "square_root", 
+                           "submit_answer", "submit_intermediate_step"]:
                     if hasattr(obj, 'name') and hasattr(obj, 'description') and hasattr(obj, 'args_schema'):
                         tool_list.append(obj)
             
