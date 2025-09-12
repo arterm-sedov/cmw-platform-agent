@@ -8,7 +8,7 @@ import sys
 import asyncio
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agent_ng.agent_ng import NextGenAgent
+from agent_ng.langchain_agent import LangChainAgent as NextGenAgent
 
 async def test_single_provider():
     """Test that only one provider is initialized"""
