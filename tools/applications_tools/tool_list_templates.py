@@ -2,8 +2,8 @@ from typing import Any, Dict, List, Optional, Literal
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.v1.types import NoneBytes
-import tools.requests_ as requests_
-from tools.models import AttributeResult
+from .. import requests_ as requests_
+from ..models import AttributeResult
 
 ATTRIBUTE_ENDPOINT = "webapi/"
 
@@ -61,11 +61,11 @@ def list_templates(
 
     try:
         if template_type == "record":
-            result = tools.requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/RecordTemplate/List/{application_system_name}")
+            result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/RecordTemplate/List/{application_system_name}")
         elif template_type == "process":
-            result = tools.requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/ProcessTemplate/List/{application_system_name}")
+            result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/ProcessTemplate/List/{application_system_name}")
         elif template_type == "account":
-            result = tools.requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/AccountTemplate/List/{application_system_name}")
+            result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/AccountTemplate/List/{application_system_name}")
         else:
             result = {
                 "success": False,

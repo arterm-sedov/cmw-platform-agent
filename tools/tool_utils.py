@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional, Literal
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
-import tools.requests_ as requests_
+from . import requests_ as requests_
 from tools.models import (
     AttributeResult, 
     CommonAttributeFields, 

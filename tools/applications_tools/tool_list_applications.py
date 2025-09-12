@@ -2,8 +2,8 @@ from typing import Any, Dict, List, Optional, Literal
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.v1.types import NoneBytes
-import tools.requests_ as requests_
-from tools.models import AttributeResult
+from .. import requests_ as requests_
+from ..models import AttributeResult
 
 ATTRIBUTE_ENDPOINT = "webapi/Solution"
 
@@ -22,7 +22,7 @@ def list_applications() -> Dict[str, Any]:
         }
     """
 
-    result = tools.requests_._get_request(f"{ATTRIBUTE_ENDPOINT}")
+    result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}")
 
     # Check if the request was successful and has the expected structure
     if not result.get('success', False):
