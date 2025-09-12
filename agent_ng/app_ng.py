@@ -325,7 +325,7 @@ class NextGenApp:
 
         with gr.Blocks(
             css_paths=[css_file_path],
-            title="Analyst Copilot",
+            title="Comindware Analyst Copilot",
             theme=gr.themes.Soft()
         ) as demo:
             
