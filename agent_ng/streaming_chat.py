@@ -87,18 +87,31 @@ class StreamingChatInterface:
             # Start thinking process
             await self._start_thinking_process(message)
             
-            # Stream the response
+            # Stream the response with timeout protection
+            timeout_seconds = 60  # 60 second timeout
+            stream_start = time.time()
+            
             async for event in self._stream_agent_response(message, history, agent):
-                if event["type"] == "thinking":
-                    await self._handle_thinking_event(event, working_history)
-                elif event["type"] == "tool_use":
-                    await self._handle_tool_use_event(event, working_history)
-                elif event["type"] == "content":
-                    await self._handle_content_event(event, working_history)
-                elif event["type"] == "error":
-                    await self._handle_error_event(event, working_history)
+                # Check for timeout
+                if time.time() - stream_start > timeout_seconds:
+                    self.debug_streamer.warning("Streaming timeout reached", LogCategory.STREAM)
+                    break
                 
-                yield working_history, ""
+                try:
+                    if event["type"] == "thinking":
+                        await self._handle_thinking_event(event, working_history)
+                    elif event["type"] == "tool_use":
+                        await self._handle_tool_use_event(event, working_history)
+                    elif event["type"] == "content":
+                        await self._handle_content_event(event, working_history)
+                    elif event["type"] == "error":
+                        await self._handle_error_event(event, working_history)
+                    
+                    yield working_history, ""
+                except Exception as stream_error:
+                    self.debug_streamer.warning(f"Stream event error: {str(stream_error)}", LogCategory.STREAM)
+                    # Continue processing other events
+                    continue
             
             # Complete the response
             await self._complete_response(working_history)
@@ -300,12 +313,18 @@ class GradioChatInterface:
             Updated history and empty message
         """
         try:
-            # Stream the response
+            # Stream the response with proper error handling
+            updated_history = history
             async for updated_history, _ in self.streaming_chat.stream_chat_response(
                 message, history, agent
             ):
                 # Yield intermediate results for real-time updates
-                pass
+                # This helps prevent session management issues
+                try:
+                    pass
+                except Exception as stream_error:
+                    self.debug_streamer.warning(f"Streaming warning: {str(stream_error)}", LogCategory.STREAM)
+                    break
             
             return updated_history, ""
             
