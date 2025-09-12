@@ -373,7 +373,7 @@ class NextGenApp:
                                 show_copy_button=True,
                                 type="messages",
                                 elem_id="chatbot-main",
-                                elem_classes=["chatbot-label"]
+                                elem_classes=["chatbot-card"]
                             )
                             
                             with gr.Row():
@@ -384,7 +384,7 @@ class NextGenApp:
                                     scale=4,
                                     max_lines=4,
                                     elem_id="message-input",
-                                    elem_classes=["message-label"]
+                                    elem_classes=["message-card"]
                                 )
                                 with gr.Column():
                                     send_btn = gr.Button("Send", variant="primary", scale=1, elem_classes=["cmw-button"])

@@ -437,11 +437,15 @@ body[data-theme='dark'] .gradio-container .cmw-button:hover,
 .chat-hints,
 .model-card,
 .quick-actions-card,
-.sidebar-card {
-    background: #f8f9fa;
-    border-radius: 12px;
-    padding: 1rem;
-    margin: 1rem 0;
+.sidebar-card,
+.message-card,
+.chatbot-card {
+    /* margin: var(--cmw-space-4) 0 !important; */
+    border: 1px solid var(--cmw-border) !important;
+    border-radius: var(--cmw-radius-md) !important;
+    background: var(--cmw-surface) !important;
+    padding: var(--cmw-space-4) !important;
+    gap: var(--cmw-space-3) !important;
 }
 
 .chat-hints {
@@ -449,3 +453,21 @@ body[data-theme='dark'] .gradio-container .cmw-button:hover,
     margin: 0.20rem 0 !important;
 }
 
+.chatbot-card label,
+span[data-testid="block-info"]
+{
+    color: var(--cmw-text-strong) !important;
+    font-weight: 500 !important;
+    font-size: var(--cmw-font-size) !important;
+    font-family: var(--cmw-font-family) !important;
+    background: var(--theme-colors__highlight) !important;
+}
+
+.user {
+    background: var(--theme-colors__highlight) !important;
+    border-color: var(--theme-colors__primary) !important;
+}
+
+.icon-button-wrapper > button {
+    color: var(--theme-colors__primary) !important; 
+}
