@@ -378,36 +378,6 @@ body {
     background-color: var(--cmw-white) !important;
 }
 
-/* Dark theme support */
-html[data-theme='dark'] .gradio-container,
-body[data-theme='dark'] .gradio-container,
-.dark.gradio-container {
-    --cmw-text: #cfd6e4;
-    --cmw-text-strong: #eef3fb;
-    --cmw-surface: #151a21;
-    --cmw-surface-alt: #0f141a;
-    --cmw-main: #151a21;
-    --cmw-border: #2a3340;
-    --cmw-border-strong: #3a4554;
-    --cmw-highlight: rgba(5, 117, 189, 0.18);
-    --cmw-highlight-text: #d8e6f5;
-}
-
-/* Keep primary-filled active buttons readable in dark */
-html[data-theme='dark'] .gradio-container .cmw-button,
-body[data-theme='dark'] .gradio-container .cmw-button,
-.dark .gradio-container .cmw-button {
-    color: var(--cmw-primary) !important;
-}
-
-html[data-theme='dark'] .gradio-container .cmw-button:hover,
-body[data-theme='dark'] .gradio-container .cmw-button:hover,
-.dark .gradio-container .cmw-button:hover {
-    border-color: var(--theme-colors__primary) !important;
-    background: var(--theme-colors__highlight) !important;
-    color: var(--theme-colors__primary_strong) !important;
-}
-
 .status-card {
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     border-radius: 12px;
@@ -470,4 +440,831 @@ span[data-testid="block-info"]
 
 .icon-button-wrapper > button {
     color: var(--theme-colors__primary) !important; 
+}
+
+/* Dark theme support */
+html[data-theme='dark'] .gradio-container,
+body[data-theme='dark'] .gradio-container,
+.dark.gradio-container {
+    --cmw-text: #cfd6e4;
+    --cmw-text-strong: #eef3fb;
+    --cmw-surface: #151a21;
+    --cmw-surface-alt: #0f141a;
+    --cmw-main: #151a21;
+    --cmw-border: #2a3340;
+    --cmw-border-strong: #3a4554;
+    --cmw-highlight: rgba(5, 117, 189, 0.18);
+    --cmw-highlight-text: #d8e6f5;
+}
+
+/* Keep primary-filled active buttons readable in dark */
+html[data-theme='dark'] .gradio-container .cmw-button,
+body[data-theme='dark'] .gradio-container .cmw-button,
+.dark .gradio-container .cmw-button {
+    color: var(--cmw-primary) !important;
+}
+
+html[data-theme='dark'] .gradio-container .cmw-button:hover,
+body[data-theme='dark'] .gradio-container .cmw-button:hover,
+.dark .gradio-container .cmw-button:hover {
+    border-color: var(--theme-colors__primary) !important;
+    background: var(--theme-colors__highlight) !important;
+    color: var(--theme-colors__primary_strong) !important;
+}
+
+    /* Dark theme support - Comprehensive coverage for all Gradio dark mode patterns */
+html[data-theme='dark'] .gradio-container,
+body[data-theme='dark'] .gradio-container,
+.dark.gradio-container,
+.gradio-container.dark,
+.dark .gradio-container,
+[data-theme="dark"] .gradio-container,
+.dark-mode .gradio-container,
+.dark .gradio-container,
+.gradio-container[data-theme="dark"],
+body.dark .gradio-container,
+html.dark .gradio-container {
+    /* Dark theme base colors */
+    --cmw-dark-base: #1a2029;
+    --cmw-dark-gradient-start: #1a2029;
+    --cmw-dark-gradient-end: #2a3340;
+    --cmw-dark-gradient: linear-gradient(135deg, var(--cmw-dark-gradient-start) 0%, var(--cmw-dark-gradient-end) 100%);
+    
+    --cmw-text: #cfd6e4;
+    --cmw-text-strong: #eef3fb;
+    --cmw-text-fade: #a8b3c4;
+    --cmw-text-fadest: #8a95a6;
+    --cmw-surface: #151a21;
+    --cmw-surface-alt: #0f141a;
+    --cmw-main: #151a21;
+    --cmw-main-fade: var(--cmw-dark-base);
+    --cmw-main-fadest: #1f252e;
+    --cmw-main-strong: #2a3340;
+    --cmw-main-strongest: #3a4554;
+    --cmw-border: #2a3340;
+    --cmw-border-strong: #3a4554;
+    --cmw-highlight: rgba(5, 117, 189, 0.18);
+    --cmw-highlight-text: #d8e6f5;
+    --cmw-secondary: var(--cmw-dark-base);
+    --cmw-secondary-fade: #1f252e;
+    --cmw-secondary-fadest: #242a33;
+    --cmw-secondary-strong: #2a3340;
+    --cmw-secondary-strongest: #3a4554;
+    --cmw-secondary-text: #a8b3c4;
+}
+
+/* Dark theme for headings - Comprehensive selector coverage */
+html[data-theme='dark'] .gradio-container h1,
+html[data-theme='dark'] .gradio-container h2,
+html[data-theme='dark'] .gradio-container h3,
+html[data-theme='dark'] .gradio-container h4,
+html[data-theme='dark'] .gradio-container h5,
+html[data-theme='dark'] .gradio-container h6,
+body[data-theme='dark'] .gradio-container h1,
+body[data-theme='dark'] .gradio-container h2,
+body[data-theme='dark'] .gradio-container h3,
+body[data-theme='dark'] .gradio-container h4,
+body[data-theme='dark'] .gradio-container h5,
+body[data-theme='dark'] .gradio-container h6,
+.dark .gradio-container h1,
+.dark .gradio-container h2,
+.dark .gradio-container h3,
+.dark .gradio-container h4,
+.dark .gradio-container h5,
+.dark .gradio-container h6,
+.gradio-container.dark h1,
+.gradio-container.dark h2,
+.gradio-container.dark h3,
+.gradio-container.dark h4,
+.gradio-container.dark h5,
+.gradio-container.dark h6,
+[data-theme="dark"] .gradio-container h1,
+[data-theme="dark"] .gradio-container h2,
+[data-theme="dark"] .gradio-container h3,
+[data-theme="dark"] .gradio-container h4,
+[data-theme="dark"] .gradio-container h5,
+[data-theme="dark"] .gradio-container h6,
+.dark-mode .gradio-container h1,
+.dark-mode .gradio-container h2,
+.dark-mode .gradio-container h3,
+.dark-mode .gradio-container h4,
+.dark-mode .gradio-container h5,
+.dark-mode .gradio-container h6,
+body.dark .gradio-container h1,
+body.dark .gradio-container h2,
+body.dark .gradio-container h3,
+body.dark .gradio-container h4,
+body.dark .gradio-container h5,
+body.dark .gradio-container h6,
+html.dark .gradio-container h1,
+html.dark .gradio-container h2,
+html.dark .gradio-container h3,
+html.dark .gradio-container h4,
+html.dark .gradio-container h5,
+html.dark .gradio-container h6 {
+    color: var(--cmw-text-strong) !important;
+}
+
+/* Dark theme for hero title */
+html[data-theme='dark'] .gradio-container.hero-title h1,
+body[data-theme='dark'] .gradio-container.hero-title h1,
+.dark .gradio-container.hero-title h1 {
+    color: var(--cmw-primary) !important;
+    font-weight: 500 !important;
+}
+
+/* Dark theme for hero title container */
+html[data-theme='dark'] .gradio-container.hero-title,
+body[data-theme='dark'] .gradio-container.hero-title,
+.dark .gradio-container.hero-title {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Dark theme for logo image */
+html[data-theme='dark'] .gradio-container.hero-title img,
+body[data-theme='dark'] .gradio-container.hero-title img,
+.dark .gradio-container.hero-title img {
+    filter: var(--cmw-logo-shadow) !important;
+    opacity: 1 !important;
+}
+
+/* Dark theme for buttons */
+html[data-theme='dark'] .gradio-container .cmw-button,
+body[data-theme='dark'] .gradio-container .cmw-button,
+.dark .gradio-container .cmw-button {
+    background-color: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+html[data-theme='dark'] .gradio-container .cmw-button.primary,
+html[data-theme='dark'] .gradio-container .cmw-button.secondary,
+body[data-theme='dark'] .gradio-container .cmw-button.primary,
+body[data-theme='dark'] .gradio-container .cmw-button.secondary,
+.dark .gradio-container .cmw-button.primary,
+.dark .gradio-container .cmw-button.secondary {
+    color: var(--cmw-primary) !important;
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+html[data-theme='dark'] .gradio-container .cmw-button:hover,
+body[data-theme='dark'] .gradio-container .cmw-button:hover,
+.dark .gradio-container .cmw-button:hover {
+    border-color: var(--theme-colors__primary) !important;
+    background: var(--theme-colors__highlight) !important;
+    color: var(--theme-colors__primary_strong) !important;
+}
+
+html[data-theme='dark'] .gradio-container .cmw-button:focus-visible,
+body[data-theme='dark'] .gradio-container .cmw-button:focus-visible,
+.dark .gradio-container .cmw-button:focus-visible {
+    background-color: var(--cmw-surface) !important;
+    border-color: var(--cmw-primary) !important;
+    box-shadow: var(--cmw-shadow-focus) !important;
+}
+
+/* Dark theme for cards and panels */
+html[data-theme='dark'] .gradio-container .chat-hints,
+html[data-theme='dark'] .gradio-container .model-card,
+html[data-theme='dark'] .gradio-container .quick-actions-card,
+html[data-theme='dark'] .gradio-container .sidebar-card,
+html[data-theme='dark'] .gradio-container .message-card,
+html[data-theme='dark'] .gradio-container .chatbot-card,
+body[data-theme='dark'] .gradio-container .chat-hints,
+body[data-theme='dark'] .gradio-container .model-card,
+body[data-theme='dark'] .gradio-container .quick-actions-card,
+body[data-theme='dark'] .gradio-container .sidebar-card,
+body[data-theme='dark'] .gradio-container .message-card,
+body[data-theme='dark'] .gradio-container .chatbot-card,
+.dark .gradio-container .chat-hints,
+.dark .gradio-container .model-card,
+.dark .gradio-container .quick-actions-card,
+.dark .gradio-container .sidebar-card,
+.dark .gradio-container .message-card,
+.dark .gradio-container .chatbot-card {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+/* Dark theme for chatbot labels */
+html[data-theme='dark'] .gradio-container .chatbot-card label,
+html[data-theme='dark'] .gradio-container span[data-testid="block-info"],
+body[data-theme='dark'] .gradio-container .chatbot-card label,
+body[data-theme='dark'] .gradio-container span[data-testid="block-info"],
+.dark .gradio-container .chatbot-card label,
+.dark .gradio-container span[data-testid="block-info"] {
+    color: var(--cmw-text-strong) !important;
+    background: var(--theme-colors__highlight) !important;
+}
+
+/* Dark theme for user messages */
+html[data-theme='dark'] .gradio-container .user,
+body[data-theme='dark'] .gradio-container .user,
+.dark .gradio-container .user {
+    background: var(--theme-colors__highlight) !important;
+    border-color: var(--theme-colors__primary) !important;
+}
+
+/* Dark theme for icon buttons */
+html[data-theme='dark'] .gradio-container .icon-button-wrapper > button,
+body[data-theme='dark'] .gradio-container .icon-button-wrapper > button,
+.dark .gradio-container .icon-button-wrapper > button {
+    color: var(--theme-colors__primary) !important;
+}
+
+/* Dark theme for status cards */
+html[data-theme='dark'] .gradio-container .status-card,
+body[data-theme='dark'] .gradio-container .status-card,
+.dark .gradio-container .status-card {
+    background: var(--cmw-dark-gradient) !important;
+    border-left-color: var(--cmw-primary-fade-alt) !important;
+}
+
+/* Dark theme for tool usage */
+html[data-theme='dark'] .gradio-container .tool-usage,
+body[data-theme='dark'] .gradio-container .tool-usage,
+.dark .gradio-container .tool-usage {
+    background: var(--cmw-dark-base) !important;
+    border-left-color: var(--cmw-success-border) !important;
+}
+
+/* Dark theme for thinking content */
+html[data-theme='dark'] .gradio-container .thinking-content,
+body[data-theme='dark'] .gradio-container .thinking-content,
+.dark .gradio-container .thinking-content {
+    background: var(--cmw-thinking-bg) !important;
+    border-left-color: var(--cmw-thinking-border) !important;
+}
+
+/* Dark theme for input fields */
+html[data-theme='dark'] .gradio-container input,
+html[data-theme='dark'] .gradio-container textarea,
+html[data-theme='dark'] .gradio-container select,
+body[data-theme='dark'] .gradio-container input,
+body[data-theme='dark'] .gradio-container textarea,
+body[data-theme='dark'] .gradio-container select,
+.dark .gradio-container input,
+.dark .gradio-container textarea,
+.dark .gradio-container select {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text-strong) !important;
+}
+
+html[data-theme='dark'] .gradio-container input:focus,
+html[data-theme='dark'] .gradio-container textarea:focus,
+html[data-theme='dark'] .gradio-container select:focus,
+body[data-theme='dark'] .gradio-container input:focus,
+body[data-theme='dark'] .gradio-container textarea:focus,
+body[data-theme='dark'] .gradio-container select:focus,
+.dark .gradio-container input:focus,
+.dark .gradio-container textarea:focus,
+.dark .gradio-container select:focus {
+    border-color: var(--cmw-primary) !important;
+    box-shadow: var(--cmw-shadow-focus) !important;
+}
+
+/* Dark theme for chatbot messages */
+html[data-theme='dark'] .gradio-container .chatbot,
+body[data-theme='dark'] .gradio-container .chatbot,
+.dark .gradio-container .chatbot {
+    background: var(--cmw-surface-alt) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+html[data-theme='dark'] .gradio-container .message.user,
+body[data-theme='dark'] .gradio-container .message.user,
+.dark .gradio-container .message.user {
+    background: var(--cmw-highlight) !important;
+}
+
+html[data-theme='dark'] .gradio-container .message.bot,
+body[data-theme='dark'] .gradio-container .message.bot,
+.dark .gradio-container .message.bot {
+    background: var(--cmw-surface) !important;
+}
+
+/* Dark theme for links */
+html[data-theme='dark'] .gradio-container a,
+body[data-theme='dark'] .gradio-container a,
+.dark .gradio-container a {
+    color: var(--cmw-link) !important;
+}
+
+html[data-theme='dark'] .gradio-container a:hover,
+body[data-theme='dark'] .gradio-container a:hover,
+.dark .gradio-container a:hover {
+    color: var(--cmw-link-strong) !important;
+}
+
+/* Dark theme for tables */
+html[data-theme='dark'] .gradio-container table,
+body[data-theme='dark'] .gradio-container table,
+.dark .gradio-container table {
+    border-color: var(--cmw-border) !important;
+}
+
+html[data-theme='dark'] .gradio-container th,
+body[data-theme='dark'] .gradio-container th,
+.dark .gradio-container th {
+    background: var(--cmw-surface-alt) !important;
+    color: var(--cmw-text-strong) !important;
+}
+
+html[data-theme='dark'] .gradio-container td,
+body[data-theme='dark'] .gradio-container td,
+.dark .gradio-container td {
+    color: var(--cmw-text) !important;
+}
+
+/* Dark theme for tabs */
+html[data-theme='dark'] .gradio-container .tab-nav,
+body[data-theme='dark'] .gradio-container .tab-nav,
+.dark .gradio-container .tab-nav {
+    border-bottom-color: var(--cmw-border) !important;
+}
+
+html[data-theme='dark'] .gradio-container .tab-nav button,
+body[data-theme='dark'] .gradio-container .tab-nav button,
+.dark .gradio-container .tab-nav button {
+    background: transparent !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+html[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="true"],
+body[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="true"],
+.dark .gradio-container .tab-nav button[aria-selected="true"] {
+    background: var(--cmw-primary) !important;
+    border-color: transparent !important;
+    color: var(--cmw-white) !important;
+}
+
+html[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="false"]:hover,
+body[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="false"]:hover,
+.dark .gradio-container .tab-nav button[aria-selected="false"]:hover {
+    background: var(--cmw-primary-fade) !important;
+    color: var(--cmw-white) !important;
+}
+
+html[data-theme='dark'] .gradio-container .tab-panel,
+html[data-theme='dark'] .gradio-container [role="tabpanel"],
+html[data-theme='dark'] .gradio-container .tab-content,
+body[data-theme='dark'] .gradio-container .tab-panel,
+body[data-theme='dark'] .gradio-container [role="tabpanel"],
+body[data-theme='dark'] .gradio-container .tab-content,
+.dark .gradio-container .tab-panel,
+.dark .gradio-container [role="tabpanel"],
+.dark .gradio-container .tab-content {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+/* Dark theme for footer */
+html[data-theme='dark'] .gradio-container footer,
+body[data-theme='dark'] .gradio-container footer,
+.dark .gradio-container footer {
+    border-top-color: var(--cmw-border) !important;
+    background: transparent !important;
+    color: var(--cmw-text-fade) !important;
+}
+
+html[data-theme='dark'] .gradio-container footer button,
+html[data-theme='dark'] .gradio-container footer a.built-with,
+html[data-theme='dark'] .gradio-container footer .show-api,
+html[data-theme='dark'] .gradio-container footer .settings,
+html[data-theme='dark'] .gradio-container footer .record,
+body[data-theme='dark'] .gradio-container footer button,
+body[data-theme='dark'] .gradio-container footer a.built-with,
+body[data-theme='dark'] .gradio-container footer .show-api,
+body[data-theme='dark'] .gradio-container footer .settings,
+body[data-theme='dark'] .gradio-container footer .record,
+.dark .gradio-container footer button,
+.dark .gradio-container footer a.built-with,
+.dark .gradio-container footer .show-api,
+.dark .gradio-container footer .settings,
+.dark .gradio-container footer .record {
+    background: transparent !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+html[data-theme='dark'] .gradio-container footer button:hover,
+html[data-theme='dark'] .gradio-container footer a.built-with:hover,
+html[data-theme='dark'] .gradio-container footer .show-api:hover,
+html[data-theme='dark'] .gradio-container footer .settings:hover,
+html[data-theme='dark'] .gradio-container footer .record:hover,
+body[data-theme='dark'] .gradio-container footer button:hover,
+body[data-theme='dark'] .gradio-container footer a.built-with:hover,
+body[data-theme='dark'] .gradio-container footer .show-api:hover,
+body[data-theme='dark'] .gradio-container footer .settings:hover,
+body[data-theme='dark'] .gradio-container footer .record:hover,
+.dark .gradio-container footer button:hover,
+.dark .gradio-container footer a.built-with:hover,
+.dark .gradio-container footer .show-api:hover,
+.dark .gradio-container footer .settings:hover,
+.dark .gradio-container footer .record:hover {
+    background: var(--cmw-toolbar-btn-hover-bg) !important;
+    border-color: var(--theme-colors__primary) !important;
+    color: var(--theme-colors__primary_strong) !important;
+}
+
+/* Dark theme for terminal chat */
+html[data-theme='dark'] .gradio-container .terminal-chat .message,
+html[data-theme='dark'] .gradio-container .terminal-chat .message .text,
+html[data-theme='dark'] .gradio-container .terminal-chat [data-testid="bot_message"],
+html[data-theme='dark'] .gradio-container .terminal-chat [data-testid="user_message"],
+body[data-theme='dark'] .gradio-container .terminal-chat .message,
+body[data-theme='dark'] .gradio-container .terminal-chat .message .text,
+body[data-theme='dark'] .gradio-container .terminal-chat [data-testid="bot_message"],
+body[data-theme='dark'] .gradio-container .terminal-chat [data-testid="user_message"],
+.dark .gradio-container .terminal-chat .message,
+.dark .gradio-container .terminal-chat .message .text,
+.dark .gradio-container .terminal-chat [data-testid="bot_message"],
+.dark .gradio-container .terminal-chat [data-testid="user_message"] {
+    color: var(--cmw-text) !important;
+}
+
+/* Dark theme for markdown content */
+html[data-theme='dark'] .gradio-container .markdown,
+html[data-theme='dark'] .gradio-container .prose,
+html[data-theme='dark'] .gradio-container [data-testid="markdown"],
+body[data-theme='dark'] .gradio-container .markdown,
+body[data-theme='dark'] .gradio-container .prose,
+body[data-theme='dark'] .gradio-container [data-testid="markdown"],
+.dark .gradio-container .markdown,
+.dark .gradio-container .prose,
+.dark .gradio-container [data-testid="markdown"] {
+    color: var(--cmw-text) !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Additional dark theme support for Gradio's native dark mode */
+.gradio-container.dark,
+.dark .gradio-container,
+[data-theme="dark"] .gradio-container,
+.dark-mode .gradio-container {
+    --cmw-text: #cfd6e4;
+    --cmw-text-strong: #eef3fb;
+    --cmw-text-fade: #a8b3c4;
+    --cmw-text-fadest: #8a95a6;
+    --cmw-surface: #151a21;
+    --cmw-surface-alt: #0f141a;
+    --cmw-main: #151a21;
+    --cmw-main-fade: var(--cmw-dark-base);
+    --cmw-main-fadest: #1f252e;
+    --cmw-main-strong: #2a3340;
+    --cmw-main-strongest: #3a4554;
+    --cmw-border: #2a3340;
+    --cmw-border-strong: #3a4554;
+    --cmw-highlight: rgba(5, 117, 189, 0.18);
+    --cmw-highlight-text: #d8e6f5;
+    --cmw-secondary: var(--cmw-dark-base);
+    --cmw-secondary-fade: #1f252e;
+    --cmw-secondary-fadest: #242a33;
+    --cmw-secondary-strong: #2a3340;
+    --cmw-secondary-strongest: #3a4554;
+    --cmw-secondary-text: #a8b3c4;
+    --theme-colors__primary: var(--cmw-primary-fade-alt);
+    --theme-colors__primary_strong: var(--cmw-primary-fade-alt);
+    --theme-colors__highlight: var(--cmw-dark-base);
+}
+
+/* Ensure all dark theme rules apply to .gradio-container.dark as well */
+.gradio-container.dark h1,
+.gradio-container.dark h2,
+.gradio-container.dark h3,
+.gradio-container.dark h4,
+.gradio-container.dark h5,
+.gradio-container.dark h6 {
+    color: var(--cmw-text-strong) !important;
+}
+
+.gradio-container.dark .hero-title h1 {
+    color: var(--cmw-primary) !important;
+}
+
+.gradio-container.dark .cmw-button {
+    background-color: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+.gradio-container.dark .cmw-button:hover {
+    border-color: var(--theme-colors__primary) !important;
+    background: var(--theme-colors__highlight) !important;
+    color: var(--theme-colors__primary_strong) !important;
+}
+
+.gradio-container.dark .chat-hints,
+.gradio-container.dark .model-card,
+.gradio-container.dark .quick-actions-card,
+.gradio-container.dark .sidebar-card,
+.gradio-container.dark .message-card,
+.gradio-container.dark .chatbot-card {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+.gradio-container.dark .chatbot-card label,
+.gradio-container.dark span[data-testid="block-info"] {
+    color: var(--cmw-text-strong) !important;
+    background: var(--theme-colors__highlight) !important;
+}
+
+.gradio-container.dark .user {
+    background: var(--theme-colors__highlight) !important;
+    border-color: var(--theme-colors__primary) !important;
+}
+
+.gradio-container.dark .status-card {
+    background: var(--cmw-dark-gradient) !important;
+    border-left-color: var(--cmw-primary-fade-alt) !important;
+}
+
+.gradio-container.dark .tool-usage {
+    background: var(--cmw-dark-base) !important;
+    border-left-color: var(--cmw-success-border) !important;
+}
+
+.gradio-container.dark .thinking-content {
+    background: var(--cmw-thinking-bg) !important;
+    border-left-color: var(--cmw-thinking-border) !important;
+}
+
+.gradio-container.dark input,
+.gradio-container.dark textarea,
+.gradio-container.dark select {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text-strong) !important;
+}
+
+.gradio-container.dark input:focus,
+.gradio-container.dark textarea:focus,
+.gradio-container.dark select:focus {
+    border-color: var(--cmw-primary) !important;
+    box-shadow: var(--cmw-shadow-focus) !important;
+}
+
+.gradio-container.dark .chatbot {
+    background: var(--cmw-surface-alt) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+.gradio-container.dark .message.user {
+    background: var(--cmw-highlight) !important;
+}
+
+.gradio-container.dark .message.bot {
+    background: var(--cmw-surface) !important;
+}
+
+.gradio-container.dark a {
+    color: var(--cmw-link) !important;
+}
+
+.gradio-container.dark a:hover {
+    color: var(--cmw-link-strong) !important;
+}
+
+.gradio-container.dark table {
+    border-color: var(--cmw-border) !important;
+}
+
+.gradio-container.dark th {
+    background: var(--cmw-surface-alt) !important;
+    color: var(--cmw-text-strong) !important;
+}
+
+.gradio-container.dark td {
+    color: var(--cmw-text) !important;
+}
+
+.gradio-container.dark .tab-nav {
+    border-bottom-color: var(--cmw-border) !important;
+}
+
+.gradio-container.dark .tab-nav button {
+    background: transparent !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+.gradio-container.dark .tab-nav button[aria-selected="true"] {
+    background: var(--cmw-primary) !important;
+    border-color: transparent !important;
+    color: var(--cmw-white) !important;
+}
+
+.gradio-container.dark .tab-nav button[aria-selected="false"]:hover {
+    background: var(--cmw-primary-fade) !important;
+    color: var(--cmw-white) !important;
+}
+
+.gradio-container.dark .tab-panel,
+.gradio-container.dark [role="tabpanel"],
+.gradio-container.dark .tab-content {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+.gradio-container.dark footer {
+    border-top-color: var(--cmw-border) !important;
+    background: transparent !important;
+    color: var(--cmw-text-fade) !important;
+}
+
+.gradio-container.dark footer button,
+.gradio-container.dark footer a.built-with,
+.gradio-container.dark footer .show-api,
+.gradio-container.dark footer .settings,
+.gradio-container.dark footer .record {
+    background: transparent !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+.gradio-container.dark footer button:hover,
+.gradio-container.dark footer a.built-with:hover,
+.gradio-container.dark footer .show-api:hover,
+.gradio-container.dark footer .settings:hover,
+.gradio-container.dark footer .record:hover {
+    background: var(--cmw-toolbar-btn-hover-bg) !important;
+    border-color: var(--theme-colors__primary) !important;
+    color: var(--theme-colors__primary_strong) !important;
+}
+
+.gradio-container.dark .terminal-chat .message,
+.gradio-container.dark .terminal-chat .message .text,
+.gradio-container.dark .terminal-chat [data-testid="bot_message"],
+.gradio-container.dark .terminal-chat [data-testid="user_message"] {
+    color: var(--cmw-text) !important;
+}
+
+.gradio-container.dark .markdown,
+.gradio-container.dark .prose,
+.gradio-container.dark [data-testid="markdown"] {
+    color: var(--cmw-text) !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Comprehensive dark theme override - This will catch all dark mode patterns */
+html[data-theme='dark'] .gradio-container,
+body[data-theme='dark'] .gradio-container,
+.dark .gradio-container,
+.gradio-container.dark,
+[data-theme="dark"] .gradio-container,
+.dark-mode .gradio-container,
+body.dark .gradio-container,
+html.dark .gradio-container {
+    background: var(--cmw-surface) !important;
+    color: var(--cmw-text) !important;
+}
+
+/* Force dark theme on all elements when dark mode is active */
+html[data-theme='dark'] .gradio-container *,
+body[data-theme='dark'] .gradio-container *,
+.dark .gradio-container *,
+.gradio-container.dark *,
+[data-theme="dark"] .gradio-container *,
+.dark-mode .gradio-container *,
+body.dark .gradio-container *,
+html.dark .gradio-container * {
+    color: inherit !important;
+}
+
+/* Specific overrides for common elements */
+html[data-theme='dark'] .gradio-container h1,
+html[data-theme='dark'] .gradio-container h2,
+html[data-theme='dark'] .gradio-container h3,
+html[data-theme='dark'] .gradio-container h4,
+html[data-theme='dark'] .gradio-container h5,
+html[data-theme='dark'] .gradio-container h6,
+body[data-theme='dark'] .gradio-container h1,
+body[data-theme='dark'] .gradio-container h2,
+body[data-theme='dark'] .gradio-container h3,
+body[data-theme='dark'] .gradio-container h4,
+body[data-theme='dark'] .gradio-container h5,
+body[data-theme='dark'] .gradio-container h6,
+.dark .gradio-container h1,
+.dark .gradio-container h2,
+.dark .gradio-container h3,
+.dark .gradio-container h4,
+.dark .gradio-container h5,
+.dark .gradio-container h6,
+.gradio-container.dark h1,
+.gradio-container.dark h2,
+.gradio-container.dark h3,
+.gradio-container.dark h4,
+.gradio-container.dark h5,
+.gradio-container.dark h6,
+[data-theme="dark"] .gradio-container h1,
+[data-theme="dark"] .gradio-container h2,
+[data-theme="dark"] .gradio-container h3,
+[data-theme="dark"] .gradio-container h4,
+[data-theme="dark"] .gradio-container h5,
+[data-theme="dark"] .gradio-container h6,
+.dark-mode .gradio-container h1,
+.dark-mode .gradio-container h2,
+.dark-mode .gradio-container h3,
+.dark-mode .gradio-container h4,
+.dark-mode .gradio-container h5,
+.dark-mode .gradio-container h6,
+body.dark .gradio-container h1,
+body.dark .gradio-container h2,
+body.dark .gradio-container h3,
+body.dark .gradio-container h4,
+body.dark .gradio-container h5,
+body.dark .gradio-container h6,
+html.dark .gradio-container h1,
+html.dark .gradio-container h2,
+html.dark .gradio-container h3,
+html.dark .gradio-container h4,
+html.dark .gradio-container h5,
+html.dark .gradio-container h6 {
+    color: var(--cmw-text-strong) !important;
+}
+
+/* Force dark backgrounds on all containers */
+html[data-theme='dark'] .gradio-container .block,
+html[data-theme='dark'] .gradio-container .panel,
+html[data-theme='dark'] .gradio-container .form,
+html[data-theme='dark'] .gradio-container .box,
+html[data-theme='dark'] .gradio-container .component,
+html[data-theme='dark'] .gradio-container .container,
+body[data-theme='dark'] .gradio-container .block,
+body[data-theme='dark'] .gradio-container .panel,
+body[data-theme='dark'] .gradio-container .form,
+body[data-theme='dark'] .gradio-container .box,
+body[data-theme='dark'] .gradio-container .component,
+body[data-theme='dark'] .gradio-container .container,
+.dark .gradio-container .block,
+.dark .gradio-container .panel,
+.dark .gradio-container .form,
+.dark .gradio-container .box,
+.dark .gradio-container .component,
+.dark .gradio-container .container,
+.gradio-container.dark .block,
+.gradio-container.dark .panel,
+.gradio-container.dark .form,
+.gradio-container.dark .box,
+.gradio-container.dark .component,
+.gradio-container.dark .container,
+[data-theme="dark"] .gradio-container .block,
+[data-theme="dark"] .gradio-container .panel,
+[data-theme="dark"] .gradio-container .form,
+[data-theme="dark"] .gradio-container .box,
+[data-theme="dark"] .gradio-container .component,
+[data-theme="dark"] .gradio-container .container,
+.dark-mode .gradio-container .block,
+.dark-mode .gradio-container .panel,
+.dark-mode .gradio-container .form,
+.dark-mode .gradio-container .box,
+.dark-mode .gradio-container .component,
+.dark-mode .gradio-container .container,
+body.dark .gradio-container .block,
+body.dark .gradio-container .panel,
+body.dark .gradio-container .form,
+body.dark .gradio-container .box,
+body.dark .gradio-container .component,
+body.dark .gradio-container .container,
+html.dark .gradio-container .block,
+html.dark .gradio-container .panel,
+html.dark .gradio-container .form,
+html.dark .gradio-container .box,
+html.dark .gradio-container .component,
+html.dark .gradio-container .container {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+/* Dark theme for chatbot labels and block info */
+html[data-theme='dark'] .chatbot-card label,
+html[data-theme='dark'] span[data-testid="block-info"],
+body[data-theme='dark'] .chatbot-card label,
+body[data-theme='dark'] span[data-testid="block-info"],
+.dark .chatbot-card label,
+.dark .chatbot-card span[data-testid="block-info"],
+.gradio-container.dark .chatbot-card label,
+.gradio-container.dark span[data-testid="block-info"],
+[data-theme="dark"] .chatbot-card label,
+[data-theme="dark"] span[data-testid="block-info"],
+.dark-mode .chatbot-card label,
+.dark-mode span[data-testid="block-info"],
+body.dark .chatbot-card label,
+body.dark span[data-testid="block-info"],
+html.dark .chatbot-card label,
+html.dark span[data-testid="block-info"] {
+    color: var(--cmw-text-strong) !important;
+    font-weight: 500 !important;
+    font-size: var(--cmw-font-size) !important;
+    font-family: var(--cmw-font-family) !important;
+    background: var(--theme-colors__highlight) !important;
 }
