@@ -308,79 +308,24 @@ class NextGenApp:
     def create_interface(self) -> gr.Blocks:
         """Create the Gradio interface"""
         
-        # Custom CSS
-        custom_css = """
-        .hero-title {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-size: 2.5rem;
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        
-        .status-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            border-radius: 12px;
-            padding: 1rem;
-            margin: 1rem 0;
-            border-left: 4px solid #667eea;
-        }
-        
-        .tool-usage {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 0.5rem;
-            margin: 0.5rem 0;
-            border-left: 3px solid #28a745;
-            font-size: 0.9rem;
-        }
-        
-        .thinking-content {
-            background: #fff3cd;
-            border-radius: 8px;
-            padding: 0.5rem;
-            margin: 0.5rem 0;
-            border-left: 3px solid #ffc107;
-            font-style: italic;
-        }
-        
-        .cmw-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        
-        .cmw-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-        
-        .sidebar-card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 1rem;
-            margin: 1rem 0;
-        }
-        
-        .chat-hints {
-            background: #e3f2fd;
-            border-radius: 8px;
-            padding: 1rem;
-            margin: 1rem 0;
-            border-left: 4px solid #2196f3;
-        }
-        """
-        
+        # Ensure Gradio can serve local static resources via /gradio_api/file=
+        RESOURCES_DIR = Path(__file__).parent.parent / "resources"
+        try:
+            existing_allowed = os.environ.get("GRADIO_ALLOWED_PATHS", "")
+            parts = [p for p in existing_allowed.split(os.pathsep) if p]
+            if str(RESOURCES_DIR) not in parts:
+                parts.append(str(RESOURCES_DIR))
+            os.environ["GRADIO_ALLOWED_PATHS"] = os.pathsep.join(parts)
+            print(f"Gradio static allowed paths: {os.environ['GRADIO_ALLOWED_PATHS']}")
+        except Exception as _e:
+            print(f"Warning: could not set GRADIO_ALLOWED_PATHS: {_e}")
+
+        # External CSS file
+        css_file_path = Path(__file__).parent.parent / "resources" / "css" / "cmw_copilot_theme.css"
+
         with gr.Blocks(
-            css=custom_css,
-            title="LangChain-Native LLM Agent",
+            css_paths=[css_file_path],
+            title="Analyst Copilot",
             theme=gr.themes.Soft()
         ) as demo:
             
@@ -393,23 +338,19 @@ class NextGenApp:
                 with gr.TabItem("💬 Chat", id="chat"):
                     
                     with gr.Row():
-                        with gr.Column():
+                        with gr.Column(elem_classes=["chat-hints"]):
                             gr.Markdown("""
-                            ## 💬 Chat with the Comindware Analyst Copilot
-                            
-                            **Welcome!**
-                            
-                            This agent focuses on the **Comindware Platform** entity operations (applications, templates, attributes) and uses deterministic tools to execute precise changes.
-                            
-                            ### 🎯 **How it works:**
-                            
+                            ## 💬 Welcome!
+                                                      
+                            The Comindware Analyst Copilot focuses on the **Comindware Platform** entity operations (applications, templates, attributes) and uses deterministic tools to execute precise changes.
+
                             - **Platform Operations First**: Validates your intent and executes tools for entity changes (e.g., create/edit attributes)
                             - **Multi-Model Orchestration**: Tries multiple LLM providers with intelligent fallback
                             - **Compact Structured Output**: Intent → Plan → Validate → Execute → Result
                             """, elem_classes=["chat-hints"]) 
-                        with gr.Column():
+                        with gr.Column(elem_classes=["chat-hints"]):
                             gr.Markdown("""
-                            ### 💡 **Try asking:**
+                            ## ❓ Try asking:
                             
                             - List all applications in the Platform
                             - List all record templates in app 'ERP'
@@ -422,7 +363,7 @@ class NextGenApp:
                             """, elem_classes=["chat-hints"]) 
                             
                     with gr.Row():
-                        with gr.Column(scale=3):
+                        with gr.Column(scale=3, elem_classes=["sidebar-card"]):
                             # Chat interface with metadata support for thinking transparency
                             chatbot = gr.Chatbot(
                                 label="Chat with the Agent",
@@ -430,7 +371,9 @@ class NextGenApp:
                                 show_label=True,
                                 container=True,
                                 show_copy_button=True,
-                                type="messages"  # Enable metadata support
+                                type="messages",
+                                elem_id="chatbot-main",
+                                elem_classes=["chatbot-label"]
                             )
                             
                             with gr.Row():
@@ -439,17 +382,19 @@ class NextGenApp:
                                     placeholder="Type your message here...",
                                     lines=2,
                                     scale=4,
-                                    max_lines=4
+                                    max_lines=4,
+                                    elem_id="message-input",
+                                    elem_classes=["message-label"]
                                 )
                                 with gr.Column():
                                     send_btn = gr.Button("Send", variant="primary", scale=1, elem_classes=["cmw-button"])
                                     clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
                         
-                        with gr.Column(scale=1, elem_classes=["sidebar-card"]):
+                        with gr.Column(scale=1):
                             with gr.Column(elem_classes=["model-card"]):
                             # Combined status
                                 gr.Markdown("### 🤖 Status")
-                                status_display = gr.Markdown("🟡 Initializing...", elem_classes=["status-card"])
+                                status_display = gr.Markdown("🟡 Initializing...")
                                 
                             # Quick actions
                             with gr.Column(elem_classes=["quick-actions-card"]):
