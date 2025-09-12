@@ -197,7 +197,7 @@ class CoreAgent:
                 not name.startswith("_") and 
                 not isinstance(obj, type) and
                 hasattr(obj, '__module__') and
-                obj.__module__ == 'tools.tools' and
+                (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and
                 name not in ["CmwAgent", "CodeInterpreter"]):
                 
                 if hasattr(obj, 'name') and hasattr(obj, 'description'):
@@ -210,7 +210,7 @@ class CoreAgent:
     
     def _format_messages(self, question: str, reference: Optional[str] = None, 
                         chat_history: Optional[List[Dict[str, Any]]] = None) -> List[Any]:
-        """Format messages for LLM"""
+        """Format messages for LLM with complete tool call context"""
         messages = [self.sys_msg]
         
         # Add chat history if provided
@@ -219,7 +219,24 @@ class CoreAgent:
                 if msg.get("role") == "user":
                     messages.append(HumanMessage(content=msg["content"]))
                 elif msg.get("role") == "assistant":
-                    messages.append(AIMessage(content=msg["content"]))
+                    ai_content = msg.get("content", "")
+                    tool_calls = msg.get("tool_calls", [])
+                    
+                    if tool_calls:
+                        # Create AI message with tool calls
+                        ai_message = AIMessage(content=ai_content)
+                        ai_message.tool_calls = tool_calls
+                        messages.append(ai_message)
+                    elif ai_content:
+                        # Regular AI message
+                        messages.append(AIMessage(content=ai_content))
+                elif msg.get("role") == "tool" and msg.get("tool_call_id"):
+                    # Add tool result messages
+                    tool_message = ToolMessage(
+                        content=msg.get("content", ""),
+                        tool_call_id=msg.get("tool_call_id")
+                    )
+                    messages.append(tool_message)
         
         # Add current question
         if reference:
@@ -240,7 +257,7 @@ class CoreAgent:
                 if hasattr(tool, 'name') and tool.name == tool_name:
                     tool_func = tool
                     break
-                elif callable(tool) and tool.__name__ == tool_name:
+                elif callable(tool) and hasattr(tool, '__name__') and tool.__name__ == tool_name:
                     tool_func = tool
                     break
             
@@ -282,7 +299,7 @@ class CoreAgent:
         return tool_args
     
     def _run_tool_calling_loop(self, llm_instance: LLMInstance, messages: List[Any], 
-                              call_id: str = None, streaming_generator=None) -> Tuple[str, List[Dict[str, Any]]]:
+                              call_id: str = None, streaming_generator=None, conversation_id: str = "default") -> Tuple[str, List[Dict[str, Any]]]:
         """Run the tool calling loop for the LLM"""
         tool_calls = []
         tool_results_history = []
@@ -321,20 +338,36 @@ class CoreAgent:
                         })
                         
                         # Add tool message to conversation
+                        tool_call_id = tool_call.get('id', f"call_{len(tool_calls)}")
                         messages.append(ToolMessage(
                             content=tool_result,
-                            tool_call_id=tool_call.get('id', f"call_{len(tool_calls)}")
+                            tool_call_id=tool_call_id
                         ))
+                        
+                        # Store tool result in conversation history
+                        self._add_to_conversation(
+                            conversation_id=conversation_id,
+                            role="tool",
+                            content=tool_result,
+                            metadata={"tool_call_id": tool_call_id, "tool_name": tool_name}
+                        )
                     
                     consecutive_no_progress = 0
                 else:
-                    # No tool calls, check if we should continue
-                    consecutive_no_progress += 1
-                    if consecutive_no_progress >= self.max_consecutive_no_progress:
+                    # No tool calls, check if we have a valid response
+                    response_content = getattr(response, 'content', '')
+                    if response_content and response_content.strip():
+                        # We have a valid response without tool calls, this is our final answer
+                        messages.append(response)
                         break
-                    
-                    # Add AI message to conversation
-                    messages.append(response)
+                    else:
+                        # Empty response, increment no progress counter
+                        consecutive_no_progress += 1
+                        if consecutive_no_progress >= self.max_consecutive_no_progress:
+                            break
+                        
+                        # Add AI message to conversation even if empty
+                        messages.append(response)
                 
             except Exception as e:
                 print(f"❌ Error in tool calling loop: {e}")
@@ -343,18 +376,21 @@ class CoreAgent:
         # Get final response
         if messages and isinstance(messages[-1], AIMessage):
             final_response = messages[-1].content
+            # Check if the response is empty or just whitespace
+            if not final_response or not final_response.strip():
+                final_response = "I apologize, but I encountered an error while processing your request."
         else:
             final_response = "I apologize, but I encountered an error while processing your request."
         
         return final_response, tool_calls
     
     def _process_with_llm(self, llm_instance: LLMInstance, messages: List[Any], 
-                         call_id: str = None, streaming_generator=None) -> Tuple[str, List[Dict[str, Any]]]:
+                         call_id: str = None, streaming_generator=None, conversation_id: str = "default") -> Tuple[str, List[Dict[str, Any]]]:
         """Process messages with a specific LLM instance"""
         try:
             if llm_instance.bound_tools:
                 # Use tool calling loop
-                return self._run_tool_calling_loop(llm_instance, messages, call_id, streaming_generator)
+                return self._run_tool_calling_loop(llm_instance, messages, call_id, streaming_generator, conversation_id)
             else:
                 # Simple LLM call without tools
                 response = llm_instance.llm.invoke(messages)
@@ -419,7 +455,7 @@ class CoreAgent:
             print(f"🤖 Using {llm_instance.provider} ({llm_instance.model_name})")
             
             # Process with LLM
-            answer, calls = self._process_with_llm(llm_instance, messages, call_id)
+            answer, calls = self._process_with_llm(llm_instance, messages, call_id, conversation_id=conversation_id)
             
             if answer and answer.strip():
                 final_answer = answer
@@ -456,7 +492,7 @@ class CoreAgent:
         )
         
         # Add to conversation history
-        self._add_to_conversation(conversation_id, "assistant", final_answer)
+        self._add_to_conversation(conversation_id, "assistant", final_answer, tool_calls=tool_calls)
         
         return response
     
@@ -519,7 +555,7 @@ class CoreAgent:
             yield {"event_type": "llm_start", "content": f"Using {llm_instance.provider} ({llm_instance.model_name})"}
             
             # Process with LLM
-            answer, calls = self._process_with_llm(llm_instance, messages, call_id)
+            answer, calls = self._process_with_llm(llm_instance, messages, call_id, conversation_id=conversation_id)
             
             if answer and answer.strip():
                 final_answer = answer
@@ -542,7 +578,7 @@ class CoreAgent:
         yield {"event_type": "answer", "content": final_answer}
         
         # Add to conversation history
-        self._add_to_conversation(conversation_id, "assistant", final_answer)
+        self._add_to_conversation(conversation_id, "assistant", final_answer, tool_calls=tool_calls)
         
         # Final metadata
         yield {
@@ -555,14 +591,19 @@ class CoreAgent:
         }
     
     def _add_to_conversation(self, conversation_id: str, role: str, content: str, 
-                           metadata: Optional[Dict[str, Any]] = None):
-        """Add a message to the conversation history"""
+                           metadata: Optional[Dict[str, Any]] = None, tool_calls: Optional[List[Dict[str, Any]]] = None):
+        """Add a message to the conversation history with tool call support"""
         with self.conversation_lock:
+            # Prepare metadata with tool calls if provided
+            full_metadata = metadata or {}
+            if tool_calls:
+                full_metadata['tool_calls'] = tool_calls
+            
             message = ConversationMessage(
                 role=role,
                 content=content,
                 timestamp=time.time(),
-                metadata=metadata
+                metadata=full_metadata
             )
             self.conversations[conversation_id].append(message)
             
@@ -571,17 +612,24 @@ class CoreAgent:
                 self.conversations[conversation_id] = self.conversations[conversation_id][-self.max_conversation_history:]
     
     def get_conversation_history(self, conversation_id: str = "default") -> List[Dict[str, Any]]:
-        """Get conversation history for a specific conversation"""
+        """Get conversation history for a specific conversation with tool call support"""
         with self.conversation_lock:
-            return [
-                {
+            history = []
+            for msg in self.conversations[conversation_id]:
+                history_entry = {
                     "role": msg.role,
                     "content": msg.content,
                     "timestamp": msg.timestamp,
-                    "metadata": msg.metadata
+                    "metadata": msg.metadata or {}
                 }
-                for msg in self.conversations[conversation_id]
-            ]
+                
+                # Add tool calls if present
+                if msg.metadata and 'tool_calls' in msg.metadata:
+                    history_entry['tool_calls'] = msg.metadata['tool_calls']
+                
+                history.append(history_entry)
+            
+            return history
     
     def clear_conversation(self, conversation_id: str = "default"):
         """Clear conversation history for a specific conversation"""

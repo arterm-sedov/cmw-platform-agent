@@ -226,6 +226,10 @@ def integrate_with_existing_app():
     # Add conversation ID support to your Gradio interface
     pass
 
+# Global interface variable for Gradio reload functionality
+# Initialize interface immediately to avoid NoneType errors during reload
+interface = create_enhanced_interface()
+
 if __name__ == "__main__":
     # Example usage
     import json
@@ -233,6 +237,5 @@ if __name__ == "__main__":
     # This would be your existing agent initialization
     # agent = CmwAgent(provider="openrouter")
     
-    # Create the enhanced interface
-    interface = create_enhanced_interface()
+    # Launch the enhanced interface
     interface.launch()

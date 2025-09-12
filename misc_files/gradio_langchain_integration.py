@@ -198,11 +198,13 @@ def show_integration_instructions():
     print("✅ Keeps all your advanced features")
     print("✅ Easy integration with existing code")
 
+# Global interface variable for Gradio reload functionality
+# Initialize interface immediately to avoid NoneType errors during reload
+interface = create_langchain_gradio_interface()
+
 if __name__ == "__main__":
     print("🚀 Creating LangChain-Enhanced Gradio Interface")
     print("=" * 50)
-    
-    interface = create_langchain_gradio_interface()
     
     if interface:
         print("\n✅ Interface created successfully!")
