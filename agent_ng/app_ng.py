@@ -347,7 +347,7 @@ class NextGenApp:
                             - **Platform Operations First**: Validates your intent and executes tools for entity changes (e.g., create/edit attributes)
                             - **Multi-Model Orchestration**: Tries multiple LLM providers with intelligent fallback
                             - **Compact Structured Output**: Intent → Plan → Validate → Execute → Result
-                            """, elem_classes=["chat-hints"]) 
+                            """) 
                         with gr.Column(elem_classes=["chat-hints"]):
                             gr.Markdown("""
                             ## ❓ Try asking:
@@ -360,10 +360,10 @@ class NextGenApp:
                             - For attribute 'Contact Phone' in app 'CRM', template 'Leads', change display format to Russian phone
                             - Fetch attribute: system name 'Comment', app 'HR', template 'Candidates'
                             - Archive/unarchive attribute, system name 'Comment', app 'HR', template 'Candidates'
-                            """, elem_classes=["chat-hints"]) 
+                            """) 
                             
                     with gr.Row():
-                        with gr.Column(scale=3, elem_classes=["sidebar-card"]):
+                        with gr.Column(scale=3):
                             # Chat interface with metadata support for thinking transparency
                             chatbot = gr.Chatbot(
                                 label="Chat with the Agent",
