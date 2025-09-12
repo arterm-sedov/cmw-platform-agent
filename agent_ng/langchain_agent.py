@@ -260,7 +260,7 @@ class LangChainAgent:
                     not isinstance(obj, type) and
                     hasattr(obj, '__module__') and
                     (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and
-                    name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step"]):
+                    name not in ["CmwAgent", "CodeInterpreter"]):
                     
                     if hasattr(obj, 'name') and hasattr(obj, 'description'):
                         tool_list.append(obj)
