@@ -1,33 +1,33 @@
 """
-Next-Generation Gradio App
-=========================
+LangChain-Native Gradio App
+===========================
 
-A clean, modern Gradio application that uses the latest features and best practices
-for LLM agent interactions with real-time streaming and tool usage visualization.
+A modern Gradio application using pure LangChain patterns for multi-turn conversations
+with tool calls, memory management, and streaming.
 
 Key Features:
-- Modern Gradio ChatInterface and Blocks
+- Pure LangChain conversation chains and memory
+- Multi-turn conversation support with tool calls
 - Real-time streaming with metadata
-- Clean initialization and error handling
+- Native LangChain tool calling
+- Modern Gradio UI with comprehensive monitoring
 - Tool usage visualization
-- Copy to clipboard functionality
+- Debug logging and statistics
 - Responsive design with custom CSS
-- Async LLM initialization
-- Conversation management
 
-Based on:
-- https://www.gradio.app/guides/agents-and-tool-usage
-- https://www.gradio.app/guides/creating-a-custom-chatbot-with-blocks
-- https://www.gradio.app/guides/chatinterface-examples
+Based on LangChain's official documentation and best practices.
 """
 
 import asyncio
 import gradio as gr
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, AsyncGenerator
 import json
 import time
 from dataclasses import asdict
+
+# LangChain imports
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
 # Local imports with robust fallback handling
 import sys
@@ -41,14 +41,14 @@ if parent_dir not in sys.path:
 
 # Try absolute imports first (works from root directory)
 try:
-    from agent_ng.agent_ng import NextGenAgent, ChatMessage, get_agent_ng
+    from agent_ng.langchain_agent import LangChainAgent as NextGenAgent, ChatMessage, get_agent_ng
     from agent_ng.llm_manager import get_llm_manager
     from agent_ng.debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
     from agent_ng.streaming_chat import get_chat_interface
 except ImportError:
     # Fallback to relative imports (when running as module)
     try:
-        from .agent_ng import NextGenAgent, ChatMessage, get_agent_ng
+        from .langchain_agent import LangChainAgent as NextGenAgent, ChatMessage, get_agent_ng
         from .llm_manager import get_llm_manager
         from .debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
         from .streaming_chat import get_chat_interface
@@ -67,7 +67,7 @@ except ImportError:
 
 
 class NextGenApp:
-    """Next-generation Gradio application with modern features"""
+    """LangChain-native Gradio application with modern features"""
     
     def __init__(self):
         self.agent: Optional[NextGenAgent] = None
@@ -75,6 +75,7 @@ class NextGenApp:
         self.initialization_logs = []
         self.is_initializing = False
         self.initialization_complete = False
+        self.session_id = "default"  # LangChain session management
         
         # Initialize debug system
         self.debug_streamer = get_debug_streamer("app_ng")
@@ -158,9 +159,26 @@ class NextGenApp:
         else:
             return "❌ Agent not ready"
     
+    def is_ready(self) -> bool:
+        """Check if the app is ready (LangChain-native pattern)"""
+        return self.initialization_complete and self.agent is not None and self.agent.is_ready()
+    
+    def clear_conversation(self) -> Tuple[List[Dict[str, str]], str]:
+        """Clear the conversation history (LangChain-native pattern)"""
+        if self.agent:
+            self.agent.clear_conversation(self.session_id)
+            self.debug_streamer.info("Conversation cleared")
+        return [], ""
+    
+    def get_conversation_history(self) -> List[BaseMessage]:
+        """Get the current conversation history (LangChain-native pattern)"""
+        if self.agent:
+            return self.agent.get_conversation_history(self.session_id)
+        return []
+    
     async def chat_with_agent(self, message: str, history: List[Dict[str, str]]) -> Tuple[List[Dict[str, str]], str]:
         """
-        Chat with the agent using modern streaming with thinking transparency.
+        Chat with the agent using LangChain-native patterns.
         
         Args:
             message: User message
@@ -169,52 +187,101 @@ class NextGenApp:
         Returns:
             Updated history and empty message
         """
-        if not self.agent or not self.agent.is_ready():
-            error_msg = "Agent not ready. Please wait for initialization to complete."
+        if not self.is_ready():
+            error_msg = "❌ **Agent not ready. Please wait for initialization to complete.**"
             history.append({"role": "user", "content": message})
             history.append({"role": "assistant", "content": error_msg})
             return history, ""
         
-        self.debug_streamer.info(f"Starting chat with message: {message[:50]}...", LogCategory.STREAM)
+        if not message.strip():
+            return history, ""
         
         try:
-            # Convert tuple history to dict format for internal processing
-            tuple_history = []
-            for msg in history:
-                if isinstance(msg, dict):
-                    if msg.get("role") == "user":
-                        tuple_history.append((msg["content"], ""))
-                    elif msg.get("role") == "assistant":
-                        if tuple_history:
-                            tuple_history[-1] = (tuple_history[-1][0], msg["content"])
-                        else:
-                            tuple_history.append(("", msg["content"]))
-                elif isinstance(msg, tuple):
-                    tuple_history.append(msg)
+            self.debug_streamer.info(f"Processing message: {message[:50]}...")
             
-            # Use the streaming chat interface with enhanced error handling
-            try:
-                updated_tuple_history, _ = await self.chat_interface.chat_with_agent(message, tuple_history, self.agent)
-            except Exception as stream_error:
-                self.debug_streamer.warning(f"Streaming error handled: {str(stream_error)}", LogCategory.STREAM)
-                # Return a safe fallback response
-                updated_tuple_history = tuple_history + [(message, f"⚠️ Streaming error occurred: {str(stream_error)}")]
+            # Process message with LangChain agent
+            response = self.agent.process_message(message, self.session_id)
             
-            # Convert back to dict format for Gradio
-            dict_history = []
-            for user_msg, assistant_msg in updated_tuple_history:
-                if user_msg:
-                    dict_history.append({"role": "user", "content": user_msg})
-                if assistant_msg:
-                    dict_history.append({"role": "assistant", "content": assistant_msg})
-            
-            return dict_history, ""
+            if response.success:
+                # Add to history
+                history.append({"role": "user", "content": message})
+                history.append({"role": "assistant", "content": response.answer})
+                
+                # Log tool calls if any
+                if response.tool_calls:
+                    self.debug_streamer.info(f"Tool calls made: {[call['name'] for call in response.tool_calls]}")
+                
+                return history, ""
+            else:
+                error_msg = f"❌ **Error: {response.error}**"
+                history.append({"role": "user", "content": message})
+                history.append({"role": "assistant", "content": error_msg})
+                return history, ""
+                
         except Exception as e:
-            self.debug_streamer.error(f"Error in chat_with_agent: {str(e)}", LogCategory.STREAM)
-            error_msg = f"❌ Error: {str(e)}"
+            self.debug_streamer.error(f"Error in chat: {e}")
+            error_msg = f"❌ **Error processing message: {str(e)}**"
             history.append({"role": "user", "content": message})
             history.append({"role": "assistant", "content": error_msg})
             return history, ""
+    
+    async def stream_chat_with_agent(self, message: str, history: List[Dict[str, str]]) -> AsyncGenerator[Tuple[List[Dict[str, str]], str], None]:
+        """
+        Stream chat with the agent using LangChain-native patterns.
+        
+        Args:
+            message: User message
+            history: Chat history
+            
+        Yields:
+            Updated history and empty message
+        """
+        if not self.is_ready():
+            error_msg = "❌ **Agent not ready. Please wait for initialization to complete.**"
+            history.append({"role": "user", "content": message})
+            history.append({"role": "assistant", "content": error_msg})
+            yield history, ""
+            return
+        
+        if not message.strip():
+            yield history, ""
+            return
+        
+        try:
+            self.debug_streamer.info(f"Streaming message: {message[:50]}...")
+            
+            # Add user message to history
+            working_history = history + [{"role": "user", "content": message}, {"role": "assistant", "content": ""}]
+            yield working_history, ""
+            
+            # Stream response
+            response_content = ""
+            async for event in self.agent.stream_message(message, self.session_id):
+                if event["type"] == "content":
+                    response_content += event["content"]
+                    working_history[-1] = {"role": "assistant", "content": response_content}
+                    yield working_history, ""
+                elif event["type"] == "tool_start":
+                    tool_msg = f"\n\n🔧 **{event['content']}**"
+                    working_history[-1] = {"role": "assistant", "content": response_content + tool_msg}
+                    yield working_history, ""
+                elif event["type"] == "tool_end":
+                    tool_msg = f"\n✅ **{event['content']}**"
+                    working_history[-1] = {"role": "assistant", "content": response_content + tool_msg}
+                    yield working_history, ""
+                elif event["type"] == "answer":
+                    working_history[-1] = {"role": "assistant", "content": event["content"]}
+                    yield working_history, ""
+                elif event["type"] == "error":
+                    error_msg = f"\n❌ **{event['content']}**"
+                    working_history[-1] = {"role": "assistant", "content": response_content + error_msg}
+                    yield working_history, ""
+            
+        except Exception as e:
+            self.debug_streamer.error(f"Error in stream chat: {e}")
+            error_msg = f"❌ **Error streaming message: {str(e)}**"
+            working_history[-1] = {"role": "assistant", "content": error_msg}
+            yield working_history, ""
     
     def create_interface(self) -> gr.Blocks:
         """Create the Gradio interface"""
@@ -291,12 +358,23 @@ class NextGenApp:
         
         with gr.Blocks(
             css=custom_css,
-            title="Next-Gen LLM Agent",
+            title="LangChain-Native LLM Agent",
             theme=gr.themes.Soft()
         ) as demo:
             
             # Header
-            gr.Markdown("# Next-Gen LLM Agent", elem_classes=["hero-title"])
+            gr.Markdown("# LangChain-Native LLM Agent", elem_classes=["hero-title"])
+            
+            gr.Markdown("""
+            A modern AI agent using pure LangChain patterns for multi-turn conversations with tool calls.
+            
+            **Features:**
+            - Multi-turn conversation memory
+            - Tool calling with context
+            - Streaming responses
+            - Error handling and recovery
+            - LangChain-native architecture
+            """, elem_classes=["chat-hints"])
             
             with gr.Tabs():
                 
@@ -327,6 +405,7 @@ class NextGenApp:
                             with gr.Row():
                                 clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
                                 copy_btn = gr.Button("Copy Last Response", variant="secondary", elem_classes=["cmw-button"])
+                                stream_btn = gr.Button("Stream Mode", variant="secondary", elem_classes=["cmw-button"])
                         
                         with gr.Column(scale=1, elem_classes=["sidebar-card"]):
                             # Agent status
@@ -346,7 +425,7 @@ class NextGenApp:
                     
                     # Event handlers
                     def clear_chat():
-                        return [], ""
+                        return self.clear_conversation()
                     
                     def copy_last_response(history):
                         if history and len(history) > 0:
@@ -357,6 +436,45 @@ class NextGenApp:
                                 elif isinstance(msg, tuple):
                                     return msg[1]  # Get last assistant message from tuple
                         return ""
+                    
+                    def send_message(message: str, history: List[Dict[str, str]]) -> Tuple[List[Dict[str, str]], str]:
+                        """Send a message to the agent"""
+                        if not message.strip():
+                            return history, ""
+                        
+                        # Run async function
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        try:
+                            result = loop.run_until_complete(self.chat_with_agent(message, history))
+                            return result
+                        finally:
+                            loop.close()
+                    
+                    def stream_message(message: str, history: List[Dict[str, str]]):
+                        """Stream a message to the agent"""
+                        if not message.strip():
+                            yield history, ""
+                            return
+                        
+                        # Run async generator
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        try:
+                            async def async_stream():
+                                async for result in self.stream_chat_with_agent(message, history):
+                                    yield result
+                            
+                            # Convert async generator to regular generator
+                            async_gen = async_stream()
+                            while True:
+                                try:
+                                    result = loop.run_until_complete(async_gen.__anext__())
+                                    yield result
+                                except StopAsyncIteration:
+                                    break
+                        finally:
+                            loop.close()
                     
                     def quick_math():
                         return "What is 15 * 23 + 7? Please show your work step by step."
@@ -369,13 +487,19 @@ class NextGenApp:
                     
                     # Connect event handlers
                     send_btn.click(
-                        fn=self.chat_with_agent,
+                        fn=send_message,
                         inputs=[msg, chatbot],
                         outputs=[chatbot, msg]
                     )
                     
                     msg.submit(
-                        fn=self.chat_with_agent,
+                        fn=send_message,
+                        inputs=[msg, chatbot],
+                        outputs=[chatbot, msg]
+                    )
+                    
+                    stream_btn.click(
+                        fn=stream_message,
                         inputs=[msg, chatbot],
                         outputs=[chatbot, msg]
                     )
@@ -525,7 +649,7 @@ demo = get_demo()
 
 def main():
     """Main function to run the application"""
-    print("🚀 Starting Next-Gen LLM Agent App...")
+    print("🚀 Starting LangChain-Native LLM Agent App...")
     
     # Get the demo interface
     demo = get_demo()
