@@ -260,7 +260,7 @@ class LangChainAgent:
                     not isinstance(obj, type) and
                     hasattr(obj, '__module__') and
                     (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and
-                    name not in ["CmwAgent", "CodeInterpreter"]):
+                    name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step"]):
                     
                     if hasattr(obj, 'name') and hasattr(obj, 'description'):
                         tool_list.append(obj)
@@ -326,7 +326,7 @@ class LangChainAgent:
     
     async def stream_message(self, message: str, conversation_id: str = "default") -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Stream a message response.
+        Stream a message response using simple streaming implementation.
         
         Args:
             message: User message
@@ -344,40 +344,48 @@ class LangChainAgent:
             return
         
         try:
+            # Use simple streaming with improved tool filtering
+            from .simple_streaming import get_simple_streaming_manager
+            
             # Get conversation chain
             chain = self._get_conversation_chain(conversation_id)
             
-            # Create streaming callback
-            events = []
-            
-            def event_callback(event):
-                events.append(event)
-            
-            callback_handler = StreamingCallbackHandler(event_callback)
-            
-            # Process with streaming
+            # Process the message first to get the response
             result = chain.process_with_tools(message, conversation_id)
             
-            # Stream events
-            for event in events:
-                yield event
+            # Get simple streaming manager
+            streaming_manager = get_simple_streaming_manager()
             
-            # Stream final response
-            yield {
-                "type": "answer",
-                "content": result["response"],
-                "metadata": {
-                    "tool_calls": result["tool_calls"],
-                    "success": result["success"]
+            # Stream thinking process
+            async for event in streaming_manager.stream_thinking(message):
+                yield {
+                    "type": event.event_type,
+                    "content": event.content,
+                    "metadata": event.metadata or {}
                 }
-            }
+            
+            # Stream response with tool calls
+            async for event in streaming_manager.stream_response_with_tools(
+                result["response"], 
+                result.get("tool_calls", [])
+            ):
+                yield {
+                    "type": event.event_type,
+                    "content": event.content,
+                    "metadata": event.metadata or {}
+                }
             
         except Exception as e:
-            yield {
-                "type": "error",
-                "content": f"Error streaming message: {str(e)}",
-                "metadata": {"error": str(e)}
-            }
+            # Stream error
+            from .simple_streaming import get_simple_streaming_manager
+            streaming_manager = get_simple_streaming_manager()
+            
+            async for event in streaming_manager.stream_error(str(e)):
+                yield {
+                    "type": event.event_type,
+                    "content": event.content,
+                    "metadata": event.metadata or {}
+                }
     
     def get_conversation_history(self, conversation_id: str = "default") -> List[BaseMessage]:
         """Get conversation history"""
@@ -386,7 +394,7 @@ class LangChainAgent:
     
     async def stream_chat(self, message: str, history: List[ChatMessage] = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Stream chat response with real-time updates (compatible with NextGenAgent).
+        Stream chat response with real-time updates using LangChain native streaming.
         
         Args:
             message: User message
@@ -403,20 +411,11 @@ class LangChainAgent:
             }
             return
         
-        # Convert history to internal format
-        internal_history = []
-        if history:
-            for msg in history:
-                internal_history.append({
-                    "role": msg.role,
-                    "content": msg.content
-                })
-        
         # Add user message to history
         self.conversation_history.append(ChatMessage(role="user", content=message))
         
         try:
-            # Stream the response
+            # Stream the response using the updated stream_message method
             async for event in self.stream_message(message, "default"):
                 yield event
                 

@@ -706,9 +706,8 @@ class LLMManager:
                 if name in ["CmwAgent", "CodeInterpreter"]:
                     continue
                 
-                # Include math tools and answer submission tools
-                if name in ["multiply", "add", "subtract", "divide", "modulus", "power", "square_root", 
-                           "submit_answer", "submit_intermediate_step"]:
+                # Include math tools only (temporarily disable structured reasoning tools)
+                if name in ["multiply", "add", "subtract", "divide", "modulus", "power", "square_root"]:
                     if hasattr(obj, 'name') and hasattr(obj, 'description') and hasattr(obj, 'args_schema'):
                         tool_list.append(obj)
             

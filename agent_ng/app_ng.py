@@ -148,14 +148,20 @@ class NextGenApp:
         return static_logs
     
     def get_agent_status(self) -> str:
-        """Get current agent status"""
+        """Get current agent status with comprehensive details"""
         if not self.agent:
             return "🟡 Initializing agent..."
         
         status = self.agent.get_status()
         if status["is_ready"]:
             llm_info = self.agent.get_llm_info()
-            return f"✅ **{llm_info['provider']}** ({llm_info['model_name']})\n🔧 {status['tools_count']} tools available"
+            return f"""✅ **Agent Ready**
+
+**Provider:** {llm_info.get('provider', 'Unknown')}
+**Model:** {llm_info.get('model_name', 'Unknown')}
+**Status:** {'✅ Healthy' if llm_info.get('is_healthy', False) else '❌ Unhealthy'}
+**Tools:** {status['tools_count']} available
+**Last Used:** {time.ctime(llm_info.get('last_used', 0))}"""
         else:
             return "❌ Agent not ready"
     
@@ -227,7 +233,7 @@ class NextGenApp:
     
     async def stream_chat_with_agent(self, message: str, history: List[Dict[str, str]]) -> AsyncGenerator[Tuple[List[Dict[str, str]], str], None]:
         """
-        Stream chat with the agent using LangChain-native patterns.
+        Stream chat with the agent using LangChain-native streaming patterns.
         
         Args:
             message: User message
@@ -254,27 +260,43 @@ class NextGenApp:
             working_history = history + [{"role": "user", "content": message}, {"role": "assistant", "content": ""}]
             yield working_history, ""
             
-            # Stream response
+            # Stream response using simple streaming
             response_content = ""
+            tool_usage = ""
+            
             async for event in self.agent.stream_message(message, self.session_id):
-                if event["type"] == "content":
-                    response_content += event["content"]
-                    working_history[-1] = {"role": "assistant", "content": response_content}
+                event_type = event.get("type", "unknown")
+                content = event.get("content", "")
+                metadata = event.get("metadata", {})
+                
+                if event_type == "thinking":
+                    # Agent is thinking
+                    working_history[-1] = {"role": "assistant", "content": content}
                     yield working_history, ""
-                elif event["type"] == "tool_start":
-                    tool_msg = f"\n\n🔧 **{event['content']}**"
-                    working_history[-1] = {"role": "assistant", "content": response_content + tool_msg}
+                    
+                elif event_type == "tool_start":
+                    # Tool is starting
+                    tool_name = metadata.get("tool_name", "unknown")
+                    tool_usage += f"\n\n{content}"
+                    working_history[-1] = {"role": "assistant", "content": response_content + tool_usage}
                     yield working_history, ""
-                elif event["type"] == "tool_end":
-                    tool_msg = f"\n✅ **{event['content']}**"
-                    working_history[-1] = {"role": "assistant", "content": response_content + tool_msg}
+                    
+                elif event_type == "tool_end":
+                    # Tool completed
+                    tool_usage += f"\n{content}"
+                    working_history[-1] = {"role": "assistant", "content": response_content + tool_usage}
                     yield working_history, ""
-                elif event["type"] == "answer":
-                    working_history[-1] = {"role": "assistant", "content": event["content"]}
+                    
+                elif event_type == "content":
+                    # Stream content from response
+                    response_content += content
+                    working_history[-1] = {"role": "assistant", "content": response_content + tool_usage}
                     yield working_history, ""
-                elif event["type"] == "error":
-                    error_msg = f"\n❌ **{event['content']}**"
-                    working_history[-1] = {"role": "assistant", "content": response_content + error_msg}
+                    
+                elif event_type == "error":
+                    # Error occurred
+                    error_msg = f"\n{content}"
+                    working_history[-1] = {"role": "assistant", "content": response_content + tool_usage + error_msg}
                     yield working_history, ""
             
         except Exception as e:
@@ -405,11 +427,10 @@ class NextGenApp:
                             with gr.Row():
                                 clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
                                 copy_btn = gr.Button("Copy Last Response", variant="secondary", elem_classes=["cmw-button"])
-                                stream_btn = gr.Button("Stream Mode", variant="secondary", elem_classes=["cmw-button"])
                         
                         with gr.Column(scale=1, elem_classes=["sidebar-card"]):
-                            # Agent status
-                            gr.Markdown("### 🤖 Agent Status")
+                            # Combined status
+                            gr.Markdown("### 🤖 Status")
                             status_display = gr.Markdown("🟡 Initializing...", elem_classes=["status-card"])
                             
                             # Quick actions
@@ -418,10 +439,6 @@ class NextGenApp:
                                 quick_math_btn = gr.Button("🧮 Math Question", elem_classes=["cmw-button"])
                                 quick_code_btn = gr.Button("💻 Code Question", elem_classes=["cmw-button"])
                                 quick_general_btn = gr.Button("💭 General Question", elem_classes=["cmw-button"])
-                            
-                            # Model info
-                            gr.Markdown("### 📊 Model Info")
-                            model_info = gr.Markdown("Loading...", elem_classes=["status-card"])
                     
                     # Event handlers
                     def clear_chat():
@@ -436,20 +453,6 @@ class NextGenApp:
                                 elif isinstance(msg, tuple):
                                     return msg[1]  # Get last assistant message from tuple
                         return ""
-                    
-                    def send_message(message: str, history: List[Dict[str, str]]) -> Tuple[List[Dict[str, str]], str]:
-                        """Send a message to the agent"""
-                        if not message.strip():
-                            return history, ""
-                        
-                        # Run async function
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        try:
-                            result = loop.run_until_complete(self.chat_with_agent(message, history))
-                            return result
-                        finally:
-                            loop.close()
                     
                     def stream_message(message: str, history: List[Dict[str, str]]):
                         """Stream a message to the agent"""
@@ -487,18 +490,12 @@ class NextGenApp:
                     
                     # Connect event handlers
                     send_btn.click(
-                        fn=send_message,
+                        fn=stream_message,
                         inputs=[msg, chatbot],
                         outputs=[chatbot, msg]
                     )
                     
                     msg.submit(
-                        fn=send_message,
-                        inputs=[msg, chatbot],
-                        outputs=[chatbot, msg]
-                    )
-                    
-                    stream_btn.click(
                         fn=stream_message,
                         inputs=[msg, chatbot],
                         outputs=[chatbot, msg]
@@ -593,27 +590,11 @@ class NextGenApp:
             def update_status():
                 return self.get_agent_status()
             
-            def update_model_info():
-                if self.agent:
-                    llm_info = self.agent.get_llm_info()
-                    return f"""
-                    **Provider:** {llm_info.get('provider', 'Unknown')}
-                    **Model:** {llm_info.get('model_name', 'Unknown')}
-                    **Status:** {'✅ Healthy' if llm_info.get('is_healthy', False) else '❌ Unhealthy'}
-                    **Last Used:** {time.ctime(llm_info.get('last_used', 0))}
-                    """
-                return "Agent not available"
-            
             # Timer for auto-refresh
             status_timer = gr.Timer(2.0, active=True)
             status_timer.tick(
                 fn=update_status,
                 outputs=[status_display]
-            )
-            
-            status_timer.tick(
-                fn=update_model_info,
-                outputs=[model_info]
             )
             
             # Auto-refresh logs every 3 seconds
