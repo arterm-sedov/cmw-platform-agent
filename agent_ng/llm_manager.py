@@ -706,10 +706,18 @@ class LLMManager:
                 if name in ["CmwAgent", "CodeInterpreter"]:
                     continue
                 
-                # Include math tools only (exclude SGR tools to prevent contamination)
-                if name in ["multiply", "add", "subtract", "divide", "modulus", "power", "square_root"]:
+                # Include all valid tools (both math and CMW platform tools)
+                if callable(obj) and not name.startswith("_"):
+                    # Check if it's a LangChain tool with proper attributes
                     if hasattr(obj, 'name') and hasattr(obj, 'description') and hasattr(obj, 'args_schema'):
                         tool_list.append(obj)
+                        self._log_initialization(f"Loaded LangChain tool: {name}", "INFO")
+                    # Also include regular callable functions that might be tools
+                    elif callable(obj) and not isinstance(obj, type):
+                        # Exclude built-in types and classes
+                        if name not in ['int', 'str', 'float', 'bool', 'list', 'dict', 'tuple', 'Any', 'BaseModel', 'Field', 'field_validator']:
+                            tool_list.append(obj)
+                            self._log_initialization(f"Loaded function tool: {name}", "INFO")
             
             return tool_list
         except ImportError:
