@@ -249,23 +249,36 @@ class CmwAgent:
             return "You are a helpful AI assistant."
     
     def _initialize_tools(self) -> List[BaseTool]:
-        """Initialize available tools"""
+        """Initialize available tools using the same logic as the old agent"""
         try:
             import tools.tools as tools_module
             tool_list = []
             
+            # Use the same logic as the old agent's _gather_tools method
             for name, obj in tools_module.__dict__.items():
+                # Only include actual tool objects (decorated with @tool) or callable functions
+                # that are not classes, modules, or builtins
                 if (callable(obj) and 
                     not name.startswith("_") and 
-                    not isinstance(obj, type) and
-                    hasattr(obj, '__module__') and
-                    (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and
-                    name not in ["CodeInterpreter", "submit_answer", "submit_intermediate_step"]):
+                    not isinstance(obj, type) and  # Exclude classes
+                    hasattr(obj, '__module__') and  # Must have __module__ attribute
+                    (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
+                    name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step"]):  # Exclude specific classes and internal tools
                     
+                    # Check if it's a proper tool object (has the tool attributes)
                     if hasattr(obj, 'name') and hasattr(obj, 'description'):
+                        # This is a proper @tool decorated function or LangChain StructuredTool
                         tool_list.append(obj)
+                        print(f"✅ Loaded LangChain tool: {name}")
                     elif callable(obj) and not name.startswith("_"):
-                        tool_list.append(obj)
+                        # This is a regular function that might be a tool
+                        # Only include if it's not an internal function
+                        if not name.startswith("_") and name not in [
+                            # Exclude built-in types and classes
+                            'int', 'str', 'float', 'bool', 'list', 'dict', 'tuple', 'Any', 'BaseModel', 'Field', 'field_validator'
+                        ]:
+                            tool_list.append(obj)
+                            print(f"✅ Loaded function tool: {name}")
             
             return tool_list
         except ImportError:
