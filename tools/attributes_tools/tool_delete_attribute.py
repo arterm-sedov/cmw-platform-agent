@@ -21,7 +21,7 @@ def delete_attribute(
 
     attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
 
-    result = tools.requests_._delete_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
+    result = requests_._delete_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
 
     validated = AttributeResult(**result)
 

@@ -78,9 +78,9 @@ def edit_or_create_duration_attribute(
 
     try:
         if operation == "create":
-            result = tools.requests_._post_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
+            result = requests_._post_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
         if operation == "edit" or operation == "create":
-            result = tools.requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
+            result = requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
             print("edit is complited")
         else:
             result = {
@@ -132,7 +132,7 @@ def get_duration_attribute(
 
     attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
 
-    result = tools.requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
+    result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
 
     # Check if the request was successful and has the expected structure
     if not result.get('success', False):

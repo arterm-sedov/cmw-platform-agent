@@ -36,9 +36,9 @@ def archive_or_unarchive_attribute(
 
     try:
         if operation == "archive":
-            result = tools.requests_._put_request(None, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}/Disable")
+            result = requests_._put_request(None, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}/Disable")
         elif operation == "unarchive" or operation == "create":
-            result = tools.requests_._put_request(None, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}/Enable")
+            result = requests_._put_request(None, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}/Enable")
         else:
             result = {
                 "success": False,
