@@ -90,6 +90,11 @@ class SimpleStreamingManager:
                 if not tool_name or tool_name.strip() == "":
                     continue
                 
+                # Skip SGR tools that are for structured output, not calculations
+                sgr_tools = {'submit_answer', 'submit_intermediate_step'}
+                if tool_name in sgr_tools:
+                    continue
+                
                 # Show meaningful tool usage
                 if tool_name in {'add', 'subtract', 'multiply', 'divide'}:
                     # Math tools - show the calculation
