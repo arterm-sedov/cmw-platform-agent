@@ -12,3 +12,6 @@ When running commands in the terminal:
 
 Before running any Python code activate .venv for WSL/Lunux or Windows.
 Do not try to execute Python without active venv.
+
+- `.venv\Scripts\Activate.ps1` - PowerShell
+- `.venv/bin/activate` - WSL/Linux
