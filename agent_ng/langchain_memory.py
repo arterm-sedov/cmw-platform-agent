@@ -367,13 +367,32 @@ class LangChainConversationChain:
                     "success": True
                 }
         
-        # Max iterations reached
+        # If we exit the loop due to max iterations, get final response
+        # This handles the case where tools were called but we need a final answer
+        if tool_calls:
+            # Get one final response from the LLM after all tool calls
+            final_response = self.llm_instance.llm.invoke(messages)
+            if hasattr(final_response, 'content') and final_response.content.strip():
+                final_response_text = final_response.content
+                messages.append(final_response)
+            else:
+                final_response_text = str(final_response)
+        else:
+            # No tool calls were made, use the last response
+            if messages and hasattr(messages[-1], 'content'):
+                final_response_text = messages[-1].content
+            else:
+                final_response_text = "No response available"
+        
+        # Add to conversation history
+        self.memory_manager.add_message(conversation_id, HumanMessage(content=messages[0].content))
+        self.memory_manager.add_message(conversation_id, AIMessage(content=final_response_text))
+        
         return {
-            "response": "Maximum tool calling iterations reached",
+            "response": final_response_text,
             "conversation_id": conversation_id,
             "tool_calls": tool_calls,
-            "success": False,
-            "error": "max_iterations_reached"
+            "success": True
         }
     
     def _execute_tool(self, tool_name: str, tool_args: dict) -> str:
