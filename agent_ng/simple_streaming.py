@@ -101,20 +101,20 @@ class SimpleStreamingManager:
                     if 'a' in tool_args and 'b' in tool_args:
                         yield SimpleStreamingEvent(
                             event_type="tool_start",
-                            content=f"🧮 **Calculating: {tool_args['a']} {tool_name} {tool_args['b']}**",
+                            content=f"🧮 Calculating: {tool_args['a']} {tool_name} {tool_args['b']}",
                             metadata={"tool_name": tool_name, "args": tool_args}
                         )
                     else:
                         yield SimpleStreamingEvent(
                             event_type="tool_start",
-                            content=f"🧮 **Using {tool_name}**",
+                            content=f"🧮 Using {tool_name}",
                             metadata={"tool_name": tool_name}
                         )
                 else:
                     # Other tools
                     yield SimpleStreamingEvent(
                         event_type="tool_start",
-                        content=f"🔧 **Using tool: {tool_name}**",
+                        content=f"🔧 Using tool: {tool_name}",
                         metadata={"tool_name": tool_name}
                     )
                 
@@ -124,7 +124,7 @@ class SimpleStreamingManager:
                 # Tool end event
                 yield SimpleStreamingEvent(
                     event_type="tool_end",
-                    content=f"✅ **{tool_name} completed**",
+                    content=f"✅ {tool_name} completed",
                     metadata={"tool_name": tool_name}
                 )
                 
@@ -139,7 +139,7 @@ class SimpleStreamingManager:
             # If no response text, show a completion message
             yield SimpleStreamingEvent(
                 event_type="content",
-                content="✅ **Response completed**",
+                content="✅ Response completed",
                 metadata={"completion": True}
             )
     
