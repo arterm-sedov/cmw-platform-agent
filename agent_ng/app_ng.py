@@ -41,14 +41,14 @@ if parent_dir not in sys.path:
 
 # Try absolute imports first (works from root directory)
 try:
-    from agent_ng.langchain_agent import LangChainAgent as NextGenAgent, ChatMessage, get_agent_ng
+    from agent_ng.langchain_agent import CmwAgent as NextGenAgent, ChatMessage, get_agent_ng
     from agent_ng.llm_manager import get_llm_manager
     from agent_ng.debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
     from agent_ng.streaming_chat import get_chat_interface
 except ImportError:
     # Fallback to relative imports (when running as module)
     try:
-        from .langchain_agent import LangChainAgent as NextGenAgent, ChatMessage, get_agent_ng
+        from .langchain_agent import CmwAgent as NextGenAgent, ChatMessage, get_agent_ng
         from .llm_manager import get_llm_manager
         from .debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
         from .streaming_chat import get_chat_interface

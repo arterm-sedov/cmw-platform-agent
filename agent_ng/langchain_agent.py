@@ -175,7 +175,7 @@ class StreamingCallbackHandler(BaseCallbackHandler):
             })
 
 
-class LangChainAgent:
+class CmwAgent:
     """
     Modern agent using pure LangChain patterns with full modular architecture.
     
@@ -260,7 +260,7 @@ class LangChainAgent:
                     not isinstance(obj, type) and
                     hasattr(obj, '__module__') and
                     (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and
-                    name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step"]):
+                    name not in ["CodeInterpreter", "submit_answer", "submit_intermediate_step"]):
                     
                     if hasattr(obj, 'name') and hasattr(obj, 'description'):
                         tool_list.append(obj)
@@ -488,13 +488,13 @@ _agent_instance = None
 _agent_lock = asyncio.Lock()
 
 
-async def get_agent_ng() -> LangChainAgent:
+async def get_agent_ng() -> CmwAgent:
     """Get the global LangChain agent instance (compatible with NextGenAgent)"""
     global _agent_instance
     if _agent_instance is None:
         async with _agent_lock:
             if _agent_instance is None:
-                _agent_instance = LangChainAgent()
+                _agent_instance = CmwAgent()
                 # Wait for initialization
                 while not _agent_instance.is_ready():
                     await asyncio.sleep(0.1)

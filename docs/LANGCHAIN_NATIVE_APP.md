@@ -33,7 +33,7 @@ The `app_ng.py` has been successfully merged with LangChain-native features, cre
 ### Core Components
 
 1. **NextGenApp Class**: Main application class with LangChain-native methods
-2. **LangChain Agent Integration**: Direct integration with `LangChainAgent`
+2. **LangChain Agent Integration**: Direct integration with `CmwAgent`
 3. **Memory Management**: LangChain's `ConversationBufferMemory` for conversation history
 4. **Streaming Interface**: Real-time streaming with tool call visualization
 5. **UI Components**: Modern Gradio interface with comprehensive monitoring

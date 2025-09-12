@@ -1,8 +1,8 @@
 """
-Test Integration: LangChainAgent with app_ng.py
+Test Integration: CmwAgent with app_ng.py
 ==============================================
 
-This script tests that the enhanced LangChainAgent works correctly
+This script tests that the enhanced CmwAgent works correctly
 with app_ng.py and provides all the functionality of NextGenAgent.
 
 Usage:
@@ -20,7 +20,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
 try:
-    from agent_ng.langchain_agent import LangChainAgent, ChatMessage, get_agent_ng
+    from agent_ng.langchain_agent import CmwAgent, ChatMessage, get_agent_ng
     from agent_ng.app_ng import NextGenApp
 except ImportError as e:
     print(f"Import error: {e}")
@@ -29,15 +29,15 @@ except ImportError as e:
 
 
 class IntegrationTester:
-    """Test the integration between LangChainAgent and app_ng.py"""
+    """Test the integration between CmwAgent and app_ng.py"""
     
     def __init__(self):
         self.agent = None
         self.app = None
     
     async def test_agent_functionality(self):
-        """Test that LangChainAgent has all NextGenAgent functionality"""
-        print("🧪 Testing LangChainAgent Functionality")
+        """Test that CmwAgent has all NextGenAgent functionality"""
+        print("🧪 Testing CmwAgent Functionality")
         print("=" * 50)
         
         # Initialize agent
@@ -109,7 +109,7 @@ class IntegrationTester:
         return response1.success and response2.success
     
     async def test_app_integration(self):
-        """Test that app_ng.py works with LangChainAgent"""
+        """Test that app_ng.py works with CmwAgent"""
         print("\n🖥️ Testing App Integration")
         print("=" * 50)
         
@@ -183,7 +183,7 @@ class IntegrationTester:
     
     async def run_all_tests(self):
         """Run all integration tests"""
-        print("🧪 LangChainAgent Integration Tests")
+        print("🧪 CmwAgent Integration Tests")
         print("=" * 60)
         
         # Set up environment
@@ -222,7 +222,7 @@ class IntegrationTester:
         print(f"\nOverall: {passed}/{total} tests passed")
         
         if passed == total:
-            print("🎉 All tests passed! LangChainAgent is ready to replace NextGenAgent.")
+            print("🎉 All tests passed! CmwAgent is ready to replace NextGenAgent.")
         else:
             print("⚠️ Some tests failed. Check the implementation.")
         

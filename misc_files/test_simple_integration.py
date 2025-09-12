@@ -2,7 +2,7 @@
 Simple Integration Test
 ======================
 
-A simple test to verify that LangChainAgent works correctly
+A simple test to verify that CmwAgent works correctly
 without the full app dependencies.
 
 Usage:
@@ -23,15 +23,15 @@ sys.path.insert(0, parent_dir)
 os.environ.setdefault("AGENT_PROVIDER", "openrouter")
 
 try:
-    from agent_ng.langchain_agent import LangChainAgent, ChatMessage, get_agent_ng
-    print("✅ Successfully imported LangChainAgent")
+    from agent_ng.langchain_agent import CmwAgent, ChatMessage, get_agent_ng
+    print("✅ Successfully imported CmwAgent")
 except ImportError as e:
     print(f"❌ Import error: {e}")
     sys.exit(1)
 
 
 async def test_basic_functionality():
-    """Test basic functionality of LangChainAgent"""
+    """Test basic functionality of CmwAgent"""
     print("\n🧪 Testing Basic Functionality")
     print("=" * 40)
     
@@ -188,7 +188,7 @@ async def test_streaming():
 
 async def main():
     """Main test function"""
-    print("🧪 LangChainAgent Simple Integration Test")
+    print("🧪 CmwAgent Simple Integration Test")
     print("=" * 60)
     
     # Run tests
@@ -223,7 +223,7 @@ async def main():
     print(f"\nOverall: {passed}/{total} tests passed")
     
     if passed == total:
-        print("🎉 All tests passed! LangChainAgent is working correctly.")
+        print("🎉 All tests passed! CmwAgent is working correctly.")
     else:
         print("⚠️ Some tests failed. Check the implementation.")
     

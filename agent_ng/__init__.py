@@ -21,7 +21,7 @@ Key Modules:
 - langchain_wrapper: LangChain integration
 """
 
-from .langchain_agent import LangChainAgent as NextGenAgent, ChatMessage, get_agent_ng
+from .langchain_agent import CmwAgent as NextGenAgent, ChatMessage, get_agent_ng
 from .app_ng import NextGenApp
 
 __all__ = [

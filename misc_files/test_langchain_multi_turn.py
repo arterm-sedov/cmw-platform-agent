@@ -27,7 +27,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
 try:
-    from agent_ng.langchain_agent import get_langchain_agent, LangChainAgent
+    from agent_ng.langchain_agent import get_langchain_agent, CmwAgent
     from agent_ng.langchain_memory import get_memory_manager
     from langchain_core.messages import HumanMessage, AIMessage
 except ImportError as e:
