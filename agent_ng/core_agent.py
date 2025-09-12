@@ -177,11 +177,15 @@ class CoreAgent:
             
             with open(prompt_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                return data.get("system_prompt", "You are a helpful AI assistant.")
+                # Convert the entire JSON to a string, just like the old agent
+                system_prompt = json.dumps(data, ensure_ascii=False)
+                print(f"✅ Loaded system prompt from: {os.path.basename(prompt_path)} ({len(system_prompt)} chars)")
+                return system_prompt
         except FileNotFoundError:
+            print("❌ Warning: system_prompt.json not found, using default prompt")
             return "You are a helpful AI assistant."
         except Exception as e:
-            print(f"Warning: Could not load system prompt: {e}")
+            print(f"❌ Warning: Could not load system prompt: {e}")
             return "You are a helpful AI assistant."
     
     def _initialize_tools(self) -> List[Any]:
@@ -192,19 +196,40 @@ class CoreAgent:
             print("Warning: Tools module not available")
             return tool_list
             
+        # Define excluded names that are not actual tools
+        excluded_names = {
+            "CmwAgent", "CodeInterpreter", "Any", "BaseModel", "Field", "field_validator",
+            "Dict", "List", "Optional", "Tuple", "Union", "Literal", "tool",
+            "ArxivLoader", "WikipediaLoader", "TavilySearch", "Exa",
+            "CombineImagesParams", "DrawOnImageParams", "GenerateSimpleImageParams", 
+            "TransformImageParams", "SubmitAnswerSchema", "SubmitIntermediateStepSchema",
+            "SubmitAnswerResult", "SubmitIntermediateStepResult"
+        }
+        
         for name, obj in tools_module.__dict__.items():
+            # Skip excluded names
+            if name in excluded_names:
+                continue
+                
+            # Check if it's a callable tool
             if (callable(obj) and 
                 not name.startswith("_") and 
                 not isinstance(obj, type) and
                 hasattr(obj, '__module__') and
                 (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and
                 name not in ["CodeInterpreter"]):
-                
+                # Check if it has tool attributes (LangChain tools)
                 if hasattr(obj, 'name') and hasattr(obj, 'description'):
                     tool_list.append(obj)
+                    print(f"✅ Loaded LangChain tool: {name}")
+                # Check if it's a regular callable function (non-tool functions)
                 elif callable(obj) and not name.startswith("_"):
-                    tool_list.append(obj)
+                    # Only include if it's not a class or built-in type
+                    if not isinstance(obj, type) and not name in ['int', 'str', 'float', 'bool', 'list', 'dict', 'tuple']:
+                        tool_list.append(obj)
+                        print(f"✅ Loaded function tool: {name}")
         
+        print(f"🔧 Total tools loaded: {len(tool_list)}")
         return tool_list
     
     
