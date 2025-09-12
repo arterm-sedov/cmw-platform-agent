@@ -1738,7 +1738,10 @@ class SubmitIntermediateStepResult(BaseModel):
 @tool("submit_answer", return_direct=False, args_schema=SubmitAnswerSchema)
 def submit_answer(answer: str, confidence: float = 1.0, sources: List[str] = None, reasoning: str = None) -> Dict[str, Any]:
     """
-    Submit an answer with structured metadata for the current question or sub-question.
+    Submit a final answer using Schema-Guided Reasoning (SGR).
+    
+    This tool forces the LLM to explicitly state its conclusion rather than leaving it implicit.
+    It preserves structured metadata while ensuring clean integration with the streaming pipeline.
     
     Use this tool when ready to provide an answer for the current question. This can be:
     - A final answer after completing all reasoning steps
@@ -1748,110 +1751,63 @@ def submit_answer(answer: str, confidence: float = 1.0, sources: List[str] = Non
     This tool preserves context across multiple conversation turns.
     
     Returns:
-        dict: {
-            "success": bool - True if the final answer was submitted successfully
-            "status_code": int - HTTP response status code (200 for success)
-            "raw_response": dict|None - Structured response containing the submitted answer data
-            "error": str|None - Error message if operation failed
-        }
+        dict: Structured response with answer and metadata
     """
     try:
-        # Validate input using Pydantic schema
-        schema = SubmitAnswerSchema(
-            answer=answer,
-            confidence=confidence,
-            sources=sources,
-            reasoning=reasoning
-        )
-        
-        # Create structured response
-        response_data = {
-            "type": "final_answer",
-            "answer": schema.answer,
-            "confidence": schema.confidence,
-            "sources": schema.sources or [],
-            "reasoning": schema.reasoning,
-            "timestamp": time.time()
+        # Create structured response that's easy to extract
+        result = {
+            "success": True,
+            "answer": answer,
+            "confidence": confidence,
+            "sources": sources or [],
+            "reasoning": reasoning or "",
+            "timestamp": time.time(),
+            "type": "final_answer"
         }
-        
-        # Create result using Pydantic model
-        result = SubmitAnswerResult(
-            success=True,
-            status_code=200,
-            raw_response=response_data
-        )
-        
-        validated = SubmitAnswerResult(**result.model_dump())
-        return validated.model_dump()
+        return result
     except Exception as e:
-        result = SubmitAnswerResult(
-            success=False,
-            status_code=500,
-            error=f"Error submitting final answer: {str(e)}"
-        )
-        validated = SubmitAnswerResult(**result.model_dump())
-        return validated.model_dump()
+        return {
+            "success": False,
+            "error": f"Error submitting answer: {str(e)}",
+            "type": "error"
+        }
 
 @tool("submit_intermediate_step", return_direct=False, args_schema=SubmitIntermediateStepSchema)
 def submit_intermediate_step(step_name: str, description: str, status: str = "in_progress", 
                            data: Dict[str, Any] = None, next_steps: List[str] = None, 
                            confidence: float = None, issues: List[str] = None) -> Dict[str, Any]:
     """
-    Submit an intermediate reasoning step or progress update.
+    Submit an intermediate reasoning step using Schema-Guided Reasoning (SGR).
     
     Use this tool to document intermediate steps in your reasoning process, 
     progress updates, or partial findings before reaching a final conclusion.
+    
     This tool helps track the agent's thought process and enables better debugging.
+    It helps guide structured thinking and makes the reasoning process transparent and debuggable.
     
     Returns:
-        dict: {
-            "success": bool - True if the intermediate step was submitted successfully
-            "status_code": int - HTTP response status code (200 for success)
-            "raw_response": dict|None - Structured response containing the submitted step data
-            "error": str|None - Error message if operation failed
-        }
+        dict: Structured response with step details and metadata
     """
     try:
-        # Validate input using Pydantic schema
-        schema = SubmitIntermediateStepSchema(
-            step_name=step_name,
-            description=description,
-            status=status,
-            data=data,
-            next_steps=next_steps,
-            confidence=confidence,
-            issues=issues
-        )
-        
-        # Create structured response
-        response_data = {
-            "type": "intermediate_step",
-            "step_name": schema.step_name,
-            "description": schema.description,
-            "status": schema.status,
-            "data": schema.data or {},
-            "next_steps": schema.next_steps or [],
-            "confidence": schema.confidence,
-            "issues": schema.issues or [],
-            "timestamp": time.time()
+        # Create structured response that's easy to extract
+        result = {
+            "success": True,
+            "step_name": step_name,
+            "description": description,
+            "status": status,
+            "data": data or {},
+            "next_steps": next_steps or [],
+            "confidence": confidence,
+            "issues": issues or [],
+            "timestamp": time.time(),
+            "type": "intermediate_step"
         }
-        
-        # Create result using Pydantic model
-        result = SubmitIntermediateStepResult(
-            success=True,
-            status_code=200,
-            raw_response=response_data
-        )
-        
-        validated = SubmitIntermediateStepResult(**result.model_dump())
-        return validated.model_dump()
+        return result
     except Exception as e:
-        result = SubmitIntermediateStepResult(
-            success=False,
-            status_code=500,
-            error=f"Error submitting intermediate step: {str(e)}"
-        )
-        validated = SubmitIntermediateStepResult(**result.model_dump())
-        return validated.model_dump()
+        return {
+            "success": False,
+            "error": f"Error submitting step: {str(e)}",
+            "type": "error"
+        }
 
 # ========== END OF TOOLS.PY ========== 

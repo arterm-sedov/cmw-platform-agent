@@ -90,7 +90,7 @@ class SimpleStreamingManager:
                 if not tool_name or tool_name.strip() == "":
                     continue
                 
-                # Skip SGR tools that are for structured output, not calculations
+                # Skip SGR tools from display (they're executed but not shown)
                 sgr_tools = {'submit_answer', 'submit_intermediate_step'}
                 if tool_name in sgr_tools:
                     continue
