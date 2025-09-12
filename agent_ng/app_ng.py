@@ -385,23 +385,42 @@ class NextGenApp:
         ) as demo:
             
             # Header
-            gr.Markdown("# LangChain-Native LLM Agent", elem_classes=["hero-title"])
-            
-            gr.Markdown("""
-            A modern AI agent using pure LangChain patterns for multi-turn conversations with tool calls.
-            
-            **Features:**
-            - Multi-turn conversation memory
-            - Tool calling with context
-            - Streaming responses
-            - Error handling and recovery
-            - LangChain-native architecture
-            """, elem_classes=["chat-hints"])
-            
+            gr.Markdown("# Analyst Copilot", elem_classes=["hero-title"]) 
+                       
             with gr.Tabs():
                 
                 # Chat Tab
                 with gr.TabItem("💬 Chat", id="chat"):
+                    
+                    with gr.Row():
+                        with gr.Column():
+                            gr.Markdown("""
+                            ## 💬 Chat with the Comindware Analyst Copilot
+                            
+                            **Welcome!**
+                            
+                            This agent focuses on the **Comindware Platform** entity operations (applications, templates, attributes) and uses deterministic tools to execute precise changes.
+                            
+                            ### 🎯 **How it works:**
+                            
+                            - **Platform Operations First**: Validates your intent and executes tools for entity changes (e.g., create/edit attributes)
+                            - **Multi-Model Orchestration**: Tries multiple LLM providers with intelligent fallback
+                            - **Compact Structured Output**: Intent → Plan → Validate → Execute → Result
+                            """, elem_classes=["chat-hints"]) 
+                        with gr.Column():
+                            gr.Markdown("""
+                            ### 💡 **Try asking:**
+                            
+                            - List all applications in the Platform
+                            - List all record templates in app 'ERP'
+                            - List all attributes in template 'Counterparties', app 'ERP'
+                            - Create plain text attribute 'Comment', app 'HR', template 'Candidates'
+                            - Create 'Customer ID' text attribute, app 'ERP', template 'Counterparties', custom input mask: ([0-9]{10}|[0-9]{12})
+                            - For attribute 'Contact Phone' in app 'CRM', template 'Leads', change display format to Russian phone
+                            - Fetch attribute: system name 'Comment', app 'HR', template 'Candidates'
+                            - Archive/unarchive attribute, system name 'Comment', app 'HR', template 'Candidates'
+                            """, elem_classes=["chat-hints"]) 
+                            
                     with gr.Row():
                         with gr.Column(scale=3):
                             # Chat interface with metadata support for thinking transparency
@@ -422,38 +441,31 @@ class NextGenApp:
                                     scale=4,
                                     max_lines=4
                                 )
-                                send_btn = gr.Button("Send", variant="primary", scale=1, elem_classes=["cmw-button"])
-                            
-                            with gr.Row():
-                                clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
-                                copy_btn = gr.Button("Copy Last Response", variant="secondary", elem_classes=["cmw-button"])
+                                with gr.Column():
+                                    send_btn = gr.Button("Send", variant="primary", scale=1, elem_classes=["cmw-button"])
+                                    clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
                         
                         with gr.Column(scale=1, elem_classes=["sidebar-card"]):
+                            with gr.Column(elem_classes=["model-card"]):
                             # Combined status
-                            gr.Markdown("### 🤖 Status")
-                            status_display = gr.Markdown("🟡 Initializing...", elem_classes=["status-card"])
-                            
+                                gr.Markdown("### 🤖 Status")
+                                status_display = gr.Markdown("🟡 Initializing...", elem_classes=["status-card"])
+                                
                             # Quick actions
-                            gr.Markdown("### ⚡ Quick Actions")
-                            with gr.Column():
-                                quick_math_btn = gr.Button("🧮 Math Question", elem_classes=["cmw-button"])
-                                quick_code_btn = gr.Button("💻 Code Question", elem_classes=["cmw-button"])
-                                quick_general_btn = gr.Button("💭 General Question", elem_classes=["cmw-button"])
+                            with gr.Column(elem_classes=["quick-actions-card"]):
+                                gr.Markdown("### ⚡ Quick Actions")
+                                with gr.Column():
+                                    quick_list_apps_btn = gr.Button("🔎 List all apps", elem_classes=["cmw-button"])
+                                    quick_create_attr_btn = gr.Button("🧩 Create text attribute", elem_classes=["cmw-button"]) 
+                                    quick_edit_mask_btn = gr.Button("🛠️ Edit phone mask", elem_classes=["cmw-button"]) 
+                                    quick_math_btn = gr.Button("🧮 15 * 23 + 7 = ?", elem_classes=["cmw-button"]) 
+                                    quick_code_btn = gr.Button("💻 Python prime check function", elem_classes=["cmw-button"]) 
+                                    quick_explain_btn = gr.Button("💭 Explain ML briefly", elem_classes=["cmw-button"]) 
                     
                     # Event handlers
                     def clear_chat():
                         return self.clear_conversation()
-                    
-                    def copy_last_response(history):
-                        if history and len(history) > 0:
-                            # Find the last assistant message
-                            for msg in reversed(history):
-                                if isinstance(msg, dict) and msg.get("role") == "assistant":
-                                    return msg.get("content", "")
-                                elif isinstance(msg, tuple):
-                                    return msg[1]  # Get last assistant message from tuple
-                        return ""
-                    
+                                      
                     def stream_message(message: str, history: List[Dict[str, str]]):
                         """Stream a message to the agent"""
                         if not message.strip():
@@ -479,13 +491,35 @@ class NextGenApp:
                         finally:
                             loop.close()
                     
+                    def quick_create_attr():
+                        return (
+                            "Draft a plan to CREATE a text attribute 'Customer ID' in application 'ERP', template 'Counterparties' "
+                            "with display_format=CustomMask and mask ([0-9]{10}|[0-9]{12}), system_name=CustomerID. "
+                            "Provide Intent, Plan, Validate, and a DRY-RUN payload preview (compact JSON) for the tool call, "
+                            "but DO NOT execute any changes yet. Wait for my confirmation."
+                        )
+                    
+                    def quick_edit_mask():
+                        return (
+                            "Prepare a safe EDIT plan for attribute 'Contact Phone' (system_name=ContactPhone) in application 'CRM', template 'Leads' "
+                            "to change display_format to PhoneRuMask. Provide Intent, Plan, Validate checklist (risk notes), and a DRY-RUN payload preview. "
+                            "Do NOT execute changes yet—await my approval."
+                        )
+                    
+                    def quick_list_apps():
+                        return (
+                            "List all applications in the Platform. "
+                            "Format nicely using Markdown. "
+                            "Show system names and descriptions if any."
+                        )
+                    
                     def quick_math():
                         return "What is 15 * 23 + 7? Please show your work step by step."
                     
                     def quick_code():
                         return "Write a Python function to check if a number is prime. Include tests."
                     
-                    def quick_general():
+                    def quick_explain():
                         return "Explain the concept of machine learning in simple terms."
                     
                     # Connect event handlers
@@ -505,13 +539,7 @@ class NextGenApp:
                         fn=clear_chat,
                         outputs=[chatbot, msg]
                     )
-                    
-                    copy_btn.click(
-                        fn=copy_last_response,
-                        inputs=[chatbot],
-                        outputs=[msg]
-                    )
-                    
+                                       
                     quick_math_btn.click(
                         fn=quick_math,
                         outputs=[msg]
@@ -522,8 +550,23 @@ class NextGenApp:
                         outputs=[msg]
                     )
                     
-                    quick_general_btn.click(
-                        fn=quick_general,
+                    quick_explain_btn.click(
+                        fn=quick_explain,
+                        outputs=[msg]
+                    )
+                    
+                    quick_create_attr_btn.click(
+                        fn=quick_create_attr,
+                        outputs=[msg]
+                    )
+                    
+                    quick_edit_mask_btn.click(
+                        fn=quick_edit_mask,
+                        outputs=[msg]
+                    )
+                    
+                    quick_list_apps_btn.click(
+                        fn=quick_list_apps,
                         outputs=[msg]
                     )
                 
