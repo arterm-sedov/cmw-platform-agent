@@ -198,7 +198,7 @@ class CoreAgent:
                 not isinstance(obj, type) and
                 hasattr(obj, '__module__') and
                 (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and
-                name not in ["CmwAgent", "CodeInterpreter"]):
+                name not in ["CodeInterpreter"]):
                 
                 if hasattr(obj, 'name') and hasattr(obj, 'description'):
                     tool_list.append(obj)
@@ -315,10 +315,12 @@ class CoreAgent:
                 
                 # Check if response has tool calls
                 if hasattr(response, 'tool_calls') and response.tool_calls:
+                    print(f"🔧 Step {step}: Found {len(response.tool_calls)} tool call(s)")
                     # Process tool calls
                     for tool_call in response.tool_calls:
                         tool_name = tool_call.get('name', 'unknown')
                         tool_args = tool_call.get('args', {})
+                        print(f"  🛠️ Calling tool: {tool_name} with args: {tool_args}")
                         
                         # Execute tool
                         tool_result = self._execute_tool(tool_name, tool_args, call_id)
@@ -356,14 +358,18 @@ class CoreAgent:
                 else:
                     # No tool calls, check if we have a valid response
                     response_content = getattr(response, 'content', '')
+                    print(f"🔍 Step {step}: No tool calls, response content: '{response_content[:100]}...'")
                     if response_content and response_content.strip():
                         # We have a valid response without tool calls, this is our final answer
+                        print(f"✅ Step {step}: Found final answer in response content")
                         messages.append(response)
                         break
                     else:
                         # Empty response, increment no progress counter
                         consecutive_no_progress += 1
+                        print(f"⚠️ Step {step}: Empty response, consecutive_no_progress: {consecutive_no_progress}")
                         if consecutive_no_progress >= self.max_consecutive_no_progress:
+                            print(f"⚠️ No progress after {consecutive_no_progress} steps, stopping tool calling loop")
                             break
                         
                         # Add AI message to conversation even if empty
@@ -373,13 +379,31 @@ class CoreAgent:
                 print(f"❌ Error in tool calling loop: {e}")
                 break
         
-        # Get final response
+        # Get final response - since submit_answer tool is disabled, 
+        # the agent should provide the answer in the response content
+        final_response = None
+        
+        # Try to get response from last AI message
         if messages and isinstance(messages[-1], AIMessage):
             final_response = messages[-1].content
+            print(f"🔍 Final response content: '{final_response[:200]}...'")
+            
             # Check if the response is empty or just whitespace
             if not final_response or not final_response.strip():
-                final_response = "I apologize, but I encountered an error while processing your request."
-        else:
+                print("⚠️ Empty response content, checking for alternative sources")
+                # If the last message is empty, check if we have any previous AI messages with content
+                for msg in reversed(messages):
+                    if isinstance(msg, AIMessage) and msg.content and msg.content.strip():
+                        final_response = msg.content
+                        print(f"✅ Found content in previous AI message: '{final_response[:200]}...'")
+                        break
+                
+                # If still no content, provide error message
+                if not final_response or not final_response.strip():
+                    final_response = "I apologize, but I encountered an error while processing your request."
+        
+        # If still no response, provide a default message
+        if not final_response:
             final_response = "I apologize, but I encountered an error while processing your request."
         
         return final_response, tool_calls

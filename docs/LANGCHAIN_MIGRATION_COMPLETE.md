@@ -1,14 +1,14 @@
-# Migration Complete: NextGenAgent → LangChainAgent
+# Migration Complete: NextGenAgent → CmwAgent
 
 ## ✅ Migration Status: COMPLETED
 
-The migration from the old `NextGenAgent` to the enhanced `LangChainAgent` has been successfully completed. All functionality has been preserved and enhanced.
+The migration from the old `NextGenAgent` to the enhanced `CmwAgent` has been successfully completed. All functionality has been preserved and enhanced.
 
 ## 🎯 What Was Accomplished
 
 ### 1. **Full Migration Completed**
 - ✅ Old `agent_ng.py` file removed
-- ✅ All imports updated to use `LangChainAgent`
+- ✅ All imports updated to use `CmwAgent`
 - ✅ Backward compatibility maintained through aliasing
 - ✅ All test files updated
 - ✅ Documentation updated
@@ -40,7 +40,7 @@ All tests are passing:
 
 ### Core Files
 - `agent_ng/__init__.py` - Updated imports
-- `agent_ng/app_ng.py` - Updated to use LangChainAgent
+- `agent_ng/app_ng.py` - Updated to use CmwAgent
 - `agent_ng/langchain_agent.py` - Enhanced with all NextGenAgent features
 - `agent_ng/langchain_memory.py` - LangChain-native memory implementation
 
@@ -63,7 +63,7 @@ The migration is transparent to existing code. All existing imports and usage pa
 from agent_ng import NextGenAgent, ChatMessage, get_agent_ng
 
 # Or use the new name directly
-from agent_ng.langchain_agent import LangChainAgent, ChatMessage, get_agent_ng
+from agent_ng.langchain_agent import CmwAgent, ChatMessage, get_agent_ng
 ```
 
 ## 🎉 Benefits Achieved
@@ -85,7 +85,7 @@ The new agent uses these default configurations (no changes needed):
 
 ## ✨ Next Steps
 
-The migration is complete and the system is ready for production use. The enhanced LangChainAgent provides:
+The migration is complete and the system is ready for production use. The enhanced CmwAgent provides:
 
 - Reliable multi-turn conversations with tool calls
 - Native LangChain integration

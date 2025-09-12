@@ -65,7 +65,7 @@ class LangChainConversationChain:
 ### 3. Modern Agent Implementation
 
 ```python
-class LangChainAgent:
+class CmwAgent:
     """Modern agent using pure LangChain patterns"""
     
     async def stream_message(self, message: str, conversation_id: str):
@@ -188,7 +188,7 @@ python test_langchain_multi_turn.py
 
 ### From Custom Implementation
 
-1. **Replace Core Agent**: Use `LangChainAgent` instead of `CoreAgent`
+1. **Replace Core Agent**: Use `CmwAgent` instead of `CoreAgent`
 2. **Update Memory**: Use `ToolAwareMemory` instead of custom conversation storage
 3. **Update Message Formatting**: Use LangChain's standard message types
 4. **Update Tool Calling**: Use LangChain's native tool calling patterns

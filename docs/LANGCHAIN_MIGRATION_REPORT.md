@@ -1,12 +1,12 @@
-# Migration Guide: NextGenAgent → LangChainAgent
+# Migration Guide: NextGenAgent → CmwAgent
 
 ## Overview
 
-This guide explains how to migrate from the old `NextGenAgent` to the enhanced `LangChainAgent` that fixes multi-turn conversation issues while maintaining all existing functionality.
+This guide explains how to migrate from the old `NextGenAgent` to the enhanced `CmwAgent` that fixes multi-turn conversation issues while maintaining all existing functionality.
 
 ## What Changed
 
-### ✅ **Enhanced LangChainAgent Now Includes:**
+### ✅ **Enhanced CmwAgent Now Includes:**
 
 1. **All NextGenAgent Functionality:**
    - ✅ Modular architecture integration
@@ -45,12 +45,12 @@ from agent_ng.agent_ng import NextGenAgent, ChatMessage, get_agent_ng
 
 **New way:**
 ```python
-from agent_ng.langchain_agent import LangChainAgent as NextGenAgent, ChatMessage, get_agent_ng
+from agent_ng.langchain_agent import CmwAgent as NextGenAgent, ChatMessage, get_agent_ng
 ```
 
 ### **Step 2: Update app_ng.py**
 
-The `app_ng.py` has been updated to use `LangChainAgent` instead of the old `NextGenAgent`. No code changes needed in your application.
+The `app_ng.py` has been updated to use `CmwAgent` instead of the old `NextGenAgent`. No code changes needed in your application.
 
 ### **Step 3: Test the Migration**
 
@@ -65,7 +65,7 @@ python test_integration.py
 
 ### **Identical Methods:**
 
-All methods from `NextGenAgent` are available in `LangChainAgent`:
+All methods from `NextGenAgent` are available in `CmwAgent`:
 
 ```python
 # All these methods work exactly the same:
@@ -91,7 +91,7 @@ async for event in agent.stream_chat("Hello", history):
 
 ### **Enhanced Functionality:**
 
-The new `LangChainAgent` provides additional methods:
+The new `CmwAgent` provides additional methods:
 
 ```python
 # New LangChain-specific methods
@@ -110,7 +110,7 @@ response1 = agent.process_message("Calculate 5 + 3", "conv1")
 response2 = agent.process_message("Now multiply by 2", "conv1")  # ❌ Fails
 ```
 
-**After (LangChainAgent):**
+**After (CmwAgent):**
 ```python
 # This works perfectly - context preserved
 response1 = agent.process_message("Calculate 5 + 3", "conv1")
@@ -202,7 +202,7 @@ If you need to rollback:
 1. **Revert app_ng.py imports:**
 ```python
 # Change back to:
-from agent_ng.langchain_agent import LangChainAgent as NextGenAgent, ChatMessage, get_agent_ng
+from agent_ng.langchain_agent import CmwAgent as NextGenAgent, ChatMessage, get_agent_ng
 ```
 
 2. **The old NextGenAgent is still available** in `agent_ng/agent_ng.py`
@@ -232,7 +232,7 @@ If you encounter any issues during migration:
 
 ## Conclusion
 
-The migration to `LangChainAgent` provides:
+The migration to `CmwAgent` provides:
 - ✅ **100% API compatibility** with `NextGenAgent`
 - ✅ **Fixed multi-turn conversations** with tool calls
 - ✅ **Better memory management** using LangChain patterns
