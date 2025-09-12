@@ -87,7 +87,8 @@ When you have enough information to provide a complete answer, use the submit_an
                 if turn.get('role') == 'tool' and turn.get('tool_call_id'):
                     tool_message = ToolMessage(
                         content=turn.get('content', ''),
-                        tool_call_id=turn.get('tool_call_id')
+                        tool_call_id=turn.get('tool_call_id'),
+                        name=turn.get('tool_name', '')
                     )
                     messages.append(tool_message)
         

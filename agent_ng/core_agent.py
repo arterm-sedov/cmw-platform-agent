@@ -649,6 +649,26 @@ class CoreAgent:
             )
             self.conversations[conversation_id].append(message)
             
+            # If there are tool calls, also store the tool results as separate ToolMessage objects
+            if tool_calls:
+                for tool_call in tool_calls:
+                    tool_result = tool_call.get('result', '')
+                    tool_call_id = tool_call.get('id', '')
+                    tool_name = tool_call.get('name', '')
+                    
+                    if tool_result and tool_call_id:
+                        tool_message = ConversationMessage(
+                            role='tool',
+                            content=tool_result,
+                            timestamp=time.time(),
+                            metadata={
+                                'tool_call_id': tool_call_id,
+                                'tool_name': tool_name,
+                                'tool_args': tool_call.get('args', {})
+                            }
+                        )
+                        self.conversations[conversation_id].append(tool_message)
+            
             # Trim conversation if too long
             if len(self.conversations[conversation_id]) > self.max_conversation_history:
                 self.conversations[conversation_id] = self.conversations[conversation_id][-self.max_conversation_history:]
@@ -668,6 +688,12 @@ class CoreAgent:
                 # Add tool calls if present
                 if msg.metadata and 'tool_calls' in msg.metadata:
                     history_entry['tool_calls'] = msg.metadata['tool_calls']
+                
+                # Add tool-specific fields for tool messages
+                if msg.role == 'tool' and msg.metadata:
+                    history_entry['tool_call_id'] = msg.metadata.get('tool_call_id', '')
+                    history_entry['tool_name'] = msg.metadata.get('tool_name', '')
+                    history_entry['tool_args'] = msg.metadata.get('tool_args', {})
                 
                 history.append(history_entry)
             

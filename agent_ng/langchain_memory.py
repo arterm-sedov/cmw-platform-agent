@@ -122,7 +122,22 @@ class ToolAwareMemory:
                 if conversation_id not in self.tool_calls_memory:
                     self.tool_calls_memory[conversation_id] = []
                 
+                # Store tool calls in separate memory
                 self.tool_calls_memory[conversation_id].extend(outputs["tool_calls"])
+                
+                # Also add ToolMessage objects to the main chat history
+                for tool_call in outputs["tool_calls"]:
+                    tool_result = tool_call.get('result', '')
+                    tool_call_id = tool_call.get('id', '')
+                    tool_name = tool_call.get('name', '')
+                    
+                    if tool_result and tool_call_id:
+                        tool_message = ToolMessage(
+                            content=tool_result,
+                            tool_call_id=tool_call_id,
+                            name=tool_name
+                        )
+                        self.chat_memory.chat_memory.append(tool_message)
     
     def clear(self) -> None:
         """Clear memory"""
@@ -356,9 +371,14 @@ class LangChainConversationChain:
                 # Add AI response to messages
                 messages.append(response)
                 
-                # Add to conversation history
-                self.memory_manager.add_message(conversation_id, HumanMessage(content=messages[0].content))
-                self.memory_manager.add_message(conversation_id, AIMessage(content=final_response))
+                # Add to conversation history - save the complete conversation including tool messages
+                for message in messages:
+                    if isinstance(message, HumanMessage):
+                        self.memory_manager.add_message(conversation_id, message)
+                    elif isinstance(message, AIMessage):
+                        self.memory_manager.add_message(conversation_id, message)
+                    elif isinstance(message, ToolMessage):
+                        self.memory_manager.add_message(conversation_id, message)
                 
                 return {
                     "response": final_response,
@@ -384,9 +404,14 @@ class LangChainConversationChain:
             else:
                 final_response_text = "No response available"
         
-        # Add to conversation history
-        self.memory_manager.add_message(conversation_id, HumanMessage(content=messages[0].content))
-        self.memory_manager.add_message(conversation_id, AIMessage(content=final_response_text))
+        # Add to conversation history - save the complete conversation including tool messages
+        for message in messages:
+            if isinstance(message, HumanMessage):
+                self.memory_manager.add_message(conversation_id, message)
+            elif isinstance(message, AIMessage):
+                self.memory_manager.add_message(conversation_id, message)
+            elif isinstance(message, ToolMessage):
+                self.memory_manager.add_message(conversation_id, message)
         
         return {
             "response": final_response_text,
