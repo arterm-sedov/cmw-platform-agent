@@ -260,7 +260,7 @@ class LangChainAgent:
                     not isinstance(obj, type) and
                     hasattr(obj, '__module__') and
                     (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and
-                    name not in ["CmwAgent", "CodeInterpreter"]):
+                    name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step"]):
                     
                     if hasattr(obj, 'name') and hasattr(obj, 'description'):
                         tool_list.append(obj)
@@ -364,9 +364,10 @@ class LangChainAgent:
                     "metadata": event.metadata or {}
                 }
             
-            # Stream response with tool calls
+            # Stream response with tool calls (ensure response is a string)
+            response_text = ensure_valid_answer(result["response"])
             async for event in streaming_manager.stream_response_with_tools(
-                result["response"], 
+                response_text, 
                 result.get("tool_calls", [])
             ):
                 yield {
