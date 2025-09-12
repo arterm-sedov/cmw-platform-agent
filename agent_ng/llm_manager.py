@@ -576,9 +576,11 @@ class LLMManager:
                         try:
                             instance.llm = instance.llm.bind_tools(tools_list)
                             instance.bound_tools = True
-                            self._log_initialization(f"Tools bound to {provider} instance", "INFO")
+                            self._log_initialization(f"Tools bound to {provider} instance ({len(tools_list)} tools)", "INFO")
                         except Exception as e:
                             self._log_initialization(f"Failed to bind tools to {provider}: {e}", "WARNING")
+                            # Don't fail the entire initialization if tool binding fails
+                            instance.bound_tools = False
                 
                 self._instances[instance_key] = instance
                 return instance
@@ -693,29 +695,34 @@ class LLMManager:
         return stats
     
     def get_tools(self) -> List[Any]:
-        """Get all available tools from tools.py"""
+        """Get all available tools from tools.py using the same logic as the old agent"""
         try:
             import tools.tools as tools_module
             tool_list = []
+            
+            # Use the same logic as the old agent's _gather_tools method
             for name, obj in tools_module.__dict__.items():
-                # Skip private attributes and classes
-                if name.startswith("_") or isinstance(obj, type):
-                    continue
-                
-                # Skip specific classes we don't want
-                if name in ["CmwAgent", "CodeInterpreter"]:
-                    continue
-                
-                # Include all valid tools (both math and CMW platform tools)
-                if callable(obj) and not name.startswith("_"):
-                    # Check if it's a LangChain tool with proper attributes
-                    if hasattr(obj, 'name') and hasattr(obj, 'description') and hasattr(obj, 'args_schema'):
+                # Only include actual tool objects (decorated with @tool) or callable functions
+                # that are not classes, modules, or builtins
+                if (callable(obj) and 
+                    not name.startswith("_") and 
+                    not isinstance(obj, type) and  # Exclude classes
+                    hasattr(obj, '__module__') and  # Must have __module__ attribute
+                    (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
+                    name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step"]):  # Exclude specific classes and internal tools
+                    
+                    # Check if it's a proper tool object (has the tool attributes)
+                    if hasattr(obj, 'name') and hasattr(obj, 'description'):
+                        # This is a proper @tool decorated function or LangChain StructuredTool
                         tool_list.append(obj)
                         self._log_initialization(f"Loaded LangChain tool: {name}", "INFO")
-                    # Also include regular callable functions that might be tools
-                    elif callable(obj) and not isinstance(obj, type):
-                        # Exclude built-in types and classes
-                        if name not in ['int', 'str', 'float', 'bool', 'list', 'dict', 'tuple', 'Any', 'BaseModel', 'Field', 'field_validator']:
+                    elif callable(obj) and not name.startswith("_"):
+                        # This is a regular function that might be a tool
+                        # Only include if it's not an internal function
+                        if not name.startswith("_") and name not in [
+                            # Exclude built-in types and classes
+                            'int', 'str', 'float', 'bool', 'list', 'dict', 'tuple', 'Any', 'BaseModel', 'Field', 'field_validator'
+                        ]:
                             tool_list.append(obj)
                             self._log_initialization(f"Loaded function tool: {name}", "INFO")
             

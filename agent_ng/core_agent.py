@@ -189,43 +189,36 @@ class CoreAgent:
             return "You are a helpful AI assistant."
     
     def _initialize_tools(self) -> List[Any]:
-        """Initialize available tools"""
+        """Initialize available tools using the same logic as the old agent"""
         tool_list = []
         
         if tools_module is None:
             print("Warning: Tools module not available")
             return tool_list
             
-        # Define excluded names that are not actual tools
-        excluded_names = {
-            "CmwAgent", "CodeInterpreter", "Any", "BaseModel", "Field", "field_validator",
-            "Dict", "List", "Optional", "Tuple", "Union", "Literal", "tool",
-            "ArxivLoader", "WikipediaLoader", "TavilySearch", "Exa",
-            "CombineImagesParams", "DrawOnImageParams", "GenerateSimpleImageParams", 
-            "TransformImageParams", "SubmitAnswerSchema", "SubmitIntermediateStepSchema",
-            "SubmitAnswerResult", "SubmitIntermediateStepResult"
-        }
-        
+        # Use the same logic as the old agent's _gather_tools method
         for name, obj in tools_module.__dict__.items():
-            # Skip excluded names
-            if name in excluded_names:
-                continue
-                
-            # Check if it's a callable tool
+            # Only include actual tool objects (decorated with @tool) or callable functions
+            # that are not classes, modules, or builtins
             if (callable(obj) and 
                 not name.startswith("_") and 
-                not isinstance(obj, type) and
-                hasattr(obj, '__module__') and
-                (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and
-                name not in ["CodeInterpreter"]):
-                # Check if it has tool attributes (LangChain tools)
+                not isinstance(obj, type) and  # Exclude classes
+                hasattr(obj, '__module__') and  # Must have __module__ attribute
+                (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
+                name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step"]):  # Exclude specific classes and internal tools
+                
+                # Check if it's a proper tool object (has the tool attributes)
                 if hasattr(obj, 'name') and hasattr(obj, 'description'):
+                    # This is a proper @tool decorated function or LangChain StructuredTool
                     tool_list.append(obj)
                     print(f"✅ Loaded LangChain tool: {name}")
-                # Check if it's a regular callable function (non-tool functions)
                 elif callable(obj) and not name.startswith("_"):
-                    # Only include if it's not a class or built-in type
-                    if not isinstance(obj, type) and not name in ['int', 'str', 'float', 'bool', 'list', 'dict', 'tuple']:
+                    # This is a regular function that might be a tool
+                    # Only include if it's not an internal function
+                    if not name.startswith("_") and name not in [
+                        # Exclude built-in types and classes
+                        'int', 'str', 'float', 'bool', 'list', 'dict', 'tuple', 'Any', 'BaseModel', 'Field', 'field_validator'
+                    ]:
                         tool_list.append(obj)
                         print(f"✅ Loaded function tool: {name}")
         
