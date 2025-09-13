@@ -201,31 +201,31 @@ class LLMManager:
             type_str="openrouter",
             api_key_env="OPENROUTER_API_KEY",
             api_base_env="OPENROUTER_BASE_URL",
-            max_history=20,
+            max_history=15,  # Reduced to accommodate context limits
             tool_support=True,
             force_tools=False,
             models=[
                 {
                     "model": "deepseek/deepseek-chat-v3.1:free",
-                    "token_limit": 100000,
+                    "token_limit": 150000,  # Updated to 150k (safe margin from 163,840 limit)
                     "max_tokens": 2048,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
                     "model": "mistralai/mistral-small-3.2-24b-instruct:free",
-                    "token_limit": 90000,
+                    "token_limit": 120000,  # Updated for consistency
                     "max_tokens": 2048,
                     "temperature": 0
                 },
                 {
                     "model": "openrouter/cypher-alpha:free",
-                    "token_limit": 1000000,
+                    "token_limit": 150000,  # Updated for consistency
                     "max_tokens": 2048,
                     "temperature": 0
                 }
             ],
-            enable_chunking=False
+            enable_chunking=True  # Enable chunking for OpenRouter
         ),
         LLMProvider.MISTRAL: LLMConfig(
             name="Mistral AI",
