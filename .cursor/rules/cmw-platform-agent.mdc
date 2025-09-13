@@ -16,5 +16,5 @@ alwaysApply: true
 - Use environment variables for secrets.
 - Ensure testability and extensibility.
 - Put any test scripts into @/misc_files folder.
-- put reports to a relevant /progress_reports/ folder under /docs/ or its relevant subfolder
-- put tests to /_tests/ under the current folder where the files are modified or created
+- put reports to a relevant docs/**/progress_reports/ folder under /docs/ or its relevant subfolder
+- put tests to /agent_ng/_tests preferably, or under the current folder _tests where the files are modified or created
