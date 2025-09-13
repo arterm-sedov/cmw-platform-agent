@@ -8,7 +8,6 @@ with clean separation of concerns and modern async/streaming patterns.
 Key Modules:
 - langchain_agent: LangChain-native agent implementation
 - app_ng: Gradio application interface
-- core_agent: Core agent functionality with tool calling
 - llm_manager: LLM provider management and configuration
 - error_handler: Error handling and fallback mechanisms
 - streaming_manager: Real-time streaming capabilities
@@ -20,9 +19,6 @@ Key Modules:
 - streaming_chat: Chat interface components
 - langchain_wrapper: LangChain integration utilities
 """
-
-# Core agent classes and functions
-from .core_agent import CoreAgent, ConversationMessage, AgentResponse, get_agent, reset_agent
 
 # LangChain agent classes and functions
 from .langchain_agent import CmwAgent as NextGenAgent, ChatMessage
@@ -40,13 +36,7 @@ from .error_handler import ErrorHandler, ErrorInfo, ErrorType, get_error_handler
 # when needed, not through this __init__.py file
 
 __all__ = [
-    # Core agent
-    'CoreAgent',
-    'ConversationMessage', 
-    'AgentResponse',
-    'get_agent',
-    'reset_agent',
-    
+   
     # LangChain agent
     'NextGenAgent',
     'ChatMessage',
