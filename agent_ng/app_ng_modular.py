@@ -47,6 +47,7 @@ try:
     from agent_ng.debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
     from agent_ng.streaming_chat import get_chat_interface
     from agent_ng.tabs import ChatTab, LogsTab, StatsTab
+    from agent_ng.ui_manager import get_ui_manager
 except ImportError:
     # Fallback to relative imports (when running as module)
     try:
@@ -55,6 +56,7 @@ except ImportError:
         from .debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
         from .streaming_chat import get_chat_interface
         from .tabs import ChatTab, LogsTab, StatsTab
+        from .ui_manager import get_ui_manager
     except ImportError as e:
         print(f"Warning: Could not import required modules: {e}")
         # Set defaults to prevent further errors
@@ -70,6 +72,7 @@ except ImportError:
         ChatTab = None
         LogsTab = None
         StatsTab = None
+        get_ui_manager = lambda: None
 
 
 class NextGenApp:
@@ -87,6 +90,9 @@ class NextGenApp:
         self.debug_streamer = get_debug_streamer("app_ng")
         self.log_handler = get_log_handler("app_ng")
         self.chat_interface = get_chat_interface("app_ng")
+        
+        # Initialize UI manager
+        self.ui_manager = get_ui_manager()
         
         # Initialize tab modules
         self.tabs = {}
@@ -428,78 +434,27 @@ class NextGenApp:
         )
     
     def create_interface(self) -> gr.Blocks:
-        """Create the Gradio interface using modular tabs"""
+        """Create the Gradio interface using UI Manager and modular tabs"""
+        # Create event handlers
+        event_handlers = self._create_event_handlers()
         
-        # Ensure Gradio can serve local static resources via /gradio_api/file=
-        RESOURCES_DIR = Path(__file__).parent.parent / "resources"
-        try:
-            existing_allowed = os.environ.get("GRADIO_ALLOWED_PATHS", "")
-            parts = [p for p in existing_allowed.split(os.pathsep) if p]
-            if str(RESOURCES_DIR) not in parts:
-                parts.append(str(RESOURCES_DIR))
-            os.environ["GRADIO_ALLOWED_PATHS"] = os.pathsep.join(parts)
-            print(f"Gradio static allowed paths: {os.environ['GRADIO_ALLOWED_PATHS']}")
-        except Exception as _e:
-            print(f"Warning: could not set GRADIO_ALLOWED_PATHS: {_e}")
-
-        # External CSS file
-        css_file_path = Path(__file__).parent.parent / "resources" / "css" / "cmw_copilot_theme.css"
-
-        with gr.Blocks(
-            css_paths=[css_file_path],
-            title="Comindware Analyst Copilot",
-            theme=gr.themes.Soft()
-        ) as demo:
-            
-            # Header
-            gr.Markdown("# Analyst Copilot", elem_classes=["hero-title"]) 
-                       
-            with gr.Tabs():
-                # Create event handlers
-                event_handlers = self._create_event_handlers()
-                
-                # Create tabs using modular components
-                if ChatTab:
-                    chat_tab, chat_components = ChatTab(event_handlers).create_tab()
-                    self.components.update(chat_components)
-                
-                if LogsTab:
-                    logs_tab, logs_components = LogsTab(event_handlers).create_tab()
-                    self.components.update(logs_components)
-                
-                if StatsTab:
-                    stats_tab, stats_components = StatsTab(event_handlers).create_tab()
-                    self.components.update(stats_components)
-            
-            # Auto-refresh timers
-            self._setup_auto_refresh(demo)
+        # Create tab modules
+        tab_modules = []
+        if ChatTab:
+            tab_modules.append(ChatTab(event_handlers))
+        if LogsTab:
+            tab_modules.append(LogsTab(event_handlers))
+        if StatsTab:
+            tab_modules.append(StatsTab(event_handlers))
+        
+        # Use UI Manager to create interface
+        demo = self.ui_manager.create_interface(tab_modules, event_handlers)
+        
+        # Update components from UI Manager
+        self.components.update(self.ui_manager.get_components())
         
         return demo
     
-    def _setup_auto_refresh(self, demo: gr.Blocks):
-        """Setup auto-refresh timers for status and logs"""
-        # Status auto-refresh
-        if "status_display" in self.components:
-            status_timer = gr.Timer(2.0, active=True)
-            status_timer.tick(
-                fn=self.get_agent_status,
-                outputs=[self.components["status_display"]]
-            )
-        
-        # Logs auto-refresh
-        if "logs_display" in self.components:
-            logs_timer = gr.Timer(3.0, active=True)
-            logs_timer.tick(
-                fn=self.get_initialization_logs,
-                outputs=[self.components["logs_display"]]
-            )
-        
-        # Load initial logs
-        if "logs_display" in self.components:
-            demo.load(
-                fn=self.get_initialization_logs,
-                outputs=[self.components["logs_display"]]
-            )
 
 
 # Global demo variable for Gradio reload functionality
