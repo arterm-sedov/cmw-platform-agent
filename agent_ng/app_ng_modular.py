@@ -459,19 +459,16 @@ class NextGenApp:
         try:
             if ChatTab:
                 tab_modules.append(ChatTab(event_handlers))
-                print("✅ ChatTab created successfully")
             else:
                 print("⚠️ ChatTab not available")
                 
             if LogsTab:
                 tab_modules.append(LogsTab(event_handlers))
-                print("✅ LogsTab created successfully")
             else:
                 print("⚠️ LogsTab not available")
                 
             if StatsTab:
                 tab_modules.append(StatsTab(event_handlers))
-                print("✅ StatsTab created successfully")
             else:
                 print("⚠️ StatsTab not available")
         except Exception as e:
@@ -481,7 +478,6 @@ class NextGenApp:
         # Use UI Manager to create interface
         try:
             demo = self.ui_manager.create_interface(tab_modules, event_handlers)
-            print("✅ Interface created successfully")
         except Exception as e:
             print(f"❌ Error creating interface: {e}")
             raise

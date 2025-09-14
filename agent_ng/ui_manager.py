@@ -43,6 +43,8 @@ class UIManager:
         Returns:
             Gradio Blocks interface
         """
+        print("🏗️ UIManager: Starting interface creation...")
+        
         # Clear components to ensure clean state
         self.components.clear()
         
@@ -66,6 +68,7 @@ class UIManager:
             # Setup auto-refresh timers
             self._setup_auto_refresh(demo, event_handlers)
         
+        print("✅ UIManager: Interface created successfully with all components and timers")
         return demo
     
     def _setup_auto_refresh(self, demo: gr.Blocks, event_handlers: Dict[str, Callable]):

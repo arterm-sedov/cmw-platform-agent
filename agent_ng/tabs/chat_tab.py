@@ -24,6 +24,8 @@ class ChatTab:
         Returns:
             Tuple of (TabItem, components_dict)
         """
+        print("✅ ChatTab: Creating chat interface...")
+        
         with gr.TabItem("💬 Chat", id="chat") as tab:
             # Create main chat interface (includes sidebar)
             self._create_chat_interface()
@@ -31,6 +33,7 @@ class ChatTab:
             # Connect event handlers
             self._connect_events()
         
+        print("✅ ChatTab: Successfully created with all components and event handlers")
         return tab, self.components
     
     def _create_chat_interface(self):
@@ -113,6 +116,8 @@ class ChatTab:
     
     def _connect_events(self):
         """Connect all event handlers for the chat tab"""
+        print("🔗 ChatTab: Connecting event handlers...")
+        
         # Get event handlers with fallbacks
         stream_handler = self.event_handlers.get("stream_message")
         clear_handler = self.event_handlers.get("clear_chat")
@@ -128,6 +133,8 @@ class ChatTab:
             raise ValueError("stream_message handler not found in event_handlers")
         if not clear_handler:
             raise ValueError("clear_chat handler not found in event_handlers")
+        
+        print("✅ ChatTab: Critical event handlers validated")
         
         # Main chat events
         self.components["send_btn"].click(
@@ -183,6 +190,8 @@ class ChatTab:
                 fn=quick_list_apps_handler,
                 outputs=[self.components["msg"]]
             )
+        
+        print("✅ ChatTab: All event handlers connected successfully")
     
     def get_components(self) -> Dict[str, Any]:
         """Get all components created by this tab"""
