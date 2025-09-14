@@ -36,6 +36,7 @@ from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, System
 from langchain_core.tools import BaseTool
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.runnables import Runnable
+from .token_counter import get_token_tracker, UsageMetadataCallbackHandler
 from langchain_core.runnables.utils import Input, Output
 
 # Local imports
@@ -84,6 +85,7 @@ class LangChainWrapper:
         """
         self.llm_manager = get_llm_manager()
         self.error_handler = get_error_handler()
+        self.token_tracker = get_token_tracker()
         self.default_provider = default_provider
         self.max_retries = max_retries
         self.timeout = timeout
@@ -257,6 +259,9 @@ class LangChainWrapper:
             tool_calls = self._extract_tool_calls(response)
             token_usage = self._extract_token_usage(response, current_provider)
             
+            # Track token usage
+            self.token_tracker.track_llm_response(response, formatted_messages)
+            
             # Update statistics
             execution_time = time.time() - start_time
             self.stats["successful_requests"] += 1
@@ -407,6 +412,16 @@ class LangChainWrapper:
             **self.stats,
             "llm_manager_stats": self.llm_manager.get_stats(),
             "error_handler_stats": self.error_handler.get_provider_failure_stats()
+        }
+    
+    def get_token_counts(self, messages: List[BaseMessage]) -> Dict[str, Any]:
+        """Get token counts for display"""
+        prompt_tokens = self.token_tracker.count_prompt_tokens(messages)
+        cumulative_stats = self.token_tracker.get_cumulative_stats()
+        
+        return {
+            "prompt_tokens": prompt_tokens,
+            "cumulative_stats": cumulative_stats
         }
     
     def reset_stats(self):

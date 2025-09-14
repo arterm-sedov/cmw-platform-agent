@@ -61,8 +61,18 @@ class ChatTab:
                 - For attribute 'Contact Phone' in app 'CRM', template 'Leads', change display format to Russian phone
                 - Fetch attribute: system name 'Comment', app 'HR', template 'Candidates'
                 - Archive/unarchive attribute, system name 'Comment', app 'HR', template 'Candidates'
-                """) 
-                
+                """)
+            # Quick actions section
+            with gr.Column(elem_classes=["quick-actions-card"]):
+                gr.Markdown("### ⚡ Quick Actions")
+                with gr.Column():
+                    self.components["quick_list_apps_btn"] = gr.Button("🔎 List all apps", elem_classes=["cmw-button"])
+                    self.components["quick_create_attr_btn"] = gr.Button("🧩 Create text attribute", elem_classes=["cmw-button"]) 
+                    self.components["quick_edit_mask_btn"] = gr.Button("🛠️ Edit phone mask", elem_classes=["cmw-button"]) 
+                    self.components["quick_math_btn"] = gr.Button("🧮 15 * 23 + 7 = ?", elem_classes=["cmw-button"]) 
+                    self.components["quick_code_btn"] = gr.Button("💻 Python prime check function", elem_classes=["cmw-button"]) 
+                    self.components["quick_explain_btn"] = gr.Button("💭 Explain ML briefly", elem_classes=["cmw-button"])
+            
         with gr.Row():
             with gr.Column(scale=3):
                 # Chat interface with metadata support for thinking transparency
@@ -97,17 +107,6 @@ class ChatTab:
                 with gr.Column(elem_classes=["model-card"]):
                     gr.Markdown("### 🤖 Status")
                     self.components["status_display"] = gr.Markdown("🟡 Initializing...")
-                    
-                # Quick actions section
-                with gr.Column(elem_classes=["quick-actions-card"]):
-                    gr.Markdown("### ⚡ Quick Actions")
-                    with gr.Column():
-                        self.components["quick_list_apps_btn"] = gr.Button("🔎 List all apps", elem_classes=["cmw-button"])
-                        self.components["quick_create_attr_btn"] = gr.Button("🧩 Create text attribute", elem_classes=["cmw-button"]) 
-                        self.components["quick_edit_mask_btn"] = gr.Button("🛠️ Edit phone mask", elem_classes=["cmw-button"]) 
-                        self.components["quick_math_btn"] = gr.Button("🧮 15 * 23 + 7 = ?", elem_classes=["cmw-button"]) 
-                        self.components["quick_code_btn"] = gr.Button("💻 Python prime check function", elem_classes=["cmw-button"]) 
-                        self.components["quick_explain_btn"] = gr.Button("💭 Explain ML briefly", elem_classes=["cmw-button"])
     
     def _create_sidebar(self):
         """Create the status and quick actions sidebar - now handled in _create_chat_interface"""
@@ -118,15 +117,9 @@ class ChatTab:
         """Connect all event handlers for the chat tab"""
         print("🔗 ChatTab: Connecting event handlers...")
         
-        # Get event handlers with fallbacks
+        # Get critical event handlers
         stream_handler = self.event_handlers.get("stream_message")
         clear_handler = self.event_handlers.get("clear_chat")
-        quick_math_handler = self.event_handlers.get("quick_math")
-        quick_code_handler = self.event_handlers.get("quick_code")
-        quick_explain_handler = self.event_handlers.get("quick_explain")
-        quick_create_attr_handler = self.event_handlers.get("quick_create_attr")
-        quick_edit_mask_handler = self.event_handlers.get("quick_edit_mask")
-        quick_list_apps_handler = self.event_handlers.get("quick_list_apps")
         
         # Validate critical handlers
         if not stream_handler:
@@ -154,42 +147,36 @@ class ChatTab:
             outputs=[self.components["chatbot"], self.components["msg"]]
         )
         
-        # Quick action events (with fallbacks)
-        if quick_math_handler:
-            self.components["quick_math_btn"].click(
-                fn=quick_math_handler,
-                outputs=[self.components["msg"]]
-            )
+        # Quick action events (using local methods)
+        self.components["quick_math_btn"].click(
+            fn=self._quick_math,
+            outputs=[self.components["msg"]]
+        )
         
-        if quick_code_handler:
-            self.components["quick_code_btn"].click(
-                fn=quick_code_handler,
-                outputs=[self.components["msg"]]
-            )
+        self.components["quick_code_btn"].click(
+            fn=self._quick_code,
+            outputs=[self.components["msg"]]
+        )
         
-        if quick_explain_handler:
-            self.components["quick_explain_btn"].click(
-                fn=quick_explain_handler,
-                outputs=[self.components["msg"]]
-            )
+        self.components["quick_explain_btn"].click(
+            fn=self._quick_explain,
+            outputs=[self.components["msg"]]
+        )
         
-        if quick_create_attr_handler:
-            self.components["quick_create_attr_btn"].click(
-                fn=quick_create_attr_handler,
-                outputs=[self.components["msg"]]
-            )
+        self.components["quick_create_attr_btn"].click(
+            fn=self._quick_create_attr,
+            outputs=[self.components["msg"]]
+        )
         
-        if quick_edit_mask_handler:
-            self.components["quick_edit_mask_btn"].click(
-                fn=quick_edit_mask_handler,
-                outputs=[self.components["msg"]]
-            )
+        self.components["quick_edit_mask_btn"].click(
+            fn=self._quick_edit_mask,
+            outputs=[self.components["msg"]]
+        )
         
-        if quick_list_apps_handler:
-            self.components["quick_list_apps_btn"].click(
-                fn=quick_list_apps_handler,
-                outputs=[self.components["msg"]]
-            )
+        self.components["quick_list_apps_btn"].click(
+            fn=self._quick_list_apps,
+            outputs=[self.components["msg"]]
+        )
         
         print("✅ ChatTab: All event handlers connected successfully")
     
@@ -204,3 +191,41 @@ class ChatTab:
     def get_message_component(self) -> gr.Textbox:
         """Get the message input component for quick actions"""
         return self.components["msg"]
+    
+    # Quick action methods
+    def _quick_math(self) -> str:
+        """Generate math quick action message"""
+        return "What is 15 * 23 + 7? Please show your work step by step."
+    
+    def _quick_code(self) -> str:
+        """Generate code quick action message"""
+        return "Write a Python function to check if a number is prime. Include tests."
+    
+    def _quick_explain(self) -> str:
+        """Generate explain quick action message"""
+        return "Explain the concept of machine learning in simple terms."
+    
+    def _quick_create_attr(self) -> str:
+        """Generate create attribute quick action message"""
+        return (
+            "Draft a plan to CREATE a text attribute 'Customer ID' in application 'ERP', template 'Counterparties' "
+            "with display_format=CustomMask and mask ([0-9]{{10}}|[0-9]{{12}}), system_name=CustomerID. "
+            "Provide Intent, Plan, Validate, and a DRY-RUN payload preview (compact JSON) for the tool call, "
+            "but DO NOT execute any changes yet. Wait for my confirmation."
+        )
+    
+    def _quick_edit_mask(self) -> str:
+        """Generate edit mask quick action message"""
+        return (
+            "Prepare a safe EDIT plan for attribute 'Contact Phone' (system_name=ContactPhone) in application 'CRM', template 'Leads' "
+            "to change display_format to PhoneRuMask. Provide Intent, Plan, Validate checklist (risk notes), and a DRY-RUN payload preview. "
+            "Do NOT execute changes yet—await my approval."
+        )
+    
+    def _quick_list_apps(self) -> str:
+        """Generate list apps quick action message"""
+        return (
+            "List all applications in the Platform. "
+            "Format nicely using Markdown. "
+            "Show system names and descriptions if any."
+        )

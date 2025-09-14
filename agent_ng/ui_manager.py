@@ -64,6 +64,8 @@ class UIManager:
                         tab_item, tab_components = tab_module.create_tab()
                         # Consolidate all components in one place
                         self.components.update(tab_components)
+                        # Store tab reference for later use
+                        self.components[f"{tab_module.__class__.__name__.lower()}_tab"] = tab_module
             
             # Setup auto-refresh timers
             self._setup_auto_refresh(demo, event_handlers)
@@ -93,11 +95,27 @@ class UIManager:
                 outputs=[self.components["logs_display"]]
             )
         
+        # Stats auto-refresh (every 5 seconds)
+        refresh_stats_handler = event_handlers.get("refresh_stats")
+        if "stats_display" in self.components and refresh_stats_handler:
+            stats_timer = gr.Timer(5.0, active=True)
+            stats_timer.tick(
+                fn=refresh_stats_handler,
+                outputs=[self.components["stats_display"]]
+            )
+        
         # Load initial logs (matches original behavior)
         if "logs_display" in self.components and refresh_logs_handler:
             demo.load(
                 fn=refresh_logs_handler,
                 outputs=[self.components["logs_display"]]
+            )
+        
+        # Load initial stats (fixes "Loading statistics..." issue)
+        if "stats_display" in self.components and refresh_stats_handler:
+            demo.load(
+                fn=refresh_stats_handler,
+                outputs=[self.components["stats_display"]]
             )
     
     def get_components(self) -> Dict[str, Any]:
@@ -107,6 +125,12 @@ class UIManager:
     def get_component(self, name: str) -> Any:
         """Get a specific component by name"""
         return self.components.get(name)
+    
+    def set_agent(self, agent):
+        """Set the agent reference on all tabs that support it"""
+        for key, component in self.components.items():
+            if hasattr(component, 'set_agent'):
+                component.set_agent(agent)
 
 # Global instance
 _ui_manager = None
