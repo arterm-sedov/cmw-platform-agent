@@ -113,54 +113,76 @@ class ChatTab:
     
     def _connect_events(self):
         """Connect all event handlers for the chat tab"""
+        # Get event handlers with fallbacks
+        stream_handler = self.event_handlers.get("stream_message")
+        clear_handler = self.event_handlers.get("clear_chat")
+        quick_math_handler = self.event_handlers.get("quick_math")
+        quick_code_handler = self.event_handlers.get("quick_code")
+        quick_explain_handler = self.event_handlers.get("quick_explain")
+        quick_create_attr_handler = self.event_handlers.get("quick_create_attr")
+        quick_edit_mask_handler = self.event_handlers.get("quick_edit_mask")
+        quick_list_apps_handler = self.event_handlers.get("quick_list_apps")
+        
+        # Validate critical handlers
+        if not stream_handler:
+            raise ValueError("stream_message handler not found in event_handlers")
+        if not clear_handler:
+            raise ValueError("clear_chat handler not found in event_handlers")
+        
         # Main chat events
         self.components["send_btn"].click(
-            fn=self.event_handlers.get("stream_message"),
+            fn=stream_handler,
             inputs=[self.components["msg"], self.components["chatbot"]],
             outputs=[self.components["chatbot"], self.components["msg"]]
         )
         
         self.components["msg"].submit(
-            fn=self.event_handlers.get("stream_message"),
+            fn=stream_handler,
             inputs=[self.components["msg"], self.components["chatbot"]],
             outputs=[self.components["chatbot"], self.components["msg"]]
         )
         
         self.components["clear_btn"].click(
-            fn=self.event_handlers.get("clear_chat"),
+            fn=clear_handler,
             outputs=[self.components["chatbot"], self.components["msg"]]
         )
         
-        # Quick action events
-        self.components["quick_math_btn"].click(
-            fn=self.event_handlers.get("quick_math"),
-            outputs=[self.components["msg"]]
-        )
+        # Quick action events (with fallbacks)
+        if quick_math_handler:
+            self.components["quick_math_btn"].click(
+                fn=quick_math_handler,
+                outputs=[self.components["msg"]]
+            )
         
-        self.components["quick_code_btn"].click(
-            fn=self.event_handlers.get("quick_code"),
-            outputs=[self.components["msg"]]
-        )
+        if quick_code_handler:
+            self.components["quick_code_btn"].click(
+                fn=quick_code_handler,
+                outputs=[self.components["msg"]]
+            )
         
-        self.components["quick_explain_btn"].click(
-            fn=self.event_handlers.get("quick_explain"),
-            outputs=[self.components["msg"]]
-        )
+        if quick_explain_handler:
+            self.components["quick_explain_btn"].click(
+                fn=quick_explain_handler,
+                outputs=[self.components["msg"]]
+            )
         
-        self.components["quick_create_attr_btn"].click(
-            fn=self.event_handlers.get("quick_create_attr"),
-            outputs=[self.components["msg"]]
-        )
+        if quick_create_attr_handler:
+            self.components["quick_create_attr_btn"].click(
+                fn=quick_create_attr_handler,
+                outputs=[self.components["msg"]]
+            )
         
-        self.components["quick_edit_mask_btn"].click(
-            fn=self.event_handlers.get("quick_edit_mask"),
-            outputs=[self.components["msg"]]
-        )
+        if quick_edit_mask_handler:
+            self.components["quick_edit_mask_btn"].click(
+                fn=quick_edit_mask_handler,
+                outputs=[self.components["msg"]]
+            )
         
-        self.components["quick_list_apps_btn"].click(
-            fn=self.event_handlers.get("quick_list_apps"),
-            outputs=[self.components["msg"]]
-        )
+        if quick_list_apps_handler:
+            self.components["quick_list_apps_btn"].click(
+                fn=quick_list_apps_handler,
+                outputs=[self.components["msg"]]
+            )
     
     def get_components(self) -> Dict[str, Any]:
         """Get all components created by this tab"""

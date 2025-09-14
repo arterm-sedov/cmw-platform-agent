@@ -46,8 +46,15 @@ class StatsTab:
     
     def _connect_events(self):
         """Connect all event handlers for the stats tab"""
+        # Get event handler with validation
+        refresh_handler = self.event_handlers.get("refresh_stats")
+        
+        # Validate critical handler
+        if not refresh_handler:
+            raise ValueError("refresh_stats handler not found in event_handlers")
+        
         self.components["refresh_stats_btn"].click(
-            fn=self.event_handlers.get("refresh_stats"),
+            fn=refresh_handler,
             outputs=[self.components["stats_display"]]
         )
     

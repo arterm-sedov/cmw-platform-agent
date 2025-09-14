@@ -43,6 +43,9 @@ class UIManager:
         Returns:
             Gradio Blocks interface
         """
+        # Clear components to ensure clean state
+        self.components.clear()
+        
         with gr.Blocks(
             css_paths=[self.css_file_path],
             title="Comindware Analyst Copilot",
@@ -57,6 +60,7 @@ class UIManager:
                 for tab_module in tab_modules:
                     if tab_module:
                         tab_item, tab_components = tab_module.create_tab()
+                        # Consolidate all components in one place
                         self.components.update(tab_components)
             
             # Setup auto-refresh timers
@@ -65,27 +69,31 @@ class UIManager:
         return demo
     
     def _setup_auto_refresh(self, demo: gr.Blocks, event_handlers: Dict[str, Callable]):
-        """Setup auto-refresh timers for status and logs"""
-        # Status auto-refresh
-        if "status_display" in self.components:
+        """Setup auto-refresh timers for status and logs - matches original behavior exactly"""
+        # Get handlers with validation
+        update_status_handler = event_handlers.get("update_status")
+        refresh_logs_handler = event_handlers.get("refresh_logs")
+        
+        # Status auto-refresh (matches original: 2.0 seconds)
+        if "status_display" in self.components and update_status_handler:
             status_timer = gr.Timer(2.0, active=True)
             status_timer.tick(
-                fn=event_handlers.get("update_status"),
+                fn=update_status_handler,
                 outputs=[self.components["status_display"]]
             )
         
-        # Logs auto-refresh
-        if "logs_display" in self.components:
+        # Logs auto-refresh (matches original: 3.0 seconds)
+        if "logs_display" in self.components and refresh_logs_handler:
             logs_timer = gr.Timer(3.0, active=True)
             logs_timer.tick(
-                fn=event_handlers.get("refresh_logs"),
+                fn=refresh_logs_handler,
                 outputs=[self.components["logs_display"]]
             )
         
-        # Load initial logs
-        if "logs_display" in self.components:
+        # Load initial logs (matches original behavior)
+        if "logs_display" in self.components and refresh_logs_handler:
             demo.load(
-                fn=event_handlers.get("refresh_logs"),
+                fn=refresh_logs_handler,
                 outputs=[self.components["logs_display"]]
             )
     

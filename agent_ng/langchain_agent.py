@@ -72,7 +72,7 @@ try:
     from .response_processor import get_response_processor
     from .stats_manager import get_stats_manager
     from .trace_manager import get_trace_manager
-    from .utils import ensure_valid_answer
+    from .utils import ensure_valid_answer, ensure_meaningful_response
 except ImportError:
     try:
         from agent_ng.llm_manager import get_llm_manager, LLMInstance
@@ -83,7 +83,7 @@ except ImportError:
         from agent_ng.response_processor import get_response_processor
         from agent_ng.stats_manager import get_stats_manager
         from agent_ng.trace_manager import get_trace_manager
-        from agent_ng.utils import ensure_valid_answer
+        from agent_ng.utils import ensure_valid_answer, ensure_meaningful_response
     except ImportError:
         get_llm_manager = lambda: None
         LLMInstance = None
@@ -96,6 +96,7 @@ except ImportError:
         get_stats_manager = lambda: None
         get_trace_manager = lambda: None
         ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
+        ensure_meaningful_response = lambda x, context="", tool_calls=None: str(x) if x is not None else "No response generated"
 
 
 @dataclass
@@ -377,8 +378,12 @@ class CmwAgent:
                     "metadata": event.metadata or {}
                 }
             
-            # Stream response with tool calls (ensure response is a string)
-            response_text = ensure_valid_answer(result["response"])
+            # Stream response with tool calls (ensure response is meaningful)
+            response_text = ensure_meaningful_response(
+                result["response"], 
+                context="LLM response after tool execution",
+                tool_calls=result.get("tool_calls", [])
+            )
             async for event in streaming_manager.stream_response_with_tools(
                 response_text, 
                 result.get("tool_calls", [])
