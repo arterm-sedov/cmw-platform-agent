@@ -79,7 +79,7 @@ class UIManager:
         update_status_handler = event_handlers.get("update_status")
         refresh_logs_handler = event_handlers.get("refresh_logs")
         
-        # Hybrid approach - minimal timer for initialization + event-driven updates
+        # Working hybrid approach - minimal timers that actually work
         # Load initial UI state once on startup
         if "status_display" in self.components and update_status_handler:
             demo.load(
@@ -96,6 +96,13 @@ class UIManager:
         
         if "logs_display" in self.components and refresh_logs_handler:
             demo.load(
+                fn=refresh_logs_handler,
+                outputs=[self.components["logs_display"]]
+            )
+            
+            # Add minimal timer for logs updates
+            logs_timer = gr.Timer(4.0, active=True)
+            logs_timer.tick(
                 fn=refresh_logs_handler,
                 outputs=[self.components["logs_display"]]
             )
