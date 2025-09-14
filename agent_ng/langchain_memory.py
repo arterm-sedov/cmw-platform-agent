@@ -62,16 +62,15 @@ if parent_dir not in sys.path:
 
 try:
     from .llm_manager import get_llm_manager, LLMInstance
-    from .utils import ensure_valid_answer, ensure_meaningful_response
+    from .utils import ensure_valid_answer
 except ImportError:
     try:
         from agent_ng.llm_manager import get_llm_manager, LLMInstance
-        from agent_ng.utils import ensure_valid_answer, ensure_meaningful_response
+        from agent_ng.utils import ensure_valid_answer
     except ImportError:
         get_llm_manager = lambda: None
         LLMInstance = None
         ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
-        ensure_meaningful_response = lambda x, context="", tool_calls=None: str(x) if x is not None else "No response generated"
 
 
 @dataclass
@@ -330,15 +329,9 @@ class LangChainConversationChain:
                 # Get LLM response
                 response = self.llm_instance.llm.invoke(messages)
             except Exception as e:
-                # Handle LLM errors (like context length limits)
-                error_msg = f"LLM Error: {str(e)}"
-                if tool_calls:
-                    tool_names = [call.get('name', 'unknown') for call in tool_calls]
-                    error_msg += f"\n\nTools executed successfully: {', '.join(tool_names)}"
-                    error_msg += f"\n\nThis error likely occurred due to context length limits after tool execution."
-                
+                # Pass LLM errors directly to user - they are valuable information
                 return {
-                    "response": error_msg,
+                    "response": f"LLM Error: {str(e)}",
                     "conversation_id": conversation_id,
                     "tool_calls": tool_calls,
                     "success": False,
@@ -416,9 +409,8 @@ class LangChainConversationChain:
                 else:
                     final_response_text = str(final_response)
             except Exception as e:
-                # Handle LLM errors in final response
-                tool_names = [call.get('name', 'unknown') for call in tool_calls]
-                final_response_text = f"LLM Error in final response: {str(e)}\n\nTools executed successfully: {', '.join(tool_names)}\n\nThis error likely occurred due to context length limits after tool execution."
+                # Pass LLM errors directly to user - they are valuable information
+                final_response_text = f"LLM Error in final response: {str(e)}"
         else:
             # No tool calls were made, use the last response
             if messages and hasattr(messages[-1], 'content'):
