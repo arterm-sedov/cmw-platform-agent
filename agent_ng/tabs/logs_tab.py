@@ -47,13 +47,23 @@ class LogsTab:
     
     def _connect_events(self):
         """Connect all event handlers for the logs tab"""
+        # Get event handlers with validation
+        refresh_handler = self.event_handlers.get("refresh_logs")
+        clear_handler = self.event_handlers.get("clear_logs")
+        
+        # Validate critical handlers
+        if not refresh_handler:
+            raise ValueError("refresh_logs handler not found in event_handlers")
+        if not clear_handler:
+            raise ValueError("clear_logs handler not found in event_handlers")
+        
         self.components["refresh_logs_btn"].click(
-            fn=self.event_handlers.get("refresh_logs"),
+            fn=refresh_handler,
             outputs=[self.components["logs_display"]]
         )
         
         self.components["clear_logs_btn"].click(
-            fn=self.event_handlers.get("clear_logs"),
+            fn=clear_handler,
             outputs=[self.components["logs_display"]]
         )
     

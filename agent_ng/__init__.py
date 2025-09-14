@@ -23,8 +23,8 @@ Key Modules:
 # LangChain agent classes and functions
 from .langchain_agent import CmwAgent as NextGenAgent, ChatMessage
 
-# App interface
-from .app_ng import NextGenApp, get_demo, main
+# App interface - import only when needed to avoid circular imports
+# from .app_ng import NextGenApp, get_demo, main
 
 # LLM management
 from .llm_manager import LLMManager, LLMProvider, LLMConfig, LLMInstance, get_llm_manager
@@ -41,10 +41,10 @@ __all__ = [
     'NextGenAgent',
     'ChatMessage',
     
-    # App interface
-    'NextGenApp',
-    'get_demo',
-    'main',
+    # App interface - commented out to avoid circular imports
+    # 'NextGenApp',
+    # 'get_demo',
+    # 'main',
     
     # LLM management
     'LLMManager',

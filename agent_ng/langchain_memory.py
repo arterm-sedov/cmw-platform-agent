@@ -62,15 +62,16 @@ if parent_dir not in sys.path:
 
 try:
     from .llm_manager import get_llm_manager, LLMInstance
-    from .utils import ensure_valid_answer
+    from .utils import ensure_valid_answer, ensure_meaningful_response
 except ImportError:
     try:
         from agent_ng.llm_manager import get_llm_manager, LLMInstance
-        from agent_ng.utils import ensure_valid_answer
+        from agent_ng.utils import ensure_valid_answer, ensure_meaningful_response
     except ImportError:
         get_llm_manager = lambda: None
         LLMInstance = None
         ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
+        ensure_meaningful_response = lambda x, context="", tool_calls=None: str(x) if x is not None else "No response generated"
 
 
 @dataclass
@@ -325,8 +326,24 @@ class LangChainConversationChain:
         while iteration < max_iterations:
             iteration += 1
             
-            # Get LLM response
-            response = self.llm_instance.llm.invoke(messages)
+            try:
+                # Get LLM response
+                response = self.llm_instance.llm.invoke(messages)
+            except Exception as e:
+                # Handle LLM errors (like context length limits)
+                error_msg = f"LLM Error: {str(e)}"
+                if tool_calls:
+                    tool_names = [call.get('name', 'unknown') for call in tool_calls]
+                    error_msg += f"\n\nTools executed successfully: {', '.join(tool_names)}"
+                    error_msg += f"\n\nThis error likely occurred due to context length limits after tool execution."
+                
+                return {
+                    "response": error_msg,
+                    "conversation_id": conversation_id,
+                    "tool_calls": tool_calls,
+                    "success": False,
+                    "error": str(e)
+                }
             
             # Check for tool calls
             if hasattr(response, 'tool_calls') and response.tool_calls:
@@ -390,13 +407,18 @@ class LangChainConversationChain:
         # If we exit the loop due to max iterations, get final response
         # This handles the case where tools were called but we need a final answer
         if tool_calls:
-            # Get one final response from the LLM after all tool calls
-            final_response = self.llm_instance.llm.invoke(messages)
-            if hasattr(final_response, 'content') and final_response.content.strip():
-                final_response_text = final_response.content
-                messages.append(final_response)
-            else:
-                final_response_text = str(final_response)
+            try:
+                # Get one final response from the LLM after all tool calls
+                final_response = self.llm_instance.llm.invoke(messages)
+                if hasattr(final_response, 'content') and final_response.content.strip():
+                    final_response_text = final_response.content
+                    messages.append(final_response)
+                else:
+                    final_response_text = str(final_response)
+            except Exception as e:
+                # Handle LLM errors in final response
+                tool_names = [call.get('name', 'unknown') for call in tool_calls]
+                final_response_text = f"LLM Error in final response: {str(e)}\n\nTools executed successfully: {', '.join(tool_names)}\n\nThis error likely occurred due to context length limits after tool execution."
         else:
             # No tool calls were made, use the last response
             if messages and hasattr(messages[-1], 'content'):

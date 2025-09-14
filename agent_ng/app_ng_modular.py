@@ -48,7 +48,9 @@ try:
     from agent_ng.streaming_chat import get_chat_interface
     from agent_ng.tabs import ChatTab, LogsTab, StatsTab
     from agent_ng.ui_manager import get_ui_manager
-except ImportError:
+    print("✅ Successfully imported all modules using absolute imports")
+except ImportError as e1:
+    print(f"⚠️ Absolute imports failed: {e1}")
     # Fallback to relative imports (when running as module)
     try:
         from .langchain_agent import CmwAgent as NextGenAgent, ChatMessage, get_agent_ng
@@ -57,8 +59,12 @@ except ImportError:
         from .streaming_chat import get_chat_interface
         from .tabs import ChatTab, LogsTab, StatsTab
         from .ui_manager import get_ui_manager
-    except ImportError as e:
-        print(f"Warning: Could not import required modules: {e}")
+        print("✅ Successfully imported all modules using relative imports")
+    except ImportError as e2:
+        print(f"❌ Both absolute and relative imports failed:")
+        print(f"   Absolute: {e1}")
+        print(f"   Relative: {e2}")
+        print("⚠️ Running with fallback implementations - some features may not work")
         # Set defaults to prevent further errors
         NextGenAgent = None
         ChatMessage = None
@@ -91,8 +97,14 @@ class NextGenApp:
         self.log_handler = get_log_handler("app_ng")
         self.chat_interface = get_chat_interface("app_ng")
         
-        # Initialize UI manager
-        self.ui_manager = get_ui_manager()
+        # Initialize UI manager with error handling
+        try:
+            self.ui_manager = get_ui_manager()
+            if not self.ui_manager:
+                raise ValueError("UI Manager not available")
+        except Exception as e:
+            print(f"❌ Failed to initialize UI Manager: {e}")
+            self.ui_manager = None
         
         # Initialize tab modules
         self.tabs = {}
@@ -435,23 +447,47 @@ class NextGenApp:
     
     def create_interface(self) -> gr.Blocks:
         """Create the Gradio interface using UI Manager and modular tabs"""
+        # Validate UI Manager
+        if not self.ui_manager:
+            raise RuntimeError("UI Manager not available - cannot create interface")
+        
         # Create event handlers
         event_handlers = self._create_event_handlers()
         
-        # Create tab modules
+        # Create tab modules with error handling
         tab_modules = []
-        if ChatTab:
-            tab_modules.append(ChatTab(event_handlers))
-        if LogsTab:
-            tab_modules.append(LogsTab(event_handlers))
-        if StatsTab:
-            tab_modules.append(StatsTab(event_handlers))
+        try:
+            if ChatTab:
+                tab_modules.append(ChatTab(event_handlers))
+                print("✅ ChatTab created successfully")
+            else:
+                print("⚠️ ChatTab not available")
+                
+            if LogsTab:
+                tab_modules.append(LogsTab(event_handlers))
+                print("✅ LogsTab created successfully")
+            else:
+                print("⚠️ LogsTab not available")
+                
+            if StatsTab:
+                tab_modules.append(StatsTab(event_handlers))
+                print("✅ StatsTab created successfully")
+            else:
+                print("⚠️ StatsTab not available")
+        except Exception as e:
+            print(f"❌ Error creating tab modules: {e}")
+            raise
         
         # Use UI Manager to create interface
-        demo = self.ui_manager.create_interface(tab_modules, event_handlers)
+        try:
+            demo = self.ui_manager.create_interface(tab_modules, event_handlers)
+            print("✅ Interface created successfully")
+        except Exception as e:
+            print(f"❌ Error creating interface: {e}")
+            raise
         
-        # Update components from UI Manager
-        self.components.update(self.ui_manager.get_components())
+        # Consolidate all components from UI Manager (single source of truth)
+        self.components = self.ui_manager.get_components()
         
         return demo
     
