@@ -79,41 +79,37 @@ class UIManager:
         update_status_handler = event_handlers.get("update_status")
         refresh_logs_handler = event_handlers.get("refresh_logs")
         
-        # Status auto-refresh (matches original: 2.0 seconds)
+        # Hybrid approach - minimal timer for initialization + event-driven updates
+        # Load initial UI state once on startup
         if "status_display" in self.components and update_status_handler:
+            demo.load(
+                fn=update_status_handler,
+                outputs=[self.components["status_display"]]
+            )
+            
+            # Add minimal timer for status updates during initialization
             status_timer = gr.Timer(2.0, active=True)
             status_timer.tick(
                 fn=update_status_handler,
                 outputs=[self.components["status_display"]]
             )
         
-        # Logs auto-refresh (matches original: 3.0 seconds)
         if "logs_display" in self.components and refresh_logs_handler:
-            logs_timer = gr.Timer(3.0, active=True)
-            logs_timer.tick(
+            demo.load(
                 fn=refresh_logs_handler,
                 outputs=[self.components["logs_display"]]
             )
         
-        # Stats auto-refresh (every 5 seconds)
         refresh_stats_handler = event_handlers.get("refresh_stats")
         if "stats_display" in self.components and refresh_stats_handler:
-            stats_timer = gr.Timer(5.0, active=True)
-            stats_timer.tick(
+            demo.load(
                 fn=refresh_stats_handler,
                 outputs=[self.components["stats_display"]]
             )
-        
-        # Load initial logs (matches original behavior)
-        if "logs_display" in self.components and refresh_logs_handler:
-            demo.load(
-                fn=refresh_logs_handler,
-                outputs=[self.components["logs_display"]]
-            )
-        
-        # Load initial stats (fixes "Loading statistics..." issue)
-        if "stats_display" in self.components and refresh_stats_handler:
-            demo.load(
+            
+            # Add minimal timer for stats updates
+            stats_timer = gr.Timer(3.0, active=True)
+            stats_timer.tick(
                 fn=refresh_stats_handler,
                 outputs=[self.components["stats_display"]]
             )

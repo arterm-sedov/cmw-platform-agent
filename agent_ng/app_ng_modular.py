@@ -91,6 +91,7 @@ class NextGenApp:
         self.is_initializing = False
         self.initialization_complete = False
         self.session_id = "default"  # LangChain session management
+        self._ui_update_needed = False
         
         # Initialize debug system
         self.debug_streamer = get_debug_streamer("app_ng")
@@ -160,6 +161,9 @@ class NextGenApp:
                 # Update agent reference in tab instances
                 if 'stats' in self.tab_instances:
                     self.tab_instances['stats'].set_agent(self.agent)
+                
+                # Trigger UI update after agent is ready
+                self._trigger_ui_update()
             else:
                 self.debug_streamer.error("Agent initialization timeout", LogCategory.INIT)
                 self.initialization_logs.append("❌ Agent initialization timeout")
@@ -324,7 +328,7 @@ class NextGenApp:
             
             # Add prompt tokens if available
             if prompt_tokens:
-                token_displays.append(f"**Prompt Tokens:** {prompt_tokens.formatted}")
+                token_displays.append(f"**Prompt tokens:** {prompt_tokens.formatted}")
             
             # Add API tokens if available
             if self.agent:
@@ -333,7 +337,7 @@ class NextGenApp:
                     last_api_tokens = self.agent.get_last_api_tokens()
                     print(f"🔍 DEBUG: Last API tokens: {last_api_tokens}")
                     if last_api_tokens:
-                        token_displays.append(f"**API Tokens:** {last_api_tokens.formatted}")
+                        token_displays.append(f"**API tokens:** {last_api_tokens.formatted}")
                         print(f"🔍 DEBUG: Added API token display")
                     else:
                         print("🔍 DEBUG: No API tokens available")
@@ -343,9 +347,12 @@ class NextGenApp:
             
             # Combine all token displays
             if token_displays:
-                token_display = f"\n\n---\n" + "\n".join(token_displays)
+                token_display = "\n" + "\n".join(token_displays)
                 working_history[-1] = {"role": "assistant", "content": response_content + tool_usage + token_display}
                 print(f"🔍 DEBUG: Added token display: {token_display}")
+            
+            # Final yield with updated stats
+            yield working_history, ""
             
         except Exception as e:
             self.debug_streamer.error(f"Error in stream chat: {e}")
@@ -364,6 +371,7 @@ class NextGenApp:
             "update_status": self._update_status,
             "refresh_logs": self._refresh_logs,
             "refresh_stats": self._refresh_stats,
+            "update_all_ui": self.update_all_ui_components,
         }
     
     def _stream_message_wrapper(self, message: str, history: List[Dict[str, str]]):
@@ -388,6 +396,7 @@ class NextGenApp:
                     yield result
                 except StopAsyncIteration:
                     break
+            
         finally:
             loop.close()
     
@@ -423,6 +432,52 @@ class NextGenApp:
             return "✅ Agent Ready"
         else:
             return "🟡 Agent Initializing..."
+    
+    def _trigger_ui_update(self):
+        """Trigger UI update after agent initialization or message processing"""
+        try:
+            print("🔍 DEBUG: Triggering UI update...")
+            # Store the update trigger - the UI will check this
+            self._ui_update_needed = True
+        except Exception as e:
+            print(f"🔍 DEBUG: Error triggering UI update: {e}")
+    
+    def check_and_clear_ui_update(self) -> bool:
+        """Check if UI update is needed and clear the flag"""
+        if self._ui_update_needed:
+            self._ui_update_needed = False
+            return True
+        return False
+    
+    def update_all_ui_components(self) -> Tuple[str, str, str]:
+        """Update all UI components and return their values"""
+        status = self._update_status()
+        stats = self._refresh_stats()
+        logs = self._refresh_logs()
+        return status, stats, logs
+    
+    def _refresh_ui_after_message(self):
+        """Refresh all UI components after a message is processed (event-driven)"""
+        try:
+            # Trigger UI update after message processing
+            self._trigger_ui_update()
+            
+            # Refresh stats
+            stats_tab = self.tab_instances.get('stats')
+            if stats_tab and hasattr(stats_tab, 'format_stats_display'):
+                updated_stats = stats_tab.format_stats_display()
+                print(f"🔍 DEBUG: Stats refreshed after message: {updated_stats[:100]}...")
+            
+            # Refresh logs (if needed)
+            logs_tab = self.tab_instances.get('logs')
+            if logs_tab and hasattr(logs_tab, 'get_initialization_logs'):
+                updated_logs = logs_tab.get_initialization_logs()
+                print(f"🔍 DEBUG: Logs refreshed after message: {updated_logs[:100]}...")
+            
+            print("🔍 DEBUG: UI refreshed after message completion")
+            
+        except Exception as e:
+            print(f"🔍 DEBUG: Error refreshing UI after message: {e}")
     
     def create_interface(self) -> gr.Blocks:
         """Create the Gradio interface using UI Manager and modular tabs"""
