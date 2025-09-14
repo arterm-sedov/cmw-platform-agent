@@ -372,6 +372,7 @@ class NextGenApp:
             "refresh_logs": self._refresh_logs,
             "refresh_stats": self._refresh_stats,
             "update_all_ui": self.update_all_ui_components,
+            "trigger_ui_update": self.trigger_ui_update,
         }
     
     def _stream_message_wrapper(self, message: str, history: List[Dict[str, str]]):
@@ -396,6 +397,9 @@ class NextGenApp:
                     yield result
                 except StopAsyncIteration:
                     break
+            
+            # Refresh UI after streaming completes (EVENT-DRIVEN)
+            self._refresh_ui_after_message()
             
         finally:
             loop.close()
@@ -456,25 +460,23 @@ class NextGenApp:
         logs = self._refresh_logs()
         return status, stats, logs
     
+    def trigger_ui_update(self):
+        """Trigger UI update after agent initialization or message processing"""
+        try:
+            print("🔍 DEBUG: Triggering UI update...")
+            # This will be called when the agent is ready or after messages
+            # The actual UI update will happen through Gradio's event system
+            self._ui_update_needed = True
+        except Exception as e:
+            print(f"🔍 DEBUG: Error triggering UI update: {e}")
+    
     def _refresh_ui_after_message(self):
-        """Refresh all UI components after a message is processed (event-driven)"""
+        """Refresh all UI components after a message is processed (EVENT-DRIVEN)"""
         try:
             # Trigger UI update after message processing
-            self._trigger_ui_update()
+            self.trigger_ui_update()
             
-            # Refresh stats
-            stats_tab = self.tab_instances.get('stats')
-            if stats_tab and hasattr(stats_tab, 'format_stats_display'):
-                updated_stats = stats_tab.format_stats_display()
-                print(f"🔍 DEBUG: Stats refreshed after message: {updated_stats[:100]}...")
-            
-            # Refresh logs (if needed)
-            logs_tab = self.tab_instances.get('logs')
-            if logs_tab and hasattr(logs_tab, 'get_initialization_logs'):
-                updated_logs = logs_tab.get_initialization_logs()
-                print(f"🔍 DEBUG: Logs refreshed after message: {updated_logs[:100]}...")
-            
-            print("🔍 DEBUG: UI refreshed after message completion")
+            print("🔍 DEBUG: UI refreshed after message completion (EVENT-DRIVEN)")
             
         except Exception as e:
             print(f"🔍 DEBUG: Error refreshing UI after message: {e}")
