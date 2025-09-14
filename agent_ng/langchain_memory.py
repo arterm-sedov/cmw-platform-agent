@@ -213,11 +213,16 @@ class LangChainConversationChain:
     patterns for multi-turn conversations with tool calls.
     """
     
-    def __init__(self, llm_instance: LLMInstance, tools: List[BaseTool], system_prompt: str):
+    def __init__(self, llm_instance: LLMInstance, tools: List[BaseTool], system_prompt: str, agent=None):
         self.llm_instance = llm_instance
         self.tools = tools
+        self.agent = agent
         self.system_prompt = system_prompt
-        self.memory_manager = ConversationMemoryManager()
+        # Use agent's memory manager if available, otherwise create new one
+        if agent and hasattr(agent, 'memory_manager'):
+            self.memory_manager = agent.memory_manager
+        else:
+            self.memory_manager = ConversationMemoryManager()
         
         # Create the chain
         self.chain = self._create_chain()
@@ -328,6 +333,10 @@ class LangChainConversationChain:
             try:
                 # Get LLM response
                 response = self.llm_instance.llm.invoke(messages)
+                
+                # Track token usage for this response
+                self._track_token_usage(response, messages)
+                
             except Exception as e:
                 # Pass LLM errors directly to user - they are valuable information
                 return {
@@ -374,6 +383,9 @@ class LangChainConversationChain:
                         'result': tool_result,
                         'id': tool_call_id
                     })
+                    
+                    # Add tool message to memory manager
+                    self.memory_manager.add_message(conversation_id, tool_message)
             else:
                 # No tool calls, we have the final response
                 final_response = response.content if hasattr(response, 'content') else str(response)
@@ -381,58 +393,78 @@ class LangChainConversationChain:
                 # Add AI response to messages
                 messages.append(response)
                 
-                # Add to conversation history - save the complete conversation including tool messages
-                for message in messages:
-                    if isinstance(message, HumanMessage):
-                        self.memory_manager.add_message(conversation_id, message)
-                    elif isinstance(message, AIMessage):
-                        self.memory_manager.add_message(conversation_id, message)
-                    elif isinstance(message, ToolMessage):
-                        self.memory_manager.add_message(conversation_id, message)
-                
-                return {
-                    "response": final_response,
-                    "conversation_id": conversation_id,
-                    "tool_calls": tool_calls,
-                    "success": True
-                }
+                # Break out of the loop since we have the final response
+                break
         
-        # If we exit the loop due to max iterations, get final response
-        # This handles the case where tools were called but we need a final answer
-        if tool_calls:
+        # If we exit the loop due to max iterations or tool calls, get final response
+        if not final_response and tool_calls:
             try:
+                print("🔍 DEBUG: Getting final response after tool calls")
                 # Get one final response from the LLM after all tool calls
-                final_response = self.llm_instance.llm.invoke(messages)
-                if hasattr(final_response, 'content') and final_response.content.strip():
-                    final_response_text = final_response.content
-                    messages.append(final_response)
+                final_response_obj = self.llm_instance.llm.invoke(messages)
+                
+                # Track token usage for final response
+                self._track_token_usage(final_response_obj, messages)
+                
+                if hasattr(final_response_obj, 'content') and final_response_obj.content.strip():
+                    final_response = final_response_obj.content
+                    messages.append(final_response_obj)
                 else:
-                    final_response_text = str(final_response)
+                    final_response = str(final_response_obj)
+                    
+                print(f"🔍 DEBUG: Final response: {final_response}")
             except Exception as e:
-                # Pass LLM errors directly to user - they are valuable information
-                final_response_text = f"LLM Error in final response: {str(e)}"
-        else:
-            # No tool calls were made, use the last response
-            if messages and hasattr(messages[-1], 'content'):
-                final_response_text = messages[-1].content
-            else:
-                final_response_text = "No response available"
+                print(f"🔍 DEBUG: Error getting final response: {e}")
+                final_response = f"Error getting final response: {str(e)}"
         
-        # Add to conversation history - save the complete conversation including tool messages
+        # Ensure we have a response
+        if not final_response:
+            final_response = "No response available"
+        
+        # Add all messages to memory manager (for both tool calls and no tool calls cases)
+        print(f"🔍 DEBUG: Adding {len(messages)} messages to memory manager")
         for message in messages:
             if isinstance(message, HumanMessage):
                 self.memory_manager.add_message(conversation_id, message)
+                print(f"🔍 DEBUG: Added HumanMessage to memory")
             elif isinstance(message, AIMessage):
                 self.memory_manager.add_message(conversation_id, message)
+                print(f"🔍 DEBUG: Added AIMessage to memory")
             elif isinstance(message, ToolMessage):
                 self.memory_manager.add_message(conversation_id, message)
-        
+                print(f"🔍 DEBUG: Added ToolMessage to memory")
+            
         return {
-            "response": final_response_text,
+            "response": final_response,
             "conversation_id": conversation_id,
             "tool_calls": tool_calls,
             "success": True
         }
+    
+    def _track_token_usage(self, response, messages):
+        """Track token usage for LLM response"""
+        try:
+            print(f"🔍 DEBUG: _track_token_usage called with response type: {type(response)}")
+            print(f"🔍 DEBUG: Has agent: {hasattr(self, 'agent')}")
+            if hasattr(self, 'agent'):
+                print(f"🔍 DEBUG: Agent is not None: {self.agent is not None}")
+                if self.agent:
+                    print(f"🔍 DEBUG: Agent has token_tracker: {hasattr(self.agent, 'token_tracker')}")
+            
+            # Get token tracker from the agent
+            if hasattr(self, 'agent') and self.agent and hasattr(self.agent, 'token_tracker'):
+                print("🔍 DEBUG: Using agent's token tracker")
+                self.agent.token_tracker.track_llm_response(response, messages)
+            else:
+                print("🔍 DEBUG: Creating new token tracker")
+                # Create a simple token tracker if none exists
+                from .token_counter import get_token_tracker
+                token_tracker = get_token_tracker()
+                token_tracker.track_llm_response(response, messages)
+        except Exception as e:
+            print(f"🔍 DEBUG: Token tracking error: {e}")
+            # Silently fail - token counting is not critical
+            pass
     
     def _execute_tool(self, tool_name: str, tool_args: dict) -> str:
         """Execute a tool and return the result"""
@@ -483,6 +515,6 @@ def get_memory_manager() -> ConversationMemoryManager:
     return _memory_manager
 
 
-def create_conversation_chain(llm_instance: LLMInstance, tools: List[BaseTool], system_prompt: str) -> LangChainConversationChain:
+def create_conversation_chain(llm_instance: LLMInstance, tools: List[BaseTool], system_prompt: str, agent=None) -> LangChainConversationChain:
     """Create a new conversation chain"""
-    return LangChainConversationChain(llm_instance, tools, system_prompt)
+    return LangChainConversationChain(llm_instance, tools, system_prompt, agent)

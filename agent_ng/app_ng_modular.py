@@ -108,6 +108,7 @@ class NextGenApp:
         
         # Initialize tab modules
         self.tabs = {}
+        self.tab_instances = {}  # Store tab instances for event handlers
         self.components = {}
         
         # Initialize synchronously first, then start async initialization
@@ -155,6 +156,10 @@ class NextGenApp:
                 self.initialization_logs.append(f"✅ Agent ready with {status['current_llm']}")
                 self.initialization_logs.append(f"🔧 Tools available: {status['tools_count']}")
                 self.initialization_complete = True
+                
+                # Update agent reference in tab instances
+                if 'stats' in self.tab_instances:
+                    self.tab_instances['stats'].set_agent(self.agent)
             else:
                 self.debug_streamer.error("Agent initialization timeout", LogCategory.INIT)
                 self.initialization_logs.append("❌ Agent initialization timeout")
@@ -165,33 +170,7 @@ class NextGenApp:
         
         self.is_initializing = False
     
-    def get_initialization_logs(self) -> str:
-        """Get initialization logs as formatted string"""
-        # Combine static logs with real-time debug logs
-        static_logs = "\n".join(self.initialization_logs)
-        debug_logs = self.log_handler.get_current_logs()
-        
-        if debug_logs and debug_logs != "No logs available yet.":
-            return f"{static_logs}\n\n--- Real-time Debug Logs ---\n\n{debug_logs}"
-        return static_logs
     
-    def get_agent_status(self) -> str:
-        """Get current agent status with comprehensive details"""
-        if not self.agent:
-            return "🟡 Initializing agent..."
-        
-        status = self.agent.get_status()
-        if status["is_ready"]:
-            llm_info = self.agent.get_llm_info()
-            return f"""✅ **Agent Ready**
-
-**Provider:** {llm_info.get('provider', 'Unknown')}
-**Model:** {llm_info.get('model_name', 'Unknown')}
-**Status:** {'✅ Healthy' if llm_info.get('is_healthy', False) else '❌ Unhealthy'}
-**Tools:** {status['tools_count']} available
-**Last Used:** {time.ctime(llm_info.get('last_used', 0))}"""
-        else:
-            return "❌ Agent not ready"
     
     def is_ready(self) -> bool:
         """Check if the app is ready (LangChain-native pattern)"""
@@ -201,6 +180,9 @@ class NextGenApp:
         """Clear the conversation history (LangChain-native pattern)"""
         if self.agent:
             self.agent.clear_conversation(self.session_id)
+            # Start new conversation tracking for token counting
+            if hasattr(self.agent, 'token_tracker'):
+                self.agent.token_tracker.start_new_conversation()
             self.debug_streamer.info("Conversation cleared")
         return [], ""
     
@@ -286,6 +268,15 @@ class NextGenApp:
             
             # Add user message to history
             working_history = history + [{"role": "user", "content": message}, {"role": "assistant", "content": ""}]
+            
+            # Get prompt token count for user message (will be displayed below assistant response)
+            prompt_tokens = None
+            if self.agent:
+                try:
+                    prompt_tokens = self.agent.count_prompt_tokens_for_chat(history, message)
+                except Exception as e:
+                    self.debug_streamer.warning(f"Failed to get prompt token count: {e}")
+            
             yield working_history, ""
             
             # Stream response using simple streaming
@@ -327,6 +318,35 @@ class NextGenApp:
                     working_history[-1] = {"role": "assistant", "content": response_content + tool_usage + error_msg}
                     yield working_history, ""
             
+            # Add API token count to final response
+            # Add token counts below assistant response
+            token_displays = []
+            
+            # Add prompt tokens if available
+            if prompt_tokens:
+                token_displays.append(f"**Prompt Tokens:** {prompt_tokens.formatted}")
+            
+            # Add API tokens if available
+            if self.agent:
+                try:
+                    print(f"🔍 DEBUG: Getting last API tokens from agent")
+                    last_api_tokens = self.agent.get_last_api_tokens()
+                    print(f"🔍 DEBUG: Last API tokens: {last_api_tokens}")
+                    if last_api_tokens:
+                        token_displays.append(f"**API Tokens:** {last_api_tokens.formatted}")
+                        print(f"🔍 DEBUG: Added API token display")
+                    else:
+                        print("🔍 DEBUG: No API tokens available")
+                except Exception as e:
+                    print(f"🔍 DEBUG: API token error: {e}")
+                    self.debug_streamer.warning(f"Failed to get API token count: {e}")
+            
+            # Combine all token displays
+            if token_displays:
+                token_display = f"\n\n---\n" + "\n".join(token_displays)
+                working_history[-1] = {"role": "assistant", "content": response_content + tool_usage + token_display}
+                print(f"🔍 DEBUG: Added token display: {token_display}")
+            
         except Exception as e:
             self.debug_streamer.error(f"Error in stream chat: {e}")
             error_msg = f"❌ **Error streaming message: {str(e)}**"
@@ -336,25 +356,14 @@ class NextGenApp:
     def _create_event_handlers(self) -> Dict[str, Any]:
         """Create event handlers for all tabs"""
         return {
-            # Chat handlers
+            # Chat handlers (core functionality)
             "stream_message": self._stream_message_wrapper,
             "clear_chat": self.clear_conversation,
             
-            # Logs handlers
-            "refresh_logs": self.get_initialization_logs,
-            "clear_logs": self._clear_logs,
-            
-            # Stats handlers
+            # Status and monitoring handlers
+            "update_status": self._update_status,
+            "refresh_logs": self._refresh_logs,
             "refresh_stats": self._refresh_stats,
-            "update_status": self.get_agent_status,
-            
-            # Quick action handlers
-            "quick_math": self._quick_math,
-            "quick_code": self._quick_code,
-            "quick_explain": self._quick_explain,
-            "quick_create_attr": self._quick_create_attr,
-            "quick_edit_mask": self._quick_edit_mask,
-            "quick_list_apps": self._quick_list_apps,
         }
     
     def _stream_message_wrapper(self, message: str, history: List[Dict[str, str]]):
@@ -382,68 +391,38 @@ class NextGenApp:
         finally:
             loop.close()
     
-    def _clear_logs(self) -> str:
-        """Clear logs and return confirmation"""
-        self.log_handler.clear_logs()
-        return "Logs cleared."
+    def _update_status(self) -> str:
+        """Update status display - delegates to stats tab"""
+        stats_tab = self.tab_instances.get('stats')
+        if stats_tab and hasattr(stats_tab, 'format_stats_display'):
+            return stats_tab.format_stats_display()
+        
+        # Fallback status
+        if self.agent and self.agent.is_ready():
+            return "✅ **Agent Ready**"
+        else:
+            return "🟡 **Initializing...**"
+    
+    def _refresh_logs(self) -> str:
+        """Refresh logs display - delegates to logs tab"""
+        logs_tab = self.tab_instances.get('logs')
+        if logs_tab and hasattr(logs_tab, 'get_initialization_logs'):
+            return logs_tab.get_initialization_logs()
+        
+        # Fallback logs
+        return "\n".join(self.initialization_logs) if self.initialization_logs else "No logs available"
     
     def _refresh_stats(self) -> str:
-        """Refresh and return agent statistics"""
-        if self.agent:
-            stats = self.agent.get_stats()
-            return f"""
-            **Agent Status:**
-            - Ready: {stats['agent_status']['is_ready']}
-            - LLM: {stats['llm_info'].get('model_name', 'Unknown')}
-            - Provider: {stats['llm_info'].get('provider', 'Unknown')}
-            
-            **Conversation:**
-            - Messages: {stats['conversation_stats']['message_count']}
-            - User: {stats['conversation_stats']['user_messages']}
-            - Assistant: {stats['conversation_stats']['assistant_messages']}
-            
-            **Tools:**
-            - Available: {stats['agent_status']['tools_count']}
-            """
-        return "Agent not available"
-    
-    # Quick action methods
-    def _quick_math(self) -> str:
-        """Generate math quick action message"""
-        return "What is 15 * 23 + 7? Please show your work step by step."
-    
-    def _quick_code(self) -> str:
-        """Generate code quick action message"""
-        return "Write a Python function to check if a number is prime. Include tests."
-    
-    def _quick_explain(self) -> str:
-        """Generate explain quick action message"""
-        return "Explain the concept of machine learning in simple terms."
-    
-    def _quick_create_attr(self) -> str:
-        """Generate create attribute quick action message"""
-        return (
-            "Draft a plan to CREATE a text attribute 'Customer ID' in application 'ERP', template 'Counterparties' "
-            "with display_format=CustomMask and mask ([0-9]{{10}}|[0-9]{{12}}), system_name=CustomerID. "
-            "Provide Intent, Plan, Validate, and a DRY-RUN payload preview (compact JSON) for the tool call, "
-            "but DO NOT execute any changes yet. Wait for my confirmation."
-        )
-    
-    def _quick_edit_mask(self) -> str:
-        """Generate edit mask quick action message"""
-        return (
-            "Prepare a safe EDIT plan for attribute 'Contact Phone' (system_name=ContactPhone) in application 'CRM', template 'Leads' "
-            "to change display_format to PhoneRuMask. Provide Intent, Plan, Validate checklist (risk notes), and a DRY-RUN payload preview. "
-            "Do NOT execute changes yet—await my approval."
-        )
-    
-    def _quick_list_apps(self) -> str:
-        """Generate list apps quick action message"""
-        return (
-            "List all applications in the Platform. "
-            "Format nicely using Markdown. "
-            "Show system names and descriptions if any."
-        )
+        """Refresh stats display - delegates to stats tab"""
+        stats_tab = self.tab_instances.get('stats')
+        if stats_tab and hasattr(stats_tab, 'format_stats_display'):
+            return stats_tab.format_stats_display()
+        
+        # Fallback stats
+        if self.agent and self.agent.is_ready():
+            return "✅ Agent Ready"
+        else:
+            return "🟡 Agent Initializing..."
     
     def create_interface(self) -> gr.Blocks:
         """Create the Gradio interface using UI Manager and modular tabs"""
@@ -458,17 +437,25 @@ class NextGenApp:
         tab_modules = []
         try:
             if ChatTab:
-                tab_modules.append(ChatTab(event_handlers))
+                chat_tab = ChatTab(event_handlers)
+                tab_modules.append(chat_tab)
+                self.tab_instances['chat'] = chat_tab
             else:
                 print("⚠️ ChatTab not available")
                 
             if LogsTab:
-                tab_modules.append(LogsTab(event_handlers))
+                logs_tab = LogsTab(event_handlers)
+                logs_tab.set_main_app(self)  # Pass main app reference
+                tab_modules.append(logs_tab)
+                self.tab_instances['logs'] = logs_tab
             else:
                 print("⚠️ LogsTab not available")
                 
             if StatsTab:
-                tab_modules.append(StatsTab(event_handlers))
+                stats_tab = StatsTab(event_handlers)
+                stats_tab.set_agent(self.agent)  # Pass agent reference
+                tab_modules.append(stats_tab)
+                self.tab_instances['stats'] = stats_tab
             else:
                 print("⚠️ StatsTab not available")
         except Exception as e:
@@ -484,6 +471,10 @@ class NextGenApp:
         
         # Consolidate all components from UI Manager (single source of truth)
         self.components = self.ui_manager.get_components()
+        
+        # Set agent reference on all tabs that support it
+        if self.agent:
+            self.ui_manager.set_agent(self.agent)
         
         return demo
     

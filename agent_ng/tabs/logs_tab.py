@@ -52,25 +52,14 @@ class LogsTab:
         """Connect all event handlers for the logs tab"""
         print("🔗 LogsTab: Connecting event handlers...")
         
-        # Get event handlers with validation
-        refresh_handler = self.event_handlers.get("refresh_logs")
-        clear_handler = self.event_handlers.get("clear_logs")
-        
-        # Validate critical handlers
-        if not refresh_handler:
-            raise ValueError("refresh_logs handler not found in event_handlers")
-        if not clear_handler:
-            raise ValueError("clear_logs handler not found in event_handlers")
-        
-        print("✅ LogsTab: Critical event handlers validated")
-        
+        # Use local methods for logs functionality
         self.components["refresh_logs_btn"].click(
-            fn=refresh_handler,
+            fn=self.get_initialization_logs,
             outputs=[self.components["logs_display"]]
         )
         
         self.components["clear_logs_btn"].click(
-            fn=clear_handler,
+            fn=self.clear_logs,
             outputs=[self.components["logs_display"]]
         )
         
@@ -83,3 +72,29 @@ class LogsTab:
     def get_logs_display_component(self) -> gr.Markdown:
         """Get the logs display component for auto-refresh"""
         return self.components["logs_display"]
+    
+    # Logs handler methods
+    def get_initialization_logs(self) -> str:
+        """Get initialization logs as formatted string"""
+        # Access the main app through event handlers context
+        # This will be set by the main app when creating the tab
+        if hasattr(self, '_main_app') and self._main_app:
+            # Combine static logs with real-time debug logs
+            static_logs = "\n".join(self._main_app.initialization_logs)
+            debug_logs = self._main_app.log_handler.get_current_logs()
+            
+            if debug_logs and debug_logs != "No logs available yet.":
+                return f"{static_logs}\n\n--- Real-time Debug Logs ---\n\n{debug_logs}"
+            return static_logs
+        return "Logs not available - main app not connected"
+    
+    def clear_logs(self) -> str:
+        """Clear logs and return confirmation"""
+        if hasattr(self, '_main_app') and self._main_app:
+            self._main_app.log_handler.clear_logs()
+            return "Logs cleared."
+        return "Cannot clear logs - main app not connected"
+    
+    def set_main_app(self, main_app):
+        """Set reference to main app for accessing logs functionality"""
+        self._main_app = main_app

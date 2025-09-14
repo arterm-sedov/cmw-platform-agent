@@ -22,6 +22,7 @@ import time
 import uuid
 from typing import Dict, List, Optional, Any, AsyncGenerator, Tuple
 from dataclasses import dataclass
+from .token_counter import TokenCount
 from pathlib import Path
 
 # LangChain imports
@@ -201,6 +202,10 @@ class CmwAgent:
         self.stats_manager = get_stats_manager()
         self.trace_manager = get_trace_manager()
         
+        # Initialize token tracker
+        from .token_counter import get_token_tracker
+        self.token_tracker = get_token_tracker()
+        
         # Load system prompt
         self.system_prompt = system_prompt or self._load_system_prompt()
         
@@ -289,7 +294,7 @@ class CmwAgent:
         """Get or create conversation chain for a conversation"""
         if conversation_id not in self.conversation_chains:
             self.conversation_chains[conversation_id] = create_conversation_chain(
-                self.llm_instance, self.tools, self.system_prompt
+                self.llm_instance, self.tools, self.system_prompt, self
             )
         return self.conversation_chains[conversation_id]
     
@@ -488,12 +493,114 @@ class CmwAgent:
             "memory_manager_stats": {
                 "total_memories": len(self.memory_manager.memories) if self.memory_manager else 0
             },
-            "conversation_stats": {
-                "message_count": len(self.conversation_history),
-                "user_messages": len([m for m in self.conversation_history if hasattr(m, 'role') and m.role == "user"]),
-                "assistant_messages": len([m for m in self.conversation_history if hasattr(m, 'role') and m.role == "assistant"])
-            }
+            "conversation_stats": self._get_conversation_stats()
         }
+    
+    def _get_conversation_stats(self) -> Dict[str, int]:
+        """Get conversation statistics from memory manager"""
+        try:
+            print(f"🔍 DEBUG: Getting conversation stats from memory manager")
+            if self.memory_manager:
+                print(f"🔍 DEBUG: Memory manager type: {type(self.memory_manager)}")
+                print(f"🔍 DEBUG: Memory manager has {len(self.memory_manager.memories)} conversations")
+                print(f"🔍 DEBUG: Memory manager memories: {self.memory_manager.memories}")
+                
+                # Get all conversations and count messages
+                total_messages = 0
+                user_messages = 0
+                assistant_messages = 0
+                
+                for conversation_id, conversation in self.memory_manager.memories.items():
+                    print(f"🔍 DEBUG: Conversation {conversation_id} type: {type(conversation)}")
+                    
+                    # Handle different memory types
+                    if hasattr(conversation, 'chat_memory') and hasattr(conversation.chat_memory, 'chat_memory'):
+                        # ToolAwareMemory with chat_memory.chat_memory
+                        messages = conversation.chat_memory.chat_memory
+                        print(f"🔍 DEBUG: Conversation {conversation_id} has {len(messages)} messages (from chat_memory.chat_memory)")
+                        for i, message in enumerate(messages):
+                            total_messages += 1
+                            print(f"🔍 DEBUG: Message {i}: type={type(message)}, role={getattr(message, 'role', 'No role')}, content={getattr(message, 'content', 'No content')[:50]}...")
+                            if hasattr(message, 'role'):
+                                if message.role == "user":
+                                    user_messages += 1
+                                elif message.role == "assistant":
+                                    assistant_messages += 1
+                            elif hasattr(message, 'type'):
+                                # Handle different message types
+                                if message.type == "human":
+                                    user_messages += 1
+                                elif message.type == "ai":
+                                    assistant_messages += 1
+                    elif hasattr(conversation, '__iter__'):
+                        # Direct list of messages
+                        messages = list(conversation)
+                        print(f"🔍 DEBUG: Conversation {conversation_id} has {len(messages)} messages")
+                        for i, message in enumerate(messages):
+                            total_messages += 1
+                            print(f"🔍 DEBUG: Message {i}: type={type(message)}, role={getattr(message, 'role', 'No role')}, content={getattr(message, 'content', 'No content')[:50]}...")
+                            if hasattr(message, 'role'):
+                                if message.role == "user":
+                                    user_messages += 1
+                                elif message.role == "assistant":
+                                    assistant_messages += 1
+                            elif hasattr(message, 'type'):
+                                # Handle different message types
+                                if message.type == "human":
+                                    user_messages += 1
+                                elif message.type == "ai":
+                                    assistant_messages += 1
+                    else:
+                        print(f"🔍 DEBUG: Unknown conversation type: {type(conversation)}")
+                
+                print(f"🔍 DEBUG: Total stats: {total_messages} total, {user_messages} user, {assistant_messages} assistant")
+                return {
+                    "message_count": total_messages,
+                    "user_messages": user_messages,
+                    "assistant_messages": assistant_messages
+                }
+            else:
+                print("🔍 DEBUG: No memory manager available")
+                return {
+                    "message_count": 0,
+                    "user_messages": 0,
+                    "assistant_messages": 0
+                }
+        except Exception as e:
+            print(f"🔍 DEBUG: Error getting conversation stats: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "message_count": 0,
+                "user_messages": 0,
+                "assistant_messages": 0
+            }
+    
+    def get_token_counts(self, messages: List[Any]) -> Dict[str, Any]:
+        """Get token counts for display"""
+        if hasattr(self, 'langchain_wrapper') and self.langchain_wrapper:
+            return self.langchain_wrapper.get_token_counts(messages)
+        return {"prompt_tokens": None, "cumulative_stats": {}}
+    
+    def get_token_display_info(self) -> Dict[str, Any]:
+        """Get comprehensive token display information"""
+        if hasattr(self, 'token_tracker'):
+            return self.token_tracker.get_token_display_info()
+        return {"prompt_tokens": None, "api_tokens": None, "cumulative_stats": {}}
+    
+    def count_prompt_tokens_for_chat(self, history: List[Dict[str, str]], current_message: str) -> Optional[TokenCount]:
+        """Count prompt tokens for chat history and current message"""
+        if hasattr(self, 'token_tracker'):
+            from .token_counter import convert_chat_history_to_messages
+            messages = convert_chat_history_to_messages(history, current_message)
+            return self.token_tracker.count_prompt_tokens(messages)
+        return None
+    
+    def get_last_api_tokens(self) -> Optional[TokenCount]:
+        """Get the last API token count"""
+        if hasattr(self, 'token_tracker'):
+            return self.token_tracker.get_last_api_tokens()
+        return None
 
 
 # Global agent instance
