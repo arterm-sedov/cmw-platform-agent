@@ -96,6 +96,7 @@ class StatsTab:
 - Messages: {stats['conversation_stats']['message_count']}
 - User: {stats['conversation_stats']['user_messages']}
 - Assistant: {stats['conversation_stats']['assistant_messages']}
+- Total Messages: {stats['conversation_stats']['message_count']}
 
 **Tools:**
 - Available: {stats['agent_status']['tools_count']}{self._format_tools_stats()}{token_stats}
@@ -121,10 +122,9 @@ class StatsTab:
             
             return f"""           
 **Token Usage:**
-- Conversation: {cumulative_stats['conversation_tokens']:,} tokens (cumulative)
-- Current Session: {cumulative_stats['session_tokens']:,} tokens
+- Total (Persistent): {cumulative_stats['conversation_tokens']:,} tokens
+- Current Conversation: {cumulative_stats['session_tokens']:,} tokens
 - Average per Message: {cumulative_stats['avg_tokens_per_message']} tokens
-- Total Messages: {total_messages}
             """
         except Exception:
             return ""
