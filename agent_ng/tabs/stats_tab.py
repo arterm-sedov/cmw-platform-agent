@@ -23,6 +23,8 @@ class StatsTab:
         Returns:
             Tuple of (TabItem, components_dict)
         """
+        print("✅ StatsTab: Creating stats interface...")
+        
         with gr.TabItem("📊 Statistics", id="stats") as tab:
             # Create stats interface
             self._create_stats_interface()
@@ -30,6 +32,7 @@ class StatsTab:
             # Connect event handlers
             self._connect_events()
         
+        print("✅ StatsTab: Successfully created with all components and event handlers")
         return tab, self.components
     
     def _create_stats_interface(self):
@@ -46,6 +49,8 @@ class StatsTab:
     
     def _connect_events(self):
         """Connect all event handlers for the stats tab"""
+        print("🔗 StatsTab: Connecting event handlers...")
+        
         # Get event handler with validation
         refresh_handler = self.event_handlers.get("refresh_stats")
         
@@ -53,10 +58,14 @@ class StatsTab:
         if not refresh_handler:
             raise ValueError("refresh_stats handler not found in event_handlers")
         
+        print("✅ StatsTab: Critical event handlers validated")
+        
         self.components["refresh_stats_btn"].click(
             fn=refresh_handler,
             outputs=[self.components["stats_display"]]
         )
+        
+        print("✅ StatsTab: All event handlers connected successfully")
     
     def get_components(self) -> Dict[str, Any]:
         """Get all components created by this tab"""

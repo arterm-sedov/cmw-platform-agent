@@ -23,6 +23,8 @@ class LogsTab:
         Returns:
             Tuple of (TabItem, components_dict)
         """
+        print("✅ LogsTab: Creating logs interface...")
+        
         with gr.TabItem("📜 Logs", id="logs") as tab:
             # Create logs interface
             self._create_logs_interface()
@@ -30,6 +32,7 @@ class LogsTab:
             # Connect event handlers
             self._connect_events()
         
+        print("✅ LogsTab: Successfully created with all components and event handlers")
         return tab, self.components
     
     def _create_logs_interface(self):
@@ -47,6 +50,8 @@ class LogsTab:
     
     def _connect_events(self):
         """Connect all event handlers for the logs tab"""
+        print("🔗 LogsTab: Connecting event handlers...")
+        
         # Get event handlers with validation
         refresh_handler = self.event_handlers.get("refresh_logs")
         clear_handler = self.event_handlers.get("clear_logs")
@@ -57,6 +62,8 @@ class LogsTab:
         if not clear_handler:
             raise ValueError("clear_logs handler not found in event_handlers")
         
+        print("✅ LogsTab: Critical event handlers validated")
+        
         self.components["refresh_logs_btn"].click(
             fn=refresh_handler,
             outputs=[self.components["logs_display"]]
@@ -66,6 +73,8 @@ class LogsTab:
             fn=clear_handler,
             outputs=[self.components["logs_display"]]
         )
+        
+        print("✅ LogsTab: All event handlers connected successfully")
     
     def get_components(self) -> Dict[str, Any]:
         """Get all components created by this tab"""
