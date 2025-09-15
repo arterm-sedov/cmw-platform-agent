@@ -3,14 +3,15 @@ from pydantic import BaseModel, Field, field_validator
 
 class AttributeResult(BaseModel):
     """
-    Common result model for attribute-related operations across all tool modules.
-    
-    This model standardizes the response format for attribute operations,
-    providing consistent success/error handling and response structure.
+    Result model for a fetched attribute.
+    Contains cleaned data after successful fetch and processing.
     """
     success: bool
     status_code: int
-    raw_response: dict | str | list | None = Field(default=None)
+    data: Optional[Any] = Field(
+        default=None,
+        description="Cleaned attribute data from server response (after removing unnecessary keys)"
+    )
     error: Optional[str] = Field(default=None)
 
 class CommonAttributeFields(BaseModel):
