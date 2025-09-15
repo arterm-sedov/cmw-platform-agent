@@ -2,6 +2,7 @@
 alwaysApply: true
 ---
 
+- Code style: langchain-pure, dry, lean, abstract, modular
 - Ensure LangChain purity.
 - Follow LangChain best practices, patterns, and conventions:
     - https://python.langchain.com/docs/introduction/
@@ -22,4 +23,4 @@ alwaysApply: true
 - Ensure testability and extensibility.
 - Put any test scripts into @/misc_files folder.
 - put reports to a relevant docs/**/progress_reports/ folder under /docs/ or its relevant subfolder
-- put tests to /agent_ng/_tests preferably, or under the current folder _tests where the files are modified or created
+- put tests to /agent_ng/_tests preferably, or under the current folder's _tests where the files are modified or created
