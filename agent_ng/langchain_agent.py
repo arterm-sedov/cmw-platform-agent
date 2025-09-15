@@ -68,7 +68,7 @@ try:
     from .llm_manager import get_llm_manager, LLMInstance
     from .langchain_memory import get_memory_manager, create_conversation_chain
     from .error_handler import get_error_handler
-    from .streaming_manager import get_streaming_manager
+    # from .streaming_manager import get_streaming_manager  # Moved to .unused
     from .message_processor import get_message_processor
     from .response_processor import get_response_processor
     from .stats_manager import get_stats_manager
@@ -79,7 +79,7 @@ except ImportError:
         from agent_ng.llm_manager import get_llm_manager, LLMInstance
         from agent_ng.langchain_memory import get_memory_manager, create_conversation_chain
         from agent_ng.error_handler import get_error_handler
-        from agent_ng.streaming_manager import get_streaming_manager
+        # from agent_ng.streaming_manager import get_streaming_manager  # Moved to .unused
         from agent_ng.message_processor import get_message_processor
         from agent_ng.response_processor import get_response_processor
         from agent_ng.stats_manager import get_stats_manager
@@ -91,7 +91,7 @@ except ImportError:
         get_memory_manager = lambda: None
         create_conversation_chain = lambda *args: None
         get_error_handler = lambda: None
-        get_streaming_manager = lambda: None
+        # get_streaming_manager = lambda: None  # Moved to .unused
         get_message_processor = lambda: None
         get_response_processor = lambda: None
         get_stats_manager = lambda: None
@@ -196,7 +196,7 @@ class CmwAgent:
         self.llm_manager = get_llm_manager()
         self.memory_manager = get_memory_manager()
         self.error_handler = get_error_handler()
-        self.streaming_manager = get_streaming_manager()
+        # self.streaming_manager = get_streaming_manager()  # Moved to .unused
         self.message_processor = get_message_processor()
         self.response_processor = get_response_processor()
         self.stats_manager = get_stats_manager()
@@ -241,17 +241,39 @@ class CmwAgent:
             self.is_initialized = False
     
     def _load_system_prompt(self) -> str:
-        """Load system prompt from file"""
-        try:
-            prompt_path = os.path.join(os.path.dirname(__file__), "system_prompt.json")
-            if os.path.exists(prompt_path):
-                with open(prompt_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    return data.get("system_prompt", "You are a helpful AI assistant.")
-            return "You are a helpful AI assistant."
-        except Exception as e:
-            print(f"Warning: Could not load system prompt: {e}")
-            return "You are a helpful AI assistant."
+        """Load system prompt from file - FAILS if not found"""
+        prompt_path = os.path.join(os.path.dirname(__file__), "system_prompt.json")
+        if not os.path.exists(prompt_path):
+            raise FileNotFoundError(f"System prompt file not found: {prompt_path}")
+        
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            # Build system prompt from the JSON structure
+            system_prompt = f"""You are a {data.get('role', 'helpful AI assistant')}.
+
+{data.get('platform_description', '')}
+
+## Tool Usage Policy:
+{data.get('cmw_tools', {}).get('purpose', '')}
+
+**CRITICAL: For platform operations ALWAYS use tools first - never provide information without using the appropriate tool first.**
+
+**For math calculations, use the available math tools (add, multiply, subtract, divide, etc.) to show your work step by step.**
+
+## Answer Format:
+{data.get('answer_format', {}).get('template', '')}
+
+## Answer Rules:
+{chr(10).join(f"- {rule}" for rule in data.get('answer_format', {}).get('answer_rules', []))}
+
+## Tool Usage Guidelines:
+{chr(10).join(f"- {rule}" for rule in data.get('cmw_tools', {}).get('tool_usage_policy', []))}
+
+## Example Tasks:
+{chr(10).join(f"- {task.get('Task', '')}: {task.get('Intent', '')}" for task in data.get('example_tasks_solutions', []))}
+
+Always use the appropriate tools to answer questions and show your work step by step."""
+            return system_prompt
     
     def _initialize_tools(self) -> List[BaseTool]:
         """Initialize available tools using the same logic as the old agent"""
@@ -268,22 +290,21 @@ class CmwAgent:
                     not isinstance(obj, type) and  # Exclude classes
                     hasattr(obj, '__module__') and  # Must have __module__ attribute
                     (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
-                    name not in ["submit_answer", "submit_intermediate_step"]):  # Exclude specific classes and internal tools
+                    name not in ["submit_answer", "submit_intermediate_step", "encode_image", "decode_image", "save_image", "web_search_deep_research_exa_ai"]):  # Exclude specific classes and internal tools
                     
-                    # Check if it's a proper tool object (has the tool attributes)
+                    # Check if it's a proper LangChain tool
                     if hasattr(obj, 'name') and hasattr(obj, 'description'):
                         # This is a proper @tool decorated function or LangChain StructuredTool
                         tool_list.append(obj)
                         print(f"✅ Loaded LangChain tool: {name}")
-                    elif callable(obj) and not name.startswith("_"):
-                        # This is a regular function that might be a tool
-                        # Only include if it's not an internal function
-                        if not name.startswith("_") and name not in [
-                            # Exclude built-in types and classes
-                            'int', 'str', 'float', 'bool', 'list', 'dict', 'tuple', 'Any', 'BaseModel', 'Field', 'field_validator'
-                        ]:
-                            tool_list.append(obj)
-                            print(f"✅ Loaded function tool: {name}")
+                    elif hasattr(obj, 'args_schema') and hasattr(obj, 'func'):
+                        # This is a @tool decorated function with args_schema
+                        tool_list.append(obj)
+                        print(f"✅ Loaded LangChain tool: {name}")
+                    elif hasattr(obj, 'func') and hasattr(obj, 'name'):
+                        # This is a LangChain StructuredTool
+                        tool_list.append(obj)
+                        print(f"✅ Loaded LangChain tool: {name}")
             
             return tool_list
         except ImportError:
@@ -344,7 +365,10 @@ class CmwAgent:
     
     async def stream_message(self, message: str, conversation_id: str = "default") -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Stream a message response using simple streaming implementation.
+        Stream a message response using proper LangChain streaming.
+        
+        This method uses LangChain's native streaming methods with correctly
+        configured LLM instances for real-time token-by-token streaming.
         
         Args:
             message: User message
@@ -362,32 +386,17 @@ class CmwAgent:
             return
         
         try:
-            # Use simple streaming with improved tool filtering
-            from .simple_streaming import get_simple_streaming_manager
+            # Use native LangChain streaming
+            from .native_langchain_streaming import get_native_streaming
             
-            # Get conversation chain
-            chain = self._get_conversation_chain(conversation_id)
+            # Get native streaming manager
+            streaming_manager = get_native_streaming()
             
-            # Process the message first to get the response
-            result = chain.process_with_tools(message, conversation_id)
-            
-            # Get simple streaming manager
-            streaming_manager = get_simple_streaming_manager()
-            
-            # Stream thinking process
-            async for event in streaming_manager.stream_thinking(message):
-                yield {
-                    "type": event.event_type,
-                    "content": event.content,
-                    "metadata": event.metadata or {}
-                }
-            
-            # Stream response with tool calls (ensure response is valid)
-            response_text = ensure_valid_answer(result["response"])
-            async for event in streaming_manager.stream_response_with_tools(
-                response_text, 
-                result.get("tool_calls", [])
+            # Stream agent response using native LangChain streaming
+            async for event in streaming_manager.stream_agent_response(
+                self, message, conversation_id
             ):
+                # Convert to the expected format
                 yield {
                     "type": event.event_type,
                     "content": event.content,
@@ -396,15 +405,11 @@ class CmwAgent:
             
         except Exception as e:
             # Stream error
-            from .simple_streaming import get_simple_streaming_manager
-            streaming_manager = get_simple_streaming_manager()
-            
-            async for event in streaming_manager.stream_error(str(e)):
-                yield {
-                    "type": event.event_type,
-                    "content": event.content,
-                    "metadata": event.metadata or {}
-                }
+            yield {
+                "type": "error",
+                "content": f"❌ **Error: {str(e)}**",
+                "metadata": {"error": str(e)}
+            }
     
     def get_conversation_history(self, conversation_id: str = "default") -> List[BaseMessage]:
         """Get conversation history"""

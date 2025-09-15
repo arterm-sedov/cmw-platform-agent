@@ -332,7 +332,8 @@ class LLMManager:
                 model=model_config["model"],
                 google_api_key=api_key,
                 temperature=model_config.get("temperature", 0),
-                max_tokens=model_config.get("max_tokens", 2000000)
+                max_tokens=model_config.get("max_tokens", 2000000),
+                streaming=True  # Enable streaming
             )
             self._log_initialization(f"Successfully initialized {config.name} - {model_config['model']}")
             return llm
@@ -351,7 +352,8 @@ class LLMManager:
                 model=model_config["model"],
                 groq_api_key=api_key,
                 temperature=model_config.get("temperature", 0),
-                max_tokens=model_config.get("max_tokens", 8192)
+                max_tokens=model_config.get("max_tokens", 8192),
+                streaming=True  # Enable streaming
             )
             self._log_initialization(f"Successfully initialized {config.name} - {model_config['model']}")
             return llm
@@ -399,7 +401,8 @@ class LLMManager:
                 api_key=api_key,
                 base_url=base_url,
                 temperature=model_config.get("temperature", 0),
-                max_tokens=model_config.get("max_tokens", 2048)
+                max_tokens=model_config.get("max_tokens", 2048),
+                streaming=True  # Enable streaming
             )
             self._log_initialization(f"Successfully initialized {config.name} - {model_config['model']}")
             return llm
@@ -418,7 +421,8 @@ class LLMManager:
                 model=model_config["model"],
                 mistral_api_key=api_key,
                 temperature=model_config.get("temperature", 0),
-                max_tokens=model_config.get("max_tokens", 2048)
+                max_tokens=model_config.get("max_tokens", 2048),
+                streaming=True  # Enable streaming
             )
             self._log_initialization(f"Successfully initialized {config.name} - {model_config['model']}")
             return llm
@@ -476,7 +480,8 @@ class LLMManager:
                 temperature=model_config.get("temperature", 0),
                 max_tokens=model_config.get("max_tokens", 2048),
                 top_p=model_config.get("top_p", 0.9),
-                repetition_penalty=model_config.get("repetition_penalty", 1.0)
+                repetition_penalty=model_config.get("repetition_penalty", 1.0),
+                streaming=True  # Enable streaming
             )
             
             self._log_initialization(f"Successfully initialized {config.name} with model {model_config['model']}", "INFO")
@@ -709,7 +714,7 @@ class LLMManager:
                     not isinstance(obj, type) and  # Exclude classes
                     hasattr(obj, '__module__') and  # Must have __module__ attribute
                     (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
-                    name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step"]):  # Exclude specific classes and internal tools
+                    name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step", "web_search_deep_research_exa_ai"]):  # Exclude specific classes and internal tools
                     
                     # Check if it's a proper tool object (has the tool attributes)
                     if hasattr(obj, 'name') and hasattr(obj, 'description'):

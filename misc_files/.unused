@@ -1,0 +1,93 @@
+"""
+Streaming Comparison Demo
+========================
+
+This script demonstrates the difference between fake streaming (character-by-character)
+and real LangChain native streaming (astream_events).
+
+Run this to see the difference in user experience.
+"""
+
+import asyncio
+import time
+from pathlib import Path
+import sys
+
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from agent_ng.simple_streaming import get_simple_streaming_manager
+from agent_ng.natural_langchain_streaming import get_natural_streaming_manager
+
+
+async def demo_fake_streaming():
+    """Demonstrate fake character-by-character streaming"""
+    print("🐌 FAKE STREAMING DEMO (Character-by-character with delays)")
+    print("=" * 60)
+    
+    streaming_manager = get_simple_streaming_manager()
+    
+    # Simulate a response
+    response_text = "Hello! I can help you with that. Let me calculate 15 + 27 for you."
+    tool_calls = [
+        {"name": "add", "args": {"a": 15, "b": 27}}
+    ]
+    
+    print("📝 Streaming response with fake delays...")
+    start_time = time.time()
+    
+    async for event in streaming_manager.stream_response_with_tools(response_text, tool_calls):
+        print(event.content, end="", flush=True)
+        # Note: This has artificial delays built-in
+    
+    end_time = time.time()
+    print(f"\n⏱️  Fake streaming took: {end_time - start_time:.2f} seconds")
+    print("❌ This is NOT real-time - content is pre-generated and streamed with delays")
+
+
+async def demo_real_streaming():
+    """Demonstrate real LangChain native streaming"""
+    print("\n🚀 REAL STREAMING DEMO (LangChain astream_events)")
+    print("=" * 60)
+    
+    streaming_manager = get_natural_streaming_manager()
+    
+    print("📝 This streams in real-time as the LLM generates content...")
+    print("✅ Zero artificial delays - only natural timing from LLM")
+    print("✅ Real-time tool execution feedback")
+    print("✅ True streaming using LangChain's astream_events()")
+    print("✅ Natural flow - delays happen naturally, not artificially")
+    
+    # Note: This would require a working LLM instance
+    # In a real scenario, you would see:
+    # - Content appearing as the LLM generates it
+    # - Tool execution happening in real-time
+    # - No artificial delays
+
+
+async def main():
+    """Main demonstration function"""
+    print("🎭 STREAMING COMPARISON DEMONSTRATION")
+    print("=" * 60)
+    print("This demo shows the difference between fake and real streaming")
+    print()
+    
+    # Demo fake streaming
+    await demo_fake_streaming()
+    
+    # Demo real streaming
+    await demo_real_streaming()
+    
+    print("\n" + "=" * 60)
+    print("📊 SUMMARY:")
+    print("• Fake streaming: Pre-generated content with artificial delays")
+    print("• Natural streaming: True real-time content generation with natural timing")
+    print("• Natural streaming provides better user experience")
+    print("• Natural streaming uses LangChain's native astream_events()")
+    print("• Zero artificial delays - only natural timing from LLM and tools")
+    print("\n🎉 The new implementation uses natural streaming!")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

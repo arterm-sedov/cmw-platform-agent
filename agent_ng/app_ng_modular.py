@@ -45,7 +45,7 @@ try:
     from agent_ng.langchain_agent import CmwAgent as NextGenAgent, ChatMessage, get_agent_ng
     from agent_ng.llm_manager import get_llm_manager
     from agent_ng.debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
-    from agent_ng.streaming_chat import get_chat_interface
+    # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
     from agent_ng.tabs import ChatTab, LogsTab, StatsTab
     from agent_ng.ui_manager import get_ui_manager
     print("✅ Successfully imported all modules using absolute imports")
@@ -56,7 +56,7 @@ except ImportError as e1:
         from .langchain_agent import CmwAgent as NextGenAgent, ChatMessage, get_agent_ng
         from .llm_manager import get_llm_manager
         from .debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
-        from .streaming_chat import get_chat_interface
+        # from .streaming_chat import get_chat_interface  # Module moved to .unused
         from .tabs import ChatTab, LogsTab, StatsTab
         from .ui_manager import get_ui_manager
         print("✅ Successfully imported all modules using relative imports")
@@ -71,10 +71,10 @@ except ImportError as e1:
         get_agent_ng = lambda: None
         get_llm_manager = lambda: None
         get_debug_streamer = lambda x: None
-        get_log_handler = lambda: None
+        get_log_handler = lambda x: None
         LogLevel = None
         LogCategory = None
-        get_chat_interface = lambda: None
+        # get_chat_interface = lambda x: None  # Dead code - never used
         ChatTab = None
         LogsTab = None
         StatsTab = None
@@ -96,7 +96,7 @@ class NextGenApp:
         # Initialize debug system
         self.debug_streamer = get_debug_streamer("app_ng")
         self.log_handler = get_log_handler("app_ng")
-        self.chat_interface = get_chat_interface("app_ng")
+        # self.chat_interface = get_chat_interface("app_ng")  # Dead code - never used
         
         # Initialize UI manager with error handling
         try:
@@ -389,28 +389,66 @@ class NextGenApp:
             yield history, ""
             return
         
-        # Run async generator
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Use the existing event loop or create a new one
         try:
-            async def async_stream():
-                async for result in self.stream_chat_with_agent(message, history):
-                    yield result
+            loop = asyncio.get_running_loop()
+            # We're in an event loop, need to run in a thread
+            import concurrent.futures
+            import threading
             
-            # Convert async generator to regular generator
-            async_gen = async_stream()
-            while True:
+            def run_in_thread():
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
                 try:
-                    result = loop.run_until_complete(async_gen.__anext__())
-                    yield result
-                except StopAsyncIteration:
-                    break
+                    async def async_stream():
+                        async for result in self.stream_chat_with_agent(message, history):
+                            yield result
+                    
+                    # Convert async generator to regular generator
+                    async_gen = async_stream()
+                    results = []
+                    while True:
+                        try:
+                            result = new_loop.run_until_complete(async_gen.__anext__())
+                            results.append(result)
+                        except StopAsyncIteration:
+                            break
+                    return results
+                finally:
+                    new_loop.close()
             
-            # Refresh UI after streaming completes (EVENT-DRIVEN)
-            self._refresh_ui_after_message()
-            
-        finally:
-            loop.close()
+            # Run in thread and collect all results
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                results = future.result()
+                
+            # Yield all results
+            for result in results:
+                yield result
+                
+        except RuntimeError:
+            # No event loop running, create a new one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                async def async_stream():
+                    async for result in self.stream_chat_with_agent(message, history):
+                        yield result
+                
+                # Convert async generator to regular generator
+                async_gen = async_stream()
+                while True:
+                    try:
+                        result = loop.run_until_complete(async_gen.__anext__())
+                        yield result
+                    except StopAsyncIteration:
+                        break
+                
+            finally:
+                loop.close()
+        
+        # Refresh UI after streaming completes (EVENT-DRIVEN)
+        self._refresh_ui_after_message()
     
     def _update_status(self) -> str:
         """Update status display - delegates to stats tab"""
