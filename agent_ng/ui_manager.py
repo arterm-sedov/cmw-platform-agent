@@ -78,6 +78,7 @@ class UIManager:
         # Get handlers with validation
         update_status_handler = event_handlers.get("update_status")
         refresh_logs_handler = event_handlers.get("refresh_logs")
+        update_progress_handler = event_handlers.get("update_progress_display")
         
         # Working hybrid approach - minimal timers that actually work
         # Load initial UI state once on startup
@@ -105,6 +106,20 @@ class UIManager:
             logs_timer.tick(
                 fn=refresh_logs_handler,
                 outputs=[self.components["logs_display"]]
+            )
+        
+        # Setup progress display auto-refresh
+        if "progress_display" in self.components and update_progress_handler:
+            demo.load(
+                fn=update_progress_handler,
+                outputs=[self.components["progress_display"]]
+            )
+            
+            # Add timer for progress updates during processing
+            progress_timer = gr.Timer(1.0, active=True)
+            progress_timer.tick(
+                fn=update_progress_handler,
+                outputs=[self.components["progress_display"]]
             )
         
         refresh_stats_handler = event_handlers.get("refresh_stats")

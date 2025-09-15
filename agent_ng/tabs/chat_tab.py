@@ -16,6 +16,7 @@ class ChatTab:
     def __init__(self, event_handlers: Dict[str, Callable]):
         self.event_handlers = event_handlers
         self.components = {}
+        self.main_app = None  # Reference to main app for progress status
     
     def create_tab(self) -> Tuple[gr.TabItem, Dict[str, Any]]:
         """
@@ -107,6 +108,10 @@ class ChatTab:
                 with gr.Column(elem_classes=["model-card"]):
                     gr.Markdown("### 🤖 Status")
                     self.components["status_display"] = gr.Markdown("🟡 Initializing...")
+                    
+                    # Progress indicator
+                    gr.Markdown("### 📊 Progress")
+                    self.components["progress_display"] = gr.Markdown("Ready to process your request...")
     
     def _create_sidebar(self):
         """Create the status and quick actions sidebar - now handled in _create_chat_interface"""
@@ -191,6 +196,14 @@ class ChatTab:
     def get_message_component(self) -> gr.Textbox:
         """Get the message input component for quick actions"""
         return self.components["msg"]
+    
+    def set_main_app(self, app):
+        """Set reference to main app for accessing progress status"""
+        self.main_app = app
+    
+    def get_progress_display(self) -> gr.Markdown:
+        """Get the progress display component"""
+        return self.components["progress_display"]
     
     # Quick action methods
     def _quick_math(self) -> str:
