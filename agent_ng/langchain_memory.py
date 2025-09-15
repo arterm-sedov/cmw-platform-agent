@@ -358,6 +358,7 @@ class LangChainConversationChain:
                 
                 # Process tool calls
                 for tool_call in response.tool_calls:
+                    # LangChain tool calls are dictionaries
                     tool_name = tool_call.get('name', 'unknown')
                     tool_args = tool_call.get('args', {})
                     tool_call_id = tool_call.get('id', f"call_{len(tool_calls)}")

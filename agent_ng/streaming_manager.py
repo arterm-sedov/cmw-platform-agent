@@ -327,6 +327,7 @@ class StreamingManager:
                 if tool_calls:
                     # Execute tools
                     for tool_call in tool_calls:
+                        # LangChain tool calls are dictionaries
                         tool_name = tool_call.get('name', '')
                         tool_args = tool_call.get('args', {})
                         

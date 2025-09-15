@@ -153,9 +153,10 @@ When you have enough information to provide a complete answer, use the submit_an
             # Check for tool calls in the response
             if hasattr(response, 'tool_calls') and response.tool_calls:
                 for tool_call in response.tool_calls:
-                    if tool_call.get('name') == 'submit_answer':
+                    # LangChain tool calls are dictionaries
+                    if tool_call.get('name', '') == 'submit_answer':
                         args = tool_call.get('args', {})
-                        return args.get('answer', '')
+                        return args.get('answer', '') if isinstance(args, dict) else ''
             
             # Check for function calls (legacy format)
             if hasattr(response, 'function_call') and response.function_call:
