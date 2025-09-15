@@ -171,8 +171,6 @@ class NativeLangChainStreaming:
                                     # Use cached result for duplicate tool call
                                     tool_result = cached_result['result'] if cached_result else "Error: Cached result not found"
                                     total_calls += deduplicator.get_duplicate_count(tool_name, tool_args, conversation_id)
-                                    # total_calls = duplicate_count + 1
-
                                 else:
                                     # Find the tool in our tools list
                                     tool_obj = None
