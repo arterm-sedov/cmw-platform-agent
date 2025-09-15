@@ -1,6 +1,6 @@
 from ..tool_utils import *
 
-class EditOrCreateInstanceAttributeSchema(CommonAttributeFields):
+class EditOrCreateRecordAttributeSchema(CommonAttributeFields):
     related_template_system_name: str = Field(
         description="System name of the template to link with the attribute. "
                     "RU: Связанный шаблон"
@@ -11,7 +11,7 @@ class EditOrCreateInstanceAttributeSchema(CommonAttributeFields):
                     "RU: Взаимная связь с атрибутом"
     )
 
-@tool("edit_or_create_record_attribute", return_direct=False, args_schema=EditOrCreateInstanceAttributeSchema)
+@tool("edit_or_create_record_attribute", return_direct=False, args_schema=EditOrCreateRecordAttributeSchema)
 def edit_or_create_record_attribute(
     operation: str,
     name: str,

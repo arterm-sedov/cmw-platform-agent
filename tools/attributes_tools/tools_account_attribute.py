@@ -30,6 +30,10 @@ def edit_or_create_account_attribute(
     """
     Edit or Create an account attribute.
     
+    Account attribute is an attribute that is linked to accounts in the system.
+    
+    Account attribute stores one or several linked account IDs.
+    
     Returns:
         dict: {
             "success": bool - True if the attribute was created or edited successfully
