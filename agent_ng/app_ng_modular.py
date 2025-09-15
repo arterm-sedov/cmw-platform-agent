@@ -303,13 +303,13 @@ class NextGenApp:
                 elif event_type == "tool_start":
                     # Tool is starting
                     tool_name = metadata.get("tool_name", "unknown")
-                    tool_usage += f"\n\n{content}"
+                    tool_usage += f"{content}"
                     working_history[-1] = {"role": "assistant", "content": response_content + tool_usage}
                     yield working_history, ""
                     
                 elif event_type == "tool_end":
                     # Tool completed
-                    tool_usage += f"\n{content}"
+                    tool_usage += f"{content}"
                     working_history[-1] = {"role": "assistant", "content": response_content + tool_usage}
                     yield working_history, ""
                     
@@ -354,7 +354,7 @@ class NextGenApp:
             
             # Combine all token displays
             if token_displays:
-                token_display = "\n" + "\n".join(token_displays)
+                token_display = "\n\n" + "\n".join(token_displays)
                 working_history[-1] = {"role": "assistant", "content": response_content + tool_usage + token_display}
                 print(f"🔍 DEBUG: Added token display: {token_display}")
             

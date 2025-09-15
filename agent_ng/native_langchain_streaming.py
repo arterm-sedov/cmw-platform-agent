@@ -125,7 +125,7 @@ class NativeLangChainStreaming:
                                 }
                                 yield StreamingEvent(
                                     event_type="tool_start",
-                                    content=f"🔧 **Using tool: {tool_name}**",
+                                    content=f"\n\n🔧 **Using tool: {tool_name}**",
                                     metadata={
                                         "tool_name": tool_name,
                                         "tool_call_id": tool_call_id
@@ -163,7 +163,7 @@ class NativeLangChainStreaming:
                                     # Stream tool completion with result in one event
                                     yield StreamingEvent(
                                         event_type="tool_end",
-                                        content=f"✅ **{tool_name} completed**\n**Result:** {str(tool_result)}",
+                                        content=f"\n✅ **{tool_name} completed**\n**Result:** {str(tool_result)}",
                                         metadata={
                                             "tool_name": tool_name,
                                             "tool_output": str(tool_result)

@@ -149,7 +149,7 @@ class StreamingCallbackHandler(BaseCallbackHandler):
         if self.event_callback:
             self.event_callback({
                 "type": "tool_start",
-                "content": f"🔧 **Using tool: {self.current_tool}**",
+                "content": f"\n\n🔧 **Using tool: {self.current_tool}**",
                 "metadata": {
                     "tool_name": self.current_tool,
                     "tool_args": input_str
@@ -161,7 +161,7 @@ class StreamingCallbackHandler(BaseCallbackHandler):
         if self.event_callback:
             self.event_callback({
                 "type": "tool_end",
-                "content": f"✅ **Tool completed: {self.current_tool}**",
+                "content": f"\n✅ **Tool completed: {self.current_tool}**",
                 "metadata": {"tool_name": self.current_tool}
             })
         self.current_tool = None
