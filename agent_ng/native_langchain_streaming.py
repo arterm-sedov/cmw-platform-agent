@@ -89,6 +89,13 @@ class NativeLangChainStreaming:
                 iteration += 1
                 print(f"🔍 DEBUG: Starting iteration {iteration}")
                 
+                # Stream iteration progress as separate message
+                yield StreamingEvent(
+                    event_type="iteration_progress",
+                    content=f"🔄 **Iteration {iteration}/{self.max_iterations}** - Processing...",
+                    metadata={"iteration": iteration, "max_iterations": self.max_iterations}
+                )
+                
                 # Use proper LangChain streaming with tool call handling
                 accumulated_chunk = None
                 tool_calls_in_progress = {}
@@ -231,13 +238,35 @@ class NativeLangChainStreaming:
                 # If no tool calls, we're done
                 if not has_tool_calls:
                     print(f"🔍 DEBUG: No tool calls in iteration {iteration}, conversation complete")
+                    
+                    # Stream conversation completion
+                    yield StreamingEvent(
+                        event_type="iteration_progress",
+                        content=f"✅ **Iteration {iteration}/{self.max_iterations} - Finished**",
+                        metadata={"iteration": iteration, "max_iterations": self.max_iterations, "conversation_complete": True}
+                    )
                     break
                 
                 print(f"🔍 DEBUG: Completed iteration {iteration}, continuing...")
+                
+                # Stream iteration completion as separate message
+                yield StreamingEvent(
+                    event_type="iteration_progress",
+                    content=f"✅ **Iteration {iteration} completed** - Continuing...",
+                    metadata={"iteration": iteration, "completed": True}
+                )
             
             # Check if we hit max iterations
             if iteration >= self.max_iterations:
                 print(f"🔍 DEBUG: Reached max iterations ({self.max_iterations}), stopping conversation")
+                
+                # Stream max iterations completion
+                yield StreamingEvent(
+                    event_type="iteration_progress",
+                    content=f"⚠️ **Iteration {iteration}/{self.max_iterations} - Finished (Max Reached)**",
+                    metadata={"iteration": iteration, "max_iterations": self.max_iterations, "max_reached": True}
+                )
+                
                 yield StreamingEvent(
                     event_type="warning",
                     content=f"⚠️ **Reached maximum iterations ({self.max_iterations}), conversation may be incomplete**",
@@ -261,12 +290,26 @@ class NativeLangChainStreaming:
                 content="✅ **Response completed**",
                 metadata={"final_response": True}
             )
+            
+            # Final iteration progress completion
+            yield StreamingEvent(
+                event_type="iteration_progress",
+                content=f"✅ **Processing Complete**",
+                metadata={"conversation_complete": True, "final": True}
+            )
                 
         except Exception as e:
             yield StreamingEvent(
                 event_type="error",
                 content=f"❌ **Error: {str(e)}**",
                 metadata={"error": str(e)}
+            )
+            
+            # Error completion for progress display
+            yield StreamingEvent(
+                event_type="iteration_progress",
+                content=f"❌ **Processing Failed**",
+                metadata={"error": True, "final": True}
             )
 
 

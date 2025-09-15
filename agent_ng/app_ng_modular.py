@@ -112,6 +112,9 @@ class NextGenApp:
         self.tab_instances = {}  # Store tab instances for event handlers
         self.components = {}
         
+        # Progress status storage
+        self.current_progress_status = "Ready to process your request..."
+        
         # Initialize synchronously first, then start async initialization
         self._start_async_initialization()
     
@@ -188,7 +191,22 @@ class NextGenApp:
             if hasattr(self.agent, 'token_tracker'):
                 self.agent.token_tracker.start_new_conversation()
             self.debug_streamer.info("Conversation cleared")
+        # Reset progress status
+        self.current_progress_status = "Ready to process your request..."
         return [], ""
+    
+    def get_progress_status(self) -> str:
+        """Get the current progress status for the UI"""
+        return self.current_progress_status
+    
+    def update_progress_display(self) -> str:
+        """Update the progress display component"""
+        if 'chat' in self.tab_instances:
+            chat_tab = self.tab_instances['chat']
+            if hasattr(chat_tab, 'get_progress_display'):
+                # This will be called by the UI update mechanism
+                return self.current_progress_status
+        return self.current_progress_status
     
     def get_conversation_history(self) -> List[BaseMessage]:
         """Get the current conversation history (LangChain-native pattern)"""
@@ -245,13 +263,14 @@ class NextGenApp:
             history.append({"role": "assistant", "content": error_msg})
             return history, ""
     
-    async def stream_chat_with_agent(self, message: str, history: List[Dict[str, str]]) -> AsyncGenerator[Tuple[List[Dict[str, str]], str], None]:
+    async def stream_chat_with_agent(self, message: str, history: List[Dict[str, str]], progress=None) -> AsyncGenerator[Tuple[List[Dict[str, str]], str], None]:
         """
         Stream chat with the agent using LangChain-native streaming patterns.
         
         Args:
             message: User message
             history: Chat history
+            progress: Optional Gradio Progress tracker
             
         Yields:
             Updated history and empty message
@@ -272,6 +291,10 @@ class NextGenApp:
         
         try:
             self.debug_streamer.info(f"Streaming message: {message[:50]}...")
+            
+            # Update progress
+            if progress:
+                progress(0.1, desc="Initializing response...")
             
             # Add user message to history
             working_history = history + [{"role": "user", "content": message}, {"role": "assistant", "content": ""}]
@@ -298,13 +321,33 @@ class NextGenApp:
                 
                 if event_type == "thinking":
                     # Agent is thinking
+                    if progress:
+                        progress(0.2, desc="Agent is thinking...")
                     working_history[-1] = {"role": "assistant", "content": content}
+                    yield working_history, ""
+                    
+                elif event_type == "iteration_progress":
+                    # Iteration progress - update progress display in sidebar
+                    if progress:
+                        iteration = metadata.get("iteration", 0)
+                        max_iterations = metadata.get("max_iterations", 1)
+                        progress(0.2 + (iteration * 0.1), desc=f"Iteration {iteration}/{max_iterations}")
+                    
+                    # Store progress status for UI update
+                    self.current_progress_status = content
+                    
+                    # Update progress display instead of adding to chat
+                    # This will be handled by the UI update mechanism
+                    # For now, just yield the current history without changes
                     yield working_history, ""
                     
                 elif event_type == "tool_start":
                     # Tool is starting - create a separate message with metadata
                     tool_name = metadata.get("tool_name", "unknown")
                     tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
+                    
+                    if progress:
+                        progress(0.3, desc=f"Using tool: {tool_name}")
                     
                     # Create tool message with metadata for collapsible section
                     tool_message = {
@@ -322,6 +365,9 @@ class NextGenApp:
                     # Tool completed - update the last tool message or create new one
                     tool_name = metadata.get("tool_name", "unknown")
                     tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
+                    
+                    if progress:
+                        progress(0.5, desc=f"Tool completed: {tool_name}")
                     
                     # Update the last tool message or create new one
                     if tool_messages and tool_messages[-1].get("metadata", {}).get("title") == tool_title:
@@ -342,12 +388,16 @@ class NextGenApp:
                     
                 elif event_type == "content":
                     # Stream content from response
+                    if progress:
+                        progress(0.6, desc="Generating response...")
                     response_content += content
                     working_history[-1] = {"role": "assistant", "content": response_content}
                     yield working_history, ""
                     
                 elif event_type == "error":
                     # Error occurred
+                    if progress:
+                        progress(0.8, desc="Error occurred...")
                     error_msg = f"\n{content}"
                     working_history[-1] = {"role": "assistant", "content": response_content + error_msg}
                     yield working_history, ""
@@ -423,6 +473,10 @@ class NextGenApp:
                 # Add back the final response
                 working_history.append(final_response)
             
+            # Final progress update
+            if progress:
+                progress(1.0, desc="Response completed!")
+            
             # Final yield with updated stats
             yield working_history, ""
             
@@ -446,13 +500,18 @@ class NextGenApp:
             "refresh_stats": self._refresh_stats,
             "update_all_ui": self.update_all_ui_components,
             "trigger_ui_update": self.trigger_ui_update,
+            "get_progress_status": self.get_progress_status,
+            "update_progress_display": self.update_progress_display,
         }
     
-    def _stream_message_wrapper(self, message: str, history: List[Dict[str, str]]):
-        """Stream a message to the agent (synchronous wrapper)"""
+    def _stream_message_wrapper(self, message: str, history: List[Dict[str, str]], progress=gr.Progress()):
+        """Stream a message to the agent (synchronous wrapper) with progress tracking"""
         if not message.strip():
             yield history, ""
             return
+        
+        # Initialize progress
+        progress(0, desc="Starting processing...")
         
         # Use the existing event loop or create a new one
         try:
@@ -466,7 +525,7 @@ class NextGenApp:
                 asyncio.set_event_loop(new_loop)
                 try:
                     async def async_stream():
-                        async for result in self.stream_chat_with_agent(message, history):
+                        async for result in self.stream_chat_with_agent(message, history, progress):
                             yield result
                     
                     # Convert async generator to regular generator
@@ -606,6 +665,7 @@ class NextGenApp:
         try:
             if ChatTab:
                 chat_tab = ChatTab(event_handlers)
+                chat_tab.set_main_app(self)  # Set reference to main app
                 tab_modules.append(chat_tab)
                 self.tab_instances['chat'] = chat_tab
             else:
