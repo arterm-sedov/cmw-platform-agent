@@ -123,14 +123,15 @@ class NativeLangChainStreaming:
                                     'args': '',
                                     'id': tool_call_id
                                 }
-                                yield StreamingEvent(
-                                    event_type="tool_start",
-                                    content=f"\n\n🔧 **Using tool: {tool_name}**",
-                                    metadata={
-                                        "tool_name": tool_name,
-                                        "tool_call_id": tool_call_id
-                                    }
-                                )
+                                # yield StreamingEvent(
+                                #     event_type="tool_start",
+                                #     content=f"\n\n2🔧 **Using tool: {tool_name}**",
+                                #     metadata={
+                                #         "tool_name": tool_name,
+                                #         "tool_call_id": tool_call_id,
+                                #         "title": f"1 🔧 Tool called: {tool_name}"
+                                #     }
+                                # )
                             
                             if tool_call_id in tool_calls_in_progress:
                                 # Accumulate tool arguments
@@ -151,24 +152,15 @@ class NativeLangChainStreaming:
                             from .tool_deduplicator import get_deduplicator
                             deduplicator = get_deduplicator()
                             is_duplicate, cached_result = deduplicator.is_duplicate(tool_name, tool_args, conversation_id)
-                            
+                            # duplicate_count = 0
+                            total_calls = 1
                             try:
                                 if is_duplicate:
                                     # Use cached result for duplicate tool call
                                     tool_result = cached_result['result'] if cached_result else "Error: Cached result not found"
-                                    duplicate_count = deduplicator.get_duplicate_count(tool_name, tool_args, conversation_id)
-                                    
-                                    # Stream tool completion with deduplication info
-                                    yield StreamingEvent(
-                                        event_type="tool_end",
-                                        content=f"\n🔧 Using tool: {tool_name}\n✅ {tool_name} completed\nCalled {duplicate_count + 1} times (deduplicated)\n**Result:** {str(tool_result)}",
-                                        metadata={
-                                            "tool_name": tool_name,
-                                            "tool_output": str(tool_result),
-                                            "duplicate": True,
-                                            "duplicate_count": duplicate_count + 1
-                                        }
-                                    )
+                                    total_calls += deduplicator.get_duplicate_count(tool_name, tool_args, conversation_id)
+                                    # total_calls = duplicate_count + 1
+
                                 else:
                                     # Find the tool in our tools list
                                     tool_obj = None
@@ -187,12 +179,13 @@ class NativeLangChainStreaming:
                                         # Stream tool completion with result in one event
                                         yield StreamingEvent(
                                             event_type="tool_end",
-                                            content=f"\n🔧 Using tool: {tool_name}\n✅ {tool_name} completed\nCalled 1 time\n**Result:** {str(tool_result)}",
+                                            content=f"\nCall count: {total_calls}\n**Result:** {str(tool_result)}",
                                             metadata={
                                                 "tool_name": tool_name,
                                                 "tool_output": str(tool_result),
                                                 "duplicate": False,
-                                                "duplicate_count": 1
+                                                "duplicate_count": total_calls,
+                                                "title": f"🔧 Tool called: {tool_name}"
                                             }
                                         )
                                     else:

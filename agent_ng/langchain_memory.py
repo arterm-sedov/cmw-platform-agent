@@ -427,8 +427,7 @@ class LangChainConversationChain:
                         }
                         
                         # Show only the first call in chat
-                        print(f"🔧 Using tool: {tool_name}")
-                        print(f"✅ {tool_name} completed")
+                        print(f"🔧✅ Used tool: {tool_name}")
                         
                         # Store tool call info
                         tool_calls.append({
@@ -465,8 +464,7 @@ class LangChainConversationChain:
                         }
                         
                         # Show only the first call in chat
-                        print(f"🔧 Using tool: {tool_name}")
-                        print(f"✅ {tool_name} completed")
+                        print(f"🔧✅ Used tool: {tool_name}")
                         
                         # Store tool call info
                         tool_calls.append({
