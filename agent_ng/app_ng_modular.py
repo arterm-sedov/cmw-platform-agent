@@ -352,6 +352,31 @@ class NextGenApp:
             execution_time = time.time() - start_time
             token_displays.append(f"**Execution time:** {execution_time:.2f}s")
             
+            # Add deduplication stats if available
+            if self.agent and hasattr(self.agent, '_deduplication_stats'):
+                dedup_stats = self.agent._deduplication_stats.get(self.session_id, {})
+                if dedup_stats:
+                    dedup_summary = []
+                    total_duplicates = 0
+                    total_tool_calls = 0
+                    
+                    for tool_key, stats in dedup_stats.items():
+                        total_tool_calls += stats['total_calls']
+                        if stats['duplicates'] > 0:
+                            dedup_summary.append(f"{stats['tool_name']}: {stats['duplicates']}")
+                            total_duplicates += stats['duplicates']
+                    
+                    if dedup_summary:
+                        # Show per-tool breakdown
+                        per_tool_breakdown = ", ".join(dedup_summary)
+                        token_displays.append(f"**Deduplication:** {total_duplicates} duplicate calls prevented ({per_tool_breakdown})")
+                        print(f"🔍 DEBUG: Added deduplication stats: {total_duplicates} duplicates")
+                    
+                    # Add total tool calls count
+                    if total_tool_calls > 0:
+                        token_displays.append(f"**Total tool calls:** {total_tool_calls}")
+                        print(f"🔍 DEBUG: Added total tool calls: {total_tool_calls}")
+            
             # Combine all token displays
             if token_displays:
                 token_display = "\n\n" + "\n".join(token_displays)
