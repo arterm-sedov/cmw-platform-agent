@@ -79,8 +79,8 @@ class ToolCallDeduplicator:
         normalized = {}
         for key, value in tool_args.items():
             if isinstance(value, str):
-                # Normalize string values (trim whitespace, lowercase for comparison)
-                normalized[key] = value.strip().lower()
+                # Normalize string values (trim whitespace only, preserve case)
+                normalized[key] = value.strip()
             elif isinstance(value, (int, float, bool)):
                 normalized[key] = value
             elif isinstance(value, list):
