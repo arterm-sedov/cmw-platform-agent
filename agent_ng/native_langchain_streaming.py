@@ -89,11 +89,16 @@ class NativeLangChainStreaming:
                 iteration += 1
                 print(f"🔍 DEBUG: Starting iteration {iteration}")
                 
-                # Stream iteration progress as separate message
+                # Stream iteration progress as separate message with pseudo-animation
+                # Cycle through different processing icons for pseudo-animation
+                processing_icons = ["🔄", "⚙️", "🔧", "⚡", "🔄", "⚙️", "🔧", "⚡"]
+                icon_index = (iteration - 1) % len(processing_icons)
+                current_icon = processing_icons[icon_index]
+                
                 yield StreamingEvent(
                     event_type="iteration_progress",
-                    content=f"🔄 **Iteration {iteration}/{self.max_iterations}** - Processing...",
-                    metadata={"iteration": iteration, "max_iterations": self.max_iterations}
+                    content=f'{current_icon} **Iteration {iteration}/{self.max_iterations}** - Processing...',
+                    metadata={"iteration": iteration, "max_iterations": self.max_iterations, "icon_index": icon_index}
                 )
                 
                 # Use proper LangChain streaming with tool call handling
@@ -240,9 +245,12 @@ class NativeLangChainStreaming:
                     print(f"🔍 DEBUG: No tool calls in iteration {iteration}, conversation complete")
                     
                     # Stream conversation completion
+                    finish_icons = ["🎉", "🏁", "✨", "🎯"]
+                    finish_icon = finish_icons[iteration % len(finish_icons)]
+                    
                     yield StreamingEvent(
                         event_type="iteration_progress",
-                        content=f"✅ **Iteration {iteration}/{self.max_iterations} - Finished**",
+                        content=f"{finish_icon} **Iteration {iteration}/{self.max_iterations} - Finished**",
                         metadata={"iteration": iteration, "max_iterations": self.max_iterations, "conversation_complete": True}
                     )
                     break
@@ -250,10 +258,13 @@ class NativeLangChainStreaming:
                 print(f"🔍 DEBUG: Completed iteration {iteration}, continuing...")
                 
                 # Stream iteration completion as separate message
+                completion_icons = ["✅", "✔️", "🎯", "✨"]
+                completion_icon = completion_icons[iteration % len(completion_icons)]
+                
                 yield StreamingEvent(
                     event_type="iteration_progress",
-                    content=f"✅ **Iteration {iteration} completed** - Continuing...",
-                    metadata={"iteration": iteration, "completed": True}
+                    content=f"{completion_icon} **Iteration {iteration} completed** - Continuing...",
+                    metadata={"iteration": iteration, "completed": True, "completion_icon": completion_icon}
                 )
             
             # Check if we hit max iterations
@@ -261,9 +272,12 @@ class NativeLangChainStreaming:
                 print(f"🔍 DEBUG: Reached max iterations ({self.max_iterations}), stopping conversation")
                 
                 # Stream max iterations completion
+                max_icons = ["⚠️", "⏰", "🔄", "⚡"]
+                max_icon = max_icons[iteration % len(max_icons)]
+                
                 yield StreamingEvent(
                     event_type="iteration_progress",
-                    content=f"⚠️ **Iteration {iteration}/{self.max_iterations} - Finished (Max Reached)**",
+                    content=f"{max_icon} **Iteration {iteration}/{self.max_iterations} - Finished (Max Reached)**",
                     metadata={"iteration": iteration, "max_iterations": self.max_iterations, "max_reached": True}
                 )
                 
@@ -292,9 +306,12 @@ class NativeLangChainStreaming:
             )
             
             # Final iteration progress completion
+            final_icons = ["🎉", "✨", "🏆", "🎯"]
+            final_icon = final_icons[0]  # Always use first icon for final completion
+            
             yield StreamingEvent(
                 event_type="iteration_progress",
-                content=f"✅ **Processing Complete**",
+                content=f"{final_icon} **Processing Complete**",
                 metadata={"conversation_complete": True, "final": True}
             )
                 
@@ -306,9 +323,12 @@ class NativeLangChainStreaming:
             )
             
             # Error completion for progress display
+            error_icons = ["❌", "💥", "⚠️", "🚫"]
+            error_icon = error_icons[0]  # Always use first icon for error
+            
             yield StreamingEvent(
                 event_type="iteration_progress",
-                content=f"❌ **Processing Failed**",
+                content=f"{error_icon} **Processing Failed**",
                 metadata={"error": True, "final": True}
             )
 
