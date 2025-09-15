@@ -327,6 +327,7 @@ class LangChainConversationChain:
         max_iterations = 10
         iteration = 0
         total_tokens_tracked = False  # Track if we've already counted tokens for this conversation turn
+        final_response = None  # Initialize final_response
         
         while iteration < max_iterations:
             iteration += 1
