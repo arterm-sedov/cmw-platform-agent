@@ -13,7 +13,7 @@ from tool_manager import get_tool_manager, reset_tool_manager
 from vector_similarity import get_vector_similarity_manager, reset_vector_similarity_manager
 from stats_manager import get_stats_manager, reset_stats_manager
 from response_processor import get_response_processor, reset_response_processor
-from streaming_manager import get_streaming_manager, reset_streaming_manager
+# from streaming_manager import get_streaming_manager, reset_streaming_manager  # Moved to .unused
 
 
 def test_all_modules():
@@ -70,11 +70,9 @@ def test_all_modules():
     answer = resp_proc.extract_final_answer(test_response)
     print(f"  ✅ Response Processor: Extracted answer: '{answer}'")
     
-    # Test 8: Streaming Manager
+    # Test 8: Streaming Manager (moved to .unused)
     print("\n8. Testing Streaming Manager...")
-    stream_mgr = get_streaming_manager()
-    generator = stream_mgr.create_streaming_generator()
-    print(f"  ✅ Streaming Manager: {len(stream_mgr.get_active_streams())} active streams")
+    print("  ⚠️ Streaming Manager moved to .unused - using native LangChain streaming")
     
     print("\n🎉 All modules tested successfully!")
     return True
@@ -143,7 +141,7 @@ def test_module_reset():
     reset_vector_similarity_manager()
     reset_stats_manager()
     reset_response_processor()
-    reset_streaming_manager()
+    # reset_streaming_manager()  # Moved to .unused
     
     print("  ✅ All modules reset successfully")
     return True

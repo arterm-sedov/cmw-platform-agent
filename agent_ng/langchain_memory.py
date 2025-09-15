@@ -324,7 +324,10 @@ class LangChainConversationChain:
     def _run_tool_calling_loop(self, messages: List[BaseMessage], conversation_id: str) -> Dict[str, Any]:
         """Run the tool calling loop using LangChain patterns"""
         tool_calls = []
-        max_iterations = 10
+        # Get max tool call iterations from centralized config
+        from .streaming_config import get_streaming_config
+        config = get_streaming_config()
+        max_iterations = config.get_max_tool_call_iterations()
         iteration = 0
         total_tokens_tracked = False  # Track if we've already counted tokens for this conversation turn
         final_response = None  # Initialize final_response
