@@ -66,6 +66,7 @@ from .attributes_tools.tools_duration_attribute import edit_or_create_duration_a
 from .attributes_tools.tools_account_attribute import edit_or_create_account_attribute, get_account_attribute 
 from .attributes_tools.tools_boolean_attribute import edit_or_create_boolean_attribute, get_boolean_attribute 
 from .attributes_tools.tools_role_attribute import edit_or_create_role_attribute, get_role_attribute 
+from .attributes_tools.tools_enum_attribute import edit_or_create_enum_attribute, get_enum_attribute 
 
 # Attributes tools - Utility functions
 from .attributes_tools.tool_delete_attribute import delete_attribute
