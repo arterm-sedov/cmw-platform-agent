@@ -289,6 +289,7 @@ class NextGenApp:
             # Stream response using simple streaming
             response_content = ""
             tool_usage = ""
+            tool_messages = []  # Store tool messages separately for metadata handling
             
             async for event in self.agent.stream_message(message, self.session_id):
                 event_type = event.get("type", "unknown")
@@ -301,28 +302,54 @@ class NextGenApp:
                     yield working_history, ""
                     
                 elif event_type == "tool_start":
-                    # Tool is starting
+                    # Tool is starting - create a separate message with metadata
                     tool_name = metadata.get("tool_name", "unknown")
-                    tool_usage += f"{content}"
-                    working_history[-1] = {"role": "assistant", "content": response_content + tool_usage}
+                    tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
+                    
+                    # Create tool message with metadata for collapsible section
+                    tool_message = {
+                        "role": "assistant", 
+                        "content": content,
+                        "metadata": {"title": tool_title}
+                    }
+                    tool_messages.append(tool_message)
+                    
+                    # Don't add tool usage to main response during streaming - will be added as collapsible sections at the end
+                    working_history[-1] = {"role": "assistant", "content": response_content}
                     yield working_history, ""
                     
                 elif event_type == "tool_end":
-                    # Tool completed
-                    tool_usage += f"{content}"
-                    working_history[-1] = {"role": "assistant", "content": response_content + tool_usage}
+                    # Tool completed - update the last tool message or create new one
+                    tool_name = metadata.get("tool_name", "unknown")
+                    tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
+                    
+                    # Update the last tool message or create new one
+                    if tool_messages and tool_messages[-1].get("metadata", {}).get("title") == tool_title:
+                        # Update existing tool message
+                        tool_messages[-1]["content"] += content
+                    else:
+                        # Create new tool message
+                        tool_message = {
+                            "role": "assistant", 
+                            "content": content,
+                            "metadata": {"title": tool_title}
+                        }
+                        tool_messages.append(tool_message)
+                    
+                    # Don't add tool usage to main response during streaming - will be added as collapsible sections at the end
+                    working_history[-1] = {"role": "assistant", "content": response_content}
                     yield working_history, ""
                     
                 elif event_type == "content":
                     # Stream content from response
                     response_content += content
-                    working_history[-1] = {"role": "assistant", "content": response_content + tool_usage}
+                    working_history[-1] = {"role": "assistant", "content": response_content}
                     yield working_history, ""
                     
                 elif event_type == "error":
                     # Error occurred
                     error_msg = f"\n{content}"
-                    working_history[-1] = {"role": "assistant", "content": response_content + tool_usage + error_msg}
+                    working_history[-1] = {"role": "assistant", "content": response_content + error_msg}
                     yield working_history, ""
             
             # Add API token count to final response
@@ -380,8 +407,21 @@ class NextGenApp:
             # Combine all token displays
             if token_displays:
                 token_display = "\n\n" + "\n".join(token_displays)
-                working_history[-1] = {"role": "assistant", "content": response_content + tool_usage + token_display}
+                working_history[-1] = {"role": "assistant", "content": response_content + token_display}
                 print(f"🔍 DEBUG: Added token display: {token_display}")
+            
+            # Add tool messages with metadata after the main response
+            if tool_messages:
+                # Insert tool messages before the final assistant response
+                final_response = working_history[-1]
+                working_history = working_history[:-1]  # Remove the final response temporarily
+                
+                # Add tool messages with metadata
+                for tool_msg in tool_messages:
+                    working_history.append(tool_msg)
+                
+                # Add back the final response
+                working_history.append(final_response)
             
             # Final yield with updated stats
             yield working_history, ""
