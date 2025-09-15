@@ -38,8 +38,18 @@ def list_applications() -> Dict[str, Any]:
         result.update({"error": "Unexpected response structure from server"})
         return result
 
-    result.update({"raw_response": result_body['response']})
-    validated = AttributeResult(**result)
+    # Extract the applications data
+    applications_data = result_body['response']
+    
+    # Create the final result with the applications data
+    final_result = {
+        "success": True,
+        "status_code": result.get("status_code", 200),
+        "data": applications_data,
+        "error": None
+    }
+    
+    validated = AttributeResult(**final_result)
     return validated.model_dump()
 
 if __name__ == "__main__":

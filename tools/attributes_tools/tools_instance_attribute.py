@@ -145,8 +145,18 @@ def get_record_attribute(
         if key in result_body['response']:
             result_body['response'].pop(key, None)
 
-    result.update({"raw_response": result_body['response']})
-    validated = AttributeResult(**result)
+    # Extract the data
+    data = result_body['response']
+    
+    # Create the final result with the data
+    final_result = {
+        "success": True,
+        "status_code": result.get("status_code", 200),
+        "data": data,
+        "error": None
+    }
+    
+    validated = AttributeResult(**final_result)
     return validated.model_dump()
 
 if __name__ == "__main__":

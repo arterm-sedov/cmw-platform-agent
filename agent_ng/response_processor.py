@@ -94,9 +94,10 @@ class ResponseProcessor:
             # Check for tool calls in the response
             tool_calls = self.extract_tool_calls(response)
             for tool_call in tool_calls:
+                # Tool calls from extract_tool_calls are already dictionaries
                 if tool_call.get('name') == 'submit_answer':
                     args = tool_call.get('args', {})
-                    answer = args.get('answer', '')
+                    answer = args.get('answer', '') if isinstance(args, dict) else ''
                     if answer:
                         return answer
             
