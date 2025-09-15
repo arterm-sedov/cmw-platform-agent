@@ -267,6 +267,9 @@ class NextGenApp:
             yield history, ""
             return
         
+        # Track execution time
+        start_time = time.time()
+        
         try:
             self.debug_streamer.info(f"Streaming message: {message[:50]}...")
             
@@ -345,6 +348,10 @@ class NextGenApp:
                     print(f"🔍 DEBUG: API token error: {e}")
                     self.debug_streamer.warning(f"Failed to get API token count: {e}")
             
+            # Add execution time
+            execution_time = time.time() - start_time
+            token_displays.append(f"**Execution time:** {execution_time:.2f}s")
+            
             # Combine all token displays
             if token_displays:
                 token_display = "\n" + "\n".join(token_displays)
@@ -356,7 +363,8 @@ class NextGenApp:
             
         except Exception as e:
             self.debug_streamer.error(f"Error in stream chat: {e}")
-            error_msg = f"❌ **Error streaming message: {str(e)}**"
+            execution_time = time.time() - start_time
+            error_msg = f"❌ **Error streaming message: {str(e)}**\n\n**Execution time:** {execution_time:.2f}s"
             working_history[-1] = {"role": "assistant", "content": error_msg}
             yield working_history, ""
     
