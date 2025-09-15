@@ -115,8 +115,8 @@ class UIManager:
                 outputs=[self.components["progress_display"]]
             )
             
-            # Add timer for progress updates during processing
-            progress_timer = gr.Timer(1.0, active=True)
+            # Add timer for progress updates during processing with faster rotation
+            progress_timer = gr.Timer(0.5, active=True)  # Faster rotation for better visual feedback
             progress_timer.tick(
                 fn=update_progress_handler,
                 outputs=[self.components["progress_display"]]

@@ -111,7 +111,10 @@ class ChatTab:
                     
                     # Progress indicator
                     gr.Markdown("### 📊 Progress")
-                    self.components["progress_display"] = gr.Markdown("Ready to process your request...")
+                    self.components["progress_display"] = gr.Markdown(
+                        "Ready to process your request...", 
+                        elem_classes=["progress-status"]
+                    )
     
     def _create_sidebar(self):
         """Create the status and quick actions sidebar - now handled in _create_chat_interface"""
