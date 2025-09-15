@@ -147,46 +147,74 @@ class NativeLangChainStreaming:
                         tool_call_id = tool_call.get('id')
                         
                         if tool_name and tool_call_id in tool_calls_in_progress:
-                            # Execute the tool
+                            # Check for duplicate tool call
+                            from .tool_deduplicator import get_deduplicator
+                            deduplicator = get_deduplicator()
+                            is_duplicate, cached_result = deduplicator.is_duplicate(tool_name, tool_args, conversation_id)
+                            
                             try:
-                                # Find the tool in our tools list
-                                tool_obj = None
-                                for tool in agent.tools:
-                                    if tool.name == tool_name:
-                                        tool_obj = tool
-                                        break
-                                
-                                if tool_obj:
-                                    # Execute tool
-                                    tool_result = tool_obj.invoke(tool_args)
+                                if is_duplicate:
+                                    # Use cached result for duplicate tool call
+                                    tool_result = cached_result['result'] if cached_result else "Error: Cached result not found"
+                                    duplicate_count = deduplicator.get_duplicate_count(tool_name, tool_args, conversation_id)
                                     
-                                    # Stream tool completion with result in one event
+                                    # Stream tool completion with deduplication info
                                     yield StreamingEvent(
                                         event_type="tool_end",
-                                        content=f"\n✅ **{tool_name} completed**\n**Result:** {str(tool_result)}",
+                                        content=f"\n🔧 Using tool: {tool_name}\n✅ {tool_name} completed\nCalled {duplicate_count + 1} times (deduplicated)\n**Result:** {str(tool_result)}",
                                         metadata={
                                             "tool_name": tool_name,
-                                            "tool_output": str(tool_result)
+                                            "tool_output": str(tool_result),
+                                            "duplicate": True,
+                                            "duplicate_count": duplicate_count + 1
                                         }
                                     )
-                                    
-                                    # Add tool message to conversation
-                                    tool_message = ToolMessage(
-                                        content=str(tool_result),
-                                        tool_call_id=tool_call_id
-                                    )
-                                    messages.append(tool_message)
-                                    agent.memory_manager.add_message(conversation_id, tool_message)
-                                    
-                                    # Remove from in-progress
-                                    del tool_calls_in_progress[tool_call_id]
-                                    
                                 else:
-                                    yield StreamingEvent(
-                                        event_type="error",
-                                        content=f"❌ **Unknown tool: {tool_name}**",
-                                        metadata={"tool_name": tool_name}
-                                    )
+                                    # Find the tool in our tools list
+                                    tool_obj = None
+                                    for tool in agent.tools:
+                                        if tool.name == tool_name:
+                                            tool_obj = tool
+                                            break
+                                    
+                                    if tool_obj:
+                                        # Execute tool for first time
+                                        tool_result = tool_obj.invoke(tool_args)
+                                        
+                                        # Store the tool call result for future deduplication
+                                        deduplicator.store_tool_call(tool_name, tool_args, tool_result, conversation_id)
+                                        
+                                        # Stream tool completion with result in one event
+                                        yield StreamingEvent(
+                                            event_type="tool_end",
+                                            content=f"\n🔧 Using tool: {tool_name}\n✅ {tool_name} completed\nCalled 1 time\n**Result:** {str(tool_result)}",
+                                            metadata={
+                                                "tool_name": tool_name,
+                                                "tool_output": str(tool_result),
+                                                "duplicate": False,
+                                                "duplicate_count": 1
+                                            }
+                                        )
+                                    else:
+                                        yield StreamingEvent(
+                                            event_type="error",
+                                            content=f"❌ **Unknown tool: {tool_name}**",
+                                            metadata={"tool_name": tool_name}
+                                        )
+                                        # Remove from in-progress
+                                        del tool_calls_in_progress[tool_call_id]
+                                        continue
+                                
+                                # Add tool message to conversation
+                                tool_message = ToolMessage(
+                                    content=str(tool_result),
+                                    tool_call_id=tool_call_id
+                                )
+                                messages.append(tool_message)
+                                agent.memory_manager.add_message(conversation_id, tool_message)
+                                
+                                # Remove from in-progress
+                                del tool_calls_in_progress[tool_call_id]
                                     
                             except Exception as e:
                                 yield StreamingEvent(
