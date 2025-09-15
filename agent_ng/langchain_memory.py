@@ -326,6 +326,7 @@ class LangChainConversationChain:
         tool_calls = []
         max_iterations = 10
         iteration = 0
+        total_tokens_tracked = False  # Track if we've already counted tokens for this conversation turn
         
         while iteration < max_iterations:
             iteration += 1
@@ -334,8 +335,10 @@ class LangChainConversationChain:
                 # Get LLM response
                 response = self.llm_instance.llm.invoke(messages)
                 
-                # Track token usage for this response
-                self._track_token_usage(response, messages)
+                # Track token usage only once per conversation turn (first LLM call)
+                if not total_tokens_tracked:
+                    self._track_token_usage(response, messages)
+                    total_tokens_tracked = True
                 
             except Exception as e:
                 # Pass LLM errors directly to user - they are valuable information
@@ -403,8 +406,8 @@ class LangChainConversationChain:
                 # Get one final response from the LLM after all tool calls
                 final_response_obj = self.llm_instance.llm.invoke(messages)
                 
-                # Track token usage for final response
-                self._track_token_usage(final_response_obj, messages)
+                # Don't track tokens again - we already tracked them for the first LLM call
+                # The final response is part of the same conversation turn
                 
                 if hasattr(final_response_obj, 'content') and final_response_obj.content.strip():
                     final_response = final_response_obj.content
