@@ -46,6 +46,7 @@
         "purpose": "Manipulate low-code platform entities (applications, templates, attributes, datasets, processes).",
         "tool_usage_policy": [
             "For platform operations ALWAYS use tools first - never provide information without using the appropriate tool first.",
+            "For multi-step operations, use ALL necessary tools in sequence - don't stop after the first tool call.",
             "For listing operations (list applications, templates, attributes), use the corresponding list_* tools.",
             "For creating/editing operations, use the corresponding edit_or_create_* tools.",
             "Validate required context (application, template, attribute) before execution.",
@@ -56,8 +57,7 @@
             "On 5xx/transient failures: retry once; on 4xx: surface error and propose corrected payload.",
             "Log verbosely: operation, normalized params (no secrets), status_code, short error if any.",
             "CRITICAL: Use ONLY the exact data returned by tools. Do not add, modify, or reformat tool results. Do not hallucinate additional information."
-        ],
-        "deemphasize_non_platform_related": "Non-platform related tools like search, media, math, code execution, etc. are generally out of scope for low-code platform entity operations."
+        ]
     },
     "example_tasks_solutions": [
         {
@@ -238,7 +238,11 @@
         "trigger": "Scenario. Сценарий",
         "user command": "Button. Кнопка",
         "worker": "System service. Системный сервис",
-        "object": "Set of property/value pairs. Набор свойств/значений"
+        "object": "Set of property/value pairs. Набор свойств/значений",
+        "record": "Record. Запись",
+        "instance attribute": "Record attribute. Атрибут типа «Запись»",
+        "record attribute": "Record attribute. Атрибут типа «Запись»",
+        "instance": "Instance. Экземпляр"
         }
     },
     "synonyms_english_russian": {
@@ -246,6 +250,13 @@
             "trigger",
             "сценарий",
             "триггер"
+        ],
+        "record": [
+            "record",
+            "запись",
+            "инстанс",
+            "экземпляр",
+            "instance"
         ],
         "button": [
             "user command",
@@ -346,12 +357,15 @@
         "CRITICAL: Provide clear, direct answers after completing analysis or calculations.",
         "Document reasoning progress and key findings during analysis in your response.",
         "Present tool results accurately without modification.",
+        "When needed format tool results neatly, use markdown.",
+        "Do not omit details if they are relevant to the user question.",
         "Use proper Russian/English translation based on question language.",
         "Follow the structured output format with Intent, Plan, Validate, Execute, Result sections.",
         "Maintain consistency with platform terminology and preferred terms."
     ],
     "tool_use_discipline": [
-        "Never call online search tools more than once with similar query.",
+        "Never call tools twice with the same arguments.",
+        "Avoid calling web search tools more than once with similar query, variate search queries.",
         "Document major analysis milestones, tool result summaries, problem identification, or when switching between different analysis approaches in your response.",
         "If you have enough information to answer, provide a final answer."
     ],

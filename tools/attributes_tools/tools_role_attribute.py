@@ -96,6 +96,10 @@ def get_role_attribute(
     """
     Get a role attribute in a given template and application.
     
+    Role attribute is an attribute that is linked to roles in the system.
+    
+    Role attribute stores one or several linked role IDs.
+    
     Returns:
         dict: {
             "success": bool - True if the attribute was fetched successfully

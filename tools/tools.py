@@ -58,7 +58,7 @@ from .attributes_tools.tools_text_attribute import edit_or_create_text_attribute
 # Attributes tools - Other attribute types
 from .attributes_tools.tools_datetime_attribute import edit_or_create_date_time_attribute, get_date_time_attribute 
 from .attributes_tools.tools_decimal_attribute import edit_or_create_numeric_attribute, get_numeric_attribute 
-from .attributes_tools.tools_instance_attribute import edit_or_create_record_attribute, get_record_attribute 
+from .attributes_tools.tools_record_attribute import edit_or_create_record_attribute, get_record_attribute 
 from .attributes_tools.tools_image_attribute import edit_or_create_image_attribute, get_image_attribute 
 from .attributes_tools.tools_drawing_attribute import edit_or_create_drawing_attribute, get_drawing_attribute 
 from .attributes_tools.tools_document_attribute import edit_or_create_document_attribute, get_document_attribute 

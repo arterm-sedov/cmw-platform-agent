@@ -58,7 +58,7 @@ from .attributes_tools import (
     # Image attributes
     edit_or_create_image_attribute, get_image_attribute,
     
-    # Instance/Record attributes
+    # Record attributes
     edit_or_create_record_attribute, get_record_attribute,
     
     # Role attributes
@@ -123,7 +123,7 @@ __all__ = [
     'edit_or_create_image_attribute',
     'get_image_attribute',
     
-    # Instance/Record attributes
+    # Record attributes
     'edit_or_create_record_attribute',
     'get_record_attribute',
     
