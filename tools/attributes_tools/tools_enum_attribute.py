@@ -1,0 +1,378 @@
+from ..tool_utils import *
+import re
+
+# _remove_nones function is now imported from tool_utils
+
+class PlainEnumValueModel(BaseModel):
+    system_name: str = Field(
+        description="Enum value system name. RU: Системное имя значения",
+        alias="alias"
+    )
+    russian_name: str = Field(
+        description="Enum value Russian name. RU: Русское название значения",
+        alias="ru"
+    )
+    english_name: Optional[str] = Field(
+        default=None,
+        description="Enum value English name. RU: Английское название значения",
+        alias="en"
+    )
+    deutsche_name: Optional[str] = Field(
+        default=None,
+        description="Enum value Deutsche name. RU: Немецкое название значения",
+        alias="de"
+    )
+    color: Optional[str] = Field(
+        default=None,
+        description="Enum value display color via hex code. RU: Цвет отображения значения"
+    )
+
+class EnumValueSystemNameModel(BaseModel):
+    variant_type: Literal["Variant"] = Field(
+        default="Variant",
+        description="EnumValue type. RU: Тип значения",
+        alias="type"
+    )
+    attribute_system_name: str = Field(
+        description="Attribute system name. RU: Системное имя атрибута",
+        alias="owner"
+    )
+    system_name: str = Field(
+        description="Variant system name. RU: Системное имя значения",
+        alias="alias"
+    )
+
+
+class EnumValueNameModel(BaseModel):
+    english_name: Optional[str] = Field(
+        default=None,
+        description="EnumValue English name. RU: Английское название значения",
+        alias="en"
+    )
+    russian_name: str = Field(
+        description="EnumValue Russian name. RU: Русское название значения",
+        alias="ru"
+    )
+    deutsche_name: Optional[str] = Field(
+        default=None,
+        description="EnumValue Deutsche name. RU: Немецкое название значения",
+        alias="de"
+    )
+
+
+class EnumValueModel(BaseModel):
+    sytem_name: EnumValueSystemNameModel = Field(alias="alias")
+    name: EnumValueNameModel
+    color: Optional[str] = Field(default=None)
+
+    @field_validator('color')
+    def validate_hex_color(cls, v):
+        if v is None:
+            return v
+        if not re.match(r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$', v):
+            raise ValueError('Color must be a valid hex color code, e.g. #RRGGBB')
+        return v
+
+    @field_validator('color')
+    def validate_hex_color(cls, v):
+        if v is None:
+            return v
+        if not re.match(r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$', v):
+            raise ValueError('Color must be a valid hex color code, e.g. #RRGGBB or #RGB')
+        return v
+
+class EditOrCreateEnumAttributeSchema(BaseModel):
+    operation: Literal["create", "edit"] = Field(
+        description="Choose operation: Create or Edit the attribute. RU: Создать, Редактировать"
+    )
+    name: str = Field(
+        description="Human-readable name of the attribute. RU: Название"
+    )
+    system_name: str = Field(
+        description="System name of the attribute. RU: Системное имя"
+    )
+    application_system_name: str = Field(
+        description="System name of the application with the template where the attribute is created or edited. RU: Системное имя приложения"
+    )
+    template_system_name: str = Field(
+        description="System name of the template where the attribute is created or edited. RU: Системное имя шаблона"
+    )
+    display_format: Literal[
+        "Text",
+        "Indicator",
+        "Badge"
+    ] = Field(
+        description="Attribute display format. RU: Формат отображения. When `display_format=CustomMask` provide `custom_mask`."
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Human-readable business-oriented description of the attribute (auto-generate if empty). RU: Описание",
+    )
+    write_changes_to_the_log: bool = Field(
+        default=False,
+        description="Set to `True` to log attribute value changes. RU: Записывать изменения в журнал",
+    )
+    calculate_value: bool = Field(
+        default=False,
+        description="Set to `True` to calculate the attribute value automatically. Relevant only when `expression_for_calculation` is provided. RU: Вычислять автоматически",
+    )
+    expression_for_calculation: Optional[str] = Field(
+        default=None,
+        description="Expression to calculate the attribute value automatically. User-provided. RU: Выражение для вычисления",
+    )
+    enum_values: List[PlainEnumValueModel] = Field(
+        description="""Attribute value enum_values. Ru: Варианты значений атрибута
+
+IMPORTANT EXAMPLE (you MUST follow this structure):
+[
+  {
+    "alias": "status_active",
+    "ru": "Активен",
+    "en": "Active",
+    "de": "Aktiv",
+    "color": "#4CAF50"
+  },
+  {
+    "alias": "status_inactive",
+    "ru": "Неактивен",
+    "color": "#F44336"
+  }
+]
+
+Note:
+- `ru` is REQUIRED.
+- `alias` is the system name of the variant.
+- `color` must be valid hex (e.g. #RRGGBB or #RGB) or omitted.
+"""
+    )
+
+    @model_validator(mode='after')
+    def inject_attribute_system_name_into_aliases(self) -> 'EditOrCreateEnumAttributeSchema':
+        for variant in self.enum_values:
+            variant.sytem_name.attribute_system_name = self.system_name
+        return self
+
+    @field_validator("operation", mode="before")
+    @classmethod
+    def normalize_operation(cls, v: str) -> str:
+        if v is None:
+            return v
+        value = str(v).strip().lower()
+        mapping = {
+            "создать": "create",
+            "редактировать": "edit",
+        }
+        return mapping.get(value, value)
+
+    @field_validator("name", "system_name", "application_system_name", "template_system_name", mode="before")
+    @classmethod
+    def non_empty_str(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
+
+    @model_validator(mode="after")
+    def validate_masks_and_calc(self) -> "EditOrCreateTextAttributeSchema":
+        if self.display_format == "CustomMask":
+            if not self.custom_mask or not str(self.custom_mask).strip():
+                raise ValueError("custom_mask is required when display_format is 'CustomMask'")
+        else:
+            # Ensure custom_mask is not accidentally provided for non-CustomMask
+            if self.custom_mask is not None and str(self.custom_mask).strip() != "":
+                raise ValueError("custom_mask must be omitted unless display_format is 'CustomMask'")
+
+        if self.expression_for_calculation is None:
+            # Calculation must be off when expression is not provided
+            object.__setattr__(self, "calculate_value", False)
+        else:
+            # Turn on calculation if expression is provided
+            object.__setattr__(self, "calculate_value", True)
+
+        return self
+
+def convert_plain_to_enum_value(plain: PlainEnumValueModel, attr_system_name: str) -> EnumValueModel:
+    return EnumValueModel(
+        alias=EnumValueSystemNameModel(
+            type="Variant",
+            owner=attr_system_name,  # ← инжектится из system_name атрибута
+            alias=plain.system_name
+        ),
+        name=EnumValueNameModel(
+            ru=plain.russian_name,
+            en=plain.english_name,
+            de=plain.deutsche_name
+        ),
+        color=plain.color
+    )
+
+@tool("edit_or_create_enum_attribute", return_direct=False, args_schema=EditOrCreateEnumAttributeSchema)
+def edit_or_create_enum_attribute(
+    operation: str,
+    name: str,
+    system_name: str,
+    application_system_name: str,
+    template_system_name: str,
+    display_format: str,
+    enum_values: List[PlainEnumValueModel],
+    description: Optional[str] = None,
+    write_changes_to_the_log: Optional[bool] = False,
+    calculate_value: Optional[bool] = False,
+    expression_for_calculation: Optional[str] = None,
+) -> Dict[str, Any]:
+    r"""
+    Edit or Create a enum attribute.
+    
+    IMPORTANT: When providing `enum_values`, you MUST follow this exact structure (see schema description for example):
+
+    Example `enum_values`:
+    [
+      {
+        "system_name": "status_active",
+        "ru": "Активен",
+        "en": "Active",
+        "de": "Aktiv",
+        "color": "#4CAF50"
+      }
+    ]
+
+    - `ru` is REQUIRED.
+    - `system_name` is the system name of the enum value.
+    - `color` must be valid hex (e.g. #RRGGBB or #RGB) or omitted.
+
+    Returns:
+        dict: {
+            "success": bool - True if the attribute was created or edited successfully
+            "status_code": int - HTTP response status code  
+            "raw_response": dict|str|None - Raw response for auditing or payload body (sanitized)
+            "error": str|None - Error message if operation failed
+        }
+    """
+
+    convert_enum_values = [
+        convert_plain_to_enum_value(plain_enum_value, system_name)
+        for plain_enum_value in enum_values
+    ]
+
+    request_body: Dict[str, Any] = {
+        "globalAlias": {
+            "owner": template_system_name,
+            "type": "Undefined",
+            "alias": system_name
+        },
+        "type": "Enum",
+        "format": display_format,
+        "name": name,
+        "description": description,
+        "isTracked": write_changes_to_the_log,
+        "isCalculated": calculate_value if expression_for_calculation != None else False,
+        "expression": expression_for_calculation,
+        "variants": [
+            {
+                "alias": variant.system_name.model_dump(by_alias=True, exclude_none=True),
+                "name": variant.name.model_dump(by_alias=True, exclude_none=True),
+                "color": variant.color
+            }
+            for variant in convert_enum_values
+        ]
+    }
+
+        # Remove None values
+    request_body = remove_nones(request_body) 
+
+    try:
+        if operation == "create":
+            result = requests_._post_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
+        if operation == "edit" or operation == "create":
+            result = requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
+            print("edit is complited")
+        else:
+            result = {
+                "success": False,
+                "error": f"No such operation for attribute: {operation}. Available operations: create, edit",
+                "status_code": 400
+            }
+    except Exception as e:
+        result = {
+            "success": False,
+            "error": f"Tool execution failed: {str(e)}",
+            "status_code": 500
+        }
+
+    # Ensure result is always a dict with proper structure
+    if not isinstance(result, dict):
+        result = {
+            "success": False,
+            "error": f"Unexpected result type: {type(result)}",
+            "status_code": 500
+        }
+    
+    # Add additional error information if the API call failed
+    if not result.get("success", False) and result.get("error"):
+        error_info = result.get("error", "")
+        result["error"] = f"API operation failed: {error_info}"
+
+    validated = AttributeResult(**result)
+    return validated.model_dump()
+
+class GetEnumAttributeSchema(BaseModel):
+    application_system_name: str = Field(
+        description="System name of the application with the template where the attribute is located. RU: Системное имя приложения"
+    )
+    template_system_name: str = Field(
+        description="System name of the template where the attribute is located. RU: Системное имя шаблона"
+    )
+    system_name: str = Field(
+        description="Unique system name of the attribute to fetch. RU: Системное имя атрибута"
+    )
+
+    @field_validator("application_system_name", "template_system_name", "system_name", mode="before")
+    @classmethod
+    def non_empty(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
+
+
+@tool("get_enum_attribute", return_direct=False, args_schema=GetEnumAttributeSchema)
+def get_enum_attribute(
+    application_system_name: str,
+    template_system_name: str,
+    system_name: str
+    ) -> Dict[str, Any]:
+    """
+    Get a enum attribute in a given template and application.
+    
+    Returns:
+        dict: {
+            "success": bool - True if operation completed successfully
+            "status_code": int - HTTP response status code  
+            "raw_response": dict|str|None - Raw response payload for auditing or payload body (sanitized)
+            "error": str|None - Error message if operation failed
+        }
+    """
+
+    attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
+
+    result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
+
+    keys_to_remove = ['isUnique', 'isTitle', 'isIndexed', 'isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio']
+
+    return process_attribute_response(
+        request_result=result,
+        keys_to_remove=keys_to_remove,
+        result_model=AttributeResult
+    )
+
+if __name__ == "__main__":
+    results = edit_or_create_text_attribute.invoke({
+        "operation": "create",
+        "name": "US Phone Number",
+        "system_name": "USPhoneNumber",
+        "application_system_name": "AItestAndApi",
+        "template_system_name": "Test",
+        "display_format": "CustomMask",
+        "custom_mask": r"^+1-?\d{3}-?\d{3}-?\d{4}$",
+        "control_uniqueness": False,
+        "use_as_record_title": False
+    })
+    print(results)

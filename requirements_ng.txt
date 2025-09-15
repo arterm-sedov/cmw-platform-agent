@@ -1,0 +1,30 @@
+# Next-Generation LLM Agent App Requirements
+# ==========================================
+
+# Core Gradio and LangChain
+gradio>=4.0.0
+langchain>=0.1.0
+langchain-core>=0.1.0
+
+# LLM Providers
+google-generativeai>=0.3.0
+groq>=0.4.0
+openai>=1.0.0
+mistralai>=0.0.8
+huggingface-hub>=0.19.0
+langchain-gigachat>=0.0.1
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+asyncio-mqtt>=0.11.0
+
+# Optional: Vector similarity (if needed)
+# sentence-transformers>=2.2.0
+# faiss-cpu>=1.7.4
+
+# Development and Testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+flake8>=6.0.0
