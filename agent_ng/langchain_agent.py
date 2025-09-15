@@ -496,14 +496,32 @@ class CmwAgent:
             "conversation_stats": self._get_conversation_stats()
         }
     
-    def _get_conversation_stats(self) -> Dict[str, int]:
-        """Get conversation statistics from memory manager"""
+    def get_conversation_stats_debug(self) -> Dict[str, int]:
+        """Get conversation statistics with debug output enabled"""
+        return self._get_conversation_stats(debug=True)
+    
+    def log_conversation_event(self, event_type: str, details: str = ""):
+        """Log conversation-related events with debug information"""
+        print(f"🔍 EVENT: {event_type} - {details}")
+        if event_type in ["new_message", "conversation_start", "conversation_end"]:
+            # Show debug stats for important events
+            self.get_conversation_stats_debug()
+    
+    def _get_conversation_stats(self, debug: bool = False) -> Dict[str, int]:
+        """Get conversation statistics from memory manager
+        
+        Args:
+            debug: If True, show detailed debug messages. If False, only log on changes.
+        """
         try:
-            print(f"🔍 DEBUG: Getting conversation stats from memory manager")
+            if debug:
+                print(f"🔍 DEBUG: Getting conversation stats from memory manager")
+            
             if self.memory_manager:
-                print(f"🔍 DEBUG: Memory manager type: {type(self.memory_manager)}")
-                print(f"🔍 DEBUG: Memory manager has {len(self.memory_manager.memories)} conversations")
-                print(f"🔍 DEBUG: Memory manager memories: {self.memory_manager.memories}")
+                if debug:
+                    print(f"🔍 DEBUG: Memory manager type: {type(self.memory_manager)}")
+                    print(f"🔍 DEBUG: Memory manager has {len(self.memory_manager.memories)} conversations")
+                    print(f"🔍 DEBUG: Memory manager memories: {self.memory_manager.memories}")
                 
                 # Get all conversations and count messages
                 total_messages = 0
@@ -511,16 +529,19 @@ class CmwAgent:
                 assistant_messages = 0
                 
                 for conversation_id, conversation in self.memory_manager.memories.items():
-                    print(f"🔍 DEBUG: Conversation {conversation_id} type: {type(conversation)}")
+                    if debug:
+                        print(f"🔍 DEBUG: Conversation {conversation_id} type: {type(conversation)}")
                     
                     # Handle different memory types
                     if hasattr(conversation, 'chat_memory') and hasattr(conversation.chat_memory, 'chat_memory'):
                         # ToolAwareMemory with chat_memory.chat_memory
                         messages = conversation.chat_memory.chat_memory
-                        print(f"🔍 DEBUG: Conversation {conversation_id} has {len(messages)} messages (from chat_memory.chat_memory)")
+                        if debug:
+                            print(f"🔍 DEBUG: Conversation {conversation_id} has {len(messages)} messages (from chat_memory.chat_memory)")
                         for i, message in enumerate(messages):
                             total_messages += 1
-                            print(f"🔍 DEBUG: Message {i}: type={type(message)}, role={getattr(message, 'role', 'No role')}, content={getattr(message, 'content', 'No content')[:50]}...")
+                            if debug:
+                                print(f"🔍 DEBUG: Message {i}: type={type(message)}, role={getattr(message, 'role', 'No role')}, content={getattr(message, 'content', 'No content')[:50]}...")
                             if hasattr(message, 'role'):
                                 if message.role == "user":
                                     user_messages += 1
@@ -535,10 +556,12 @@ class CmwAgent:
                     elif hasattr(conversation, '__iter__'):
                         # Direct list of messages
                         messages = list(conversation)
-                        print(f"🔍 DEBUG: Conversation {conversation_id} has {len(messages)} messages")
+                        if debug:
+                            print(f"🔍 DEBUG: Conversation {conversation_id} has {len(messages)} messages")
                         for i, message in enumerate(messages):
                             total_messages += 1
-                            print(f"🔍 DEBUG: Message {i}: type={type(message)}, role={getattr(message, 'role', 'No role')}, content={getattr(message, 'content', 'No content')[:50]}...")
+                            if debug:
+                                print(f"🔍 DEBUG: Message {i}: type={type(message)}, role={getattr(message, 'role', 'No role')}, content={getattr(message, 'content', 'No content')[:50]}...")
                             if hasattr(message, 'role'):
                                 if message.role == "user":
                                     user_messages += 1
@@ -551,16 +574,19 @@ class CmwAgent:
                                 elif message.type == "ai":
                                     assistant_messages += 1
                     else:
-                        print(f"🔍 DEBUG: Unknown conversation type: {type(conversation)}")
+                        if debug:
+                            print(f"🔍 DEBUG: Unknown conversation type: {type(conversation)}")
                 
-                print(f"🔍 DEBUG: Total stats: {total_messages} total, {user_messages} user, {assistant_messages} assistant")
+                if debug:
+                    print(f"🔍 DEBUG: Total stats: {total_messages} total, {user_messages} user, {assistant_messages} assistant")
                 return {
                     "message_count": total_messages,
                     "user_messages": user_messages,
                     "assistant_messages": assistant_messages
                 }
             else:
-                print("🔍 DEBUG: No memory manager available")
+                if debug:
+                    print("🔍 DEBUG: No memory manager available")
                 return {
                     "message_count": 0,
                     "user_messages": 0,

@@ -17,6 +17,7 @@ class StatsTab:
         self.event_handlers = event_handlers
         self.components = {}
         self.agent = None  # Will be set by the app
+        self._last_conversation_stats = None  # Track last stats for change detection
     
     def create_tab(self) -> Tuple[gr.TabItem, Dict[str, Any]]:
         """
@@ -117,7 +118,13 @@ class StatsTab:
                 return ""
             
             # Get conversation stats for message count
-            conversation_stats = self.agent._get_conversation_stats()
+            # Only show debug messages if stats have changed
+            conversation_stats = self.agent._get_conversation_stats(debug=False)
+            debug_stats = self._last_conversation_stats != conversation_stats
+            if debug_stats:
+                # Re-get with debug enabled to show the change
+                conversation_stats = self.agent._get_conversation_stats(debug=True)
+            self._last_conversation_stats = conversation_stats.copy() if conversation_stats else None
             total_messages = conversation_stats.get('message_count', 0)
             
             return f"""           
