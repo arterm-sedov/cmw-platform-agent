@@ -394,6 +394,13 @@ class LangChainConversationChain:
                 # No tool calls, we have the final response
                 final_response = response.content if hasattr(response, 'content') else str(response)
                 
+                # Check for empty response and retry with reminder
+                if not final_response or not final_response.strip():
+                    print("🔍 DEBUG: Empty response detected, retrying with reminder")
+                    reminder_msg = HumanMessage(content="Please provide a meaningful response. You should answer the user's question or use available tools to help.")
+                    messages.append(reminder_msg)
+                    continue  # Retry the loop with the reminder
+                
                 # Add AI response to messages
                 messages.append(response)
                 
@@ -414,7 +421,21 @@ class LangChainConversationChain:
                     final_response = final_response_obj.content
                     messages.append(final_response_obj)
                 else:
-                    final_response = str(final_response_obj)
+                    # Empty response after tool calls - add reminder and retry once
+                    print("🔍 DEBUG: Empty final response after tool calls, adding reminder")
+                    reminder_msg = HumanMessage(content="Please provide a meaningful final answer based on the tool results above.")
+                    messages.append(reminder_msg)
+                    
+                    # Retry once more
+                    try:
+                        retry_response = self.llm_instance.llm.invoke(messages)
+                        if hasattr(retry_response, 'content') and retry_response.content.strip():
+                            final_response = retry_response.content
+                            messages.append(retry_response)
+                        else:
+                            final_response = "I apologize, but I'm having difficulty providing a response. Please try rephrasing your question."
+                    except Exception as retry_e:
+                        final_response = f"Error getting response: {str(retry_e)}"
                     
                 print(f"🔍 DEBUG: Final response: {final_response}")
             except Exception as e:
