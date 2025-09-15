@@ -24,6 +24,21 @@ hf_oauth_expiration_minutes: 480
 
 Behold the Comindware Analyst Copilot — a robust and extensible system designed for real-world reliability and performance in creating entities within the Comindware Platform.
 
+### 🆕 **LangChain-Native Architecture**
+
+The system now features a **LangChain-native Gradio app** (`app_ng.py`) that provides:
+
+- **Multi-turn Conversations**: Reliable conversation memory with tool calls
+- **Pure LangChain Patterns**: Native LangChain conversation chains and memory
+- **Real-time Streaming**: Live response streaming with tool visualization
+- **Modern UI**: Comprehensive monitoring, debugging, and statistics
+- **OpenRouter Integration**: More predictable and reliable LLM responses
+
+**Quick Start:**
+```bash
+python agent_ng/app_ng.py
+```
+
 ## 🕵🏻‍♂️ What is this project?
 
 This is an **experimental multi-LLM agent** that demonstrates AI agent and CMW Platform integration:
@@ -106,6 +121,22 @@ The agent includes 20+ specialized tools:
 - **Response Time**: 30-100 seconds per entity creation request (depending on complexity and LLM)
 - **Tool Usage**: 2-8 tool calls per request on average
 - **Fallback Rate**: 20-40% of requests require human clarification
+
+## 🏗️ Modular Architecture
+
+The codebase follows a clean modular design with clear separation of concerns:
+
+### Core Modules
+- **`similarity_manager.py`**: Handles vector similarity operations and text matching with optional local embeddings
+- **`tool_call_manager.py`**: Manages tool call deduplication and history tracking
+- **`vector_store.py`**: Optional Supabase vector storage operations
+- **`agent.py`**: Main orchestration logic using the above modules
+
+### Key Benefits
+- **No External Dependencies**: Core features work without Supabase or sentence-transformers
+- **Graceful Degradation**: Falls back to basic text similarity when embeddings unavailable
+- **Clean Separation**: Each module has a single responsibility with no circular dependencies
+- **Backward Compatibility**: Existing functionality remains unchanged
 
 ## Dataset Structure
 
@@ -334,10 +365,10 @@ Visit the Gradio interface to test the agent interactively:
 ### Programmatic Usage
 
 ```python
-from agent import GaiaAgent
+from agent import CmwAgent
 
 # Initialize the agent
-agent = GaiaAgent()
+agent = CmwAgent()
 
 # Create an entity in CMW Platform
 result = agent("Create a template called 'Customer' with attributes: Name (Text), Email (Text), Phone (Text)")

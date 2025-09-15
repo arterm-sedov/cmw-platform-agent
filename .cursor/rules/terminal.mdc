@@ -1,0 +1,19 @@
+---
+description: Rules for running terminal commandss
+globs:
+alwaysApply: true
+---
+
+When running commands in the terminal:
+
+1. ALWAYS activate venv:
+
+    Before running any Python code activate .venv for WSL/Lunux or Windows.
+    Do not try to execute Python without active venv.
+
+    - `.venv\Scripts\Activate.ps1` - PowerShell
+    - `.venv-ubuntu/bin/activate` - WSL/Linux
+
+2. Understand what is the default terminal in Cursor and use it
+3. Initialize the venv using appropriate commands for Powershell or WSL depending on the terminal
+4. Then execute the commands

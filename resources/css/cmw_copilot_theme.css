@@ -1,0 +1,1270 @@
+/* CMW Button Styles-Extracted from gradio_comindware.css */
+:root {
+    /* Core CMW Design Tokens */
+    --cmw-primary: #0575bd;
+    --cmw-primary-fade: #0694EF;
+    --cmw-primary-fadest: #2FAAF9;
+    --cmw-primary-dark: #04568B;
+    --cmw-primary-strongest: #02375A;
+    --cmw-primary-text: #ffffff;
+    --cmw-brand: #3697d4;
+    /* HSL for alpha-based utilities */
+    --cmw-primary-hsl: 203, 95%, 38%;
+
+    --cmw-secondary: #f5f5f5;
+    --cmw-secondary-fade: #FFFFFF;
+    --cmw-secondary-fadest: #FFFFFF;
+    --cmw-secondary-strong: #DCDCDC;
+    --cmw-secondary-strongest: #C2C2C2;
+    --cmw-secondary-text: #5a5a5a;
+
+    --cmw-main: #ffffff;
+    --cmw-main-fade: #FFFFFF;
+    --cmw-main-fadest: #FFFFFF;
+    --cmw-main-strong: #E6E6E6;
+    --cmw-main-strongest: #CCCCCC;
+
+    --cmw-text: #5a5a5a;
+    --cmw-text-fade: #747474;
+    --cmw-text-fadest: #8D8D8D;
+    --cmw-text-strong: #404040;
+
+    --cmw-surface: #ffffff;
+    --cmw-surface-alt: #f5f8fc;
+    --cmw-border: #dce2ea;
+    --cmw-border-strong: #b8c3d1;
+
+    /* Links */
+    --cmw-link: var(--cmw-primary);
+    --cmw-link-fade: var(--cmw-primary-fade);
+    --cmw-link-fadest: var(--cmw-primary-fadest);
+    --cmw-link-strong: var(--cmw-primary-dark);
+
+    /* Status */
+    --cmw-success: #74c365;
+    --cmw-success-text: #ffffff;
+    --cmw-error: #e1462c;
+    --cmw-error-text: #ffffff;
+    --cmw-warning: #F79437;
+    --cmw-warning-text: #5a5a5a;
+    --cmw-highlight: #e8f6ff;
+    --cmw-highlight-text: #5a5a5a;
+
+    /* Radii, spacing, shadows */
+    --cmw-radius-sm: 3px;
+    --cmw-radius-md: 4px;
+    --cmw-radius-lg: 6px;
+
+    --cmw-space-1: 4px;
+    --cmw-space-2: 8px;
+    --cmw-space-3: 12px;
+    --cmw-space-4: 16px;
+    --cmw-space-5: 20px;
+
+    --cmw-shadow-soft: 0 2px 6px rgba(0, 0, 0, 0.06);
+    --cmw-shadow-focus: 0 0 0 2px rgba(5, 117, 189, 0.2);
+
+    /* Typography */
+    --cmw-font-family: OpenSans, Arial, sans-serif;
+    --cmw-font-weight-normal: 400;
+    --cmw-font-size: 14px;
+    --cmw-line-height: 1.6;
+
+    /* Buttons */
+    --cmw-button-radius: var(--cmw-radius-md);
+    --cmw-button-padding-x: 16px;
+    --cmw-button-padding-y: 8px;
+    --cmw-button-height-lg: 38px;
+    --cmw-button-font-weight: 500;
+
+    /* Toolbar button (compact CMW style) */
+    --cmw-toolbar-btn-height: 26px;
+    --cmw-toolbar-btn-padding-x: 10px;
+    --cmw-toolbar-btn-radius: 4px;
+    --cmw-toolbar-btn-font-weight: 400;
+    --cmw-toolbar-btn-hover-bg: hsla(var(--cmw-primary-hsl), 0.08);
+    --cmw-toolbar-btn-hover-border: var(--cmw-primary);
+
+    /* Misc */
+    --cmw-white: #ffffff;
+
+    /* Assets (optional; set to your local resources if available) */
+    --cmw-logo-url: url('/gradio_api/file=resources/img/comindware_logo.svg');
+    --cmw-logo-height: 1.6em;
+    --cmw-logo-gap: var(--cmw-space-3);
+    --cmw-logo-shadow: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.06));
+
+    /* Platform token compatibility: map platform variables to our theme tokens */
+    --theme-colors__primary: var(--cmw-primary);
+    --theme-colors__primary_fade: var(--cmw-primary-fade);
+    --theme-colors__primary_fadest: var(--cmw-primary-fadest);
+    --theme-colors__primary_strong: var(--cmw-primary-dark);
+    --theme-colors__primary_strongest: var(--cmw-primary-strongest, var(--cmw-primary-dark));
+    --theme-colors__primary-hsl: var(--cmw-primary-hsl);
+    --theme-colors__primary-txt: var(--cmw-white);
+
+    --theme-colors__secondary: var(--cmw-secondary, #f5f5f5);
+    --theme-colors__secondary_fade: var(--cmw-secondary-fade, #fff);
+    --theme-colors__secondary_fadest: var(--cmw-secondary-fadest, #fff);
+    --theme-colors__secondary_strong: var(--cmw-secondary-strong, #dcdcdc);
+    --theme-colors__secondary_strongest: var(--cmw-secondary-strongest, #c2c2c2);
+    --theme-colors__secondary-txt: var(--cmw-text);
+    --theme-colors__secondary-txt_hover: var(--cmw-primary);
+
+    --theme-colors__text: var(--cmw-text);
+    --theme-colors__text_fade: var(--cmw-text-fade);
+    --theme-colors__text_fadest: var(--cmw-text-fadest);
+    --theme-colors__text_strong: var(--cmw-text-strong);
+
+    --theme-colors__link: var(--cmw-link);
+    --theme-colors__link_fade: var(--cmw-link-fade);
+    --theme-colors__link_fadest: var(--cmw-link-fadest);
+    --theme-colors__link_strong: var(--cmw-link-strong);
+
+    --theme-colors__highlight: var(--cmw-highlight);
+    --theme-colors__highlight-txt: var(--cmw-highlight-text);
+
+    --theme-colors__background: var(--cmw-surface-alt);
+    --theme-colors__background-txt: var(--cmw-primary);
+    --theme-colors__main: var(--cmw-main);
+    --theme-colors__main_fade: var(--cmw-main-fade, #efefef);
+    --theme-colors__main_fadest: var(--cmw-main-fadest, #f5f5f5);
+    --theme-colors__main_strong: var(--cmw-main-strong, #e6e6e6);
+    --theme-colors__main_strongest: var(--cmw-main-strongest, #c1c1c1);
+
+    --theme-colors__warning: var(--cmw-warning);
+    --theme-colors__warning-txt: var(--cmw-warning-text);
+    --theme-colors__error: var(--cmw-error);
+    --theme-colors__error-txt: var(--cmw-error-text, var(--cmw-white));
+    --theme-colors__success: var(--cmw-success);
+    --theme-colors__success-txt: var(--cmw-success-text, var(--cmw-white));
+
+    --link-color: var(--theme-colors__primary);
+    --link-hover-color: var(--theme-colors__primary_fade);
+}
+
+/* Map core tokens (brand) */
+:root {
+    /* Brand blue */
+    --cmw-primary: #3698D4;
+    --cmw-primary-dark: #2B7DB1;
+    --cmw-primary-fade: #5EB1EF;
+    --cmw-primary-fadest: #8ECFF6;
+    --cmw-primary-hsl: 203, 65%, 52%;
+
+    /* Text and surfaces (keep from scale) */
+    --cmw-text: var(--slate-9);
+    --cmw-text-strong: var(--slate-12);
+    --cmw-border: var(--slate-4);
+    --cmw-border-strong: var(--slate-6);
+    --cmw-surface-alt: var(--slate-1);
+
+    /* Semantics */
+    --cmw-success: var(--green-9);
+    --cmw-error: var(--red-9);
+    --cmw-warning: #F79437;
+}
+
+/* Extended color scales with sRGB fallbacks */
+:root {
+    /* Blue scale */
+    --blue-1: #f7fbff;
+    --blue-2: #eff7ff;
+    --blue-3: #e1f0ff;
+    --blue-4: #cde7ff;
+    --blue-5: #b5dcff;
+    --blue-6: #97cdff;
+    --blue-7: #6fb7ff;
+    --blue-8: #3a99f8;
+    --blue-9: #0575bd;
+    --blue-10: #045f98;
+    --blue-11: #044e7e;
+    --blue-12: #033960;
+    /* Slate/gray scale */
+    --slate-1: #fcfdfe;
+    --slate-2: #f7f9fb;
+    --slate-3: #f0f3f7;
+    --slate-4: #e7edf3;
+    --slate-5: #dfe6ee;
+    --slate-6: #d2dbe6;
+    --slate-7: #bcc8d6;
+    --slate-8: #9fb0c2;
+    --slate-9: #7a8ca3;
+    --slate-10: #5e6f84;
+    --slate-11: #485768;
+    --slate-12: #2d3742;
+    /* Semantic scales */
+    --green-9: #74c365;
+    --red-9: #e1462c;
+    --amber-9: #ffda44;
+}
+
+/* P3 gamut overrides when supported */
+@supports(color: color(display-p3 1 1 1)) {
+    :root {
+        --blue-9: color(display-p3 0.023 0.47 0.75);
+        --blue-10: color(display-p3 0.02 0.39 0.59);
+        --slate-9: color(display-p3 0.47 0.55 0.64);
+        --slate-12: color(display-p3 0.18 0.21 0.26);
+        --green-9: color(display-p3 0.44 0.72 0.39);
+        --red-9: color(display-p3 0.86 0.36 0.22);
+        --amber-9: color(display-p3 0.98 0.85 0.27);
+    }
+}
+
+/* Font-face declarations matching platform (paths must exist to take effect) */
+@font-face {
+    font-family: OpenSans;
+    src: local('Open Sans'),
+        url('/gradio_api/file=resources/fonts/OpenSans/OpenSans-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-display: fallback;
+}
+
+@font-face {
+    font-family: OpenSans;
+    src: local('Open Sans Italic'),
+        url('/gradio_api/file=resources/fonts/OpenSans/OpenSans-Italic.ttf') format('truetype');
+    font-weight: 400;
+    font-style: italic;
+    font-display: fallback;
+}
+
+@font-face {
+    font-family: OpenSans;
+    src: local('Open Sans Medium'),
+        url('/gradio_api/file=resources/fonts/OpenSans/OpenSans-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-display: fallback;
+}
+
+@font-face {
+    font-family: OpenSans;
+    src: local('Open Sans Light'),
+        url('/gradio_api/file=resources/fonts/OpenSans/OpenSans-Light.ttf') format('truetype');
+    font-weight: 300;
+    font-display: fallback;
+}
+
+@font-face {
+    font-family: OpenSans;
+    src: local('Open Sans Bold'),
+        url('/gradio_api/file=resources/fonts/OpenSans/OpenSans-Bold.ttf') format('truetype');
+    font-weight: 600;
+    font-display: fallback;
+}
+
+/* App container */
+.gradio-container,
+body {
+    background: var(--cmw-surface) !important;
+    color: var(--cmw-text) !important;
+    font-weight: var(--cmw-font-weight-normal);
+    font-family: var(--cmw-font-family);
+    font-size: var(--cmw-font-size);
+}
+
+/* Headings */
+.gradio-container h1,
+.gradio-container h2,
+.gradio-container h3,
+.gradio-container h4,
+.gradio-container h5,
+.gradio-container h6 {
+    color: var(--cmw-text-strong) !important;
+    font-weight: 500;
+    line-height: 1.25;
+    border: none !important;
+    background: transparent !important;
+}
+
+.gradio-container .prose,
+.gradio-container .prose.md,
+.gradio-container[data-testid=\"markdown\"],
+.gradio-container .md {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+/* Ensure hero title block has no border/shadow/background */
+.gradio-container .block.padded.hero-title,
+.gradio-container .hero-title {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+.gradio-container .prose h1 {
+    font-size: 28px;
+}
+
+.gradio-container .prose h2 {
+    font-size: 22px;
+}
+
+.gradio-container .prose h3 {
+    font-size: 18px;
+}
+
+/* Logo + title alignment (matches platform header look) */
+.gradio-container .hero-title h1 {
+    display: inline-block;
+    align-items: start;
+    color: var(--cmw-primary) !important;
+    font-weight: 500;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.gradio-container .hero-title h1::before {
+    content: '';
+    display: inline-block;
+    width: auto;
+    margin-right: var(--cmw-logo-gap);
+    height: var(--cmw-logo-height);
+    aspect-ratio: 7/2;
+    background-image: var(--cmw-logo-url);
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-position: bottom;
+    border: none !important;
+}
+
+@media(max-width: 640px) {
+    .gradio-container h1:first-of-type::before {
+        height: 22px;
+    }
+}
+
+/* CMW Button Styles-Main Implementation */
+.gradio-container .cmw-button {
+    width: 100% !important;
+    max-width: 100% !important;
+    text-align: center !important;
+    padding: 7px 15px !important;
+    line-height: 19px !important;
+    box-sizing: border-box !important;
+    cursor: pointer !important;
+    border-radius: 4px !important;
+    transition: all .3s ease-in-out !important;
+    font-size: var(--cmw-font-size) !important;
+    font-style: normal !important;
+    font-weight: var(--cmw-font-weight-normal) !important;
+    background-color: var(--cmw-white) !important;
+    border: 1px solid var(--cmw-border) !important;
+    color: var(--cmw-text-fade) !important;
+}
+
+/* CMW Button Variants */
+.gradio-container .cmw-button.primary,
+.gradio-container .cmw-button.secondary {
+    color: var(--cmw-primary) !important;
+    background: var(--cmw-white) !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text-fade) !important;
+}
+
+/* CMW Button Hover States */
+.gradio-container .cmw-button:hover {
+    border-color: var(--theme-colors__primary) !important;
+    background-color: var(--theme-colors__highlight) !important;
+    color: var(--theme-colors__primary_strong) !important;
+}
+
+/* CMW Button Focus States */
+.gradio-container .cmw-button:focus-visible {
+    
+    background-color: var(--cmw-white) !important;
+}
+
+.status-card {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-left: 4px solid #667eea;
+}
+
+.tool-usage {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+    border-left: 3px solid #28a745;
+    font-size: 0.9rem;
+}
+
+.thinking-content {
+    background: #fff3cd;
+    border-radius: 8px;
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+    border-left: 3px solid #ffc107;
+    font-style: italic;
+}
+
+.chat-hints,
+.model-card,
+.quick-actions-card,
+.sidebar-card,
+.message-card,
+.chatbot-card {
+    /* margin: var(--cmw-space-4) 0 !important; */
+    border: 1px solid var(--cmw-border) !important;
+    border-radius: var(--cmw-radius-md) !important;
+    background: var(--cmw-surface) !important;
+    padding: var(--cmw-space-4) !important;
+    gap: var(--cmw-space-3) !important;
+}
+
+.chat-hints {
+    padding: 0.5rem;
+    margin: 0.20rem 0 !important;
+}
+
+.chatbot-card label,
+span[data-testid="block-info"]
+{
+    color: var(--cmw-text-strong) !important;
+    font-weight: 500 !important;
+    font-size: var(--cmw-font-size) !important;
+    font-family: var(--cmw-font-family) !important;
+    background: var(--theme-colors__highlight) !important;
+}
+
+.user {
+    background: var(--theme-colors__highlight) !important;
+    border-color: var(--theme-colors__primary) !important;
+}
+
+.icon-button-wrapper > button {
+    color: var(--theme-colors__primary) !important; 
+}
+
+/* Dark theme support */
+html[data-theme='dark'] .gradio-container,
+body[data-theme='dark'] .gradio-container,
+.dark.gradio-container {
+    --cmw-text: #cfd6e4;
+    --cmw-text-strong: #eef3fb;
+    --cmw-surface: #151a21;
+    --cmw-surface-alt: #0f141a;
+    --cmw-main: #151a21;
+    --cmw-border: #2a3340;
+    --cmw-border-strong: #3a4554;
+    --cmw-highlight: rgba(5, 117, 189, 0.18);
+    --cmw-highlight-text: #d8e6f5;
+}
+
+/* Keep primary-filled active buttons readable in dark */
+html[data-theme='dark'] .gradio-container .cmw-button,
+body[data-theme='dark'] .gradio-container .cmw-button,
+.dark .gradio-container .cmw-button {
+    color: var(--cmw-primary) !important;
+}
+
+html[data-theme='dark'] .gradio-container .cmw-button:hover,
+body[data-theme='dark'] .gradio-container .cmw-button:hover,
+.dark .gradio-container .cmw-button:hover {
+    border-color: var(--theme-colors__primary) !important;
+    background: var(--theme-colors__highlight) !important;
+    color: var(--theme-colors__primary_strong) !important;
+}
+
+    /* Dark theme support - Comprehensive coverage for all Gradio dark mode patterns */
+html[data-theme='dark'] .gradio-container,
+body[data-theme='dark'] .gradio-container,
+.dark.gradio-container,
+.gradio-container .dark,
+.dark .gradio-container,
+[data-theme="dark"] .gradio-container,
+.dark-mode .gradio-container,
+.dark .gradio-container,
+.gradio-container[data-theme="dark"],
+body.dark .gradio-container,
+html.dark .gradio-container {
+    /* Dark theme base colors */
+    --cmw-dark-base: #1a2029;
+    --cmw-dark-gradient-start: #1a2029;
+    --cmw-dark-gradient-end: #2a3340;
+    --cmw-dark-gradient: linear-gradient(135deg, var(--cmw-dark-gradient-start) 0%, var(--cmw-dark-gradient-end) 100%);
+    
+    --cmw-text: #cfd6e4;
+    --cmw-text-strong: #eef3fb;
+    --cmw-text-fade: #a8b3c4;
+    --cmw-text-fadest: #8a95a6;
+    --cmw-surface: #151a21;
+    --cmw-surface-alt: #0f141a;
+    --cmw-main: #151a21;
+    --cmw-main-fade: var(--cmw-dark-base);
+    --cmw-main-fadest: #1f252e;
+    --cmw-main-strong: #2a3340;
+    --cmw-main-strongest: #3a4554;
+    --cmw-border: #2a3340;
+    --cmw-border-strong: #3a4554;
+    --cmw-highlight: rgba(5, 117, 189, 0.18);
+    --cmw-highlight-text: #d8e6f5;
+    --cmw-secondary: var(--cmw-dark-base);
+    --cmw-secondary-fade: #1f252e;
+    --cmw-secondary-fadest: #242a33;
+    --cmw-secondary-strong: #2a3340;
+    --cmw-secondary-strongest: #3a4554;
+    --cmw-secondary-text: #a8b3c4;
+}
+
+/* Dark theme for headings - Comprehensive selector coverage */
+html[data-theme='dark'] .gradio-container h1,
+html[data-theme='dark'] .gradio-container h2,
+html[data-theme='dark'] .gradio-container h3,
+html[data-theme='dark'] .gradio-container h4,
+html[data-theme='dark'] .gradio-container h5,
+html[data-theme='dark'] .gradio-container h6,
+body[data-theme='dark'] .gradio-container h1,
+body[data-theme='dark'] .gradio-container h2,
+body[data-theme='dark'] .gradio-container h3,
+body[data-theme='dark'] .gradio-container h4,
+body[data-theme='dark'] .gradio-container h5,
+body[data-theme='dark'] .gradio-container h6,
+.dark .gradio-container h1,
+.dark .gradio-container h2,
+.dark .gradio-container h3,
+.dark .gradio-container h4,
+.dark .gradio-container h5,
+.dark .gradio-container h6,
+.gradio-container .dark h1,
+.gradio-container .dark h2,
+.gradio-container .dark h3,
+.gradio-container .dark h4,
+.gradio-container .dark h5,
+.gradio-container .dark h6,
+[data-theme="dark"] .gradio-container h1,
+[data-theme="dark"] .gradio-container h2,
+[data-theme="dark"] .gradio-container h3,
+[data-theme="dark"] .gradio-container h4,
+[data-theme="dark"] .gradio-container h5,
+[data-theme="dark"] .gradio-container h6,
+.dark-mode .gradio-container h1,
+.dark-mode .gradio-container h2,
+.dark-mode .gradio-container h3,
+.dark-mode .gradio-container h4,
+.dark-mode .gradio-container h5,
+.dark-mode .gradio-container h6,
+body.dark .gradio-container h1,
+body.dark .gradio-container h2,
+body.dark .gradio-container h3,
+body.dark .gradio-container h4,
+body.dark .gradio-container h5,
+body.dark .gradio-container h6,
+html.dark .gradio-container h1,
+html.dark .gradio-container h2,
+html.dark .gradio-container h3,
+html.dark .gradio-container h4,
+html.dark .gradio-container h5,
+html.dark .gradio-container h6 {
+    color: var(--cmw-text-strong) !important;
+}
+
+/* Dark theme for hero title */
+html[data-theme='dark'] .gradio-container .hero-title h1,
+body[data-theme='dark'] .gradio-container .hero-title h1,
+.dark .gradio-container .hero-title h1 {
+    color: var(--cmw-primary) !important;
+    font-weight: 500 !important;
+}
+
+/* Dark theme for hero title container */
+html[data-theme='dark'] .gradio-container .hero-title,
+body[data-theme='dark'] .gradio-container .hero-title,
+.dark .gradio-container .hero-title {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Dark theme for logo image */
+html[data-theme='dark'] .gradio-container .hero-title img,
+body[data-theme='dark'] .gradio-container .hero-title img,
+.dark .gradio-container .hero-title img {
+    filter: var(--cmw-logo-shadow) !important;
+    opacity: 1 !important;
+}
+
+/* Dark theme for buttons */
+html[data-theme='dark'] .gradio-container .cmw-button,
+body[data-theme='dark'] .gradio-container .cmw-button,
+.dark .gradio-container .cmw-button {
+    background-color: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+html[data-theme='dark'] .gradio-container .cmw-button.primary,
+html[data-theme='dark'] .gradio-container .cmw-button.secondary,
+body[data-theme='dark'] .gradio-container .cmw-button.primary,
+body[data-theme='dark'] .gradio-container .cmw-button.secondary,
+.dark .gradio-container .cmw-button.primary,
+.dark .gradio-container .cmw-button.secondary {
+    color: var(--cmw-primary) !important;
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+html[data-theme='dark'] .gradio-container .cmw-button:hover,
+body[data-theme='dark'] .gradio-container .cmw-button:hover,
+.dark .gradio-container .cmw-button:hover {
+    border-color: var(--theme-colors__primary) !important;
+    background: var(--theme-colors__highlight) !important;
+    color: var(--theme-colors__primary_strong) !important;
+}
+
+html[data-theme='dark'] .gradio-container .cmw-button:focus-visible,
+body[data-theme='dark'] .gradio-container .cmw-button:focus-visible,
+.dark .gradio-container .cmw-button:focus-visible {
+    background-color: var(--cmw-surface) !important;
+    border-color: var(--cmw-primary) !important;
+    box-shadow: var(--cmw-shadow-focus) !important;
+}
+
+/* Dark theme for cards and panels */
+html[data-theme='dark'] .gradio-container .chat-hints,
+html[data-theme='dark'] .gradio-container .model-card,
+html[data-theme='dark'] .gradio-container .quick-actions-card,
+html[data-theme='dark'] .gradio-container .sidebar-card,
+html[data-theme='dark'] .gradio-container .message-card,
+html[data-theme='dark'] .gradio-container .chatbot-card,
+body[data-theme='dark'] .gradio-container .chat-hints,
+body[data-theme='dark'] .gradio-container .model-card,
+body[data-theme='dark'] .gradio-container .quick-actions-card,
+body[data-theme='dark'] .gradio-container .sidebar-card,
+body[data-theme='dark'] .gradio-container .message-card,
+body[data-theme='dark'] .gradio-container .chatbot-card,
+.dark .gradio-container .chat-hints,
+.dark .gradio-container .model-card,
+.dark .gradio-container .quick-actions-card,
+.dark .gradio-container .sidebar-card,
+.dark .gradio-container .message-card,
+.dark .gradio-container .chatbot-card {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+/* Dark theme for chatbot labels */
+html[data-theme='dark'] .gradio-container .chatbot-card label,
+html[data-theme='dark'] .gradio-container span[data-testid="block-info"],
+body[data-theme='dark'] .gradio-container .chatbot-card label,
+body[data-theme='dark'] .gradio-container span[data-testid="block-info"],
+.dark .gradio-container .chatbot-card label,
+.dark .gradio-container span[data-testid="block-info"] {
+    color: var(--cmw-text-strong) !important;
+    background: var(--theme-colors__highlight) !important;
+}
+
+/* Dark theme for user messages */
+html[data-theme='dark'] .gradio-container .user,
+body[data-theme='dark'] .gradio-container .user,
+.dark .gradio-container .user {
+    background: var(--theme-colors__highlight) !important;
+    border-color: var(--theme-colors__primary) !important;
+}
+
+/* Dark theme for icon buttons */
+html[data-theme='dark'] .gradio-container .icon-button-wrapper > button,
+body[data-theme='dark'] .gradio-container .icon-button-wrapper > button,
+.dark .gradio-container .icon-button-wrapper > button {
+    color: var(--theme-colors__primary) !important;
+}
+
+/* Dark theme for status cards */
+html[data-theme='dark'] .gradio-container .status-card,
+body[data-theme='dark'] .gradio-container .status-card,
+.dark .gradio-container .status-card {
+    background: var(--cmw-dark-gradient) !important;
+    border-left-color: var(--cmw-primary-fade-alt) !important;
+}
+
+/* Dark theme for tool usage */
+html[data-theme='dark'] .gradio-container .tool-usage,
+body[data-theme='dark'] .gradio-container .tool-usage,
+.dark .gradio-container .tool-usage {
+    background: var(--cmw-dark-base) !important;
+    border-left-color: var(--cmw-success-border) !important;
+}
+
+/* Dark theme for thinking content */
+html[data-theme='dark'] .gradio-container .thinking-content,
+body[data-theme='dark'] .gradio-container .thinking-content,
+.dark .gradio-container .thinking-content {
+    background: var(--cmw-thinking-bg) !important;
+    border-left-color: var(--cmw-thinking-border) !important;
+}
+
+/* Dark theme for input fields */
+html[data-theme='dark'] .gradio-container input,
+html[data-theme='dark'] .gradio-container textarea,
+html[data-theme='dark'] .gradio-container select,
+body[data-theme='dark'] .gradio-container input,
+body[data-theme='dark'] .gradio-container textarea,
+body[data-theme='dark'] .gradio-container select,
+.dark .gradio-container input,
+.dark .gradio-container textarea,
+.dark .gradio-container select {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text-strong) !important;
+}
+
+html[data-theme='dark'] .gradio-container input:focus,
+html[data-theme='dark'] .gradio-container textarea:focus,
+html[data-theme='dark'] .gradio-container select:focus,
+body[data-theme='dark'] .gradio-container input:focus,
+body[data-theme='dark'] .gradio-container textarea:focus,
+body[data-theme='dark'] .gradio-container select:focus,
+.dark .gradio-container input:focus,
+.dark .gradio-container textarea:focus,
+.dark .gradio-container select:focus {
+    border-color: var(--cmw-primary) !important;
+    box-shadow: var(--cmw-shadow-focus) !important;
+}
+
+/* Dark theme for chatbot messages */
+html[data-theme='dark'] .gradio-container .chatbot,
+body[data-theme='dark'] .gradio-container .chatbot,
+.dark .gradio-container .chatbot {
+    background: var(--cmw-surface-alt) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+html[data-theme='dark'] .gradio-container .message.user,
+body[data-theme='dark'] .gradio-container .message.user,
+.dark .gradio-container .message.user {
+    background: var(--cmw-highlight) !important;
+}
+
+html[data-theme='dark'] .gradio-container .message.bot,
+body[data-theme='dark'] .gradio-container .message.bot,
+.dark .gradio-container .message.bot {
+    background: var(--cmw-surface) !important;
+}
+
+/* Dark theme for links */
+html[data-theme='dark'] .gradio-container a,
+body[data-theme='dark'] .gradio-container a,
+.dark .gradio-container a {
+    color: var(--cmw-link) !important;
+}
+
+html[data-theme='dark'] .gradio-container a:hover,
+body[data-theme='dark'] .gradio-container a:hover,
+.dark .gradio-container a:hover {
+    color: var(--cmw-link-strong) !important;
+}
+
+/* Dark theme for tables */
+html[data-theme='dark'] .gradio-container table,
+body[data-theme='dark'] .gradio-container table,
+.dark .gradio-container table {
+    border-color: var(--cmw-border) !important;
+}
+
+html[data-theme='dark'] .gradio-container th,
+body[data-theme='dark'] .gradio-container th,
+.dark .gradio-container th {
+    background: var(--cmw-surface-alt) !important;
+    color: var(--cmw-text-strong) !important;
+}
+
+html[data-theme='dark'] .gradio-container td,
+body[data-theme='dark'] .gradio-container td,
+.dark .gradio-container td {
+    color: var(--cmw-text) !important;
+}
+
+/* Dark theme for tabs */
+html[data-theme='dark'] .gradio-container .tab-nav,
+body[data-theme='dark'] .gradio-container .tab-nav,
+.dark .gradio-container .tab-nav {
+    border-bottom-color: var(--cmw-border) !important;
+}
+
+html[data-theme='dark'] .gradio-container .tab-nav button,
+body[data-theme='dark'] .gradio-container .tab-nav button,
+.dark .gradio-container .tab-nav button {
+    background: transparent !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+html[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="true"],
+body[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="true"],
+.dark .gradio-container .tab-nav button[aria-selected="true"] {
+    background: var(--cmw-primary) !important;
+    border-color: transparent !important;
+    color: var(--cmw-white) !important;
+}
+
+html[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="false"]:hover,
+body[data-theme='dark'] .gradio-container .tab-nav button[aria-selected="false"]:hover,
+.dark .gradio-container .tab-nav button[aria-selected="false"]:hover {
+    background: var(--cmw-primary-fade) !important;
+    color: var(--cmw-white) !important;
+}
+
+html[data-theme='dark'] .gradio-container .tab-panel,
+html[data-theme='dark'] .gradio-container [role="tabpanel"],
+html[data-theme='dark'] .gradio-container .tab-content,
+body[data-theme='dark'] .gradio-container .tab-panel,
+body[data-theme='dark'] .gradio-container [role="tabpanel"],
+body[data-theme='dark'] .gradio-container .tab-content,
+.dark .gradio-container .tab-panel,
+.dark .gradio-container [role="tabpanel"],
+.dark .gradio-container .tab-content {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+/* Dark theme for footer */
+html[data-theme='dark'] .gradio-container footer,
+body[data-theme='dark'] .gradio-container footer,
+.dark .gradio-container footer {
+    border-top-color: var(--cmw-border) !important;
+    background: transparent !important;
+    color: var(--cmw-text-fade) !important;
+}
+
+html[data-theme='dark'] .gradio-container footer button,
+html[data-theme='dark'] .gradio-container footer a.built-with,
+html[data-theme='dark'] .gradio-container footer .show-api,
+html[data-theme='dark'] .gradio-container footer .settings,
+html[data-theme='dark'] .gradio-container footer .record,
+body[data-theme='dark'] .gradio-container footer button,
+body[data-theme='dark'] .gradio-container footer a.built-with,
+body[data-theme='dark'] .gradio-container footer .show-api,
+body[data-theme='dark'] .gradio-container footer .settings,
+body[data-theme='dark'] .gradio-container footer .record,
+.dark .gradio-container footer button,
+.dark .gradio-container footer a.built-with,
+.dark .gradio-container footer .show-api,
+.dark .gradio-container footer .settings,
+.dark .gradio-container footer .record {
+    background: transparent !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+html[data-theme='dark'] .gradio-container footer button:hover,
+html[data-theme='dark'] .gradio-container footer a.built-with:hover,
+html[data-theme='dark'] .gradio-container footer .show-api:hover,
+html[data-theme='dark'] .gradio-container footer .settings:hover,
+html[data-theme='dark'] .gradio-container footer .record:hover,
+body[data-theme='dark'] .gradio-container footer button:hover,
+body[data-theme='dark'] .gradio-container footer a.built-with:hover,
+body[data-theme='dark'] .gradio-container footer .show-api:hover,
+body[data-theme='dark'] .gradio-container footer .settings:hover,
+body[data-theme='dark'] .gradio-container footer .record:hover,
+.dark .gradio-container footer button:hover,
+.dark .gradio-container footer a.built-with:hover,
+.dark .gradio-container footer .show-api:hover,
+.dark .gradio-container footer .settings:hover,
+.dark .gradio-container footer .record:hover {
+    background: var(--cmw-toolbar-btn-hover-bg) !important;
+    border-color: var(--theme-colors__primary) !important;
+    color: var(--theme-colors__primary_strong) !important;
+}
+
+/* Dark theme for terminal chat */
+html[data-theme='dark'] .gradio-container .terminal-chat .message,
+html[data-theme='dark'] .gradio-container .terminal-chat .message .text,
+html[data-theme='dark'] .gradio-container .terminal-chat [data-testid="bot_message"],
+html[data-theme='dark'] .gradio-container .terminal-chat [data-testid="user_message"],
+body[data-theme='dark'] .gradio-container .terminal-chat .message,
+body[data-theme='dark'] .gradio-container .terminal-chat .message .text,
+body[data-theme='dark'] .gradio-container .terminal-chat [data-testid="bot_message"],
+body[data-theme='dark'] .gradio-container .terminal-chat [data-testid="user_message"],
+.dark .gradio-container .terminal-chat .message,
+.dark .gradio-container .terminal-chat .message .text,
+.dark .gradio-container .terminal-chat [data-testid="bot_message"],
+.dark .gradio-container .terminal-chat [data-testid="user_message"] {
+    color: var(--cmw-text) !important;
+}
+
+/* Dark theme for markdown content */
+html[data-theme='dark'] .gradio-container .markdown,
+html[data-theme='dark'] .gradio-container .prose,
+html[data-theme='dark'] .gradio-container [data-testid="markdown"],
+body[data-theme='dark'] .gradio-container .markdown,
+body[data-theme='dark'] .gradio-container .prose,
+body[data-theme='dark'] .gradio-container [data-testid="markdown"],
+.dark .gradio-container .markdown,
+.dark .gradio-container .prose,
+.dark .gradio-container [data-testid="markdown"] {
+    color: var(--cmw-text) !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Additional dark theme support for Gradio's native dark mode */
+.gradio-container .dark,
+.dark .gradio-container,
+[data-theme="dark"] .gradio-container,
+.dark-mode .gradio-container {
+    --cmw-text: #cfd6e4;
+    --cmw-text-strong: #eef3fb;
+    --cmw-text-fade: #a8b3c4;
+    --cmw-text-fadest: #8a95a6;
+    --cmw-surface: #151a21;
+    --cmw-surface-alt: #0f141a;
+    --cmw-main: #151a21;
+    --cmw-main-fade: var(--cmw-dark-base);
+    --cmw-main-fadest: #1f252e;
+    --cmw-main-strong: #2a3340;
+    --cmw-main-strongest: #3a4554;
+    --cmw-border: #2a3340;
+    --cmw-border-strong: #3a4554;
+    --cmw-highlight: rgba(5, 117, 189, 0.18);
+    --cmw-highlight-text: #d8e6f5;
+    --cmw-secondary: var(--cmw-dark-base);
+    --cmw-secondary-fade: #1f252e;
+    --cmw-secondary-fadest: #242a33;
+    --cmw-secondary-strong: #2a3340;
+    --cmw-secondary-strongest: #3a4554;
+    --cmw-secondary-text: #a8b3c4;
+    --theme-colors__primary: var(--cmw-primary-fade-alt);
+    --theme-colors__primary_strong: var(--cmw-primary-fade-alt);
+    --theme-colors__highlight: var(--cmw-dark-base);
+}
+
+/* Ensure all dark theme rules apply to .gradio-container .dark as well */
+.gradio-container .dark h1,
+.gradio-container .dark h2,
+.gradio-container .dark h3,
+.gradio-container .dark h4,
+.gradio-container .dark h5,
+.gradio-container .dark h6 {
+    color: var(--cmw-text-strong) !important;
+}
+
+.gradio-container .dark .hero-title h1 {
+    color: var(--cmw-primary) !important;
+}
+
+.gradio-container .dark .cmw-button {
+    background-color: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+.gradio-container .dark .cmw-button:hover {
+    border-color: var(--theme-colors__primary) !important;
+    background: var(--theme-colors__highlight) !important;
+    color: var(--theme-colors__primary_strong) !important;
+}
+
+.gradio-container .dark .chat-hints,
+.gradio-container .dark .model-card,
+.gradio-container .dark .quick-actions-card,
+.gradio-container .dark .sidebar-card,
+.gradio-container .dark .message-card,
+.gradio-container .dark .chatbot-card {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+.gradio-container .dark .chatbot-card label,
+.gradio-container .dark span[data-testid="block-info"] {
+    color: var(--cmw-text-strong) !important;
+    background: var(--theme-colors__highlight) !important;
+}
+
+.gradio-container .dark .user {
+    background: var(--theme-colors__highlight) !important;
+    border-color: var(--theme-colors__primary) !important;
+}
+
+.gradio-container .dark .status-card {
+    background: var(--cmw-dark-gradient) !important;
+    border-left-color: var(--cmw-primary-fade-alt) !important;
+}
+
+.gradio-container .dark .tool-usage {
+    background: var(--cmw-dark-base) !important;
+    border-left-color: var(--cmw-success-border) !important;
+}
+
+.gradio-container .dark .thinking-content {
+    background: var(--cmw-thinking-bg) !important;
+    border-left-color: var(--cmw-thinking-border) !important;
+}
+
+.gradio-container .dark input,
+.gradio-container .dark textarea,
+.gradio-container .dark select {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text-strong) !important;
+}
+
+.gradio-container .dark input:focus,
+.gradio-container .dark textarea:focus,
+.gradio-container .dark select:focus {
+    border-color: var(--cmw-primary) !important;
+    box-shadow: var(--cmw-shadow-focus) !important;
+}
+
+.gradio-container .dark .chatbot {
+    background: var(--cmw-surface-alt) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+.gradio-container .dark .message.user {
+    background: var(--cmw-highlight) !important;
+}
+
+.gradio-container .dark .message.bot {
+    background: var(--cmw-surface) !important;
+}
+
+.gradio-container .dark a {
+    color: var(--cmw-link) !important;
+}
+
+.gradio-container .dark a:hover {
+    color: var(--cmw-link-strong) !important;
+}
+
+.gradio-container .dark table {
+    border-color: var(--cmw-border) !important;
+}
+
+.gradio-container .dark th {
+    background: var(--cmw-surface-alt) !important;
+    color: var(--cmw-text-strong) !important;
+}
+
+.gradio-container .dark td {
+    color: var(--cmw-text) !important;
+}
+
+.gradio-container .dark .tab-nav {
+    border-bottom-color: var(--cmw-border) !important;
+}
+
+.gradio-container .dark .tab-nav button {
+    background: transparent !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+.gradio-container .dark .tab-nav button[aria-selected="true"] {
+    background: var(--cmw-primary) !important;
+    border-color: transparent !important;
+    color: var(--cmw-white) !important;
+}
+
+.gradio-container .dark .tab-nav button[aria-selected="false"]:hover {
+    background: var(--cmw-primary-fade) !important;
+    color: var(--cmw-white) !important;
+}
+
+.gradio-container .dark .tab-panel,
+.gradio-container .dark [role="tabpanel"],
+.gradio-container .dark .tab-content {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+}
+
+.gradio-container .dark footer {
+    border-top-color: var(--cmw-border) !important;
+    background: transparent !important;
+    color: var(--cmw-text-fade) !important;
+}
+
+.gradio-container .dark footer button,
+.gradio-container .dark footer a.built-with,
+.gradio-container .dark footer .show-api,
+.gradio-container .dark footer .settings,
+.gradio-container .dark footer .record {
+    background: transparent !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+.gradio-container .dark footer button:hover,
+.gradio-container .dark footer a.built-with:hover,
+.gradio-container .dark footer .show-api:hover,
+.gradio-container .dark footer .settings:hover,
+.gradio-container .dark footer .record:hover {
+    background: var(--cmw-toolbar-btn-hover-bg) !important;
+    border-color: var(--theme-colors__primary) !important;
+    color: var(--theme-colors__primary_strong) !important;
+}
+
+.gradio-container .dark .terminal-chat .message,
+.gradio-container .dark .terminal-chat .message .text,
+.gradio-container .dark .terminal-chat [data-testid="bot_message"],
+.gradio-container .dark .terminal-chat [data-testid="user_message"] {
+    color: var(--cmw-text) !important;
+}
+
+.gradio-container .dark .markdown,
+.gradio-container .dark .prose,
+.gradio-container .dark [data-testid="markdown"] {
+    color: var(--cmw-text) !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Comprehensive dark theme override - This will catch all dark mode patterns */
+html[data-theme='dark'] .gradio-container,
+body[data-theme='dark'] .gradio-container,
+.dark .gradio-container,
+.gradio-container .dark,
+[data-theme="dark"] .gradio-container,
+.dark-mode .gradio-container,
+body.dark .gradio-container,
+html.dark .gradio-container {
+    background: var(--cmw-surface) !important;
+    color: var(--cmw-text) !important;
+}
+
+/* Force dark theme on all elements when dark mode is active */
+html[data-theme='dark'] .gradio-container *,
+body[data-theme='dark'] .gradio-container *,
+.dark .gradio-container *,
+.gradio-container .dark *,
+[data-theme="dark"] .gradio-container *,
+.dark-mode .gradio-container *,
+body.dark .gradio-container *,
+html.dark .gradio-container * {
+    color: inherit !important;
+}
+
+/* Specific overrides for common elements */
+html[data-theme='dark'] .gradio-container h1,
+html[data-theme='dark'] .gradio-container h2,
+html[data-theme='dark'] .gradio-container h3,
+html[data-theme='dark'] .gradio-container h4,
+html[data-theme='dark'] .gradio-container h5,
+html[data-theme='dark'] .gradio-container h6,
+body[data-theme='dark'] .gradio-container h1,
+body[data-theme='dark'] .gradio-container h2,
+body[data-theme='dark'] .gradio-container h3,
+body[data-theme='dark'] .gradio-container h4,
+body[data-theme='dark'] .gradio-container h5,
+body[data-theme='dark'] .gradio-container h6,
+.dark .gradio-container h1,
+.dark .gradio-container h2,
+.dark .gradio-container h3,
+.dark .gradio-container h4,
+.dark .gradio-container h5,
+.dark .gradio-container h6,
+.gradio-container .dark h1,
+.gradio-container .dark h2,
+.gradio-container .dark h3,
+.gradio-container .dark h4,
+.gradio-container .dark h5,
+.gradio-container .dark h6,
+[data-theme="dark"] .gradio-container h1,
+[data-theme="dark"] .gradio-container h2,
+[data-theme="dark"] .gradio-container h3,
+[data-theme="dark"] .gradio-container h4,
+[data-theme="dark"] .gradio-container h5,
+[data-theme="dark"] .gradio-container h6,
+.dark-mode .gradio-container h1,
+.dark-mode .gradio-container h2,
+.dark-mode .gradio-container h3,
+.dark-mode .gradio-container h4,
+.dark-mode .gradio-container h5,
+.dark-mode .gradio-container h6,
+body.dark .gradio-container h1,
+body.dark .gradio-container h2,
+body.dark .gradio-container h3,
+body.dark .gradio-container h4,
+body.dark .gradio-container h5,
+body.dark .gradio-container h6,
+html.dark .gradio-container h1,
+html.dark .gradio-container h2,
+html.dark .gradio-container h3,
+html.dark .gradio-container h4,
+html.dark .gradio-container h5,
+html.dark .gradio-container h6 {
+    color: var(--cmw-text-strong) !important;
+}
+
+/* Force dark backgrounds on all containers */
+html[data-theme='dark'] .gradio-container .block,
+html[data-theme='dark'] .gradio-container .panel,
+html[data-theme='dark'] .gradio-container .form,
+html[data-theme='dark'] .gradio-container .box,
+html[data-theme='dark'] .gradio-container .component,
+html[data-theme='dark'] .gradio-container .container,
+body[data-theme='dark'] .gradio-container .block,
+body[data-theme='dark'] .gradio-container .panel,
+body[data-theme='dark'] .gradio-container .form,
+body[data-theme='dark'] .gradio-container .box,
+body[data-theme='dark'] .gradio-container .component,
+body[data-theme='dark'] .gradio-container .container,
+.dark .gradio-container .block,
+.dark .gradio-container .panel,
+.dark .gradio-container .form,
+.dark .gradio-container .box,
+.dark .gradio-container .component,
+.dark .gradio-container .container,
+.gradio-container .dark .block,
+.gradio-container .dark .panel,
+.gradio-container .dark .form,
+.gradio-container .dark .box,
+.gradio-container .dark .component,
+.gradio-container .dark .container,
+[data-theme="dark"] .gradio-container .block,
+[data-theme="dark"] .gradio-container .panel,
+[data-theme="dark"] .gradio-container .form,
+[data-theme="dark"] .gradio-container .box,
+[data-theme="dark"] .gradio-container .component,
+[data-theme="dark"] .gradio-container .container,
+.dark-mode .gradio-container .block,
+.dark-mode .gradio-container .panel,
+.dark-mode .gradio-container .form,
+.dark-mode .gradio-container .box,
+.dark-mode .gradio-container .component,
+.dark-mode .gradio-container .container,
+body.dark .gradio-container .block,
+body.dark .gradio-container .panel,
+body.dark .gradio-container .form,
+body.dark .gradio-container .box,
+body.dark .gradio-container .component,
+body.dark .gradio-container .container,
+html.dark .gradio-container .block,
+html.dark .gradio-container .panel,
+html.dark .gradio-container .form,
+html.dark .gradio-container .box,
+html.dark .gradio-container .component,
+html.dark .gradio-container .container {
+    background: var(--cmw-surface) !important;
+    border-color: var(--cmw-border) !important;
+    color: var(--cmw-text) !important;
+}
+
+/* Dark theme for chatbot labels and block info */
+html[data-theme='dark'] .chatbot-card label,
+html[data-theme='dark'] span[data-testid="block-info"],
+body[data-theme='dark'] .chatbot-card label,
+body[data-theme='dark'] span[data-testid="block-info"],
+.dark .chatbot-card label,
+.dark .chatbot-card span[data-testid="block-info"],
+.gradio-container .dark .chatbot-card label,
+.gradio-container .dark span[data-testid="block-info"],
+[data-theme="dark"] .chatbot-card label,
+[data-theme="dark"] span[data-testid="block-info"],
+.dark-mode .chatbot-card label,
+.dark-mode span[data-testid="block-info"],
+body.dark .chatbot-card label,
+body.dark span[data-testid="block-info"],
+html.dark .chatbot-card label,
+html.dark span[data-testid="block-info"] {
+    color: var(--cmw-text-strong) !important;
+    font-weight: 500 !important;
+    font-size: var(--cmw-font-size) !important;
+    font-family: var(--cmw-font-family) !important;
+    background: var(--theme-colors__highlight) !important;
+}
