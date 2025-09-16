@@ -44,13 +44,13 @@ class ChatTab:
         """Create the main chat interface with proper layout"""
         with gr.Row():
             with gr.Column(elem_classes=["chat-hints"]):
-                gr.Markdown(f"## {self._get_translation("welcome_title")}")
+                gr.Markdown(f"## {self._get_translation("welcome_title")}", elem_classes=["chat-hints-title"])
 
                 gr.Markdown(self._get_translation("welcome_description")) 
             
             # Prompt examples section (quick action buttons)
             with gr.Column(elem_classes=["quick-actions-card"]):
-                gr.Markdown(f"## {self._get_translation('quick_actions_title')}")
+                gr.Markdown(f"## {self._get_translation('quick_actions_title')}", elem_classes=["chat-hints-title"])
                 
                 self.components["quick_list_apps_btn"] = gr.Button(self._get_translation("quick_list_apps"), elem_classes=["cmw-button"])
                 self.components["quick_templates_erp_btn"] = gr.Button(self._get_translation("quick_templates_erp"), elem_classes=["cmw-button"])
