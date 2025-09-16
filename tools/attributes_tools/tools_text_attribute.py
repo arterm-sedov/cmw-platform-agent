@@ -151,40 +151,9 @@ def edit_or_create_text_attribute(
         "validationMaskRegex": custom_mask if display_format == "CustomMask" else _set_input_mask(display_format)
     }
 
-        # Remove None values
-    request_body = remove_nones(request_body) 
+    endpoint = f"{ATTRIBUTE_ENDPOINT}/{application_system_name}"
 
-    try:
-        if operation == "create":
-            result = requests_._post_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
-        if operation == "edit" or operation == "create":
-            result = requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
-            print("edit is complited")
-        else:
-            result = {
-                "success": False,
-                "error": f"No such operation for attribute: {operation}. Available operations: create, edit",
-                "status_code": 400
-            }
-    except Exception as e:
-        result = {
-            "success": False,
-            "error": f"Tool execution failed: {str(e)}",
-            "status_code": 500
-        }
-
-    # Ensure result is always a dict with proper structure
-    if not isinstance(result, dict):
-        result = {
-            "success": False,
-            "error": f"Unexpected result type: {type(result)}",
-            "status_code": 500
-        }
-    
-    # Add additional error information if the API call failed
-    if not result.get("success", False) and result.get("error"):
-        error_info = result.get("error", "")
-        result["error"] = f"API operation failed: {error_info}"
+    result = execute_edit_or_create_operation(request_body, operation, endpoint)
 
     validated = AttributeResult(**result)
     return validated.model_dump()
