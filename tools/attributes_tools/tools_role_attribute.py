@@ -86,39 +86,6 @@ def edit_or_create_role_attribute(
     validated = AttributeResult(**result)
     return validated.model_dump()
 
-
-@tool("get_role_attribute", return_direct=False, args_schema=CommonGetAttributeFields)
-def get_role_attribute(
-    application_system_name: str,
-    template_system_name: str,
-    system_name: str
-    ) -> Dict[str, Any]:
-    """
-    Get a role attribute in a given template and application.
-    
-    Role attribute is an attribute that is linked to roles in the system.
-    
-    Role attribute stores one or several linked role IDs.
-    
-    Returns:
-        dict: {
-            "success": bool - True if the attribute was fetched successfully
-            "status_code": int - HTTP response status code  
-            "raw_response": dict|str|None - Raw response payload for auditing or payload body (sanitized)
-            "error": str|None - Error message if operation failed
-        }
-    """
-
-    attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
-
-    result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
-
-    return process_attribute_response(
-        request_result=result,
-        result_model=AttributeResult,
-        response_mapping=ATTRIBUTE_RESPONE_MAPPING
-    )
-
 if __name__ == "__main__":
     results = edit_or_create_role_attribute.invoke({
         "operation": "create",
