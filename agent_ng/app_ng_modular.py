@@ -48,6 +48,7 @@ try:
     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
     from agent_ng.tabs import ChatTab, LogsTab, StatsTab
     from agent_ng.ui_manager import get_ui_manager
+    from agent_ng.i18n_translations import create_i18n_instance, get_translation_key, format_translation
     print("✅ Successfully imported all modules using absolute imports")
 except ImportError as e1:
     print(f"⚠️ Absolute imports failed: {e1}")
@@ -59,6 +60,7 @@ except ImportError as e1:
         # from .streaming_chat import get_chat_interface  # Module moved to .unused
         from .tabs import ChatTab, LogsTab, StatsTab
         from .ui_manager import get_ui_manager
+        from .i18n_translations import create_i18n_instance, get_translation_key, format_translation
         print("✅ Successfully imported all modules using relative imports")
     except ImportError as e2:
         print(f"❌ Both absolute and relative imports failed:")
@@ -79,12 +81,15 @@ except ImportError as e1:
         LogsTab = None
         StatsTab = None
         get_ui_manager = lambda: None
+        create_i18n_instance = lambda x: None
+        get_translation_key = lambda x, y: x
+        format_translation = lambda x, y, **kwargs: x
 
 
 class NextGenApp:
-    """LangChain-native Gradio application with modular tab architecture"""
+    """LangChain-native Gradio application with modular tab architecture and i18n support"""
     
-    def __init__(self):
+    def __init__(self, language: str = "en"):
         self.agent: Optional[NextGenAgent] = None
         self.llm_manager = get_llm_manager()
         self.initialization_logs = []
@@ -92,15 +97,19 @@ class NextGenApp:
         self.initialization_complete = False
         self.session_id = "default"  # LangChain session management
         self._ui_update_needed = False
+        self.language = language
+        
+        # Create i18n instance for the specified language
+        self.i18n = create_i18n_instance(language)
         
         # Initialize debug system
         self.debug_streamer = get_debug_streamer("app_ng")
         self.log_handler = get_log_handler("app_ng")
         # self.chat_interface = get_chat_interface("app_ng")  # Dead code - never used
         
-        # Initialize UI manager with error handling
+        # Initialize UI manager with i18n support
         try:
-            self.ui_manager = get_ui_manager()
+            self.ui_manager = get_ui_manager(language=language, i18n_instance=self.i18n)
             if not self.ui_manager:
                 raise ValueError("UI Manager not available")
         except Exception as e:
@@ -112,8 +121,8 @@ class NextGenApp:
         self.tab_instances = {}  # Store tab instances for event handlers
         self.components = {}
         
-        # Progress status storage
-        self.current_progress_status = "Ready to process your request..."
+        # Progress status storage with translation
+        self.current_progress_status = get_translation_key("progress_ready", language)
         self.progress_icon_index = 0
         self.progress_icons = ["🔄", "⚙️", "🔧", "⚡", "🔄", "⚙️", "🔧", "⚡"]
         self.is_processing = False
@@ -141,7 +150,7 @@ class NextGenApp:
         """Initialize the agent asynchronously"""
         self.is_initializing = True
         self.debug_streamer.info("Starting agent initialization", LogCategory.INIT)
-        self.initialization_logs.append("🚀 Starting agent initialization...")
+        self.initialization_logs.append("🚀 " + get_translation_key("logs_initializing", self.language))
         
         try:
             # Initialize agent (uses single provider from AGENT_PROVIDER)
@@ -155,13 +164,17 @@ class NextGenApp:
                 await asyncio.sleep(0.5)
                 wait_time += 0.5
                 self.debug_streamer.debug(f"Waiting for agent... ({wait_time:.1f}s)", LogCategory.INIT)
-                self.initialization_logs.append(f"⏳ Waiting for agent... ({wait_time:.1f}s)")
+                self.initialization_logs.append(f"⏳ Ожидание агента... ({wait_time:.1f}s)" if self.language == "ru" else f"⏳ Waiting for agent... ({wait_time:.1f}s)")
             
             if self.agent.is_ready():
                 status = self.agent.get_status()
                 self.debug_streamer.success(f"Agent ready with {status['current_llm']}", LogCategory.INIT)
-                self.initialization_logs.append(f"✅ Agent ready with {status['current_llm']}")
-                self.initialization_logs.append(f"🔧 Tools available: {status['tools_count']}")
+                if self.language == "ru":
+                    self.initialization_logs.append(f"✅ Агент готов с {status['current_llm']}")
+                    self.initialization_logs.append(f"🔧 Доступно инструментов: {status['tools_count']}")
+                else:
+                    self.initialization_logs.append(f"✅ Agent ready with {status['current_llm']}")
+                    self.initialization_logs.append(f"🔧 Tools available: {status['tools_count']}")
                 self.initialization_complete = True
                 
                 # Update agent reference in tab instances
@@ -172,11 +185,11 @@ class NextGenApp:
                 self._trigger_ui_update()
             else:
                 self.debug_streamer.error("Agent initialization timeout", LogCategory.INIT)
-                self.initialization_logs.append("❌ Agent initialization timeout")
+                self.initialization_logs.append(get_translation_key("error_agent_timeout", self.language))
                 
         except Exception as e:
             self.debug_streamer.error(f"Initialization failed: {str(e)}", LogCategory.INIT)
-            self.initialization_logs.append(f"❌ Initialization failed: {str(e)}")
+            self.initialization_logs.append(format_translation("error_initialization_failed", self.language, error=str(e)))
         
         self.is_initializing = False
     
@@ -195,7 +208,7 @@ class NextGenApp:
                 self.agent.token_tracker.start_new_conversation()
             self.debug_streamer.info("Conversation cleared")
         # Reset progress status
-        self.current_progress_status = "Ready to process your request..."
+        self.current_progress_status = get_translation_key("progress_ready", self.language)
         return [], ""
     
     def get_progress_status(self) -> str:
@@ -245,7 +258,7 @@ class NextGenApp:
             Updated history and empty message
         """
         if not self.is_ready():
-            error_msg = "❌ **Agent not ready. Please wait for initialization to complete.**"
+            error_msg = get_translation_key("agent_not_ready", self.language)
             history.append({"role": "user", "content": message})
             history.append({"role": "assistant", "content": error_msg})
             return history, ""
@@ -270,14 +283,14 @@ class NextGenApp:
                 
                 return history, ""
             else:
-                error_msg = f"❌ **Error: {response.error}**"
+                error_msg = format_translation("error_processing", self.language, error=response.error)
                 history.append({"role": "user", "content": message})
                 history.append({"role": "assistant", "content": error_msg})
                 return history, ""
                 
         except Exception as e:
             self.debug_streamer.error(f"Error in chat: {e}")
-            error_msg = f"❌ **Error processing message: {str(e)}**"
+            error_msg = format_translation("error_processing", self.language, error=str(e))
             history.append({"role": "user", "content": message})
             history.append({"role": "assistant", "content": error_msg})
             return history, ""
@@ -295,7 +308,7 @@ class NextGenApp:
             Updated history and empty message
         """
         if not self.is_ready():
-            error_msg = "❌ **Agent not ready. Please wait for initialization to complete.**"
+            error_msg = get_translation_key("agent_not_ready", self.language)
             history.append({"role": "user", "content": message})
             history.append({"role": "assistant", "content": error_msg})
             yield history, ""
@@ -354,7 +367,10 @@ class NextGenApp:
                 elif event_type == "tool_start":
                     # Tool is starting - create a separate message with metadata
                     tool_name = metadata.get("tool_name", "unknown")
-                    tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
+                    if self.language == "ru":
+                        tool_title = metadata.get("title", f"🔧 Инструмент вызван: {tool_name}")
+                    else:
+                        tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
                     
                     # Create tool message with metadata for collapsible section
                     tool_message = {
@@ -371,7 +387,10 @@ class NextGenApp:
                 elif event_type == "tool_end":
                     # Tool completed - update the last tool message or create new one
                     tool_name = metadata.get("tool_name", "unknown")
-                    tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
+                    if self.language == "ru":
+                        tool_title = metadata.get("title", f"🔧 Инструмент вызван: {tool_name}")
+                    else:
+                        tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
                     
                     # Update the last tool message or create new one
                     if tool_messages and tool_messages[-1].get("metadata", {}).get("title") == tool_title:
@@ -408,7 +427,7 @@ class NextGenApp:
             
             # Add prompt tokens if available
             if prompt_tokens:
-                token_displays.append(f"**Prompt tokens:** {prompt_tokens.formatted}")
+                token_displays.append(format_translation("prompt_tokens", self.language, tokens=prompt_tokens.formatted))
             
             # Add API tokens if available
             if self.agent:
@@ -417,7 +436,7 @@ class NextGenApp:
                     last_api_tokens = self.agent.get_last_api_tokens()
                     print(f"🔍 DEBUG: Last API tokens: {last_api_tokens}")
                     if last_api_tokens:
-                        token_displays.append(f"**API tokens:** {last_api_tokens.formatted}")
+                        token_displays.append(format_translation("api_tokens", self.language, tokens=last_api_tokens.formatted))
                         print(f"🔍 DEBUG: Added API token display")
                     else:
                         print("🔍 DEBUG: No API tokens available")
@@ -427,7 +446,7 @@ class NextGenApp:
             
             # Add execution time
             execution_time = time.time() - start_time
-            token_displays.append(f"**Execution time:** {execution_time:.2f}s")
+            token_displays.append(format_translation("execution_time", self.language, time=execution_time))
             
             # Add deduplication stats if available
             if self.agent and hasattr(self.agent, '_deduplication_stats'):
@@ -446,12 +465,14 @@ class NextGenApp:
                     if dedup_summary:
                         # Show per-tool breakdown
                         per_tool_breakdown = ", ".join(dedup_summary)
-                        token_displays.append(f"**Deduplication:** {total_duplicates} duplicate calls prevented ({per_tool_breakdown})")
+                        token_displays.append(format_translation("deduplication", self.language, 
+                                                               duplicates=total_duplicates, 
+                                                               breakdown=per_tool_breakdown))
                         print(f"🔍 DEBUG: Added deduplication stats: {total_duplicates} duplicates")
                     
                     # Add total tool calls count
                     if total_tool_calls > 0:
-                        token_displays.append(f"**Total tool calls:** {total_tool_calls}")
+                        token_displays.append(format_translation("total_tool_calls", self.language, calls=total_tool_calls))
                         print(f"🔍 DEBUG: Added total tool calls: {total_tool_calls}")
             
             # Combine all token displays
@@ -482,7 +503,7 @@ class NextGenApp:
         except Exception as e:
             self.debug_streamer.error(f"Error in stream chat: {e}")
             execution_time = time.time() - start_time
-            error_msg = f"❌ **Error streaming message: {str(e)}**\n\n**Execution time:** {execution_time:.2f}s"
+            error_msg = format_translation("error_streaming", self.language, error=str(e)) + f"\n\n{format_translation('execution_time', self.language, time=execution_time)}"
             working_history[-1] = {"role": "assistant", "content": error_msg}
             # Stop processing state on error
             self.stop_processing()
@@ -490,7 +511,7 @@ class NextGenApp:
     
     def _create_event_handlers(self) -> Dict[str, Any]:
         """Create event handlers for all tabs"""
-        return {
+        handlers = {
             # Chat handlers (core functionality)
             "stream_message": self._stream_message_wrapper,
             "clear_chat": self.clear_conversation,
@@ -504,6 +525,10 @@ class NextGenApp:
             "get_progress_status": self.get_progress_status,
             "update_progress_display": self.update_progress_display,
         }
+        
+        # Add language switch handler if this is the language detection app
+        
+        return handlers
     
     def _stream_message_wrapper(self, message: str, history: List[Dict[str, str]]):
         """Stream a message to the agent (synchronous wrapper)"""
@@ -526,7 +551,7 @@ class NextGenApp:
                 asyncio.set_event_loop(new_loop)
                 try:
                     async def async_stream():
-                        async for result in self.stream_chat_with_agent(message, history, progress):
+                        async for result in self.stream_chat_with_agent(message, history):
                             yield result
                     
                     # Convert async generator to regular generator
@@ -583,9 +608,9 @@ class NextGenApp:
         
         # Fallback status
         if self.agent and self.agent.is_ready():
-            return "✅ **Agent Ready**"
+            return get_translation_key("agent_ready", self.language)
         else:
-            return "🟡 **Initializing...**"
+            return get_translation_key("agent_initializing", self.language)
     
     def _refresh_logs(self) -> str:
         """Refresh logs display - delegates to logs tab"""
@@ -604,9 +629,9 @@ class NextGenApp:
         
         # Fallback stats
         if self.agent and self.agent.is_ready():
-            return "✅ Agent Ready"
+            return get_translation_key("agent_ready", self.language)
         else:
-            return "🟡 Agent Initializing..."
+            return get_translation_key("agent_initializing", self.language)
     
     def _trigger_ui_update(self):
         """Trigger UI update after agent initialization or message processing"""
@@ -665,7 +690,7 @@ class NextGenApp:
         tab_modules = []
         try:
             if ChatTab:
-                chat_tab = ChatTab(event_handlers)
+                chat_tab = ChatTab(event_handlers, language=self.language, i18n_instance=self.i18n)
                 chat_tab.set_main_app(self)  # Set reference to main app
                 tab_modules.append(chat_tab)
                 self.tab_instances['chat'] = chat_tab
@@ -673,7 +698,7 @@ class NextGenApp:
                 print("⚠️ ChatTab not available")
                 
             if LogsTab:
-                logs_tab = LogsTab(event_handlers)
+                logs_tab = LogsTab(event_handlers, language=self.language, i18n_instance=self.i18n)
                 logs_tab.set_main_app(self)  # Pass main app reference
                 tab_modules.append(logs_tab)
                 self.tab_instances['logs'] = logs_tab
@@ -681,7 +706,7 @@ class NextGenApp:
                 print("⚠️ LogsTab not available")
                 
             if StatsTab:
-                stats_tab = StatsTab(event_handlers)
+                stats_tab = StatsTab(event_handlers, language=self.language, i18n_instance=self.i18n)
                 stats_tab.set_agent(self.agent)  # Pass agent reference
                 tab_modules.append(stats_tab)
                 self.tab_instances['stats'] = stats_tab
@@ -706,36 +731,225 @@ class NextGenApp:
             self.ui_manager.set_agent(self.agent)
         
         return demo
+
+
+class NextGenAppWithLanguageDetection(NextGenApp):
+    """LangChain-native Gradio application with dynamic language detection and switching"""
+    
+    def __init__(self, language: str = "en"):
+        super().__init__(language)
+        self.current_language = language
+        self.supported_languages = ["en", "ru"]
+    
+    def detect_language_from_url(self):
+        """Detect language from URL parameters using environment variables or sys.argv"""
+        try:
+            # Check if we're running with Gradio and can access URL parameters
+            import os
+            import sys
+            
+            # Check for language parameter in command line arguments
+            for i, arg in enumerate(sys.argv):
+                if arg == '--lang' and i + 1 < len(sys.argv):
+                    lang = sys.argv[i + 1].lower()
+                    if lang in self.supported_languages:
+                        print(f"🌐 Language detected from command line: {lang}")
+                        return lang
+                elif arg.startswith('--lang='):
+                    lang = arg.split('=')[1].lower()
+                    if lang in self.supported_languages:
+                        print(f"🌐 Language detected from command line: {lang}")
+                        return lang
+            
+            # Check environment variable (can be set by Gradio)
+            lang_env = os.environ.get('GRADIO_LANG', '').lower()
+            if lang_env in self.supported_languages:
+                print(f"🌐 Language detected from environment: {lang_env}")
+                return lang_env
+            
+            # Check for URL parameter in environment (Gradio might set this)
+            url_lang = os.environ.get('LANG_PARAM', '').lower()
+            if url_lang in self.supported_languages:
+                print(f"🌐 Language detected from URL parameter: {url_lang}")
+                return url_lang
+            
+            return None
+            
+        except Exception as e:
+            print(f"⚠️ URL language detection failed: {e}")
+            return None
+    
+    def detect_language(self, request=None):
+        """Detect language from URL parameters, headers, or browser settings"""
+        # Default to Russian
+        detected_lang = "ru"
+        
+        try:
+            # Check URL parameters first
+            if request and hasattr(request, 'query_params'):
+                lang_param = request.query_params.get('lang', '').lower()
+                if lang_param in self.supported_languages:
+                    detected_lang = lang_param
+                    print(f"🌐 Language detected from URL parameter: {detected_lang}")
+                    return detected_lang
+            
+            # Check Accept-Language header
+            if request and hasattr(request, 'headers'):
+                accept_lang = request.headers.get('Accept-Language', '')
+                if 'ru' in accept_lang.lower():
+                    detected_lang = "ru"
+                    print(f"🌐 Language detected from browser: {detected_lang}")
+                    return detected_lang
+            
+            # Fallback to default
+            print(f"🌐 Using default language: {detected_lang}")
+            return detected_lang
+            
+        except Exception as e:
+            print(f"⚠️ Language detection failed: {e}, using default: {detected_lang}")
+            return detected_lang
+    
     
 
 
-# Global demo variable for Gradio reload functionality
+# Global demo variable for single port architecture
 demo = None
 
-def get_demo():
-    """Get or create the demo interface"""
+def get_demo_with_language_detection():
+    """Get or create the demo interface with language detection support"""
     global demo
+    
     if demo is None:
-        app = NextGenApp()
-        demo = app.create_interface()
+        try:
+            # Create app with language detection capability
+            app = NextGenAppWithLanguageDetection()
+            demo = app.create_interface()
+            # Ensure the demo has the required attributes for Gradio reloading
+            if not hasattr(demo, '_queue'):
+                demo._queue = None
+        except Exception as e:
+            print(f"❌ Error creating demo: {e}")
+            # Create a minimal working demo with required attributes
+            with gr.Blocks() as fallback_demo:
+                gr.Markdown("# CMW Platform Agent")
+                gr.Markdown("Application is initializing...")
+            # Ensure required attributes exist
+            if not hasattr(fallback_demo, '_queue'):
+                fallback_demo._queue = None
+            demo = fallback_demo
+    
     return demo
 
-# Initialize demo for Gradio reload functionality
-demo = get_demo()
+def get_demo(language: str = "en"):
+    """Get or create the demo interface for the specified language (legacy support)"""
+    # For backward compatibility, create language-specific demo
+    try:
+        app = NextGenApp(language=language)
+        return app.create_interface()
+    except Exception as e:
+        print(f"❌ Error creating demo for language {language}: {e}")
+        return gr.Blocks()
+
+# Create a safe demo instance for Gradio reloading
+# This prevents the _queue attribute error by ensuring demo is always valid
+def create_safe_demo():
+    """Create a safe demo instance that won't cause reload errors"""
+    try:
+        demo_instance = get_demo("en")  # Default to English
+        # Ensure the demo has the required attributes for Gradio reloading
+        if not hasattr(demo_instance, '_queue'):
+            demo_instance._queue = None
+        return demo_instance
+    except Exception as e:
+        print(f"❌ Error creating safe demo: {e}")
+        # Create a minimal working demo with required attributes
+        with gr.Blocks() as demo:
+            gr.Markdown("# CMW Platform Agent")
+            gr.Markdown("Application is initializing...")
+        # Ensure required attributes exist
+        if not hasattr(demo, '_queue'):
+            demo._queue = None
+        return demo
+
+# Initialize demo for Gradio reloading - use language detection
+demo = get_demo_with_language_detection()
+
+def reload_demo():
+    """Reload the demo for Gradio hot reloading"""
+    global demo
+    try:
+        print("🔄 Reloading demo...")
+        demo = get_demo_with_language_detection()
+        return demo
+    except Exception as e:
+        print(f"❌ Error reloading demo: {e}")
+        # Return current demo or create minimal one
+        if demo is None:
+            with gr.Blocks() as fallback_demo:
+                gr.Markdown("# CMW Platform Agent")
+                gr.Markdown("Error during reload - please restart the application")
+            return fallback_demo
+        return demo
+
+def find_available_port(start_port=7860, max_attempts=10):
+    """Find an available port starting from start_port"""
+    import socket
+    
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('0.0.0.0', port))
+                return port
+        except OSError:
+            continue
+    return None
 
 def main():
-    """Main function to run the application"""
-    print("🚀 Starting LangChain-Native LLM Agent App...")
+    """Main function to run the application with single port and language detection"""
+    import argparse
+    import sys
+    import os
     
-    # Get the demo interface
-    demo = get_demo()
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='CMW Platform Agent')
+    parser.add_argument('-en', '--english', action='store_true', help='Start in English')
+    parser.add_argument('-ru', '--russian', action='store_true', help='Start in Russian')
+    parser.add_argument('-p', '--port', type=int, default=7860, help='Port to run on (default: 7860)')
+    parser.add_argument('--auto-port', action='store_true', help='Automatically find an available port')
+    args = parser.parse_args()
     
-    print("🌐 Launching Gradio interface...")
+    # Determine language from environment variable, command line, or default
+    # Priority: Command line > Environment variable > Default (Russian)
+    language = os.getenv('CMW_DEFAULT_LANGUAGE', 'ru')  # Default to Russian
+    
+    if args.russian:
+        language = "ru"
+    elif args.english:
+        language = "en"
+    
+    # Determine port
+    if args.auto_port:
+        port = find_available_port(args.port)
+        if port is None:
+            print(f"❌ Could not find an available port starting from {args.port}")
+            sys.exit(1)
+    else:
+        port = args.port
+    
+    print(f"🚀 Starting LangChain-Native LLM Agent App with language detection...")
+    print(f"🌐 Language: {language.upper()}")
+    print(f"🔌 Port: {port}")
+    
+    # Create app with specified language
+    app = NextGenAppWithLanguageDetection(language=language)
+    demo = app.create_interface()
+    
+    print(f"🌐 Launching Gradio interface on port {port} with language switching...")
     demo.launch(
         debug=True,
         share=False,
         server_name="0.0.0.0",
-        server_port=7860,
+        server_port=port,
         show_error=True
     )
 
