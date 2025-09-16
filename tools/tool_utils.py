@@ -125,7 +125,7 @@ def process_attribute_response(
     # Копируем данные, чтобы не мутировать оригинал
     attribute_data = raw_response['response'].copy() if isinstance(raw_response['response'], dict) else raw_response['response']
 
-    # Работаем только если attribute_data - словарь
+    # Работаем только если attribute_data - словарь         
     if isinstance(attribute_data, dict):
         # Определяем тип атрибута
         attr_type = attribute_data.get("type")
@@ -134,69 +134,69 @@ def process_attribute_response(
         for key in keys_to_remove:
             attribute_data.pop(key, None)
 
-    # Обрабатываем globalAlias: вытаскиваем owner и alias, удаляем globalAlias и type
-    if "globalAlias" in attribute_data:
-        global_alias = attribute_data.pop("globalAlias", {})
-        if isinstance(global_alias, dict):
-            # Добавляем owner и alias в корень, если они есть
-            new_items = {}
-            if "owner" in global_alias:
-                new_items["owner"] = global_alias["owner"]
-            if "alias" in global_alias:
-                new_items["alias"] = global_alias["alias"]
-            # type игнорируется и не добавляется
+        # Обрабатываем globalAlias: вытаскиваем owner и alias, удаляем globalAlias и type
+        if "globalAlias" in attribute_data:
+            global_alias = attribute_data.pop("globalAlias", {})
+            if isinstance(global_alias, dict):
+                # Добавляем owner и alias в корень, если они есть
+                new_items = {}
+                if "owner" in global_alias:
+                    new_items["owner"] = global_alias["owner"]
+                if "alias" in global_alias:
+                    new_items["alias"] = global_alias["alias"]
+                # type игнорируется и не добавляется
 
-            # Пересоздаём словарь: сначала новые ключи, потом остальные
-            attribute_data = {**new_items, **attribute_data}
+                # Пересоздаём словарь: сначала новые ключи, потом остальные
+                attribute_data = {**new_items, **attribute_data}
 
-    # Обрабатываем instanceGlobalAlias: вытаскиваем owner и alias, удаляем instanceGlobalAlias и type
-    if "instanceGlobalAlias" in attribute_data:
-        instance_global_alias = attribute_data.pop("instanceGlobalAlias", {})
-        if isinstance(instance_global_alias, dict):
-            # Добавляем owner и alias в корень, если они есть
-            if "owner" in global_alias:
-                attribute_data["instanceAlias"] = instance_global_alias["owner"]
-                attribute_data["instanceAttributeAlias"] = instance_global_alias["alias"]
-            else:
-                attribute_data["instanceAlias"] = instance_global_alias["alias"]
-            # type игнорируется и не добавляется
+        # Обрабатываем instanceGlobalAlias: вытаскиваем owner и alias, удаляем instanceGlobalAlias и type
+        if "instanceGlobalAlias" in attribute_data:
+            instance_global_alias = attribute_data.pop("instanceGlobalAlias", {})
+            if isinstance(instance_global_alias, dict):
+                # Добавляем owner и alias в корень, если они есть
+                if "owner" in global_alias:
+                    attribute_data["instanceAlias"] = instance_global_alias["owner"]
+                    attribute_data["instanceAttributeAlias"] = instance_global_alias["alias"]
+                else:
+                    attribute_data["instanceAlias"] = instance_global_alias["alias"]
+                # type игнорируется и не добавляется
 
-    # Специальная обработка variants - преобразуем структуру каждого элемента
-    if isinstance(attribute_data, dict) and "variants" in attribute_data:
-        processed_variants = []
-        for variant in attribute_data["variants"]:
-            if not isinstance(variant, dict):
-                continue # пропускаем, если не словарь
+        # Специальная обработка variants - преобразуем структуру каждого элемента
+        if "variants" in attribute_data:
+            processed_variants = []
+            for variant in attribute_data["variants"]:
+                if not isinstance(variant, dict):
+                    continue # пропускаем, если не словарь
 
-            # Извлекаем alias.alias
-            alias_value = ""
-            if "alias" in variant and isinstance(variant["alias"], dict):
-                alias_value = variant["alias"].get("alias", "")
+                # Извлекаем alias.alias
+                alias_value = ""
+                if "alias" in variant and isinstance(variant["alias"], dict):
+                    alias_value = variant["alias"].get("alias", "")
 
-            # Извлекаем переводы из name
-            name_data = variant.get("name", {}) if isinstance(variant.get("name"), dict) else {}
-            en_name = name_data.get("en", "")
-            ru_name = name_data.get("ru", "")
-            de_name = name_data.get("de", "")
+                # Извлекаем переводы из name
+                name_data = variant.get("name", {}) if isinstance(variant.get("name"), dict) else {}
+                en_name = name_data.get("en", "")
+                ru_name = name_data.get("ru", "")
+                de_name = name_data.get("de", "")
 
-            # Цвет
-            color = variant.get("color", "")
+                # Цвет
+                color = variant.get("color", "")
 
-            # Формуруем новый элемент
-            processed_variants.append({
-                "System name": alias_value,
-                "English name": en_name,
-                "Russian name": ru_name,
-                "Deutsche name": de_name,
-                "Color": color
-            })
+                # Формуруем новый элемент
+                processed_variants.append({
+                    "System name": alias_value,
+                    "English name": en_name,
+                    "Russian name": ru_name,
+                    "Deutsche name": de_name,
+                    "Color": color
+                })
 
-            # Заменяем старый variants на обрботанный
-            attribute_data["variants"] = processed_variants
+                # Заменяем старый variants на обрботанный
+                attribute_data["variants"] = processed_variants
 
-    # Переименовываем ключи согласно response_mapping
-    if isinstance(attribute_data, dict):
+        # Переименовываем ключи согласно response_mapping
         renamed_data = {}
+
         for key, value in attribute_data.items():
             # Если ключ есть в маппинге - используем новое имя, иначе оставляем как есть
             new_key = response_mapping.get(key, key)
