@@ -109,10 +109,10 @@ def remove_values(
         ]
     return obj
 
-def process_attribute_response(
-    request_result: Dict[str, Any],
+def execute_get_operation(
     result_model: Type[BaseModel],
-    response_mapping: Dict[str, Any]
+    response_mapping: Dict[str, Any],
+    endpoint: str
 ) -> Dict[str, Any]:
     """
     Универсальная функция для постобработки ответа от _get_request.
@@ -123,21 +123,24 @@ def process_attribute_response(
     :param result_model: Pydantic-модель для валидации финального результата (должна иметь поля: success, status_code, data, error)
     :return: Валидированный результат в виде dict (model_dump)
     """
-    if not request_result.get('success', False):
+
+    result = requests_._get_request(endpoint)
+
+    if not result.get('success', False):
         adapted = {
-            "success": request_result.get("success", False),
-            "status_code": request_result.get("status_code"),
+            "success": result.get("success", False),
+            "status_code": result.get("status_code"),
             "data": None,
-            "error": request_result.get("error")
+            "error": result.get("error")
         }
         return result_model(**adapted).model_dump()
 
     # Извлекаем тело ответа
-    raw_response = request_result.get('raw_response')
+    raw_response = result.get('raw_response')
     if raw_response is None:
         adapted = {
             "success": False,
-            "status_code": request_result.get("status_code"),
+            "status_code": result.get("status_code"),
             "data": None,
             "error": "No response data received from server"
         }
@@ -147,7 +150,7 @@ def process_attribute_response(
     if not isinstance(raw_response, dict) or 'response' not in raw_response:
         adapted = {
             "success": False,
-            "status_code": request_result.get("status_code"),
+            "status_code": result.get("status_code"),
             "data": None,
             "error": "Unexpected response structure from server"
         }
@@ -237,7 +240,7 @@ def process_attribute_response(
     # Формируем финальный результат
     final_result = {
         "success": True,
-        "status_code": request_result["status_code"],
+        "status_code": result["status_code"],
         "data": attribute_data,
         "error": None
     }

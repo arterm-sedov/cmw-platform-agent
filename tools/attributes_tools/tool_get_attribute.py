@@ -18,14 +18,15 @@ def get_attribute(
         }
     """
 
+    
+
     attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
+    endpoint = f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}"
 
-    result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
-
-    return process_attribute_response(
-        request_result=result,
+    return execute_get_operation(
         result_model=AttributeResult,
-        response_mapping=ATTRIBUTE_RESPONE_MAPPING
+        response_mapping=ATTRIBUTE_RESPONE_MAPPING,
+        endpoint=endpoint
     )
 
 if __name__ == "__main__":
