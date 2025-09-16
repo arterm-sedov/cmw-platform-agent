@@ -24,6 +24,21 @@ hf_oauth_expiration_minutes: 480
 
 Behold the Comindware Analyst Copilot — a robust and extensible system designed for real-world reliability and performance in creating entities within the Comindware Platform.
 
+### 🆕 **LangChain-Native Architecture**
+
+The system now features a **LangChain-native Gradio app** (`app_ng.py`) that provides:
+
+- **Multi-turn Conversations**: Reliable conversation memory with tool calls
+- **Pure LangChain Patterns**: Native LangChain conversation chains and memory
+- **Real-time Streaming**: Live response streaming with tool visualization
+- **Modern UI**: Comprehensive monitoring, debugging, and statistics
+- **OpenRouter Integration**: More predictable and reliable LLM responses
+
+**Quick Start:**
+```bash
+python agent_ng/app_ng.py
+```
+
 ## 🕵🏻‍♂️ What is this project?
 
 This is an **experimental multi-LLM agent** that demonstrates AI agent and CMW Platform integration:
