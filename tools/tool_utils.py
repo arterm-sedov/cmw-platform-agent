@@ -78,6 +78,37 @@ def remove_nones(obj: Any) -> Any:
         return [remove_nones(v) for v in obj if v is not None]
     return obj
 
+def remove_values(
+    obj: Any,
+    exclude_values: Set[Any] = None
+) -> Any:
+    """
+    Recursively remove specified values from dicts/lists.
+
+    Args:
+        obj: The object to clean (dict, list, or any other type)
+        exclude_values: Set of values to remove (default: {None, ""})
+        
+    Returns:
+        Cleaned object
+    """
+    if exclude_values is None:
+        exclude_values = {None, ""}
+
+    if isinstance(obj, dict):
+        return {
+            k: remove_values(v, exclude_values)
+            for k, v in obj.items()
+            if v not in exclude_values
+        }
+    if isinstance(obj, list):
+        return [
+            remove_values(v, exclude_values)
+            for v in obj
+            if v not in exclude_values
+        ]
+    return obj
+
 def process_attribute_response(
     request_result: Dict[str, Any],
     result_model: Type[BaseModel],
@@ -213,4 +244,61 @@ def process_attribute_response(
 
     # Валидируем и возвращаем
     validated = result_model(**final_result)
+    return validated.model_dump()
+
+def execute_edit_or_create_operation(
+    request_body: Dict[str, Any],
+    operation: str,
+    application_system_name: str,
+    requests_module: Any = requests_,
+    attribute_endpoint: str = ATTRIBUTE_ENDPOINT
+) -> Dict[str, Any]:
+    """
+    Выполняет операцию (create/edit) над атрибутом через API.
+    Возвращает словарь с результатом, соответствующий модели AttributeResult.
+    """
+    # Убираем None-значения
+    request_body = remove_nones(request_body)
+
+    try:
+        if operation == "create":
+            result = requests_module._post_request(
+                request_body, 
+                f"{attribute_endpoint}/{application_system_name}"
+            )
+        elif operation == "edit":
+            result = requests_module._put_request(
+                request_body, 
+                f"{attribute_endpoint}/{application_system_name}"
+            )
+            print("edit is completed")  # Опечатка исправлена: "complited" → "completed"
+        else:
+            result = {
+                "success": False,
+                "error": f"No such operation for attribute: {operation}. Available operations: create, edit",
+                "status_code": 400
+            }
+
+    except Exception as e:
+        result = {
+            "success": False,
+            "error": f"Tool execution failed: {str(e)}",
+            "status_code": 500
+        }
+
+    # Гарантируем, что result — это dict
+    if not isinstance(result, dict):
+        result = {
+            "success": False,
+            "error": f"Unexpected result type: {type(result)}",
+            "status_code": 500
+        }
+
+    # Добавляем префикс к ошибке, если операция неуспешна
+    if not result.get("success", False) and result.get("error"):
+        error_info = result.get("error", "")
+        result["error"] = f"API operation failed: {error_info}"
+
+    # Валидируем и возвращаем как dict
+    validated = AttributeResult(**result)
     return validated.model_dump()
