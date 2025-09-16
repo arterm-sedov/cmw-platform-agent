@@ -47,17 +47,29 @@ class ChatTab:
                 self.components["welcome_title"] = gr.Markdown(f"""## {self._get_translation("welcome_title")}
 
 {self._get_translation("welcome_description")}""") 
-            with gr.Column(elem_classes=["chat-hints"]):
-                self.components["try_asking_title"] = gr.Markdown(f"""## {self._get_translation("try_asking_title")}
+            
+            # Query examples section (converted to quick action buttons)
+            with gr.Column(elem_classes=["quick-actions-card"]):
+                gr.Markdown(f"### {self._get_translation('try_asking_title')}")
+                with gr.Column():
+                    self.components["quick_list_apps_btn"] = gr.Button(self._get_translation("quick_list_apps"), elem_classes=["cmw-button"])
+                    self.components["query_templates_erp_btn"] = gr.Button(self._get_translation("query_templates_erp"), elem_classes=["cmw-button"])
+                    self.components["query_attributes_contractors_btn"] = gr.Button(self._get_translation("query_attributes_contractors"), elem_classes=["cmw-button"])
+                    self.components["query_create_comment_attr_btn"] = gr.Button(self._get_translation("query_create_comment_attr"), elem_classes=["cmw-button"])
+                    self.components["query_create_id_attr_btn"] = gr.Button(self._get_translation("query_create_id_attr"), elem_classes=["cmw-button"])
+                    self.components["query_edit_phone_mask_btn"] = gr.Button(self._get_translation("query_edit_phone_mask"), elem_classes=["cmw-button"])
+                    self.components["query_get_comment_attr_btn"] = gr.Button(self._get_translation("query_get_comment_attr"), elem_classes=["cmw-button"])
+                    self.components["query_enum_add_value_btn"] = gr.Button(self._get_translation("query_enum_add_value"), elem_classes=["cmw-button"])
 
-{self._get_translation("try_asking_examples")}""")
+            
             # Quick actions section
             with gr.Column(elem_classes=["quick-actions-card"]):
                 gr.Markdown(f"### {self._get_translation('quick_actions_title')}")
                 with gr.Column():
-                    self.components["quick_list_apps_btn"] = gr.Button(self._get_translation("quick_list_apps"), elem_classes=["cmw-button"])
+                    self.components["quick_edit_enum_btn"] = gr.Button(self._get_translation("quick_edit_enum"), elem_classes=["cmw-button"])
                     self.components["quick_create_attr_btn"] = gr.Button(self._get_translation("quick_create_attr"), elem_classes=["cmw-button"]) 
                     self.components["quick_edit_mask_btn"] = gr.Button(self._get_translation("quick_edit_mask"), elem_classes=["cmw-button"]) 
+                    self.components["query_archive_attr_btn"] = gr.Button(self._get_translation("query_archive_attr"), elem_classes=["cmw-button"])
                     self.components["quick_math_btn"] = gr.Button(self._get_translation("quick_math"), elem_classes=["cmw-button"]) 
                     self.components["quick_code_btn"] = gr.Button(self._get_translation("quick_code"), elem_classes=["cmw-button"]) 
                     self.components["quick_explain_btn"] = gr.Button(self._get_translation("quick_explain"), elem_classes=["cmw-button"])
@@ -177,6 +189,52 @@ class ChatTab:
             outputs=[self.components["msg"]]
         )
         
+        # Query example button events
+        self.components["quick_edit_enum_btn"].click(
+            fn=self._quick_edit_enum,
+            outputs=[self.components["msg"]]
+        )
+        
+        self.components["query_templates_erp_btn"].click(
+            fn=self._query_templates_erp,
+            outputs=[self.components["msg"]]
+        )
+        
+        self.components["query_attributes_contractors_btn"].click(
+            fn=self._query_attributes_contractors,
+            outputs=[self.components["msg"]]
+        )
+        
+        self.components["query_create_comment_attr_btn"].click(
+            fn=self._query_create_comment_attr,
+            outputs=[self.components["msg"]]
+        )
+        
+        self.components["query_create_id_attr_btn"].click(
+            fn=self._query_create_id_attr,
+            outputs=[self.components["msg"]]
+        )
+        
+        self.components["query_edit_phone_mask_btn"].click(
+            fn=self._query_edit_phone_mask,
+            outputs=[self.components["msg"]]
+        )
+        
+        self.components["query_get_comment_attr_btn"].click(
+            fn=self._query_get_comment_attr,
+            outputs=[self.components["msg"]]
+        )
+        
+        self.components["query_enum_add_value_btn"].click(
+            fn=self._query_enum_add_value,
+            outputs=[self.components["msg"]]
+        )
+        
+        self.components["query_archive_attr_btn"].click(
+            fn=self._query_archive_attr,
+            outputs=[self.components["msg"]]
+        )
+        
         print("✅ ChatTab: All event handlers connected successfully")
     
     def _setup_chat_event_triggers(self):
@@ -255,3 +313,40 @@ class ChatTab:
     def _quick_list_apps(self) -> str:
         """Generate list apps quick action message"""
         return self._get_translation("quick_list_apps_message")
+    
+    # Query example methods
+    def _quick_edit_enum(self) -> str:
+        """Generate query list apps message"""
+        return self._get_translation("quick_edit_enum_message")
+    
+    def _query_templates_erp(self) -> str:
+        """Generate query templates ERP message"""
+        return self._get_translation("query_templates_erp_message")
+    
+    def _query_attributes_contractors(self) -> str:
+        """Generate query attributes contractors message"""
+        return self._get_translation("query_attributes_contractors_message")
+    
+    def _query_create_comment_attr(self) -> str:
+        """Generate query create comment attribute message"""
+        return self._get_translation("query_create_comment_attr_message")
+    
+    def _query_create_id_attr(self) -> str:
+        """Generate query create ID attribute message"""
+        return self._get_translation("query_create_id_attr_message")
+    
+    def _query_edit_phone_mask(self) -> str:
+        """Generate query edit phone mask message"""
+        return self._get_translation("query_edit_phone_mask_message")
+    
+    def _query_get_comment_attr(self) -> str:
+        """Generate query get comment attribute message"""
+        return self._get_translation("query_get_comment_attr_message")
+    
+    def _query_enum_add_value(self) -> str:
+        """Generate query enum add value message"""
+        return self._get_translation("query_enum_add_value_message")
+    
+    def _query_archive_attr(self) -> str:
+        """Generate query archive attribute message"""
+        return self._get_translation("query_archive_attr_message")
