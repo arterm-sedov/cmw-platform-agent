@@ -1,10 +1,6 @@
 from ..tool_utils import *
 
-class EditOrCreateRoleAttributeSchema(CommonAttributeFields):
-    pass
-
-
-@tool("edit_or_create_role_attribute", return_direct=False, args_schema=EditOrCreateRoleAttributeSchema)
+@tool("edit_or_create_role_attribute", return_direct=False, args_schema=CommonAttributeFields)
 def edit_or_create_role_attribute(
     operation: str,
     name: str,

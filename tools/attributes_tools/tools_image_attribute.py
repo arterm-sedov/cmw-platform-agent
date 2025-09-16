@@ -5,7 +5,6 @@ ALLOWED_COLOR_RENDERING_MODES_LIST = ['Original', 'Bitonal', 'GreyScale']
 
 ALLOWED_EXTENSIONS_SET = set(ALLOWED_EXTENSIONS_LIST)
 ALLOWED_COLOR_RENDERING_MODES_SET = set(ALLOWED_COLOR_RENDERING_MODES_LIST)
-
 class EditOrCreateImageAttributeSchema(CommonAttributeFields):
     rendering_color_mode: str = Field(
         description="Image color rendering mode. "

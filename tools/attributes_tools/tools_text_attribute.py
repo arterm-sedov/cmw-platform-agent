@@ -1,24 +1,4 @@
 from ..tool_utils import *
-
-def _set_input_mask(display_format: str) -> str:
-    # Setting validation mask via display format
-    input_mask_mapping: Dict[str, str] = {
-        "PlainText": None,
-        "MarkedText": None,
-        "HtmlText": None,
-        "LicensePlateNumberRuMask":"([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})",
-        "IndexRuMask": "([0-9]{6})",
-        "PassportRuMask": "([0-9]{4} [0-9]{6})",
-        "INNMask": "([0-9]{10})",
-        "OGRNMask": "([0-9]{13})",
-        "IndividualINNMask": "([0-9]{12})",
-        "PhoneRuMask": "(\+7 \([0-9]{3}\) [0-9]{3}-[0-9]{2}-[0-9]{2})",
-        "EmailMask": "^(([a-zа-яё0-9_-]+\.)*[a-zа-яё0-9_-]+@[a-zа-яё0-9-]+(\.[a-zа-яё0-9-]+)*\.[a-zа-яё]{2,6})?$",
-        "CustomMask": None
-    }
-
-    return input_mask_mapping.get(display_format, None)
-
 class EditOrCreateTextAttributeSchema(CommonAttributeFields):
     display_format: Literal[
         "PlainText",
