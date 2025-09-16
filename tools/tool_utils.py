@@ -11,6 +11,20 @@ from .models import (
 
 # Common constants
 ATTRIBUTE_ENDPOINT = "webapi/Attribute"
+KEYS_TO_REMOVE_MAPPING = {
+    "String": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Role": ['instanceGlobalAlias', 'isTitle', 'isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Instance": ['isTitle', 'isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Image": ['isUnique', 'format', 'isCalculated', 'isTitle', 'isMandatory', 'isOwnership', 'instanceGlobalAlias'],
+    "Enum": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Duration": ['isUnique', 'isIndexed', 'isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Drawing": ['isIndexed', 'isMultiValue', 'imageColorType', 'imagePreserveAspectRatio', 'isUnique', 'format', 'isCalculated', 'isTitle', 'isMandatory', 'isOwnership', 'instanceGlobalAlias'],
+    "Document": ['isTitle', 'isUnique', 'isCalculated', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Decimal": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
+    "DateTime": ['isUnique', 'isIndexed', 'isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Boolean": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Account": ['isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio']
+}
 
 def remove_nones(obj: Any) -> Any:
     """
@@ -33,7 +47,6 @@ def remove_nones(obj: Any) -> Any:
 
 def process_attribute_response(
     request_result: Dict[str, Any],
-    keys_to_remove: List[str],
     result_model: Type[BaseModel]
 ) -> Dict[str, Any]:
     """
@@ -78,8 +91,12 @@ def process_attribute_response(
     # Копируем данные, чтобы не мутировать оригинал
     attribute_data = raw_response['response'].copy() if isinstance(raw_response['response'], dict) else raw_response['response']
 
-    # Удаляем ненужные ключи (если это словарь)
+    # Работаем только если attribute_data - словарь
     if isinstance(attribute_data, dict):
+        # Определяем тип атрибута
+        attr_type = attribute_data.get("type")
+        keys_to_remove = KEYS_TO_REMOVE_MAPPING.get(attr_type, []) # по умолчанию - пустой список
+        # Удаляем ненужные ключи (если это словарь)
         for key in keys_to_remove:
             attribute_data.pop(key, None)
 
@@ -93,7 +110,7 @@ def process_attribute_response(
             if "alias" in global_alias:
                 attribute_data["alias"] = global_alias["alias"]
             # type игнорируется и не добавляется
-            
+
 
     # Формируем финальный результат
     final_result = {

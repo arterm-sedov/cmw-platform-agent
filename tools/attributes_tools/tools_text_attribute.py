@@ -212,11 +212,8 @@ def get_text_attribute(
 
     result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
 
-    keys_to_remove = ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio']
-
     return process_attribute_response(
         request_result=result,
-        keys_to_remove=keys_to_remove,
         result_model=AttributeResult
     )
 
