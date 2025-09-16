@@ -26,6 +26,15 @@ from typing import List, Dict, Any, Optional, Tuple, AsyncGenerator
 import json
 import time
 from dataclasses import asdict
+# Import configuration with fallback for direct execution
+try:
+    from agent_ng.agent_config import config, get_language_settings, get_port_settings
+except ImportError:
+    # Fallback for direct execution
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).parent))
+    from agent_config import config, get_language_settings, get_port_settings
 
 # LangChain imports
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
@@ -914,13 +923,23 @@ def main():
     parser = argparse.ArgumentParser(description='CMW Platform Agent')
     parser.add_argument('-en', '--english', action='store_true', help='Start in English')
     parser.add_argument('-ru', '--russian', action='store_true', help='Start in Russian')
-    parser.add_argument('-p', '--port', type=int, default=7860, help='Port to run on (default: 7860)')
+    parser.add_argument('-p', '--port', type=int, default=None, help='Port to run on (overrides config)')
     parser.add_argument('--auto-port', action='store_true', help='Automatically find an available port')
+    parser.add_argument('--config', action='store_true', help='Show current configuration')
     args = parser.parse_args()
     
-    # Determine language from environment variable, command line, or default
-    # Priority: Command line > Environment variable > Default (Russian)
-    language = os.getenv('CMW_DEFAULT_LANGUAGE', 'ru')  # Default to Russian
+    # Show configuration if requested
+    if args.config:
+        config.print_config()
+        return
+    
+    # Get language settings from central config
+    language_settings = get_language_settings()
+    port_settings = get_port_settings()
+    
+    # Determine language from command line, environment variable, or config default
+    # Priority: Command line > Environment variable > Config default
+    language = language_settings['default_language']
     
     if args.russian:
         language = "ru"
@@ -928,13 +947,15 @@ def main():
         language = "en"
     
     # Determine port
+    default_port = args.port if args.port is not None else port_settings['default_port']
+    
     if args.auto_port:
-        port = find_available_port(args.port)
+        port = find_available_port(default_port, port_settings['auto_port_range'])
         if port is None:
-            print(f"❌ Could not find an available port starting from {args.port}")
+            print(f"❌ Could not find an available port starting from {default_port}")
             sys.exit(1)
     else:
-        port = args.port
+        port = default_port
     
     print(f"🚀 Starting LangChain-Native LLM Agent App with language detection...")
     print(f"🌐 Language: {language.upper()}")
