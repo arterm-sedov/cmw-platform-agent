@@ -78,16 +78,6 @@ def main():
     except Exception as e:
         print(f"❌ Failed to import edit_or_create_text_attribute: {e}")
     
-    try:
-        from tools.attributes_tools.tools_text_attribute import get_text_attribute
-        test_tool("get_text_attribute", get_text_attribute, {
-            'application_system_name': 'systemSolution',
-            'template_system_name': 'Contact',
-            'system_name': 'testfield'
-        })
-    except Exception as e:
-        print(f"❌ Failed to import get_text_attribute: {e}")
-    
     print("\n🎉 Tool testing completed!")
 
 if __name__ == "__main__":

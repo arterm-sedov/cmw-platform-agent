@@ -21,7 +21,7 @@ def debug_tool_loading():
         print(f"📁 Module path: {tools_module.__file__}")
         
         # Check a few CMW platform tools
-        cmw_tools = ['list_applications', 'list_templates', 'edit_or_create_text_attribute', 'get_text_attribute']
+        cmw_tools = ['list_applications', 'list_templates', 'edit_or_create_text_attribute']
         
         for tool_name in cmw_tools:
             if hasattr(tools_module, tool_name):
