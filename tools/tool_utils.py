@@ -161,7 +161,7 @@ def process_attribute_response(
     if isinstance(attribute_data, dict) and "variants" in attribute_data:
         processed_variants = []
         for variant in attribute_data["variants"]:
-            if not isintance(variant, dict):
+            if not isinstance(variant, dict):
                 continue # пропускаем, если не словарь
 
             # Извлекаем alias.alias
@@ -193,7 +193,7 @@ def process_attribute_response(
     # Переименовываем ключи согласно response_mapping
     if isinstance(attribute_data, dict):
         renamed_data = {}
-        for key, value in attribute_data.items()
+        for key, value in attribute_data.items():
             # Если ключ есть в маппинге - используем новое имя, иначе оставляем как есть
             new_key = response_mapping.get(key, key)
             renamed_data[new_key] = value
