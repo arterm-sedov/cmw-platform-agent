@@ -136,13 +136,13 @@ RUSSIAN_TRANSLATIONS = {
     "quick_code_message": "Напиши функцию на Python проверяющую, является ли число простым. Напиши и запусти тесты.",
     "quick_explain_message": "Объясни концепцию машинного обучения простыми словами.",
     "quick_create_attr_message": (
-        "Составь план для создания текстового атрибута 'ID клиента' в приложении 'ERP', шаблон 'Контрагенты' "
+        "Составь план для создания текстового атрибута \"ID клиента\" в приложении \"ERP\", шаблон \"Контрагенты\" "
         "с display_format=CustomMask и маской ([0-9]{{10}}|[0-9]{{12}}), system_name=CustomerID. "
         "Представь: Намерение, План, Проверку и предварительный просмотр (DRY-RUN) аргументов (компактный JSON) для вызова инструмента, "
         "Но не выполняй никаких изменений пока. Жди моего подтверждения."
     ),
     "quick_edit_mask_message": (
-        "Подготовь безопасный план редактирования атрибута 'Контактный телефон' (system_name=ContactPhone) в приложении 'CRM', шаблон 'Лиды'. "
+        "Подготовь безопасный план редактирования атрибута \"Контактный телефон\" (system_name=ContactPhone) в приложении \"CRM\", шаблон \"Лиды\". "
         "Измени display_format на PhoneRuMask. Представь: Намерение, План, Контрольный список проверки (заметки о рисках) и предварительный просмотр запроса (DRY-RUN). "
         "Не выполняй изменения, ожидай моего одобрения."
     ),
@@ -150,7 +150,35 @@ RUSSIAN_TRANSLATIONS = {
         "Покажи список всех приложений в Comindware Platform. "
         "Отформатируй красиво в Markdown. "
         "Покажи системные имена, описания, ссылки, если есть."
-    )
+    ),
+    
+    # Query example buttons (converted from try_asking_examples)
+    "quick_edit_enum": "📝 Редактировать enum",
+    "quick_edit_enum_message": "Получи enum атрибут \"Статус\" из приложения \"CRM\", шаблон \"Лиды\", затем добавь к нему новое значение \"В работе\" (system_name: in_progress, color: #FF9800) и обнови атрибут",
+    
+    "query_templates_erp": "📄 Шаблоны ERP",
+    "query_templates_erp_message": "Покажи все шаблоны записей в приложении \"ERP\". Отформатируй красиво используя Markdown.",
+    
+    "query_attributes_contractors": "🏷️ Атрибуты контрагентов",
+    "query_attributes_contractors_message": "Выдай список всех атрибутов шаблона \"Контрагенты\", приложение \"ERP\"",
+    
+    "query_create_comment_attr": "💬 Создать атрибут комментария",
+    "query_create_comment_attr_message": "Создать текстовый атрибут \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
+    
+    "query_create_id_attr": "🆔 Создать ID атрибут",
+    "query_create_id_attr_message": "Создай текстовый атрибут \"ID клиента\", приложение \"ERP\", шаблон \"Контрагенты\", особая маска ввода: ([0-9]{10}|[0-9]{12})",
+    
+    "query_edit_phone_mask": "📞 Редактировать маску телефона",
+    "query_edit_phone_mask_message": "Для атрибута \"Контактный телефон\" в приложении \"CRM\", шаблон \"Лиды\", смени формат отображения на российский телефон",
+    
+    "query_get_comment_attr": "🔍 Получить атрибут комментария",
+    "query_get_comment_attr_message": "Получи атрибут: системное имя \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
+    
+    "query_enum_add_value": "📝 Добавить значение в enum",
+    "query_enum_add_value_message": "Получи enum атрибут \"Статус\" из приложения \"CRM\", шаблон \"Лиды\", затем добавь к нему новое значение \"В работе\" (system_name: in_progress, color: #FF9800) и обнови атрибут",
+    
+    "query_archive_attr": "📊 Анализ производительности",
+    "query_archive_attr_message": "Проведи анализ производительности приложения \"CRM\" за последний месяц. Покажи статистику по количеству созданных лидов, конвертации в сделки, среднее время обработки заявок и топ-5 самых активных пользователей с их результатами"
 }
 
 # English translations (fallback)
@@ -177,13 +205,13 @@ ENGLISH_TRANSLATIONS = {
     "try_asking_title": "❓ Try asking",
     "try_asking_examples": """
     - List all applications in the platform. Format nicely using Markdown
-    - List all record templates in app 'ERP'. Format as a list
-    - List all attributes in template 'Counterparties', app 'ERP'
-    - Create plain text attribute 'Comment', app 'HR', template 'Candidates'
-    - Create 'Customer ID' text attribute, app 'ERP', template 'Counterparties', custom input mask ([0-9]{10}|[0-9]{12})
-    - For attribute 'Contact Phone' in app 'CRM', template 'Leads', change display format to Russian phone
-    - Fetch attribute: system name 'Comment', app 'HR', template 'Candidates'
-    - Archive/unarchive attribute, system name 'Comment', app 'HR', template 'Candidates'
+    - List all record templates in app \"ERP\". Format as a list
+    - List all attributes in template \"Counterparties\", app \"ERP\"
+    - Create plain text attribute \"Comment\", app \"HR\", template \"Candidates\"
+    - Create \"Customer ID\" text attribute, app \"ERP\", template \"Counterparties\", custom input mask ([0-9]{10}|[0-9]{12})
+    - For attribute \"Contact Phone\" in app \"CRM\", template \"Leads\", change display format to Russian phone
+    - Fetch attribute: system name \"Comment\", app \"HR\", template \"Candidates\"
+    - Archive/unarchive attribute, system name \"Comment\", app \"HR\", template \"Candidates\"
     """,
     
     # Quick actions
@@ -277,13 +305,13 @@ ENGLISH_TRANSLATIONS = {
     "quick_code_message": "Write a Python function to check if a number is prime. Include tests.",
     "quick_explain_message": "Explain the concept of machine learning in simple terms.",
     "quick_create_attr_message": (
-        "Draft a plan to CREATE a text attribute 'Customer ID' in application 'ERP', template 'Counterparties' "
+        "Draft a plan to CREATE a text attribute \"Customer ID\" in application \"ERP\", template \"Counterparties\" "
         "with display_format=CustomMask and mask ([0-9]{{10}}|[0-9]{{12}}), system_name=CustomerID. "
         "Provide Intent, Plan, Validate, and a DRY-RUN payload preview (compact JSON) for the tool call, "
         "but DO NOT execute any changes yet. Wait for my confirmation."
     ),
     "quick_edit_mask_message": (
-        "Prepare a safe EDIT plan for attribute 'Contact Phone' (system_name=ContactPhone) in application 'CRM', template 'Leads' "
+        "Prepare a safe EDIT plan for attribute \"Contact Phone\" (system_name=ContactPhone) in application \"CRM\", template \"Leads\" "
         "to change display_format to PhoneRuMask. Provide Intent, Plan, Validate checklist (risk notes), and a DRY-RUN payload preview. "
         "Do NOT execute changes yet—await my approval."
     ),
@@ -291,7 +319,35 @@ ENGLISH_TRANSLATIONS = {
         "List all applications in the platform. "
         "Format nicely using Markdown. "
         "Show system names and descriptions if any."
-    )
+    ),
+    
+    # Query example buttons (converted from try_asking_examples)
+    "quick_edit_enum": "📝 Edit Enum",
+    "quick_edit_enum_message": "Get the enum attribute \"Status\" from application \"CRM\", template \"Leads\", then add a new value \"In Progress\" (system_name: in_progress, color: #FF9800) and update the attribute",
+    
+    "query_templates_erp": "📄 ERP Templates",
+    "query_templates_erp_message": "Show all record templates in the \"ERP\" application. Format nicely using Markdown.",
+    
+    "query_attributes_contractors": "🏷️ Contractor Attributes",
+    "query_attributes_contractors_message": "Get a list of all attributes of the \"Counterparties\" template, application \"ERP\"",
+    
+    "query_create_comment_attr": "💬 Create Comment Attribute",
+    "query_create_comment_attr_message": "Create a text attribute \"Comment\", application \"HR\", template \"Candidates\"",
+    
+    "query_create_id_attr": "🆔 Create ID Attribute",
+    "query_create_id_attr_message": "Create a text attribute \"Customer ID\", application \"ERP\", template \"Counterparties\", special input mask: ([0-9]{10}|[0-9]{12})",
+    
+    "query_edit_phone_mask": "📞 Edit Phone Mask",
+    "query_edit_phone_mask_message": "For the \"Contact Phone\" attribute in application \"CRM\", template \"Leads\", change the display format to Russian phone",
+    
+    "query_get_comment_attr": "🔍 Get Comment Attribute",
+    "query_get_comment_attr_message": "Get attribute: system name \"Comment\", application \"HR\", template \"Candidates\"",
+    
+    "query_enum_add_value": "📝 Add Enum Value",
+    "query_enum_add_value_message": "Get the enum attribute \"Status\" from application \"CRM\", template \"Leads\", then add a new value \"In Progress\" (system_name: in_progress, color: #FF9800) and update the attribute",
+    
+    "query_archive_attr": "📊 Performance Analysis",
+    "query_archive_attr_message": "Conduct a performance analysis of the \"CRM\" application for the last month. Show statistics on the number of leads created, conversion to deals, average processing time for requests, and top 5 most active users with their results"
 }
 
 def create_i18n_instance(language: str = "en") -> gr.I18n:
