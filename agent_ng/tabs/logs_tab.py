@@ -4,17 +4,20 @@ Logs Tab Module for App NG
 
 Handles logs monitoring, display, and management functionality.
 This module encapsulates all logs-related UI components and functionality.
+Supports internationalization (i18n) with Russian and English translations.
 """
 
 import gradio as gr
-from typing import Dict, Any, Callable, Tuple
+from typing import Dict, Any, Callable, Tuple, Optional
 
 class LogsTab:
     """Logs tab component for monitoring and display"""
     
-    def __init__(self, event_handlers: Dict[str, Callable]):
+    def __init__(self, event_handlers: Dict[str, Callable], language: str = "en", i18n_instance: Optional[gr.I18n] = None):
         self.event_handlers = event_handlers
         self.components = {}
+        self.language = language
+        self.i18n = i18n_instance
     
     def create_tab(self) -> Tuple[gr.TabItem, Dict[str, Any]]:
         """
@@ -25,7 +28,7 @@ class LogsTab:
         """
         print("✅ LogsTab: Creating logs interface...")
         
-        with gr.TabItem("📜 Logs", id="logs") as tab:
+        with gr.TabItem(self._get_translation("tab_logs"), id="logs") as tab:
             # Create logs interface
             self._create_logs_interface()
             
@@ -37,16 +40,16 @@ class LogsTab:
     
     def _create_logs_interface(self):
         """Create the logs monitoring interface"""
-        gr.Markdown("### Initialization Logs")
+        gr.Markdown(f"### {self._get_translation('logs_title')}")
         
         self.components["logs_display"] = gr.Markdown(
-            "🟡 Starting initialization...",
+            self._get_translation("logs_initializing"),
             elem_classes=["status-card"]
         )
         
         with gr.Row():
-            self.components["refresh_logs_btn"] = gr.Button("🔄 Refresh Logs", elem_classes=["cmw-button"])
-            self.components["clear_logs_btn"] = gr.Button("🗑️ Clear Logs", elem_classes=["cmw-button"])
+            self.components["refresh_logs_btn"] = gr.Button(self._get_translation("refresh_logs_button"), elem_classes=["cmw-button"])
+            self.components["clear_logs_btn"] = gr.Button(self._get_translation("clear_logs_button"), elem_classes=["cmw-button"])
     
     def _connect_events(self):
         """Connect all event handlers for the logs tab"""
@@ -92,9 +95,15 @@ class LogsTab:
         """Clear logs and return confirmation"""
         if hasattr(self, '_main_app') and self._main_app:
             self._main_app.log_handler.clear_logs()
-            return "Logs cleared."
-        return "Cannot clear logs - main app not connected"
+            return self._get_translation("logs_cleared")
+        return self._get_translation("logs_not_available")
     
     def set_main_app(self, main_app):
         """Set reference to main app for accessing logs functionality"""
         self._main_app = main_app
+    
+    def _get_translation(self, key: str) -> str:
+        """Get a translation for a specific key"""
+        # Always use direct translation for now to avoid i18n metadata issues
+        from ..i18n_translations import get_translation_key
+        return get_translation_key(key, self.language)

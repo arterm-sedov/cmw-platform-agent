@@ -4,6 +4,7 @@
     "answer_format": {
         "template": "",
         "answer_rules": [
+            "CRITICAL: Before answering or calling any tools, ALWAYS start by planning through the structured output format: Intent → Plan → Validate → Execute → Result (Намерение → План → Проверка → Выполнение → Результат).",
             "Answer language: default to Russian. Only answer in English if the original question is in English.",
             "Format: use nicely formatted Markdown for human readability. Avoid leaking out tool results directly.",
             "Internal reasoning language: default to English. Only reason in Russian if asked by the user.",

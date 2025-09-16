@@ -4,18 +4,21 @@ UI Manager for App NG
 
 Handles Gradio interface creation, styling, and component management.
 This module orchestrates the UI creation process while maintaining all existing functionality.
+Supports internationalization (i18n) with Russian and English translations.
 """
 
 import gradio as gr
 from pathlib import Path
-from typing import Dict, Any, Callable, List, Tuple
+from typing import Dict, Any, Callable, List, Tuple, Optional
 import os
 
 class UIManager:
-    """Manages Gradio UI creation and configuration"""
+    """Manages Gradio UI creation and configuration with i18n support"""
     
-    def __init__(self):
+    def __init__(self, language: str = "en", i18n_instance: Optional[gr.I18n] = None):
         self.css_file_path = Path(__file__).parent.parent / "resources" / "css" / "cmw_copilot_theme.css"
+        self.language = language
+        self.i18n = i18n_instance
         self._setup_gradio_paths()
         self.components = {}
     
@@ -34,7 +37,7 @@ class UIManager:
     
     def create_interface(self, tab_modules: List[Any], event_handlers: Dict[str, Callable]) -> gr.Blocks:
         """
-        Create the main Gradio interface using tab modules.
+        Create the main Gradio interface using tab modules with i18n support.
         
         Args:
             tab_modules: List of tab module instances
@@ -48,14 +51,20 @@ class UIManager:
         # Clear components to ensure clean state
         self.components.clear()
         
+        # Get translated title
+        app_title = self._get_translation("app_title")
+        hero_title = self._get_translation("hero_title")
+        
         with gr.Blocks(
             css_paths=[self.css_file_path],
-            title="Comindware Analyst Copilot",
+            title=app_title,
             theme=gr.themes.Soft()
         ) as demo:
             
             # Header
-            gr.Markdown("# Analyst Copilot", elem_classes=["hero-title"])
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown(f"# {hero_title}", elem_classes=["hero-title"])
             
             with gr.Tabs():
                 # Create tabs using provided tab modules
@@ -80,17 +89,10 @@ class UIManager:
         refresh_logs_handler = event_handlers.get("refresh_logs")
         update_progress_handler = event_handlers.get("update_progress_display")
         
-        # Working hybrid approach - minimal timers that actually work
-        # Load initial UI state once on startup
+        
+        # Load initial UI state once on startup - no timers to avoid queue issues
         if "status_display" in self.components and update_status_handler:
             demo.load(
-                fn=update_status_handler,
-                outputs=[self.components["status_display"]]
-            )
-            
-            # Add minimal timer for status updates during initialization
-            status_timer = gr.Timer(2.0, active=True)
-            status_timer.tick(
                 fn=update_status_handler,
                 outputs=[self.components["status_display"]]
             )
@@ -100,24 +102,9 @@ class UIManager:
                 fn=refresh_logs_handler,
                 outputs=[self.components["logs_display"]]
             )
-            
-            # Add minimal timer for logs updates
-            logs_timer = gr.Timer(4.0, active=True)
-            logs_timer.tick(
-                fn=refresh_logs_handler,
-                outputs=[self.components["logs_display"]]
-            )
         
-        # Setup progress display auto-refresh
         if "progress_display" in self.components and update_progress_handler:
             demo.load(
-                fn=update_progress_handler,
-                outputs=[self.components["progress_display"]]
-            )
-            
-            # Add timer for progress updates during processing with faster rotation
-            progress_timer = gr.Timer(0.5, active=True)  # Faster rotation for better visual feedback
-            progress_timer.tick(
                 fn=update_progress_handler,
                 outputs=[self.components["progress_display"]]
             )
@@ -125,13 +112,6 @@ class UIManager:
         refresh_stats_handler = event_handlers.get("refresh_stats")
         if "stats_display" in self.components and refresh_stats_handler:
             demo.load(
-                fn=refresh_stats_handler,
-                outputs=[self.components["stats_display"]]
-            )
-            
-            # Add minimal timer for stats updates
-            stats_timer = gr.Timer(3.0, active=True)
-            stats_timer.tick(
                 fn=refresh_stats_handler,
                 outputs=[self.components["stats_display"]]
             )
@@ -149,13 +129,35 @@ class UIManager:
         for key, component in self.components.items():
             if hasattr(component, 'set_agent'):
                 component.set_agent(agent)
+    
+    def _get_translation(self, key: str) -> str:
+        """Get a translation for a specific key"""
+        # Always use direct translation to avoid i18n metadata issues
+        from .i18n_translations import get_translation_key
+        return get_translation_key(key, self.language)
 
-# Global instance
-_ui_manager = None
+# Global instances for different languages
+_ui_manager_en = None
+_ui_manager_ru = None
 
-def get_ui_manager() -> UIManager:
-    """Get the global UI manager instance"""
-    global _ui_manager
-    if _ui_manager is None:
-        _ui_manager = UIManager()
-    return _ui_manager
+def get_ui_manager(language: str = "en", i18n_instance: Optional[gr.I18n] = None) -> UIManager:
+    """
+    Get the global UI manager instance for the specified language.
+    
+    Args:
+        language: Language code ('en' or 'ru')
+        i18n_instance: Optional Gradio I18n instance
+        
+    Returns:
+        UIManager instance
+    """
+    global _ui_manager_en, _ui_manager_ru
+    
+    if language.lower() == "ru":
+        if _ui_manager_ru is None:
+            _ui_manager_ru = UIManager(language="ru", i18n_instance=i18n_instance)
+        return _ui_manager_ru
+    else:
+        if _ui_manager_en is None:
+            _ui_manager_en = UIManager(language="en", i18n_instance=i18n_instance)
+        return _ui_manager_en

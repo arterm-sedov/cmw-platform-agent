@@ -4,19 +4,22 @@ Chat Tab Module for App NG
 
 Handles the main chat interface, quick actions, and user interactions.
 This module encapsulates all chat-related UI components and functionality.
+Supports internationalization (i18n) with Russian and English translations.
 """
 
 import gradio as gr
-from typing import Dict, Any, Callable, List, Tuple
+from typing import Dict, Any, Callable, List, Tuple, Optional
 import asyncio
 
 class ChatTab:
     """Chat tab component with interface and quick actions"""
     
-    def __init__(self, event_handlers: Dict[str, Callable]):
+    def __init__(self, event_handlers: Dict[str, Callable], language: str = "en", i18n_instance: Optional[gr.I18n] = None):
         self.event_handlers = event_handlers
         self.components = {}
         self.main_app = None  # Reference to main app for progress status
+        self.language = language
+        self.i18n = i18n_instance
     
     def create_tab(self) -> Tuple[gr.TabItem, Dict[str, Any]]:
         """
@@ -27,7 +30,7 @@ class ChatTab:
         """
         print("✅ ChatTab: Creating chat interface...")
         
-        with gr.TabItem("💬 Chat", id="chat") as tab:
+        with gr.TabItem(self._get_translation("tab_chat"), id="chat") as tab:
             # Create main chat interface (includes sidebar)
             self._create_chat_interface()
             
@@ -41,44 +44,29 @@ class ChatTab:
         """Create the main chat interface with proper layout"""
         with gr.Row():
             with gr.Column(elem_classes=["chat-hints"]):
-                gr.Markdown("""
-                ## 💬 Welcome!
-                                                      
-                The Comindware Analyst Copilot focuses on the **Comindware Platform** entity operations (applications, templates, attributes) and uses deterministic tools to execute precise changes.
+                self.components["welcome_title"] = gr.Markdown(f"""## {self._get_translation("welcome_title")}
 
-                - **Platform Operations First**: Validates your intent and executes tools for entity changes (e.g., create/edit attributes)
-                - **Multi-Model Orchestration**: Tries multiple LLM providers with intelligent fallback
-                - **Compact Structured Output**: Intent → Plan → Validate → Execute → Result
-                """) 
+{self._get_translation("welcome_description")}""") 
             with gr.Column(elem_classes=["chat-hints"]):
-                gr.Markdown("""
-                ## ❓ Try asking:
-                
-                - List all applications in the Platform
-                - List all record templates in app 'ERP'
-                - List all attributes in template 'Counterparties', app 'ERP'
-                - Create plain text attribute 'Comment', app 'HR', template 'Candidates'
-                - Create 'Customer ID' text attribute, app 'ERP', template 'Counterparties', custom input mask: ([0-9]{10}|[0-9]{12})
-                - For attribute 'Contact Phone' in app 'CRM', template 'Leads', change display format to Russian phone
-                - Fetch attribute: system name 'Comment', app 'HR', template 'Candidates'
-                - Archive/unarchive attribute, system name 'Comment', app 'HR', template 'Candidates'
-                """)
+                self.components["try_asking_title"] = gr.Markdown(f"""## {self._get_translation("try_asking_title")}
+
+{self._get_translation("try_asking_examples")}""")
             # Quick actions section
             with gr.Column(elem_classes=["quick-actions-card"]):
-                gr.Markdown("### ⚡ Quick Actions")
+                gr.Markdown(f"### {self._get_translation('quick_actions_title')}")
                 with gr.Column():
-                    self.components["quick_list_apps_btn"] = gr.Button("🔎 List all apps", elem_classes=["cmw-button"])
-                    self.components["quick_create_attr_btn"] = gr.Button("🧩 Create text attribute", elem_classes=["cmw-button"]) 
-                    self.components["quick_edit_mask_btn"] = gr.Button("🛠️ Edit phone mask", elem_classes=["cmw-button"]) 
-                    self.components["quick_math_btn"] = gr.Button("🧮 15 * 23 + 7 = ?", elem_classes=["cmw-button"]) 
-                    self.components["quick_code_btn"] = gr.Button("💻 Python prime check function", elem_classes=["cmw-button"]) 
-                    self.components["quick_explain_btn"] = gr.Button("💭 Explain ML briefly", elem_classes=["cmw-button"])
+                    self.components["quick_list_apps_btn"] = gr.Button(self._get_translation("quick_list_apps"), elem_classes=["cmw-button"])
+                    self.components["quick_create_attr_btn"] = gr.Button(self._get_translation("quick_create_attr"), elem_classes=["cmw-button"]) 
+                    self.components["quick_edit_mask_btn"] = gr.Button(self._get_translation("quick_edit_mask"), elem_classes=["cmw-button"]) 
+                    self.components["quick_math_btn"] = gr.Button(self._get_translation("quick_math"), elem_classes=["cmw-button"]) 
+                    self.components["quick_code_btn"] = gr.Button(self._get_translation("quick_code"), elem_classes=["cmw-button"]) 
+                    self.components["quick_explain_btn"] = gr.Button(self._get_translation("quick_explain"), elem_classes=["cmw-button"])
             
         with gr.Row():
             with gr.Column(scale=3):
                 # Chat interface with metadata support for thinking transparency
                 self.components["chatbot"] = gr.Chatbot(
-                    label="Chat with the Agent",
+                    label=self._get_translation("chat_label"),
                     height=500,
                     show_label=True,
                     container=True,
@@ -90,8 +78,8 @@ class ChatTab:
                 
                 with gr.Row():
                     self.components["msg"] = gr.Textbox(
-                        label="Your Message",
-                        placeholder="Type your message here...",
+                        label=self._get_translation("message_label"),
+                        placeholder=self._get_translation("message_placeholder"),
                         lines=2,
                         scale=4,
                         max_lines=4,
@@ -99,20 +87,20 @@ class ChatTab:
                         elem_classes=["message-card"]
                     )
                     with gr.Column():
-                        self.components["send_btn"] = gr.Button("Send", variant="primary", scale=1, elem_classes=["cmw-button"])
-                        self.components["clear_btn"] = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
+                        self.components["send_btn"] = gr.Button(self._get_translation("send_button"), variant="primary", scale=1, elem_classes=["cmw-button"])
+                        self.components["clear_btn"] = gr.Button(self._get_translation("clear_button"), variant="secondary", elem_classes=["cmw-button"])
             
             # Status and Quick Actions sidebar (moved here to be on the right)
             with gr.Column(scale=1):
                 # Status section
                 with gr.Column(elem_classes=["model-card"]):
-                    gr.Markdown("### 🤖 Status")
-                    self.components["status_display"] = gr.Markdown("🟡 Initializing...")
+                    gr.Markdown(f"### {self._get_translation('status_title')}")
+                    self.components["status_display"] = gr.Markdown(self._get_translation("status_initializing"))
                     
                     # Progress indicator
-                    gr.Markdown("### 📊 Progress")
+                    gr.Markdown(f"### {self._get_translation('progress_title')}")
                     self.components["progress_display"] = gr.Markdown(
-                        "Ready to process your request...", 
+                        self._get_translation("progress_ready"), 
                         elem_classes=["progress-status"]
                     )
     
@@ -208,40 +196,33 @@ class ChatTab:
         """Get the progress display component"""
         return self.components["progress_display"]
     
+    def _get_translation(self, key: str) -> str:
+        """Get a translation for a specific key"""
+        # Always use direct translation for now to avoid i18n metadata issues
+        from ..i18n_translations import get_translation_key
+        return get_translation_key(key, self.language)
+    
     # Quick action methods
     def _quick_math(self) -> str:
         """Generate math quick action message"""
-        return "What is 15 * 23 + 7? Please show your work step by step."
+        return self._get_translation("quick_math_message")
     
     def _quick_code(self) -> str:
         """Generate code quick action message"""
-        return "Write a Python function to check if a number is prime. Include tests."
+        return self._get_translation("quick_code_message")
     
     def _quick_explain(self) -> str:
         """Generate explain quick action message"""
-        return "Explain the concept of machine learning in simple terms."
+        return self._get_translation("quick_explain_message")
     
     def _quick_create_attr(self) -> str:
         """Generate create attribute quick action message"""
-        return (
-            "Draft a plan to CREATE a text attribute 'Customer ID' in application 'ERP', template 'Counterparties' "
-            "with display_format=CustomMask and mask ([0-9]{{10}}|[0-9]{{12}}), system_name=CustomerID. "
-            "Provide Intent, Plan, Validate, and a DRY-RUN payload preview (compact JSON) for the tool call, "
-            "but DO NOT execute any changes yet. Wait for my confirmation."
-        )
+        return self._get_translation("quick_create_attr_message")
     
     def _quick_edit_mask(self) -> str:
         """Generate edit mask quick action message"""
-        return (
-            "Prepare a safe EDIT plan for attribute 'Contact Phone' (system_name=ContactPhone) in application 'CRM', template 'Leads' "
-            "to change display_format to PhoneRuMask. Provide Intent, Plan, Validate checklist (risk notes), and a DRY-RUN payload preview. "
-            "Do NOT execute changes yet—await my approval."
-        )
+        return self._get_translation("quick_edit_mask_message")
     
     def _quick_list_apps(self) -> str:
         """Generate list apps quick action message"""
-        return (
-            "List all applications in the Platform. "
-            "Format nicely using Markdown. "
-            "Show system names and descriptions if any."
-        )
+        return self._get_translation("quick_list_apps_message")
