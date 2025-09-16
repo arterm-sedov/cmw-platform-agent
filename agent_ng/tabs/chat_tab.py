@@ -104,14 +104,13 @@ class ChatTab:
             with gr.Column(scale=1):
                 # Status section
                 with gr.Column(elem_classes=["model-card"]):
-                    gr.Markdown(f"### {self._get_translation('status_title')}")
+                    gr.Markdown(f"### {self._get_translation('status_title')}", elem_classes=["status-title"])
                     self.components["status_display"] = gr.Markdown(self._get_translation("status_initializing"))
                     
                     # Progress indicator
-                    gr.Markdown(f"### {self._get_translation('progress_title')}")
+                    gr.Markdown(f"### {self._get_translation('progress_title')}", elem_classes=["progress-title"])
                     self.components["progress_display"] = gr.Markdown(
-                        self._get_translation("progress_ready"), 
-                        elem_classes=["progress-status"]
+                        self._get_translation("progress_ready")
                     )
     
     def _create_sidebar(self):
