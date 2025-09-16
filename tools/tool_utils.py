@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional, Literal, Type
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from . import requests_ as requests_
-from tools.models import (
+from .models import (
     AttributeResult, 
     CommonAttributeFields, 
     CommonGetAttributeFields,
