@@ -143,6 +143,9 @@ class ChatTab:
             outputs=[self.components["chatbot"], self.components["msg"]]
         )
         
+        # Trigger UI updates after chat events
+        self._setup_chat_event_triggers()
+        
         # Quick action events (using local methods)
         self.components["quick_math_btn"].click(
             fn=self._quick_math,
@@ -175,6 +178,32 @@ class ChatTab:
         )
         
         print("✅ ChatTab: All event handlers connected successfully")
+    
+    def _setup_chat_event_triggers(self):
+        """Setup event triggers to update other UI components when chat events occur"""
+        # Get UI update handlers
+        trigger_ui_update = self.event_handlers.get("trigger_ui_update")
+        
+        if trigger_ui_update:
+            # Trigger UI update after send button click
+            self.components["send_btn"].click(
+                fn=trigger_ui_update,
+                outputs=[]  # No specific outputs, just triggers the update
+            )
+            
+            # Trigger UI update after message submit
+            self.components["msg"].submit(
+                fn=trigger_ui_update,
+                outputs=[]
+            )
+            
+            # Trigger UI update after clear button click
+            self.components["clear_btn"].click(
+                fn=trigger_ui_update,
+                outputs=[]
+            )
+            
+            print("✅ ChatTab: UI update triggers connected")
     
     def get_components(self) -> Dict[str, Any]:
         """Get all components created by this tab"""

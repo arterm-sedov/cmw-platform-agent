@@ -11,6 +11,15 @@ import gradio as gr
 from pathlib import Path
 from typing import Dict, Any, Callable, List, Tuple, Optional
 import os
+# Import configuration with fallback for direct execution
+try:
+    from agent_ng.agent_config import get_refresh_intervals
+except ImportError:
+    # Fallback for direct execution
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).parent))
+    from agent_config import get_refresh_intervals
 
 class UIManager:
     """Manages Gradio UI creation and configuration with i18n support"""
@@ -90,7 +99,7 @@ class UIManager:
         update_progress_handler = event_handlers.get("update_progress_display")
         
         
-        # Load initial UI state once on startup - no timers to avoid queue issues
+        # Load initial UI state once on startup
         if "status_display" in self.components and update_status_handler:
             demo.load(
                 fn=update_status_handler,
@@ -115,7 +124,55 @@ class UIManager:
                 fn=refresh_stats_handler,
                 outputs=[self.components["stats_display"]]
             )
+        
+        # Setup auto-refresh timers for real-time updates
+        self._setup_auto_refresh_timers(demo, event_handlers)
     
+    def _setup_auto_refresh_timers(self, demo: gr.Blocks, event_handlers: Dict[str, Callable]):
+        """Setup auto-refresh timers for real-time updates"""
+        print("🔄 Setting up auto-refresh timers...")
+        
+        # Get refresh intervals from central configuration
+        intervals = get_refresh_intervals()
+        
+        # Status updates
+        if "status_display" in self.components and event_handlers.get("update_status"):
+            status_timer = gr.Timer(intervals.status, active=True)
+            status_timer.tick(
+                fn=event_handlers["update_status"],
+                outputs=[self.components["status_display"]]
+            )
+            print(f"✅ Status auto-refresh timer set ({intervals.status}s)")
+        
+        # Logs updates
+        if "logs_display" in self.components and event_handlers.get("refresh_logs"):
+            logs_timer = gr.Timer(intervals.logs, active=True)
+            logs_timer.tick(
+                fn=event_handlers["refresh_logs"],
+                outputs=[self.components["logs_display"]]
+            )
+            print(f"✅ Logs auto-refresh timer set ({intervals.logs}s)")
+        
+        # Stats updates
+        if "stats_display" in self.components and event_handlers.get("refresh_stats"):
+            stats_timer = gr.Timer(intervals.stats, active=True)
+            stats_timer.tick(
+                fn=event_handlers["refresh_stats"],
+                outputs=[self.components["stats_display"]]
+            )
+            print(f"✅ Stats auto-refresh timer set ({intervals.stats}s)")
+        
+        # Progress updates (for visual feedback)
+        if "progress_display" in self.components and event_handlers.get("update_progress_display"):
+            progress_timer = gr.Timer(intervals.progress, active=True)
+            progress_timer.tick(
+                fn=event_handlers["update_progress_display"],
+                outputs=[self.components["progress_display"]]
+            )
+            print(f"✅ Progress auto-refresh timer set ({intervals.progress}s)")
+        
+        print("🔄 Auto-refresh timers configured successfully")
+
     def get_components(self) -> Dict[str, Any]:
         """Get all components created by the UI manager"""
         return self.components
