@@ -206,11 +206,15 @@ class ConversationTokenTracker:
             )
             print(f"🔍 DEBUG: Using API tokens: {token_count}")
         else:
-            # Fallback to tiktoken estimation - count the full LLM payload
+            # Fallback to tiktoken estimation - count only the current request
             print("🔍 DEBUG: No API tokens, using tiktoken fallback")
-            print(f"🔍 DEBUG: Counting tokens for full LLM payload: {len(messages)} messages")
-            print(f"🔍 DEBUG: This includes system prompt + tool bindings + conversation history + current message")
-            token_count = self.tiktoken_counter.count_tokens(messages)
+            print(f"🔍 DEBUG: Counting tokens for current request only (avoiding duplication)")
+            
+            # Extract only the current request to avoid counting duplicated context
+            current_request = self._extract_current_request(messages)
+            print(f"🔍 DEBUG: Current request has {len(current_request)} messages (vs {len(messages)} total)")
+            
+            token_count = self.tiktoken_counter.count_tokens(current_request)
             # Mark as estimated
             token_count = TokenCount(
                 token_count.input_tokens,
@@ -233,13 +237,23 @@ class ConversationTokenTracker:
         """Extract only the current request from messages (system + current user message)"""
         # Find the last HumanMessage (current user input)
         current_request = []
+        last_user_message = None
+        
+        # Find the last user message
         for message in reversed(messages):
             if isinstance(message, HumanMessage):
-                # Found the current user message, collect system + this message
-                current_request = [msg for msg in messages if isinstance(msg, SystemMessage)]
-                current_request.append(message)
+                last_user_message = message
                 break
-        return current_request if current_request else messages[-1:]  # Fallback to last message
+        
+        if last_user_message:
+            # Collect system messages and the last user message
+            system_messages = [msg for msg in messages if isinstance(msg, SystemMessage)]
+            current_request = system_messages + [last_user_message]
+        else:
+            # Fallback to last message if no user message found
+            current_request = messages[-1:] if messages else []
+        
+        return current_request
     
     def _extract_api_tokens(self, response: Any) -> Optional[Tuple[int, int, int]]:
         """Extract token usage from API response"""
