@@ -83,6 +83,18 @@ def process_attribute_response(
         for key in keys_to_remove:
             attribute_data.pop(key, None)
 
+    # Обрабатываем globalAlias: вытаскиваем owner и alias, удаляем globalAlias и type
+    if "globalAlias" in attribute_data:
+        global_alias = attribute_data.pop("globalAlias", {})
+        if isinstance(global_alias, dict):
+            # Добавляем owner и alias в корень, если они есть
+            if "owner" in global_alias:
+                attribute_data["owner"] = global_alias["owner"]
+            if "alias" in global_alias:
+                attribute_data["alias"] = global_alias["alias"]
+            # type игнорируется и не добавляется
+            
+
     # Формируем финальный результат
     final_result = {
         "success": True,
