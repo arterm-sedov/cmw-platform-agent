@@ -157,6 +157,39 @@ def process_attribute_response(
                 attribute_data["instanceAlias"] = instance_global_alias["alias"]
             # type игнорируется и не добавляется
 
+    # Специальная обработка variants - преобразуем структуру каждого элемента
+    if isinstance(attribute_data, dict) and "variants" in attribute_data:
+        processed_variants = []
+        for variant in attribute_data["variants"]:
+            if not isintance(variant, dict):
+                continue # пропускаем, если не словарь
+
+            # Извлекаем alias.alias
+            alias_value = ""
+            if "alias" in variant and isinstance(variant["alias"], dict):
+                alias_value = variant["alias"].get("alias", "")
+
+            # Извлекаем переводы из name
+            name_data = variant.get("name", {}) if isinstance(variant.get("name"), dict) else {}
+            en_name = name_data.get("en", "")
+            ru_name = name_data.get("ru", "")
+            de_name = name_data.get("de", "")
+
+            # Цвет
+            color = variant.get("color", "")
+
+            # Формуруем новый элемент
+            processed_variants.append({
+                "System name": alias_value,
+                "English name": en_name,
+                "Russian name": ru_name,
+                "Deutsche name": de_name,
+                "Color": color
+            })
+
+            # Заменяем старый variants на обрботанный
+            attribute_data["variants"] = processed_variants
+
     # Переименовываем ключи согласно response_mapping
     if isinstance(attribute_data, dict):
         renamed_data = {}
