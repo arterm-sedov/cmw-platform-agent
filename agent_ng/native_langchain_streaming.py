@@ -43,6 +43,87 @@ class NativeLangChainStreaming:
         self.config = get_streaming_config()
         self.max_iterations = self.config.get_max_tool_call_iterations()
     
+    def _get_processing_complete_message(self, language: str = "en") -> str:
+        """Get the localized processing complete message"""
+        from .i18n_translations import get_translation_key
+        return get_translation_key("processing_complete", language)
+    
+    def _get_response_completed_message(self, language: str = "en") -> str:
+        """Get the localized response completed message"""
+        from .i18n_translations import get_translation_key
+        return get_translation_key("response_completed", language)
+    
+    def _get_processing_failed_message(self, language: str = "en") -> str:
+        """Get the localized processing failed message"""
+        from .i18n_translations import get_translation_key
+        return get_translation_key("processing_failed", language)
+    
+    def _get_iteration_processing_message(self, iteration: int, max_iterations: int, language: str = "en") -> str:
+        """Get the localized iteration processing message"""
+        from .i18n_translations import get_translation_key
+        template = get_translation_key("iteration_processing", language)
+        return template.format(iteration=iteration, max_iterations=max_iterations)
+    
+    def _get_iteration_finished_message(self, iteration: int, max_iterations: int, language: str = "en") -> str:
+        """Get the localized iteration finished message"""
+        from .i18n_translations import get_translation_key
+        template = get_translation_key("iteration_finished", language)
+        return template.format(iteration=iteration, max_iterations=max_iterations)
+    
+    def _get_iteration_completed_message(self, iteration: int, language: str = "en") -> str:
+        """Get the localized iteration completed message"""
+        from .i18n_translations import get_translation_key
+        template = get_translation_key("iteration_completed", language)
+        return template.format(iteration=iteration)
+    
+    def _get_iteration_max_reached_message(self, iteration: int, max_iterations: int, language: str = "en") -> str:
+        """Get the localized iteration max reached message"""
+        from .i18n_translations import get_translation_key
+        template = get_translation_key("iteration_max_reached", language)
+        return template.format(iteration=iteration, max_iterations=max_iterations)
+    
+    def _get_max_iterations_warning_message(self, max_iterations: int, language: str = "en") -> str:
+        """Get the localized max iterations warning message"""
+        from .i18n_translations import get_translation_key
+        template = get_translation_key("max_iterations_warning", language)
+        return template.format(max_iterations=max_iterations)
+    
+    def _get_tool_called_message(self, tool_name: str, language: str = "en") -> str:
+        """Get the localized tool called message"""
+        from .i18n_translations import get_translation_key
+        template = get_translation_key("tool_called", language)
+        return template.format(tool_name=tool_name)
+    
+    def _get_call_count_message(self, total_calls: int, language: str = "en") -> str:
+        """Get the localized call count message"""
+        from .i18n_translations import get_translation_key
+        template = get_translation_key("call_count", language)
+        return template.format(total_calls=total_calls)
+    
+    def _get_result_message(self, tool_result: str, language: str = "en") -> str:
+        """Get the localized result message"""
+        from .i18n_translations import get_translation_key
+        template = get_translation_key("result", language)
+        return template.format(tool_result=tool_result)
+    
+    def _get_tool_error_message(self, error: str, language: str = "en") -> str:
+        """Get the localized tool error message"""
+        from .i18n_translations import get_translation_key
+        template = get_translation_key("tool_error", language)
+        return template.format(error=error)
+    
+    def _get_unknown_tool_message(self, tool_name: str, language: str = "en") -> str:
+        """Get the localized unknown tool message"""
+        from .i18n_translations import get_translation_key
+        template = get_translation_key("unknown_tool", language)
+        return template.format(tool_name=tool_name)
+    
+    def _get_error_message(self, error: str, language: str = "en") -> str:
+        """Get the localized error message"""
+        from .i18n_translations import get_translation_key
+        template = get_translation_key("error", language)
+        return template.format(error=error)
+    
     async def stream_agent_response(
         self,
         agent,
@@ -108,9 +189,12 @@ class NativeLangChainStreaming:
                 icon_index = (iteration - 1) % len(processing_icons)
                 current_icon = processing_icons[icon_index]
                 
+                # Get language from agent if available, otherwise default to English
+                language = getattr(agent, 'language', 'en')
+                
                 yield StreamingEvent(
                     event_type="iteration_progress",
-                    content=f'{current_icon} **Iteration {iteration}/{self.max_iterations}** - Processing...',
+                    content=f'{current_icon} **{self._get_iteration_processing_message(iteration, self.max_iterations, language)}**',
                     metadata={"iteration": iteration, "max_iterations": self.max_iterations, "icon_index": icon_index}
                 )
                 
@@ -202,19 +286,19 @@ class NativeLangChainStreaming:
                                         # Stream tool completion with result in one event
                                         yield StreamingEvent(
                                             event_type="tool_end",
-                                            content=f"\nCall count: {total_calls}\n**Result:** {str(tool_result)}",
+                                            content=f"\n{self._get_call_count_message(total_calls, language)}\n{self._get_result_message(str(tool_result), language)}",
                                             metadata={
                                                 "tool_name": tool_name,
                                                 "tool_output": str(tool_result),
                                                 "duplicate": False,
                                                 "duplicate_count": total_calls,
-                                                "title": f"🔧 Tool called: {tool_name}"
+                                                "title": self._get_tool_called_message(tool_name, language)
                                             }
                                         )
                                     else:
                                         yield StreamingEvent(
                                             event_type="error",
-                                            content=f"❌ **Unknown tool: {tool_name}**",
+                                            content=self._get_unknown_tool_message(tool_name, language),
                                             metadata={"tool_name": tool_name}
                                         )
                                         # Remove from in-progress
@@ -235,7 +319,7 @@ class NativeLangChainStreaming:
                             except Exception as e:
                                 yield StreamingEvent(
                                     event_type="error",
-                                    content=f"❌ **Tool error: {str(e)}**",
+                                    content=self._get_tool_error_message(str(e), language),
                                     metadata={
                                         "tool_name": tool_name,
                                         "error": str(e)
@@ -261,7 +345,7 @@ class NativeLangChainStreaming:
                     
                     yield StreamingEvent(
                         event_type="iteration_progress",
-                        content=f"{finish_icon} **Iteration {iteration}/{self.max_iterations} - Finished**",
+                        content=f"{finish_icon} **{self._get_iteration_finished_message(iteration, self.max_iterations, language)}**",
                         metadata={"iteration": iteration, "max_iterations": self.max_iterations, "conversation_complete": True}
                     )
                     break
@@ -274,7 +358,7 @@ class NativeLangChainStreaming:
                 
                 yield StreamingEvent(
                     event_type="iteration_progress",
-                    content=f"{completion_icon} **Iteration {iteration} completed** - Continuing...",
+                    content=f"{completion_icon} **{self._get_iteration_completed_message(iteration, language)}**",
                     metadata={"iteration": iteration, "completed": True, "completion_icon": completion_icon}
                 )
             
@@ -288,13 +372,13 @@ class NativeLangChainStreaming:
                 
                 yield StreamingEvent(
                     event_type="iteration_progress",
-                    content=f"{max_icon} **Iteration {iteration}/{self.max_iterations} - Finished (Max Reached)**",
+                    content=f"{max_icon} **{self._get_iteration_max_reached_message(iteration, self.max_iterations, language)}**",
                     metadata={"iteration": iteration, "max_iterations": self.max_iterations, "max_reached": True}
                 )
                 
                 yield StreamingEvent(
                     event_type="warning",
-                    content=f"⚠️ **Reached maximum iterations ({self.max_iterations}), conversation may be incomplete**",
+                    content=self._get_max_iterations_warning_message(self.max_iterations, language),
                     metadata={"max_iterations_reached": True}
                 )
             
@@ -337,9 +421,15 @@ class NativeLangChainStreaming:
             print(f"🔍 DEBUG: Added {new_messages_added} new messages to memory")
             
             # Final completion event
+            # Get language from agent if available, otherwise default to English
+            language = getattr(agent, 'language', 'en')
+            
+            completion_icons = ["✅", "🎯", "✨", "🏆"]
+            completion_icon = completion_icons[0]  # Always use first icon for completion
+            
             yield StreamingEvent(
                 event_type="completion",
-                content="✅ **Response completed**",
+                content=f"{completion_icon} **{self._get_response_completed_message(language)}**",
                 metadata={"final_response": True}
             )
             
@@ -347,26 +437,33 @@ class NativeLangChainStreaming:
             final_icons = ["🎉", "✨", "🏆", "🎯"]
             final_icon = final_icons[0]  # Always use first icon for final completion
             
+            # Get language from agent if available, otherwise default to English
+            language = getattr(agent, 'language', 'en')
+            
             yield StreamingEvent(
                 event_type="iteration_progress",
-                content=f"{final_icon} **Processing Complete**",
+                content=f"{final_icon} **{self._get_processing_complete_message(language)}**",
                 metadata={"conversation_complete": True, "final": True}
             )
                 
         except Exception as e:
+            # Get language from agent if available, otherwise default to English
+            language = getattr(agent, 'language', 'en')
+            
             yield StreamingEvent(
                 event_type="error",
-                content=f"❌ **Error: {str(e)}**",
+                content=self._get_error_message(str(e), language),
                 metadata={"error": str(e)}
             )
             
             # Error completion for progress display
+            
             error_icons = ["❌", "💥", "⚠️", "🚫"]
             error_icon = error_icons[0]  # Always use first icon for error
             
             yield StreamingEvent(
                 event_type="iteration_progress",
-                content=f"{error_icon} **Processing Failed**",
+                content=f"{error_icon} **{self._get_processing_failed_message(language)}**",
                 metadata={"error": True, "final": True}
             )
 

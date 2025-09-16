@@ -114,9 +114,9 @@ RUSSIAN_TRANSLATIONS = {
     
     # Statistics labels
     "agent_status_section": "**Статус агента:**",
-    "conversation_section": "**Разговор:**",
+    "conversation_section": "**Диалог:**",
     "tools_section": "**Инструменты:**",
-    "token_usage_section": "**Использование токенов:**",
+    "token_usage_section": "**Расход токенов:**",
     "messages_label": "Сообщения",
     "user_messages_label": "Пользователь",
     "assistant_messages_label": "Ассистент",
@@ -124,7 +124,7 @@ RUSSIAN_TRANSLATIONS = {
     "available_label": "Доступно",
     "used_label": "Использовано",
     "total_persistent_label": "Всего",
-    "current_conversation_label": "Текущий разговор",
+    "current_conversation_label": "Текущий диалог",
     "average_per_message_label": "Среднее на сообщение",
     "tokens_label": "токенов",
     "unique_tools_label": "уникальных инструментов",
@@ -156,29 +156,51 @@ RUSSIAN_TRANSLATIONS = {
     "quick_edit_enum": "📝 Редактировать «Список значений»",
     "quick_edit_enum_message": "Получи атрибут типа enum \"Статус\" из приложения \"CRM\", шаблон \"Лиды\", затем добавь к нему новое значение \"В работе\" (system_name: in_progress, color: #FF9800) и обнови атрибут",
     
-    "query_templates_erp": "📄 Шаблоны ERP",
-    "query_templates_erp_message": "Покажи все шаблоны записей в приложении \"ERP\". Отформатируй красиво используя Markdown.",
+    "quick_templates_erp": "📄 Шаблоны ERP",
+    "quick_templates_erp_message": "Покажи все шаблоны записей в приложении \"ERP\". Отформатируй красиво используя Markdown.",
     
-    "query_attributes_contractors": "🏷️ Атрибуты контрагентов",
-    "query_attributes_contractors_message": "Выдай список всех атрибутов шаблона \"Контрагенты\", приложение \"ERP\"",
+    "quick_attributes_contractors": "🏷️ Атрибуты контрагентов",
+    "quick_attributes_contractors_message": "Выдай список всех атрибутов шаблона \"Контрагенты\", приложение \"ERP\"",
     
-    "query_create_comment_attr": "💬 Создать атрибут комментария",
-    "query_create_comment_attr_message": "Создать текстовый атрибут \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
+    "quick_create_comment_attr": "💬 Создать атрибут комментария",
+    "quick_create_comment_attr_message": "Создать текстовый атрибут \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
     
-    "query_create_id_attr": "🆔 Создать атрибут ID",
-    "query_create_id_attr_message": "Создай текстовый атрибут \"ID клиента\", приложение \"ERP\", шаблон \"Контрагенты\", особая маска ввода: ([0-9]{10}|[0-9]{12})",
+    "quick_create_id_attr": "🆔 Создать атрибут ID",
+    "quick_create_id_attr_message": "Создай текстовый атрибут \"ID клиента\", приложение \"ERP\", шаблон \"Контрагенты\", особая маска ввода: ([0-9]{10}|[0-9]{12})",
     
-    "query_edit_phone_mask": "📞 Редактировать маску телефона",
-    "query_edit_phone_mask_message": "Для атрибута \"Контактный телефон\" в приложении \"CRM\", шаблон \"Лиды\", смени формат отображения на российский телефон",
+    "quick_edit_phone_mask": "📞 Редактировать маску телефона",
+    "quick_edit_phone_mask_message": "Для атрибута \"Контактный телефон\" в приложении \"CRM\", шаблон \"Лиды\", смени формат отображения на российский телефон",
     
-    "query_get_comment_attr": "🔍 Получить атрибут комментария",
-    "query_get_comment_attr_message": "Получи атрибут: системное имя \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
+    "quick_get_comment_attr": "🔍 Получить атрибут комментария",
+    "quick_get_comment_attr_message": "Получи атрибут: системное имя \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
     
     "quick_edit_date_time": "📅 Настроить дату/время",
     "quick_edit_date_time_message": "Создай атрибут даты/времени \"Дата создания заявки\" в приложении \"CRM\", шаблон \"Лиды\" с форматом отображения LongDateLongTime и используй его как заголовок записи для автоматической сортировки по времени",
     
-    "query_archive_attr": "📦 Архивировать атрибут",
-    "query_archive_attr_message": "Архивируй/разархивируй атрибут, системное имя \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\""
+    "quick_archive_attr": "📦 Архивировать атрибут",
+    "quick_archive_attr_message": "Архивируй/разархивируй атрибут, системное имя \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
+    
+    # Status messages
+    "processing_complete": "🎉 Обработка завершена",
+    "response_completed": "Ответ завершен",
+    "processing_failed": "Обработка не удалась",
+    
+    # Iteration messages
+    "iteration_processing": "Итерация {iteration}/{max_iterations} - Обработка...",
+    "iteration_finished": "Итерация {iteration}/{max_iterations} - Завершена",
+    "iteration_completed": "Итерация {iteration} завершена - Продолжение...",
+    "iteration_max_reached": "Итерация {iteration}/{max_iterations} - Завершена (достигнут максимум)",
+    "max_iterations_warning": "⚠️ Достигнут лимит итераций ({max_iterations}), диалог может быть неполным",
+    
+    # Tool messages
+    "tool_called": "🔧 Вызван инструмент: {tool_name}",
+    "call_count": "Количество вызовов: {total_calls}",
+    "result": "**Результат:** {tool_result}",
+    "tool_error": "❌ **Ошибка инструмента: {error}**",
+    "unknown_tool": "❌ **Неизвестный инструмент: {tool_name}**",
+    
+    # Error messages
+    "error": "❌ **Ошибка: {error}**"
 }
 
 # English translations (fallback)
@@ -325,29 +347,51 @@ ENGLISH_TRANSLATIONS = {
     "quick_edit_enum": "📝 Edit Enum",
     "quick_edit_enum_message": "Get the enum attribute \"Status\" from application \"CRM\", template \"Leads\", then add a new value \"In Progress\" (system_name: in_progress, color: #FF9800) and update the attribute",
     
-    "query_templates_erp": "📄 ERP Templates",
-    "query_templates_erp_message": "Show all record templates in the \"ERP\" application. Format nicely using Markdown.",
+    "quick_templates_erp": "📄 ERP Templates",
+    "quick_templates_erp_message": "Show all record templates in the \"ERP\" application. Format nicely using Markdown.",
     
-    "query_attributes_contractors": "🏷️ Contractor Attributes",
-    "query_attributes_contractors_message": "Get a list of all attributes of the \"Counterparties\" template, application \"ERP\"",
+    "quick_attributes_contractors": "🏷️ Contractor Attributes",
+    "quick_attributes_contractors_message": "Get a list of all attributes of the \"Counterparties\" template, application \"ERP\"",
     
-    "query_create_comment_attr": "💬 Create Comment Attribute",
-    "query_create_comment_attr_message": "Create a text attribute \"Comment\", application \"HR\", template \"Candidates\"",
+    "quick_create_comment_attr": "💬 Create Comment Attribute",
+    "quick_create_comment_attr_message": "Create a text attribute \"Comment\", application \"HR\", template \"Candidates\"",
     
-    "query_create_id_attr": "🆔 Create ID Attribute",
-    "query_create_id_attr_message": "Create a text attribute \"Customer ID\", application \"ERP\", template \"Counterparties\", special input mask: ([0-9]{10}|[0-9]{12})",
+    "quick_create_id_attr": "🆔 Create ID Attribute",
+    "quick_create_id_attr_message": "Create a text attribute \"Customer ID\", application \"ERP\", template \"Counterparties\", special input mask: ([0-9]{10}|[0-9]{12})",
     
-    "query_edit_phone_mask": "📞 Edit Phone Mask",
-    "query_edit_phone_mask_message": "For the \"Contact Phone\" attribute in application \"CRM\", template \"Leads\", change the display format to Russian phone",
+    "quick_edit_phone_mask": "📞 Edit Phone Mask",
+    "quick_edit_phone_mask_message": "For the \"Contact Phone\" attribute in application \"CRM\", template \"Leads\", change the display format to Russian phone",
     
-    "query_get_comment_attr": "🔍 Get Comment Attribute",
-    "query_get_comment_attr_message": "Get attribute: system name \"Comment\", application \"HR\", template \"Candidates\"",
+    "quick_get_comment_attr": "🔍 Get Comment Attribute",
+    "quick_get_comment_attr_message": "Get attribute: system name \"Comment\", application \"HR\", template \"Candidates\"",
     
     "quick_edit_date_time": "📅 Configure Date/Time",
     "quick_edit_date_time_message": "Create a date/time attribute \"Lead Creation Date\" in application \"CRM\", template \"Leads\" with LongDateLongTime display format and use it as record title for automatic time-based sorting",
     
-    "query_archive_attr": "📦 Archive Attribute",
-    "query_archive_attr_message": "Archive/unarchive attribute, system name \"Comment\", application \"HR\", template \"Candidates\""
+    "quick_archive_attr": "📦 Archive Attribute",
+    "quick_archive_attr_message": "Archive/unarchive attribute, system name \"Comment\", application \"HR\", template \"Candidates\"",
+    
+    # Status messages
+    "processing_complete": "🎉 Processing complete",
+    "response_completed": "Response completed",
+    "processing_failed": "Processing failed",
+    
+    # Iteration messages
+    "iteration_processing": "Iteration {iteration}/{max_iterations} - Processing...",
+    "iteration_finished": "Iteration {iteration}/{max_iterations} - Finished",
+    "iteration_completed": "Iteration {iteration} completed - Continuing...",
+    "iteration_max_reached": "Iteration {iteration}/{max_iterations} - Finished (Max Reached)",
+    "max_iterations_warning": "⚠️ Reached maximum iterations ({max_iterations}), conversation may be incomplete",
+    
+    # Tool messages
+    "tool_called": "🔧 Tool called: {tool_name}",
+    "call_count": "Call count: {total_calls}",
+    "result": "**Result:** {tool_result}",
+    "tool_error": "❌ **Tool error: {error}**",
+    "unknown_tool": "❌ **Unknown tool: {tool_name}**",
+    
+    # Error messages
+    "error": "❌ **Error: {error}**"
 }
 
 def create_i18n_instance(language: str = "en") -> gr.I18n:
