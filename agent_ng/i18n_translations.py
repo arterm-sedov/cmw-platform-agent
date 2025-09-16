@@ -149,9 +149,7 @@ RUSSIAN_TRANSLATIONS = {
         "Не выполняй изменения, ожидай моего одобрения."
     ),
     "quick_list_apps_message": (
-        "Покажи список всех приложений в Comindware Platform. "
-        "Отформатируй красиво в Markdown. "
-        "Покажи системные имена, описания, ссылки, если есть."
+        "Покажи список всех приложений в Comindware Platform. Отформатируй красиво в Markdown."
     ),
     
     # Query example buttons (converted from try_asking_examples)
@@ -342,9 +340,7 @@ ENGLISH_TRANSLATIONS = {
         "Do NOT execute changes yet—await my approval."
     ),
     "quick_list_apps_message": (
-        "List all applications in the platform. "
-        "Format nicely using Markdown. "
-        "Show system names and descriptions if any."
+        "List all applications in the platform. Format nicely using Markdown."
     ),
     
     # Query example buttons (converted from try_asking_examples)
