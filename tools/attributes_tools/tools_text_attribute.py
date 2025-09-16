@@ -214,7 +214,8 @@ def get_text_attribute(
 
     return process_attribute_response(
         request_result=result,
-        result_model=AttributeResult
+        result_model=AttributeResult,
+        response_mapping=KEYS_TO_REMOVE_MAPPING
     )
 
 if __name__ == "__main__":
