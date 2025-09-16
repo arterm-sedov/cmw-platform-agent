@@ -25,6 +25,39 @@ KEYS_TO_REMOVE_MAPPING = {
     "Boolean": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
     "Account": ['isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio']
 }
+ATTRIBUTE_RESPONE_MAPPING = {
+    "owner": "Template System Name",
+    "alias": "System Name",
+    "type": "Type",
+    "format": "Display format",
+    "name": "Name",
+    "description": "Description",
+    "isSystem": "Is System",
+    "isDisabled": "In Archive",
+    "isUnique": "Control Uniqueness",
+    "isIndexed": "Use to search records",
+    "isTracked": "Write changes to the log",
+    "isDigitGrouping": "Group digits numbers",
+    "isMultiValue": "Store multiple values",
+    "isTitle": "Use as record title",
+    "isCalculated": "Calculate value",
+    "isReadonly": "Is Readonly",
+    "expression": "Expression for calculation",
+    "fileFormat": "File extensions filter",
+    "uriChemeFormats": "Uri chemes filter",
+    "instanceAlias": "Related template system name",
+    "instanceAttributeAlias": "Related attribute system name",
+    "imageColorType": "Rendering color mode",
+    "imageWidth": "Image Width",
+    "imageHeight": "Image Height",
+    "imagePreserveAspectRatio": "Save image aspect ration",
+    "imageXResolution": "X-axis image resolution",
+    "imageYResolution": "Y-axis image resolution",
+    "decimalPlaces": "Number decimal places",
+    "validationMaskRegex": "Custom mask",
+    "variants": "Enum values",
+    "linkedRecordTemplate": "Related template Id"
+}
 
 def remove_nones(obj: Any) -> Any:
     """
@@ -109,6 +142,18 @@ def process_attribute_response(
                 attribute_data["owner"] = global_alias["owner"]
             if "alias" in global_alias:
                 attribute_data["alias"] = global_alias["alias"]
+            # type игнорируется и не добавляется
+
+    # Обрабатываем instanceGlobalAlias: вытаскиваем owner и alias, удаляем instanceGlobalAlias и type
+    if "instanceGlobalAlias" in attribute_data:
+        instance_global_alias = attribute_data.pop("instanceGlobalAlias", {})
+        if isinstance(instance_global_alias, dict):
+            # Добавляем owner и alias в корень, если они есть
+            if "owner" in global_alias:
+                attribute_data["instanceAlias"] = instance_global_alias["owner"]
+                attribute_data["instanceAttributeAlias"] = instance_global_alias["alias"]
+            else:
+                attribute_data["instanceAlias"] = instance_global_alias["alias"]
             # type игнорируется и не добавляется
 
 
