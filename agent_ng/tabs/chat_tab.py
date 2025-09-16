@@ -44,33 +44,33 @@ class ChatTab:
         """Create the main chat interface with proper layout"""
         with gr.Row():
             with gr.Column(elem_classes=["chat-hints"]):
-                self.components["welcome_title"] = gr.Markdown(f"""## {self._get_translation("welcome_title")}
+                gr.Markdown(f"## {self._get_translation("welcome_title")}")
 
-{self._get_translation("welcome_description")}""") 
+                gr.Markdown(self._get_translation("welcome_description")) 
             
-            # Query examples section (converted to quick action buttons)
+            # Prompt examples section (quick action buttons)
             with gr.Column(elem_classes=["quick-actions-card"]):
-                gr.Markdown(f"### {self._get_translation('quick_actions_title')}")
-                with gr.Column():
-                    self.components["quick_list_apps_btn"] = gr.Button(self._get_translation("quick_list_apps"), elem_classes=["cmw-button"])
-                    self.components["query_templates_erp_btn"] = gr.Button(self._get_translation("query_templates_erp"), elem_classes=["cmw-button"])
-                    self.components["query_attributes_contractors_btn"] = gr.Button(self._get_translation("query_attributes_contractors"), elem_classes=["cmw-button"])
-                    self.components["quick_edit_date_time_btn"] = gr.Button(self._get_translation("quick_edit_date_time"), elem_classes=["cmw-button"])
-                    self.components["query_create_comment_attr_btn"] = gr.Button(self._get_translation("query_create_comment_attr"), elem_classes=["cmw-button"])
-                    self.components["query_create_id_attr_btn"] = gr.Button(self._get_translation("query_create_id_attr"), elem_classes=["cmw-button"])
-                    self.components["query_edit_phone_mask_btn"] = gr.Button(self._get_translation("query_edit_phone_mask"), elem_classes=["cmw-button"])
+                gr.Markdown(f"## {self._get_translation('quick_actions_title')}")
+                
+                self.components["quick_list_apps_btn"] = gr.Button(self._get_translation("quick_list_apps"), elem_classes=["cmw-button"])
+                self.components["quick_templates_erp_btn"] = gr.Button(self._get_translation("quick_templates_erp"), elem_classes=["cmw-button"])
+                self.components["quick_attributes_contractors_btn"] = gr.Button(self._get_translation("quick_attributes_contractors"), elem_classes=["cmw-button"])
+                self.components["quick_edit_date_time_btn"] = gr.Button(self._get_translation("quick_edit_date_time"), elem_classes=["cmw-button"])
+                self.components["quick_create_comment_attr_btn"] = gr.Button(self._get_translation("quick_create_comment_attr"), elem_classes=["cmw-button"])
+                self.components["quick_create_id_attr_btn"] = gr.Button(self._get_translation("quick_create_id_attr"), elem_classes=["cmw-button"])
+                self.components["quick_edit_phone_mask_btn"] = gr.Button(self._get_translation("quick_edit_phone_mask"), elem_classes=["cmw-button"])
             
             # Quick actions section
             with gr.Column(elem_classes=["quick-actions-card"]):
-                with gr.Column():
-                    self.components["quick_edit_enum_btn"] = gr.Button(self._get_translation("quick_edit_enum"), elem_classes=["cmw-button"])
-                    self.components["query_get_comment_attr_btn"] = gr.Button(self._get_translation("query_get_comment_attr"), elem_classes=["cmw-button"])
-                    self.components["quick_create_attr_btn"] = gr.Button(self._get_translation("quick_create_attr"), elem_classes=["cmw-button"]) 
-                    self.components["quick_edit_mask_btn"] = gr.Button(self._get_translation("quick_edit_mask"), elem_classes=["cmw-button"]) 
-                    self.components["query_archive_attr_btn"] = gr.Button(self._get_translation("query_archive_attr"), elem_classes=["cmw-button"])
-                    self.components["quick_math_btn"] = gr.Button(self._get_translation("quick_math"), elem_classes=["cmw-button"]) 
-                    self.components["quick_code_btn"] = gr.Button(self._get_translation("quick_code"), elem_classes=["cmw-button"]) 
-                    self.components["quick_explain_btn"] = gr.Button(self._get_translation("quick_explain"), elem_classes=["cmw-button"])
+            
+                self.components["quick_edit_enum_btn"] = gr.Button(self._get_translation("quick_edit_enum"), elem_classes=["cmw-button"])
+                self.components["quick_get_comment_attr_btn"] = gr.Button(self._get_translation("quick_get_comment_attr"), elem_classes=["cmw-button"])
+                self.components["quick_create_attr_btn"] = gr.Button(self._get_translation("quick_create_attr"), elem_classes=["cmw-button"]) 
+                self.components["quick_edit_mask_btn"] = gr.Button(self._get_translation("quick_edit_mask"), elem_classes=["cmw-button"]) 
+                self.components["quick_archive_attr_btn"] = gr.Button(self._get_translation("quick_archive_attr"), elem_classes=["cmw-button"])
+                self.components["quick_math_btn"] = gr.Button(self._get_translation("quick_math"), elem_classes=["cmw-button"]) 
+                self.components["quick_code_btn"] = gr.Button(self._get_translation("quick_code"), elem_classes=["cmw-button"]) 
+                self.components["quick_explain_btn"] = gr.Button(self._get_translation("quick_explain"), elem_classes=["cmw-button"])
             
         with gr.Row():
             with gr.Column(scale=3):
@@ -193,33 +193,33 @@ class ChatTab:
             outputs=[self.components["msg"]]
         )
         
-        self.components["query_templates_erp_btn"].click(
-            fn=self._query_templates_erp,
+        self.components["quick_templates_erp_btn"].click(
+            fn=self._quick_templates_erp,
             outputs=[self.components["msg"]]
         )
         
-        self.components["query_attributes_contractors_btn"].click(
-            fn=self._query_attributes_contractors,
+        self.components["quick_attributes_contractors_btn"].click(
+            fn=self._quick_attributes_contractors,
             outputs=[self.components["msg"]]
         )
         
-        self.components["query_create_comment_attr_btn"].click(
-            fn=self._query_create_comment_attr,
+        self.components["quick_create_comment_attr_btn"].click(
+            fn=self._quick_create_comment_attr,
             outputs=[self.components["msg"]]
         )
         
-        self.components["query_create_id_attr_btn"].click(
-            fn=self._query_create_id_attr,
+        self.components["quick_create_id_attr_btn"].click(
+            fn=self._quick_create_id_attr,
             outputs=[self.components["msg"]]
         )
         
-        self.components["query_edit_phone_mask_btn"].click(
-            fn=self._query_edit_phone_mask,
+        self.components["quick_edit_phone_mask_btn"].click(
+            fn=self._quick_edit_phone_mask,
             outputs=[self.components["msg"]]
         )
         
-        self.components["query_get_comment_attr_btn"].click(
-            fn=self._query_get_comment_attr,
+        self.components["quick_get_comment_attr_btn"].click(
+            fn=self._quick_get_comment_attr,
             outputs=[self.components["msg"]]
         )
         
@@ -228,8 +228,8 @@ class ChatTab:
             outputs=[self.components["msg"]]
         )
         
-        self.components["query_archive_attr_btn"].click(
-            fn=self._query_archive_attr,
+        self.components["quick_archive_attr_btn"].click(
+            fn=self._quick_archive_attr,
             outputs=[self.components["msg"]]
         )
         
@@ -317,34 +317,34 @@ class ChatTab:
         """Generate query list apps message"""
         return self._get_translation("quick_edit_enum_message")
     
-    def _query_templates_erp(self) -> str:
+    def _quick_templates_erp(self) -> str:
         """Generate query templates ERP message"""
-        return self._get_translation("query_templates_erp_message")
+        return self._get_translation("quick_templates_erp_message")
     
-    def _query_attributes_contractors(self) -> str:
+    def _quick_attributes_contractors(self) -> str:
         """Generate query attributes contractors message"""
-        return self._get_translation("query_attributes_contractors_message")
+        return self._get_translation("quick_attributes_contractors_message")
     
-    def _query_create_comment_attr(self) -> str:
+    def _quick_create_comment_attr(self) -> str:
         """Generate query create comment attribute message"""
-        return self._get_translation("query_create_comment_attr_message")
+        return self._get_translation("quick_create_comment_attr_message")
     
-    def _query_create_id_attr(self) -> str:
+    def _quick_create_id_attr(self) -> str:
         """Generate query create ID attribute message"""
-        return self._get_translation("query_create_id_attr_message")
+        return self._get_translation("quick_create_id_attr_message")
     
-    def _query_edit_phone_mask(self) -> str:
+    def _quick_edit_phone_mask(self) -> str:
         """Generate query edit phone mask message"""
-        return self._get_translation("query_edit_phone_mask_message")
+        return self._get_translation("quick_edit_phone_mask_message")
     
-    def _query_get_comment_attr(self) -> str:
+    def _quick_get_comment_attr(self) -> str:
         """Generate query get comment attribute message"""
-        return self._get_translation("query_get_comment_attr_message")
+        return self._get_translation("quick_get_comment_attr_message")
     
     def _quick_edit_date_time(self) -> str:
         """Generate query enum add value message"""
         return self._get_translation("quick_edit_date_time_message")
     
-    def _query_archive_attr(self) -> str:
+    def _quick_archive_attr(self) -> str:
         """Generate query archive attribute message"""
-        return self._get_translation("query_archive_attr_message")
+        return self._get_translation("quick_archive_attr_message")

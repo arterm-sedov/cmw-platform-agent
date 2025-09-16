@@ -795,8 +795,8 @@ class NextGenAppWithLanguageDetection(NextGenApp):
         
         try:
             # Check URL parameters first
-            if request and hasattr(request, 'query_params'):
-                lang_param = request.query_params.get('lang', '').lower()
+            if request and hasattr(request, 'quick_params'):
+                lang_param = request.quick_params.get('lang', '').lower()
                 if lang_param in self.supported_languages:
                     detected_lang = lang_param
                     print(f"🌐 Language detected from URL parameter: {detected_lang}")

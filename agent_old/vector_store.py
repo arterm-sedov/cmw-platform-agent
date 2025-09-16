@@ -90,7 +90,7 @@ class VectorStoreManager:
                 client=self.supabase_client,
                 embedding=self.embeddings,
                 table_name="agent_course_reference",
-                query_name="match_agent_course_reference_langchain",
+                quick_name="match_agent_course_reference_langchain",
             )
             
             print("✅ Supabase vector store initialized successfully")
