@@ -19,6 +19,19 @@ class EditOrCreateDurationAttributeSchema(CommonAttributeFields):
                     "RU: 'Использовать как заголовок записей'",
     )
 
+    @field_validator("display_format", mode="before")
+    def non_empty_str(cls, v: Any) -> Any:
+        """
+        Validate that string fields are not empty.
+        
+        This field validator is automatically applied to the name, system_name, 
+        application_system_name, and template_system_name fields in all schemas
+        that inherit from CommonAttributeFields, ensuring consistent validation.
+        """
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
+
 @tool("edit_or_create_duration_attribute", return_direct=False, args_schema=EditOrCreateDurationAttributeSchema)
 def edit_or_create_duration_attribute(
     operation: str,

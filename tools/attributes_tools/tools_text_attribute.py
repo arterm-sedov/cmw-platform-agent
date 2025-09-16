@@ -58,6 +58,19 @@ class EditOrCreateTextAttributeSchema(CommonAttributeFields):
             "RU: Использовать для поиска записей",
     )
 
+    @field_validator("display_format", mode="before")
+    def non_empty_str(cls, v: Any) -> Any:
+        """
+        Validate that string fields are not empty.
+        
+        This field validator is automatically applied to the name, system_name, 
+        application_system_name, and template_system_name fields in all schemas
+        that inherit from CommonAttributeFields, ensuring consistent validation.
+        """
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
+
     @model_validator(mode="after")
     def validate_masks_and_calc(self) -> "EditOrCreateTextAttributeSchema":
         if self.display_format == "CustomMask":

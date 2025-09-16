@@ -12,6 +12,19 @@ class EditOrCreateAccountAttributeSchema(CommonAttributeFields):
             "RU: Связанный шаблон"
     )
 
+    @field_validator("related_template_system_name", mode="before")
+    def non_empty_str(cls, v: Any) -> Any:
+        """
+        Validate that string fields are not empty.
+        
+        This field validator is automatically applied to the name, system_name, 
+        application_system_name, and template_system_name fields in all schemas
+        that inherit from CommonAttributeFields, ensuring consistent validation.
+        """
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
+
 @tool("edit_or_create_account_attribute", return_direct=False, args_schema=EditOrCreateAccountAttributeSchema)
 def edit_or_create_account_attribute(
     operation: str,

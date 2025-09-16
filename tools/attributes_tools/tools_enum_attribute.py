@@ -6,7 +6,7 @@ class PlainEnumValueModel(BaseModel):
     system_name: str = Field(
         description="Enum value system name. RU: Системное имя значения",
     )
-    russian_name: str = Field(
+    russian_name: Optional[str] = Field(
         description="Enum value Russian name. RU: Русское название значения",
     )
     english_name: Optional[str] = Field(
@@ -22,8 +22,18 @@ class PlainEnumValueModel(BaseModel):
         description="Enum value display color via hex code. RU: Цвет отображения значения"
     )
 
+    @model_validator(mode='after')
+    def check_at_least_one_name(cls, values):
+        russian = values.russian_name
+        english = values.english_name
+        deutsche = values.deutsche_name
+
+        if not any([russian, english, deutsche]):
+            raise ValueError("At least one of 'russian_name', 'english_name', or 'deutsche_name' must be provided.")
+
+        return values
+
     @field_validator('color')
-    @classmethod
     def validate_hex_color(cls, v):
         if v is None:
             return v
@@ -38,6 +48,19 @@ class EditOrCreateEnumAttributeSchema(CommonAttributeFields):
     enum_values: List[PlainEnumValueModel] = Field(
         description="Attribute enum values. RU: Варианты значений атрибута"
     )
+
+    @field_validator("display_format", "enum_values", mode="before")
+    def non_empty_str(cls, v: Any) -> Any:
+        """
+        Validate that string fields are not empty.
+        
+        This field validator is automatically applied to the name, system_name, 
+        application_system_name, and template_system_name fields in all schemas
+        that inherit from CommonAttributeFields, ensuring consistent validation.
+        """
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
 
 def convert_plain_to_enum_value(plain: PlainEnumValueModel, attr_system_name: str) -> Dict[str, Any]:
     """Build API-ready variant payload from a plain enum value."""

@@ -25,8 +25,20 @@ class EditOrCreateDocumentAttributeSchema(CommonAttributeFields):
                     "RU: Фильтр расширений файлов"
     )
 
+    @field_validator("display_format", mode="before")
+    def non_empty_str(cls, v: Any) -> Any:
+        """
+        Validate that string fields are not empty.
+        
+        This field validator is automatically applied to the name, system_name, 
+        application_system_name, and template_system_name fields in all schemas
+        that inherit from CommonAttributeFields, ensuring consistent validation.
+        """
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
+
     @field_validator("file_extensions_filter", mode="before")
-    @classmethod
     def normalize_file_extensions_filter(cls, v: Any) -> Optional[List[str]]:
         if v is None:
             return v
