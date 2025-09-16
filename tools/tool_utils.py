@@ -139,11 +139,15 @@ def process_attribute_response(
         global_alias = attribute_data.pop("globalAlias", {})
         if isinstance(global_alias, dict):
             # Добавляем owner и alias в корень, если они есть
+            new_items = {}
             if "owner" in global_alias:
-                attribute_data["owner"] = global_alias["owner"]
+                new_items["owner"] = global_alias["owner"]
             if "alias" in global_alias:
-                attribute_data["alias"] = global_alias["alias"]
+                new_items["alias"] = global_alias["alias"]
             # type игнорируется и не добавляется
+
+            # Пересоздаём словарь: сначала новые ключи, потом остальные
+            attribute_data = {**new_items, **attribute_data}
 
     # Обрабатываем instanceGlobalAlias: вытаскиваем owner и alias, удаляем instanceGlobalAlias и type
     if "instanceGlobalAlias" in attribute_data:
