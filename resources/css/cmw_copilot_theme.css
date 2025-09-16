@@ -276,6 +276,7 @@ body {
     line-height: 1.25;
     border: none !important;
     background: transparent !important;
+    overflow: unset !important;
 }
 
 .gradio-container .prose,
@@ -290,7 +291,9 @@ body {
 /* Ensure hero title block has no border/shadow/background */
 .gradio-container .block.padded.hero-title,
 .gradio-container .hero-title,
-.chat-hints-title {
+.chat-hints-title,
+.progress-title,
+.status-title {
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
