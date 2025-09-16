@@ -153,10 +153,12 @@ def edit_or_create_text_attribute(
 
     endpoint = f"{ATTRIBUTE_ENDPOINT}/{application_system_name}"
 
-    result = execute_edit_or_create_operation(request_body, operation, endpoint)
-
-    validated = AttributeResult(**result)
-    return validated.model_dump()
+    return execute_edit_or_create_operation(
+        request_body=request_body,
+        operation=operation,
+        endpoint=endpoint,
+        result_model=AttributeResult
+    )
 
 if __name__ == "__main__":
     results = edit_or_create_text_attribute.invoke({
