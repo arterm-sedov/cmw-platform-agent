@@ -249,7 +249,8 @@ def process_attribute_response(
 def execute_edit_or_create_operation(
     request_body: Dict[str, Any],
     operation: str,
-    endpoint: str
+    endpoint: str,
+    result_model: Type[BaseModel]
 ) -> Dict[str, Any]:
     """
     Выполняет операцию (create/edit) через API.
@@ -296,4 +297,5 @@ def execute_edit_or_create_operation(
         error_info = result.get("error", "")
         result["error"] = f"API operation failed: {error_info}"
 
-    return result
+    validated = result_model(**result)
+    return validated.model_dump()
