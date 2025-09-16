@@ -12,8 +12,10 @@ Available Tools:
 # Import all tool functions
 from .tool_list_applications import list_applications
 from .tool_list_templates import list_templates
+from .tool_platform_entity_url import get_platform_entity_url
 
 __all__ = [
     'list_applications',
-    'list_templates'
+    'list_templates',
+    'get_platform_entity_url'
 ]

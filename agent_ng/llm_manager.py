@@ -700,41 +700,58 @@ class LLMManager:
         return stats
     
     def get_tools(self) -> List[Any]:
-        """Get all available tools from tools.py using the same logic as the old agent"""
+        """Get all available tools from tools module and attributes_tools submodule"""
+        tool_list = []
+        
+        # Load tools from main tools module
         try:
             import tools.tools as tools_module
-            tool_list = []
-            
-            # Use the same logic as the old agent's _gather_tools method
-            for name, obj in tools_module.__dict__.items():
-                # Only include actual tool objects (decorated with @tool) or callable functions
-                # that are not classes, modules, or builtins
-                if (callable(obj) and 
-                    not name.startswith("_") and 
-                    not isinstance(obj, type) and  # Exclude classes
-                    hasattr(obj, '__module__') and  # Must have __module__ attribute
-                    (obj.__module__ == 'tools.tools' or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
-                    name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step", "web_search_deep_research_exa_ai"]):  # Exclude specific classes and internal tools
-                    
-                    # Check if it's a proper tool object (has the tool attributes)
-                    if hasattr(obj, 'name') and hasattr(obj, 'description'):
-                        # This is a proper @tool decorated function or LangChain StructuredTool
-                        tool_list.append(obj)
-                        self._log_initialization(f"Loaded LangChain tool: {name}", "INFO")
-                    elif callable(obj) and not name.startswith("_"):
-                        # This is a regular function that might be a tool
-                        # Only include if it's not an internal function
-                        if not name.startswith("_") and name not in [
-                            # Exclude built-in types and classes
-                            'int', 'str', 'float', 'bool', 'list', 'dict', 'tuple', 'Any', 'BaseModel', 'Field', 'field_validator'
-                        ]:
-                            tool_list.append(obj)
-                            self._log_initialization(f"Loaded function tool: {name}", "INFO")
-            
-            return tool_list
+            self._load_tools_from_module(tools_module, tool_list, "tools.tools")
         except ImportError:
-            self._log_initialization("Could not import tools module", "WARNING")
-            return []
+            self._log_initialization("Could not import tools.tools module", "WARNING")
+        
+        # Load tools from attributes_tools submodule
+        try:
+            import tools.attributes_tools as attributes_tools_module
+            self._load_tools_from_module(attributes_tools_module, tool_list, "tools.attributes_tools")
+        except ImportError:
+            self._log_initialization("Could not import tools.attributes_tools module", "WARNING")
+        
+        # Load tools from applications_tools submodule
+        try:
+            import tools.applications_tools as applications_tools_module
+            self._load_tools_from_module(applications_tools_module, tool_list, "tools.applications_tools")
+        except ImportError:
+            self._log_initialization("Could not import tools.applications_tools module", "WARNING")
+        
+        return tool_list
+    
+    def _load_tools_from_module(self, module, tool_list: List[Any], module_name: str):
+        """Load tools from a specific module"""
+        for name, obj in module.__dict__.items():
+            # Only include actual tool objects (decorated with @tool) or callable functions
+            # that are not classes, modules, or builtins
+            if (callable(obj) and 
+                not name.startswith("_") and 
+                not isinstance(obj, type) and  # Exclude classes
+                hasattr(obj, '__module__') and  # Must have __module__ attribute
+                (obj.__module__ == module_name or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
+                name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step", "web_search_deep_research_exa_ai"]):  # Exclude specific classes and internal tools
+                
+                # Check if it's a proper tool object (has the tool attributes)
+                if hasattr(obj, 'name') and hasattr(obj, 'description'):
+                    # This is a proper @tool decorated function or LangChain StructuredTool
+                    tool_list.append(obj)
+                    self._log_initialization(f"Loaded LangChain tool: {name} from {module_name}", "INFO")
+                elif callable(obj) and not name.startswith("_"):
+                    # This is a regular function that might be a tool
+                    # Only include if it's not an internal function
+                    if not name.startswith("_") and name not in [
+                        # Exclude built-in types and classes
+                        'int', 'str', 'float', 'bool', 'list', 'dict', 'tuple', 'Any', 'BaseModel', 'Field', 'field_validator'
+                    ]:
+                        tool_list.append(obj)
+                        self._log_initialization(f"Loaded function tool: {name} from {module_name}", "INFO")
 
 
 # Global instance for application-wide use

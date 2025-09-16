@@ -30,6 +30,7 @@ from . import tools
 
 # Import key functions from subpackages for convenience
 from .applications_tools import list_applications, list_templates
+from .applications_tools import get_platform_entity_url
 from .attributes_tools import (
     # General operations
     delete_attribute, archive_or_unarchive_attribute,
@@ -86,6 +87,7 @@ __all__ = [
     'list_applications',
     'list_templates',
     'list_attributes',
+    'get_platform_entity_url',
     
     # General operations
     'delete_attribute',
