@@ -237,8 +237,8 @@ class LangChainConversationChain:
             MessagesPlaceholder(variable_name="agent_scratchpad")
         ])
         
-        # Bind tools to LLM
-        llm_with_tools = self.llm_instance.llm.bind_tools(self.tools)
+        # Use LLM with pre-bound tools (tools are already bound in the LLM instance)
+        llm_with_tools = self.llm_instance.llm
         
         # Create the chain
         chain = prompt | llm_with_tools | StrOutputParser()
@@ -302,9 +302,25 @@ class LangChainConversationChain:
             # Get conversation history
             chat_history = self.memory_manager.get_conversation_history(conversation_id)
             
-            # Create messages list
-            messages = [SystemMessage(content=self.system_prompt)]
-            messages.extend(chat_history)
+            # Create messages list for LLM context
+            messages = []
+            
+            # Always add system message to LLM context (required for every call)
+            system_message = SystemMessage(content=self.system_prompt)
+            messages.append(system_message)
+            
+            # Check if system message is already in memory, if not add it
+            system_in_history = any(isinstance(msg, SystemMessage) for msg in chat_history)
+            if not system_in_history:
+                # Store system message in memory only once
+                self.memory_manager.add_message(conversation_id, system_message)
+                print("🔍 DEBUG: Added system message to memory (first time)")
+            else:
+                print("🔍 DEBUG: System message already in memory, skipping storage")
+            
+            # Add conversation history (excluding system messages to avoid duplication)
+            non_system_history = [msg for msg in chat_history if not isinstance(msg, SystemMessage)]
+            messages.extend(non_system_history)
             messages.append(HumanMessage(content=message))
             
             # Process with tool calling
@@ -573,18 +589,31 @@ class LangChainConversationChain:
         if not final_response:
             final_response = "No response available"
         
-        # Add all messages to memory manager (for both tool calls and no tool calls cases)
-        print(f"🔍 DEBUG: Adding {len(messages)} messages to memory manager")
+        # Add only NEW messages to memory manager (avoid duplication)
+        # Get existing conversation history to check for duplicates
+        existing_history = self.memory_manager.get_conversation_history(conversation_id)
+        existing_content = {(type(msg).__name__, msg.content) for msg in existing_history if hasattr(msg, 'content')}
+        
+        print(f"🔍 DEBUG: Adding new messages to memory manager (avoiding {len(existing_history)} existing)")
+        new_messages_added = 0
         for message in messages:
-            if isinstance(message, HumanMessage):
+            # Skip system messages - they should be handled separately to ensure single storage
+            if isinstance(message, SystemMessage):
+                print(f"🔍 DEBUG: Skipped system message (handled separately)")
+                continue
+            
+            # Create a unique identifier for this message
+            message_key = (type(message).__name__, message.content if hasattr(message, 'content') else str(message))
+            
+            # Only add if not already in memory
+            if message_key not in existing_content:
                 self.memory_manager.add_message(conversation_id, message)
-                print(f"🔍 DEBUG: Added HumanMessage to memory")
-            elif isinstance(message, AIMessage):
-                self.memory_manager.add_message(conversation_id, message)
-                print(f"🔍 DEBUG: Added AIMessage to memory")
-            elif isinstance(message, ToolMessage):
-                self.memory_manager.add_message(conversation_id, message)
-                print(f"🔍 DEBUG: Added ToolMessage to memory")
+                new_messages_added += 1
+                print(f"🔍 DEBUG: Added new {type(message).__name__} to memory")
+            else:
+                print(f"🔍 DEBUG: Skipped duplicate {type(message).__name__}")
+        
+        print(f"🔍 DEBUG: Added {new_messages_added} new messages to memory")
             
         return {
             "response": final_response,

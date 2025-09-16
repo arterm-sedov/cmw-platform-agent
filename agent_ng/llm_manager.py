@@ -700,34 +700,44 @@ class LLMManager:
         return stats
     
     def get_tools(self) -> List[Any]:
-        """Get all available tools from tools module and attributes_tools submodule"""
-        tool_list = []
+        """Get all available tools from tools module (avoiding duplicates) - cached"""
+        # Return cached tools if available
+        if hasattr(self, '_cached_tools'):
+            return self._cached_tools
         
-        # Load tools from main tools module
+        tool_list = []
+        tool_names = set()  # Track tool names to avoid duplicates
+        
+        # Load tools from main tools module (primary source)
         try:
             import tools.tools as tools_module
-            self._load_tools_from_module(tools_module, tool_list, "tools.tools")
+            self._load_tools_from_module(tools_module, tool_list, "tools.tools", tool_names)
         except ImportError:
             self._log_initialization("Could not import tools.tools module", "WARNING")
         
-        # Load tools from attributes_tools submodule
+        # Load tools from attributes_tools submodule (only if not already loaded)
         try:
             import tools.attributes_tools as attributes_tools_module
-            self._load_tools_from_module(attributes_tools_module, tool_list, "tools.attributes_tools")
+            self._load_tools_from_module(attributes_tools_module, tool_list, "tools.attributes_tools", tool_names)
         except ImportError:
             self._log_initialization("Could not import tools.attributes_tools module", "WARNING")
         
-        # Load tools from applications_tools submodule
+        # Load tools from applications_tools submodule (only if not already loaded)
         try:
             import tools.applications_tools as applications_tools_module
-            self._load_tools_from_module(applications_tools_module, tool_list, "tools.applications_tools")
+            self._load_tools_from_module(applications_tools_module, tool_list, "tools.applications_tools", tool_names)
         except ImportError:
             self._log_initialization("Could not import tools.applications_tools module", "WARNING")
         
+        # Cache the tools list
+        self._cached_tools = tool_list
         return tool_list
     
-    def _load_tools_from_module(self, module, tool_list: List[Any], module_name: str):
-        """Load tools from a specific module"""
+    def _load_tools_from_module(self, module, tool_list: List[Any], module_name: str, tool_names: set = None):
+        """Load tools from a specific module (avoiding duplicates)"""
+        if tool_names is None:
+            tool_names = set()
+            
         for name, obj in module.__dict__.items():
             # Only include actual tool objects (decorated with @tool) or callable functions
             # that are not classes, modules, or builtins
@@ -738,10 +748,22 @@ class LLMManager:
                 (obj.__module__ == module_name or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
                 name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step", "web_search_deep_research_exa_ai"]):  # Exclude specific classes and internal tools
                 
+                # Get tool name for deduplication
+                if hasattr(obj, 'name'):
+                    tool_name = obj.name
+                else:
+                    tool_name = name
+                
+                # Skip if already loaded
+                if tool_name in tool_names:
+                    self._log_initialization(f"Skipped duplicate tool: {tool_name} from {module_name}", "DEBUG")
+                    continue
+                
                 # Check if it's a proper tool object (has the tool attributes)
                 if hasattr(obj, 'name') and hasattr(obj, 'description'):
                     # This is a proper @tool decorated function or LangChain StructuredTool
                     tool_list.append(obj)
+                    tool_names.add(tool_name)
                     self._log_initialization(f"Loaded LangChain tool: {name} from {module_name}", "INFO")
                 elif callable(obj) and not name.startswith("_"):
                     # This is a regular function that might be a tool
@@ -751,6 +773,7 @@ class LLMManager:
                         'int', 'str', 'float', 'bool', 'list', 'dict', 'tuple', 'Any', 'BaseModel', 'Field', 'field_validator'
                     ]:
                         tool_list.append(obj)
+                        tool_names.add(tool_name)
                         self._log_initialization(f"Loaded function tool: {name} from {module_name}", "INFO")
 
 

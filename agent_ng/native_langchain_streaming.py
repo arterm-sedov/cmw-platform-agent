@@ -66,21 +66,34 @@ class NativeLangChainStreaming:
             # Get conversation history
             chat_history = agent.memory_manager.get_conversation_history(conversation_id)
             
-            # Create messages list
-            messages = [SystemMessage(content=agent.system_prompt)]
-            messages.extend(chat_history)
+            # Create messages list for LLM context
+            messages = []
+            
+            # Always add system message to LLM context (required for every call)
+            system_message = SystemMessage(content=agent.system_prompt)
+            messages.append(system_message)
+            
+            # Check if system message is already in memory, if not add it
+            system_in_history = any(isinstance(msg, SystemMessage) for msg in chat_history)
+            if not system_in_history:
+                # Store system message in memory only once
+                agent.memory_manager.add_message(conversation_id, system_message)
+                print("🔍 DEBUG: Added system message to memory (first time)")
+            else:
+                print("🔍 DEBUG: System message already in memory, skipping storage")
+            
+            # Add conversation history (excluding system messages to avoid duplication)
+            non_system_history = [msg for msg in chat_history if not isinstance(msg, SystemMessage)]
+            messages.extend(non_system_history)
             
             # Create user message and save to memory
             user_message = HumanMessage(content=message)
             messages.append(user_message)
             agent.memory_manager.add_message(conversation_id, user_message)
             
-            # Get LLM with tools
-            llm = agent.llm_instance.llm
-            if agent.tools:
-                llm_with_tools = llm.bind_tools(agent.tools)
-            else:
-                llm_with_tools = llm
+            # Get LLM with tools (tools are already bound in the LLM instance)
+            llm_with_tools = agent.llm_instance.llm
+            print("🔍 DEBUG: Using LLM instance with pre-bound tools")
             
             # Multi-turn conversation loop for proper tool calling
             iteration = 0
@@ -214,7 +227,7 @@ class NativeLangChainStreaming:
                                     tool_call_id=tool_call_id
                                 )
                                 messages.append(tool_message)
-                                agent.memory_manager.add_message(conversation_id, tool_message)
+                                # Don't add to memory here - will be added at the end
                                 
                                 # Remove from in-progress
                                 del tool_calls_in_progress[tool_call_id]
@@ -236,7 +249,7 @@ class NativeLangChainStreaming:
                 if accumulated_chunk and hasattr(accumulated_chunk, 'content') and accumulated_chunk.content:
                     ai_message = AIMessage(content=accumulated_chunk.content)
                     messages.append(ai_message)
-                    agent.memory_manager.add_message(conversation_id, ai_message)
+                    # Don't add to memory here - will be added at the end
                 
                 # If no tool calls, we're done
                 if not has_tool_calls:
@@ -295,6 +308,33 @@ class NativeLangChainStreaming:
                         agent.token_tracker.track_llm_response(final_chunk, messages)
                 except Exception as e:
                     print(f"🔍 DEBUG: Error tracking API tokens: {e}")
+            
+            # Add all new messages to memory at the end (avoid duplication)
+            print(f"🔍 DEBUG: Adding new messages to memory manager")
+            
+            # Get current memory content for deduplication
+            current_memory = agent.memory_manager.get_conversation_history(conversation_id)
+            memory_content = {(type(msg).__name__, msg.content) for msg in current_memory if hasattr(msg, 'content')}
+            
+            new_messages_added = 0
+            for message in messages:
+                # Skip system messages - they're handled separately above
+                if isinstance(message, SystemMessage):
+                    print(f"🔍 DEBUG: Skipped system message (handled separately)")
+                    continue
+                
+                # Create a unique identifier for this message
+                message_key = (type(message).__name__, message.content if hasattr(message, 'content') else str(message))
+                
+                # Only add if not already in memory
+                if message_key not in memory_content:
+                    agent.memory_manager.add_message(conversation_id, message)
+                    new_messages_added += 1
+                    print(f"🔍 DEBUG: Added new {type(message).__name__} to memory")
+                else:
+                    print(f"🔍 DEBUG: Skipped duplicate {type(message).__name__}")
+            
+            print(f"🔍 DEBUG: Added {new_messages_added} new messages to memory")
             
             # Final completion event
             yield StreamingEvent(

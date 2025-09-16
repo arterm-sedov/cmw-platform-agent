@@ -230,8 +230,8 @@ class CmwAgent:
             if not self.llm_instance:
                 raise Exception("No LLM provider available. Check AGENT_PROVIDER environment variable.")
             
-            # Initialize tools
-            self.tools = self._initialize_tools()
+            # Initialize tools using LLM manager's cached tools
+            self.tools = self.llm_manager.get_tools()
             
             self.is_initialized = True
             print(f"✅ LangChain Agent initialized with {self.llm_instance.provider} ({self.llm_instance.model_name}) and {len(self.tools)} tools")
@@ -275,58 +275,6 @@ class CmwAgent:
 Always use the appropriate tools to answer questions and show your work step by step."""
             return system_prompt
     
-    def _initialize_tools(self) -> List[BaseTool]:
-        """Initialize available tools from tools module and attributes_tools submodule"""
-        tool_list = []
-        
-        # Load tools from main tools module
-        try:
-            import tools.tools as tools_module
-            self._load_tools_from_module(tools_module, tool_list, "tools.tools")
-        except ImportError:
-            print("Warning: Could not import tools.tools module")
-        
-        # Load tools from attributes_tools submodule
-        try:
-            import tools.attributes_tools as attributes_tools_module
-            self._load_tools_from_module(attributes_tools_module, tool_list, "tools.attributes_tools")
-        except ImportError:
-            print("Warning: Could not import tools.attributes_tools module")
-        
-        # Load tools from applications_tools submodule
-        try:
-            import tools.applications_tools as applications_tools_module
-            self._load_tools_from_module(applications_tools_module, tool_list, "tools.applications_tools")
-        except ImportError:
-            print("Warning: Could not import tools.applications_tools module")
-        
-        return tool_list
-    
-    def _load_tools_from_module(self, module, tool_list: List[BaseTool], module_name: str):
-        """Load tools from a specific module"""
-        for name, obj in module.__dict__.items():
-            # Only include actual tool objects (decorated with @tool) or callable functions
-            # that are not classes, modules, or builtins
-            if (callable(obj) and 
-                not name.startswith("_") and 
-                not isinstance(obj, type) and  # Exclude classes
-                hasattr(obj, '__module__') and  # Must have __module__ attribute
-                (obj.__module__ == module_name or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
-                name not in ["submit_answer", "submit_intermediate_step", "encode_image", "decode_image", "save_image", "web_search_deep_research_exa_ai"]):  # Exclude specific classes and internal tools
-                
-                # Check if it's a proper LangChain tool
-                if hasattr(obj, 'name') and hasattr(obj, 'description'):
-                    # This is a proper @tool decorated function or LangChain StructuredTool
-                    tool_list.append(obj)
-                    print(f"✅ Loaded LangChain tool: {name} from {module_name}")
-                elif hasattr(obj, 'args_schema') and hasattr(obj, 'func'):
-                    # This is a @tool decorated function with args_schema
-                    tool_list.append(obj)
-                    print(f"✅ Loaded LangChain tool: {name} from {module_name}")
-                elif hasattr(obj, 'func') and hasattr(obj, 'name'):
-                    # This is a LangChain StructuredTool
-                    tool_list.append(obj)
-                    print(f"✅ Loaded LangChain tool: {name} from {module_name}")
     
     def _get_conversation_chain(self, conversation_id: str = "default"):
         """Get or create conversation chain for a conversation"""
