@@ -153,8 +153,8 @@ RUSSIAN_TRANSLATIONS = {
     ),
     
     # Query example buttons (converted from try_asking_examples)
-    "quick_edit_enum": "📝 Редактировать enum",
-    "quick_edit_enum_message": "Получи enum атрибут \"Статус\" из приложения \"CRM\", шаблон \"Лиды\", затем добавь к нему новое значение \"В работе\" (system_name: in_progress, color: #FF9800) и обнови атрибут",
+    "quick_edit_enum": "📝 Редактировать «Список значений»",
+    "quick_edit_enum_message": "Получи атрибут типа enum \"Статус\" из приложения \"CRM\", шаблон \"Лиды\", затем добавь к нему новое значение \"В работе\" (system_name: in_progress, color: #FF9800) и обнови атрибут",
     
     "query_templates_erp": "📄 Шаблоны ERP",
     "query_templates_erp_message": "Покажи все шаблоны записей в приложении \"ERP\". Отформатируй красиво используя Markdown.",
@@ -165,7 +165,7 @@ RUSSIAN_TRANSLATIONS = {
     "query_create_comment_attr": "💬 Создать атрибут комментария",
     "query_create_comment_attr_message": "Создать текстовый атрибут \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
     
-    "query_create_id_attr": "🆔 Создать ID атрибут",
+    "query_create_id_attr": "🆔 Создать атрибут ID",
     "query_create_id_attr_message": "Создай текстовый атрибут \"ID клиента\", приложение \"ERP\", шаблон \"Контрагенты\", особая маска ввода: ([0-9]{10}|[0-9]{12})",
     
     "query_edit_phone_mask": "📞 Редактировать маску телефона",
@@ -174,11 +174,11 @@ RUSSIAN_TRANSLATIONS = {
     "query_get_comment_attr": "🔍 Получить атрибут комментария",
     "query_get_comment_attr_message": "Получи атрибут: системное имя \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
     
-    "query_enum_add_value": "📝 Добавить значение в enum",
-    "query_enum_add_value_message": "Получи enum атрибут \"Статус\" из приложения \"CRM\", шаблон \"Лиды\", затем добавь к нему новое значение \"В работе\" (system_name: in_progress, color: #FF9800) и обнови атрибут",
+    "quick_edit_date_time": "📅 Настроить дату/время",
+    "quick_edit_date_time_message": "Создай атрибут даты/времени \"Дата создания заявки\" в приложении \"CRM\", шаблон \"Лиды\" с форматом отображения LongDateLongTime и используй его как заголовок записи для автоматической сортировки по времени",
     
-    "query_archive_attr": "📊 Анализ производительности",
-    "query_archive_attr_message": "Проведи анализ производительности приложения \"CRM\" за последний месяц. Покажи статистику по количеству созданных лидов, конвертации в сделки, среднее время обработки заявок и топ-5 самых активных пользователей с их результатами"
+    "query_archive_attr": "📦 Архивировать атрибут",
+    "query_archive_attr_message": "Архивируй/разархивируй атрибут, системное имя \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\""
 }
 
 # English translations (fallback)
@@ -343,11 +343,11 @@ ENGLISH_TRANSLATIONS = {
     "query_get_comment_attr": "🔍 Get Comment Attribute",
     "query_get_comment_attr_message": "Get attribute: system name \"Comment\", application \"HR\", template \"Candidates\"",
     
-    "query_enum_add_value": "📝 Add Enum Value",
-    "query_enum_add_value_message": "Get the enum attribute \"Status\" from application \"CRM\", template \"Leads\", then add a new value \"In Progress\" (system_name: in_progress, color: #FF9800) and update the attribute",
+    "quick_edit_date_time": "📅 Configure Date/Time",
+    "quick_edit_date_time_message": "Create a date/time attribute \"Lead Creation Date\" in application \"CRM\", template \"Leads\" with LongDateLongTime display format and use it as record title for automatic time-based sorting",
     
-    "query_archive_attr": "📊 Performance Analysis",
-    "query_archive_attr_message": "Conduct a performance analysis of the \"CRM\" application for the last month. Show statistics on the number of leads created, conversion to deals, average processing time for requests, and top 5 most active users with their results"
+    "query_archive_attr": "📦 Archive Attribute",
+    "query_archive_attr_message": "Archive/unarchive attribute, system name \"Comment\", application \"HR\", template \"Candidates\""
 }
 
 def create_i18n_instance(language: str = "en") -> gr.I18n:
