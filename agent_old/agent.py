@@ -1,0 +1,7106 @@
+"""
+Comindware Analyst Copilot
+By Arte(r)m Sedov
+==================================
+
+This module implements the main agent logic for the Comindware Analyst Copilot.
+
+Usage:
+    agent = CmwAgent(provider="google")
+    answer = agent(question)
+
+Environment Variables:
+    - GEMINI_KEY: API key for Gemini model (if using Google provider)
+    - SUPABASE_URL: URL for Supabase instance
+    - SUPABASE_KEY: Key for Supabase access
+
+Files required in the same directory:
+    - system_prompt.json (agent-specific system prompt configuration)
+"""
+# Standard library imports
+import base64
+import builtins
+import csv
+import datetime
+import io
+import json
+import os
+import random
+import re
+import sys
+import tempfile
+import time
+from io import StringIO
+from typing import Any, Dict, List, Optional
+
+# Third-party imports
+import numpy as np
+import tiktoken
+from pydantic import BaseModel, Field
+
+# LangChain imports
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.tools import BaseTool, tool
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
+from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint, HuggingFaceEmbeddings
+from langchain_mistralai.chat_models import ChatMistralAI
+from langchain_openai import ChatOpenAI
+
+# Local imports with robust fallback handling
+import sys
+import os
+
+# Add current directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+try:
+    # Try relative imports first (when running as module)
+    import tools.tools
+    from .dataset_manager import dataset_manager
+    from tools.tools import *
+    from .utils import TRACES_DIR, ensure_valid_answer
+    from .tool_call_manager import tool_call_manager
+except ImportError:
+    # Fallback for when running from root directory
+    try:
+        import tools.tools
+        from agent_old.dataset_manager import dataset_manager
+        from tools.tools import *
+        from agent_old.utils import TRACES_DIR, ensure_valid_answer
+        from agent_old.tool_call_manager import tool_call_manager
+    except ImportError as e:
+        print(f"Warning: Could not import required modules: {e}")
+        # Set defaults to prevent further errors
+        dataset_manager = None
+        TRACES_DIR = "traces"
+        ensure_valid_answer = lambda x: x
+        tool_call_manager = None
+
+# Vector store and similarity manager imports are now conditional
+# They will be imported only when ENABLE_VECTOR_SIMILARITY is True
+
+# Enhanced imports for conversation management
+from collections import defaultdict
+from threading import Lock
+import uuid
+
+# Structured output models for modern response handling
+class FinalAnswer(BaseModel):
+    """Structured model for final answers with metadata"""
+    answer: str = Field(description="The final answer to the user's question")
+    confidence: float = Field(description="Confidence level from 0.0 to 1.0", ge=0.0, le=1.0)
+    sources: List[str] = Field(description="List of sources or tools used to generate this answer", default_factory=list)
+    reasoning: Optional[str] = Field(description="Brief explanation of the reasoning process", default=None)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "answer": "The powerhouse of the cell is the mitochondrion.",
+                "confidence": 0.95,
+                "sources": ["biology_knowledge", "web_search"],
+                "reasoning": "Based on established biological facts and recent research"
+            }
+        }
+
+def trace_prints_with_context(context_type: str):
+    """
+    Decorator that traces all print calls in a function and attaches them to specific execution contexts.
+    Automatically captures print output and adds it to the appropriate context in the agent's trace.
+    """
+    def decorator(func):
+        def wrapper(self, *args, **kwargs):
+            # Store original print
+            original_print = print
+            
+            # Store current context
+            old_context = getattr(self, '_current_trace_context', None)
+            self._current_trace_context = context_type
+            
+            def trace_print(*print_args, **print_kwargs):
+                # Original print functionality
+                original_print(*print_args, **print_kwargs)
+                
+                # Write to current LLM's stdout buffer if available
+                if hasattr(self, 'current_llm_stdout_buffer') and self.current_llm_stdout_buffer:
+                    try:
+                        message = " ".join(str(arg) for arg in print_args)
+                        self.current_llm_stdout_buffer.write(message + "\n")
+                    except Exception as e:
+                        # Fallback if buffer write fails
+                        original_print(f"[Buffer Error] Failed to write to stdout buffer: {e}")
+                
+                # Add to appropriate context
+                if hasattr(self, 'question_trace') and self.question_trace is not None:
+                    try:
+                        self._add_log_to_context(" ".join(str(arg) for arg in print_args), func.__name__)
+                    except Exception as e:
+                        # Fallback to basic logging if trace fails
+                        original_print(f"[Trace Error] Failed to add log entry: {e}")
+            
+            # Override print for this function call
+            builtins.print = trace_print
+            
+            try:
+                result = func(self, *args, **kwargs)
+            finally:
+                # Restore original print
+                builtins.print = original_print
+                # Restore previous context
+                self._current_trace_context = old_context
+            
+            return result
+        return wrapper
+    return decorator
+
+def trace_prints(func):
+    """
+    Decorator that traces all print calls in a function.
+    Automatically captures print output and adds it to the agent's trace.
+    """
+    def wrapper(self, *args, **kwargs):
+        # Store original print
+        original_print = print
+        
+        def trace_print(*print_args, **print_kwargs):
+            # Original print functionality
+            original_print(*print_args, **print_kwargs)
+            
+            # Write to current LLM's stdout buffer if available
+            if hasattr(self, 'current_llm_stdout_buffer') and self.current_llm_stdout_buffer:
+                try:
+                    message = " ".join(str(arg) for arg in print_args)
+                    self.current_llm_stdout_buffer.write(message + "\n")
+                except Exception as e:
+                    # Fallback if buffer write fails
+                    original_print(f"[Buffer Error] Failed to write to stdout buffer: {e}")
+            
+            # Add to trace
+            if hasattr(self, 'question_trace') and self.question_trace is not None:
+                try:
+                    log_entry = {
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "level": "info",
+                        "message": " ".join(str(arg) for arg in print_args),
+                        "function": func.__name__
+                    }
+                    self.question_trace.setdefault("logs", []).append(log_entry)
+                except Exception as e:
+                    # Fallback to basic logging if trace fails
+                    original_print(f"[Trace Error] Failed to add log entry: {e}")
+        
+        # Override print for this function call
+        builtins.print = trace_print
+        
+        try:
+            result = func(self, *args, **kwargs)
+        finally:
+            # Restore original print
+            builtins.print = original_print
+        
+        return result
+    return wrapper
+
+class Tee:
+    """
+    Tee class to duplicate writes to multiple streams (e.g., sys.stdout and a buffer).
+    """
+    def __init__(self, *streams):
+        self.streams = streams
+    def write(self, data):
+        for s in self.streams:
+            s.write(data)
+    def flush(self):
+        for s in self.streams:
+            s.flush()
+
+class _SinkWriter:
+    def __init__(self, sink):
+        self.sink = sink
+    def write(self, data):
+        try:
+            self.sink(data)
+        except Exception:
+            pass
+    def flush(self):
+        pass
+
+class StreamingCallbackHandler(BaseCallbackHandler):
+    """
+    Custom callback handler for streaming events during tool execution.
+    Provides real-time visibility into LLM thinking and tool usage.
+    """
+    def __init__(self, agent_instance, streaming_generator=None):
+        self.agent = agent_instance
+        self.streaming_generator = streaming_generator
+        self.current_tool_name = None
+        self.tool_args = None
+        
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        """Called when LLM starts generating"""
+        if self.streaming_generator:
+            self.streaming_generator.send({
+                "type": "llm_start",
+                "content": "🤖 **LLM is thinking...**\n",
+                "metadata": {"llm_type": serialized.get("name", "unknown")}
+            })
+    
+    def on_llm_stream(self, chunk, **kwargs):
+        """Called for each streaming chunk from LLM"""
+        if self.streaming_generator:
+            content = getattr(chunk, 'content', '') or str(chunk)
+            if content:
+                self.streaming_generator.send({
+                    "type": "llm_chunk",
+                    "content": content,
+                    "metadata": {"chunk_type": "llm_response"}
+                })
+    
+    def on_tool_start(self, serialized, input_str, **kwargs):
+        """Called when a tool starts executing"""
+        self.current_tool_name = serialized.get("name", "unknown_tool")
+        self.tool_args = input_str
+        
+        if self.streaming_generator:
+            self.streaming_generator.send({
+                "type": "tool_start",
+                "content": f"\n🔧 **Using tool: {self.current_tool_name}**\n",
+                "metadata": {
+                    "tool_name": self.current_tool_name,
+                    "tool_args": self.tool_args
+                }
+            })
+    
+    def on_tool_end(self, output, **kwargs):
+        """Called when a tool finishes executing"""
+        if self.streaming_generator:
+            # Truncate long outputs for display
+            display_output = output[:500] + "..." if len(output) > 500 else output
+            self.streaming_generator.send({
+                "type": "tool_end",
+                "content": f"✅ **Tool completed: {self.current_tool_name}**\n```\n{display_output}\n```\n",
+                "metadata": {
+                    "tool_name": self.current_tool_name,
+                    "tool_output": output
+                }
+            })
+    
+    def on_llm_end(self, response, **kwargs):
+        """Called when LLM finishes generating"""
+        if self.streaming_generator:
+            self.streaming_generator.send({
+                "type": "llm_end",
+                "content": "\n🎯 **LLM completed**\n",
+                "metadata": {"response": str(response)}
+            })
+
+class CmwAgent:
+    """
+    Main agent for the CMW Platform benchmark.
+
+    This agent:
+      - Uses the tools.py (math, code, file, image, web, etc.)
+      - Integrates a supabase retriever for similar Q/A and context
+      - Strictly follows the system prompt in system_prompt
+      - Is modular and extensible for future tool/model additions
+      - Includes rate limiting and retry logic for API calls
+      - Uses Google Gemini for first attempt, Groq for retry
+      - Implements LLM-specific token management (no limits for Gemini, conservative for others)
+
+    Args:
+        provider (str): LLM provider to use. One of "google", "groq", or "huggingface".
+
+    Attributes:
+        system_prompt (str): The loaded system prompt template.
+        sys_msg (SystemMessage): The system message for the LLM.
+        vector_store_manager: Vector store manager instance for similarity operations.
+        llm_primary: Primary LLM instance (Google Gemini).
+        llm_fallback: Fallback LLM instance (Groq).
+        llm_third_fallback: Third fallback LLM instance (HuggingFace).
+        tools: List of callable tool functions.
+        llm_primary_with_tools: Primary LLM instance with tools bound for tool-calling.
+        llm_fallback_with_tools: Fallback LLM instance with tools bound for tool-calling.
+        llm_third_fallback_with_tools: Third fallback LLM instance with tools bound for tool-calling.
+        last_request_time (float): Timestamp of the last API request for rate limiting.
+        min_request_interval (float): Minimum time between requests in seconds.
+        token_limits: Dictionary of token limits for different LLMs
+        max_message_history: Maximum number of messages to keep in history
+        original_question: Store the original question for reuse
+        similarity_threshold: Minimum similarity score (0.0-1.0) to consider answers similar
+        tool_calls_similarity_threshold: Silarity for tool deduplication
+        max_summary_tokens: Global token limit for summaries
+    """
+    
+    # Single source of truth for LLM configuration
+    LLM_CONFIG = {
+        "default": {
+            "type_str": "default",
+            "token_limit": 2500,
+            "max_history": 20,
+            "tool_support": False,
+            "force_tools": False,
+            "models": [],
+            "token_per_minute_limit": None,
+            "enable_chunking": True
+        },
+        "gemini": {
+            "name": "Google Gemini",
+            "type_str": "gemini",
+            "api_key_env": "GEMINI_KEY",
+            "max_history": 25,
+            "tool_support": True,
+            "force_tools": True,
+            "models": [
+                {
+                    "model": "gemini-2.5-pro",
+                    "token_limit": 2000000,
+                    "max_tokens": 2000000,
+                    "temperature": 0
+                }
+            ],
+            "token_per_minute_limit": None,
+            "enable_chunking": False
+        },
+        "groq": {
+            "name": "Groq",
+            "type_str": "groq",
+            "api_key_env": "GROQ_API_KEY",
+            "max_history": 15,
+            "tool_support": True,
+            "force_tools": True,
+            "models": [
+                {
+                    "model": "groq/compound",
+                    "token_limit": 131072,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "llama-3.3-70b-versatile",
+                    "token_limit": 131072
+,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "llama-3.3-70b-8192",
+                    "token_limit": 16000,
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": True
+                }
+            ],
+            "token_per_minute_limit": None,  # Model-specific limits used instead
+            "enable_chunking": False
+        },
+        "huggingface": {
+            "name": "HuggingFace",
+            "type_str": "huggingface",
+            "api_key_env": "HUGGINGFACE_API_KEY",
+            "max_history": 20,
+            "tool_support": False,
+            "force_tools": False,
+            "models": [
+                {
+                    "model": "Qwen/Qwen2.5-Coder-32B-Instruct",
+                    "task": "text-generation",
+                    "token_limit": 3000,
+                    "max_new_tokens": 1024,
+                    "do_sample": False,
+                    "temperature": 0
+                },
+                {
+                    "model": "microsoft/DialoGPT-medium",
+                    "task": "text-generation",
+                    "token_limit": 1000,
+                    "max_new_tokens": 512,
+                    "do_sample": False,
+                    "temperature": 0
+                },
+                {
+                    "model": "gpt2",
+                    "task": "text-generation",
+                    "token_limit": 1000,
+                    "max_new_tokens": 256,
+                    "do_sample": False,
+                    "temperature": 0
+                }
+            ],
+            "token_per_minute_limit": None,
+            "enable_chunking": True
+        },
+        "openrouter": {
+            "name": "OpenRouter",
+            "type_str": "openrouter",
+            "api_key_env": "OPENROUTER_API_KEY",
+            "api_base_env": "OPENROUTER_BASE_URL",
+            "max_history": 20,
+            "tool_support": True,
+            "force_tools": False,
+            "models": [
+                {
+                    "model": "deepseek/deepseek-chat-v3.1:free",
+                    "token_limit": 100000,
+                    "max_tokens": 2048,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "mistralai/mistral-small-3.2-24b-instruct:free",
+                    "token_limit": 90000,
+                    "max_tokens": 2048,
+                    "temperature": 0
+                },
+                {
+                    "model": "openrouter/cypher-alpha:free",
+                    "token_limit": 1000000,
+                    "max_tokens": 2048,
+                    "temperature": 0
+                }
+            ],
+            "token_per_minute_limit": None,
+            "enable_chunking": False
+        },
+        "mistral": {
+            "name": "Mistral AI",
+            "type_str": "mistral",
+            "api_key_env": "MISTRAL_API_KEY",
+            "max_history": 20,
+            "tool_support": True,
+            "force_tools": True,  # Keep tools enabled by default, disable only on consistent failures
+            "models": [
+                                {
+                    "model": "mistral-large-latest",
+                    "token_limit": 32000,
+                    "max_tokens": 2048,
+                    "temperature": 0
+                },
+                {
+                    "model": "mistral-small-latest",
+                    "token_limit": 32000,
+                    "max_tokens": 2048,
+                    "temperature": 0
+                },
+                {
+                    "model": "mistral-medium-latest",
+                    "token_limit": 32000,
+                    "max_tokens": 2048,
+                    "temperature": 0
+                }
+            ],
+            "token_per_minute_limit": 500000,
+            "enable_chunking": False
+        },
+        "gigachat": {
+            "name": "Sber GigaChat",
+            "type_str": "gigachat",
+            "api_key_env": "GIGACHAT_API_KEY",
+            "scope_env": "GIGACHAT_SCOPE",
+            "verify_ssl_env": "GIGACHAT_VERIFY_SSL",
+            "max_history": 20,
+            "tool_support": True,
+            "force_tools": True,
+            "models": [
+                {
+                    "model": "GigaChat-2",
+                    "token_limit": 128000,
+                    "max_tokens": 2048,
+                    "temperature": 0,
+                    "top_p": 0.9,
+                    "repetition_penalty": 1.0
+                },
+                {
+                    "model": "GigaChat-2-Pro",
+                    "token_limit": 128000,
+                    "max_tokens": 2048,
+                    "temperature": 0,
+                    "top_p": 0.9,
+                    "repetition_penalty": 1.0
+                },
+                {
+                    "model": "GigaChat-2-Max",
+                    "token_limit": 128000,
+                    "max_tokens": 2048,
+                    "temperature": 0,
+                    "top_p": 0.9,
+                    "repetition_penalty": 1.0
+                }
+            ],
+            "token_per_minute_limit": None,
+            "enable_chunking": False
+        },
+    }
+    
+    # Default LLM sequence order - references LLM_CONFIG keys
+    DEFAULT_LLM_SEQUENCE = [
+        "openrouter",
+    #    "gigachat",
+    #    "mistral",
+    #    "gemini",
+    #    "groq",
+    #    "huggingface"
+    ]
+    # Print truncation length for debug output
+    MAX_PRINT_LEN = 1000
+    
+    def __init__(self, provider: str = None, log_sink=None, ENABLE_VECTOR_SIMILARITY: bool = True):
+        """
+        Initialize the agent, loading the system prompt, tools, retriever, and LLM.
+
+        Args:
+            provider (str): LLM provider to use. One of "google", "groq", or "huggingface".
+            log_sink (callable | None): Optional callable accepting str chunks for real-time init logs.
+            ENABLE_VECTOR_SIMILARITY (bool): Whether to enable vector similarity calculations. Defaults to True.
+        """
+        # --- Capture stdout for debug output and tee to console ---
+        debug_buffer = io.StringIO()
+        old_stdout = sys.stdout
+        tee_streams = [old_stdout, debug_buffer]
+        if log_sink is not None:
+            tee_streams.append(_SinkWriter(log_sink))
+        sys.stdout = Tee(*tee_streams)
+        try:
+            # Store the config of the successfully initialized model per provider
+            self.active_model_config = {} 
+            self.system_prompt = self._load_system_prompt()
+            self.sys_msg = SystemMessage(content=self.system_prompt)
+            self.original_question = None
+            # Vector similarity control flag
+            self.ENABLE_VECTOR_SIMILARITY = ENABLE_VECTOR_SIMILARITY
+            # Global threshold. Minimum similarity score (0.0-1.0) to consider answers similar
+            self.similarity_threshold = 0.95
+            # Tool calls deduplication threshold
+            self.tool_calls_similarity_threshold = 0.90
+            # Global token limit for summaries
+            # self.max_summary_tokens = 255
+            self.last_request_time = 0
+            # Track the current LLM type and model for rate limiting
+            self.current_llm_type = None
+            self.current_model_name = None
+            self.token_limits = {}
+            for provider_key, config in self.LLM_CONFIG.items():
+                models = config.get("models", [])
+                if models:
+                    self.token_limits[provider_key] = [model.get("token_limit", self.LLM_CONFIG["default"]["token_limit"]) for model in models]
+                else:
+                    self.token_limits[provider_key] = [self.LLM_CONFIG["default"]["token_limit"]]
+            
+            # Initialize token usage tracking for rate limiting
+            self._provider_token_usage = {}
+            
+            # Enhanced conversation state management
+            self.conversation_states = defaultdict(dict)  # conversation_id -> state
+            self.conversation_histories = defaultdict(list)  # conversation_id -> chat_history
+            self.agent_lock = Lock()  # Thread safety for concurrent requests
+            self.conversation_metadata = defaultdict(dict)  # conversation_id -> metadata
+            # Unified LLM tracking system
+            self.llm_tracking = {}
+            for llm_type in self.DEFAULT_LLM_SEQUENCE:
+                self.llm_tracking[llm_type] = {
+                    "successes": 0,
+                    "failures": 0,
+                    "threshold_passes": 0,
+                    "submitted": 0,      # Above threshold, submitted
+                    "low_submit": 0,        # Below threshold, submitted
+                    "total_attempts": 0
+                }
+            self.total_questions = 0
+            
+            # Initialize tracing system
+            self.question_trace = None
+            self.current_llm_call_id = None
+            self.current_llm_stdout_buffer = None  # Buffer for current LLM's stdout
+
+            # Vector store functionality is now handled by vector_store.py module
+            # All Supabase operations are disabled by default
+            # Initialize managers with the vector similarity flag
+            if self.ENABLE_VECTOR_SIMILARITY:
+                from vector_store import get_vector_store_manager
+                from similarity_manager import get_similarity_manager
+                self.vector_store_manager = get_vector_store_manager(enable_vector_similarity=True)
+                # Also initialize similarity manager for tool call manager
+                get_similarity_manager(enabled=True)
+            else:
+                # Create dummy managers when vector similarity is disabled
+                self.vector_store_manager = None
+                print("ℹ️ Vector similarity disabled - skipping vector store and similarity manager initialization")
+
+            # Arrays for all initialized LLMs and tool-bound LLMs, in order (initialize before LLM setup loop)
+            self.llms = []
+            self.llms_with_tools = []
+            self.llm_provider_names = []
+            # Track initialization results for summary
+            self.llm_init_results = []
+            # Get the LLM types that should be initialized based on the sequence
+            if provider and provider in self.LLM_CONFIG and provider != "default":
+                llm_types_to_init = [provider]
+            else:
+                # Use the full sequence when no specific provider is requested
+                llm_types_to_init = self.DEFAULT_LLM_SEQUENCE
+            llm_names = [self.LLM_CONFIG[llm_type]["name"] for llm_type in llm_types_to_init]
+            print(f"🔄 Initializing LLMs based on sequence:")
+            for i, name in enumerate(llm_names, 1):
+                print(f"   {i}. {name}")
+            # Prepare storage for LLM instances
+            self.llm_instances = {}
+            self.llm_instances_with_tools = {}
+            # Only gather tools if at least one LLM supports tools
+            any_tool_support = any(self.LLM_CONFIG[llm_type].get("tool_support", False) for llm_type in llm_types_to_init)
+            self.tools = self._gather_tools() if any_tool_support else []
+            for idx, llm_type in enumerate(llm_types_to_init):
+                config = self.LLM_CONFIG[llm_type]
+                llm_name = config["name"]
+                
+                # Skip LLMs that don't support tools - we only want tool-capable LLMs
+                if not config.get("tool_support", False):
+                    print(f"⏭️ Skipping {llm_name} - no tool support")
+                    continue
+                
+                for model_config in config["models"]:
+                    model_id = model_config.get("model", "")
+                    print(f"🔄 Initializing LLM {llm_name} (model: {model_id}) ({idx+1} of {len(llm_types_to_init)})")
+                    llm_instance = None
+                    tools_ok = None
+                    error_tools = None
+                    
+                    try:
+                        def get_llm_instance(llm_type, config, model_config):
+                            if llm_type == "gemini":
+                                return self._init_gemini_llm(config, model_config)
+                            elif llm_type == "groq":
+                                return self._init_groq_llm(config, model_config)
+                            elif llm_type == "huggingface":
+                                return self._init_huggingface_llm(config, model_config)
+                            elif llm_type == "openrouter":
+                                return self._init_openrouter_llm(config, model_config)
+                            elif llm_type == "mistral":
+                                return self._init_mistral_llm(config, model_config)
+                            elif llm_type == "gigachat":
+                                return self._init_gigachat_llm(config, model_config)
+                            else:
+                                return None
+                        
+                        llm_instance = get_llm_instance(llm_type, config, model_config)
+                        if llm_instance is None:
+                            error_tools = "instantiation returned None"
+                            continue
+                        
+                        # Filter tools for provider-specific schema limitations
+                        safe_tools = self._filter_tools_for_llm(self.tools, llm_type)
+                        
+                        # Special handling for GigaChat - check if tool calling is supported
+                        if llm_type == "gigachat":
+                            try:
+                                # Test basic tool binding first
+                                llm_with_tools = llm_instance.bind_tools(safe_tools)
+                                print(f"   ✅ GigaChat tool binding successful")
+                            except Exception as e:
+                                print(f"   ⚠️ GigaChat tool binding failed: {e}")
+                                print(f"   ℹ️ Check your GigaChat configuration and API key")
+                                llm_with_tools = llm_instance  # Use without tools
+                        else:
+                            llm_with_tools = llm_instance.bind_tools(safe_tools)
+                        
+                        # Test tool calling directly since our agent only works with tools
+                        tools_ok, tools_error, test_answer = self._test_llm_tool_calling(f"{llm_name} (model: {model_id})", llm_type, llm_with_tools)
+                        basic_ok = tools_ok  # If tools work, basic functionality works too
+                        
+                        # Store result for summary
+                        self.llm_init_results.append({
+                            "provider": llm_name,
+                            "llm_type": llm_type,
+                            "model": model_id,
+                            "plain_ok": basic_ok,
+                            "tools_ok": tools_ok,
+                            "error_plain": tools_error if not basic_ok else None,
+                            "error_tools": tools_error,
+                            "test_answer": test_answer
+                        })
+                        
+                        # Check force_tools flag - if True, use even if tools test failed (but only if basic works)
+                        force_tools = config.get("force_tools", False) or model_config.get("force_tools", False)
+                        
+                        if basic_ok and tools_ok:
+                            # LLM passed both basic and tool tests - mark as fully functional
+                            self.active_model_config[llm_type] = model_config
+                            self.llm_instances[llm_type] = llm_instance
+                            self.llm_instances_with_tools[llm_type] = llm_with_tools
+                            self.llms.append(llm_instance)
+                            self.llms_with_tools.append(llm_with_tools)
+                            self.llm_provider_names.append(llm_type)
+                            
+                            print(f"✅ LLM ({llm_name}) initialized successfully with model {model_id}")
+                            break
+                        elif basic_ok and force_tools:
+                            # LLM passed basic test but failed tool test, force_tools=True - mark as available but warn
+                            self.active_model_config[llm_type] = model_config
+                            self.llm_instances[llm_type] = llm_instance
+                            self.llm_instances_with_tools[llm_type] = llm_with_tools
+                            self.llms.append(llm_instance)
+                            self.llms_with_tools.append(llm_with_tools)
+                            self.llm_provider_names.append(llm_type)
+                            
+                            print(f"⚠️ {llm_name} (model: {model_id}) tool test failed, but using anyway (force_tools=True)")
+                            print(f"⚠️ WARNING: This LLM may not work properly for tool-calling tasks")
+                            break
+                        elif not basic_ok:
+                            print(f"❌ {llm_name} (model: {model_id}) failed tool calling test - skipping")
+                            if tools_error:
+                                print(f"   Error: {tools_error}")
+                        else:
+                            print(f"❌ {llm_name} (model: {model_id}) failed tool test and force_tools=False - skipping")
+                            if tools_error:
+                                print(f"   Error: {tools_error}")
+                            
+                    except Exception as e:
+                        print(f"⚠️ Failed to initialize {llm_name} (model: {model_id}): {e}")
+                        # Interpret the actual error to get real details
+                        error_info = self._interpret_llm_error(e, llm_name, llm_type)
+                        self.llm_init_results.append({
+                            "provider": llm_name,
+                            "llm_type": llm_type,
+                            "model": model_id,
+                            "plain_ok": False,
+                            "tools_ok": False,
+                            "error_plain": error_info['description'],
+                            "error_tools": error_info['description'],
+                            "error_type": error_info['error_type'],
+                            "suggested_action": error_info['suggested_action'],
+                            "is_temporary": error_info['is_temporary'],
+                            "requires_config_change": error_info['requires_config_change'],
+                            "test_answer": ""
+                        })
+                        self.llm_instances[llm_type] = None
+                        self.llm_instances_with_tools[llm_type] = None
+            # Legacy assignments for backward compatibility
+            self.tools = self._gather_tools()
+            # Print summary table after all initializations
+            print(self._format_llm_init_summary(as_str=True))
+            self._print_llm_init_summary()
+        finally:
+            sys.stdout = old_stdout
+        debug_output = debug_buffer.getvalue()
+        # --- Save LLM initialization summary to log file and commit to repo ---  
+        try:
+            # Create structured init data
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            summary_table = self._format_llm_init_summary(as_str=True)
+            summary_json = self._get_llm_init_summary_json()
+            
+            init_data = {
+                "timestamp": timestamp,
+                "init_summary": summary_table,
+                "init_summary_json": json.dumps(summary_json, ensure_ascii=False) if not isinstance(summary_json, str) else summary_json,
+                "debug_output": debug_output,
+                "llm_config": json.dumps(self.LLM_CONFIG, ensure_ascii=False) if not isinstance(self.LLM_CONFIG, str) else self.LLM_CONFIG,
+                "available_models": json.dumps(self._get_available_models(), ensure_ascii=False) if not isinstance(self._get_available_models(), str) else self._get_available_models(),
+                "tool_support": self._get_tool_support_status()
+            }
+            
+            # Upload to dataset
+            success = dataset_manager.upload_init_summary(init_data)
+            if success:
+                print(f"✅ LLM initialization summary uploaded to dataset")
+            else:
+                print(f"⚠️ Failed to upload LLM initialization summary to dataset")
+                
+        except Exception as e:
+            print(f"⚠️ Failed to upload LLM initialization summary: {e}")
+
+    def _load_system_prompt(self):
+        """
+        Load the system prompt from the system_prompt.json file as a JSON string.
+        """
+        try:
+            # Try relative path first (when running from agent_old directory)
+            prompt_path = "system_prompt.json"
+            if not os.path.exists(prompt_path):
+                # Fallback to absolute path (when running from root directory)
+                prompt_path = os.path.join(os.path.dirname(__file__), "system_prompt.json")
+            
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                taxonomy = json.load(f)
+                return json.dumps(taxonomy, ensure_ascii=False)
+        except FileNotFoundError:
+            print("⚠️ system_prompt.json not found, using default system prompt")
+        except Exception as e:
+            print(f"⚠️ Error reading system_prompt.json: {e}")
+        return "You are a helpful assistant. Please provide clear and accurate responses."
+    
+    def _handle_rate_limit_throttling(self, error, llm_name, llm_type, max_retries=3):
+        """
+        Handle rate limit errors by throttling and retrying instead of immediate fallback.
+        
+        Args:
+            error: The rate limit error
+            llm_name: Name of the LLM
+            llm_type: Type of the LLM
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            bool: True if retry should be attempted, False if max retries exceeded
+        """
+        # Extract retry-after from error if available
+        retry_after = None
+        error_str = str(error)
+        
+        # Look for retry-after in error message or headers
+        if "retry-after" in error_str.lower():
+            match = re.search(r'retry-after[:\s]*(\d+)', error_str, re.IGNORECASE)
+            if match:
+                retry_after = int(match.group(1))
+        
+        # Default retry delays for different error types
+        if "service_tier_capacity_exceeded" in error_str or "3505" in error_str:
+            # Mistral capacity exceeded - wait longer
+            retry_after = retry_after or 30
+        elif "invalid_request_message_order" in error_str or "3230" in error_str:
+            # Mistral message ordering error - short wait and retry
+            retry_after = retry_after or 5
+        elif "429" in error_str or "rate limit" in error_str.lower():
+            # Generic rate limit - moderate wait
+            retry_after = retry_after or 10
+        else:
+            # Unknown rate limit - short wait
+            retry_after = retry_after or 5
+            
+        # Check if we've exceeded max retries
+        retry_key = f"{llm_type}_{llm_name}"
+        if not hasattr(self, '_rate_limit_retry_count'):
+            self._rate_limit_retry_count = {}
+            
+        current_retries = self._rate_limit_retry_count.get(retry_key, 0)
+        if current_retries >= max_retries:
+            print(f"⏰ Max retries ({max_retries}) exceeded for {llm_name} rate limiting. Falling back to next LLM.")
+            self._rate_limit_retry_count[retry_key] = 0  # Reset for future use
+            return False
+            
+        # Increment retry count
+        self._rate_limit_retry_count[retry_key] = current_retries + 1
+        
+        print(f"⏰ Rate limit hit for {llm_name}. Waiting {retry_after}s before retry ({current_retries + 1}/{max_retries})...")
+        time.sleep(retry_after)
+        
+        return True
+
+    def _rate_limit(self):
+        """
+        Implement rate limiting to avoid hitting API limits.
+        Waits if necessary to maintain minimum interval between requests.
+        For providers with a token_per_minute_limit, throttle based on tokens sent in the last 60 seconds.
+        """
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        # Determine wait time based on current LLM type
+        min_interval = 20
+        if time_since_last < min_interval:
+            sleep_time = min_interval - time_since_last
+            time.sleep(sleep_time)
+        llm_type = self.current_llm_type
+        config = self.LLM_CONFIG.get(llm_type, {})
+        
+        # Check for model-specific rate limit first, then provider-level limit
+        tpm_limit = None
+        if hasattr(self, 'current_model_name') and self.current_model_name:
+            # Look for model-specific rate limit
+            models = config.get("models", [])
+            for model_config in models:
+                if model_config.get("model") == self.current_model_name:
+                    tpm_limit = model_config.get("token_per_minute_limit")
+                    break
+        
+        # Fall back to provider-level rate limit if no model-specific limit found
+        if tpm_limit is None:
+            tpm_limit = config.get("token_per_minute_limit")
+            
+        if tpm_limit:
+            # Initialize token usage tracker for this provider
+            if llm_type not in self._provider_token_usage:
+                self._provider_token_usage[llm_type] = []  # List of (timestamp, tokens)
+            # Remove entries older than 60 seconds
+            self._provider_token_usage[llm_type] = [
+                (ts, tok) for ts, tok in self._provider_token_usage[llm_type]
+                if current_time - ts < 60
+            ]
+            # Estimate tokens for the next request (should be set before _rate_limit is called)
+            next_tokens = getattr(self, '_next_request_tokens', None)
+            if next_tokens is None:
+                next_tokens = 0
+            # Calculate total tokens in the last 60 seconds
+            tokens_last_minute = sum(tok for ts, tok in self._provider_token_usage[llm_type])
+            # If sending now would exceed the TPM limit, wait
+            if tokens_last_minute + next_tokens > tpm_limit:
+                # Calculate how long to wait: find the soonest token batch to expire
+                oldest_ts = min(ts for ts, tok in self._provider_token_usage[llm_type]) if self._provider_token_usage[llm_type] else current_time
+                wait_time = 60 - (current_time - oldest_ts) + 60  # Add 1 min safety
+                print(f"⏳ [TPM Throttle] Waiting {wait_time:.1f}s to respect {tpm_limit} TPM for {llm_type}...")
+                time.sleep(wait_time)
+            # After waiting, add this request to the tracker
+            self._provider_token_usage[llm_type].append((time.time(), next_tokens))
+        self.last_request_time = time.time()
+
+    def _estimate_tokens(self, text: str) -> int:
+        """
+        Estimate token count using tiktoken for accurate counting.
+        """
+        try:
+            # Use GPT-4 encoding as a reasonable approximation for most models
+            encoding = tiktoken.encoding_for_model("gpt-4")
+            tokens = encoding.encode(text)
+            return len(tokens)
+        except Exception as e:
+            # Fallback to character-based estimation if tiktoken fails
+            print(f"⚠️ Tiktoken failed, using fallback: {e}")
+            return len(text) // 4
+
+    def _truncate_messages(self, messages: List[Any], llm_type: str = None) -> List[Any]:
+        """
+        Truncate message history to prevent token overflow.
+        Keeps system message and a recent chronological window of messages.
+        Ensures conversation order is preserved and that any 'tool' message
+        retains its preceding assistant tool-call message to satisfy providers
+        that require function-call continuity (e.g., GigaChat/OpenAI-style).
+        
+        Args:
+            messages: List of messages to truncate
+            llm_type: Type of LLM for context-aware truncation
+        """
+        # Always read max_history from LLM_CONFIG, using global default when provider has none
+        max_history = self.LLM_CONFIG.get(llm_type, {}).get(
+            "max_history",
+            self.LLM_CONFIG["default"]["max_history"]
+        )
+
+        if len(messages) <= max_history:
+            return messages
+
+        # Identify system message (first message may be system)
+        system_msg = messages[0] if messages and hasattr(messages[0], 'type') and messages[0].type == 'system' else None
+
+        # Start with a simple tail window preserving chronological order
+        # Keep the last (max_history - 1) messages after the system message (if any)
+        keep_after_system = max_history - 1 if system_msg else max_history
+        tail_messages = messages[1:] if system_msg else messages
+        kept = tail_messages[-keep_after_system:]
+
+        # If the first kept message is a tool message, ensure we also include the
+        # immediately preceding assistant message that issued the tool call
+        def _has_tool_calls(ai_msg: Any) -> bool:
+            try:
+                return (hasattr(ai_msg, 'type') and ai_msg.type in ('ai', 'assistant')) and bool(getattr(ai_msg, 'tool_calls', None))
+            except Exception:
+                return False
+
+        if kept and hasattr(kept[0], 'type') and kept[0].type == 'tool':
+            # Find the original index of this tool message
+            first_tool_idx_global = (1 if system_msg else 0) + (len(tail_messages) - len(kept))
+            # Look one message back in the full list for the assistant tool-call
+            prev_idx = first_tool_idx_global - 1
+            if prev_idx >= 0:
+                prev_msg = messages[prev_idx]
+                if _has_tool_calls(prev_msg):
+                    # Prepend the assistant tool-call message to kept
+                    kept = [prev_msg] + kept
+                else:
+                    # Walk further back until we either find an assistant with tool_calls or hit a non-ai
+                    scan_idx = prev_idx
+                    while scan_idx >= 0:
+                        candidate = messages[scan_idx]
+                        if _has_tool_calls(candidate):
+                            kept = [candidate] + kept
+                            break
+                        # Stop if we encounter a human/system before an AI tool-call
+                        if hasattr(candidate, 'type') and candidate.type in ('human', 'system'):
+                            break
+                        scan_idx -= 1
+
+        # If we exceeded the allowed window due to pairing, trim from the start but never drop the paired assistant
+        # Keep chronological order: system (optional) + kept
+        truncated_messages = []
+        if system_msg:
+            truncated_messages.append(system_msg)
+        # If still too long, drop earliest items after system, but do not start with a dangling tool message
+        if len(truncated_messages) + len(kept) > max_history:
+            drop = (len(truncated_messages) + len(kept)) - max_history
+            # Avoid starting with a tool message after drop by ensuring we don't drop the paired assistant
+            start_idx = 0
+            while drop > 0 and start_idx < len(kept):
+                # Do not drop if dropping would make the new first item a tool without preceding assistant
+                next_first = kept[start_idx + 1] if start_idx + 1 < len(kept) else None
+                if next_first is not None and hasattr(next_first, 'type') and next_first.type == 'tool':
+                    break
+                start_idx += 1
+                drop -= 1
+            kept = kept[start_idx:]
+
+        truncated_messages.extend(kept)
+        return truncated_messages
+
+    @trace_prints_with_context("tool_execution")
+    def _execute_tool(self, tool_name: str, tool_args: dict, tool_registry: dict, call_id: str = None) -> str:
+        """
+        Execute a tool with the given name and arguments.
+        
+        Args:
+            tool_name: Name of the tool to execute
+            tool_args: Arguments for the tool
+            tool_registry: Registry of available tools
+            
+        Returns:
+            str: Result of tool execution
+        """
+        # Inject file data if available and needed
+        if isinstance(tool_args, dict):
+            tool_args = self._inject_file_data_to_tool_args(tool_name, tool_args)
+        
+        # Create truncated copy for logging only
+        truncated_args = self._deep_trim_dict_max_length(tool_args)
+        print(f"[Tool Loop] Running tool: {tool_name} with args: {truncated_args}")
+        print(f"[Tool Loop] Tool args type: {type(tool_args)}, Tool args value: {tool_args}")
+        
+        # Start timing for trace
+        start_time = time.time()
+        
+        tool_func = tool_registry.get(tool_name)
+        
+        if not tool_func:
+            tool_result = f"Tool '{tool_name}' not found."
+            print(f"[Tool Loop] Tool '{tool_name}' not found.")
+        else:
+            try:
+                # Check if it's a proper LangChain tool (has invoke method and tool attributes)
+                if (hasattr(tool_func, 'invoke') and 
+                    hasattr(tool_func, 'name') and 
+                    hasattr(tool_func, 'description')):
+                    # This is a proper LangChain tool, use invoke method
+                    if isinstance(tool_args, dict):
+                        tool_result = tool_func.invoke(tool_args)
+                    else:
+                        # For non-dict args, assume it's a single value that should be passed as 'input'
+                        tool_result = tool_func.invoke({'input': tool_args})
+                else:
+                    # This is a regular function, call it directly
+                    if isinstance(tool_args, dict):
+                        tool_result = tool_func(**tool_args)
+                    else:
+                        # For non-dict args, pass directly
+                        tool_result = tool_func(tool_args)
+                print(f"[Tool Loop] Tool '{tool_name}' executed successfully.")
+                # Only trim for printing, not for LLM
+                self._print_tool_result(tool_name, tool_result)
+            except Exception as e:
+                tool_result = f"Error running tool '{tool_name}': {e}"
+                print(f"[Tool Loop] Error running tool '{tool_name}': {e}")
+        
+        # Add tool execution to trace if call_id is provided
+        if call_id and self.question_trace:
+            execution_time = time.time() - start_time
+            llm_type = self.current_llm_type
+            self._add_tool_execution_trace(llm_type, call_id, tool_name, tool_args, tool_result, execution_time)
+        
+        # Convert tool result to string for message history, handling structured results properly
+        if isinstance(tool_result, dict):
+            return self._extract_main_text_from_tool_result(tool_result)
+        return str(tool_result)
+
+
+    @trace_prints_with_context("final_answer")
+    def _force_final_answer(self, messages, tool_results_history, llm):
+        """
+        Force the LLM to provide a final answer by adding a reminder prompt.
+        Tool results are already available in the message history as ToolMessage objects.
+        
+        Args:
+            messages: Current message list (contains tool results as ToolMessage objects)
+            tool_results_history: History of tool results (for reference, not used in prompt)
+            llm: LLM instance
+        Returns:
+            Response from LLM with structured answer via submit_answer tool
+        """
+        
+        # Extract llm_type from llm
+        llm_type = getattr(llm, 'llm_type', None) or getattr(llm, 'type_str', None) or ''
+        
+        # Create a more explicit reminder to provide final answer
+        reminder = self._get_reminder_prompt(
+            reminder_type="final_answer_prompt",
+            messages=messages,
+            tools=self.tools,
+            tool_results_history=tool_results_history
+        )
+        # Tool results are already in message history as ToolMessage objects
+        # No need to duplicate them in the reminder
+        
+        # Add the reminder to the existing message history
+        messages.append(HumanMessage(content=reminder))
+        
+        try:
+            print(f"[Tool Loop] Trying to force the final answer with {len(tool_results_history)} tool results.")
+            final_response = self._invoke_llm_provider(llm, messages)
+            if hasattr(final_response, 'content') and final_response.content:
+                print(f"[Tool Loop] ✅ Final answer generated: {final_response.content[:200]}...")
+                return final_response
+            else:
+                print("[Tool Loop] ❌ LLM returned empty response")
+                # If LLM returns empty response, return a generic message
+                return AIMessage(content="Unable to determine the answer from the available information.")
+        except Exception as e:
+            print(f"[Tool Loop] ❌ Failed to get final answer: {e}")
+            # If LLM fails, return a generic error message
+            return AIMessage(content="Error occurred while processing the question.")
+
+
+    @trace_prints_with_context("tool_loop")
+    def _run_tool_calling_loop(self, llm, messages, tool_registry, llm_type="unknown", model_index: int = 0, call_id: str = None, streaming_generator=None):
+        """
+        Run a tool-calling loop: repeatedly invoke the LLM, detect tool calls, execute tools, and feed results back until a final answer is produced.
+        Supports both streaming and non-streaming modes for lean implementation.
+        
+        - Uses adaptive step limits based on LLM type (Gemini: 25, Groq: 15, HuggingFace: 20, unknown: 20).
+        - Tracks called tools to prevent duplicate calls and tool results history for fallback handling.
+        - Monitors progress by tracking consecutive steps without meaningful changes in response content.
+        - Handles LLM invocation failures gracefully with error messages.
+        - Detects when responses are truncated due to token limits and adjusts accordingly.
+        
+        Args:
+            llm: The LLM instance (with or without tools bound)
+            messages: The message history (list)
+            tool_registry: Dict mapping tool names to functions
+            llm_type: Type of LLM ("gemini", "groq", "huggingface", or "unknown")
+            model_index: Index of the model to use for token limits
+            call_id: Call ID for tracing
+            streaming_generator: If provided, yields streaming events for real-time visibility
+            
+        Returns:
+            The final LLM response (with content)
+        Yields:
+            If streaming_generator is provided, yields streaming events
+        """
+
+        # Adaptive step limits based on LLM type and progress
+        base_max_steps = {
+            "gemini": 10,    # Reduced from 25 to prevent excessive repetition
+            "groq": 5,       # Reduced from 10 to 5 to prevent infinite loops
+            "huggingface": 20,  # Conservative for HuggingFace
+            "unknown": 20
+        }
+        max_steps = base_max_steps.get(llm_type, 8)
+        
+        # Tool calling configuration       
+        called_tools = []  # Track which tools have been called to prevent duplicates (stores dictionaries with name, embedding, args)
+        tool_results_history = []  # Track tool results for better fallback handling
+        current_step_tool_results = []  # Track results from current step only
+        consecutive_no_progress = 0  # Track consecutive steps without progress
+        last_response_content = ""  # Track last response content for progress detection
+        max_total_tool_calls = 10  # Reduced from 15 to 8 to prevent excessive tool usage
+        max_tool_calls_per_step = 5  # Maximum tool calls allowed per step
+        total_tool_calls = 2  # Track total tool calls to prevent infinite loops
+        consecutive_identical_tool_calls = 0  # Track consecutive identical tool calls
+        last_tool_call_signature = None  # Track the signature of the last tool call
+        
+        # Simplified tool usage tracking - no special handling for search tools
+        tool_usage_limits = {
+            'default': 3,
+            'wiki_search': 2,
+            'web_search': 3, 
+            'arxiv_search': 2,
+            'analyze_excel_file': 2,
+            'analyze_csv_file': 2,
+            'analyze_image': 2,
+            'extract_text_from_image': 2,
+            'exa_ai_helper': 1,
+            'web_search_deep_research_exa_ai': 1,
+            'submit_intermediate_step': 10  # Limit intermediate steps to prevent excessive reasoning loops
+        }
+        tool_usage_count = {tool_name: 0 for tool_name in tool_usage_limits}
+        
+        # Unified streaming function - yields immediately, no buffering
+        def stream_now(content: str, event_type: str = "content", metadata: dict = None):
+            """Immediately yield content for real-time streaming without duplication"""
+            if streaming_generator:
+                # Update trace first
+                self._update_trace_during_streaming(event_type, content, metadata)
+                
+                # Don't call streaming_generator directly - let the caller handle yielding
+                # This prevents duplication since the content will be yielded by the caller
+                return content  # Return content for yielding
+            return None
+        
+        # Stream loop start if in streaming mode
+        content = stream_now(f"🔄 **Starting tool loop with {llm_type}** (max {max_steps} steps)\n", 
+                            "loop_start", {"llm_type": llm_type, "max_steps": max_steps})
+        # If we have a streaming generator, this method should yield content
+        
+        # Detect if the question is text-only (file_name is empty/None)
+        is_text_only_question = False
+        original_question = ""
+        for msg in messages:
+            if hasattr(msg, 'type') and msg.type == 'human':
+                original_question = getattr(msg, 'content', "")
+                break
+        # Try to get file_name from trace or messages
+        file_name = getattr(self, 'current_file_name', "")
+        if not file_name:
+            is_text_only_question = True
+        
+        for step in range(max_steps):
+            response = None
+            print(f"\n[Tool Loop] Step {step+1}/{max_steps} - Using LLM: {llm_type}")
+            current_step_tool_results = []  # Reset for this step
+            
+            # Stream step start immediately
+            step_content = stream_now(f"\n\n📍 **Step {step+1}/{max_steps}**\n", 
+                      "step_start", {"step": step + 1, "max_steps": max_steps})
+            if step_content and streaming_generator:
+                yield step_content
+            
+            # Reset Mistral conversion flag for each step
+            self._mistral_converted_this_step = False
+            
+            # ... existing code ...
+            # Check if we've exceeded the maximum total tool calls
+            if total_tool_calls >= max_total_tool_calls:
+                print(f"[Tool Loop] Maximum total tool calls ({max_total_tool_calls}) reached. Calling _force_final_answer ().")
+                # Let the LLM generate the final answer from tool results (or lack thereof)
+                return self._force_final_answer(messages, tool_results_history, llm)
+            
+            # Check for excessive tool usage
+            for tool_name, count in tool_usage_count.items():
+                if count >= tool_usage_limits.get(tool_name, tool_usage_limits['default']):  # Use default limit for unknown tools
+                    print(f"[Tool Loop] ⚠️ {tool_name} used {count} times (max: {tool_usage_limits.get(tool_name, tool_usage_limits['default'])}). Preventing further usage.")
+                    # Add a message to discourage further use of this tool
+                    if step > 2:  # Only add this message after a few steps
+                        reminder = self._get_reminder_prompt(
+                            reminder_type="tool_usage_issue",
+                            tool_name=tool_name,
+                            count=count
+                        )
+                        messages.append(HumanMessage(content=reminder))
+            
+            # Truncate messages to prevent token overflow
+            messages = self._truncate_messages(messages, llm_type)
+            
+            # Check token limits and summarize if needed
+            total_text = "".join(str(getattr(msg, 'content', '')) for msg in messages)
+            estimated_tokens = self._estimate_tokens(total_text)
+            token_limit = self._get_token_limit(llm_type)
+            
+            # Stream LLM thinking immediately  
+            thinking_content = stream_now("\n🤖 **LLM is analyzing and planning...**\n", 
+                      "llm_thinking", {"llm_type": llm_type})
+            if thinking_content and streaming_generator:
+                yield thinking_content
+            
+            try:
+                # Use streaming if supported - unified approach for LLM tokens
+                if streaming_generator and hasattr(llm, "stream") and callable(getattr(llm, "stream")):
+                    response_start = stream_now("\n💭 **LLM response:**\n", "llm_stream_start", {"streaming": True})
+                    if response_start and streaming_generator:
+                        yield response_start
+                    
+                    llm_response_content = ""
+                    for chunk in llm.stream(messages):
+                        try:
+                            text = getattr(chunk, "content", None) or getattr(chunk, "text", None) or str(chunk)
+                            if text:
+                                llm_response_content += text
+                                # Stream each token immediately - unified with other content
+                                chunk_content = stream_now(text, "llm_chunk", {"chunk_type": "streaming"})
+                                if chunk_content and streaming_generator:
+                                    yield chunk_content
+                        except Exception:
+                            continue
+                    
+                    # Reconstruct response object
+                    response = AIMessage(content=llm_response_content)
+                    if hasattr(chunk, 'tool_calls'):
+                        response.tool_calls = getattr(chunk, 'tool_calls', [])
+                else:
+                    response = self._invoke_llm_provider(llm, messages)
+                    if streaming_generator and hasattr(response, 'content') and response.content:
+                        # Stream non-streaming LLM response immediately too
+                        response_content = stream_now(response.content, "llm_response", {"streaming": False})
+                        if response_content and streaming_generator:
+                            yield response_content
+            except Exception as e:
+                # Check if this is a rate limit error that should be throttled
+                error_str = str(e)
+                if ("429" in error_str or "rate limit" in error_str.lower() or 
+                    "service_tier_capacity_exceeded" in error_str or "3505" in error_str or
+                    "invalid_request_message_order" in error_str or "3230" in error_str):
+                    
+                    # Try throttling and retrying instead of immediate fallback
+                    if self._handle_rate_limit_throttling(e, llm_type, llm_type):
+                        print(f"🔄 [Tool Loop] Retrying {llm_type} after rate limit throttling...")
+                        # Continue the loop to retry the same LLM
+                        continue
+                    else:
+                        print(f"⏰ [Tool Loop] Rate limit retries exhausted for {llm_type}, re-raising for fallback...")
+                        self._handle_provider_failure(llm_type, "rate_limit")
+                        # Re-raise the exception so it can be caught by _unified_process for fallback
+                        raise
+                
+                # Check for Mistral AI specific message ordering error
+                if llm_type == "mistral" and ("invalid_request_message_order" in error_str or "3230" in error_str):
+                    return self._handle_mistral_message_ordering_error_in_tool_loop(e, llm_type, messages, llm, tool_results_history)
+                else:
+                    # Handle other errors normally
+                    handled, result = self._handle_llm_error(e, llm_name=llm_type, llm_type=llm_type, phase="tool_loop",
+                        messages=messages, llm=llm, tool_results_history=tool_results_history)
+                    if handled:
+                        return result
+                    else:
+                        raise
+
+            # Check if response was truncated due to token limits
+            if hasattr(response, 'response_metadata') and response.response_metadata:
+                finish_reason = response.response_metadata.get('finish_reason')
+                if finish_reason == 'length':
+                    print(f"[Tool Loop] ❌ Hit token limit for {llm_type} LLM. Response was truncated. Cannot complete reasoning.")
+                    # Check if chunking is enabled for this provider
+                    config = self.LLM_CONFIG.get(llm_type, {})
+                    enable_chunking = config.get("enable_chunking", True)  # Default to True for backward compatibility
+                    
+                    if enable_chunking:
+                        # Handle response truncation using generic token limit error handler
+                        print(f"[Tool Loop] Applying chunking mechanism for {llm_type} response truncation")
+                        # Get the LLM name for proper logging
+                        _, llm_name, _ = self._select_llm(llm_type, True)
+                        return self._handle_token_limit_error(messages, llm, llm_name, Exception("Response truncated due to token limit"), llm_type)
+                    else:
+                        print(f"[Tool Loop] ⚠️ Chunking disabled for {llm_type}. Returning truncated response.")
+                        return response
+
+            # === DEBUG OUTPUT ===
+            # Print LLM response using the new helper function
+            print(f"[Tool Loop] Raw LLM response details:")
+            self._print_message_components(response, "response")
+
+            # Check for empty response
+            if not hasattr(response, 'content') or not response.content:
+                # Allow empty content if there are tool calls (this is normal for tool-calling responses)
+                if hasattr(response, 'tool_calls') and response.tool_calls:
+                    print(f"[Tool Loop] Empty content but tool calls detected - proceeding with tool execution")
+                else:
+                    # If we have tool results but no content, force a final answer after 2 consecutive empty responses
+                    if tool_results_history and consecutive_no_progress >= 1:
+                        print(f"[Tool Loop] Empty content and we have {len(tool_results_history)} tool results for 2 consecutive steps. Forcing final answer.")
+                        return self._force_final_answer(messages, tool_results_history, llm)
+                    # Otherwise, increment no-progress counter and continue
+                    consecutive_no_progress += 1
+                    print(f"[Tool Loop] ❌ {llm_type} LLM returned empty response. Consecutive no-progress steps: {consecutive_no_progress}")
+                    if consecutive_no_progress >= 2:
+                        return AIMessage(content=f"Error: {llm_type} LLM returned empty response. Cannot complete reasoning.")
+                    continue
+            else:
+                consecutive_no_progress = 0  # Reset counter on progress
+
+            # Check for progress (new content or tool calls)
+            current_content = getattr(response, 'content', '') or ''
+            current_tool_calls = getattr(response, 'tool_calls', []) or []
+            
+            # Check if we have new tool calls that are different from the last ones
+            has_new_tool_calls = len(current_tool_calls) > 0
+            has_different_tool_calls = False
+            has_intermediate_step = False
+            has_final_answer_tool = False
+            
+            if has_new_tool_calls:
+                # Check if any of the current tool calls are different from the last one
+                for tool_call in current_tool_calls:
+                    tool_name = tool_call.get('name')
+                    tool_args = tool_call.get('args', {})
+                    current_signature = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
+                    
+                    # Check for intermediate step tool calls
+                    if tool_name == 'submit_intermediate_step':
+                        has_intermediate_step = True
+                    
+                    # Check for final answer tool calls
+                    if tool_name == 'submit_answer':
+                        has_final_answer_tool = True
+                    
+                    # Check if tool call is different from last one
+                    if last_tool_call_signature and current_signature != last_tool_call_signature:
+                        has_different_tool_calls = True
+                        break
+            
+            # Progress detection logic:
+            # - New content is always progress
+            # - Different tool calls are progress
+            # - Intermediate steps are progress but don't count as much toward completion
+            # - Final answer tools are progress and indicate completion
+            has_progress = (current_content != last_response_content or 
+                          (has_new_tool_calls and has_different_tool_calls) or
+                          has_intermediate_step or has_final_answer_tool)
+            
+            # Check if we have tool results but no final answer yet
+            has_tool_results = len(tool_results_history) > 0
+            has_final_answer = (hasattr(response, 'content') and response.content and 
+                              not getattr(response, 'tool_calls', None))
+            
+            if has_tool_results and not has_final_answer and step >= 2:  # Increased from 1 to 2 to give more time
+                # We have information but no answer - provide explicit reminder to analyze tool results
+                reminder = self._get_reminder_prompt(
+                    reminder_type="final_answer_prompt",
+                    messages=messages,
+                    tools=self.tools,
+                    tool_results_history=tool_results_history
+                )
+                messages.append(HumanMessage(content=reminder))
+            
+            if not has_progress:
+                consecutive_no_progress += 1
+                print(f"[Tool Loop] No progress detected. Consecutive no-progress steps: {consecutive_no_progress}")
+                
+                # Exit early if no progress for too many consecutive steps
+                if consecutive_no_progress >= 3:  # Increased from 2 to 3
+                    print(f"[Tool Loop] Exiting due to {consecutive_no_progress} consecutive steps without progress")
+                    # If we have tool results, force a final answer before exiting
+                    if tool_results_history:
+                        print(f"[Tool Loop] Forcing final answer with {len(tool_results_history)} tool results before exit")
+                        return self._force_final_answer(messages, tool_results_history, llm)
+                    break
+                elif consecutive_no_progress == 1:
+                    # Add a gentle reminder to use tools
+                    reminder = self._get_reminder_prompt(
+                        reminder_type="final_answer_prompt",
+                        tools=self.tools
+                    )
+                    messages.append(HumanMessage(content=reminder))
+            else:
+                consecutive_no_progress = 0  # Reset counter on progress
+                
+            # Additional check: if we have too many consecutive identical tool calls, force exit
+            if consecutive_identical_tool_calls >= 2:
+                print(f"[Tool Loop] Detected {consecutive_identical_tool_calls} consecutive identical tool calls. Forcing exit.")
+                if tool_results_history:
+                    return self._force_final_answer(messages, tool_results_history, llm)
+                else:
+                    return AIMessage(content="Error: LLM is stuck making identical tool calls. Cannot complete reasoning.")
+                
+            last_response_content = current_content
+
+        # Check for submit_answer and submit_intermediate_step tool calls (modern structured approach)
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            for tool_call in response.tool_calls:
+                tool_name = tool_call.get('name')
+                
+                if tool_name == 'submit_answer':
+                    print(f"[Tool Loop] Structured answer detected via submit_answer tool")
+                    # Track successful provider requests
+                    self._handle_provider_success(llm_type)
+                    
+                    # Execute the tool to get structured result and add to chat history
+                    tool_args = tool_call.get('args', {})
+                    
+                    # Execute the tool using helper method with call_id for tracing
+                    tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
+                    
+                    # Store the raw result for this step
+                    current_step_tool_results.append(tool_result)
+                    tool_results_history.append(tool_result)
+                    total_tool_calls += 1  # Increment total tool call counter
+                    
+                    # Report tool result
+                    self._print_tool_result(tool_name, tool_result)
+                    
+                    # Add tool result to messages for chat history continuity
+                    messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
+                    
+                    # Update the stored conversation history
+                    self._update_conversation_history(messages)
+                    
+                    # Extract the answer for immediate display
+                    answer = self._extract_main_text_from_tool_result(tool_result)
+                    if streaming_generator:
+                        # Use the streaming generator instead of direct yield
+                        streaming_generator(answer)
+                    return response
+                
+                elif tool_name == 'submit_intermediate_step':
+                    print(f"[Tool Loop] Intermediate step detected via submit_intermediate_step tool")
+                    
+                    # Execute the tool to get structured result and add to chat history
+                    tool_args = tool_call.get('args', {})
+                    
+                    # Execute the tool using helper method with call_id for tracing
+                    tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
+                    
+                    # Store the raw result for this step
+                    current_step_tool_results.append(tool_result)
+                    tool_results_history.append(tool_result)
+                    total_tool_calls += 1  # Increment total tool call counter
+                    
+                    # Report tool result
+                    self._print_tool_result(tool_name, tool_result)
+                    
+                    # Add tool result to messages for chat history continuity
+                    messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
+                    
+                    # Update the stored conversation history
+                    self._update_conversation_history(messages)
+                    
+                    # Extract the step description for display
+                    step_description = self._extract_main_text_from_tool_result(tool_result)
+                    if streaming_generator:
+                        # Use the streaming generator instead of direct yield
+                        streaming_generator(step_description)
+                    
+                    # IMPORTANT: Don't return here - continue the loop for intermediate steps
+                    # Only return for submit_answer which indicates completion
+                    continue
+            
+            # If response has content and no tool calls, return (legacy approach)
+            if hasattr(response, 'content') and response.content and not getattr(response, 'tool_calls', None):
+                print(f"[Tool Loop] Final answer detected: {response.content}")
+                # Track successful provider requests
+                self._handle_provider_success(llm_type)
+                # If streaming, use the streaming generator
+                if streaming_generator:
+                    streaming_generator(response.content)
+                return response
+            tool_calls = getattr(response, 'tool_calls', None)
+            if tool_calls:
+                print(f"[Tool Loop] Detected {len(tool_calls)} tool call(s)")
+                
+                # Stream tool calls detected immediately
+                tool_calls_content = stream_now(f"\n🔧 **Detected {len(tool_calls)} tool call(s)**\n", 
+                          "tool_calls_detected", {"tool_count": len(tool_calls)})
+                if tool_calls_content and streaming_generator:
+                    yield tool_calls_content
+                
+                # Add tool loop data to trace
+                if call_id and self.question_trace:
+                    self._add_tool_loop_data(llm_type, call_id, step + 1, tool_calls, consecutive_no_progress)
+                
+                # IMPORTANT: Preserve the assistant function call in history for providers
+                # like GigaChat/OpenAI that require pairing before tool results.
+                messages.append(response)
+
+                # Limit the number of tool calls per step to prevent token overflow
+                if len(tool_calls) > max_tool_calls_per_step:
+                    print(f"[Tool Loop] Too many tool calls on a single step ({len(tool_calls)}). Limiting to first {max_tool_calls_per_step}.")
+                    tool_calls = tool_calls[:max_tool_calls_per_step]
+                
+                # Simplified duplicate detection using new centralized methods
+                new_tool_calls = []
+                duplicate_count = 0
+                for tool_call in tool_calls:
+                    tool_name = tool_call.get('name')
+                    tool_args = tool_call.get('args', {})
+                    
+                    # submit_answer and submit_intermediate_step are now handled earlier in the flow, but if they somehow get here, process them normally
+                    if tool_name == 'submit_answer':
+                        print(f"[Tool Loop] submit_answer detected in regular flow - processing normally")
+                    elif tool_name == 'submit_intermediate_step':
+                        print(f"[Tool Loop] submit_intermediate_step detected in regular flow - processing normally")
+                    
+                    # Check if tool usage limit exceeded FIRST (most restrictive check)
+                    if tool_name in tool_usage_count and tool_usage_count[tool_name] >= tool_usage_limits.get(tool_name, tool_usage_limits['default']):
+                        print(f"[Tool Loop] ⚠️ {tool_name} usage limit reached ({tool_usage_count[tool_name]}/{tool_usage_limits.get(tool_name, tool_usage_limits['default'])}). Skipping.")
+                        stream_now(f"⚠️ **{tool_name} usage limit reached**\n", 
+                                   "tool_limit", {"tool_name": tool_name, "usage_count": tool_usage_count[tool_name]})
+                        duplicate_count += 1
+                        continue
+                    
+                    # Check if this is a duplicate tool call (SECOND)
+                    if self._is_duplicate_tool_call(tool_name, tool_args, called_tools):
+                        duplicate_count += 1
+                        print(f"[Tool Loop] Duplicate tool call detected: {tool_name} with args: {tool_args}")
+                        stream_now(f"⚠️ **Duplicate tool call: {tool_name}**\n", 
+                                   "tool_duplicate", {"tool_name": tool_name})
+                        reminder = self._get_reminder_prompt(
+                            reminder_type="tool_usage_issue",
+                            tool_name=tool_name,
+                            tool_args=tool_args
+                        )
+                        messages.append(HumanMessage(content=reminder))
+                        return response
+                    
+                    # New tool call - add it (LAST)
+                    print(f"[Tool Loop] New tool call: {tool_name} with args: {tool_args}")
+                    new_tool_calls.append(tool_call)
+                    self._add_tool_call_to_history(tool_name, tool_args, called_tools)
+                    
+                    # Track tool usage
+                    if tool_name in tool_usage_count:
+                        tool_usage_count[tool_name] += 1
+                        print(f"[Tool Loop] {tool_name} usage: {tool_usage_count[tool_name]}/{tool_usage_limits.get(tool_name, tool_usage_limits['default'])}")
+                
+                # Only force final answer if ALL tool calls were duplicates AND we have tool results
+                if not new_tool_calls and tool_results_history:
+                    print(f"[Tool Loop] All {len(tool_calls)} tool calls were duplicates and we have {len(tool_results_history)} tool results. Forcing final answer.")
+                    result = self._force_final_answer(messages, tool_results_history, llm)
+                    if result:
+                        return result
+                elif not new_tool_calls and not tool_results_history:
+                    # No new tool calls and no previous results - this might be a stuck state
+                    print(f"[Tool Loop] All tool calls were duplicates but no previous results. Adding reminder to use available tools.")
+                    reminder = self._get_reminder_prompt(reminder_type="tool_usage_issue", tool_name=tool_name)
+                    messages.append(HumanMessage(content=reminder))
+                    return response
+                
+                # Execute only new tool calls
+                for tool_call in new_tool_calls:
+                    tool_name = tool_call.get('name')
+                    tool_args = tool_call.get('args', {})
+                    
+                    # Check for consecutive identical tool calls
+                    current_tool_signature = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
+                    if current_tool_signature == last_tool_call_signature:
+                        consecutive_identical_tool_calls += 1
+                        print(f"[Tool Loop] Consecutive identical tool call detected: {tool_name} (count: {consecutive_identical_tool_calls})")
+                        
+                        # If we have too many consecutive identical tool calls, force exit
+                        if consecutive_identical_tool_calls >= 2:
+                            print(f"[Tool Loop] Too many consecutive identical tool calls ({consecutive_identical_tool_calls}). Forcing final answer.")
+                            if tool_results_history:
+                                return self._force_final_answer(messages, tool_results_history, llm)
+                            else:
+                                return AIMessage(content="Error: LLM is stuck in a loop making identical tool calls. Cannot complete reasoning.")
+                    else:
+                        consecutive_identical_tool_calls = 0
+                        last_tool_call_signature = current_tool_signature
+                    
+                    # submit_answer is now handled earlier, but if it reaches here, process it normally
+                    if tool_name == 'submit_answer':
+                        print(f"[Tool Loop] submit_answer reached execution - processing normally")
+                    
+                    # Stream tool start immediately
+                    tool_start_content = stream_now(f"\n🔧 **Executing {tool_name}**\n", 
+                              "tool_start", {"tool_name": tool_name, "tool_args": tool_args})
+                    if tool_start_content and streaming_generator:
+                        yield tool_start_content
+                    
+                    # Execute tool using helper method with call_id for tracing
+                    tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
+                    
+                    # Store the raw result for this step
+                    current_step_tool_results.append(tool_result)
+                    tool_results_history.append(tool_result)
+                    total_tool_calls += 1  # Increment total tool call counter
+                    
+                    # Report tool result
+                    self._print_tool_result(tool_name, tool_result)
+                    
+                    # Stream tool completion immediately
+                    if isinstance(tool_result, str):
+                        display_result = tool_result[:300] + "..." if len(tool_result) > 300 else tool_result
+                    else:
+                        # For structured results, extract the main text
+                        display_result = self._extract_main_text_from_tool_result(tool_result)
+                        display_result = display_result[:300] + "..." if len(display_result) > 300 else display_result
+                    tool_end_content = stream_now(f"\n✅ **{tool_name} completed**\n```\n{display_result}\n```\n", 
+                              "tool_end", {"tool_name": tool_name, "tool_result": tool_result})
+                    if tool_end_content and streaming_generator:
+                        yield tool_end_content
+                    
+                    # Add tool result to messages - let LangChain handle the formatting
+                    messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
+                    
+                    # Update the stored conversation history
+                    self._update_conversation_history(messages)
+                
+                # Convert messages for Mistral AI if needed (before next LLM call)
+                if llm_type == "mistral" and not self._mistral_converted_this_step:
+                    messages = self._convert_messages_for_mistral(messages)
+                    self._mistral_converted_this_step = True
+                
+                # Make new LLM call with tool results instead of returning old response
+                # This will be handled by the next iteration of the loop
+                pass
+            # Gemini (and some LLMs) may use 'function_call' instead of 'tool_calls'
+            function_call = getattr(response, 'function_call', None)
+            if function_call:
+                tool_name = function_call.get('name')
+                tool_args = function_call.get('arguments', {})
+                
+                # Preserve assistant function call message in history
+                messages.append(response)
+                
+                # Check if this is a duplicate function call
+                if self._is_duplicate_tool_call(tool_name, tool_args, called_tools):
+                    print(f"[Tool Loop] Duplicate function_call detected: {tool_name} with args: {tool_args}")
+                    reminder = self._get_reminder_prompt(
+                        reminder_type="tool_usage_issue",
+                        tool_name=tool_name,
+                        tool_args=tool_args
+                    )
+                    messages.append(HumanMessage(content=reminder))
+                    
+                    # Only force final answer if we have tool results
+                    if tool_results_history:
+                        print(f"[Tool Loop] Duplicate function_call with {len(tool_results_history)} tool results. Forcing final answer.")
+                        result = self._force_final_answer(messages, tool_results_history, llm)
+                        if result:
+                            return result
+                    else:
+                        # No previous results - add reminder and continue
+                        reminder = self._get_reminder_prompt(reminder_type="tool_usage_issue", tool_name=tool_name)
+                        messages.append(HumanMessage(content=reminder))
+                    return response
+                
+                # Check if tool usage limit exceeded
+                if tool_name in tool_usage_count and tool_usage_count[tool_name] >= tool_usage_limits.get(tool_name, tool_usage_limits['default']):
+                    print(f"[Tool Loop] ⚠️ {tool_name} usage limit reached ({tool_usage_count[tool_name]}/{tool_usage_limits.get(tool_name, tool_usage_limits['default'])}). Skipping.")
+                    reminder = self._get_reminder_prompt(
+                        reminder_type="tool_usage_issue",
+                        tool_name=tool_name,
+                        count=tool_usage_count[tool_name]
+                    )
+                    messages.append(HumanMessage(content=reminder))
+                    return response
+                
+                # Add to history and track usage
+                self._add_tool_call_to_history(tool_name, tool_args, called_tools)
+                if tool_name in tool_usage_count:
+                    tool_usage_count[tool_name] += 1
+                
+                # Execute tool using helper method with call_id for tracing
+                tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
+                
+                # Store the raw result for this step
+                current_step_tool_results.append(tool_result)
+                tool_results_history.append(tool_result)
+                total_tool_calls += 1  # Increment total tool call counter
+                
+                # Report tool result (for function_call branch)
+                self._print_tool_result(tool_name, tool_result)
+                messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_name))
+                
+                # Update the stored conversation history
+                self._update_conversation_history(messages)
+                
+                # Convert messages for Mistral AI if needed (after tool results are added)
+                if llm_type == "mistral" and not self._mistral_converted_this_step:
+                    messages = self._convert_messages_for_mistral(messages)
+                    self._mistral_converted_this_step = True
+                
+                # Make new LLM call with tool results instead of returning old response
+                # This will be handled by the next iteration of the loop
+                pass
+            if hasattr(response, 'content') and response.content:
+                return response
+            print(f"[Tool Loop] No tool calls or final answer detected. Exiting loop.")
+            
+            # If we get here, the LLM didn't make tool calls or provide content
+            # Add a reminder to use tools or provide an answer
+            reminder = self._get_reminder_prompt(reminder_type="final_answer_prompt", tools=self.tools)
+            messages.append(HumanMessage(content=reminder))
+            return response
+        
+        # If we reach here, we've exhausted all steps or hit progress limits
+        print(f"[Tool Loop] Exiting after {step+1} steps. Last response: {response}")
+        
+        # If we have tool results but no final answer, force one
+        if tool_results_history and (not hasattr(response, 'content') or not response.content):
+            print(f"[Tool Loop] Forcing final answer with {len(tool_results_history)} tool results at loop exit")
+            forced_response = self._force_final_answer(messages, tool_results_history, llm)
+            if forced_response and hasattr(forced_response, 'content') and forced_response.content:
+                # Yield the forced response content
+                yield forced_response.content
+            return forced_response
+        
+        # If streaming, yield final response content
+        if streaming_generator:
+            final_content = getattr(response, 'content', str(response)) if response else ""
+            if final_content:
+                final_answer_content = stream_now(f"\n\n🏁 **Final answer:**\n{final_content}\n", "final_answer")
+                if final_answer_content:
+                    yield final_answer_content
+                    
+        # Return the last response as-is, no partial answer extraction
+        return response
+
+
+    def _select_llm(self, llm_type, use_tools):
+        # Updated to use arrays and provider names
+        if llm_type not in self.LLM_CONFIG:
+            raise ValueError(f"Invalid llm_type: {llm_type}")
+        if llm_type not in self.llm_provider_names:
+            available_providers = ", ".join(self.llm_provider_names) if self.llm_provider_names else "none"
+            raise ValueError(f"LLM {llm_type} not initialized. Available providers: {available_providers}")
+        idx = self.llm_provider_names.index(llm_type)
+        llm = self.llms_with_tools[idx] if use_tools else self.llms[idx]
+        llm_name = self.LLM_CONFIG[llm_type]["name"]
+        llm_type_str = self.LLM_CONFIG[llm_type]["type_str"]
+        
+        # Get the actual model name for rate limiting
+        model_name = None
+        if hasattr(llm, 'model_name'):
+            model_name = llm.model_name
+        elif hasattr(llm, 'model'):
+            model_name = llm.model
+        elif llm_type in self.active_model_config:
+            # Get the first model from the active config
+            models = self.active_model_config[llm_type].get("models", [])
+            if models:
+                model_name = models[0].get("model")
+        
+        # Set current model name for rate limiting
+        self.current_model_name = model_name
+        
+        return llm, llm_name, llm_type_str
+
+    @trace_prints_with_context("llm_call")
+    def _make_llm_request(self, messages, use_tools=True, llm_type=None):
+        """
+        Make an LLM request with rate limiting.
+
+        Args:
+            messages: The messages to send to the LLM
+            use_tools (bool): Whether to use tools (llm_with_tools vs llm)
+            llm_type (str): Which LLM to use (mandatory)
+
+        Returns:
+            The LLM response
+
+        Raises:
+            Exception: If the LLM fails or if llm_type is not specified
+        """
+
+        if llm_type is None:
+                raise Exception(
+                    f"llm_type must be specified for _make_llm_request(). "
+                    f"Please specify a valid llm_type from {list(self.LLM_CONFIG.keys())}"
+                )
+        # Estimate tokens for this request and set for _rate_limit
+        total_text = "".join(str(getattr(msg, 'content', '')) for msg in messages)
+        estimated_tokens = self._estimate_tokens(total_text)
+        self._next_request_tokens = estimated_tokens
+        # Start LLM trace
+        call_id = self._trace_start_llm(llm_type)
+        start_time = time.time()
+        
+        # Set the current LLM type for rate limiting
+        self.current_llm_type = llm_type
+        # ENFORCE: Never use tools for providers that do not support them
+        if not self._provider_supports_tools(llm_type):
+            use_tools = False
+        
+        # Add input to trace
+        self._trace_add_llm_call_input(llm_type, call_id, messages, use_tools)
+        
+        llm, llm_name, llm_type_str = self._select_llm(llm_type, use_tools)
+        if llm is None:
+            raise Exception(f"{llm_name} LLM not available")
+        
+        try:
+            self._rate_limit()
+            print(f"🤖 Using {llm_name}")
+            print(f"--- LLM Prompt/messages sent to {llm_name} ---")
+            for i, msg in enumerate(messages):
+                self._print_message_components(msg, i)
+            tool_registry = {self._get_tool_name(tool): tool for tool in self.tools}
+            if use_tools:
+                # Create streaming generator for consistent streaming behavior
+                def silent_stream_handler(event_type, content, metadata=None):
+                    # Silent streaming - no output but still populates trace
+                    return {"type": event_type, "content": content, "metadata": metadata or {}}
+                
+                response = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type_str, 0, call_id, silent_stream_handler)
+                if not hasattr(response, 'content') or not response.content:
+                    print(f"⚠️ {llm_name} tool calling returned empty content, trying with enhanced context...")
+                    # Instead of falling back to non-tool LLM, enhance the context and retry with tools
+                    tool_results_history = []
+                    for msg in messages:
+                        if hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'content'):
+                            tool_results_history.append(msg.content)
+                    
+                    if tool_results_history:
+                        print(f"📝 Tool results included: {len(tool_results_history)} tools")
+                        reminder = self._get_reminder_prompt(
+                            reminder_type="final_answer_prompt",
+                            messages=messages,
+                            tools=self.tools,
+                            tool_results_history=tool_results_history
+                        )
+                        enhanced_messages = [self.sys_msg, HumanMessage(content=reminder)]
+                        response = self._invoke_llm_provider(llm, enhanced_messages)
+                    else:
+                        print(f"⚠️ No tool results found, retrying with original context")
+                        response = self._invoke_llm_provider(llm, messages)
+                    
+                    if not hasattr(response, 'content') or not response.content:
+                        print(f"⚠️ {llm_name} still returning empty content. This may be a token limit issue.")
+                        return AIMessage(content=f"Error: {llm_name} failed due to token limits. Cannot complete reasoning.")
+            else:
+                response = self._invoke_llm_provider(llm, messages)
+            print(f"--- Raw response from {llm_name} ---")
+            
+            # Add output to trace
+            execution_time = time.time() - start_time
+            self._trace_add_llm_call_output(llm_type, call_id, response, execution_time)
+            
+            # Track successful provider requests
+            self._handle_provider_success(llm_type)
+            
+            return response
+        except Exception as e:
+            # Add error to trace
+            execution_time = time.time() - start_time
+            self._trace_add_llm_error(llm_type, call_id, e)
+            
+            # Check if this is a rate limit error that should be throttled
+            error_str = str(e)
+            if ("429" in error_str or "rate limit" in error_str.lower() or 
+                "service_tier_capacity_exceeded" in error_str or "3505" in error_str or
+                "invalid_request_message_order" in error_str or "3230" in error_str):
+                
+                # Try throttling and retrying instead of immediate fallback
+                if self._handle_rate_limit_throttling(e, llm_name, llm_type):
+                    print(f"🔄 Retrying {llm_name} after rate limit throttling...")
+                    # Recursive retry with the same LLM
+                    return self._make_llm_request(messages, use_tools, llm_type)
+                else:
+                    print(f"⏰ Rate limit retries exhausted for {llm_name}, falling back to error handler...")
+                    self._handle_provider_failure(llm_type, "rate_limit")
+            
+            # Check for Mistral AI specific message ordering error
+            if llm_type == "mistral" and ("invalid_request_message_order" in error_str or "3230" in error_str):
+                return self._handle_mistral_message_ordering_error(e, llm_name, llm_type, messages, llm)
+            else:
+                # Handle other errors normally
+                handled, result = self._handle_llm_error(e, llm_name, llm_type, phase="request", messages=messages, llm=llm)
+                if handled:
+                    return result
+                else:
+                    raise Exception(f"{llm_name} failed: {e}")
+
+    
+
+    def _handle_groq_token_limit_error(self, messages, llm, llm_name, original_error):
+        """
+        Handle Groq token limit errors by chunking tool results and processing them in intervals.
+        """
+        return self._handle_token_limit_error(messages, llm, llm_name, original_error, "groq")
+
+    def _handle_token_limit_error(self, messages, llm, llm_name, original_error, llm_type="unknown"):
+        """
+        Generic token limit error handling that can be used for any LLM.
+        """
+        print(f"🔄 Handling token limit error for {llm_name} ({llm_type})")
+        
+        # Check if chunking is enabled for this provider
+        config = self.LLM_CONFIG.get(llm_type, {})
+        enable_chunking = config.get("enable_chunking", True)  # Default to True for backward compatibility
+        
+        if not enable_chunking:
+            print(f"⚠️ Chunking disabled for {llm_type}. Cannot handle token limit error.")
+            # Return a simple error message instead of chunking
+            return AIMessage(content=f"Error: Token limit exceeded for {llm_name} and chunking is disabled. Please try with a shorter input or enable chunking for this provider.")
+        
+        # Extract tool results from messages
+        tool_results = []
+        for msg in messages:
+            if hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'content'):
+                tool_results.append(msg.content)
+        
+        # If no tool results, try to chunk the entire message content
+        if not tool_results:
+            print(f"📊 No tool results found, attempting to chunk entire message content")
+            # Extract all message content
+            all_content = []
+            for msg in messages:
+                if hasattr(msg, 'content') and msg.content:
+                    all_content.append(str(msg.content))
+            
+            if not all_content:
+                return AIMessage(content=f"Error: {llm_name} token limit exceeded but no content available to process.")
+            
+            # Create chunks from all content (use LLM-specific limits)
+            token_limit = self._get_token_limit(llm_type)
+            # Handle None token limits (like Gemini) by using a reasonable default
+            if token_limit is None:
+                token_limit = self.LLM_CONFIG["default"]["token_limit"]
+            safe_tokens = int(token_limit * 0.60)
+            chunks = self._create_token_chunks(all_content, safe_tokens)
+            print(f"📦 Created {len(chunks)} chunks from message content")
+        else:
+            print(f"📊 Found {len(tool_results)} tool results to process in chunks")
+            # Create chunks (use LLM-specific limits)
+            token_limit = self._get_token_limit(llm_type)
+            # Handle None token limits (like Gemini) by using a reasonable default
+            if token_limit is None:
+                token_limit = self.LLM_CONFIG["default"]["token_limit"]
+            safe_tokens = int(token_limit * 0.60)
+            chunks = self._create_token_chunks(tool_results, safe_tokens)
+            print(f"📦 Created {len(chunks)} chunks from tool results")
+        # Ensure original_question is always defined
+        original_question = None
+        for msg in messages:
+            if hasattr(msg, 'type') and msg.type == 'human' and getattr(msg, 'content', None):
+                original_question = msg.content
+                break
+        if not original_question:
+            original_question = '[No original question provided]'
+        # Prepare LLM instances for chunking and synthesis - use tools for both
+        llm_chunk = self._select_llm(llm_type, use_tools=True)[0]
+        llm_final = self._select_llm(llm_type, use_tools=True)[0]
+        all_responses = []
+        wait_time = 60
+        
+        for i, chunk in enumerate(chunks):
+            print(f"🔄 Processing chunk {i+1}/{len(chunks)}")
+            
+            # Wait between chunks (except first)
+            if i > 0:
+                print(f"⏳ Waiting {wait_time} seconds...")
+                time.sleep(wait_time)
+            # Always use the same prompt for all chunks, now with original question
+            chunk_prompt = f"Question: {original_question}\n\nAnalyze these results and provide key findings."
+            chunk_content = "\n\n".join(chunk) if isinstance(chunk, list) else str(chunk)
+            chunk_messages = [self.sys_msg, HumanMessage(content=chunk_prompt + "\n\n" + chunk_content)]
+            try:
+                response = llm_chunk.invoke(chunk_messages)
+                if hasattr(response, 'content') and response.content:
+                    all_responses.append(response.content)
+                    print(f"✅ Chunk {i+1} processed")
+            except Exception as e:
+                print(f"❌ Chunk {i+1} failed: {e}")
+                continue
+        
+        if not all_responses:
+            return AIMessage(content=f"Error: Failed to process any chunks for {llm_name}")
+        # Final synthesis step, now with original question and tools enabled
+        final_prompt = (
+            f"Question: {original_question}\n\nCombine these analyses into a final answer:\n\n"
+            + "\n\n".join(all_responses)
+            + "\n\nUse the submit_answer tool based on all content, following the system prompt format."
+        )
+        final_messages = [self.sys_msg, HumanMessage(content=final_prompt)]
+        try:
+            final_response = llm_final.invoke(final_messages)
+            return final_response
+        except Exception as e:
+            print(f"❌ Final synthesis failed: {e}")
+            return AIMessage(content=f"OUTPUT {' '.join(all_responses)}")
+
+    def _create_token_chunks(self, tool_results, max_tokens_per_chunk):
+        """
+        Create chunks of tool results that fit within the token limit.
+        """
+        chunks = []
+        current_chunk = []
+        current_tokens = 0
+        
+        for result in tool_results:
+            # Use tiktoken for accurate token counting
+            result_tokens = self._estimate_tokens(result)
+            if current_tokens + result_tokens > max_tokens_per_chunk and current_chunk:
+                chunks.append(current_chunk)
+                current_chunk = [result]
+                current_tokens = result_tokens
+            else:
+                current_chunk.append(result)
+                current_tokens += result_tokens
+        
+        if current_chunk:
+            chunks.append(current_chunk)
+        
+        return chunks
+
+    def _try_llm_sequence(self, messages, use_tools=True, reference=None, llm_sequence=None):
+        """
+        Try multiple LLMs in sequence, collect all results and their similarity scores, and pick the best one.
+        Even if _vector_answers_match returns true, continue with the next models, 
+        then choose the best one (highest similarity) or the first one with similar scores.
+        Only one attempt per LLM, then move to the next.
+
+        Args:
+            messages (list): The messages to send to the LLM.
+            use_tools (bool): Whether to use tools.
+            reference (str, optional): Reference answer to compare against.
+            llm_sequence (list, optional): List of LLM provider keys to use for this call.
+        Returns:
+            tuple: (answer, llm_used) where answer is the final answer and llm_used is the name of the LLM that succeeded.
+
+        Raises:
+            Exception: If all LLMs fail or none produce similar enough answers.
+        """
+        # Use provided llm_sequence or default
+        llm_types_to_use = llm_sequence if llm_sequence is not None else self.DEFAULT_LLM_SEQUENCE
+        available_llms = []
+        for idx, llm_type in enumerate(self.llm_provider_names):
+            # Only use LLMs that are in the provided llm_sequence (if any)
+            if llm_type not in llm_types_to_use:
+                continue
+            # ENFORCE: Never use tools for providers that do not support them
+            llm_use_tools = use_tools and self._provider_supports_tools(llm_type)
+            llm, llm_name, _ = self._select_llm(llm_type, llm_use_tools)
+            # Determine the actual model identifier for this LLM
+            model_name = None
+            if hasattr(llm, 'model_name'):
+                model_name = llm.model_name
+            elif hasattr(llm, 'model'):
+                model_name = llm.model
+            elif llm_type in self.active_model_config:
+                models_cfg = self.active_model_config[llm_type].get("models", [])
+                if models_cfg:
+                    model_name = models_cfg[0].get("model")
+            if llm:
+                # Append provider type, human-readable provider name, tools flag, and actual model id
+                available_llms.append((llm_type, llm_name, llm_use_tools, model_name))
+            else:
+                print(f"⚠️ {llm_name} not available, skipping...")
+        if not available_llms:
+            raise Exception("No LLMs are available. Please check your API keys and configuration.")
+        print(f"🔄 Available LLMs: {[name for _, name, _, _ in available_llms]}")
+        original_question = ""
+        for msg in messages:
+            if hasattr(msg, 'type') and msg.type == 'human':
+                original_question = msg.content
+                break
+        llm_results = []
+        for llm_type, llm_name, llm_use_tools, model_name in available_llms:
+            # Skip providers that are temporarily disabled due to recent failures
+            if self._should_skip_provider_temporarily(llm_type):
+                print(f"⏸️ Skipping {llm_name} - temporarily disabled due to recent failures")
+                continue
+            
+            try:
+                response = self._make_llm_request(messages, use_tools=llm_use_tools, llm_type=llm_type)
+                answer = self._extract_final_answer(response)
+                print(f"✅ {llm_name} answered: {answer}")
+                print(f"✅ Reference: {reference}")
+                
+                # Capture stdout for this LLM attempt
+                if hasattr(self, 'current_llm_call_id'):
+                    self._trace_capture_llm_stdout(llm_type, self.current_llm_call_id)
+                
+                if reference is None:
+                    print(f"✅ {llm_name} succeeded (no reference to compare)")
+                    self._update_llm_tracking(llm_type, "success")
+                    self._update_llm_tracking(llm_type, "submitted")  # Mark as submitted since it's the final answer
+                    # Store actual model identifier for downstream display
+                    llm_results.append((1.0, answer, model_name or llm_name, llm_type))
+                    break
+                is_match, similarity = self._vector_answers_match(answer, reference)
+                if is_match:
+                    print(f"✅ {llm_name} succeeded with similar answer to reference")
+                else:
+                    print(f"⚠️ {llm_name} succeeded but answer doesn't match reference")
+                # Prefer actual model id; fall back to provider name if unavailable
+                llm_results.append((similarity, answer, model_name or llm_name, llm_type))
+                if similarity >= self.similarity_threshold:
+                    self._update_llm_tracking(llm_type, "threshold_pass")
+                if llm_type != available_llms[-1][0]:
+                    print(f"🔄 Trying next LLM without reference...")
+                else:
+                    print(f"🔄 All LLMs tried, all failed")
+            except Exception as e:
+                print(f"❌ {llm_name} failed: {e}")
+                
+                # Capture stdout for this failed LLM attempt
+                if hasattr(self, 'current_llm_call_id'):
+                    self._trace_capture_llm_stdout(llm_type, self.current_llm_call_id)
+                
+                self._update_llm_tracking(llm_type, "failure")
+                if llm_type == available_llms[-1][0]:
+                    raise Exception(f"All available LLMs failed. Last error from {llm_name}: {e}")
+                print(f"🔄 Trying next LLM...")
+        # --- Finalist selection and stats update ---
+        if llm_results:
+            threshold = self.similarity_threshold
+            for sim, ans, name, llm_type in llm_results:
+                if sim >= threshold:
+                    print(f"🎯 First answer above threshold: {ans} (LLM: {name}, similarity: {sim:.3f})")
+                    self._update_llm_tracking(llm_type, "submitted")
+                    return ans, name
+            # If none above threshold, pick best similarity as low score submission
+            best_similarity, best_answer, best_llm, best_llm_type = max(llm_results, key=lambda x: x[0])
+            print(f"🔄 Returning best answer by similarity: {best_answer} (LLM: {best_llm}, similarity: {best_similarity:.3f})")
+            self._update_llm_tracking(best_llm_type, "low_submit")
+            return best_answer, best_llm
+        raise Exception("All LLMs failed")
+
+    def _get_reference_answer(self, question: str) -> Optional[str]:
+        """
+        Retrieve the reference answer for a question using the vector store manager.
+
+        Args:
+            question (str): The question text.
+
+        Returns:
+            str or None: The reference answer if found, else None.
+        """
+        if not self.ENABLE_VECTOR_SIMILARITY or self.vector_store_manager is None:
+            return None
+        
+        from vector_store import get_reference_answer
+        return get_reference_answer(question)
+
+    def _format_messages(self, question: str, reference: Optional[str] = None, chat_history: Optional[List[Dict[str, Any]]] = None) -> List[Any]:
+        """
+        Format the message list for the LLM, including system prompt, optional prior chat history,
+        question, and optional reference answer. Now supports complete tool execution history.
+
+        Args:
+            question (str): The question to answer.
+            reference (str, optional): The reference answer to include in context.
+            chat_history (list, optional): Prior conversation turns as list of {role, content, tool_calls, tool_call_id}.
+
+        Returns:
+            list: List of message objects for the LLM.
+        """
+        messages = [self.sys_msg]
+        
+        # Append prior chat history with full tool execution context
+        if chat_history and isinstance(chat_history, list):
+            for turn in chat_history:
+                try:
+                    role = str(turn.get("role", "")).lower()
+                    content = turn.get("content", "")
+                    tool_calls = turn.get("tool_calls", [])
+                    tool_call_id = turn.get("tool_call_id")
+                    name = turn.get("name")
+                except Exception:
+                    continue
+                
+                if not content and not tool_calls:
+                    continue
+                
+                if role in ("user", "human"):
+                    messages.append(HumanMessage(content=str(content)))
+                elif role in ("assistant", "ai"):
+                    # Handle assistant messages with potential tool calls
+                    if tool_calls:
+                        # Convert tool calls to the format expected by LangChain
+                        formatted_tool_calls = []
+                        for tc in tool_calls:
+                            if isinstance(tc, dict):
+                                formatted_tool_calls.append({
+                                    "name": tc.get("name", ""),
+                                    "args": tc.get("args", {}),
+                                    "id": tc.get("id", "")
+                                })
+                        messages.append(AIMessage(content=str(content), tool_calls=formatted_tool_calls))
+                    else:
+                        messages.append(AIMessage(content=str(content)))
+                elif role == "tool":
+                    # Handle tool execution results
+                    if tool_call_id and name:
+                        messages.append(ToolMessage(content=str(content), name=name, tool_call_id=tool_call_id))
+                    else:
+                        # Fallback for tool messages without proper metadata
+                        messages.append(ToolMessage(content=str(content), name=name or "unknown", tool_call_id=tool_call_id or "unknown"))
+        
+        # Current question last - ensure it's clearly separated
+        messages.append(HumanMessage(content=f"Current question: {question}"))
+        if reference:
+            messages.append(HumanMessage(content=f"Reference answer: {reference}"))
+        return messages
+
+
+    def _get_tool_name(self, tool):
+        if hasattr(tool, 'name'):
+            return tool.name
+        elif hasattr(tool, '__name__'):
+            return tool.__name__
+        else:
+            return str(tool)
+
+    def _update_conversation_history(self, messages: List[Any]) -> None:
+        """
+        Update the conversation history with new messages, ensuring no duplicates.
+        This method maintains a clean, deduplicated conversation history.
+        
+        Args:
+            messages: List of message objects to add to history
+        """
+        if not hasattr(self, '_current_conversation_history'):
+            self._current_conversation_history = []
+        
+        # Create a set to track unique tool results to prevent duplicates
+        if not hasattr(self, '_seen_tool_results'):
+            self._seen_tool_results = set()
+        
+        # Process each message and add only if not duplicate
+        for msg in messages:
+            if hasattr(msg, 'type') and msg.type == 'tool':
+                # For tool messages, create a unique identifier to prevent duplicates
+                tool_id = f"{getattr(msg, 'name', 'unknown')}_{getattr(msg, 'tool_call_id', 'unknown')}_{str(msg.content)[:100]}"
+                if tool_id not in self._seen_tool_results:
+                    self._current_conversation_history.append(msg)
+                    self._seen_tool_results.add(tool_id)
+            else:
+                # For non-tool messages, add them normally
+                self._current_conversation_history.append(msg)
+
+    def get_conversation_history(self) -> List[Dict[str, Any]]:
+        """
+        Get the complete conversation history including tool execution results.
+        This can be used to maintain context across multiple conversation turns.
+        
+        Returns:
+            List[Dict]: Complete conversation history with role, content, tool_calls, etc.
+        """
+        if not hasattr(self, '_current_conversation_history'):
+            return []
+        
+        # Convert the internal message objects to a serializable format
+        history = []
+        for msg in self._current_conversation_history:
+            if hasattr(msg, 'type'):
+                if msg.type == 'human':
+                    history.append({
+                        "role": "user",
+                        "content": str(msg.content)
+                    })
+                elif msg.type in ('ai', 'assistant'):
+                    # Handle assistant messages with potential tool calls
+                    msg_dict = {
+                        "role": "assistant", 
+                        "content": str(msg.content)
+                    }
+                    if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                        msg_dict["tool_calls"] = [
+                            {
+                                "name": tc.get("name", ""),
+                                "args": tc.get("args", {}),
+                                "id": tc.get("id", "")
+                            } for tc in msg.tool_calls
+                        ]
+                    history.append(msg_dict)
+                elif msg.type == 'tool':
+                    # Handle tool execution results
+                    history.append({
+                        "role": "tool",
+                        "content": str(msg.content),
+                        "name": getattr(msg, 'name', 'unknown'),
+                        "tool_call_id": getattr(msg, 'tool_call_id', 'unknown')
+                    })
+        return history
+    
+    def get_conversation_history_by_id(self, conversation_id: str = "default") -> List[Dict[str, Any]]:
+        """
+        Get the conversation history for a specific conversation ID.
+        
+        Args:
+            conversation_id (str): The conversation ID to get history for
+            
+        Returns:
+            List[Dict[str, Any]]: List of conversation turns with 'role' and 'content' keys
+        """
+        return self.conversation_histories[conversation_id].copy()
+    
+    def clear_conversation(self, conversation_id: str = "default") -> None:
+        """
+        Clear the conversation history for a specific conversation.
+        
+        Args:
+            conversation_id (str): The conversation ID to clear
+        """
+        self.conversation_histories[conversation_id] = []
+        self.conversation_states[conversation_id] = {}
+        self.conversation_metadata[conversation_id] = {}
+    
+    def get_conversation_metadata(self, conversation_id: str = "default") -> Dict[str, Any]:
+        """
+        Get metadata for a specific conversation.
+        
+        Args:
+            conversation_id (str): The conversation ID to get metadata for
+            
+        Returns:
+            Dict[str, Any]: Conversation metadata
+        """
+        return self.conversation_metadata[conversation_id].copy()
+    
+    def set_conversation_metadata(self, conversation_id: str, metadata: Dict[str, Any]) -> None:
+        """
+        Set metadata for a specific conversation.
+        
+        Args:
+            conversation_id (str): The conversation ID to set metadata for
+            metadata (Dict[str, Any]): Metadata to set
+        """
+        self.conversation_metadata[conversation_id].update(metadata)
+    
+    def get_all_conversation_ids(self) -> List[str]:
+        """
+        Get all active conversation IDs.
+        
+        Returns:
+            List[str]: List of all conversation IDs
+        """
+        return list(self.conversation_histories.keys())
+
+    def _convert_messages_for_mistral(self, messages: List) -> List:
+        """
+        Convert LangChain messages to Mistral AI compatible format.
+        Mistral AI requires specific message formatting for tool calls.
+        The key issue is that tool messages must immediately follow the assistant message
+        that made the tool calls, not after user messages.
+        
+        Args:
+            messages: List of LangChain message objects
+            
+        Returns:
+            List of messages in Mistral AI compatible format
+        """
+        converted_messages = []
+        i = 0
+        orphaned_count = 0
+        
+        while i < len(messages):
+            msg = messages[i]
+            
+            if hasattr(msg, 'type'):
+                if msg.type == 'system':
+                    converted_messages.append({
+                        "role": "system",
+                        "content": msg.content
+                    })
+                elif msg.type == 'human':
+                    converted_messages.append({
+                        "role": "user",
+                        "content": msg.content
+                    })
+                elif msg.type == 'ai':
+                    # For AI messages with tool calls, we need to handle them specially
+                    if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                        # Add the assistant message with tool calls
+                        converted_messages.append({
+                            "role": "assistant",
+                            "content": msg.content or "",
+                            "tool_calls": msg.tool_calls
+                        })
+                        
+                        # Look ahead for tool messages that should immediately follow
+                        j = i + 1
+                        while j < len(messages) and hasattr(messages[j], 'type') and messages[j].type == 'tool':
+                            tool_msg = messages[j]
+                            converted_messages.append({
+                                "role": "tool",
+                                "name": getattr(tool_msg, 'name', 'unknown'),
+                                "content": tool_msg.content,
+                                "tool_call_id": getattr(tool_msg, 'tool_call_id', getattr(tool_msg, 'name', 'unknown'))
+                            })
+                            j += 1
+                        # If the next message is a user/system or we're at the end,
+                        # insert an assistant turn to properly close the tool-call block
+                        # per Mistral's expected ordering (no user directly after tool).
+                        if j >= len(messages) or (
+                            hasattr(messages[j], 'type') and messages[j].type in ('human', 'system')
+                        ):
+                            # Mistral requires assistant messages to have non-empty content.
+                            # Insert a minimal, meaningful acknowledgment to satisfy API constraints.
+                            converted_messages.append({
+                                "role": "assistant",
+                                "content": "[continue]"
+                            })
+                        
+                        # Skip the tool messages we've already processed
+                        i = j - 1
+                    else:
+                        converted_messages.append({
+                            "role": "assistant",
+                            "content": msg.content or ""
+                        })
+                elif msg.type == 'tool':
+                    # Tool messages should only appear after assistant messages with tool calls
+                    # If we encounter one here, it might be orphaned - skip it
+                    # Only log the first few orphaned messages to avoid spam
+                    if orphaned_count < 2:
+                        print(f"[Mistral Conversion] Warning: Orphaned tool message detected: {getattr(msg, 'name', 'unknown')}")
+                        orphaned_count += 1
+                    continue
+            else:
+                # Handle raw message objects (fallback)
+                converted_messages.append(msg)
+            
+            i += 1
+        
+        return converted_messages
+
+    def _invoke_llm_provider(self, llm, messages, llm_type=None):
+        """
+        Helper function to invoke LLM with automatic Mistral-specific message conversion.
+        This centralizes the repetitive Mistral conversion logic and makes the code cleaner.
+        Note: This function assumes messages are already in the correct format for Mistral AI.
+        For tool loops where tool results are added after conversion, use manual conversion.
+        
+        Args:
+            llm: The LLM instance to invoke
+            messages: List of messages to send to the LLM
+            llm_type: Type of LLM (if None, will be auto-detected)
+            
+        Returns:
+            The LLM response
+        """
+        # Auto-detect LLM type if not provided
+        if llm_type is None:
+            llm_type = getattr(llm, 'llm_type', None) or getattr(llm, 'type_str', None) or ''
+        
+        # Convert messages for providers that require strict tool-call ordering (e.g., Mistral, GigaChat)
+        if llm_type in ("mistral", "gigachat"):
+            messages = self._convert_messages_for_mistral(messages)
+        
+        # Invoke the LLM
+        return llm.invoke(messages)
+
+        
+    def _calculate_cosine_similarity(self, embedding1, embedding2) -> float:
+        """
+        Calculate cosine similarity between two embeddings.
+        If vector similarity is disabled, returns 1.0 to indicate perfect match.
+        
+        Args:
+            embedding1: First embedding vector
+            embedding2: Second embedding vector
+            
+        Returns:
+            float: Cosine similarity score (0.0 to 1.0)
+        """
+        if not self.ENABLE_VECTOR_SIMILARITY or self.vector_store_manager is None:
+            return 1.0
+        
+        from similarity_manager import calculate_cosine_similarity
+        return calculate_cosine_similarity(embedding1, embedding2)
+
+    def _vector_answers_match(self, answer: str, reference: str):
+        """
+        Return (bool, similarity) where bool is if similarity >= threshold, and similarity is the float value.
+        If vector similarity is disabled, returns (True, 1.0) to always consider answers as matching.
+        """
+        if not self.ENABLE_VECTOR_SIMILARITY or self.vector_store_manager is None:
+            return True, 1.0
+        
+        from similarity_manager import vector_answers_match
+        return vector_answers_match(answer, reference, self.similarity_threshold)
+
+    def get_llm_stats(self) -> dict:
+        stats = {
+            "total_questions": self.total_questions,
+            "llm_stats": {},
+            "summary": {}
+        }
+        used_models = {}
+        for llm_type in self.llm_tracking.keys():
+            model_id = None
+            if llm_type in self.active_model_config:
+                model_id = self.active_model_config[llm_type].get("model", "")
+            used_models[llm_type] = model_id
+        llm_types = list(self.llm_tracking.keys())
+        total_submitted = 0
+        total_low_submit = 0
+        total_passed = 0
+        total_failures = 0
+        total_attempts = 0
+        for llm_type in llm_types:
+            llm_name = self.LLM_CONFIG[llm_type]["name"]
+            model_id = used_models.get(llm_type, "")
+            display_name = f"{llm_name} ({model_id})" if model_id else llm_name
+            tracking = self.llm_tracking[llm_type]
+            successes = tracking["successes"]
+            failures = tracking["failures"]
+            threshold_count = tracking["threshold_passes"]
+            submitted = tracking["submitted"]
+            low_submit = tracking["low_submit"]
+            attempts = tracking["total_attempts"]
+            total_submitted += submitted
+            total_low_submit += low_submit
+            total_passed += successes
+            total_failures += failures
+            total_attempts += attempts
+            pass_rate = (successes / attempts * 100) if attempts > 0 else 0
+            fail_rate = (failures / attempts * 100) if attempts > 0 else 0
+            submit_rate = (submitted / self.total_questions * 100) if self.total_questions > 0 else 0
+            stats["llm_stats"][display_name] = {
+                "runs": attempts,
+                "passed": successes,
+                "pass_rate": f"{pass_rate:.1f}",
+                "submitted": submitted,
+                "submit_rate": f"{submit_rate:.1f}",
+                "low_submit": low_submit,
+                "failed": failures,
+                "fail_rate": f"{fail_rate:.1f}",
+                "threshold": threshold_count
+            }
+        overall_submit_rate = (total_submitted / self.total_questions * 100) if self.total_questions > 0 else 0
+        stats["summary"] = {
+            "total_questions": self.total_questions,
+            "total_submitted": total_submitted,
+            "total_low_submit": total_low_submit,
+            "total_passed": total_passed,
+            "total_failures": total_failures,
+            "total_attempts": total_attempts,
+            "overall_submit_rate": f"{overall_submit_rate:.1f}"
+        }
+        return stats
+
+    def _format_llm_init_summary(self, as_str=True):
+        """
+        Return the LLM initialization summary as a formatted table string (for printing or saving).
+        """
+        if not hasattr(self, 'llm_init_results') or not self.llm_init_results:
+            return ""
+        provider_w = max(14, max(len(r['provider']) for r in self.llm_init_results) + 2)
+        model_w = max(40, max(len(r['model']) for r in self.llm_init_results) + 2)
+        plain_w = max(5, len('Plain'))
+        tools_w = max(5, len('Tools (forced)'))
+        error_w = max(20, len('Error (tools)'))
+        answer_w = max(30, max(len(r.get('test_answer', '')[:30]) for r in self.llm_init_results) + 2)
+        header = (
+            f"{'Provider':<{provider_w}}| "
+            f"{'Model':<{model_w}}| "
+            f"{'Plain':<{plain_w}}| "
+            f"{'Tools':<{tools_w}}| "
+            f"{'Test Answer':<{answer_w}}| "
+            f"{'Error (tools)':<{error_w}}"
+        )
+        lines = [
+            "===== LLM Initialization Summary =====",
+            "Legend: ✅ Working | ⚠️ (forced) May not work | ❌ Failed",
+            header, 
+            "-" * len(header)
+        ]
+        for r in self.llm_init_results:
+            plain = '✅' if r['plain_ok'] else '❌'
+            config = self.LLM_CONFIG.get(r['llm_type'], {})
+            model_force_tools = False
+            for m in config.get('models', []):
+                if m.get('model', '') == r['model']:
+                    model_force_tools = config.get('force_tools', False) or m.get('force_tools', False)
+                    break
+            if r['tools_ok'] is None:
+                tools = 'N/A'
+            else:
+                if r['tools_ok']:
+                    tools = '✅'
+                else:
+                    if model_force_tools:
+                        tools = '⚠️ (forced)'
+                    else:
+                        tools = '❌'
+            error_tools = ''
+            if r['tools_ok'] is False and r['error_tools']:
+                if '400' in r['error_tools']:
+                    error_tools = '400'
+                else:
+                    error_tools = r['error_tools'][:18]
+            
+            # Format test answer - truncate if too long
+            test_answer = r.get('test_answer', '')
+            if test_answer:
+                test_answer_display = test_answer[:30] + "..." if len(test_answer) > 30 else test_answer
+            else:
+                test_answer_display = "N/A"
+            
+            lines.append(f"{r['provider']:<{provider_w}}| {r['model']:<{model_w}}| {plain:<{plain_w}}| {tools:<{tools_w}}| {test_answer_display:<{answer_w}}| {error_tools:<{error_w}}")
+        lines.append("=" * len(header))
+        return "\n".join(lines) if as_str else lines
+
+    def _get_llm_init_summary_json(self):
+        """
+        Return the LLM initialization summary as structured JSON data for dataset upload.
+        """
+        if not hasattr(self, 'llm_init_results') or not self.llm_init_results:
+            return {}
+        
+        summary_data = {
+            "results": []
+        }
+        
+        for r in self.llm_init_results:
+            config = self.LLM_CONFIG.get(r['llm_type'], {})
+            model_force_tools = False
+            for m in config.get('models', []):
+                if m.get('model', '') == r['model']:
+                    model_force_tools = config.get('force_tools', False) or m.get('force_tools', False)
+                    break
+            
+            result_entry = {
+                "provider": r['provider'],
+                "model": r['model'],
+                "llm_type": r['llm_type'],
+                "plain_ok": r['plain_ok'],
+                "tools_ok": r['tools_ok'],
+                "force_tools": model_force_tools,
+                "error_tools": r.get('error_tools', ''),
+                "error_plain": r.get('error_plain', ''),
+                "test_answer": r.get('test_answer', '')
+            }
+            summary_data["results"].append(result_entry)
+        
+        return summary_data
+
+    def _format_llm_stats_table(self, as_str=True):
+        """
+        Return the LLM statistics as a formatted table string (for printing or saving).
+        """
+        stats = self.get_llm_stats()
+        rows = []
+        for name, data in stats["llm_stats"].items():
+            # Show LLMs that have any activity (runs, submitted, low_submit, or any other activity)
+            if (data["runs"] > 0 or data["submitted"] > 0 or data["low_submit"] > 0 or 
+                data["passed"] > 0 or data["failed"] > 0 or data["threshold"] > 0):
+                rows.append([
+                    name,
+                    data["runs"],
+                    data["passed"],
+                    data["pass_rate"],
+                    data["submitted"],
+                    data["submit_rate"],
+                    data["low_submit"],
+                    data["failed"],
+                    data["fail_rate"],
+                    data["threshold"]
+                ])
+        header = [
+            "Model", "Runs", "Passed", "Pass %", "Submitted", "Submit %", "LowSubmit", "Failed", "Fail %", "Threshold"
+        ]
+        col_widths = [max(len(str(row[i])) for row in ([header] + rows)) for i in range(len(header))]
+        def fmt_row(row):
+            return " | ".join(str(val).ljust(col_widths[i]) for i, val in enumerate(row))
+        lines = ["===== LLM Model Statistics =====", fmt_row(header), "-" * (sum(col_widths) + 3 * (len(header) - 1))]
+        for row in rows:
+            lines.append(fmt_row(row))
+        # Add true totals row for numeric columns
+        totals = ["TOTALS"]
+        for i, col in enumerate(header[1:], 1):
+            if col.endswith("%"):
+                totals.append("")
+            else:
+                totals.append(sum(row[i] for row in rows if isinstance(row[i], (int, float))))
+        lines.append(fmt_row(totals))
+        lines.append("-" * (sum(col_widths) + 3 * (len(header) - 1)))
+        s = stats["summary"]
+        lines.append(f"Above Threshold Submissions: {s['total_submitted']} / {s['total_questions']} ({s['overall_submit_rate']}%)")
+        lines.append("=" * (sum(col_widths) + 3 * (len(header) - 1)))
+        return "\n".join(lines) if as_str else lines
+
+    def _get_llm_stats_json(self):
+        """
+        Return the LLM statistics as structured JSON data for dataset upload.
+        """
+        stats = self.get_llm_stats()
+        
+        stats_data = {
+            "llm_stats": {}
+        }
+        
+        for name, data in stats["llm_stats"].items():
+            # Include all LLMs that have any activity
+            if (data["runs"] > 0 or data["submitted"] > 0 or data["low_submit"] > 0 or 
+                data["passed"] > 0 or data["failed"] > 0 or data["threshold"] > 0):
+                stats_data["llm_stats"][name] = {
+                    "runs": data["runs"],
+                    "passed": data["passed"],
+                    "pass_rate": data["pass_rate"],
+                    "submitted": data["submitted"],
+                    "submit_rate": data["submit_rate"],
+                    "low_submit": data["low_submit"],
+                    "failed": data["failed"],
+                    "fail_rate": data["fail_rate"],
+                    "threshold": data["threshold"],
+                    "successes": data.get("successes", 0),
+                    "failures": data.get("failures", 0),
+                    "total_attempts": data.get("total_attempts", 0),
+                    "threshold_passes": data.get("threshold_passes", 0)
+                }
+        
+        return stats_data
+
+    def _print_llm_init_summary(self):
+        summary = self._format_llm_init_summary(as_str=True)
+        if summary:
+            print("\n" + summary + "\n")
+
+    def print_llm_stats_table(self):
+        summary = self._format_llm_stats_table(as_str=True)
+        if summary:
+            print("\n" + summary + "\n")
+
+    def _update_llm_tracking(self, llm_type: str, event_type: str, increment: int = 1):
+        """
+        Helper method to update LLM tracking statistics.
+        
+        Args:
+            llm_type (str): The LLM type (e.g., 'gemini', 'groq')
+            event_type (str): The type of event ('success', 'failure', 'threshold_pass', 'submitted', 'low_submit')
+            increment (int): Amount to increment (default: 1)
+        """
+        if llm_type not in self.llm_tracking:
+            return
+        if event_type == "success":
+            self.llm_tracking[llm_type]["successes"] += increment
+            self.llm_tracking[llm_type]["total_attempts"] += increment
+        elif event_type == "failure":
+            self.llm_tracking[llm_type]["failures"] += increment
+            self.llm_tracking[llm_type]["total_attempts"] += increment
+        elif event_type == "threshold_pass":
+            self.llm_tracking[llm_type]["threshold_passes"] += increment
+        elif event_type == "submitted":
+            self.llm_tracking[llm_type]["submitted"] += increment
+            # Ensure total_attempts is incremented for submitted events if not already counted
+            if self.llm_tracking[llm_type]["total_attempts"] == 0:
+                self.llm_tracking[llm_type]["total_attempts"] += increment
+        elif event_type == "low_submit":
+            self.llm_tracking[llm_type]["low_submit"] += increment
+            # Ensure total_attempts is incremented for low_submit events if not already counted
+            if self.llm_tracking[llm_type]["total_attempts"] == 0:
+                self.llm_tracking[llm_type]["total_attempts"] += increment
+
+    @trace_prints_with_context("question")
+    def __call__(self, question: str, file_data: str = None, file_name: str = None, llm_sequence: list = None, chat_history: Optional[List[Dict[str, Any]]] = None):
+        """
+        Run the agent on a single question, using step-by-step reasoning and tools.
+        Now always returns a generator for consistent streaming behavior.
+
+        Args:
+            question (str): The question to answer.
+            file_data (str, optional): Base64 encoded file data if a file is attached.
+            file_name (str, optional): Name of the attached file.
+            llm_sequence (list, optional): List of LLM provider keys to use for this call.
+            chat_history (list, optional): Prior conversation to maintain continuity.
+        Returns:
+            Generator: Yields text chunks of the response.
+        """
+        # Always use streaming internally, but collect trace data
+        result = self._unified_process(question, file_data, file_name, llm_sequence, chat_history, streaming=True)
+        return result
+
+    def _unified_process(self, question: str, file_data: str = None, file_name: str = None, llm_sequence: list = None, chat_history: Optional[List[Dict[str, Any]]] = None, streaming: bool = False):
+        """
+        Unified processing method that always uses streaming internally but can return either format.
+        This is the single source of truth for all LLM calling logic.
+        
+        Args:
+            question (str): The question to answer
+            file_data (str, optional): Base64 encoded file data if a file is attached
+            file_name (str, optional): Name of the attached file
+            llm_sequence (list, optional): List of LLM provider keys to use
+            chat_history (list, optional): Prior conversation to maintain continuity
+            streaming (bool): Whether to return generator (True) or dict (False)
+            
+        Returns:
+            If streaming=True: generator yielding text chunks
+            If streaming=False: dict with full trace (collected from streaming)
+        """
+        # Initialize trace for this question
+        self._trace_init_question(question, file_data, file_name)
+        
+        print(f"\n🔎 {'(stream)' if streaming else ''} Processing question: {question}\n")
+        
+        # Increment total questions counter
+        self.total_questions += 1
+        
+        # Store the original question for reuse throughout the process
+        self.original_question = question
+        
+        # Store file data for use by tools
+        self.current_file_data = file_data
+        self.current_file_name = file_name
+        
+        if file_data and file_name:
+            print(f"📁 File attached: {file_name} ({len(file_data)} chars base64)")
+        
+        # Retrieve reference answer
+        reference = self._get_reference_answer(question)
+        
+        # Format messages
+        messages = self._format_messages(question, reference=reference, chat_history=chat_history)
+        
+        # Initialize the complete conversation history for later retrieval
+        self._update_conversation_history(messages)
+        
+        # Build a default llm_sequence if not provided
+        if not llm_sequence:
+            try:
+                llm_sequence = self.DEFAULT_LLM_SEQUENCE.copy()
+            except Exception:
+                llm_sequence = []
+        
+        # Always use streaming internally, but collect data for dictionary output
+        accumulated_response = ""
+        final_llm_name = "unknown"
+        similarity_score = 0.0
+        
+        # Collect all successful responses to choose the best one
+        successful_responses = []
+        
+        # Track failed LLMs for dynamic error reporting
+        failed_llms = []
+        
+        # Try providers in order with unified logic
+        for llm_type in llm_sequence:
+            try:
+                # Check if this LLM type was successfully initialized
+                if llm_type not in self.llm_provider_names:
+                    print(f"⚠️ Skipping {llm_type}: LLM not initialized")
+                    failed_llms.append({
+                        'provider': llm_type,
+                        'error': 'LLM not initialized',
+                        'status': 'Not initialized'
+                    })
+                    continue
+                
+                # Always use tools when available - this ensures consistent behavior
+                use_tools = self._provider_supports_tools(llm_type)
+                llm, llm_name, _ = self._select_llm(llm_type, use_tools)
+                if llm is None:
+                    print(f"⚠️ Skipping {llm_type}: LLM instance is None")
+                    failed_llms.append({
+                        'provider': llm_type,
+                        'error': 'LLM instance is None',
+                        'status': 'Not available'
+                    })
+                    continue
+                
+                print(f"🤖 Using {llm_name} (tools: {use_tools})")
+                final_llm_name = llm_name
+                
+                # Always use streaming internally
+                if use_tools:
+                    # For tool-calling, use the new streaming loop for real-time visibility
+                    tool_registry = {self._get_tool_name(tool): tool for tool in self.tools}
+                    call_id = self._trace_start_llm(llm_type)
+                    
+                    if streaming:
+                        # Create a streaming generator that yields content immediately
+                        def streaming_yielder(content):
+                            nonlocal accumulated_response
+                            if content and content.strip():
+                                accumulated_response += content
+                                # Don't return content here - let the calling loop handle yielding
+                                # This prevents duplication
+                            return None
+                        
+                        # Execute tool loop with streaming
+                        result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, streaming_yielder)
+                        
+                        # Handle the result - it should be a generator for streaming
+                        if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
+                            # It's a generator, consume it and yield content
+                            for chunk in result:
+                                if isinstance(chunk, str) and chunk.strip():
+                                    accumulated_response += chunk
+                                    yield chunk
+                        else:
+                            # Not a generator, extract answer and yield it
+                            answer = self._extract_final_answer(result)
+                            if answer:
+                                accumulated_response = answer
+                                for char in answer:
+                                    yield char
+                    else:
+                        # Non-streaming: execute tool loop silently
+                        result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, None)
+                        
+                        # Handle the result
+                        if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
+                            # It's a generator, consume it silently
+                            for chunk in result:
+                                if isinstance(chunk, str):
+                                    accumulated_response += chunk
+                        else:
+                            # Not a generator, extract answer
+                            answer = self._extract_final_answer(result)
+                            if answer:
+                                accumulated_response = answer
+                else:
+                    # For non-tool calls, try native streaming first
+                    if hasattr(llm, "stream") and callable(getattr(llm, "stream")):
+                        for chunk in llm.stream(messages):
+                            try:
+                                text = getattr(chunk, "content", None)
+                                if text is None:
+                                    text = getattr(chunk, "text", None)
+                                if text is None and isinstance(chunk, dict):
+                                    text = chunk.get("content") or chunk.get("text") or chunk.get("delta")
+                                if text is None:
+                                    text = str(chunk)
+                            except Exception:
+                                text = str(chunk)
+                            if not text:
+                                continue
+                            accumulated_response += text
+                            if streaming:
+                                yield text
+                    else:
+                        # Fallback: invoke once and stream result
+                        response = self._invoke_llm_provider(llm, messages, llm_type)
+                        answer = self._extract_final_answer(response)
+                        for char in answer:
+                            accumulated_response += char
+                            if streaming:
+                                yield char
+                
+                # If we get here, we have a successful response
+                print(f"🎯 Answer from {llm_name}: {accumulated_response[:100]}...")
+                
+                # Calculate similarity score if reference exists
+                if reference:
+                    is_match, similarity_score = self._vector_answers_match(accumulated_response, reference)
+                else:
+                    similarity_score = 1.0
+                
+                # Store this successful response
+                successful_responses.append({
+                    "response": accumulated_response,
+                    "llm_name": llm_name,
+                    "llm_type": llm_type,
+                    "similarity_score": similarity_score
+                })
+                
+                print(f"✅ {llm_name} succeeded (similarity: {similarity_score:.3f})")
+                
+                # For streaming, yield the first successful response immediately
+                # For non-streaming, continue trying other LLMs to find the best one
+                if streaming:
+                    # Yield the first successful response immediately for better UX
+                    print(f"🎯 Final answer from {llm_name}")
+                    
+                    # Display comprehensive stats
+                    self.print_llm_stats_table()
+                    
+                    # Finalize trace and yield the response
+                    self._finalize_trace_for_streaming(question, accumulated_response, llm_name, reference)
+                    for char in accumulated_response:
+                        yield char
+                    return
+                else:
+                    # For non-streaming, continue trying other LLMs to find the best one
+                    continue
+                    
+            except Exception as e:
+                print(f"❌ {llm_name} failed: {e}")
+                # Interpret the actual error to get real details
+                error_info = self._interpret_llm_error(e, llm_name, llm_type)
+                failed_llms.append(error_info)
+                if llm_type == llm_sequence[-1]:  # Last provider
+                    # Return error result
+                    error_result = {
+                        "submitted_answer": f"Error: {e}",
+                        "similarity_score": 0.0,
+                        "llm_used": "none",
+                        "reference": reference if reference else "Reference answer not found",
+                        "question": question,
+                        "error": str(e)
+                    }
+                    
+                    # Finalize trace with error result
+                    self._trace_finalize_question(error_result)
+                    
+                    if streaming:
+                        error_msg = self._generate_llm_failure_summary(failed_llms)
+                        for char in error_msg:
+                            yield char
+                        return
+                    else:
+                        return self._trace_get_full()
+                else:
+                    print(f"🔄 Trying next LLM...")
+                    if streaming:
+                        # Yield fallback message for this LLM
+                        fallback_msg = f"🔄 **{llm_name} failed, trying next LLM...**\n"
+                        for char in fallback_msg:
+                            yield char
+                    continue
+        
+        # After trying all LLMs, select the best response
+        if successful_responses:
+            # Sort by similarity score (highest first), then by order in sequence
+            best_response = max(successful_responses, key=lambda x: (x["similarity_score"], -llm_sequence.index(x["llm_type"])))
+            
+            accumulated_response = best_response["response"]
+            final_llm_name = best_response["llm_name"]
+            similarity_score = best_response["similarity_score"]
+            
+            print(f"🏆 Best response from {final_llm_name} (similarity: {similarity_score:.3f})")
+            
+            # Display comprehensive stats
+            self.print_llm_stats_table()
+            
+            # If streaming, finalize trace and yield the response
+            if streaming:
+                self._finalize_trace_for_streaming(question, accumulated_response, final_llm_name, reference)
+                # Yield the accumulated response character by character for streaming effect
+                for char in accumulated_response:
+                    yield char
+                return
+            else:
+                # For non-streaming, create dictionary result
+                final_answer = {
+                    "submitted_answer": ensure_valid_answer(accumulated_response),
+                    "similarity_score": similarity_score,
+                    "llm_used": final_llm_name,
+                    "reference": reference if reference else "Reference answer not found",
+                    "question": question
+                }
+                
+                # Finalize trace with success result
+                self._trace_finalize_question(final_answer)
+                
+                result = self._trace_get_full()
+                return result
+        else:
+            # No successful responses
+            print("❌ All LLMs failed")
+        
+        # If we get here, all LLMs failed
+        if streaming:
+            error_msg = self._generate_llm_failure_summary(failed_llms)
+            for char in error_msg:
+                yield char
+        else:
+            return {"error": "All LLMs failed", "failed_llms": failed_llms}
+
+    def _unified_process_with_streaming(self, question: str, chat_history: Optional[List[Dict[str, Any]]] = None, llm_sequence: Optional[List[str]] = None):
+        """
+        Wrapper for unified processing with streaming enabled.
+        """
+        return self._unified_process(question, None, None, llm_sequence, chat_history, streaming=True)
+
+    def _finalize_trace_for_streaming(self, question: str, answer: str, llm_used: str, reference: str):
+        """
+        Finalize trace for streaming responses.
+        """
+        try:
+            # Similarity scoring
+            if reference:
+                _, similarity_score = self._vector_answers_match(answer, reference)
+            else:
+                similarity_score = 1.0
+
+            final_answer = {
+                "submitted_answer": ensure_valid_answer(answer),
+                "similarity_score": similarity_score,
+                "llm_used": llm_used,
+                "reference": reference if reference else "Reference answer not found",
+                "question": question,
+            }
+            self._trace_finalize_question(final_answer)
+        except Exception as _e:
+            # Ensure trace ends even if scoring failed
+            try:
+                final_answer = {
+                    "submitted_answer": ensure_valid_answer(answer),
+                    "similarity_score": 0.0,
+                    "llm_used": llm_used,
+                    "reference": reference if reference else "Reference answer not found",
+                    "question": question,
+                }
+                self._trace_finalize_question(final_answer)
+            except Exception:
+                pass
+
+    def _extract_text_from_response(self, response: Any) -> str:
+        """
+        Helper method to extract text content from various response object types.
+        
+        Args:
+            response (Any): The response object (could be LLM response, dict, or string)
+            
+        Returns:
+            str: The text content from the response
+        """
+        # Handle None responses gracefully
+        if not response:
+            return ""
+            
+        if hasattr(response, 'content'):
+            return response.content
+        elif isinstance(response, dict) and 'content' in response:
+            return response['content']
+        else:
+            return str(response)
+
+
+    def _extract_final_answer(self, response: Any) -> str:
+        """
+        Extract the final answer from the LLM response using structured output approach.
+        This agent is tool-only and requires the submit_answer tool to be used.
+
+        Args:
+            response (Any): The LLM response object.
+
+        Returns:
+            str: The extracted final answer string.
+        """
+        # Extract using structured output (tool-only approach)
+        structured_answer = self._extract_structured_final_answer(response)
+        if structured_answer:
+            return structured_answer
+        
+        # If no structured answer found, this is an error condition for a tool-only agent
+        print(f"[Response Extractor] No structured answer found - agent requires submit_answer tool usage")
+        return "Error: Agent requires submit_answer tool usage. No structured answer found."
+    
+    def _extract_structured_final_answer(self, response: Any) -> Optional[str]:
+        """
+        Extract final answer using structured output (tool calls or JSON mode).
+        This is the modern SOTA approach.
+        
+        Args:
+            response (Any): The LLM response object.
+            
+        Returns:
+            Optional[str]: Extracted answer if found, None otherwise.
+        """
+        # Check for tool calls first (most reliable)
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            for tool_call in response.tool_calls:
+                if tool_call.get('name') == 'submit_answer':
+                    args = tool_call.get('args', {})
+                    if 'answer' in args:
+                        return args['answer']
+        
+        # Check for structured content in response metadata
+        if hasattr(response, 'response_metadata') and response.response_metadata:
+            metadata = response.response_metadata
+            if 'structured_output' in metadata:
+                structured_data = metadata['structured_output']
+                if isinstance(structured_data, dict) and 'answer' in structured_data:
+                    return structured_data['answer']
+        
+        # Check for JSON content in response
+        text = self._extract_text_from_response(response)
+        if text:
+            try:
+                # Try to parse as JSON
+                json_data = json.loads(text)
+                if isinstance(json_data, dict) and 'answer' in json_data:
+                    return json_data['answer']
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        return None
+    
+
+    def _llm_answers_match(self, answer: str, reference: str) -> bool:
+        """
+        Use the LLM to validate whether the agent's answer matches the reference answer according to the system prompt rules.
+        This method is kept for compatibility but should be avoided due to rate limiting.
+
+        Args:
+            answer (str): The agent's answer.
+            reference (str): The reference answer.
+
+        Returns:
+            bool: True if the LLM determines the answers match, False otherwise.
+        """
+        validation_prompt = (
+            f"Agent's answer:\n{answer}\n\n"
+            f"Reference answer:\n{reference}\n\n"
+            "Question: Does the agent's answer match the reference answer exactly, following the system prompt's answer formatting and constraints? "
+            "Reply with only 'true' or 'false'."
+        )
+        validation_msg = [SystemMessage (content=self.system_prompt), HumanMessage(content=validation_prompt)]
+        try:
+            response = self._try_llm_sequence(validation_msg, use_tools=True)
+            result = self._extract_text_from_response(response).strip().lower()
+            return result.startswith('true')
+        except Exception as e:
+            # Fallback: conservative, treat as not matching if validation fails
+            print(f"LLM validation error in _llm_answers_match: {e}")
+            return False
+
+    def _gather_tools(self) -> List[Any]:
+        """
+        Gather all callable tools from tools.py for LLM tool binding.
+
+        Returns:
+            list: List of tool functions.
+        """
+       
+        # Get all attributes from the tools module
+        tool_list = []
+        for name, obj in tools.__dict__.items():
+            # Only include actual tool objects (decorated with @tool) or callable functions
+            # that are not classes, modules, or builtins
+            if (callable(obj) and 
+                not name.startswith("_") and 
+                not isinstance(obj, type) and  # Exclude classes
+                hasattr(obj, '__module__') and  # Must have __module__ attribute
+                obj.__module__ == 'tools.tools' and  # Must be from tools module
+                name not in ["CmwAgent", "CodeInterpreter"]):  # Exclude specific classes
+                
+                # Check if it's a proper tool object (has the tool attributes)
+                if hasattr(obj, 'name') and hasattr(obj, 'description'):
+                    # This is a proper @tool decorated function
+                    tool_list.append(obj)
+                elif callable(obj) and not name.startswith("_"):
+                    # This is a regular function that might be a tool
+                    # Only include if it's not an internal function
+                    if not name.startswith("_") and name not in [
+                        # chess internals removed
+                    ]:
+                        tool_list.append(obj)
+        
+        # Add specific tools that might be missed
+        specific_tools = [
+            # List of specific tool names to ensure inclusion (grouped by category for clarity)
+                # Response handling tools
+                'submit_answer',
+                'submit_intermediate_step',
+                # Math tools
+                'multiply', 'add', 'subtract', 'divide', 'modulus', 'power', 'square_root',
+                # File and data tools
+                'save_and_read_file', 'download_file_from_url', 'get_task_file',
+                # Image and media tools
+                'extract_text_from_image', 'analyze_csv_file', 'analyze_excel_file',
+                'analyze_image', 'transform_image', 'draw_on_image', 'generate_simple_image', 'combine_images',
+                'understand_video', 'understand_audio',
+                # Chess tools removed
+                # Code execution
+                'execute_code_multilang',
+                # Research and search tools
+                'web_search_deep_research_exa_ai', 
+                'wiki_search', 'arxiv_search', 'web_search',
+                # Comindware Platform tools - Templates
+                'list_attributes',
+                # Comindware Platform tools - Applications
+                'list_templates', 'list_applications',
+                # Comindware Platform tools - Attributes (Text)
+                'edit_or_create_text_attribute', 'get_text_attribute',
+                # Comindware Platform tools - Attributes (Enum)
+                'edit_or_create_enum_attribute', 'get_enum_attribute',
+                # Comindware Platform tools - Attributes (DateTime)
+                'edit_or_create_date_time_attribute', 'get_date_time_attribute',
+                # Comindware Platform tools - Attributes (Decimal/Numeric)
+                'edit_or_create_numeric_attribute', 'get_numeric_attribute',
+                # Comindware Platform tools - Attributes (Instance/Record)
+                'edit_or_create_record_attribute', 'get_record_attribute',
+                # Comindware Platform tools - Attributes (Image)
+                'edit_or_create_image_attribute', 'get_image_attribute',
+                # Comindware Platform tools - Attributes (Drawing)
+                'edit_or_create_drawing_attribute', 'get_drawing_attribute',
+                # Comindware Platform tools - Attributes (Document)
+                'edit_or_create_document_attribute', 'get_document_attribute',
+                # Comindware Platform tools - Attributes (Duration)
+                'edit_or_create_duration_attribute', 'get_duration_attribute',
+                # Comindware Platform tools - Attributes (Account)
+                'edit_or_create_account_attribute', 'get_account_attribute',
+                # Comindware Platform tools - Attributes (Boolean)
+                'edit_or_create_boolean_attribute', 'get_boolean_attribute',
+                # Comindware Platform tools - Attributes (Role)
+                'edit_or_create_role_attribute', 'get_role_attribute',
+                # Comindware Platform tools - Attributes (Utility)
+                'delete_attribute', 'archive_or_unarchive_attribute'
+        ]
+        
+        # Build a set of tool names for deduplication (handle both __name__ and .name attributes)
+        tool_names = set(self._get_tool_name(tool) for tool in tool_list)
+        
+        # Ensure all specific tools are included
+        for tool_name in specific_tools:
+            if hasattr(tools, tool_name):
+                tool_obj = getattr(tools, tool_name)
+                name_val = self._get_tool_name(tool_obj)
+                if name_val not in tool_names:
+                    tool_list.append(tool_obj)
+                    tool_names.add(name_val)
+        
+        # Add retriever tool from vector store if available
+        if self.ENABLE_VECTOR_SIMILARITY and self.vector_store_manager is not None:
+            from vector_store import get_retriever_tool
+            retriever_tool = get_retriever_tool()
+            if retriever_tool:
+                tool_list.append(retriever_tool)
+                print("✅ Added retriever tool from vector store")
+            else:
+                print("ℹ️ No retriever tool available (vector store disabled)")
+        else:
+            print("ℹ️ No retriever tool available (vector similarity disabled)")
+        
+        # Filter out any tools that don't have proper tool attributes
+        final_tool_list = []
+        for tool in tool_list:
+            if hasattr(tool, 'name') and hasattr(tool, 'description'):
+                # This is a proper tool object
+                final_tool_list.append(tool)
+            elif callable(tool) and not self._get_tool_name(tool).startswith("_"):
+                # This is a callable function that should be a tool
+                final_tool_list.append(tool)
+        
+        print(f"✅ Gathered {len(final_tool_list)} tools: {[self._get_tool_name(tool) for tool in final_tool_list]}")
+        return final_tool_list
+
+    def _filter_tools_for_llm(self, tools_list: List[Any], llm_type: str) -> List[Any]:
+        """
+        Filter tools to avoid provider-specific JSON Schema issues.
+
+        - For providers like 'gigachat' that are strict about JSON schema, drop tools
+          whose argument schemas contain open-ended Dict/Any objects without defined properties
+          (e.g., parameters named 'params' typed as Dict[str, Any]).
+
+        Args:
+            tools_list: Tools gathered for binding
+            llm_type: Provider type string
+
+        Returns:
+            List[Any]: Filtered list of tools
+        """
+        if not tools_list:
+            return tools_list
+        if llm_type not in ("gigachat",):
+            return tools_list
+
+        filtered = []
+        for t in tools_list:
+            try:
+                # LangChain tools expose args schema via .args or .args_schema, fall back to __signature__
+                schema = None
+                if hasattr(t, "args") and isinstance(getattr(t, "args"), dict):
+                    schema = getattr(t, "args")
+                elif hasattr(t, "args_schema") and getattr(t, "args_schema") is not None:
+                    try:
+                        schema = getattr(t, "args_schema").schema().get("properties", {})
+                    except Exception:
+                        schema = None
+                if schema is None and hasattr(t, "__signature__") and getattr(t, "__signature__") is not None:
+                    # Build a simple schema-like view from signature annotations
+                    sig = getattr(t, "__signature__")
+                    pseudo = {}
+                    for p in sig.parameters.values():
+                        pseudo[p.name] = str(p.annotation) if p.annotation is not p.empty else "Any"
+                    schema = pseudo
+
+                # Decide if tool is safe: reject if any param looks like an unstructured dict
+                unsafe = False
+                if isinstance(schema, dict):
+                    for k, v in schema.items():
+                        v_str = str(v).lower()
+                        if k in ("params", "options", "kwargs") or ("dict" in v_str and ("any" in v_str or "typing.any" in v_str)):
+                            unsafe = True
+                            break
+                if not unsafe:
+                    filtered.append(t)
+                else:
+                    print(f"ℹ️ Skipping tool for {llm_type} due to open dict param: {self._get_tool_name(t)}")
+            except Exception as e:
+                # If inspection fails, keep the tool to avoid accidental removal
+                print(f"ℹ️ Tool inspection failed for {self._get_tool_name(t)}: {e}. Keeping tool.")
+                filtered.append(t)
+
+        if not filtered:
+            # Fallback: if filtering removed everything, return original list
+            return tools_list
+        return filtered
+
+    def _inject_file_data_to_tool_args(self, tool_name: str, tool_args: dict) -> dict:
+        """
+        Automatically inject file data and system prompt into tool arguments if needed.
+        
+        Args:
+            tool_name (str): Name of the tool being called
+            tool_args (dict): Original tool arguments
+            
+        Returns:
+            dict: Modified tool arguments with file data and system prompt if needed
+        """
+        # Tools that need file data
+        file_tools = {
+            'understand_audio': 'file_path',
+            'analyze_image': 'image_base64', 
+            'transform_image': 'image_base64',
+            'draw_on_image': 'image_base64',
+            'combine_images': 'images_base64',
+            'extract_text_from_image': 'image_path',
+            'analyze_csv_file': 'file_path',
+            'analyze_excel_file': 'file_path',
+            # chess tools removed
+            'execute_code_multilang': 'code'  # Add support for code injection
+        }
+        
+        # Tools that need system prompt for better formatting
+        system_prompt_tools = ['understand_video', 'understand_audio']
+        
+        # Inject system prompt for video and audio understanding tools
+        if tool_name in system_prompt_tools and 'system_prompt' not in tool_args:
+            tool_args['system_prompt'] = self.system_prompt
+            print(f"[Tool Loop] Injected system prompt for {tool_name}")
+        
+        if tool_name in file_tools and self.current_file_data and self.current_file_name:
+            param_name = file_tools[tool_name]
+            
+            # For image tools, use base64 directly
+            if 'image' in param_name:
+                tool_args[param_name] = self.current_file_data
+                print(f"[Tool Loop] Injected base64 image data for {tool_name}")
+            # For file path tools, create a temporary file
+            elif 'file_path' in param_name:
+                # Decode base64 and create temporary file
+                file_data = base64.b64decode(self.current_file_data)
+                with tempfile.NamedTemporaryFile(suffix=os.path.splitext(self.current_file_name)[1], delete=False) as temp_file:
+                    temp_file.write(file_data)
+                    temp_file_path = temp_file.name
+                tool_args[param_name] = temp_file_path
+                print(f"[Tool Loop] Created temporary file {temp_file_path} for {tool_name}")
+            # For code tools, decode and inject the code content
+            elif param_name == 'code':
+                try:
+                    # Get file extension
+                    temp_ext = os.path.splitext(self.current_file_name)[1].lower()
+                    code_str = tool_args.get('code', '')
+                    orig_file_name = self.current_file_name
+                    file_data = base64.b64decode(self.current_file_data)
+                    # List of code file extensions
+                    code_exts = ['.py', '.js', '.cpp', '.c', '.java', '.rb', '.go', '.ts', '.sh', '.php', '.rs']
+                    if temp_ext in code_exts:
+                        # If it's a code file, decode as UTF-8 and inject as code
+                        code_content = file_data.decode('utf-8')
+                        tool_args[param_name] = code_content
+                        print(f"[Tool Loop] Injected code from attached file for {tool_name}: {len(code_content)} characters")
+                    else:
+                        # Otherwise, treat as data file: create temp file and patch code string
+                        with tempfile.NamedTemporaryFile(suffix=temp_ext, delete=False) as temp_file:
+                            temp_file.write(file_data)
+                            temp_file_path = temp_file.name
+                        print(f"[Tool Loop] Created temporary file {temp_file_path} for code execution")
+                        # Replace all occurrences of the original file name in the code string with the temp file path
+                        patched_code = code_str.replace(orig_file_name, temp_file_path)
+                        tool_args[param_name] = patched_code
+                        print(f"[Tool Loop] Patched code to use temp file path for {tool_name}")
+                except Exception as e:
+                    print(f"[Tool Loop] Failed to patch code for code injection: {e}")
+        
+        return tool_args
+
+    def _init_gemini_llm(self, config, model_config):
+        return ChatGoogleGenerativeAI(
+            model=model_config["model"],
+            temperature=model_config["temperature"],
+            google_api_key=os.environ.get(config["api_key_env"]),
+            max_tokens=model_config["max_tokens"]
+        )
+
+    def _init_groq_llm(self, config, model_config):
+        if not os.environ.get(config["api_key_env"]):
+            print(f"⚠️ {config['api_key_env']} not found in environment variables. Skipping Groq...")
+            return None
+        return ChatGroq(
+            model=model_config["model"],
+            temperature=model_config["temperature"],
+            max_tokens=model_config["max_tokens"]
+        )
+
+    def _init_huggingface_llm(self, config, model_config):
+        # Convert model to repo_id for HuggingFace
+        model_config_with_repo = model_config.copy()
+        model_config_with_repo['repo_id'] = model_config['model']
+        del model_config_with_repo['model']
+        
+        allowed_fields = {'repo_id', 'task', 'max_new_tokens', 'do_sample', 'temperature'}
+        filtered_config = {k: v for k, v in model_config_with_repo.items() if k in allowed_fields}
+        try:
+            endpoint = HuggingFaceEndpoint(**filtered_config)
+            return ChatHuggingFace(
+                llm=endpoint,
+                verbose=True,
+            )
+        except Exception as e:
+            if "402" in str(e) or "payment required" in str(e).lower():
+                print(f"\u26a0\ufe0f HuggingFace Payment Required (402) error: {e}")
+                print("💡 You have exceeded your HuggingFace credits. Skipping HuggingFace LLM initialization.")
+                return None
+            raise
+
+    def _init_openrouter_llm(self, config, model_config):
+        api_key = os.environ.get(config["api_key_env"])
+        api_base = os.environ.get(config["api_base_env"])
+        if not api_key or not api_base:
+            print(f"⚠️ {config['api_key_env']} or {config['api_base_env']} not found in environment variables. Skipping OpenRouter...")
+            return None
+        return ChatOpenAI(
+            openai_api_key=api_key,
+            openai_api_base=api_base,
+            model_name=model_config["model"],
+            temperature=model_config["temperature"],
+            max_tokens=model_config["max_tokens"]
+        )
+
+    def _init_mistral_llm(self, config, model_config):
+        api_key = os.environ.get(config["api_key_env"])
+        if not api_key:
+            print(f"⚠️ {config['api_key_env']} not found in environment variables. Skipping Mistral AI...")
+            return None
+        return ChatMistralAI(
+            model=model_config["model"],
+            temperature=model_config["temperature"],
+            max_tokens=model_config["max_tokens"]
+        )
+
+    def _init_gigachat_llm(self, config, model_config):
+        try:
+            # Use the newer langchain-gigachat package (recommended)
+            from langchain_gigachat.chat_models import GigaChat as LC_GigaChat
+        except ImportError:
+            try:
+                # Fallback to langchain-community (deprecated but still works)
+                from langchain_community.chat_models import GigaChat as LC_GigaChat
+                print("⚠️ Using deprecated langchain-community.GigaChat. Consider upgrading to langchain-gigachat")
+            except ImportError as e:
+                print(f"⚠️ Neither langchain-gigachat nor langchain-community is installed: {e}")
+                print(f"   Install with: pip install langchain-gigachat")
+                print(f"   Or: pip install langchain-community")
+                return None
+        
+        # Check for required environment variables
+        api_key = os.environ.get(config["api_key_env"]) or os.environ.get("GIGACHAT_API_KEY")
+        if not api_key:
+            print(f"⚠️ {config['api_key_env']} not found in environment variables. Skipping GigaChat...")
+            print(f"   To use GigaChat, set GIGACHAT_API_KEY in your environment variables.")
+            return None
+        
+        scope = os.environ.get(config.get("scope_env", "GIGACHAT_SCOPE"))
+        if not scope:
+            print(f"⚠️ GIGACHAT_SCOPE not found in environment variables. Using default scope...")
+            print(f"   Available scopes: GIGACHAT_API_PERS, GIGACHAT_API_B2B, GIGACHAT_API_CORP")
+            scope = "GIGACHAT_API_PERS"  # Default scope
+        
+        verify_ssl_env = os.environ.get(config.get("verify_ssl_env", "GIGACHAT_VERIFY_SSL"), "false")
+        verify_ssl = str(verify_ssl_env).strip().lower() in ("1", "true", "yes", "y")
+        
+        # Get additional optional parameters
+        base_url = os.environ.get("GIGACHAT_BASE_URL", "https://gigachat.devices.sberbank.ru/api/v1")
+        timeout = int(os.environ.get("GIGACHAT_TIMEOUT", "30"))
+        
+        try:
+            # Initialize LangChain GigaChat client with proper parameters
+            giga_chat = LC_GigaChat(
+                credentials=api_key,
+                model=model_config["model"],
+                verify_ssl_certs=verify_ssl,
+                scope=scope,
+                base_url=base_url,
+                timeout=timeout,
+                temperature=model_config.get("temperature", 0),
+                max_tokens=model_config.get("max_tokens", 2048),
+                top_p=model_config.get("top_p", 0.9),
+                repetition_penalty=model_config.get("repetition_penalty", 1.0)
+            )
+            
+            return giga_chat
+        except Exception as e:
+            print(f"⚠️ Failed to initialize GigaChat: {e}")
+            print(f"   Check your GIGACHAT_API_KEY and GIGACHAT_SCOPE configuration.")
+            print(f"   Ensure you have the correct langchain-community or langchain-gigachat package installed.")
+            return None
+
+    def _interpret_llm_response(self, response: Any, llm_name: str, llm_type: str, test_type: str) -> dict:
+        """
+        Interpret actual LLM API responses to determine real capabilities.
+        
+        Args:
+            response: The actual response from the LLM API
+            llm_name: Name of the LLM provider
+            llm_type: Type of the LLM
+            test_type: Type of test being performed
+            
+        Returns:
+            dict: Interpreted response information
+        """
+        response_info = {
+            'provider': llm_name,
+            'llm_type': llm_type,
+            'test_type': test_type,
+            'is_successful': False,
+            'response_type': 'unknown',
+            'content': '',
+            'error_description': '',
+            'capabilities': [],
+            'limitations': []
+        }
+        
+        # Check if response is None
+        if response is None:
+            response_info.update({
+                'response_type': 'null_response',
+                'error_description': 'API returned null response',
+                'limitations': ['null_responses']
+            })
+            return response_info
+        
+        # Check for tool calls first (valid even without content)
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            response_info.update({
+                'response_type': 'tool_calls',
+                'capabilities': ['tool_calling']
+            })
+            response_info['is_successful'] = True
+        
+        # Check if response has content
+        if hasattr(response, 'content') and response.content:
+            content = str(response.content).strip()
+            response_info['content'] = content
+            
+            # Check for empty content
+            if not content:
+                response_info.update({
+                    'response_type': 'empty_content',
+                    'error_description': 'API returned empty content',
+                    'limitations': ['empty_responses']
+                })
+                return response_info
+            
+            # Check for error messages in content
+            if any(term in content.lower() for term in ['error', 'failed', 'unavailable', 'not supported']):
+                response_info.update({
+                    'response_type': 'error_content',
+                    'error_description': f'API returned error in content: {content[:100]}',
+                    'limitations': ['error_responses']
+                })
+                return response_info
+            
+            # Check for streaming response
+            if hasattr(response, 'response_metadata') and response.response_metadata:
+                response_info['capabilities'].append('streaming')
+            
+            # Successful response with content
+            response_info.update({
+                'is_successful': True,
+                'response_type': 'successful',
+                'capabilities': response_info['capabilities'] + ['text_generation', 'api_communication']
+            })
+            
+        elif hasattr(response, 'tool_calls') and response.tool_calls:
+            # Tool calls without content - this is valid for tool-calling scenarios
+            response_info.update({
+                'is_successful': True,
+                'response_type': 'tool_calls_only',
+                'capabilities': response_info['capabilities'] + ['api_communication']
+            })
+            
+        else:
+            # No content attribute and no tool calls
+            response_info.update({
+                'response_type': 'no_content',
+                'error_description': 'Response has no content attribute',
+                'limitations': ['no_content_support']
+            })
+        
+        return response_info
+
+    def _test_llm_tool_calling(self, llm_name: str, llm_type: str, llm_instance) -> tuple[bool, str, str]:
+        """
+        Test LLM tool calling capabilities by interpreting actual API responses.
+        This is the primary test since our agent only works with tools.
+        
+        Args:
+            llm_name: Name of the LLM for logging purposes
+            llm_type: The LLM type string (e.g., 'gemini', 'groq', etc.)
+            llm_instance: The LLM instance with tools bound
+            
+        Returns:
+            tuple: (success: bool, error_message: str, test_answer: str)
+        """
+        try:
+            # Use a math question that requires tools - similar to the quick action
+            test_question = "Calculate 15 * 23 + 7. Show your work step by step using tools."
+            test_message = [
+                self.sys_msg, 
+                HumanMessage(content=test_question)
+            ]
+            print(f"🧪 Testing {llm_name} with tool-calling test...")
+            print(f"   Test question: {test_question}")
+            start_time = time.time()
+            test_response = self._invoke_llm_provider(llm_instance, test_message, llm_type)
+            end_time = time.time()
+            
+            # Interpret the actual response
+            response_info = self._interpret_llm_response(test_response, llm_name, llm_type, "tool_calling")
+            
+            print(f"   Response time: {end_time - start_time:.2f}s")
+            print(f"   Response type: {response_info['response_type']}")
+            
+            # Debug: Show response structure
+            if hasattr(test_response, 'tool_calls') and test_response.tool_calls:
+                print(f"   Tool calls detected: {len(test_response.tool_calls)}")
+                for i, tool_call in enumerate(test_response.tool_calls):
+                    print(f"     Tool {i+1}: {tool_call.get('name', 'unknown')}")
+            if hasattr(test_response, 'content'):
+                print(f"   Content attribute exists: {bool(test_response.content)}")
+                if test_response.content:
+                    print(f"   Content length: {len(str(test_response.content))}")
+            else:
+                print(f"   No content attribute found")
+            
+            if not response_info['is_successful']:
+                error_msg = f"{llm_name} tool test failed: {response_info['error_description']}"
+                print(f"❌ {error_msg}")
+                
+                # Special handling for GigaChat 500 errors - check configuration
+                if llm_type == "gigachat" and "Internal Server Error" in error_msg:
+                    print(f"   ℹ️ GigaChat Internal Server Error - check your API configuration")
+                    print(f"   ℹ️ Verify GIGACHAT_API_KEY, GIGACHAT_SCOPE, and base URL settings")
+                    return False, error_msg, ""  # Don't accept as text-only mode
+                
+                return False, error_msg, ""
+            
+            # Check for tool calling capabilities
+            has_tool_calls = 'tool_calling' in response_info['capabilities']
+            has_content = bool(response_info['content'])
+            
+            if has_content:
+                content_preview = response_info['content'][:100] + "..." if len(response_info['content']) > 100 else response_info['content']
+                print(f"   Content preview: {content_preview}")
+            
+            # Success cases for tool calling
+            if has_tool_calls:
+                print(f"✅ {llm_name} tool calling successful!")
+                print(f"   Capabilities: {', '.join(response_info['capabilities'])}")
+                if not has_content:
+                    print(f"   Note: LLM made tool calls but returned empty content (this is acceptable)")
+                return True, None, response_info['content']
+            
+            # Fallback: Check if LLM calculated correctly without tools
+            elif has_content and ("352" in response_info['content'] or "15 * 23 + 7" in response_info['content']):
+                print(f"⚠️ {llm_name} calculated correctly without tools")
+                print(f"   Note: LLM may not support tool calling but can perform calculations")
+                return True, None, response_info['content']
+            
+            # Failure cases
+            elif has_content:
+                error_msg = f"{llm_name} returned content but wrong answer (expected: 352, got: {response_info['content'][:50]}...)"
+                print(f"❌ {error_msg}")
+                print(f"   Expected answer: 352 (15 * 23 + 7)")
+                return False, error_msg, response_info['content']
+            else:
+                error_msg = f"{llm_name} returned no tool calls and no content"
+                print(f"❌ {error_msg}")
+                return False, error_msg, ""
+                
+        except Exception as e:
+            # Interpret the actual error
+            error_info = self._interpret_llm_error(e, llm_name, llm_type)
+            error_msg = f"{llm_name} tool test failed: {error_info['description']}"
+            print(f"❌ {error_msg}")
+            
+            # Special handling for GigaChat 500 errors - check configuration
+            if llm_type == "gigachat" and "Internal Server Error" in error_msg:
+                print(f"   ℹ️ GigaChat Internal Server Error - check your API configuration")
+                print(f"   ℹ️ Verify GIGACHAT_API_KEY, GIGACHAT_SCOPE, and base URL settings")
+                return False, error_msg, ""  # Don't accept as text-only mode
+            
+            return False, error_msg, ""
+
+    def _interpret_llm_error(self, error: Exception, llm_name: str, llm_type: str) -> dict:
+        """
+        Interpret actual LLM API error responses using official API error structures.
+        
+        Args:
+            error: The actual exception/error from the LLM API
+            llm_name: Name of the LLM provider
+            llm_type: Type of the LLM
+            
+        Returns:
+            dict: Interpreted error information with real details
+        """
+        error_info = {
+            'provider': llm_name,
+            'llm_type': llm_type,
+            'raw_error': str(error),
+            'error_type': 'unknown',
+            'description': 'Unknown error',
+            'suggested_action': 'Check logs for details',
+            'retry_after': None,
+            'is_temporary': False,
+            'requires_config_change': False
+        }
+        
+        # Try to extract HTTP status code from the error
+        status_code = self._extract_http_status_code(error)
+        
+        if status_code:
+            # Use official HTTP status codes for error classification
+            error_info.update(self._classify_error_by_status_code(status_code, error, llm_name))
+        else:
+            # Fallback to analyzing error message for known patterns
+            error_info.update(self._classify_error_by_message(str(error), llm_name))
+        
+        return error_info
+
+    def _extract_http_status_code(self, error: Exception) -> int:
+        """Extract HTTP status code from various error types."""
+        error_str = str(error)
+        
+        # Look for HTTP status codes in the error message
+        import re
+        import json
+        
+        # Pattern 1: "HTTP 429" or "429 error"
+        status_match = re.search(r'HTTP\s+(\d{3})|(\d{3})\s+error', error_str, re.IGNORECASE)
+        if status_match:
+            return int(status_match.group(1) or status_match.group(2))
+        
+        # Pattern 2: "status: 429" or "code: 429"
+        status_match = re.search(r'(?:status|code):\s*(\d{3})', error_str, re.IGNORECASE)
+        if status_match:
+            return int(status_match.group(1))
+        
+        # Pattern 3: Try to parse JSON error responses
+        try:
+            # Look for JSON error structures in the error message
+            json_match = re.search(r'\{[^}]*"status"[^}]*\d{3}[^}]*\}|\{[^}]*"code"[^}]*\d{3}[^}]*\}', error_str)
+            if json_match:
+                error_data = json.loads(json_match.group(0))
+                if 'status' in error_data:
+                    return int(error_data['status'])
+                elif 'code' in error_data:
+                    return int(error_data['code'])
+        except (json.JSONDecodeError, ValueError, KeyError):
+            pass
+        
+        # Pattern 4: Look for common HTTP status codes in the message
+        for status in [400, 401, 402, 403, 404, 408, 413, 422, 429, 500, 502, 503]:
+            if str(status) in error_str:
+                return status
+        
+        return None
+
+    def _extract_retry_after_timing(self, error_str: str) -> int:
+        """Extract retry-after timing from error messages."""
+        import re
+        
+        # Look for retry-after in various formats
+        patterns = [
+            r'retry-after[:\s]*(\d+)',
+            r'retry[:\s]*after[:\s]*(\d+)',
+            r'wait[:\s]*(\d+)[:\s]*seconds?',
+            r'(\d+)[:\s]*seconds?[:\s]*before[:\s]*retry'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, error_str, re.IGNORECASE)
+            if match:
+                return int(match.group(1))
+        
+        return None
+
+    def _classify_gemini_error(self, status_code: int, error_str: str) -> dict:
+        """Classify Gemini-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        if status_code == 400:
+            if 'invalid_argument' in error_str_lower:
+                return {
+                    'error_type': 'invalid_argument',
+                    'description': 'INVALID_ARGUMENT - Request body is malformed',
+                    'suggested_action': 'Check API reference for request format and supported versions',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'failed_precondition' in error_str_lower or 'free tier' in error_str_lower:
+                return {
+                    'error_type': 'failed_precondition',
+                    'description': 'FAILED_PRECONDITION - Free tier not available in your country',
+                    'suggested_action': 'Enable billing on your project in Google AI Studio',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 403:
+            if 'permission_denied' in error_str_lower:
+                return {
+                    'error_type': 'permission_denied',
+                    'description': 'PERMISSION_DENIED - API key lacks required permissions',
+                    'suggested_action': 'Check API key access and authentication for tuned models',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 404:
+            if 'not_found' in error_str_lower:
+                return {
+                    'error_type': 'not_found',
+                    'description': 'NOT_FOUND - Requested resource was not found',
+                    'suggested_action': 'Check if all parameters in your request are valid for your API version',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 429:
+            if 'resource_exhausted' in error_str_lower:
+                retry_after = self._extract_retry_after_timing(error_str)
+                return {
+                    'error_type': 'resource_exhausted',
+                    'description': 'RESOURCE_EXHAUSTED - Rate limit exceeded',
+                    'suggested_action': 'Verify rate limits and request quota increase if needed',
+                    'is_temporary': True,
+                    'requires_config_change': False,
+                    'retry_after': retry_after
+                }
+        
+        elif status_code == 500:
+            if 'internal' in error_str_lower or 'context' in error_str_lower:
+                return {
+                    'error_type': 'internal_context_error',
+                    'description': 'INTERNAL - Input context too long',
+                    'suggested_action': 'Reduce input context or switch to Gemini 1.5 Flash',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 503:
+            if 'unavailable' in error_str_lower:
+                return {
+                    'error_type': 'unavailable',
+                    'description': 'UNAVAILABLE - Service temporarily overloaded',
+                    'suggested_action': 'Switch to Gemini 1.5 Flash or wait and retry',
+                    'is_temporary': True,
+                    'requires_config_change': False
+                }
+        
+        elif status_code == 504:
+            if 'deadline_exceeded' in error_str_lower:
+                return {
+                    'error_type': 'deadline_exceeded',
+                    'description': 'DEADLINE_EXCEEDED - Service unable to finish processing within deadline',
+                    'suggested_action': 'Set larger timeout or reduce prompt size',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        return None
+
+    def _classify_groq_error(self, status_code: int, error_str: str) -> dict:
+        """Classify Groq-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        if status_code == 400:
+            return {
+                'error_type': 'bad_request',
+                'description': 'Bad Request - Invalid syntax in request',
+                'suggested_action': 'Check request format and parameters',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 401:
+            return {
+                'error_type': 'unauthorized',
+                'description': 'Unauthorized - Invalid authentication credentials',
+                'suggested_action': 'Check API key configuration',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 404:
+            return {
+                'error_type': 'not_found',
+                'description': 'Not Found - Requested resource not found',
+                'suggested_action': 'Check model name and endpoint configuration',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 413:
+            return {
+                'error_type': 'request_too_large',
+                'description': 'Request Entity Too Large - Request body exceeds size limits',
+                'suggested_action': 'Reduce request size or enable chunking',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 422:
+            return {
+                'error_type': 'unprocessable_entity',
+                'description': 'Unprocessable Entity - Semantic errors in request',
+                'suggested_action': 'Check request parameters and model compatibility',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 429:
+            retry_after = self._extract_retry_after_timing(error_str)
+            return {
+                'error_type': 'rate_limit_exceeded',
+                'description': 'Too Many Requests - Rate limit exceeded',
+                'suggested_action': 'Wait before retrying or reduce request frequency',
+                'is_temporary': True,
+                'requires_config_change': False,
+                'retry_after': retry_after
+            }
+        
+        elif status_code == 498:
+            return {
+                'error_type': 'flex_tier_capacity_exceeded',
+                'description': 'Flex Tier Capacity Exceeded - Service at capacity',
+                'suggested_action': 'Wait for capacity to free up or upgrade to higher tier',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 499:
+            return {
+                'error_type': 'request_cancelled',
+                'description': 'Request Cancelled - Request was cancelled by caller',
+                'suggested_action': 'Retry the request if needed',
+                'is_temporary': False,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 500:
+            return {
+                'error_type': 'internal_server_error',
+                'description': 'Internal Server Error - Generic server error',
+                'suggested_action': 'Try again later or contact support',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 502:
+            return {
+                'error_type': 'bad_gateway',
+                'description': 'Bad Gateway - Invalid response from upstream server',
+                'suggested_action': 'Try again later or use different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 503:
+            return {
+                'error_type': 'service_unavailable',
+                'description': 'Service Unavailable - Server not ready to handle request',
+                'suggested_action': 'Wait for maintenance to complete or try different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        return None
+
+    def _classify_mistral_error(self, status_code: int, error_str: str) -> dict:
+        """Classify Mistral-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        # Check for Mistral-specific error codes first
+        if 'invalid_request_message_order' in error_str_lower or '3230' in error_str:
+            return {
+                'error_type': 'invalid_message_order',
+                'description': 'Invalid Request Message Order - Message sequence is incorrect',
+                'suggested_action': 'Reconstruct conversation with proper message ordering',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        # Standard HTTP status codes for Mistral
+        if status_code == 400:
+            return {
+                'error_type': 'bad_request',
+                'description': 'Bad Request - Invalid or missing parameters',
+                'suggested_action': 'Check request parameters and format',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 401:
+            return {
+                'error_type': 'unauthorized',
+                'description': 'Unauthorized - Invalid API key',
+                'suggested_action': 'Check API key configuration',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 403:
+            return {
+                'error_type': 'forbidden',
+                'description': 'Forbidden - Server refuses to authorize the request',
+                'suggested_action': 'Check API key permissions and access rights',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 404:
+            return {
+                'error_type': 'not_found',
+                'description': 'Not Found - Requested resource could not be found',
+                'suggested_action': 'Check if the requested resource exists and is accessible',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 422:
+            return {
+                'error_type': 'validation_error',
+                'description': 'Validation Error - Request validation failed',
+                'suggested_action': 'Check request parameters and ensure they meet validation requirements',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 429:
+            retry_after = self._extract_retry_after_timing(error_str)
+            return {
+                'error_type': 'rate_limit_exceeded',
+                'description': 'Too Many Requests - Rate limit exceeded',
+                'suggested_action': 'Wait before retrying or reduce request frequency',
+                'is_temporary': True,
+                'requires_config_change': False,
+                'retry_after': retry_after
+            }
+        
+        elif status_code == 500:
+            return {
+                'error_type': 'internal_server_error',
+                'description': 'Internal Server Error - Service temporarily unavailable',
+                'suggested_action': 'Try again later or contact support',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 503:
+            return {
+                'error_type': 'service_unavailable',
+                'description': 'Service Unavailable - Server temporarily unable to handle requests',
+                'suggested_action': 'Wait and retry later or contact support',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        return None
+
+    def _classify_gigachat_error(self, status_code: int, error_str: str) -> dict:
+        """Classify GigaChat-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        if status_code == 400:
+            # Check for specific GigaChat 400 error patterns
+            if 'rquid' in error_str_lower or 'uuid4' in error_str_lower:
+                return {
+                    'error_type': 'invalid_rquid',
+                    'description': 'Invalid RqUID header - Missing or malformed request ID',
+                    'suggested_action': 'Add RqUID header with valid UUID4 format',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'scope is empty' in error_str_lower or 'code": 5' in error_str:
+                return {
+                    'error_type': 'empty_scope',
+                    'description': 'Empty scope - API version not specified',
+                    'suggested_action': 'Specify API version: GIGACHAT_API_PERS, GIGACHAT_API_B2B, or GIGACHAT_API_CORP',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'scope data format invalid' in error_str_lower or 'code": 1' in error_str:
+                return {
+                    'error_type': 'invalid_scope_format',
+                    'description': 'Invalid scope format - Malformed API version',
+                    'suggested_action': 'Check scope parameter format and try again',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'id must not be empty' in error_str_lower:
+                return {
+                    'error_type': 'missing_id',
+                    'description': 'Missing ID parameter - Required field is empty',
+                    'suggested_action': 'Provide valid ID parameter in request',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            else:
+                return {
+                    'error_type': 'bad_request',
+                    'description': 'Bad Request - Invalid parameters or request format',
+                    'suggested_action': 'Check request parameters and format',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 401:
+            if 'can\'t decode \'authorization\' header' in error_str_lower or 'code": 4' in error_str:
+                return {
+                    'error_type': 'invalid_auth_header',
+                    'description': 'Invalid Authorization header - Cannot decode credentials',
+                    'suggested_action': 'Check API key format and ensure it\'s correctly encoded',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'credentials doesn\'t match db data' in error_str_lower or 'code": 6' in error_str:
+                return {
+                    'error_type': 'credential_mismatch',
+                    'description': 'Credential mismatch - API key doesn\'t match database',
+                    'suggested_action': 'Regenerate API key in personal cabinet and try again',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'scope from db not fully includes consumed scope' in error_str_lower or 'code": 7' in error_str:
+                return {
+                    'error_type': 'scope_mismatch',
+                    'description': 'Scope mismatch - API key doesn\'t match requested scope',
+                    'suggested_action': 'Ensure API key matches the specified scope version',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            else:
+                return {
+                    'error_type': 'unauthorized',
+                    'description': 'Unauthorized - Invalid or expired authentication',
+                    'suggested_action': 'Check API key and ensure token is not older than 30 minutes',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 402:
+            return {
+                'error_type': 'payment_required',
+                'description': 'Payment Required - Model tokens exhausted',
+                'suggested_action': 'Check token balance in personal cabinet and add credits',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 403:
+            return {
+                'error_type': 'permission_denied',
+                'description': 'Permission Denied - Access to resource not allowed',
+                'suggested_action': 'Check if you\'re using pay-as-you-go billing (GET /balance not available)',
+                'is_temporary': False,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 413:
+            return {
+                'error_type': 'payload_too_large',
+                'description': 'Payload Too Large - Input exceeds maximum size',
+                'suggested_action': 'Reduce prompt size to fit within model context window',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 422:
+            if 'requested model does not support functions' in error_str_lower:
+                return {
+                    'error_type': 'functions_not_supported',
+                    'description': 'Functions Not Supported - Model doesn\'t support custom functions',
+                    'suggested_action': 'Contact support or use a different model',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'system message must be the first message' in error_str_lower:
+                return {
+                    'error_type': 'invalid_message_order',
+                    'description': 'Invalid Message Order - System message must be first',
+                    'suggested_action': 'Reorder messages to put system prompt first',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'unprocessable entity' in error_str_lower and 'attachments' in error_str_lower:
+                return {
+                    'error_type': 'attachment_too_large',
+                    'description': 'Attachment Too Large - File content exceeds context window',
+                    'suggested_action': 'Split or reduce file content size',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            else:
+                return {
+                    'error_type': 'unprocessable_entity',
+                    'description': 'Unprocessable Entity - Request format is invalid',
+                    'suggested_action': 'Check message order, field names, and parameter values',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 429:
+            return {
+                'error_type': 'rate_limit_exceeded',
+                'description': 'Too Many Requests - Concurrent request limit exceeded',
+                'suggested_action': 'Reduce concurrent requests (1 for individuals, 10 for businesses)',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 500:
+            return {
+                'error_type': 'internal_server_error',
+                'description': 'Internal Server Error - Service error occurred',
+                'suggested_action': 'Contact support or try again later',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        return None
+
+    def _classify_openrouter_error(self, status_code: int, error_str: str) -> dict:
+        """Classify OpenRouter-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        if status_code == 400:
+            return {
+                'error_type': 'bad_request',
+                'description': 'Bad Request - Invalid or missing parameters, CORS issues',
+                'suggested_action': 'Check request parameters, format, and CORS settings',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 401:
+            if 'oauth' in error_str_lower or 'session expired' in error_str_lower:
+                return {
+                    'error_type': 'oauth_expired',
+                    'description': 'OAuth session expired - Authentication token has expired',
+                    'suggested_action': 'Refresh OAuth token or re-authenticate',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            elif 'disabled' in error_str_lower or 'invalid api key' in error_str_lower:
+                return {
+                    'error_type': 'invalid_api_key',
+                    'description': 'Invalid API key - Key is disabled or invalid',
+                    'suggested_action': 'Check API key validity and ensure it\'s enabled',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            else:
+                return {
+                    'error_type': 'unauthorized',
+                    'description': 'Unauthorized - Invalid credentials or API key',
+                    'suggested_action': 'Check API key configuration and authentication',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 402:
+            return {
+                'error_type': 'insufficient_credits',
+                'description': 'Insufficient Credits - Account or API key has insufficient credits',
+                'suggested_action': 'Add more credits to your account and retry the request',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 403:
+            # Check for moderation error metadata
+            if 'moderation' in error_str_lower or 'flagged' in error_str_lower:
+                return {
+                    'error_type': 'moderation_flagged',
+                    'description': 'Content Flagged - Input was flagged by moderation system',
+                    'suggested_action': 'Review and modify input content to comply with moderation policies',
+                    'is_temporary': False,
+                    'requires_config_change': False,
+                    'metadata': self._extract_openrouter_moderation_metadata(error_str)
+                }
+            else:
+                return {
+                    'error_type': 'forbidden',
+                    'description': 'Forbidden - Access denied to chosen model',
+                    'suggested_action': 'Check model availability and permissions',
+                    'is_temporary': False,
+                    'requires_config_change': False
+                }
+        
+        elif status_code == 408:
+            return {
+                'error_type': 'request_timeout',
+                'description': 'Request Timeout - Request took too long to process',
+                'suggested_action': 'Try again with shorter input or different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 429:
+            return {
+                'error_type': 'rate_limited',
+                'description': 'Rate Limited - Too many requests in given timeframe',
+                'suggested_action': 'Wait before retrying or reduce request frequency',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 502:
+            # Check for provider error metadata
+            if 'provider' in error_str_lower or 'model' in error_str_lower:
+                return {
+                    'error_type': 'model_down',
+                    'description': 'Model Down - Chosen model is down or returned invalid response',
+                    'suggested_action': 'Try again later or use a different model',
+                    'is_temporary': True,
+                    'requires_config_change': False,
+                    'metadata': self._extract_openrouter_provider_metadata(error_str)
+                }
+            else:
+                return {
+                    'error_type': 'bad_gateway',
+                    'description': 'Bad Gateway - Invalid response from upstream server',
+                    'suggested_action': 'Try again later or contact support',
+                    'is_temporary': True,
+                    'requires_config_change': False
+                }
+        
+        elif status_code == 503:
+            return {
+                'error_type': 'no_available_provider',
+                'description': 'No Available Provider - No model provider meets routing requirements',
+                'suggested_action': 'Try again later or adjust routing requirements',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        return None
+
+    def _extract_openrouter_moderation_metadata(self, error_str: str) -> dict:
+        """Extract moderation error metadata from OpenRouter error response."""
+        try:
+            import json
+            # Look for JSON metadata in error string
+            if 'metadata' in error_str:
+                # Try to extract metadata from error string
+                start = error_str.find('"metadata":')
+                if start != -1:
+                    # Find the end of metadata object
+                    brace_count = 0
+                    start += len('"metadata":')
+                    for i, char in enumerate(error_str[start:], start):
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                metadata_str = error_str[start:i+1]
+                                return json.loads(metadata_str)
+        except (json.JSONDecodeError, ValueError, AttributeError):
+            pass
+        
+        return {
+            'reasons': ['Content flagged by moderation'],
+            'flagged_input': 'Unable to extract',
+            'provider_name': 'Unknown',
+            'model_slug': 'Unknown'
+        }
+
+    def _extract_openrouter_provider_metadata(self, error_str: str) -> dict:
+        """Extract provider error metadata from OpenRouter error response."""
+        try:
+            import json
+            # Look for JSON metadata in error string
+            if 'metadata' in error_str:
+                # Try to extract metadata from error string
+                start = error_str.find('"metadata":')
+                if start != -1:
+                    # Find the end of metadata object
+                    brace_count = 0
+                    start += len('"metadata":')
+                    for i, char in enumerate(error_str[start:], start):
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                metadata_str = error_str[start:i+1]
+                                return json.loads(metadata_str)
+        except (json.JSONDecodeError, ValueError, AttributeError):
+            pass
+        
+        return {
+            'provider_name': 'Unknown',
+            'raw': 'Unable to extract raw error'
+        }
+
+    def _classify_huggingface_error(self, status_code: int, error_str: str) -> dict:
+        """Classify HuggingFace-specific error codes based on official documentation."""
+        error_str_lower = error_str.lower()
+        
+        if status_code == 400:
+            return {
+                'error_type': 'bad_request',
+                'description': 'Bad Request - Malformed syntax or invalid parameters',
+                'suggested_action': 'Check request parameters and format',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 402:
+            return {
+                'error_type': 'payment_required',
+                'description': 'Payment Required - Exceeded monthly included credits or payment issue',
+                'suggested_action': 'Check HuggingFace account billing and add credits if needed',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 404:
+            if 'model' in error_str_lower or 'not found' in error_str_lower:
+                return {
+                    'error_type': 'model_not_found',
+                    'description': 'Model Not Found - Requested model could not be found',
+                    'suggested_action': 'Check model ID spelling, ensure model exists, or verify access permissions',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+            else:
+                return {
+                    'error_type': 'not_found',
+                    'description': 'Not Found - Requested resource could not be found',
+                    'suggested_action': 'Check if the requested resource exists and is accessible',
+                    'is_temporary': False,
+                    'requires_config_change': True
+                }
+        
+        elif status_code == 503:
+            if 'router.huggingface.co' in error_str:
+                return {
+                    'error_type': 'router_service_unavailable',
+                    'description': 'Router Service Unavailable - HuggingFace router service is down',
+                    'suggested_action': 'Try again later or use a different model provider',
+                    'is_temporary': True,
+                    'requires_config_change': False
+                }
+            else:
+                return {
+                    'error_type': 'service_unavailable',
+                    'description': 'Service Unavailable - Inference API temporarily unable to handle requests',
+                    'suggested_action': 'Wait and retry later or try a different model',
+                    'is_temporary': True,
+                    'requires_config_change': False
+                }
+        
+        elif status_code == 504:
+            return {
+                'error_type': 'gateway_timeout',
+                'description': 'Gateway Timeout - Server did not receive timely response from upstream',
+                'suggested_action': 'Try again with shorter input or use a faster model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        return None
+
+    def _classify_error_by_status_code(self, status_code: int, error: Exception, llm_name: str) -> dict:
+        """Classify error based on official HTTP status codes."""
+        error_str = str(error)
+        
+        # Check for provider-specific error status codes first
+        if 'gemini' in llm_name.lower():
+            gemini_error = self._classify_gemini_error(status_code, error_str)
+            if gemini_error:
+                return gemini_error
+        elif 'groq' in llm_name.lower():
+            groq_error = self._classify_groq_error(status_code, error_str)
+            if groq_error:
+                return groq_error
+        elif 'mistral' in llm_name.lower():
+            mistral_error = self._classify_mistral_error(status_code, error_str)
+            if mistral_error:
+                return mistral_error
+        elif 'gigachat' in llm_name.lower():
+            gigachat_error = self._classify_gigachat_error(status_code, error_str)
+            if gigachat_error:
+                return gigachat_error
+        elif 'openrouter' in llm_name.lower():
+            openrouter_error = self._classify_openrouter_error(status_code, error_str)
+            if openrouter_error:
+                return openrouter_error
+        elif 'huggingface' in llm_name.lower():
+            huggingface_error = self._classify_huggingface_error(status_code, error_str)
+            if huggingface_error:
+                return huggingface_error
+        
+        if status_code == 400:
+            return {
+                'error_type': 'bad_request',
+                'description': 'Bad Request - Invalid or missing parameters',
+                'suggested_action': 'Check request parameters and format',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 401:
+            return {
+                'error_type': 'authentication',
+                'description': 'Unauthorized - Invalid credentials or API key',
+                'suggested_action': 'Check API key configuration and authentication',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 402:
+            return {
+                'error_type': 'payment_required',
+                'description': 'Payment Required - Insufficient credits or quota',
+                'suggested_action': 'Add credits or check quota limits',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 403:
+            return {
+                'error_type': 'forbidden',
+                'description': 'Forbidden - Access denied or content flagged',
+                'suggested_action': 'Check permissions or modify content',
+                'is_temporary': False,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 404:
+            return {
+                'error_type': 'not_found',
+                'description': 'Not Found - Model or endpoint not available',
+                'suggested_action': 'Check model name and endpoint configuration',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 408:
+            return {
+                'error_type': 'timeout',
+                'description': 'Request Timeout - Request took too long',
+                'suggested_action': 'Try again with shorter input or different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 413:
+            return {
+                'error_type': 'payload_too_large',
+                'description': 'Payload Too Large - Input exceeds size limits',
+                'suggested_action': 'Reduce input size or enable chunking',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 422:
+            return {
+                'error_type': 'unprocessable_entity',
+                'description': 'Unprocessable Entity - Invalid request format',
+                'suggested_action': 'Check request format and parameters',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif status_code == 429:
+            # Extract retry-after timing if available
+            retry_after = self._extract_retry_after_timing(error_str)
+            return {
+                'error_type': 'rate_limit',
+                'description': 'Too Many Requests - Rate limit exceeded',
+                'suggested_action': 'Wait before retrying or reduce request frequency',
+                'is_temporary': True,
+                'requires_config_change': False,
+                'retry_after': retry_after
+            }
+        
+        elif status_code == 500:
+            return {
+                'error_type': 'internal_server_error',
+                'description': 'Internal Server Error - Service temporarily unavailable',
+                'suggested_action': 'Try again later or contact support',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 502:
+            return {
+                'error_type': 'bad_gateway',
+                'description': 'Bad Gateway - Model provider is down',
+                'suggested_action': 'Try again later or use different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        elif status_code == 503:
+            return {
+                'error_type': 'service_unavailable',
+                'description': 'Service Unavailable - No available model providers',
+                'suggested_action': 'Try again later or use different model',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        else:
+            return {
+                'error_type': 'unknown_http_error',
+                'description': f'HTTP {status_code} - Unknown error',
+                'suggested_action': 'Check logs and try again',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+
+    def _classify_error_by_message(self, error_message: str, llm_name: str) -> dict:
+        """Fallback classification based on error message content."""
+        error_lower = error_message.lower()
+        
+        # Only use this for very specific, well-known error patterns
+        if 'location is not supported' in error_lower:
+            return {
+                'error_type': 'location_restriction',
+                'description': 'Service not available in your location',
+                'suggested_action': 'Use a different region or VPN',
+                'is_temporary': False,
+                'requires_config_change': True
+            }
+        
+        elif 'rate limit' in error_lower or 'too many requests' in error_lower:
+            return {
+                'error_type': 'rate_limit',
+                'description': 'Rate limit exceeded',
+                'suggested_action': 'Wait before retrying',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+        
+        else:
+            return {
+                'error_type': 'unknown',
+                'description': f'Unexpected error: {error_message[:100]}{"..." if len(error_message) > 100 else ""}',
+                'suggested_action': 'Check logs and try again',
+                'is_temporary': True,
+                'requires_config_change': False
+            }
+
+    def _generate_llm_failure_summary(self, failed_llms: list) -> str:
+        """
+        Generate a dynamic error message based on actual LLM failure reasons.
+        
+        Args:
+            failed_llms: List of dicts with 'provider', 'error', 'status' keys
+            
+        Returns:
+            str: Formatted error message with actual failure details
+        """
+        if not failed_llms:
+            return "❌ **All LLM providers are currently unavailable**\n\nNo specific error details available."
+        
+        error_msg = "❌ **All LLM providers are currently unavailable**\n\n**Details:**\n"
+        
+        # Group errors by type for better organization
+        error_groups = {}
+        for llm_info in failed_llms:
+            error_type = llm_info.get('error_type', 'unknown')
+            if error_type not in error_groups:
+                error_groups[error_type] = []
+            error_groups[error_type].append(llm_info)
+        
+        # Display errors grouped by type
+        for error_type, errors in error_groups.items():
+            if error_type == 'location_restriction':
+                error_msg += f"\n**🌍 Location Restrictions:**\n"
+                for error in errors:
+                    error_msg += f"- {error['provider']}: {error['description']}\n"
+                error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
+            
+            elif error_type == 'rate_limit':
+                error_msg += f"\n**⏱️ Rate Limits:**\n"
+                for error in errors:
+                    retry_info = f" (retry after {error['retry_after']}s)" if error.get('retry_after') else ""
+                    error_msg += f"- {error['provider']}: {error['description']}{retry_info}\n"
+                error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
+            
+            elif error_type == 'authentication':
+                error_msg += f"\n**🔑 Authentication Issues:**\n"
+                for error in errors:
+                    error_msg += f"- {error['provider']}: {error['description']}\n"
+                error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
+            
+            elif error_type == 'service_unavailable':
+                error_msg += f"\n**🔧 Service Issues:**\n"
+                for error in errors:
+                    error_msg += f"- {error['provider']}: {error['description']}\n"
+                error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
+            
+            else:
+                error_msg += f"\n**❓ Other Issues:**\n"
+                for error in errors:
+                    error_msg += f"- {error['provider']}: {error['description']}\n"
+        
+        error_msg += "\n**Fallback system:** The agent tried all available LLM providers but none could generate a response.\n\n"
+        error_msg += "**Next steps:**\n"
+        error_msg += "- Check the specific error types above for targeted solutions\n"
+        error_msg += "- Review API key configuration if authentication issues\n"
+        error_msg += "- Wait for rate limits to reset if applicable\n"
+        error_msg += "- Try again later for temporary service issues\n\n"
+        error_msg += "Please check the Init logs for more details."
+        
+        return error_msg
+
+    def _ping_llm(self, llm_name: str, llm_type: str, use_tools: bool = False, llm_instance=None) -> bool:
+        """
+        Legacy method - kept for backward compatibility but not used in new init logic.
+        """
+        # This method is now deprecated in favor of _test_llm_with_tools
+        return True
+
+    def _is_duplicate_tool_call(self, tool_name: str, tool_args: dict, called_tools: list) -> bool:
+        """
+        Check if a tool call is a duplicate based on tool name and vector similarity of arguments.
+
+        Args:
+            tool_name: Name of the tool
+            tool_args: Arguments for the tool
+            called_tools: List of previously called tool dictionaries
+
+        Returns:
+            bool: True if this is a duplicate tool call
+        """
+        return tool_call_manager.is_duplicate_tool_call(tool_name, tool_args, called_tools, self.tool_calls_similarity_threshold)
+
+    def _add_tool_call_to_history(self, tool_name: str, tool_args: dict, called_tools: list) -> None:
+        """
+        Add a tool call to the history of called tools.
+
+        Args:
+            tool_name: Name of the tool
+            tool_args: Arguments for the tool
+            called_tools: List of previously called tool dictionaries
+        """
+        tool_call_manager.add_tool_call_to_history(tool_name, tool_args, called_tools)
+
+    def _trim_for_print(self, obj, max_len=None):
+        """
+        Helper to trim any object (string, dict, etc.) for debug printing only.
+        Converts to string, trims to max_len (default: self.MAX_PRINT_LEN), and adds suffix with original length if needed.
+        """
+        if max_len is None:
+            max_len = self.MAX_PRINT_LEN
+        s = str(obj)
+        orig_len = len(s)
+        
+        if orig_len > max_len:
+            return f"Truncated. Original length: {orig_len}\n{s[:max_len]}"
+        return s
+
+    def _format_value_for_print(self, value):
+        """
+        Smart value formatter that handles JSON serialization, fallback, and trimming.
+        ENHANCED: Now uses _deep_trim_dict_max_length() for dicts/lists for consistent base64 and length handling.
+        Returns a formatted string ready for printing.
+        """
+        if isinstance(value, str):
+            return self._trim_for_print(value)
+        elif isinstance(value, (dict, list)):
+            # Use _deep_trim_dict_max_length() for print statements with both base64 and length truncation
+            trimmed = self._deep_trim_dict_max_length(value)
+            try:
+                # Convert back to JSON string for display
+                return json.dumps(trimmed, indent=2, ensure_ascii=False, default=str)
+            except (TypeError, ValueError):
+                # Fallback to string representation
+                return str(trimmed)
+        else:
+            return self._trim_for_print(str(value))
+
+    def _print_meaningful_attributes(self, msg, attributes, separator, printed_attrs=None):
+        """
+        Generic helper to check and print meaningful attributes from a message object.
+        
+        Args:
+            msg: The message object to inspect
+            attributes: List of attribute names to check
+            separator: String separator to print before each attribute
+            printed_attrs: Set of already printed attributes (optional, for tracking)
+        """
+        if printed_attrs is None:
+            printed_attrs = set()
+            
+        for attr in attributes:
+            if hasattr(msg, attr):
+                value = getattr(msg, attr)
+                if value is not None and value != "" and value != [] and value != {}:
+                    print(separator)
+                    print(f"  {attr}: {self._format_value_for_print(value)}")
+                    printed_attrs.add(attr)
+        
+        return printed_attrs
+
+    def _print_message_components(self, msg, msg_index):
+        """
+        Smart, agnostic message component printer that dynamically discovers and prints all relevant attributes.
+        Uses introspection, JSON-like handling, and smart filtering for optimal output.
+        """
+        separator = "------------------------------------------------\n"
+        print(separator) 
+        print(f"Message {msg_index}:")
+        
+        # Get message type dynamically
+        msg_type = getattr(msg, 'type', 'unknown')
+        print(f"  type: {msg_type}")
+        
+        # Define priority attributes to check first (most important)
+        priority_attrs = ['content', 'tool_calls', 'function_call', 'name', 'tool_call_id']
+        
+        # Define secondary attributes to check if they exist and have meaningful values
+        secondary_attrs = ['additional_kwargs', 'response_metadata', 'id', 'timestamp', 'metadata']
+        
+        # Smart attribute discovery and printing
+        printed_attrs = set()
+        
+        # Check priority attributes first
+        printed_attrs = self._print_meaningful_attributes(msg, priority_attrs, separator, printed_attrs)
+        
+        # Check secondary attributes if they exist and haven't been printed
+        self._print_meaningful_attributes(msg, secondary_attrs, separator, printed_attrs)
+        
+        # Dynamic discovery: check for any other non-private attributes we might have missed
+        dynamic_attrs = []
+        for attr_name in dir(msg):
+            if (not attr_name.startswith('_') and 
+                attr_name not in printed_attrs and 
+                attr_name not in secondary_attrs and
+                attr_name not in ['type'] and  # Already printed
+                not callable(getattr(msg, attr_name))):  # Skip methods
+                dynamic_attrs.append(attr_name)
+        
+        # Print any dynamically discovered meaningful attributes
+        self._print_meaningful_attributes(msg, dynamic_attrs, separator, printed_attrs)
+        
+        print(separator)
+
+    def _is_base64_data(self, data: str) -> bool:
+        """
+        Check if string is likely base64 data using Python's built-in validation.
+        Fast and reliable detection for logging purposes.
+        """
+        if len(data) < 50:  # Too short to be meaningful base64
+            return False
+        try:
+            # Check if it's valid base64 by attempting to decode first 100 chars
+            base64.b64decode(data[:100])
+            # Additional check for base64 character pattern
+            if re.match(r'^[A-Za-z0-9+/=]+$', data):
+                return True
+        except Exception:
+            return False
+        return False
+
+    def _deep_trim_dict_base64(self, obj, max_len=None):
+        """
+        Recursively traverse JSON structure and ONLY truncate base64 data.
+        Keep all other text fields intact for complete trace visibility.
+        """
+        if max_len is None:
+            max_len = 100  # Shorter for base64 placeholders
+        
+        if isinstance(obj, dict):
+            return {k: self._deep_trim_dict_base64(v, max_len) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._deep_trim_dict_base64(v, max_len) for v in obj]
+        elif isinstance(obj, str):
+            # ONLY check for base64, leave everything else intact
+            if self._is_base64_data(obj):
+                return f"[BASE64_DATA] Length: {len(obj)} chars"
+            return obj  # ← Keep all non-base64 text intact
+        else:
+            return obj
+
+    def _deep_trim_dict_max_length(self, obj, max_len=None):
+        """
+        First truncate base64 data, then check remaining text for max length.
+        This ensures base64 is always handled properly before length checks.
+        """
+        if max_len is None:
+            max_len = self.MAX_PRINT_LEN
+        
+        # Step 1: Handle base64 first
+        obj = self._deep_trim_dict_base64(obj)
+        
+        # Step 2: Now check remaining text for max length
+        if isinstance(obj, dict):
+            return {k: self._deep_trim_dict_max_length(v, max_len) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._deep_trim_dict_max_length(v, max_len) for v in obj]
+        elif isinstance(obj, str):
+            # Base64 is already handled, now check length
+            if len(obj) > max_len:
+                return f"Truncated. Original length: {len(obj)}\n{obj[:max_len]}"
+            return obj
+        else:
+            return obj
+
+    def _print_tool_result(self, tool_name, tool_result):
+        """
+        Print tool results in a readable format with deep recursive trimming for all dicts/lists.
+        For dict/list results, deeply trim all string fields. For other types, use _trim_for_print.
+        """
+        if isinstance(tool_result, (dict, list)):
+            trimmed = self._deep_trim_dict_max_length(tool_result)
+            print(f"[Tool Loop] Tool result for '{tool_name}': {trimmed}")
+        else:
+            print(f"[Tool Loop] Tool result for '{tool_name}': {self._trim_for_print(tool_result)}")
+        print()
+
+    def _extract_main_text_from_tool_result(self, tool_result):
+        """
+        Extract the main text from a tool result dict (e.g., wiki_results, web_results, arxiv_results, etc.).
+        Also handles structured tool results from submit_answer and submit_intermediate_step.
+        """
+        if isinstance(tool_result, dict):
+            # Handle structured tool results (submit_answer, submit_intermediate_step)
+            if "raw_response" in tool_result and isinstance(tool_result["raw_response"], dict):
+                raw_response = tool_result["raw_response"]
+                # For submit_answer, extract the answer
+                if "answer" in raw_response:
+                    return raw_response["answer"]
+                # For submit_intermediate_step, extract the description
+                if "description" in raw_response:
+                    return raw_response["description"]
+                # Fallback: convert raw_response to readable string
+                return str(raw_response)
+            
+            # Handle error cases in structured results
+            if "error" in tool_result and tool_result["error"]:
+                return f"Error: {tool_result['error']}"
+            
+            # Handle legacy tool results
+            for key in ("wiki_results", "web_results", "arxiv_results", "result", "text", "content"):
+                if key in tool_result and isinstance(tool_result[key], str):
+                    return tool_result[key]
+            
+            # Fallback: join all string values
+            return " ".join(str(v) for v in tool_result.values() if isinstance(v, str))
+        return str(tool_result)
+
+    def _retry_with_final_answer_reminder(self, messages, use_tools, llm_type):
+        """
+        Injects a final answer reminder, retries the LLM request, and extracts the answer.
+        Returns (answer, response)
+        """
+        # Find the original question from the message history
+        original_question = None
+        for msg in messages:
+            if hasattr(msg, 'type') and msg.type == 'human':
+                original_question = msg.content
+                break
+        
+        # Build the prompt message (slim, direct)
+        prompt = (
+            "TASK: Extract the answer from the given LLM response. "
+            "If a **question** is present, extract the most likely answer according to the system prompt's answer formatting rules. "
+            "Return only the most likely answer, formatted exactly as required by the system prompt.\n\n"
+            "FOCUS: Focus on the most relevant facts, numbers, and names, related to the question if present.\n\n"
+            "PURPOSE: Extract the answer per the system prompt.\n\n"
+            "INSTRUCTIONS: Do not use tools.\n\n"
+        )
+        if original_question:
+            prompt += f"QUESTION: {original_question}\n\n"
+        prompt += "RESPONSE TO ANALYZE:\nAnalyze the previous response and provide your answer."
+        
+        # Inject the message into the queue
+        messages.append(HumanMessage(content=prompt))
+        
+        # Make the LLM call and extract the answer
+        response = self._make_llm_request(messages, use_tools=use_tools, llm_type=llm_type)
+        answer = self._extract_final_answer(response)
+        return answer, response
+
+    def _get_reminder_prompt(
+        self,
+        reminder_type: str,
+        messages=None,
+        tools=None,
+        tool_results_history=None,
+        tool_name=None,
+        count=None,
+        tool_args=None,
+        question=None
+    ) -> str:
+        """
+        Get standardized reminder prompts based on type. Extracts tool_names, tool_count, and original_question as needed.
+        
+        Args:
+            reminder_type: Type of reminder needed
+            messages: Message history (for extracting question)
+            tools: List of tool objects (for tool names)
+            tool_results_history: List of tool results (for count)
+            tool_name: Name of the tool (for tool-specific reminders)
+            count: Usage count (for tool-specific reminders)
+            tool_args: Arguments for the tool (for duplicate reminders)
+            question: Optional question override
+            
+        Returns:
+            str: The reminder prompt
+        """
+        # Extract tool_names if needed
+        tool_names = None
+        if tools is not None:
+            tool_names = ', '.join([self._get_tool_name(tool) for tool in tools])
+            
+        # Extract tool_count if needed
+        tool_count = None
+        if tool_results_history is not None:
+            tool_count = len(tool_results_history)
+            
+        # Extract original_question if needed
+        original_question = None
+        if messages is not None:
+            for msg in messages:
+                if hasattr(msg, 'type') and msg.type == 'human':
+                    original_question = msg.content
+                    break
+        if not original_question:
+            original_question = question or '[Original question not found]'
+            
+        reminders = {
+            "final_answer_prompt": (
+                    "Analyse existing tool results, then use the submit_answer tool.\n"
+                + (
+                    "Use VARIOUS tools to gather missing information, then use the submit_answer tool.\n"
+                    f"Available tools include: {tool_names or 'various tools'}.\n"
+                    if not tool_count or tool_count == 0 else ""
+                  )
+                + (
+                    f"\n\nIMPORTANT: You have gathered information from {tool_count} tool calls.\n"
+                    "The tool results are available in the conversation.\n"
+                    "Carefully analyze tool results and use the submit_answer tool to provide your answer to the ORIGINAL QUESTION.\n"
+                    "Follow the system prompt.\n"
+                    "Do not call any more tools - analyze the existing results and use submit_answer tool now.\n"
+                    if tool_count and tool_count > 0 else ""
+                  )
+                + "\n\nPlease answer the following question using the submit_answer tool:\n\n"
+                + f"ORIGINAL QUESTION:\n{original_question}\n\n"
+                + "Use the submit_answer tool with your answer and follow the system prompt.\n"
+            ),
+            "tool_usage_issue": (
+                "Call a DIFFERENT TOOL.\n"
+                + (
+                    f"You have already called '{tool_name or 'this tool'}'"
+                    + (f" {count} times" if count is not None else "")
+                    + (f" with arguments {tool_args}" if tool_args is not None else "")
+                    + ". "
+                    if (tool_name or count is not None or tool_args is not None) else ""
+                )
+                + "Do not call the tools repeately with the same arguments.\n"
+                + "Consider any results you have.\n"
+                + f"ORIGINAL QUESTION:\n{original_question}\n\n"
+                + "Use the submit_answer tool based on the information you have or call OTHER TOOLS.\n"
+            ),
+        }
+        return reminders.get(reminder_type, "Please analyse the tool results and use the submit_answer tool.")
+
+    def _create_simple_chunk_prompt(self, messages, chunk_results, chunk_num, total_chunks):
+        """Create a simple prompt for processing a chunk."""
+        # Find original question
+        original_question = ""
+        for msg in messages:
+            if hasattr(msg, 'type') and msg.type == 'human':
+                original_question = msg.content
+                break
+        
+        # Determine if this is tool results or general content
+        is_tool_results = any('tool' in str(result).lower() or 'result' in str(result).lower() for result in chunk_results)
+        
+        if is_tool_results:
+            prompt = f"Question: {original_question}\n\nTool Results (Part {chunk_num}/{total_chunks}):\n"
+            for i, result in enumerate(chunk_results, 1):
+                prompt += f"{i}. {result}\n\n"
+        else:
+            prompt = f"Question: {original_question}\n\nContent Analysis (Part {chunk_num}/{total_chunks}):\n"
+            for i, result in enumerate(chunk_results, 1):
+                prompt += f"{i}. {result}\n\n"
+        
+        if chunk_num < total_chunks:
+            prompt += "Analyze these results and provide key findings."
+        else:
+            prompt += "Use the submit_answer tool based on all content, when you receive it, following the system prompt format."
+        
+        return prompt
+
+    def _is_token_limit_error(self, error, llm_type="unknown") -> bool:
+        """
+        Check if the error is a token limit error or router error using vector similarity.
+        
+        Args:
+            error: The exception object
+            llm_type: Type of LLM for specific error patterns
+            
+        Returns:
+            bool: True if it's a token limit error or router error
+        """
+        error_str = str(error).lower()
+        
+        # Token limit and router error patterns for vector similarity
+        error_patterns = [
+            "Error code: 413 - {'error': {'message': 'Request too large for model `qwen-qwq-32b` in organization `org_01jyfgv54ge5ste08j9248st66` service tier `on_demand` on tokens per minute (TPM): Limit 6000, Requested 9681, please reduce your message size and try again. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
+            "500 Server Error: Internal Server Error for url: https://router.huggingface.co/hyperbolic/v1/chat/completions (Request ID: Root=1-6861ed33-7dd4232d49939c6f65f6e83d;164205eb-e591-4b20-8b35-5745a13f05aa)",
+            "Error code: 429 - {'error': {'message': 'Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day', 'code': 429, 'metadata': {'headers': {'X-RateLimit-Limit': '50', 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1756771200000'}, 'provider_name': None}}, 'user_id': 'user_2zGr0yIHMzRxIJYcW8N0my40LIs'}"
+        ]
+        
+        # Direct substring checks for efficiency
+        if any(term in error_str for term in ["413", "429", "token", "limit", "tokens per minute", "truncated", "tpm", "router.huggingface.co", "402", "payment required", "rate limit", "rate_limit"]):
+            return True
+        
+        # Check if error matches any pattern using vector similarity
+        for pattern in error_patterns:
+            if self._vector_answers_match(error_str, pattern):
+                return True
+        
+        return False
+
+    def _get_token_limit(self, provider: str) -> int:
+        """
+        Get the token limit for a given provider, using the active model config, with fallback to default.
+        """
+        try:
+            if provider in self.active_model_config:
+                return self.active_model_config[provider].get("token_limit", self.LLM_CONFIG["default"]["token_limit"])
+            else:
+                return self.LLM_CONFIG["default"]["token_limit"]
+        except Exception:
+            return self.LLM_CONFIG["default"]["token_limit"]
+
+    def _provider_supports_tools(self, llm_type: str) -> bool:
+        """
+        Returns True if the provider supports tool-calling, based on LLM_CONFIG.
+        """
+        config = self.LLM_CONFIG.get(llm_type, {})
+        return config.get("tool_support", False)
+
+    def _handle_llm_error(self, e, llm_name, llm_type, phase, **kwargs):
+        """
+        Centralized error handler for LLM errors (init, runtime, tool loop, request, etc.).
+        For phase="init": returns (ok: bool, error_str: str).
+        For phase="runtime"/"tool_loop"/"request": returns (handled: bool, result: Optional[Any]).
+        All logging and comments are preserved from original call sites.
+        """
+        # --- INIT PHASE ---
+        if phase == "init":
+            if self._is_token_limit_error(e, llm_type) or "429" in str(e):
+                print(f"⛔ {llm_name} initialization failed due to rate limit/quota (429) [{phase}]: {e}")
+                return False, str(e)
+            raise
+        # --- RUNTIME/TOOL LOOP PHASE ---
+        # Enhanced Groq token limit error handling
+        if llm_type == "groq" and self._is_token_limit_error(e):
+            print(f"⚠️ Groq token limit error detected: {e}")
+            return True, self._handle_groq_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e)
+        # Special handling for HuggingFace router errors
+        if llm_type == "huggingface" and self._is_token_limit_error(e):
+            # Check if chunking is enabled for HuggingFace
+            config = self.LLM_CONFIG.get(llm_type, {})
+            enable_chunking = config.get("enable_chunking", True)
+            
+            if enable_chunking:
+                print(f"⚠️ HuggingFace router error detected, applying chunking: {e}")
+                return True, self._handle_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e, llm_type)
+            else:
+                print(f"⚠️ HuggingFace router error detected, but chunking disabled: {e}")
+                raise e
+        if llm_type == "huggingface" and "500 Server Error" in str(e) and "router.huggingface.co" in str(e):
+            error_msg = f"HuggingFace router service error (500): {e}"
+            print(f"⚠️ {error_msg}")
+            print("💡 This is a known issue with HuggingFace's router service. Consider using Google Gemini or Groq instead.")
+            raise Exception(error_msg)
+        if llm_type == "huggingface" and "timeout" in str(e).lower():
+            error_msg = f"HuggingFace timeout error: {e}"
+            print(f"⚠️ {error_msg}")
+            print("💡 HuggingFace models may be slow or overloaded. Consider using Google Gemini or Groq instead.")
+            raise Exception(error_msg)
+        # Special handling for Groq network errors
+        if llm_type == "groq" and ("no healthy upstream" in str(e).lower() or "network" in str(e).lower() or "connection" in str(e).lower()):
+            error_msg = f"Groq network connectivity error: {e}"
+            print(f"⚠️ {error_msg}")
+            print("💡 This is a network connectivity issue with Groq's servers. The service may be temporarily unavailable.")
+            raise Exception(error_msg)
+        # Enhanced token limit error handling for all LLMs (tool loop context)
+        if phase in ("tool_loop", "runtime", "request") and self._is_token_limit_error(e, llm_type):
+            # Check if chunking is enabled for this provider
+            config = self.LLM_CONFIG.get(llm_type, {})
+            enable_chunking = config.get("enable_chunking", True)
+            
+            if enable_chunking:
+                print(f"[Tool Loop] Token limit error detected for {llm_type} in tool calling loop")
+                _, llm_name, _ = self._select_llm(llm_type, True)
+                return True, self._handle_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e, llm_type)
+            else:
+                print(f"[Tool Loop] Token limit error detected for {llm_type}, but chunking disabled")
+                raise e
+        # Handle HuggingFace router errors with chunking (tool loop context)
+        if phase in ("tool_loop", "runtime", "request") and llm_type == "huggingface" and self._is_token_limit_error(e):
+            # Check if chunking is enabled for HuggingFace
+            config = self.LLM_CONFIG.get(llm_type, {})
+            enable_chunking = config.get("enable_chunking", True)
+            
+            if enable_chunking:
+                print(f"⚠️ HuggingFace router error detected, applying chunking: {e}")
+                return True, self._handle_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e, llm_type)
+            else:
+                print(f"⚠️ HuggingFace router error detected, but chunking disabled: {e}")
+                raise e
+        # Check for general token limit errors specifically (tool loop context)
+        if phase in ("tool_loop", "runtime", "request") and ("413" in str(e) or "token" in str(e).lower() or "limit" in str(e).lower()):
+            print(f"[Tool Loop] Token limit error detected. Forcing final answer with available information.")
+            tool_results_history = kwargs.get('tool_results_history')
+            if tool_results_history:
+                return True, self._force_final_answer(kwargs.get('messages'), tool_results_history, kwargs.get('llm'))
+            else:
+                return True, AIMessage(content=f"Error: Token limit exceeded for {llm_type} LLM. Cannot complete reasoning.")
+        # Generic fallback for tool loop
+        if phase in ("tool_loop", "runtime", "request"):
+            return True, AIMessage(content=f"Error during LLM processing: {str(e)}")
+        # Fallback: not handled here
+        return False, None
+
+    def _get_available_models(self) -> Dict:
+        """
+        Get list of available models and their status.
+        
+        Returns:
+            Dict: Available models with their status
+        """
+        available_models = {}
+        for llm_type, config in self.LLM_CONFIG.items():
+            if llm_type == "default":
+                continue
+            available_models[llm_type] = {
+                "name": config.get("name", llm_type),
+                "models": config.get("models", []),
+                "tool_support": config.get("tool_support", False),
+                "max_history": config.get("max_history", self.LLM_CONFIG["default"]["max_history"])
+            }
+        return available_models
+
+    def _get_tool_support_status(self) -> Dict:
+        """
+        Get tool support status for each LLM type.
+        
+        Returns:
+            Dict: Tool support status for each LLM
+        """
+        tool_status = {}
+        for llm_type, config in self.LLM_CONFIG.items():
+            if llm_type == "default":
+                continue
+            tool_status[llm_type] = {
+                "tool_support": config.get("tool_support", False),
+                "force_tools": config.get("force_tools", False)
+            }
+        return tool_status
+
+    # ===== TRACING SYSTEM METHODS =====
+    
+    def _trace_init_question(self, question: str, file_data: str = None, file_name: str = None):
+        """
+        Initialize trace for a new question.
+        
+        Args:
+            question: The question being processed
+            file_data: Base64 file data if attached
+            file_name: Name of attached file
+        """
+        self.question_trace = {
+            "question": question,
+            "file_name": file_name if file_name is not None else "N/A",
+            "file_size": len(file_data) if file_data else 0,
+            "start_time": datetime.datetime.now().isoformat(),
+            "llm_traces": {},
+            "logs": [],
+            "final_result": None,
+            "per_llm_stdout": [],  # Array to store stdout for each LLM attempt
+            "streaming_events": [],  # Real-time streaming events
+            "real_time_updates": True,  # Flag for streaming mode
+            "streaming_duration": 0.0  # Total streaming duration
+        }
+        self.current_llm_call_id = None
+        self.current_llm_stdout_buffer = None  # Buffer for current LLM's stdout
+        self.streaming_start_time = time.time()  # Track streaming start time
+        print(f"🔍 Initialized trace for question: {question[:100]}...")
+
+    def _get_llm_name(self, llm_type: str) -> str:
+        """
+        Get the LLM name for a given LLM type.
+        
+        Args:
+            llm_type: Type of LLM
+            
+        Returns:
+            str: LLM name (model ID if available, otherwise provider name)
+        """
+        model_id = ""
+        if llm_type in self.active_model_config:
+            model_id = self.active_model_config[llm_type].get("model", "")
+        
+        return f"{model_id}" if model_id else self.LLM_CONFIG[llm_type]["name"]
+
+    def _trace_start_llm(self, llm_type: str) -> str:
+        """
+        Start a new LLM call trace and return call_id.
+        
+        Args:
+            llm_type: Type of LLM being called
+            
+        Returns:
+            str: Unique call ID for this LLM call
+        """
+        if not self.question_trace:
+            return None
+            
+        call_id = f"{llm_type}_call_{len(self.question_trace['llm_traces'].get(llm_type, [])) + 1}"
+        self.current_llm_call_id = call_id
+        
+        # Initialize LLM trace if not exists
+        if llm_type not in self.question_trace["llm_traces"]:
+            self.question_trace["llm_traces"][llm_type] = []
+        
+        # Create descriptive LLM name with model info
+        llm_name = self._get_llm_name(llm_type)
+        
+        # Create new call trace
+        call_trace = {
+            "call_id": call_id,
+            "llm_name": llm_name,
+            "timestamp": datetime.datetime.now().isoformat(),
+            "input": {},
+            "output": {},
+            "tool_executions": [],
+            "tool_loop_data": [],
+            "execution_time": None,
+            "total_tokens": None,
+            "error": None
+        }
+        
+        self.question_trace["llm_traces"][llm_type].append(call_trace)
+        
+        # Start new stdout buffer for this LLM attempt
+        self.current_llm_stdout_buffer = StringIO()
+        
+        print(f"🤖 Started LLM trace: {call_id} ({llm_type})")
+        return call_id
+
+    def _trace_capture_llm_stdout(self, llm_type: str, call_id: str):
+        """
+        Capture stdout for the current LLM attempt and add it to the trace.
+        This should be called when an LLM attempt is complete.
+        
+        Args:
+            llm_type: Type of LLM that just completed
+            call_id: Call ID of the completed LLM attempt
+        """
+        if not self.question_trace or not self.current_llm_stdout_buffer:
+            return
+            
+        # Get the captured stdout
+        stdout_content = self.current_llm_stdout_buffer.getvalue()
+        
+        # Create descriptive LLM name with model info
+        llm_name = self._get_llm_name(llm_type)
+        
+        # Add to per-LLM stdout array
+        llm_stdout_entry = {
+            "llm_type": llm_type,
+            "llm_name": llm_name,
+            "call_id": call_id,
+            "timestamp": datetime.datetime.now().isoformat(),
+            "stdout": stdout_content
+        }
+        
+        self.question_trace["per_llm_stdout"].append(llm_stdout_entry)
+        
+        # Clear the buffer for next LLM
+        self.current_llm_stdout_buffer = None
+        
+        print(f"📝 Captured stdout for {llm_type} ({call_id}): {len(stdout_content)} chars")
+
+    def _update_trace_during_streaming(self, event_type: str, content: str, metadata: dict = None):
+        """
+        Update trace object in real-time during streaming.
+        
+        Args:
+            event_type: Type of streaming event (llm_chunk, tool_start, tool_end, etc.)
+            content: Content to add to trace
+            metadata: Additional metadata for the event
+        """
+        if not self.question_trace:
+            return
+            
+        streaming_event = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event_type": event_type,
+            "content": content,
+            "metadata": metadata or {},
+            "llm_call_id": self.current_llm_call_id,
+            "llm_type": getattr(self, 'current_llm_type', 'unknown')
+        }
+        
+        self.question_trace["streaming_events"].append(streaming_event)
+        
+        # Update current LLM call trace if available
+        if self.current_llm_call_id and self.current_llm_type:
+            for call_trace in self.question_trace["llm_traces"].get(self.current_llm_type, []):
+                if call_trace["call_id"] == self.current_llm_call_id:
+                    if "streaming_events" not in call_trace:
+                        call_trace["streaming_events"] = []
+                    call_trace["streaming_events"].append(streaming_event)
+                    
+                    # Update output content incrementally for LLM chunks
+                    if event_type == "llm_chunk":
+                        if "content" not in call_trace["output"]:
+                            call_trace["output"]["content"] = ""
+                        call_trace["output"]["content"] += content
+                    break
+
+    def _stream_terminal_output(self):
+        """
+        Stream terminal debugging output in real-time.
+        """
+        if hasattr(self, 'current_llm_stdout_buffer') and self.current_llm_stdout_buffer:
+            content = self.current_llm_stdout_buffer.getvalue()
+            if content:
+                # Only stream new content since last call
+                if not hasattr(self, '_last_streamed_stdout'):
+                    self._last_streamed_stdout = ""
+                
+                new_content = content[len(self._last_streamed_stdout):]
+                if new_content:
+                    self._last_streamed_stdout = content
+                    return f"```\n{new_content}\n```"
+        return ""
+
+    def _trace_add_llm_call_input(self, llm_type: str, call_id: str, messages: List, use_tools: bool):
+        """
+        Add input data to current LLM call trace.
+        
+        Args:
+            llm_type: Type of LLM
+            call_id: Call ID
+            messages: Input messages
+            use_tools: Whether tools are being used
+        """
+        if not self.question_trace or not call_id:
+            return
+            
+        # Find the call trace
+        for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
+            if call_trace["call_id"] == call_id:
+                # Use _deep_trim_dict_base64 to preserve all text data in trace JSON
+                trimmed_messages = self._deep_trim_dict_base64(messages)
+                call_trace["input"] = {
+                    "messages": trimmed_messages,
+                    "use_tools": use_tools,
+                    "llm_type": llm_type
+                }
+                break
+
+    def _trace_add_llm_call_output(self, llm_type: str, call_id: str, response: Any, execution_time: float):
+        """
+        Add output data to current LLM call trace.
+        
+        Args:
+            llm_type: Type of LLM
+            call_id: Call ID
+            response: LLM response
+            execution_time: Time taken for the call
+        """
+        if not self.question_trace or not call_id:
+            return
+            
+        # Find the call trace
+        for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
+            if call_trace["call_id"] == call_id:
+                # Use _deep_trim_dict_base64 to preserve all text data in trace JSON
+                trimmed_response = self._deep_trim_dict_base64(response)
+                call_trace["output"] = {
+                    "content": getattr(response, 'content', None),
+                    "tool_calls": getattr(response, 'tool_calls', None),
+                    "response_metadata": getattr(response, 'response_metadata', None),
+                    "raw_response": trimmed_response
+                }
+                call_trace["execution_time"] = execution_time
+                
+                # Extract and accumulate token usage
+                token_data = self._extract_token_usage(response, llm_type)
+                if token_data:
+                    # Initialize token usage if not exists
+                    if "token_usage" not in call_trace:
+                        call_trace["token_usage"] = {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                            "call_count": 0,
+                            "calls": []
+                        }
+                    
+                    # Add current call data
+                    call_data = {
+                        "call_id": call_id,
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        **token_data
+                    }
+                    call_trace["token_usage"]["calls"].append(call_data)
+                    
+                    # Accumulate totals
+                    call_trace["token_usage"]["prompt_tokens"] += token_data.get("prompt_tokens", 0)
+                    call_trace["token_usage"]["completion_tokens"] += token_data.get("completion_tokens", 0)
+                    call_trace["token_usage"]["total_tokens"] += token_data.get("total_tokens", 0)
+                    call_trace["token_usage"]["call_count"] += 1
+                
+                # Fallback to estimated tokens if no token data available
+                if not token_data or not any([token_data.get("prompt_tokens"), token_data.get("completion_tokens"), token_data.get("total_tokens")]):
+                    call_trace["total_tokens"] = self._estimate_tokens(str(response)) if response else None
+                
+                break
+
+    def _add_tool_execution_trace(self, llm_type: str, call_id: str, tool_name: str, tool_args: dict, tool_result: str, execution_time: float):
+        """
+        Add tool execution trace to current LLM call.
+        
+        Args:
+            llm_type: Type of LLM
+            call_id: Call ID
+            tool_name: Name of the tool
+            tool_args: Tool arguments
+            tool_result: Tool result
+            execution_time: Time taken for tool execution
+        """
+        if not self.question_trace or not call_id:
+            return
+            
+        # Find the call trace
+        for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
+            if call_trace["call_id"] == call_id:
+                # Use _deep_trim_dict_base64 to preserve all text data in trace JSON
+                trimmed_args = self._deep_trim_dict_base64(tool_args)
+                trimmed_result = self._deep_trim_dict_base64(tool_result)
+                
+                tool_execution = {
+                    "tool_name": tool_name,
+                    "args": trimmed_args,
+                    "result": trimmed_result,
+                    "execution_time": execution_time,
+                    "timestamp": datetime.datetime.now().isoformat()
+                }
+                call_trace["tool_executions"].append(tool_execution)
+                break
+
+    def _add_tool_loop_data(self, llm_type: str, call_id: str, step: int, tool_calls: List, consecutive_no_progress: int):
+        """
+        Add tool loop data to current LLM call trace.
+        
+        Args:
+            llm_type: Type of LLM
+            call_id: Call ID
+            step: Current step number
+            tool_calls: List of tool calls detected
+            consecutive_no_progress: Number of consecutive steps without progress
+        """
+        if not self.question_trace or not call_id:
+            return
+            
+        # Find the call trace
+        for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
+            if call_trace["call_id"] == call_id:
+                loop_data = {
+                    "step": step,
+                    "tool_calls_detected": len(tool_calls) if tool_calls else 0,
+                    "consecutive_no_progress": consecutive_no_progress,
+                    "timestamp": datetime.datetime.now().isoformat()
+                }
+                call_trace["tool_loop_data"].append(loop_data)
+                break
+
+    def _trace_add_llm_error(self, llm_type: str, call_id: str, error: Exception):
+        """
+        Add error information to current LLM call trace.
+        
+        Args:
+            llm_type: Type of LLM
+            call_id: Call ID
+            error: Exception that occurred
+        """
+        if not self.question_trace or not call_id:
+            return
+            
+        # Find the call trace
+        for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
+            if call_trace["call_id"] == call_id:
+                call_trace["error"] = {
+                    "type": type(error).__name__,
+                    "message": str(error),
+                    "timestamp": datetime.datetime.now().isoformat()
+                }
+                break
+
+    def _trace_finalize_question(self, final_result: dict):
+        """
+        Finalize the question trace with final results.
+        
+        Args:
+            final_result: Final result dictionary
+        """
+        if not self.question_trace:
+            return
+            
+        self.question_trace["final_result"] = final_result
+        self.question_trace["end_time"] = datetime.datetime.now().isoformat()
+        
+        # Calculate total execution time
+        start_time = datetime.datetime.fromisoformat(self.question_trace["start_time"])
+        end_time = datetime.datetime.fromisoformat(self.question_trace["end_time"])
+        total_time = (end_time - start_time).total_seconds()
+        self.question_trace["total_execution_time"] = total_time
+        
+        # Calculate total tokens across all LLM calls
+        total_tokens = 0
+        for llm_type, calls in self.question_trace["llm_traces"].items():
+            for call in calls:
+                if "token_usage" in call:
+                    total_tokens += call["token_usage"].get("total_tokens", 0)
+        
+        self.question_trace["tokens_total"] = total_tokens
+        
+        # Calculate streaming duration
+        if hasattr(self, 'streaming_start_time'):
+            streaming_duration = time.time() - self.streaming_start_time
+            self.question_trace["streaming_duration"] = streaming_duration
+        
+        # Capture any remaining stdout from current LLM attempt
+        if hasattr(self, 'current_llm_stdout_buffer') and self.current_llm_stdout_buffer:
+            self._trace_capture_llm_stdout(self.current_llm_type, self.current_llm_call_id)
+        
+        # Capture all debug output as comprehensive text
+        debug_output = self._capture_all_debug_output()
+        self.question_trace["debug_output"] = debug_output
+        
+        streaming_events_count = len(self.question_trace.get("streaming_events", []))
+        
+        print(f"📊 Question trace finalized. Total execution time: {total_time:.2f}s")
+        print(f"📝 Captured stdout for {len(self.question_trace.get('per_llm_stdout', []))} LLM attempts")
+        print(f"🔢 Total tokens used: {total_tokens}")
+        print(f"📄 Debug output captured: {len(debug_output)} characters")
+        print(f"🔄 Streaming events captured: {streaming_events_count}")
+        if hasattr(self, 'streaming_start_time'):
+            print(f"⏱️ Streaming duration: {self.question_trace.get('streaming_duration', 0):.2f}s")
+
+    def _capture_all_debug_output(self) -> str:
+        """
+        Capture all debug output as comprehensive text, including:
+        - All logs from the question trace
+        - All LLM traces with their details
+        - All tool executions
+        - All stdout captures
+        - Error information
+        - Performance metrics
+        
+        Returns:
+            str: Comprehensive debug output as text
+        """
+        if not self.question_trace:
+            return "No trace available"
+        
+        debug_lines = []
+        debug_lines.append("=" * 80)
+        debug_lines.append("COMPREHENSIVE DEBUG OUTPUT")
+        debug_lines.append("=" * 80)
+        
+        # Question metadata
+        debug_lines.append(f"Question: {self.question_trace.get('question', 'N/A')}")
+        debug_lines.append(f"File: {self.question_trace.get('file_name', 'N/A')}")
+        debug_lines.append(f"File Size: {self.question_trace.get('file_size', 0)} chars")
+        debug_lines.append(f"Start Time: {self.question_trace.get('start_time', 'N/A')}")
+        debug_lines.append(f"End Time: {self.question_trace.get('end_time', 'N/A')}")
+        debug_lines.append(f"Total Execution Time: {self.question_trace.get('total_execution_time', 0):.2f}s")
+        debug_lines.append(f"Total Tokens: {self.question_trace.get('tokens_total', 0)}")
+        debug_lines.append("")
+        
+        # Final result
+        debug_lines.append("-" * 40)
+        final_result = self.question_trace.get('final_result', {})
+        if final_result:
+            debug_lines.append("FINAL RESULT:")
+            debug_lines.append("-" * 40)
+            for key, value in final_result.items():
+                debug_lines.append(f"{key}: {value}")
+            debug_lines.append("")
+        
+        
+        # Per-LLM stdout captures
+        debug_lines.append("-" * 40)
+        per_llm_stdout = self.question_trace.get('per_llm_stdout', [])
+        if per_llm_stdout:
+            debug_lines.append("PER-LLM STDOUT CAPTURES:")
+            for i, stdout_entry in enumerate(per_llm_stdout, 1):
+                debug_lines.append("-" * 40)
+                debug_lines.append(f"LLM Attempt {i}:")
+                debug_lines.append("-" * 40)
+                debug_lines.append(f"  LLM Type: {stdout_entry.get('llm_type', 'N/A')}")
+                debug_lines.append(f"  LLM Name: {stdout_entry.get('llm_name', 'N/A')}")
+                debug_lines.append(f"  Call ID: {stdout_entry.get('call_id', 'N/A')}")
+                debug_lines.append(f"  Timestamp: {stdout_entry.get('timestamp', 'N/A')}")
+                stdout_content = stdout_entry.get('stdout', '')
+                debug_lines.append(f"  Stdout Length: {len(stdout_content)} characters")
+                if stdout_content:
+                    debug_lines.append(f"  Stdout: {stdout_content}")
+                    # CAN BE SHORTENED debug_lines.append(f"  Stdout Preview: {stdout_content[:self.MAX_PRINT_LEN]}...")
+                debug_lines.append("")
+        
+        # All logs
+        debug_lines.append("-" * 40)
+        logs = self.question_trace.get('logs', [])
+        if logs:
+            debug_lines.append("GENERAL LOGS:")
+            debug_lines.append("-" * 40)
+            for log in logs:
+                timestamp = log.get('timestamp', 'N/A')
+                message = log.get('message', 'N/A')
+                function = log.get('function', 'N/A')
+                debug_lines.append(f"[{timestamp}] [{function}] {message}")
+            debug_lines.append("")
+        
+        # LLM traces
+        debug_lines.append("-" * 40)
+        llm_traces = self.question_trace.get('llm_traces', {})
+        if llm_traces:
+            debug_lines.append("LLM TRACES:")
+            debug_lines.append("-" * 40)
+            for llm_type, calls in llm_traces.items():
+                debug_lines.append(f"LLM Type: {llm_type}")
+                debug_lines.append("-" * 30)
+                for i, call in enumerate(calls, 1):
+                    debug_lines.append(f"  Call {i}: {call.get('call_id', 'N/A')}")
+                    debug_lines.append(f"    LLM Name: {call.get('llm_name', 'N/A')}")
+                    debug_lines.append(f"    Timestamp: {call.get('timestamp', 'N/A')}")
+                    debug_lines.append(f"    Execution Time: {call.get('execution_time', 'N/A')}")
+                    
+                    # Input details
+                    input_data = call.get('input', {})
+                    if input_data:
+                        debug_lines.append(f"    Input Messages: {len(input_data.get('messages', []))}")
+                        debug_lines.append(f"    Use Tools: {input_data.get('use_tools', False)}")
+                    
+                    # Output details
+                    output_data = call.get('output', {})
+                    if output_data:
+                        content = output_data.get('content', '')
+                        if content:
+                            debug_lines.append(f"    Output Content: {content[:200]}...")
+                        tool_calls = output_data.get('tool_calls', [])
+                        if tool_calls:
+                            debug_lines.append(f"    Tool Calls: {len(tool_calls)}")
+                    
+                    # Token usage
+                    token_usage = call.get('token_usage', {})
+                    if token_usage:
+                        debug_lines.append(f"    Tokens: {token_usage.get('total_tokens', 0)}")
+                    
+                    # Tool executions
+                    tool_executions = call.get('tool_executions', [])
+                    if tool_executions:
+                        debug_lines.append(f"    Tool Executions: {len(tool_executions)}")
+                        for j, tool_exec in enumerate(tool_executions, 1):
+                            tool_name = tool_exec.get('tool_name', 'N/A')
+                            exec_time = tool_exec.get('execution_time', 0)
+                            debug_lines.append(f"      Tool {j}: {tool_name} ({exec_time:.2f}s)")
+                    
+                    # Tool loop data
+                    tool_loop_data = call.get('tool_loop_data', [])
+                    if tool_loop_data:
+                        debug_lines.append(f"    Tool Loop Steps: {len(tool_loop_data)}")
+                    
+                    # Error information
+                    error = call.get('error', {})
+                    if error:
+                        debug_lines.append(f"    Error: {error.get('type', 'N/A')} - {error.get('message', 'N/A')}")
+                    
+                    # Call-specific logs
+                    call_logs = call.get('logs', [])
+                    if call_logs:
+                        debug_lines.append(f"    Logs: {len(call_logs)} entries")
+                    
+                    debug_lines.append("")
+                debug_lines.append("")
+        
+        debug_lines.append("=" * 80)
+        debug_lines.append("END DEBUG OUTPUT")
+        debug_lines.append("=" * 80)
+        
+        return "\n".join(debug_lines)
+
+    def _trace_get_full(self) -> dict:
+        """
+        Get the complete trace for the current question.
+        
+        Returns:
+            dict: Complete trace data or None if no trace exists
+        """
+        if not self.question_trace:
+            return None
+            
+        # Serialize the trace data to ensure it's JSON-serializable
+        return self._serialize_trace_data(self.question_trace)
+
+    def _serialize_trace_data(self, obj):
+        """
+        Recursively serialize trace data, converting LangChain message objects and other
+        non-JSON-serializable objects to dictionaries.
+        
+        Args:
+            obj: Object to serialize
+            
+        Returns:
+            Serialized object that can be JSON serialized
+        """
+        if obj is None:
+            return None
+        elif isinstance(obj, (str, int, float, bool)):
+            return obj
+        elif isinstance(obj, list):
+            return [self._serialize_trace_data(item) for item in obj]
+        elif isinstance(obj, dict):
+            return {key: self._serialize_trace_data(value) for key, value in obj.items()}
+        elif hasattr(obj, 'type') and hasattr(obj, 'content'):
+            # This is likely a LangChain message object
+            return {
+                "type": getattr(obj, 'type', 'unknown'),
+                "content": self._serialize_trace_data(getattr(obj, 'content', '')),
+                "additional_kwargs": self._serialize_trace_data(getattr(obj, 'additional_kwargs', {})),
+                "response_metadata": self._serialize_trace_data(getattr(obj, 'response_metadata', {})),
+                "tool_calls": self._serialize_trace_data(getattr(obj, 'tool_calls', [])),
+                "function_call": self._serialize_trace_data(getattr(obj, 'function_call', None)),
+                "name": getattr(obj, 'name', None),
+                "tool_call_id": getattr(obj, 'tool_call_id', None),
+                "id": getattr(obj, 'id', None),
+                "timestamp": getattr(obj, 'timestamp', None),
+                "metadata": self._serialize_trace_data(getattr(obj, 'metadata', {}))
+            }
+        else:
+            # For any other object, try to convert to string
+            try:
+                return str(obj)
+            except:
+                return f"<non-serializable object of type {type(obj).__name__}>"
+
+    def _trace_clear(self):
+        """
+        Clear the current question trace.
+        """
+        self.question_trace = None
+        self.current_llm_call_id = None
+        self.current_llm_stdout_buffer = None
+
+    def _add_log_to_context(self, message: str, function: str):
+        """
+        Add log to the appropriate context based on current execution.
+        
+        Args:
+            message: The log message
+            function: The function name that generated the log
+        """
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "message": message,
+            "function": function
+        }
+        
+        if not self.question_trace:
+            return
+        
+        context = getattr(self, '_current_trace_context', None)
+        
+        if context == "llm_call" and self.current_llm_call_id:
+            # Add to current LLM call
+            self._add_log_to_llm_call(log_entry)
+        elif context == "tool_execution":
+            # Add to current tool execution
+            self._add_log_to_tool_execution(log_entry)
+        elif context == "tool_loop":
+            # Add to current tool loop step
+            self._add_log_to_tool_loop(log_entry)
+        elif context == "final_answer":
+            # Add to current LLM call's final answer enforcement
+            self._add_log_to_llm_call(log_entry)
+        else:
+            # Add to question-level logs
+            self.question_trace.setdefault("logs", []).append(log_entry)
+
+    def _add_log_to_llm_call(self, log_entry: dict):
+        """
+        Add log entry to the current LLM call.
+        
+        Args:
+            log_entry: The log entry to add
+        """
+        if not self.question_trace or not self.current_llm_call_id:
+            return
+            
+        llm_type = self.current_llm_type
+        call_id = self.current_llm_call_id
+        
+        # Find the call trace
+        for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
+            if call_trace["call_id"] == call_id:
+                # Check if this is a final answer enforcement log
+                if log_entry.get("function") == "_force_final_answer":
+                    call_trace.setdefault("final_answer_enforcement", []).append(log_entry)
+                else:
+                    call_trace.setdefault("logs", []).append(log_entry)
+                break
+
+    def _add_log_to_tool_execution(self, log_entry: dict):
+        """
+        Add log entry to the current tool execution.
+        
+        Args:
+            log_entry: The log entry to add
+        """
+        if not self.question_trace or not self.current_llm_call_id:
+            return
+            
+        llm_type = self.current_llm_type
+        call_id = self.current_llm_call_id
+        
+        # Find the call trace and add to the last tool execution
+        for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
+            if call_trace["call_id"] == call_id:
+                tool_executions = call_trace.get("tool_executions", [])
+                if tool_executions:
+                    tool_executions[-1].setdefault("logs", []).append(log_entry)
+                break
+
+    def _add_log_to_tool_loop(self, log_entry: dict):
+        """
+        Add log entry to the current tool loop step.
+        
+        Args:
+            log_entry: The log entry to add
+        """
+        if not self.question_trace or not self.current_llm_call_id:
+            return
+            
+        llm_type = self.current_llm_type
+        call_id = self.current_llm_call_id
+        
+        # Find the call trace and add to the last tool loop step
+        for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
+            if call_trace["call_id"] == call_id:
+                tool_loop_data = call_trace.get("tool_loop_data", [])
+                if tool_loop_data:
+                    tool_loop_data[-1].setdefault("logs", []).append(log_entry)
+                break
+
+    def _extract_token_usage(self, response, llm_type: str) -> dict:
+        """
+        Extract token usage data from LLM response.
+        
+        Args:
+            response: The LLM response object
+            llm_type: Type of LLM provider
+            
+        Returns:
+            dict: Token usage data with available fields
+        """
+        token_data = {
+            "prompt_tokens": None,
+            "completion_tokens": None,
+            "total_tokens": None,
+            "finish_reason": None,
+            "system_fingerprint": None,
+            "input_token_details": {},
+            "output_token_details": {}
+        }
+        
+        try:
+            # Extract from response_metadata (OpenRouter, HuggingFace)
+            if hasattr(response, 'response_metadata') and response.response_metadata:
+                metadata = response.response_metadata
+                if 'token_usage' in metadata:
+                    usage = metadata['token_usage']
+                    token_data.update({
+                        "prompt_tokens": usage.get('prompt_tokens'),
+                        "completion_tokens": usage.get('completion_tokens'),
+                        "total_tokens": usage.get('total_tokens')
+                    })
+                
+                token_data["finish_reason"] = metadata.get('finish_reason')
+                token_data["system_fingerprint"] = metadata.get('system_fingerprint')
+            
+            # Extract from usage_metadata (Groq, some others)
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                usage = response.usage_metadata
+                token_data.update({
+                    "prompt_tokens": usage.get('input_tokens'),
+                    "completion_tokens": usage.get('output_tokens'),
+                    "total_tokens": usage.get('total_tokens')
+                })
+                
+                # Extract detailed token breakdowns
+                token_data["input_token_details"] = usage.get('input_token_details', {})
+                token_data["output_token_details"] = usage.get('output_token_details', {})
+            
+            # Clean up None values
+            token_data = {k: v for k, v in token_data.items() if v is not None}
+            
+        except Exception as e:
+            self._add_log_to_context(f"Error extracting token usage: {str(e)}", "_extract_token_usage")
+        
+        return token_data
+
+    def get_available_model_choices(self):
+        """
+        Return a flat list of available models in 'provider: model' format, only for successfully initialized models.
+        """
+        choices = ["ALL"]
+        for provider, model_config in self.active_model_config.items():
+            model_name = model_config.get("model")
+            if model_name:
+                choices.append(f"{provider}: {model_name}")
+        return choices
+
+    def _handle_provider_failure(self, provider_type: str, error_type: str = "general"):
+        """
+        Track provider failures with simple retry limits without disabling tools.
+        
+        Args:
+            provider_type: Provider name (e.g., "mistral", "gemini", "groq")
+            error_type: Type of error ("rate_limit", "message_ordering", "timeout", "general")
+        """
+        # Initialize provider tracking if not exists
+        if not hasattr(self, '_provider_failure_tracker'):
+            self._provider_failure_tracker = {}
+        
+        if provider_type not in self._provider_failure_tracker:
+            self._provider_failure_tracker[provider_type] = {
+                'consecutive_failures': 0,
+                'total_failures': 0,
+                'last_failure_time': None,
+                'last_success_time': None,
+                'error_types': {},
+                'should_skip_temporarily': False,
+                'skip_until': None
+            }
+        
+        tracker = self._provider_failure_tracker[provider_type]
+        
+        # Update failure stats
+        tracker['consecutive_failures'] += 1
+        tracker['total_failures'] += 1
+        tracker['last_failure_time'] = time.time()
+        tracker['error_types'][error_type] = tracker['error_types'].get(error_type, 0) + 1
+        
+        # Simple temporary skip logic to prevent infinite loops
+        if tracker['consecutive_failures'] >= 3:
+            # Skip this provider for 5 minutes after 3 consecutive failures
+            tracker['should_skip_temporarily'] = True
+            tracker['skip_until'] = time.time() + 300  # 5 minutes
+            print(f"⚠️ {provider_type.title()} temporarily skipped for 5 minutes after {tracker['consecutive_failures']} consecutive failures")
+        
+        print(f"❌ {provider_type.title()} failure ({error_type}): {tracker['consecutive_failures']} consecutive, {tracker['total_failures']} total")
+
+    def _handle_provider_success(self, provider_type: str):
+        """
+        Track successful provider requests and reset failure counters.
+        
+        Args:
+            provider_type: Provider name (e.g., "mistral", "gemini", "groq")
+        """
+        # Initialize if not exists
+        if not hasattr(self, '_provider_failure_tracker'):
+            self._provider_failure_tracker = {}
+        
+        if provider_type not in self._provider_failure_tracker:
+            self._provider_failure_tracker[provider_type] = {
+                'consecutive_failures': 0,
+                'total_failures': 0,
+                'last_failure_time': None,
+                'last_success_time': None,
+                'error_types': {},
+                'should_skip_temporarily': False,
+                'skip_until': None
+            }
+        
+        tracker = self._provider_failure_tracker[provider_type]
+        
+        # Reset failure counters on success
+        tracker['consecutive_failures'] = 0
+        tracker['last_success_time'] = time.time()
+        tracker['should_skip_temporarily'] = False
+        tracker['skip_until'] = None
+        
+        print(f"✅ {provider_type.title()} success - failure counters reset")
+
+    def _should_skip_provider_temporarily(self, provider_type: str) -> bool:
+        """
+        Check if provider should be temporarily skipped due to recent failures.
+        
+        Args:
+            provider_type: Provider name
+            
+        Returns:
+            bool: True if provider should be skipped
+        """
+        if not hasattr(self, '_provider_failure_tracker'):
+            return False
+        
+        tracker = self._provider_failure_tracker.get(provider_type)
+        if not tracker:
+            return False
+        
+        # Check if skip period has expired
+        if tracker.get('skip_until') and time.time() > tracker['skip_until']:
+            tracker['should_skip_temporarily'] = False
+            tracker['skip_until'] = None
+            print(f"🔄 {provider_type.title()} skip period expired - re-enabling")
+        
+        return tracker.get('should_skip_temporarily', False)
+
+    def _handle_mistral_message_ordering_error(self, error, llm_name, llm_type, messages, llm):
+        """
+        Handle Mistral AI message ordering errors by reconstructing the conversation.
+        
+        Args:
+            error: The original error
+            llm_name: Name of the LLM for logging
+            llm_type: Type of LLM
+            messages: Original message history
+            llm: LLM instance
+            
+        Returns:
+            Response from the retry attempt or raises exception
+        """
+        error_str = str(error)
+        print(f"❌ Mistral AI message ordering error detected: {error_str}")
+        self._handle_provider_failure("mistral", "message_ordering")
+        print(f"🔄 Attempting to fix message ordering and retry...")
+        
+        # Try to fix the message ordering by reconstructing the conversation
+        try:
+            # Extract the original question and tool results
+            original_question = None
+            tool_results = []
+            
+            for msg in messages:
+                if hasattr(msg, 'type'):
+                    if msg.type == 'human' and not any('reminder' in str(msg.content).lower() for reminder in ['use tools', 'final answer', 'analyze']):
+                        original_question = msg.content
+                    elif msg.type == 'tool':
+                        tool_results.append({
+                            'name': getattr(msg, 'name', 'unknown'),
+                            'content': msg.content,
+                            'tool_call_id': getattr(msg, 'tool_call_id', getattr(msg, 'name', 'unknown'))
+                        })
+            
+            if original_question and tool_results:
+                # Reconstruct a clean conversation for Mistral
+                clean_messages = []
+                
+                # Add system message if present
+                for msg in messages:
+                    if hasattr(msg, 'type') and msg.type == 'system':
+                        clean_messages.append(msg)
+                        break
+                
+                # Add the original question
+                clean_messages.append(HumanMessage(content=original_question))
+                
+                # Add tool results as a single user message
+                if tool_results:
+                    tool_summary = "Tool results:\n" + "\n".join([f"{result['name']}: {result['content']}" for result in tool_results])
+                    clean_messages.append(HumanMessage(content=f"Please analyze these results and provide the final answer:\n{tool_summary}"))
+                
+                # Try the clean conversation
+                response = self._invoke_llm_provider(llm, clean_messages)
+                print(f"✅ Successfully retried with clean message ordering")
+                return response
+            else:
+                raise Exception("Could not reconstruct clean conversation for Mistral AI")
+                
+        except Exception as retry_error:
+            print(f"❌ Failed to fix Mistral AI message ordering: {retry_error}")
+            # Fall back to error handler
+            handled, result = self._handle_llm_error(error, llm_name, llm_type, phase="request", messages=messages, llm=llm)
+            if handled:
+                return result
+            else:
+                raise Exception(f"{llm_name} failed: {error}")
+
+    def _handle_mistral_message_ordering_error_in_tool_loop(self, error, llm_type, messages, llm, tool_results_history):
+        """
+        Handle Mistral AI message ordering errors specifically in the tool loop context.
+        
+        Args:
+            error: The original error
+            llm_type: Type of LLM
+            messages: Original message history
+            llm: LLM instance
+            tool_results_history: History of tool results
+            
+        Returns:
+            Response from the retry attempt or raises exception
+        """
+        error_str = str(error)
+        print(f"❌ [Tool Loop] Mistral AI message ordering error detected: {error_str}")
+        try:
+            response = self._handle_mistral_message_ordering_error(error, llm_type, llm_type, messages, llm)
+            print(f"✅ [Tool Loop] Successfully retried with clean message ordering")
+            return response
+        except Exception as retry_error:
+            print(f"❌ [Tool Loop] Failed to fix Mistral AI message ordering: {retry_error}")
+            # Fall back to error handler
+            handled, result = self._handle_llm_error(error, llm_name=llm_type, llm_type=llm_type, phase="tool_loop",
+                messages=messages, llm=llm, tool_results_history=tool_results_history)
+            if handled:
+                return result
+            else:
+                raise
+
+    def stream(self, question: str, chat_history: Optional[List[Dict[str, Any]]] = None, llm_sequence: Optional[List[str]] = None):
+        """
+        Unified streaming interface for all scenarios.
+        Provides real-time visibility into LLM thinking, tool execution, and results.
+        
+        Args:
+            question: The question to process
+            chat_history: Optional chat history for context
+            llm_sequence: Optional sequence of LLM providers to try
+            
+        Yields:
+            str: Text content for streaming display
+        """
+        # Use the unified processing method with streaming
+        for chunk in self._unified_process_with_streaming(question, chat_history, llm_sequence):
+            yield chunk
+    
+    def stream_events(self, question: str, chat_history: Optional[List[Dict[str, Any]]] = None, llm_sequence: Optional[List[str]] = None):
+        """
+        Stream structured events for detailed monitoring of LLM and tool execution.
+        
+        Args:
+            question: The question to process
+            chat_history: Optional chat history for context
+            llm_sequence: Optional sequence of LLM providers to try
+            
+        Yields:
+            dict: Structured events with type, content, and metadata
+        """
+        # Initialize trace for this question
+        self._trace_init_question(question, None, None)
+        
+        # Increment total questions counter
+        self.total_questions += 1
+        
+        # Store the original question for reuse throughout the process
+        self.original_question = question
+        
+        # Retrieve reference answer
+        reference = self._get_reference_answer(question)
+        
+        # Format messages
+        messages = self._format_messages(question, reference=reference, chat_history=chat_history)
+        
+        # Build a default llm_sequence if not provided
+        if not llm_sequence:
+            llm_sequence = self.DEFAULT_LLM_SEQUENCE.copy()
+        
+        # Try providers in order
+        for llm_type in llm_sequence:
+            try:
+                # Check if this LLM type was successfully initialized
+                if llm_type not in self.llm_provider_names:
+                    yield {
+                        "type": "llm_skip",
+                        "content": f"⚠️ Skipping {llm_type}: LLM not initialized\n",
+                        "metadata": {"llm_type": llm_type, "reason": "not_initialized"}
+                    }
+                    continue
+                
+                # Always use tools when available
+                use_tools = self._provider_supports_tools(llm_type)
+                llm, llm_name, _ = self._select_llm(llm_type, use_tools)
+                if llm is None:
+                    yield {
+                        "type": "llm_error",
+                        "content": f"⚠️ Skipping {llm_type}: LLM instance is None\n",
+                        "metadata": {"llm_type": llm_type, "reason": "instance_none"}
+                    }
+                    continue
+                
+                yield {
+                    "type": "llm_selected",
+                    "content": f"🤖 Using {llm_name} (tools: {use_tools})\n",
+                    "metadata": {"llm_type": llm_type, "llm_name": llm_name, "use_tools": use_tools}
+                }
+                
+                if use_tools:
+                    # Use streaming tool calling loop
+                    tool_registry = {self._get_tool_name(tool): tool for tool in self.tools}
+                    call_id = self._trace_start_llm(llm_type)
+                    
+                    # Create an event capturing function for streaming
+                    def event_yielder(event_type, content, metadata=None):
+                        event = {
+                            "type": event_type,
+                            "content": content,
+                            "metadata": metadata or {}
+                        }
+                        return event
+                    
+                    # Run tool calling loop with event capture
+                    result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, event_yielder)
+                    
+                    # Since we can't yield during the loop execution, we'll yield the final result
+                    if result:
+                        answer = self._extract_final_answer(result)
+                        
+                        # Calculate similarity score if reference exists
+                        if reference:
+                            _, similarity_score = self._vector_answers_match(answer, reference)
+                        else:
+                            similarity_score = 1.0
+                        
+                        # Finalize trace
+                        final_answer = {
+                            "submitted_answer": ensure_valid_answer(answer),
+                            "similarity_score": similarity_score,
+                            "llm_used": llm_name,
+                            "reference": reference if reference else "Reference answer not found",
+                            "question": question,
+                        }
+                        self._trace_finalize_question(final_answer)
+                        
+                        yield {
+                            "type": "completion",
+                            "content": f"🎯 **Task completed with {llm_name}**\n",
+                            "metadata": {
+                                "final_answer": answer,
+                                "similarity_score": similarity_score,
+                                "llm_used": llm_name
+                            }
+                        }
+                        return
+                else:
+                    # Non-tool scenario with streaming
+                    yield {
+                        "type": "llm_thinking",
+                        "content": "🤖 **LLM is generating response...**\n",
+                        "metadata": {"llm_type": llm_type, "streaming": True}
+                    }
+                    
+                    if hasattr(llm, "stream") and callable(getattr(llm, "stream")):
+                        accumulated_response = ""
+                        for chunk in llm.stream(messages):
+                            try:
+                                text = getattr(chunk, "content", None) or getattr(chunk, "text", None) or str(chunk)
+                                if text:
+                                    accumulated_response += text
+                                    yield {
+                                        "type": "llm_chunk",
+                                        "content": text,
+                                        "metadata": {"streaming": True}
+                                    }
+                            except Exception:
+                                continue
+                        
+                        # Finalize for non-tool scenario
+                        if reference:
+                            _, similarity_score = self._vector_answers_match(accumulated_response, reference)
+                        else:
+                            similarity_score = 1.0
+                        
+                        final_answer = {
+                            "submitted_answer": ensure_valid_answer(accumulated_response),
+                            "similarity_score": similarity_score,
+                            "llm_used": llm_name,
+                            "reference": reference if reference else "Reference answer not found",
+                            "question": question,
+                        }
+                        self._trace_finalize_question(final_answer)
+                        
+                        yield {
+                            "type": "completion",
+                            "content": f"🎯 **Task completed with {llm_name}**\n",
+                            "metadata": {
+                                "final_answer": accumulated_response,
+                                "similarity_score": similarity_score,
+                                "llm_used": llm_name
+                            }
+                        }
+                        return
+                
+            except Exception as e:
+                yield {
+                    "type": "error",
+                    "content": f"❌ {llm_name} failed: {e}\n",
+                    "metadata": {"llm_type": llm_type, "error": str(e)}
+                }
+                
+                if llm_type == llm_sequence[-1]:  # Last provider
+                    yield {
+                        "type": "final_error",
+                        "content": f"❌ **All LLMs failed. Last error: {e}**\n",
+                        "metadata": {"final_error": str(e)}
+                    }
+                    return
+                else:
+                    yield {
+                        "type": "fallback",
+                        "content": "🔄 **Trying next LLM...**\n",
+                        "metadata": {"next_llm": "unknown"}
+                    }
+                    continue
+        
+        # If we get here, all LLMs failed
+        yield {
+            "type": "no_llms",
+            "content": "⚠️ **No LLM providers are currently available.**\n",
+            "metadata": {"available_llms": self.llm_provider_names}
+        }
+    
+    def get_trace_data(self):
+        """
+        Get the complete trace data for the last processed question.
+        This should be called after consuming the generator from __call__ or stream.
+        
+        Returns:
+            dict: Complete trace data or None if no trace exists
+        """
+        return self._trace_get_full()
+    
+    # ========== LANGCHAIN-COMPATIBLE METHODS ==========
+    
+    def invoke(self, input_data: dict, config: dict = None) -> dict:
+        """
+        LangChain-compatible invoke method with enhanced thread safety and conversation management.
+        
+        Args:
+            input_data (dict): Input data containing 'input' or 'messages'
+            config (dict, optional): Configuration parameters
+            
+        Returns:
+            dict: Response with 'output' key containing the agent's response
+        """
+        # Extract question from various input formats
+        if "input" in input_data:
+            question = input_data["input"]
+        elif "messages" in input_data and input_data["messages"]:
+            # Handle LangChain message format
+            last_message = input_data["messages"][-1]
+            if hasattr(last_message, 'content'):
+                question = last_message.content
+            elif isinstance(last_message, dict):
+                question = last_message.get("content", "")
+            else:
+                question = str(last_message)
+        else:
+            question = str(input_data)
+        
+        # Extract additional parameters
+        file_data = input_data.get("file_data")
+        file_name = input_data.get("file_name")
+        llm_sequence = input_data.get("llm_sequence")
+        chat_history = input_data.get("chat_history")
+        conversation_id = input_data.get("conversation_id", "default")
+        
+        # Thread-safe execution
+        if not self.agent_lock.acquire(blocking=False):
+            return {"output": "⚠️ Another request is being processed. Please wait...", "error": "concurrent_request"}
+        
+        try:
+            # Update conversation history if provided
+            if chat_history:
+                self.conversation_histories[conversation_id] = chat_history.copy()
+            
+            # Use streaming mode and consume the generator to get final result
+            accumulated_response = ""
+            for chunk in self._unified_process(
+                question=question,
+                file_data=file_data,
+                file_name=file_name,
+                llm_sequence=llm_sequence,
+                chat_history=self.conversation_histories[conversation_id],
+                streaming=True
+            ):
+                if isinstance(chunk, str):
+                    accumulated_response += chunk
+            
+            # Update conversation history with the new exchange
+            self.conversation_histories[conversation_id].extend([
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": accumulated_response}
+            ])
+            
+            # Update conversation metadata
+            self.conversation_metadata[conversation_id].update({
+                "last_updated": datetime.now().isoformat(),
+                "message_count": len(self.conversation_histories[conversation_id]),
+                "last_question": question
+            })
+            
+            # Return the accumulated response
+            return {"output": accumulated_response}
+            
+        except Exception as e:
+            error_msg = f"Error: {str(e)}"
+            # Update conversation history with error
+            self.conversation_histories[conversation_id].extend([
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": error_msg}
+            ])
+            return {"output": error_msg, "error": str(e)}
+        finally:
+            self.agent_lock.release()
+    
+    def astream(self, input_data: dict, config: dict = None):
+        """
+        LangChain-compatible async streaming method with enhanced conversation management.
+        
+        Args:
+            input_data (dict): Input data containing 'input' or 'messages'
+            config (dict, optional): Configuration parameters
+            
+        Yields:
+            dict: Streaming chunks with 'chunk' key and metadata
+        """
+        # Extract question from various input formats
+        if "input" in input_data:
+            question = input_data["input"]
+        elif "messages" in input_data and input_data["messages"]:
+            # Handle LangChain message format
+            last_message = input_data["messages"][-1]
+            if hasattr(last_message, 'content'):
+                question = last_message.content
+            elif isinstance(last_message, dict):
+                question = last_message.get("content", "")
+            else:
+                question = str(last_message)
+        else:
+            question = str(input_data)
+        
+        # Extract additional parameters
+        file_data = input_data.get("file_data")
+        file_name = input_data.get("file_name")
+        llm_sequence = input_data.get("llm_sequence")
+        chat_history = input_data.get("chat_history")
+        conversation_id = input_data.get("conversation_id", "default")
+        
+        # Thread-safe execution
+        if not self.agent_lock.acquire(blocking=False):
+            yield {"chunk": "⚠️ Another request is being processed. Please wait...", "type": "error"}
+            return
+        
+        try:
+            # Update conversation history if provided
+            if chat_history:
+                self.conversation_histories[conversation_id] = chat_history.copy()
+            
+            # Track accumulated response for conversation history
+            accumulated_response = ""
+            
+            # Use streaming mode with enhanced chunk handling
+            for chunk in self._unified_process(
+                question=question,
+                file_data=file_data,
+                file_name=file_name,
+                llm_sequence=llm_sequence,
+                chat_history=self.conversation_histories[conversation_id],
+                streaming=True
+            ):
+                if isinstance(chunk, str):
+                    accumulated_response += chunk
+                    yield {
+                        "chunk": chunk,
+                        "type": "content",
+                        "conversation_id": conversation_id,
+                        "metadata": {
+                            "question": question,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                    }
+            
+            # Update conversation history with the new exchange
+            self.conversation_histories[conversation_id].extend([
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": accumulated_response}
+            ])
+            
+            # Update conversation metadata
+            self.conversation_metadata[conversation_id].update({
+                "last_updated": datetime.now().isoformat(),
+                "message_count": len(self.conversation_histories[conversation_id]),
+                "last_question": question
+            })
+            
+            # Yield final chunk with completion metadata
+            yield {
+                "chunk": "",
+                "type": "complete",
+                "conversation_id": conversation_id,
+                "metadata": {
+                    "total_length": len(accumulated_response),
+                    "message_count": len(self.conversation_histories[conversation_id])
+                }
+            }
+            
+        except Exception as e:
+            error_msg = f"Error: {str(e)}"
+            # Update conversation history with error
+            self.conversation_histories[conversation_id].extend([
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": error_msg}
+            ])
+            yield {
+                "chunk": error_msg,
+                "type": "error",
+                "conversation_id": conversation_id,
+                "metadata": {"error": str(e)}
+            }
+        finally:
+            self.agent_lock.release()
+    
+    def get_graph(self):
+        """
+        Return a simple LangGraph representation for compatibility.
+        This creates a basic state graph that delegates to your existing logic.
+        
+        Returns:
+            Compiled LangGraph: A simple graph that uses your existing agent logic
+        """
+        try:
+            from langgraph.graph import StateGraph, END
+            from typing import TypedDict, Annotated
+            from langchain_core.messages import BaseMessage
+            
+            class AgentState(TypedDict):
+                messages: Annotated[List[BaseMessage], "The messages in the conversation"]
+                current_question: str
+                file_data: Optional[str]
+                file_name: Optional[str]
+                llm_sequence: Optional[List[str]]
+                chat_history: Optional[List[Dict[str, Any]]]
+            
+            def agent_node(state: AgentState):
+                """Agent node that delegates to your existing sophisticated logic"""
+                # Extract the latest question from messages
+                if state["messages"]:
+                    last_message = state["messages"][-1]
+                    if hasattr(last_message, 'content'):
+                        question = last_message.content
+                    else:
+                        question = str(last_message)
+                else:
+                    question = state.get("current_question", "")
+                
+                # Convert messages to chat_history format for your agent
+                chat_history = []
+                for msg in state["messages"][:-1]:  # Exclude the latest message
+                    if hasattr(msg, 'type'):
+                        if msg.type == 'human':
+                            chat_history.append({"role": "user", "content": msg.content})
+                        elif msg.type in ('ai', 'assistant'):
+                            chat_history.append({"role": "assistant", "content": msg.content})
+                        elif msg.type == 'tool':
+                            chat_history.append({
+                                "role": "tool", 
+                                "content": msg.content,
+                                "name": getattr(msg, 'name', 'unknown'),
+                                "tool_call_id": getattr(msg, 'tool_call_id', 'unknown')
+                            })
+                
+                # Use your existing agent logic
+                result = self._unified_process(
+                    question=question,
+                    file_data=state.get("file_data"),
+                    file_name=state.get("file_name"),
+                    llm_sequence=state.get("llm_sequence"),
+                    chat_history=chat_history,
+                    streaming=False
+                )
+                
+                # Extract the final answer
+                if isinstance(result, dict) and "final_answer" in result:
+                    response_content = result["final_answer"]
+                else:
+                    response_content = str(result)
+                
+                # Create AI message response
+                from langchain_core.messages import AIMessage
+                response_message = AIMessage(content=response_content)
+                
+                return {
+                    "messages": state["messages"] + [response_message],
+                    "current_question": question,
+                    "file_data": state.get("file_data"),
+                    "file_name": state.get("file_name"),
+                    "llm_sequence": state.get("llm_sequence"),
+                    "chat_history": chat_history
+                }
+            
+            # Build the graph
+            graph = StateGraph(AgentState)
+            graph.add_node("agent", agent_node)
+            graph.set_entry_point("agent")
+            graph.add_edge("agent", END)
+            
+            return graph.compile()
+            
+        except ImportError as e:
+            print(f"Warning: LangGraph not available. Install with: pip install langgraph. Error: {e}")
+            return None
+    
+    def get_langchain_tools(self):
+        """
+        Get all tools in LangChain format for compatibility.
+        
+        Returns:
+            List[Tool]: List of LangChain tool objects
+        """
+        try:
+            from langchain_core.tools import Tool
+            
+            # Get your existing tools using the method from the agent
+            if hasattr(self, '_gather_tools'):
+                tools_list = self._gather_tools()
+            else:
+                # Fallback: try to get tools from the tools module
+                try:
+                    from tools.tools import _gather_tools
+                    tools_list = _gather_tools()
+                except ImportError:
+                    # If _gather_tools doesn't exist, try to get tools from the agent's tools attribute
+                    tools_list = getattr(self, 'tools', [])
+            
+            # Convert to LangChain Tool format
+            langchain_tools = []
+            for tool in tools_list:
+                if hasattr(tool, 'name') and hasattr(tool, 'description'):
+                    langchain_tools.append(tool)
+            
+            return langchain_tools
+            
+        except Exception as e:
+            print(f"Warning: Could not get LangChain tools: {e}")
+            return []
+    
+    def bind_tools(self, tools=None):
+        """
+        Bind tools to the agent for LangChain compatibility.
+        
+        Args:
+            tools (list, optional): List of tools to bind. If None, uses all available tools.
+            
+        Returns:
+            CmwAgent: Self for method chaining
+        """
+        if tools is None:
+            tools = self.get_langchain_tools()
+        
+        # Your existing tool binding logic is already in place
+        # This method is mainly for LangChain compatibility
+        self.tools = tools
+        return self
+    
+    # ========== ENHANCED DEBUGGING AND MONITORING ==========
+    
+    def get_conversation_stats(self, conversation_id: str = "default") -> Dict[str, Any]:
+        """
+        Get comprehensive statistics for a conversation.
+        
+        Args:
+            conversation_id (str): The conversation ID to get stats for
+            
+        Returns:
+            Dict[str, Any]: Conversation statistics
+        """
+        history = self.conversation_histories[conversation_id]
+        metadata = self.conversation_metadata[conversation_id]
+        
+        user_messages = [msg for msg in history if msg.get("role") == "user"]
+        assistant_messages = [msg for msg in history if msg.get("role") == "assistant"]
+        
+        return {
+            "conversation_id": conversation_id,
+            "total_messages": len(history),
+            "user_messages": len(user_messages),
+            "assistant_messages": len(assistant_messages),
+            "last_updated": metadata.get("last_updated"),
+            "message_count": metadata.get("message_count", 0),
+            "last_question": metadata.get("last_question"),
+            "average_user_message_length": sum(len(msg.get("content", "")) for msg in user_messages) / max(len(user_messages), 1),
+            "average_assistant_message_length": sum(len(msg.get("content", "")) for msg in assistant_messages) / max(len(assistant_messages), 1)
+        }
+    
+    def get_agent_health_status(self) -> Dict[str, Any]:
+        """
+        Get comprehensive health status of the agent.
+        
+        Returns:
+            Dict[str, Any]: Agent health information
+        """
+        return {
+            "active_conversations": len(self.conversation_histories),
+            "conversation_ids": list(self.conversation_histories.keys()),
+            "total_questions_processed": getattr(self, 'total_questions', 0),
+            "llm_providers_available": list(self.llm_provider_names),
+            "tools_available": len(self.tools) if hasattr(self, 'tools') else 0,
+            "vector_store_enabled": self.ENABLE_VECTOR_SIMILARITY,
+            "agent_lock_locked": self.agent_lock.locked(),
+            "memory_usage": {
+                "conversation_states": len(self.conversation_states),
+                "conversation_histories": len(self.conversation_histories),
+                "conversation_metadata": len(self.conversation_metadata)
+            }
+        }
+    
+    def export_conversation(self, conversation_id: str = "default", format: str = "json") -> str:
+        """
+        Export a conversation in various formats.
+        
+        Args:
+            conversation_id (str): The conversation ID to export
+            format (str): Export format ("json", "txt", "markdown")
+            
+        Returns:
+            str: Exported conversation data
+        """
+        history = self.conversation_histories[conversation_id]
+        metadata = self.conversation_metadata[conversation_id]
+        
+        if format == "json":
+            return json.dumps({
+                "conversation_id": conversation_id,
+                "metadata": metadata,
+                "history": history,
+                "exported_at": datetime.now().isoformat()
+            }, indent=2)
+        elif format == "txt":
+            lines = [f"Conversation: {conversation_id}"]
+            lines.append(f"Exported: {datetime.now().isoformat()}")
+            lines.append("=" * 50)
+            for msg in history:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                lines.append(f"{role.upper()}: {content}")
+            return "\n".join(lines)
+        elif format == "markdown":
+            lines = [f"# Conversation: {conversation_id}"]
+            lines.append(f"**Exported:** {datetime.now().isoformat()}")
+            lines.append("")
+            for msg in history:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                if role == "user":
+                    lines.append(f"**User:** {content}")
+                elif role == "assistant":
+                    lines.append(f"**Assistant:** {content}")
+                lines.append("")
+            return "\n".join(lines)
+        else:
+            raise ValueError(f"Unsupported format: {format}")
+    
+    def cleanup_old_conversations(self, max_age_hours: int = 24) -> int:
+        """
+        Clean up old conversations to free memory.
+        
+        Args:
+            max_age_hours (int): Maximum age in hours before cleanup
+            
+        Returns:
+            int: Number of conversations cleaned up
+        """
+        current_time = datetime.now()
+        cutoff_time = current_time - datetime.timedelta(hours=max_age_hours)
+        cleaned_count = 0
+        
+        for conv_id in list(self.conversation_histories.keys()):
+            metadata = self.conversation_metadata[conv_id]
+            last_updated = metadata.get("last_updated")
+            
+            if last_updated:
+                try:
+                    last_updated_dt = datetime.fromisoformat(last_updated)
+                    if last_updated_dt < cutoff_time:
+                        self.clear_conversation(conv_id)
+                        cleaned_count += 1
+                except ValueError:
+                    # If we can't parse the date, skip this conversation
+                    continue
+        
+        return cleaned_count

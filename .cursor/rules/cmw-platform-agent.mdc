@@ -2,8 +2,14 @@
 alwaysApply: true
 ---
 
+- Code style: langchain-pure, dry, lean, abstract, modular
+- Ensure LangChain purity.
+- Follow LangChain best practices, patterns, and conventions:
+    - https://python.langchain.com/docs/introduction/
+    - https://langchain-ai.github.io/langgraph/concepts/why-langgraph/
 - Be super smart, create super lean and dry code.
 - Use abstractions.
+- Use modularization.
 - When refactoring code, change only the levant parts.
 - Group and isolate code based on its function in different files to avoid clutter.
 - Do not duplicate code, encapsulate any reused code in methods/functions.
@@ -15,3 +21,6 @@ alwaysApply: true
 - Place imports always on top.
 - Use environment variables for secrets.
 - Ensure testability and extensibility.
+- Put any test scripts into @/misc_files folder.
+- put reports to a relevant docs/**/progress_reports/ folder under /docs/ or its relevant subfolder
+- put tests to /agent_ng/_tests preferably, or under the current folder's _tests where the files are modified or created
