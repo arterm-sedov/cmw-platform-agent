@@ -26,11 +26,13 @@ RUSSIAN_TRANSLATIONS = {
     # Chat tab content
     "welcome_title": "💬 Добро пожаловать!",
     "welcome_description": """
-    Ассистен аналитика Comindware фокусируется на операциях с сущностями **Comindware Platform** (приложения, шаблоны, атрибуты) и использует детерминированные инструменты для выполнения точных изменений.
+    **Ассистент аналитика Comindware** предназначен для работы с сущностями **Comindware Platform**, такими как приложения, шаблоны, атрибуты.
+    
+    Ассистент использует детерминированные инструменты, обеспечивающие высокую точность работы.
 
-    - **Операции с Comindware Platform в приоритете**: помогает выполнять операции с помощью инструментов для изменения сущностей (например, создание/редактирование атрибутов)
-    - **Оркестрация нескольких моделей**: позволяет использовать различных поставщиков LLM
-    - **Компактный структурированный вывод**: Намерение → План → Проверка → Выполнение → Результат
+    - **Операции с Comindware Platform в приоритете**: помогает получать данные и манипулировать сущностями.
+    - **Оркестрация нескольких моделей**: позволяет использовать различных поставщиков LLM.
+    - **Компактный структурированный вывод**: Намерение → План → Проверка → Выполнение → Результат.
     """,
     
     "try_asking_title": "❓ Варианты запросов:",
@@ -217,11 +219,13 @@ ENGLISH_TRANSLATIONS = {
     # Chat tab content
     "welcome_title": "💬 Welcome!",
     "welcome_description": """
-    The Comindware Analyst Copilot focuses on the **Comindware Platform** entity operations (applications, templates, attributes) and uses deterministic tools to execute precise changes.
+    **Comindware Analyst Copilot** is designed to work with **Comindware Platform** entities such as applications, templates, and attributes.
+    
+    The Copilot uses deterministic tools ensuring accurate operations.
 
-    - **Platform operations first**: Validates your intent and executes tools for entity changes (e.g., create/edit attributes)
-    - **Multi-model orchestration**: Supports multiple LLM providers
-    - **Compact structured output**: Intent → Plan → Validate → Execute → Result
+    - **Comindware Platform operations first**: Helps get data and manipulate entities.
+    - **Multiple model orchestration**: Supports different LLM providers.
+    - **Compact structured output**: Intent → Plan → Validation → Execution → Result.
     """,
     
     "try_asking_title": "❓ Try asking",
@@ -304,19 +308,19 @@ ENGLISH_TRANSLATIONS = {
     "unhealthy_status": "❌ Unhealthy",
     
     # Statistics labels
-    "agent_status_section": "**Agent Status:**",
+    "agent_status_section": "**Agent status:**",
     "conversation_section": "**Conversation:**",
     "tools_section": "**Tools:**",
-    "token_usage_section": "**Token Usage:**",
+    "token_usage_section": "**Tokens used:**",
     "messages_label": "Messages",
     "user_messages_label": "User",
     "assistant_messages_label": "Copilot",
-    "total_messages_label": "Total Messages",
+    "total_messages_label": "Total messages",
     "available_label": "Available",
     "used_label": "Used",
     "total_persistent_label": "Total (Persistent)",
-    "current_conversation_label": "Current Conversation",
-    "average_per_message_label": "Average per Message",
+    "current_conversation_label": "Current conversation",
+    "average_per_message_label": "Average per message",
     "tokens_label": "tokens",
     "unique_tools_label": "unique tools",
     "total_calls_label": "Total Calls",
@@ -380,8 +384,8 @@ ENGLISH_TRANSLATIONS = {
     "iteration_processing": "Iteration {iteration}/{max_iterations} - Processing...",
     "iteration_finished": "Iteration {iteration}/{max_iterations} - Finished",
     "iteration_completed": "Iteration {iteration} completed - Continuing...",
-    "iteration_max_reached": "Iteration {iteration}/{max_iterations} - Finished (Max Reached)",
-    "max_iterations_warning": "⚠️ Reached maximum iterations ({max_iterations}), conversation may be incomplete",
+    "iteration_max_reached": "Iteration {iteration}/{max_iterations} - Finished (max reached)",
+    "max_iterations_warning": "⚠️ Reached iteration limit ({max_iterations}), conversation may be incomplete",
     
     # Tool messages
     "tool_called": "🔧 Tool called: {tool_name}",

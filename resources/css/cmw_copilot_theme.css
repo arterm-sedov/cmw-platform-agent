@@ -289,11 +289,15 @@ body {
 
 /* Ensure hero title block has no border/shadow/background */
 .gradio-container .block.padded.hero-title,
-.gradio-container .hero-title {
+.gradio-container .hero-title,
+.chat-hints-title {
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
+    overflow: unset !important;
 }
+
+
 
 .gradio-container .prose h1 {
     font-size: 28px;
