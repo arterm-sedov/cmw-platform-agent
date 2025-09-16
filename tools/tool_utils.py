@@ -59,25 +59,6 @@ ATTRIBUTE_RESPONE_MAPPING = {
     "linkedRecordTemplate": "Related template Id"
 }
 
-def remove_nones(obj: Any) -> Any:
-    """
-    Recursively remove None values from dicts/lists to keep payload minimal and consistent with Platform expectations.
-    
-    This utility function is used across all tool modules to clean up data before sending to the API,
-    ensuring that only meaningful data is transmitted and reducing payload size.
-    
-    Args:
-        obj: The object to clean (dict, list, or any other type)
-        
-    Returns:
-        Cleaned object with None values removed
-    """
-    if isinstance(obj, dict):
-        return {k: remove_nones(v) for k, v in obj.items() if v is not None}
-    if isinstance(obj, list):
-        return [remove_nones(v) for v in obj if v is not None]
-    return obj
-
 def remove_values(
     obj: Any,
     exclude_values: Set[Any] = None
@@ -108,6 +89,25 @@ def remove_values(
             if v not in exclude_values
         ]
     return obj
+
+def _set_input_mask(display_format: str) -> str:
+    # Setting validation mask via display format
+    input_mask_mapping: Dict[str, str] = {
+        "PlainText": None,
+        "MarkedText": None,
+        "HtmlText": None,
+        "LicensePlateNumberRuMask":"([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})",
+        "IndexRuMask": "([0-9]{6})",
+        "PassportRuMask": "([0-9]{4} [0-9]{6})",
+        "INNMask": "([0-9]{10})",
+        "OGRNMask": "([0-9]{13})",
+        "IndividualINNMask": "([0-9]{12})",
+        "PhoneRuMask": "(\+7 \([0-9]{3}\) [0-9]{3}-[0-9]{2}-[0-9]{2})",
+        "EmailMask": "^(([a-zа-яё0-9_-]+\.)*[a-zа-яё0-9_-]+@[a-zа-яё0-9-]+(\.[a-zа-яё0-9-]+)*\.[a-zа-яё]{2,6})?$",
+        "CustomMask": None
+    }
+
+    return input_mask_mapping.get(display_format, None)
 
 def execute_get_operation(
     result_model: Type[BaseModel],

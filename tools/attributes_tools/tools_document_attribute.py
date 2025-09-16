@@ -4,7 +4,6 @@ ALLOWED_EXTENSIONS_LIST = ['TXT', 'PNG', 'JPG', 'CSV', 'XLSX', 'DOCX', 'PPTX', '
 
 ALLOWED_EXTENSIONS = Literal[tuple(ALLOWED_EXTENSIONS_LIST)]
 ALLOWED_EXTENSIONS_SET = set(ALLOWED_EXTENSIONS_LIST)
-
 class EditOrCreateDocumentAttributeSchema(CommonAttributeFields):
     display_format: Literal[
         "Attachment",

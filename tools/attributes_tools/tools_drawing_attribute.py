@@ -1,10 +1,6 @@
 from ..tool_utils import *
 
-class EditOrCreateDrawingAttributeSchema(CommonAttributeFields):
-    pass
-
-
-@tool("edit_or_create_drawing_attribute", return_direct=False, args_schema=EditOrCreateDrawingAttributeSchema)
+@tool("edit_or_create_drawing_attribute", return_direct=False, args_schema=CommonAttributeFields)
 def edit_or_create_drawing_attribute(
     operation: str,
     name: str,
