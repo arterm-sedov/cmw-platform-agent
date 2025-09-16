@@ -32,7 +32,7 @@ def edit_or_create_drawing_attribute(
             "type": "Undefined",
             "alias": system_name
         },
-        "type": "Image",
+        "type": "Drawing",
         "name": name,
         "description": description,
         "isTracked": write_changes_to_the_log
@@ -99,39 +99,10 @@ def get_drawing_attribute(
 
     result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
 
-    # Check if the request was successful and has the expected structure
-    if not result.get('success', False):
-        return result
-    
-    result_body = result.get('raw_response')
-    if result_body is None:
-        result.update({"error": "No response data received from server"})
-        return result
-    
-    # Check if result_body has the expected 'response' key
-    if not isinstance(result_body, dict) or 'response' not in result_body:
-        result.update({"error": "Unexpected response structure from server"})
-        return result
-
-    keys_to_remove = ['isIndexed', 'isMultiValue', 'imageColorType', 'imagePreserveAspectRatio', 'isUnique', 'format', 'isCalculated', 'isTitle', 'isMandatory', 'isOwnership', 'instanceGlobalAlias']
-
-    for key in keys_to_remove:
-        if key in result_body['response']:
-            result_body['response'].pop(key, None)
-
-    # Extract the data
-    data = result_body['response']
-    
-    # Create the final result with the data
-    final_result = {
-        "success": True,
-        "status_code": result.get("status_code", 200),
-        "data": data,
-        "error": None
-    }
-    
-    validated = AttributeResult(**final_result)
-    return validated.model_dump()
+    return process_attribute_response(
+        request_result=result,
+        result_model=AttributeResult
+    )
 
 if __name__ == "__main__":
     results = edit_or_create_drawing_attribute.invoke({
