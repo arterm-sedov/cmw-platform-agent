@@ -739,8 +739,8 @@ class LLMManager:
             tool_names = set()
             
         for name, obj in module.__dict__.items():
-            # Only include actual tool objects (decorated with @tool) or callable functions
-            # that are not classes, modules, or builtins
+            # Only include actual tool objects (decorated with @tool)
+            # Check if it's a proper @tool decorated function
             if (callable(obj) and 
                 not name.startswith("_") and 
                 not isinstance(obj, type) and  # Exclude classes
@@ -748,33 +748,23 @@ class LLMManager:
                 (obj.__module__ == module_name or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
                 name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step", "web_search_deep_research_exa_ai"]):  # Exclude specific classes and internal tools
                 
-                # Get tool name for deduplication
-                if hasattr(obj, 'name'):
+                # Check if it's a proper @tool decorated function
+                # @tool decorated functions have specific attributes that indicate they're LangChain tools
+                if (hasattr(obj, 'name') and 
+                    hasattr(obj, 'description') and 
+                    hasattr(obj, 'args_schema') and
+                    hasattr(obj, 'func')):
+                    # This is a proper @tool decorated function
                     tool_name = obj.name
-                else:
-                    tool_name = name
-                
-                # Skip if already loaded
-                if tool_name in tool_names:
-                    self._log_initialization(f"Skipped duplicate tool: {tool_name} from {module_name}", "DEBUG")
-                    continue
-                
-                # Check if it's a proper tool object (has the tool attributes)
-                if hasattr(obj, 'name') and hasattr(obj, 'description'):
-                    # This is a proper @tool decorated function or LangChain StructuredTool
+                    
+                    # Skip if already loaded
+                    if tool_name in tool_names:
+                        self._log_initialization(f"Skipped duplicate tool: {tool_name} from {module_name}", "DEBUG")
+                        continue
+                    
                     tool_list.append(obj)
                     tool_names.add(tool_name)
                     self._log_initialization(f"Loaded LangChain tool: {name} from {module_name}", "INFO")
-                elif callable(obj) and not name.startswith("_"):
-                    # This is a regular function that might be a tool
-                    # Only include if it's not an internal function
-                    if not name.startswith("_") and name not in [
-                        # Exclude built-in types and classes
-                        'int', 'str', 'float', 'bool', 'list', 'dict', 'tuple', 'Any', 'BaseModel', 'Field', 'field_validator'
-                    ]:
-                        tool_list.append(obj)
-                        tool_names.add(tool_name)
-                        self._log_initialization(f"Loaded function tool: {name} from {module_name}", "INFO")
 
 
 # Global instance for application-wide use
