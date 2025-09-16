@@ -140,7 +140,7 @@ def get_account_attribute(
     return process_attribute_response(
         request_result=result,
         result_model=AttributeResult,
-        response_mapping=KEYS_TO_REMOVE_MAPPING
+        response_mapping=ATTRIBUTE_RESPONE_MAPPING
     )
 
 if __name__ == "__main__":
