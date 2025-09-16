@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Literal, Type
+from typing import Any, Dict, List, Optional, Literal, Type, Set
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from . import requests_ as requests_
@@ -249,33 +249,30 @@ def process_attribute_response(
 def execute_edit_or_create_operation(
     request_body: Dict[str, Any],
     operation: str,
-    application_system_name: str,
-    requests_module: Any = requests_,
-    attribute_endpoint: str = ATTRIBUTE_ENDPOINT
+    endpoint: str
 ) -> Dict[str, Any]:
     """
-    Выполняет операцию (create/edit) над атрибутом через API.
-    Возвращает словарь с результатом, соответствующий модели AttributeResult.
+    Выполняет операцию (create/edit) через API.
+    Возвращает словарь с результатом.
     """
     # Убираем None-значения
     request_body = remove_nones(request_body)
 
     try:
         if operation == "create":
-            result = requests_module._post_request(
+            result = requests_._post_request(
                 request_body, 
-                f"{attribute_endpoint}/{application_system_name}"
+                endpoint
             )
         elif operation == "edit":
-            result = requests_module._put_request(
+            result = requests_._put_request(
                 request_body, 
-                f"{attribute_endpoint}/{application_system_name}"
+                endpoint
             )
-            print("edit is completed")  # Опечатка исправлена: "complited" → "completed"
         else:
             result = {
                 "success": False,
-                "error": f"No such operation for attribute: {operation}. Available operations: create, edit",
+                "error": f"No such operation: {operation}. Available operations: create, edit",
                 "status_code": 400
             }
 
@@ -299,6 +296,4 @@ def execute_edit_or_create_operation(
         error_info = result.get("error", "")
         result["error"] = f"API operation failed: {error_info}"
 
-    # Валидируем и возвращаем как dict
-    validated = AttributeResult(**result)
-    return validated.model_dump()
+    return result
