@@ -40,7 +40,6 @@ class EditOrCreateImageAttributeSchema(CommonAttributeFields):
     )
 
     @field_validator("file_extensions_filter", mode="before")
-    @classmethod
     def normalize_file_extensions_filter(cls, v: Any) -> Optional[List[str]]:
         if v is None:
             return v
@@ -56,7 +55,6 @@ class EditOrCreateImageAttributeSchema(CommonAttributeFields):
         return normalized
 
     @field_validator("rendering_color_mode", mode="before")
-    @classmethod
     def validate_rendering_color_mode(cls, v: Any) -> str:
         if v is None:
             raise ValueError("rendering_color_mode is required")
