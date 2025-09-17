@@ -198,6 +198,8 @@ RUSSIAN_TRANSLATIONS = {
     "result": "**Результат:** {tool_result}",
     "tool_error": "❌ **Ошибка инструмента: {error}**",
     "unknown_tool": "❌ **Неизвестный инструмент: {tool_name}**",
+    "tools_available": "🔧 Доступно инструментов: {count}",
+    "tool_calls_made": "Вызовы инструментов: {tool_names}",
     
     # Error messages
     "error": "❌ **Ошибка: {error}**"
@@ -389,6 +391,8 @@ ENGLISH_TRANSLATIONS = {
     "result": "**Result:** {tool_result}",
     "tool_error": "❌ **Tool error: {error}**",
     "unknown_tool": "❌ **Unknown tool: {tool_name}**",
+    "tools_available": "🔧 Tools available: {count}",
+    "tool_calls_made": "Tool calls made: {tool_names}",
     
     # Error messages
     "error": "❌ **Error: {error}**"

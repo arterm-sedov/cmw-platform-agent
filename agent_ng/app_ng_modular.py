@@ -79,20 +79,11 @@ except ImportError as e1:
         # Set defaults to prevent further errors
         NextGenAgent = None
         ChatMessage = None
-        get_agent_ng = lambda: None
-        get_llm_manager = lambda: None
-        get_debug_streamer = lambda x: None
-        get_log_handler = lambda x: None
         LogLevel = None
         LogCategory = None
-        # get_chat_interface = lambda x: None  # Dead code - never used
         ChatTab = None
         LogsTab = None
         StatsTab = None
-        get_ui_manager = lambda: None
-        create_i18n_instance = lambda x: None
-        get_translation_key = lambda x, y: x
-        format_translation = lambda x, y, **kwargs: x
 
 
 class NextGenApp:
@@ -180,10 +171,12 @@ class NextGenApp:
                 self.debug_streamer.success(f"Agent ready with {status['current_llm']}", LogCategory.INIT)
                 if self.language == "ru":
                     self.initialization_logs.append(f"✅ Агент готов с {status['current_llm']}")
-                    self.initialization_logs.append(f"🔧 Доступно инструментов: {status['tools_count']}")
+                    tools_msg = format_translation("tools_available", self.language, count=status['tools_count'])
+                    self.initialization_logs.append(tools_msg)
                 else:
                     self.initialization_logs.append(f"✅ Agent ready with {status['current_llm']}")
-                    self.initialization_logs.append(f"🔧 Tools available: {status['tools_count']}")
+                    tools_msg = format_translation("tools_available", self.language, count=status['tools_count'])
+                    self.initialization_logs.append(tools_msg)
                 self.initialization_complete = True
                 
                 # Update agent reference in tab instances
@@ -288,7 +281,9 @@ class NextGenApp:
                 
                 # Log tool calls if any
                 if response.tool_calls:
-                    self.debug_streamer.info(f"Tool calls made: {[call['name'] for call in response.tool_calls]}")
+                    tool_names = [call['name'] for call in response.tool_calls]
+                    tool_calls_msg = format_translation("tool_calls_made", self.language, tool_names=tool_names)
+                    self.debug_streamer.info(tool_calls_msg)
                 
                 return history, ""
             else:
@@ -376,10 +371,7 @@ class NextGenApp:
                 elif event_type == "tool_start":
                     # Tool is starting - create a separate message with metadata
                     tool_name = metadata.get("tool_name", "unknown")
-                    if self.language == "ru":
-                        tool_title = metadata.get("title", f"🔧 Инструмент вызван: {tool_name}")
-                    else:
-                        tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
+                    tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name))
                     
                     # Create tool message with metadata for collapsible section
                     tool_message = {
@@ -396,10 +388,7 @@ class NextGenApp:
                 elif event_type == "tool_end":
                     # Tool completed - update the last tool message or create new one
                     tool_name = metadata.get("tool_name", "unknown")
-                    if self.language == "ru":
-                        tool_title = metadata.get("title", f"🔧 Инструмент вызван: {tool_name}")
-                    else:
-                        tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
+                    tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name))
                     
                     # Update the last tool message or create new one
                     if tool_messages and tool_messages[-1].get("metadata", {}).get("title") == tool_title:
