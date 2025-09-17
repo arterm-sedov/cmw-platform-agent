@@ -8,3 +8,4 @@ When generating reports about changes, readmes, explanations:
 
 1. Place the .md files to @/docs folder
 2. Follow GitHub Markdown format
+3. Add prefix to filename: `YYYYMMDD_`

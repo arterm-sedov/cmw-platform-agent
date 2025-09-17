@@ -44,7 +44,7 @@ class ChatTab:
         """Create the main chat interface with proper layout"""
         with gr.Row():
             with gr.Column(elem_classes=["chat-hints"]):
-                gr.Markdown(f"## {self._get_translation("welcome_title")}", elem_classes=["chat-hints-title"])
+                gr.Markdown(f"## {self._get_translation('welcome_title')}", elem_classes=["chat-hints-title"])
 
                 gr.Markdown(self._get_translation("welcome_description")) 
             
@@ -102,10 +102,37 @@ class ChatTab:
             
             # Status and Quick Actions sidebar (moved here to be on the right)
             with gr.Column(scale=1):
+                # LLM Selection section
+                with gr.Column(elem_classes=["model-card"]):
+                    gr.Markdown(f"### {self._get_translation('llm_selection_title')}", elem_classes=["llm-selection-title"])
+                    
+                    # Combined Provider/Model selector
+                    self.components["provider_model_selector"] = gr.Dropdown(
+                        choices=self._get_available_provider_model_combinations(),
+                        value=self._get_current_provider_model_combination(),
+                        label=self._get_translation("provider_model_label"),
+                        interactive=True,
+                        allow_custom_value=True,
+                        elem_classes=["provider-model-selector"]
+                    )
+                    
+                    # Apply button
+                    self.components["apply_llm_btn"] = gr.Button(
+                        self._get_translation("apply_llm_button"),
+                        variant="primary",
+                        elem_classes=["cmw-button"]
+                    )
+                
                 # Status section
                 with gr.Column(elem_classes=["model-card"]):
                     gr.Markdown(f"### {self._get_translation('status_title')}", elem_classes=["status-title"])
                     self.components["status_display"] = gr.Markdown(self._get_translation("status_initializing"))
+                    
+                    # Token budget indicator
+                    gr.Markdown(f"### {self._get_translation('token_budget_title')}", elem_classes=["token-budget-title"])
+                    self.components["token_budget_display"] = gr.Markdown(
+                        self._get_translation("token_budget_initializing")
+                    )
                     
                     # Progress indicator
                     gr.Markdown(f"### {self._get_translation('progress_title')}", elem_classes=["progress-title"])
@@ -232,6 +259,14 @@ class ChatTab:
             outputs=[self.components["msg"]]
         )
         
+        # LLM selection events
+        if "apply_llm_btn" in self.components and "provider_model_selector" in self.components and "status_display" in self.components:
+            self.components["apply_llm_btn"].click(
+                fn=self._apply_llm_selection_combined,
+                inputs=[self.components["provider_model_selector"]],
+                outputs=[self.components["status_display"]]
+            )
+        
         print("✅ ChatTab: All event handlers connected successfully")
     
     def _setup_chat_event_triggers(self):
@@ -279,6 +314,248 @@ class ChatTab:
     def get_progress_display(self) -> gr.Markdown:
         """Get the progress display component"""
         return self.components["progress_display"]
+    
+    def get_token_budget_display(self) -> gr.Markdown:
+        """Get the token budget display component"""
+        return self.components["token_budget_display"]
+    
+    def get_llm_selection_components(self) -> Dict[str, Any]:
+        """Get LLM selection components for UI updates"""
+        return {
+            "provider_selector": self.components.get("provider_selector"),
+            "model_selector": self.components.get("model_selector"),
+            "apply_llm_btn": self.components.get("apply_llm_btn")
+        }
+    
+    def format_token_budget_display(self) -> str:
+        """Format and return the token budget display"""
+        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+            return self._get_translation("token_budget_initializing")
+        
+        try:
+            budget_info = self.main_app.agent.get_token_budget_info()
+            
+            if budget_info["status"] == "unknown":
+                return self._get_translation("token_budget_unknown")
+            
+            # Get cumulative stats for detailed display
+            cumulative_stats = self.main_app.agent.token_tracker.get_cumulative_stats()
+            
+            # Determine status icon
+            status_icon = "🟢" if budget_info["status"] == "good" else \
+                         "🟡" if budget_info["status"] == "moderate" else \
+                         "🟠" if budget_info["status"] == "warning" else \
+                         "🔴" if budget_info["status"] == "critical" else "❓"
+            
+            return self._get_translation("token_budget_detailed").format(
+                total_tokens=cumulative_stats["conversation_tokens"],
+                conversation_tokens=cumulative_stats["conversation_tokens"],
+                percentage=budget_info["percentage"],
+                used=budget_info["used_tokens"],
+                context_window=budget_info["context_window"],
+                status_icon=status_icon,
+                avg_tokens=cumulative_stats["avg_tokens_per_message"]
+            )
+        except Exception as e:
+            print(f"Error formatting token budget: {e}")
+            return self._get_translation("token_budget_unknown")
+    
+    def _get_available_providers(self) -> List[str]:
+        """Get list of available LLM providers"""
+        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+            return ["openrouter", "groq", "gemini", "mistral", "huggingface", "gigachat"]
+        
+        try:
+            if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
+                return self.main_app.agent.llm_manager.get_available_providers()
+        except Exception as e:
+            print(f"Error getting available providers: {e}")
+        
+        return ["openrouter", "groq", "gemini", "mistral", "huggingface", "gigachat"]
+    
+    def _get_current_provider(self) -> str:
+        """Get current LLM provider"""
+        import os
+        return os.environ.get("AGENT_PROVIDER", "openrouter")
+    
+    def _get_available_models(self) -> List[str]:
+        """Get list of available models for the current provider"""
+        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+            return []
+        
+        try:
+            if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
+                current_provider = self._get_current_provider()
+                config = self.main_app.agent.llm_manager.get_provider_config(current_provider)
+                if config and config.models:
+                    return [model["model"] for model in config.models]
+        except Exception as e:
+            print(f"Error getting available models: {e}")
+        
+        return []
+    
+    def _get_available_provider_model_combinations(self) -> List[str]:
+        """Get list of available provider/model combinations in format 'Provider / Model'"""
+        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+            return [""]
+        
+        try:
+            if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
+                combinations = []
+                available_providers = self.main_app.agent.llm_manager.get_available_providers()
+                
+                for provider in available_providers:
+                    config = self.main_app.agent.llm_manager.get_provider_config(provider)
+                    if config and config.models:
+                        for model in config.models:
+                            model_name = model["model"]
+                            # Format as "Provider / Model"
+                            combination = f"{provider.title()} / {model_name}"
+                            combinations.append(combination)
+                
+                return combinations
+        except Exception as e:
+            print(f"Error getting provider/model combinations: {e}")
+        
+        # Return fallback combinations on error
+        return [
+            "Openrouter / openrouter/anthropic/claude-3.5-sonnet",
+            "Groq / groq/compound",
+            "Gemini / gemini-2.5-pro",
+            "Mistral / mistral-large-latest",
+            "Huggingface / microsoft/DialoGPT-medium",
+            "Gigachat / gigachat"
+        ]
+    
+    def _get_current_model(self) -> str:
+        """Get current LLM model"""
+        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+            return ""
+        
+        try:
+            if hasattr(self.main_app.agent, 'llm_instance') and self.main_app.agent.llm_instance:
+                return self.main_app.agent.llm_instance.model_name
+        except Exception as e:
+            print(f"Error getting current model: {e}")
+        
+        return ""
+    
+    def _get_current_provider_model_combination(self) -> str:
+        """Get current provider/model combination in format 'Provider / Model'"""
+        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+            # Return fallback value when main app is not available
+            import os
+            provider = os.environ.get("AGENT_PROVIDER", "openrouter")
+            return f"{provider.title()} / {provider}/default-model"
+        
+        try:
+            if hasattr(self.main_app.agent, 'llm_instance') and self.main_app.agent.llm_instance:
+                provider = self.main_app.agent.llm_instance.provider.value
+                model = self.main_app.agent.llm_instance.model_name
+                return f"{provider.title()} / {model}"
+        except Exception as e:
+            print(f"Error getting current provider/model combination: {e}")
+        
+        # Return fallback value on error
+        import os
+        provider = os.environ.get("AGENT_PROVIDER", "openrouter")
+        return f"{provider.title()} / {provider}/default-model"
+    
+    def _update_models_for_provider(self, provider: str) -> List[str]:
+        """Update available models when provider changes"""
+        try:
+            if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+                return []
+            
+            if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
+                config = self.main_app.agent.llm_manager.get_provider_config(provider)
+                if config and config.models:
+                    return [model["model"] for model in config.models]
+        except Exception as e:
+            print(f"Error updating models for provider {provider}: {e}")
+        
+        return []
+    
+    def _apply_llm_selection(self, provider: str, model: str) -> str:
+        """Apply the selected LLM provider and model"""
+        try:
+            if not hasattr(self, 'main_app') or not self.main_app:
+                return self._get_translation("llm_apply_error")
+            
+            # Update environment variable
+            import os
+            os.environ["AGENT_PROVIDER"] = provider
+            
+            # Reinitialize the agent with new LLM
+            if hasattr(self.main_app, 'agent') and self.main_app.agent:
+                # Find the model index
+                if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
+                    config = self.main_app.agent.llm_manager.get_provider_config(provider)
+                    if config and config.models:
+                        model_index = 0
+                        for i, model_config in enumerate(config.models):
+                            if model_config["model"] == model:
+                                model_index = i
+                                break
+                        
+                        # Get new LLM instance
+                        new_llm_instance = self.main_app.agent.llm_manager.get_llm(provider, model_index=model_index)
+                        if new_llm_instance:
+                            self.main_app.agent.llm_instance = new_llm_instance
+                            return self._get_translation("llm_apply_success").format(provider=provider, model=model)
+                        else:
+                            return self._get_translation("llm_apply_error")
+            
+            return self._get_translation("llm_apply_error")
+        except Exception as e:
+            print(f"Error applying LLM selection: {e}")
+            return self._get_translation("llm_apply_error")
+    
+    def _apply_llm_selection_combined(self, provider_model_combination: str) -> str:
+        """Apply the selected LLM provider/model combination"""
+        try:
+            if not provider_model_combination or " / " not in provider_model_combination:
+                return self._get_translation("llm_apply_error")
+            
+            # Parse the combination: "Provider / Model"
+            parts = provider_model_combination.split(" / ", 1)
+            if len(parts) != 2:
+                return self._get_translation("llm_apply_error")
+            
+            provider = parts[0].lower()  # Convert to lowercase for environment variable
+            model = parts[1]
+            
+            if not hasattr(self, 'main_app') or not self.main_app:
+                return self._get_translation("llm_apply_error")
+            
+            # Update environment variable
+            import os
+            os.environ["AGENT_PROVIDER"] = provider
+            
+            # Reinitialize the agent with new LLM
+            if hasattr(self.main_app, 'agent') and self.main_app.agent:
+                # Find the model index
+                if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
+                    config = self.main_app.agent.llm_manager.get_provider_config(provider)
+                    if config and config.models:
+                        model_index = 0
+                        for i, model_config in enumerate(config.models):
+                            if model_config["model"] == model:
+                                model_index = i
+                                break
+                        
+                        # Get new LLM instance
+                        new_llm_instance = self.main_app.agent.llm_manager.get_llm(provider, model_index=model_index)
+                        if new_llm_instance:
+                            self.main_app.agent.llm_instance = new_llm_instance
+                            return self._get_translation("llm_apply_success").format(provider=provider.title(), model=model)
+                        else:
+                            return self._get_translation("llm_apply_error")
+            
+            return self._get_translation("llm_apply_error")
+        except Exception as e:
+            print(f"Error applying LLM selection: {e}")
+            return self._get_translation("llm_apply_error")
     
     def _get_translation(self, key: str) -> str:
         """Get a translation for a specific key"""

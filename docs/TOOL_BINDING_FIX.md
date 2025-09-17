@@ -71,18 +71,18 @@ Updated the tool loading logic to:
 ### CMW Tools Now Available
 - **Application Management**: `list_applications`, `list_templates`
 - **Attribute Management**: `list_attributes`
-- **Text Attributes**: `edit_or_create_text_attribute`, `get_text_attribute`
-- **DateTime Attributes**: `edit_or_create_date_time_attribute`, `get_date_time_attribute`
-- **Numeric Attributes**: `edit_or_create_numeric_attribute`, `get_numeric_attribute`
-- **Record Attributes**: `edit_or_create_record_attribute`, `get_record_attribute`
-- **Image Attributes**: `edit_or_create_image_attribute`, `get_image_attribute`
-- **Drawing Attributes**: `edit_or_create_drawing_attribute`, `get_drawing_attribute`
-- **Document Attributes**: `edit_or_create_document_attribute`, `get_document_attribute`
-- **Duration Attributes**: `edit_or_create_duration_attribute`, `get_duration_attribute`
-- **Account Attributes**: `edit_or_create_account_attribute`, `get_account_attribute`
-- **Boolean Attributes**: `edit_or_create_boolean_attribute`, `get_boolean_attribute`
-- **Role Attributes**: `edit_or_create_role_attribute`, `get_role_attribute`
-- **Attribute Operations**: `delete_attribute`, `archive_or_unarchive_attribute`
+- **Text Attributes**: `edit_or_create_text_attribute`
+- **DateTime Attributes**: `edit_or_create_date_time_attribute`
+- **Numeric Attributes**: `edit_or_create_numeric_attribute`
+- **Record Attributes**: `edit_or_create_record_attribute`
+- **Image Attributes**: `edit_or_create_image_attribute`
+- **Drawing Attributes**: `edit_or_create_drawing_attribute`
+- **Document Attributes**: `edit_or_create_document_attribute`
+- **Duration Attributes**: `edit_or_create_duration_attribute`
+- **Account Attributes**: `edit_or_create_account_attribute`
+- **Boolean Attributes**: `edit_or_create_boolean_attribute`
+- **Role Attributes**: `edit_or_create_role_attribute`
+- **Attribute Operations**: `delete_attribute`, `archive_or_unarchive_attribute`, `get_attribute`
 
 ## Testing
 Created comprehensive test scripts:

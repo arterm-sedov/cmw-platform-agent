@@ -16,7 +16,7 @@ class RefreshIntervals:
     status: float = 2.0      # Status pane refresh interval (seconds)
     logs: float = 3.0        # Logs pane refresh interval (seconds)
     stats: float = 4.0       # Stats pane refresh interval (seconds)
-    progress: float = 2.0    # Progress pane refresh interval (seconds)
+    progress: float = 1.0    # Progress pane refresh interval (seconds) - faster for smooth icon rotation
 
 @dataclass
 class AgentSettings:

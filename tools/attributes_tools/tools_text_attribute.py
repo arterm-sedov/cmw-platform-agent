@@ -12,13 +12,12 @@ def _set_input_mask(display_format: str) -> str:
         "INNMask": "([0-9]{10})",
         "OGRNMask": "([0-9]{13})",
         "IndividualINNMask": "([0-9]{12})",
-        "PhoneRuMask": "(\+7 \([0-9]{3}\) [0-9]{3}-[0-9]{2}-[0-9]{2})",
-        "EmailMask": "^(([a-zа-яё0-9_-]+\.)*[a-zа-яё0-9_-]+@[a-zа-яё0-9-]+(\.[a-zа-яё0-9-]+)*\.[a-zа-яё]{2,6})?$",
+        "PhoneRuMask": r"(\+7 \([0-9]{3}\) [0-9]{3}-[0-9]{2}-[0-9]{2})",
+        "EmailMask": r"^(([a-zа-яё0-9_-]+\.)*[a-zа-яё0-9_-]+@[a-zа-яё0-9-]+(\.[a-zа-яё0-9-]+)*\.[a-zа-яё]{2,6})?$",
         "CustomMask": None
     }
 
     return input_mask_mapping.get(display_format, None)
-
 class EditOrCreateTextAttributeSchema(CommonAttributeFields):
     display_format: Literal[
         "PlainText",
@@ -57,6 +56,19 @@ class EditOrCreateTextAttributeSchema(CommonAttributeFields):
         description="Set to `True` to allow the users to search the records by this attribute's value."
             "RU: Использовать для поиска записей",
     )
+
+    @field_validator("display_format", mode="before")
+    def non_empty_str(cls, v: Any) -> Any:
+        """
+        Validate that string fields are not empty.
+        
+        This field validator is automatically applied to the name, system_name, 
+        application_system_name, and template_system_name fields in all schemas
+        that inherit from CommonAttributeFields, ensuring consistent validation.
+        """
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
 
     @model_validator(mode="after")
     def validate_masks_and_calc(self) -> "EditOrCreateTextAttributeSchema":
@@ -138,72 +150,12 @@ def edit_or_create_text_attribute(
         "validationMaskRegex": custom_mask if display_format == "CustomMask" else _set_input_mask(display_format)
     }
 
-        # Remove None values
-    request_body = remove_nones(request_body) 
+    endpoint = f"{ATTRIBUTE_ENDPOINT}/{application_system_name}"
 
-    try:
-        if operation == "create":
-            result = requests_._post_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
-        if operation == "edit" or operation == "create":
-            result = requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
-            print("edit is complited")
-        else:
-            result = {
-                "success": False,
-                "error": f"No such operation for attribute: {operation}. Available operations: create, edit",
-                "status_code": 400
-            }
-    except Exception as e:
-        result = {
-            "success": False,
-            "error": f"Tool execution failed: {str(e)}",
-            "status_code": 500
-        }
-
-    # Ensure result is always a dict with proper structure
-    if not isinstance(result, dict):
-        result = {
-            "success": False,
-            "error": f"Unexpected result type: {type(result)}",
-            "status_code": 500
-        }
-    
-    # Add additional error information if the API call failed
-    if not result.get("success", False) and result.get("error"):
-        error_info = result.get("error", "")
-        result["error"] = f"API operation failed: {error_info}"
-
-    validated = AttributeResult(**result)
-    return validated.model_dump()
-
-
-@tool("get_text_attribute", return_direct=False, args_schema=CommonGetAttributeFields)
-def get_text_attribute(
-    application_system_name: str,
-    template_system_name: str,
-    system_name: str
-    ) -> Dict[str, Any]:
-    """
-    Get a text attribute in a given template and application.
-    
-    Returns:
-        dict: {
-            "success": bool - True if the attribute was fetched successfully
-            "status_code": int - HTTP response status code  
-            "raw_response": dict|str|None - Raw response payload for auditing or payload body (sanitized)
-            "error": str|None - Error message if operation failed
-        }
-    """
-
-    attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
-
-    result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
-
-    keys_to_remove = ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio']
-
-    return process_attribute_response(
-        request_result=result,
-        keys_to_remove=keys_to_remove,
+    return execute_edit_or_create_operation(
+        request_body=request_body,
+        operation=operation,
+        endpoint=endpoint,
         result_model=AttributeResult
     )
 
