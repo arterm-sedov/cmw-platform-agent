@@ -118,64 +118,6 @@ class AgentResponse:
     metadata: Optional[Dict[str, Any]] = None
 
 
-class StreamingCallbackHandler(BaseCallbackHandler):
-    """Callback handler for streaming responses"""
-    
-    def __init__(self, event_callback=None):
-        self.event_callback = event_callback
-        self.current_tool = None
-    
-    def on_llm_start(self, serialized, prompts, **kwargs):
-        """Called when LLM starts"""
-        if self.event_callback:
-            self.event_callback({
-                "type": "llm_start",
-                "content": "🤖 **LLM is thinking...**",
-                "metadata": {"llm_type": serialized.get("name", "unknown")}
-            })
-    
-    def on_llm_stream(self, chunk, **kwargs):
-        """Called when LLM streams content"""
-        if hasattr(chunk, 'content') and chunk.content and self.event_callback:
-            self.event_callback({
-                "type": "content",
-                "content": chunk.content,
-                "metadata": {"chunk_type": "llm_response"}
-            })
-    
-    def on_tool_start(self, serialized, input_str, **kwargs):
-        """Called when a tool starts"""
-        self.current_tool = serialized.get("name", "unknown_tool")
-        if self.event_callback:
-            self.event_callback({
-                "type": "tool_start",
-                "content": f"\n\n🔧 **Using tool: {self.current_tool}**",
-                "metadata": {
-                    "tool_name": self.current_tool,
-                    "tool_args": input_str
-                }
-            })
-    
-    def on_tool_end(self, output, **kwargs):
-        """Called when a tool ends"""
-        if self.event_callback:
-            self.event_callback({
-                "type": "tool_end",
-                "content": f"\n✅ **Tool completed: {self.current_tool}**",
-                "metadata": {"tool_name": self.current_tool}
-            })
-        self.current_tool = None
-    
-    def on_llm_end(self, response, **kwargs):
-        """Called when LLM ends"""
-        if self.event_callback:
-            self.event_callback({
-                "type": "llm_end",
-                "content": "✅ **LLM processing completed**",
-                "metadata": {}
-            })
-
-
 class CmwAgent:
     """
     Modern agent using pure LangChain patterns with full modular architecture.
