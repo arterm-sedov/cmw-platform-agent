@@ -25,6 +25,57 @@ KEYS_TO_REMOVE_MAPPING = {
     "Boolean": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
     "Account": ['isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio']
 }
+
+ATTRIBUTE_MODEL_DESCRIPTIONS = {
+    "Account": """Stores one or several linked account IDs.""",
+    "Boolean": "Stores `true` or `false`.",
+    "DateTime": """Stores date and time along with a `Display format`:
+        - DateISO: 1986-09-04
+        - YearMonth: сентябрь 1986
+        - TimeTracker: остался 1 д 12 ч 55 мин
+        - DateTimeISO: 1986-09-04 03:30:00
+        - ShortDateLongTime: 04.09.1986 г. 03:30:00
+        - ShortDateShortTime: 04.09.1986 03:30
+        - CondensedDateTime: 4 сент. 1986 г. 03:30
+        - MonthDay: 4 сентября
+        - CondensedDate: 4 сент. 1986 г.
+        - ShortDate: 4.09.1986
+        - LongDate: 4 сентября 1986 г.
+        - LongDateLongTime: 4 сентября 1986 г. 03:30:00
+        - LongDateShortTime: 4 сентября 1986 г. 03:30""",
+    "Decimal": """Stores numeric numbers with configurable decimal places.
+        Decimal places examples:
+        - 0: 123
+        - 1: 123.4
+        - 2: 123.45""",
+    "Document": "Stores file attachments with configurable file format filters.",
+    "Drawing": "Stores floor plans based on CAD files.",
+    "Duration": """Supports various display formats:
+        - DurationHMS: 2 ч 55 м 59 с
+        - DurationHM: 2 ч 55 м
+        - DurationHMSTime: 2:55:59 (макс 23:59:59)
+        - DurationD8HM: 3 д 12 ч 55 м (8-часовой день)
+        - DurationD24HM: 1 д 12 ч 55 м (24-часовой день)
+        - DurationFullShort: 1 д 12 ч 55 м 59 с
+        - DurationHMTime: 2:55 (макс. 23:59)""",
+    "Enum": "Stores a list of values with multiple language support and color coding.",
+    "Image": "Stores image files with configurable color modes and dimensions.",
+    "Instance": "Stores one or several IDs of the linked records in the related template. "
+        "Record attribute can be mutually linked with the attribute in the related template. "
+        "Mutually linked attributes are automatically cross-linked whenever the values of one of the attributes change.",
+    "Role": "Stores one or several linked role IDs.",
+    "String": """Stores a sting value.
+        Supports various display formats including predefined and custom masks for common Russian data types:
+        - LicensePlateNumberRuMask: ([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})
+        - IndexRuMask: ([0-9]{6})
+        - PassportRuMask: ([0-9]{4} [0-9]{6})
+        - INNMask: ([0-9]{10})
+        - OGRNMask: ([0-9]{13})
+        - IndividualINNMask: ([0-9]{12})
+        - PhoneRuMask: (\+7 \([0-9]{3}\) [0-9]{3}-[0-9]{2}-[0-9]{2})
+        - EmailMask: ^(([a-zа-яё0-9_-]+\.)*[a-zа-яё0-9_-]+@[a-zа-яё0-9-]+(\.[a-zа-яё0-9-]+)*\.[a-zа-яё]{2,6})?$"""
+}
+
 ATTRIBUTE_RESPONSE_MAPPING = {
     "owner": "Parent template system name",
     "alias": "Attribute system name",
@@ -230,6 +281,10 @@ def execute_get_operation(
 
         # Переименовываем ключи согласно response_mapping
         renamed_data = {}
+        
+        # Добавляем описание типа атрибута как первый элемент
+        if attr_type and attr_type in ATTRIBUTE_MODEL_DESCRIPTIONS:
+            renamed_data["Attribute type description"] = ATTRIBUTE_MODEL_DESCRIPTIONS[attr_type]
 
         for key, value in attribute_data.items():
             # Если ключ есть в маппинге - используем новое имя, иначе оставляем как есть
