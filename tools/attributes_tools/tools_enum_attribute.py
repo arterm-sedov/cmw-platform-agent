@@ -13,9 +13,9 @@ class PlainEnumValueModel(BaseModel):
         default=None,
         description="Enum value English name. RU: Английское название значения",
     )
-    deutsche_name: Optional[str] = Field(
+    german_name: Optional[str] = Field(
         default=None,
-        description="Enum value Deutsche name. RU: Немецкое название значения",
+        description="Enum value German name. RU: Немецкое название значения",
     )
     color: Optional[str] = Field(
         default=None,
@@ -26,10 +26,10 @@ class PlainEnumValueModel(BaseModel):
     def check_at_least_one_name(cls, values):
         russian = values.russian_name
         english = values.english_name
-        deutsche = values.deutsche_name
+        german = values.german_name
 
-        if not any([russian, english, deutsche]):
-            raise ValueError("At least one of 'russian_name', 'english_name', or 'deutsche_name' must be provided.")
+        if not any([russian, english, german]):
+            raise ValueError("At least one of 'russian_name', 'english_name', or 'german_name' must be provided.")
 
         return values
 
@@ -73,7 +73,7 @@ def convert_plain_to_enum_value(plain: PlainEnumValueModel, attr_system_name: st
         "name": {
             "ru": plain.russian_name,
             "en": plain.english_name,
-            "de": plain.deutsche_name,
+            "de": plain.german_name,
         },
         "color": plain.color,
     }
@@ -103,7 +103,7 @@ def edit_or_create_enum_attribute(
         "system_name": "status_active",
         "russian_name": "Активен",
         "english_name": "Active",
-        "deutsche_name": "Aktiv",
+        "german_name": "Aktiv",
         "color": "#4CAF50"
       }
     ]
@@ -164,14 +164,14 @@ if __name__ == "__main__":
                 "system_name": "status_active",
                 "russian_name": "Активен",
                 "english_name": "Active",
-                "deutsche_name": "Aktiv",
+                "german_name": "Aktiv",
                 "color": "#4CAF50"
             },
             {
                 "system_name": "status_inactive",
                 "russian_name": "Неактивен",
                 "english_name": "Inactive",
-                "deutsche_name": "Inaktiv",
+                "german_name": "Inaktiv",
                 "color": "#9E9E9E"
             }
         ]
