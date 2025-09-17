@@ -33,43 +33,43 @@ from .applications_tools import list_applications, list_templates
 from .applications_tools import get_platform_entity_url
 from .attributes_tools import (
     # General operations
-    delete_attribute, archive_or_unarchive_attribute,
+    delete_attribute, archive_or_unarchive_attribute, get_attribute,
     
     # Text attributes
-    edit_or_create_text_attribute, get_text_attribute,
+    edit_or_create_text_attribute,
     
     # Boolean attributes
-    edit_or_create_boolean_attribute, get_boolean_attribute,
+    edit_or_create_boolean_attribute,
     
     # DateTime attributes
-    edit_or_create_date_time_attribute, get_date_time_attribute,
+    edit_or_create_date_time_attribute,
     
     # Decimal/Numeric attributes
-    edit_or_create_numeric_attribute, get_numeric_attribute,
+    edit_or_create_numeric_attribute,
     
     # Document attributes
-    edit_or_create_document_attribute, get_document_attribute,
+    edit_or_create_document_attribute,
     
     # Drawing attributes
-    edit_or_create_drawing_attribute, get_drawing_attribute,
+    edit_or_create_drawing_attribute,
     
     # Duration attributes
-    edit_or_create_duration_attribute, get_duration_attribute,
+    edit_or_create_duration_attribute,
     
     # Image attributes
-    edit_or_create_image_attribute, get_image_attribute,
+    edit_or_create_image_attribute,
     
     # Record attributes
-    edit_or_create_record_attribute, get_record_attribute,
+    edit_or_create_record_attribute,
     
     # Role attributes
-    edit_or_create_role_attribute, get_role_attribute,
+    edit_or_create_role_attribute,
     
     # Account attributes
-    edit_or_create_account_attribute, get_account_attribute,
+    edit_or_create_account_attribute,
     
     # Enum attributes
-    edit_or_create_enum_attribute, get_enum_attribute
+    edit_or_create_enum_attribute,
 )
 from .templates_tools import list_attributes
 
@@ -92,52 +92,41 @@ __all__ = [
     # General operations
     'delete_attribute',
     'archive_or_unarchive_attribute',
+    'get_attribute',
     
     # Text attributes
     'edit_or_create_text_attribute',
-    'get_text_attribute',
     
     # Boolean attributes
     'edit_or_create_boolean_attribute',
-    'get_boolean_attribute',
     
     # DateTime attributes
     'edit_or_create_date_time_attribute',
-    'get_date_time_attribute',
     
     # Decimal/Numeric attributes
     'edit_or_create_numeric_attribute',
-    'get_numeric_attribute',
     
     # Document attributes
     'edit_or_create_document_attribute',
-    'get_document_attribute',
     
     # Drawing attributes
     'edit_or_create_drawing_attribute',
-    'get_drawing_attribute',
     
     # Duration attributes
     'edit_or_create_duration_attribute',
-    'get_duration_attribute',
     
     # Image attributes
     'edit_or_create_image_attribute',
-    'get_image_attribute',
     
     # Record attributes
     'edit_or_create_record_attribute',
-    'get_record_attribute',
     
     # Role attributes
     'edit_or_create_role_attribute',
-    'get_role_attribute',
     
     # Account attributes
     'edit_or_create_account_attribute',
-    'get_account_attribute',
     
     # Enum attributes
     'edit_or_create_enum_attribute',
-    'get_enum_attribute'
 ]

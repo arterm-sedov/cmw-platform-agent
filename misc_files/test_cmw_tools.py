@@ -22,18 +22,18 @@ def test_cmw_tools():
         # Check for specific CMW tools
         cmw_tool_names = [
             'list_applications', 'list_templates', 'list_attributes',
-            'edit_or_create_text_attribute', 'get_text_attribute',
-            'edit_or_create_date_time_attribute', 'get_date_time_attribute',
-            'edit_or_create_numeric_attribute', 'get_numeric_attribute',
-            'edit_or_create_record_attribute', 'get_record_attribute',
-            'edit_or_create_image_attribute', 'get_image_attribute',
-            'edit_or_create_drawing_attribute', 'get_drawing_attribute',
-            'edit_or_create_document_attribute', 'get_document_attribute',
-            'edit_or_create_duration_attribute', 'get_duration_attribute',
-            'edit_or_create_account_attribute', 'get_account_attribute',
-            'edit_or_create_boolean_attribute', 'get_boolean_attribute',
-            'edit_or_create_role_attribute', 'get_role_attribute',
-            'delete_attribute', 'archive_or_unarchive_attribute'
+            'edit_or_create_text_attribute',
+            'edit_or_create_date_time_attribute',
+            'edit_or_create_numeric_attribute',
+            'edit_or_create_record_attribute',
+            'edit_or_create_image_attribute',
+            'edit_or_create_drawing_attribute',
+            'edit_or_create_document_attribute',
+            'edit_or_create_duration_attribute',
+            'edit_or_create_account_attribute',
+            'edit_or_create_boolean_attribute',
+            'edit_or_create_role_attribute',
+            'delete_attribute', 'archive_or_unarchive_attribute', 'get_attribute'
         ]
         
         print(f"\n🔍 Checking for CMW tools...")

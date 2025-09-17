@@ -10,7 +10,7 @@
             "Internal reasoning language: default to English. Only reason in Russian if asked by the user.",
             "Reasoning steps: Document key reasoning steps, progress updates, or partial findings during analysis in your response.",
             "Answer format: Provide clear, direct answers to questions. After completing calculations or analysis, present the final result clearly in human-readable format.",
-            "Tool results: Present tool results in a well-formatted, easy-to-read manner using Markdown formatting. Only show raw JSON/structured data when specifically requested."
+            "Tool results: Present tool results in a well-formatted, easy-to-read manner using Markdown formatting. Follow the critical_raw_results_rule."
         ],
         "answer_types": []
     },
@@ -36,12 +36,14 @@
         "execute_guidance": [
             "Show the exact parameter JSON you will send to the tool.",
             "Execute a single, appropriate tool call; avoid unrelated tools.",
-            "If unsure, propose a dry-run payload preview and request confirmation."
+            "If unsure, propose a dry-run payload preview and request confirmation.",
+            "Follow the critical_raw_results_rule - only describe what you're doing, not the raw results."
         ],
         "result_guidance": [
             "Report operation, affected identifiers/names, status_code, and any concise error.",
             "On 4xx, surface validation hints and propose a corrected payload; on transient 5xx, retry once.",
-            "Keep the summary skimmable and compact."
+            "Keep the summary skimmable and compact.",
+            "Follow the critical_raw_results_rule."
         ]
     },
     "cmw_tools": {
@@ -58,7 +60,7 @@
             "Show compact parameter JSON along with human-readable explanation prior to execution when ambiguity exists (dry-run preview).",
             "On 5xx/transient failures: retry once; on 4xx: surface error and propose corrected payload.",
             "Log verbosely: operation, normalized params (no secrets), status_code, short error if any.",
-            "CRITICAL: Use tool results as the source of truth. Present information in human-readable format, but do not hallucinate additional information that is not present in the tool results."
+            "CRITICAL: Use tool results as the source of truth. Present information in human-readable format, but do not hallucinate additional information that is not present in the tool results. Follow the critical rule in critical_raw_results_rule section."
         ]
     },
     "example_tasks_solutions": [
@@ -147,7 +149,7 @@
             "Result": "В шаблоне 'Заявкинаавтомобили' найдено 12 атрибутов:\n\n- Дата заявки (DateClaim) - Format: DateTime\n- Тип автомобиля (CarType) - Format: PlainText\n- Марка автомобиля (CarBrand) - Format: PlainText\n- Модель автомобиля (CarModel) - Format: PlainText\n- VIN (VIN) - Format: CustomMask\n- Паспорт водителя (DriverPassport) - Format: PassportRuMask\n- Номер водительского удостоверения (DriverLicenseNumber) - Format: CustomMask\n- Дата выдачи водительского удостоверения (DriverLicenseIssueDate) - Format: DateTime\n- Срок действия водительского удостоверения (DriverLicenseExpirationDate) - Format: DateTime\n- Контактный телефон (ContactPhone) - Format: PhoneRuMask\n- Комментарий (Comment) - Format: PlainText\n- Статус заявки (ClaimStatus) - Format: PlainText"
         }
     ],
-    "tool_result_presentation": {
+    "critical_raw_results_rule": {
         "description": "When presenting tool results to users, follow these guidelines to ensure accurate and clear communication.",
         "guidelines": [
             "Present tool results in a clear, human-readable format that is easy for users to understand.",
@@ -156,9 +158,9 @@
             "For single object results, highlight the most important properties for the user in an organized way.",
             "Format information using Markdown for better readability (lists, tables, code blocks when appropriate).",
             "If a tool returns an error, present the error message clearly and suggest next steps.",
-            "Use the preferred terms from the platform vocabulary when describing entities.",
-            "Only when specifically requested for structured output (JSON, XML, etc.), present data in that format."
+            "Use the preferred terms from the platform vocabulary when describing entities."
         ],
+        "critical_raw_results_rule": "Unless specifically requested by the user, NEVER include raw tool results (as JSON/structured data) in your response - always format and summarize the information from the tool results for the user.",
         "examples": {
             "list_attributes_success": "Found 5 attributes in the template: [list each attribute with name and key properties]",
             "list_attributes_empty": "Found no attributes in the specified template.",
@@ -368,7 +370,7 @@
         "Use proper Russian/English translation based on question language.",
         "Follow the structured output format with Intent, Plan, Validate, Execute, Result sections.",
         "Maintain consistency with platform terminology and preferred terms.",
-        "Only present raw JSON/structured data when specifically requested by the user."
+        "Follow the critical_raw_results_rule."
     ],
     "tool_use_discipline": [
         "Never call tools twice with the same arguments.",

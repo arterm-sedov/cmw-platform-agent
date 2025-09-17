@@ -69,7 +69,6 @@ class CommonAttributeFields(BaseModel):
     )
 
     @field_validator("operation", mode="before")
-    @classmethod
     def normalize_operation_create_edit(cls, v: str) -> str:
         """
         Normalize Create/Edit operation field values by converting them to lowercase and applying a mapping.
@@ -90,7 +89,6 @@ class CommonAttributeFields(BaseModel):
         return mapping.get(normalized_value, normalized_value)
 
     @field_validator("name", "system_name", "application_system_name", "template_system_name", mode="before")
-    @classmethod
     def non_empty_str(cls, v: Any) -> Any:
         """
         Validate that string fields are not empty.
@@ -125,7 +123,6 @@ class CommonGetAttributeFields(BaseModel):
     )
 
     @field_validator("application_system_name", "template_system_name", "system_name", mode="before")
-    @classmethod
     def non_empty_str(cls, v: Any) -> Any:
         """
         Validate that string fields are not empty.

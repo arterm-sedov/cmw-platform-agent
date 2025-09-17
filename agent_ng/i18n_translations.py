@@ -183,7 +183,7 @@ RUSSIAN_TRANSLATIONS = {
     "quick_archive_attr_message": "Архивируй/разархивируй атрибут, системное имя \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
     
     # Status messages
-    "processing_complete": "🎉 Обработка завершена",
+    "processing_complete": "Обработка завершена",
     "response_completed": "Ответ завершен",
     "processing_failed": "Обработка не удалась",
     
@@ -376,7 +376,7 @@ ENGLISH_TRANSLATIONS = {
     "quick_archive_attr_message": "Archive/unarchive attribute, system name \"Comment\", application \"HR\", template \"Candidates\"",
     
     # Status messages
-    "processing_complete": "🎉 Processing complete",
+    "processing_complete": "Processing complete",
     "response_completed": "Response completed",
     "processing_failed": "Processing failed",
     
