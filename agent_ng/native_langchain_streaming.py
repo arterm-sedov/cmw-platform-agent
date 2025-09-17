@@ -263,13 +263,14 @@ class NativeLangChainStreaming:
                             
                             # Check if we've already processed this exact tool call in this response
                             if tool_key in processed_tools:
-                                # This is a duplicate within the same response - skip ToolMessage
+                                # This is a duplicate within the same response - increment counts silently
+                                processed_tools[tool_key]['count'] += 1
+                                processed_tools[tool_key]['call_ids'].append(tool_call_id)
+                                
+                                # Skip creating ToolMessage for duplicates - only first call gets a message
                                 # The LLM will see that some call_ids don't have responses, which is fine
+                                print(f"🔍 DEBUG: Skipping duplicate tool call {tool_name} (count: {processed_tools[tool_key]['count']})")
                                 continue
-                            
-                            # Note: We don't check for duplicates across conversation history
-                            # because the same tool can return different results over time
-                            # We only deduplicate within the same response
                             
                             # Find the tool in our tools list
                             tool_obj = None
@@ -280,13 +281,23 @@ class NativeLangChainStreaming:
                             
                             try:
                                 if tool_obj:
-                                    # Execute tool (always fresh execution)
+                                    # Execute tool (only for first occurrence)
                                     tool_result = tool_obj.invoke(tool_args)
                                     
                                     # Store the tool call result for future deduplication
                                     from .tool_deduplicator import get_deduplicator
                                     deduplicator = get_deduplicator()
                                     deduplicator.store_tool_call(tool_name, tool_args, tool_result, conversation_id)
+                                    
+                                    # Track this tool call as processed
+                                    processed_tools[tool_key] = {
+                                        'name': tool_name,
+                                        'args': tool_args,
+                                        'result': tool_result,
+                                        'call_id': tool_call_id,
+                                        'count': 1,
+                                        'call_ids': [tool_call_id]
+                                    }
                                     
                                     # Stream tool completion with result in one event
                                     yield StreamingEvent(
@@ -300,6 +311,14 @@ class NativeLangChainStreaming:
                                             "title": self._get_tool_called_message(tool_name, language)
                                         }
                                     )
+                                    
+                                    # Add tool message to conversation (only one per unique tool call)
+                                    tool_message = ToolMessage(
+                                        content=str(tool_result),
+                                        tool_call_id=tool_call_id
+                                    )
+                                    messages.append(tool_message)
+                                    # Don't add to memory here - will be added at the end
                                 else:
                                     yield StreamingEvent(
                                         event_type="error",
@@ -309,22 +328,6 @@ class NativeLangChainStreaming:
                                     # Remove from in-progress
                                     del tool_calls_in_progress[tool_call_id]
                                     continue
-                                
-                                # Track this tool call as processed
-                                processed_tools[tool_key] = {
-                                    'name': tool_name,
-                                    'args': tool_args,
-                                    'result': tool_result,
-                                    'call_id': tool_call_id
-                                }
-                                
-                                # Add tool message to conversation (only one per unique tool call)
-                                tool_message = ToolMessage(
-                                    content=str(tool_result),
-                                    tool_call_id=tool_call_id
-                                )
-                                messages.append(tool_message)
-                                # Don't add to memory here - will be added at the end
                                 
                                 # Remove from in-progress
                                 del tool_calls_in_progress[tool_call_id]
