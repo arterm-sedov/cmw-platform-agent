@@ -219,17 +219,25 @@ class NextGenApp:
     
     def update_progress_display(self) -> str:
         """Update the progress display component with rotating icons"""
-        if self.is_processing and "Iteration" in self.current_progress_status and "Processing..." in self.current_progress_status:
-            # Rotate icon during processing
+        if self.is_processing:
+            # Always rotate icon during processing to ensure continuous rotation
             self.progress_icon_index = (self.progress_icon_index + 1) % len(self.progress_icons)
             current_icon = self.progress_icons[self.progress_icon_index]
             
-            # Extract iteration info and rebuild with new icon
+            # Check if we have iteration processing status
+            if "Iteration" in self.current_progress_status and "Processing..." in self.current_progress_status:
+                # Extract iteration info and rebuild with new icon
+                import re
+                # Match both English and Russian patterns
+                match = re.search(r'(\*\*Iteration \d+/\d+\*\* - Processing\.\.\.|\*\*Итерация \d+/\d+\*\* - Обработка\.\.\.)', self.current_progress_status)
+                if match:
+                    iteration_text = match.group(1)
+                    return f"{current_icon} {iteration_text}"
+            
+            # For any processing status, replace existing icon with rotating one
             import re
-            match = re.search(r'(\*\*Iteration \d+/\d+\*\* - Processing\.\.\.)', self.current_progress_status)
-            if match:
-                iteration_text = match.group(1)
-                return f"{current_icon} {iteration_text}"
+            cleaned_status = re.sub(r'^[🔄⚙️🔧⚡] ', '', self.current_progress_status)
+            return f"{current_icon} {cleaned_status}"
         
         return self.current_progress_status
     
