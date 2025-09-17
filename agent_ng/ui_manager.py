@@ -95,6 +95,7 @@ class UIManager:
         """Setup auto-refresh timers for status and logs - matches original behavior exactly"""
         # Get handlers with validation
         update_status_handler = event_handlers.get("update_status")
+        update_token_budget_handler = event_handlers.get("update_token_budget")
         refresh_logs_handler = event_handlers.get("refresh_logs")
         update_progress_handler = event_handlers.get("update_progress_display")
         
@@ -105,6 +106,15 @@ class UIManager:
                 fn=update_status_handler,
                 outputs=[self.components["status_display"]]
             )
+        
+        if "token_budget_display" in self.components and update_token_budget_handler:
+            demo.load(
+                fn=update_token_budget_handler,
+                outputs=[self.components["token_budget_display"]]
+            )
+        
+        # LLM selection components are initialized with static values
+        # and only update when explicitly triggered by user actions
         
         if "logs_display" in self.components and refresh_logs_handler:
             demo.load(
@@ -143,6 +153,20 @@ class UIManager:
                 outputs=[self.components["status_display"]]
             )
             print(f"✅ Status auto-refresh timer set ({intervals.status}s)")
+        
+        # Token budget updates
+        if "token_budget_display" in self.components and event_handlers.get("update_token_budget"):
+            token_budget_timer = gr.Timer(intervals.status, active=True)  # Use same interval as status
+            token_budget_timer.tick(
+                fn=event_handlers["update_token_budget"],
+                outputs=[self.components["token_budget_display"]]
+            )
+            print(f"✅ Token budget auto-refresh timer set ({intervals.status}s)")
+        
+        # LLM selection updates - removed auto-refresh timer
+        # LLM selection components should only update when explicitly triggered,
+        # not on a timer, to avoid resetting user selections
+        print("✅ LLM selection components will update only when explicitly triggered")
         
         # Logs updates
         if "logs_display" in self.components and event_handlers.get("refresh_logs"):

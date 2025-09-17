@@ -537,6 +537,24 @@ Always use the appropriate tools to answer questions and show your work step by 
         if hasattr(self, 'token_tracker'):
             return self.token_tracker.get_last_api_tokens()
         return None
+    
+    def get_token_budget_info(self) -> Dict[str, Any]:
+        """Get token budget information for the current LLM context window"""
+        if not hasattr(self, 'token_tracker') or not self.token_tracker:
+            return {
+                "used_tokens": 0,
+                "context_window": 0,
+                "percentage": 0.0,
+                "remaining_tokens": 0,
+                "status": "unknown"
+            }
+        
+        # Get context window from LLM manager
+        context_window = 0
+        if hasattr(self, 'llm_manager') and self.llm_manager:
+            context_window = self.llm_manager.get_current_llm_context_window()
+        
+        return self.token_tracker.get_token_budget_info(context_window)
 
 
 # Global agent instance

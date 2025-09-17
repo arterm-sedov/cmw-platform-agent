@@ -330,6 +330,43 @@ class ConversationTokenTracker:
             "api_tokens": self._last_api_tokens,
             "cumulative_stats": self.get_cumulative_stats()
         }
+    
+    def get_token_budget_info(self, context_window: int) -> Dict[str, Any]:
+        """Get token budget information for context window percentage calculation"""
+        if not context_window or context_window <= 0:
+            return {
+                "used_tokens": 0,
+                "context_window": 0,
+                "percentage": 0.0,
+                "remaining_tokens": 0,
+                "status": "unknown"
+            }
+        
+        # Use the last API tokens (current conversation) for budget calculation
+        current_tokens = 0
+        if self._last_api_tokens:
+            current_tokens = self._last_api_tokens.total_tokens
+        
+        percentage = (current_tokens / context_window) * 100
+        remaining_tokens = max(0, context_window - current_tokens)
+        
+        # Determine status based on usage
+        if percentage >= 90:
+            status = "critical"
+        elif percentage >= 75:
+            status = "warning"
+        elif percentage >= 50:
+            status = "moderate"
+        else:
+            status = "good"
+        
+        return {
+            "used_tokens": current_tokens,
+            "context_window": context_window,
+            "percentage": round(percentage, 1),
+            "remaining_tokens": remaining_tokens,
+            "status": status
+        }
 
 
 class UsageMetadataCallbackHandler(BaseCallbackHandler):

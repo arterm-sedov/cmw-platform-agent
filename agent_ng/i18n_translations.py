@@ -63,10 +63,28 @@ RUSSIAN_TRANSLATIONS = {
     "send_button": "Отправить",
     "clear_button": "Очистить чат",
     
+    # LLM Selection section
+    "llm_selection_title": "🔧 Выбор LLM",
+    "provider_label": "Провайдер",
+    "model_label": "Модель",
+    "provider_model_label": "Провайдер / Модель",
+    "apply_llm_button": "Применить",
+    "llm_apply_success": "✅ LLM изменен: {provider} - {model}",
+    "llm_apply_error": "❌ Ошибка применения LLM",
+    "current_provider": "**Провайдер:** {provider}",
+    "current_model": "**Модель:** {model}",
+    
     # Status section
     "status_title": "🤖 Статус",
     "status_initializing": "🟡 Инициализация...",
     "status_ready": "✅ Готов",
+    "token_budget_title": "💰 Бюджет токенов",
+    "token_budget_initializing": "🟡 Загрузка...",
+    "token_budget_good": "🟢 {percentage}% ({used:,}/{total:,} токенов)",
+    "token_budget_moderate": "🟡 {percentage}% ({used:,}/{total:,} токенов)",
+    "token_budget_warning": "🟠 {percentage}% ({used:,}/{total:,} токенов)",
+    "token_budget_critical": "🔴 {percentage}% ({used:,}/{total:,} токенов)",
+    "token_budget_unknown": "❓ Неизвестно",
     "progress_title": "📊 Прогресс",
     "progress_ready": "Готов обработать ваш запрос...",
     
@@ -106,8 +124,8 @@ RUSSIAN_TRANSLATIONS = {
     # Agent status details
     "agent_status_ready": "✅ **Агент готов**",
     "agent_status_initializing": "🟡 **Инициализация агента**",
-    "provider_label": "**Провайдер:** {provider}",
-    "model_label": "**Модель:** {model}",
+    "provider_info": "**Провайдер:** {provider}",
+    "model_info": "**Модель:** {model}",
     "status_label": "**Статус:** {status}",
     "tools_label": "**Инструменты:** {count} доступно",
     "last_used_label": "**Последнее использование:** {time}",
@@ -256,10 +274,28 @@ ENGLISH_TRANSLATIONS = {
     "send_button": "Send",
     "clear_button": "Clear chat",
     
+    # LLM Selection section
+    "llm_selection_title": "🔧 LLM Selection",
+    "provider_label": "Provider",
+    "model_label": "Model",
+    "provider_model_label": "Provider / Model",
+    "apply_llm_button": "Apply",
+    "llm_apply_success": "✅ LLM changed: {provider} - {model}",
+    "llm_apply_error": "❌ Error applying LLM",
+    "current_provider": "**Provider:** {provider}",
+    "current_model": "**Model:** {model}",
+    
     # Status section
     "status_title": "🤖 Status",
     "status_initializing": "🟡 Initializing...",
     "status_ready": "✅ Ready",
+    "token_budget_title": "💰 Token Budget",
+    "token_budget_initializing": "🟡 Loading...",
+    "token_budget_good": "🟢 {percentage}% ({used:,}/{total:,} tokens)",
+    "token_budget_moderate": "🟡 {percentage}% ({used:,}/{total:,} tokens)",
+    "token_budget_warning": "🟠 {percentage}% ({used:,}/{total:,} tokens)",
+    "token_budget_critical": "🔴 {percentage}% ({used:,}/{total:,} tokens)",
+    "token_budget_unknown": "❓ Unknown",
     "progress_title": "📊 Progress",
     "progress_ready": "Ready to process your request...",
     
@@ -299,8 +335,8 @@ ENGLISH_TRANSLATIONS = {
     # Agent status details
     "agent_status_ready": "✅ **Agent Ready**",
     "agent_status_initializing": "🟡 **Agent Initializing**",
-    "provider_label": "**Provider:** {provider}",
-    "model_label": "**Model:** {model}",
+    "provider_info": "**Provider:** {provider}",
+    "model_info": "**Model:** {model}",
     "status_label": "**Status:** {status}",
     "tools_label": "**Tools:** {count} available",
     "last_used_label": "**Last Used:** {time}",
