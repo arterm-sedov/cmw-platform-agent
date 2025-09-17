@@ -80,7 +80,7 @@ def edit_or_create_image_attribute(
     image_height: Optional[int] = None
 ) -> Dict[str, Any]:
     """
-    Edit or Create an image attribute.
+    Edit or Create an image attribute (Изображение).
     
     Image attribute stores image files with configurable color modes and dimensions.
     

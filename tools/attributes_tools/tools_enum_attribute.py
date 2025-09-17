@@ -93,7 +93,7 @@ def edit_or_create_enum_attribute(
     expression_for_calculation: Optional[str] = None,
 ) -> Dict[str, Any]:
     r"""
-    Edit or Create a enum attribute.
+    Edit or Create a enum attribute (Список значений).
     
     IMPORTANT: When providing `enum_values`, you MUST follow this exact structure (see schema description for example):
 

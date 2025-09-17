@@ -67,7 +67,7 @@ def edit_or_create_document_attribute(
     file_extensions_filter: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
-    Edit or Create a document attribute.
+    Edit or Create a document attribute (Документа).
     
     Document attribute stores file attachments with configurable file format filters.
     

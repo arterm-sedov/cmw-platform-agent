@@ -53,7 +53,7 @@ def edit_or_create_date_time_attribute(
     expression_for_calculation: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Edit or Create a date & time attribute.
+    Edit or Create a date & time attribute (Дата и время).
     
     Supports various display formats for date and time representation.
     

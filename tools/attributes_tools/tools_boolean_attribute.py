@@ -17,7 +17,7 @@ def edit_or_create_boolean_attribute(
     expression_for_calculation: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Edit or Create a boolean attribute.
+    Edit or Create a boolean attribute (Логический атрибут).
     
     Boolean attribute stores `true` or `false`.
     

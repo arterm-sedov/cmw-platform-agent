@@ -41,7 +41,7 @@ def edit_or_create_account_attribute(
     store_multiple_values: Optional[bool] = False
 ) -> Dict[str, Any]:
     """
-    Edit or Create an account attribute.
+    Edit or Create an account attribute (Аккаунт, учетная запись).
     
     Account attribute is linked to accounts in the system.
     

@@ -11,7 +11,7 @@ def edit_or_create_drawing_attribute(
     write_changes_to_the_log: Optional[bool] = False
 ) -> Dict[str, Any]:
     """
-    Edit or Create a drawing attribute.
+    Edit or Create a drawing attribute (Чертеж).
     
     Drawing attribute stores floor plans based on CAD files.
     
