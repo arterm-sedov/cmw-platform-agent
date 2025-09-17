@@ -4,7 +4,6 @@ ALLOWED_EXTENSIONS_LIST = ['TXT', 'PNG', 'JPG', 'CSV', 'XLSX', 'DOCX', 'PPTX', '
 
 ALLOWED_EXTENSIONS = Literal[tuple(ALLOWED_EXTENSIONS_LIST)]
 ALLOWED_EXTENSIONS_SET = set(ALLOWED_EXTENSIONS_LIST)
-
 class EditOrCreateDocumentAttributeSchema(CommonAttributeFields):
     display_format: Literal[
         "Attachment",
@@ -25,8 +24,20 @@ class EditOrCreateDocumentAttributeSchema(CommonAttributeFields):
                     "RU: Фильтр расширений файлов"
     )
 
+    @field_validator("display_format", mode="before")
+    def non_empty_str(cls, v: Any) -> Any:
+        """
+        Validate that string fields are not empty.
+        
+        This field validator is automatically applied to the name, system_name, 
+        application_system_name, and template_system_name fields in all schemas
+        that inherit from CommonAttributeFields, ensuring consistent validation.
+        """
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
+
     @field_validator("file_extensions_filter", mode="before")
-    @classmethod
     def normalize_file_extensions_filter(cls, v: Any) -> Optional[List[str]]:
         if v is None:
             return v
@@ -56,8 +67,12 @@ def edit_or_create_document_attribute(
     file_extensions_filter: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
-    Edit or Create a document attribute.
+    Edit or Create a document attribute (Документа).
     
+    Document attribute stores file attachments with configurable file format filters.
+    
+    Can also store signed documents with digital signatures.
+
     Returns:
         dict: {
             "success": bool - True if the attribute was created or edited successfully
@@ -73,7 +88,7 @@ def edit_or_create_document_attribute(
             "type": "Undefined",
             "alias": system_name
         },
-        "type": "String",
+        "type": "Document",
         "format": display_format,
         "name": name,
         "description": description,
@@ -83,100 +98,14 @@ def edit_or_create_document_attribute(
         "fileFormat": file_extensions_filter
     }
 
-        # Remove None values
-    request_body = remove_nones(request_body) 
+    endpoint = f"{ATTRIBUTE_ENDPOINT}/{application_system_name}"
 
-    try:
-        if operation == "create":
-            result = requests_._post_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
-        if operation == "edit" or operation == "create":
-            result = requests_._put_request(request_body, f"{ATTRIBUTE_ENDPOINT}/{application_system_name}")
-            print("edit is complited")
-        else:
-            result = {
-                "success": False,
-                "error": f"No such operation for attribute: {operation}. Available operations: create, edit",
-                "status_code": 400
-            }
-    except Exception as e:
-        result = {
-            "success": False,
-            "error": f"Tool execution failed: {str(e)}",
-            "status_code": 500
-        }
-
-    # Ensure result is always a dict with proper structure
-    if not isinstance(result, dict):
-        result = {
-            "success": False,
-            "error": f"Unexpected result type: {type(result)}",
-            "status_code": 500
-        }
-    
-    # Add additional error information if the API call failed
-    if not result.get("success", False) and result.get("error"):
-        error_info = result.get("error", "")
-        result["error"] = f"API operation failed: {error_info}"
-
-    validated = AttributeResult(**result)
-    return validated.model_dump()
-
-
-@tool("get_document_attribute", return_direct=False, args_schema=CommonGetAttributeFields)
-def get_document_attribute(
-    application_system_name: str,
-    template_system_name: str,
-    system_name: str
-    ) -> Dict[str, Any]:
-    """
-    Get a document attribute in a given template and application.
-    
-    Returns:
-        dict: {
-            "success": bool - True if the attribute was fetched successfully
-            "status_code": int - HTTP response status code  
-            "raw_response": dict|str|None - Raw response payload for auditing or payload body (sanitized)
-            "error": str|None - Error message if operation failed
-        }
-    """
-
-    attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
-
-    result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}")
-
-    # Check if the request was successful and has the expected structure
-    if not result.get('success', False):
-        return result
-    
-    result_body = result.get('raw_response')
-    if result_body is None:
-        result.update({"error": "No response data received from server"})
-        return result
-    
-    # Check if result_body has the expected 'response' key
-    if not isinstance(result_body, dict) or 'response' not in result_body:
-        result.update({"error": "Unexpected response structure from server"})
-        return result
-
-    keys_to_remove = ['isTitle', 'isUnique', 'isCalculated', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio']
-
-    for key in keys_to_remove:
-        if key in result_body['response']:
-            result_body['response'].pop(key, None)
-
-    # Extract the data
-    data = result_body['response']
-    
-    # Create the final result with the data
-    final_result = {
-        "success": True,
-        "status_code": result.get("status_code", 200),
-        "data": data,
-        "error": None
-    }
-    
-    validated = AttributeResult(**final_result)
-    return validated.model_dump()
+    return execute_edit_or_create_operation(
+        request_body=request_body,
+        operation=operation,
+        endpoint=endpoint,
+        result_model=AttributeResult
+    )
 
 if __name__ == "__main__":
     results = edit_or_create_document_attribute.invoke({

@@ -206,21 +206,29 @@ class LLMManager:
             force_tools=False,
             models=[
                 {
+                    "model": "openrouter/sonoma-dusk-alpha",
+                    "token_limit": 2000000,
+                    "max_tokens": 2048,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "qwen/qwen3-coder:free",
+                    "token_limit": 262144,
+                    "max_tokens": 2048,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
                     "model": "deepseek/deepseek-chat-v3.1:free",
-                    "token_limit": 100000,
+                    "token_limit": 163840,
                     "max_tokens": 2048,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
                     "model": "mistralai/mistral-small-3.2-24b-instruct:free",
-                    "token_limit": 90000,
-                    "max_tokens": 2048,
-                    "temperature": 0
-                },
-                {
-                    "model": "openrouter/cypher-alpha:free",
-                    "token_limit": 1000000,
+                    "token_limit": 131072,
                     "max_tokens": 2048,
                     "temperature": 0
                 }
@@ -333,7 +341,7 @@ class LLMManager:
                 google_api_key=api_key,
                 temperature=model_config.get("temperature", 0),
                 max_tokens=model_config.get("max_tokens", 2000000),
-                streaming=True  # Enable streaming
+                disable_streaming=False  # Enable streaming
             )
             self._log_initialization(f"Successfully initialized {config.name} - {model_config['model']}")
             return llm
@@ -698,6 +706,25 @@ class LLMManager:
                 stats["providers"][provider]["models"].append(instance.model_name)
                 
         return stats
+    
+    def get_current_llm_context_window(self) -> int:
+        """Get the context window size for the current LLM instance"""
+        import os
+        
+        # Get the current provider from environment
+        agent_provider = os.environ.get("AGENT_PROVIDER", "mistral")
+        
+        try:
+            provider_enum = LLMProvider(agent_provider.lower())
+            config = self.LLM_CONFIGS.get(provider_enum)
+            
+            if config and config.models:
+                # Get the first model's token limit as the context window
+                return config.models[0].get("token_limit", 0)
+        except ValueError:
+            pass
+        
+        return 0
     
     def get_tools(self) -> List[Any]:
         """Get all available tools from tools module (avoiding duplicates) - cached"""

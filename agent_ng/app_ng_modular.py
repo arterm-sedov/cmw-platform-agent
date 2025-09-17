@@ -79,20 +79,11 @@ except ImportError as e1:
         # Set defaults to prevent further errors
         NextGenAgent = None
         ChatMessage = None
-        get_agent_ng = lambda: None
-        get_llm_manager = lambda: None
-        get_debug_streamer = lambda x: None
-        get_log_handler = lambda x: None
         LogLevel = None
         LogCategory = None
-        # get_chat_interface = lambda x: None  # Dead code - never used
         ChatTab = None
         LogsTab = None
         StatsTab = None
-        get_ui_manager = lambda: None
-        create_i18n_instance = lambda x: None
-        get_translation_key = lambda x, y: x
-        format_translation = lambda x, y, **kwargs: x
 
 
 class NextGenApp:
@@ -180,10 +171,12 @@ class NextGenApp:
                 self.debug_streamer.success(f"Agent ready with {status['current_llm']}", LogCategory.INIT)
                 if self.language == "ru":
                     self.initialization_logs.append(f"✅ Агент готов с {status['current_llm']}")
-                    self.initialization_logs.append(f"🔧 Доступно инструментов: {status['tools_count']}")
+                    tools_msg = format_translation("tools_available", self.language, count=status['tools_count'])
+                    self.initialization_logs.append(tools_msg)
                 else:
                     self.initialization_logs.append(f"✅ Agent ready with {status['current_llm']}")
-                    self.initialization_logs.append(f"🔧 Tools available: {status['tools_count']}")
+                    tools_msg = format_translation("tools_available", self.language, count=status['tools_count'])
+                    self.initialization_logs.append(tools_msg)
                 self.initialization_complete = True
                 
                 # Update agent reference in tab instances
@@ -226,17 +219,25 @@ class NextGenApp:
     
     def update_progress_display(self) -> str:
         """Update the progress display component with rotating icons"""
-        if self.is_processing and "Iteration" in self.current_progress_status and "Processing..." in self.current_progress_status:
-            # Rotate icon during processing
+        if self.is_processing:
+            # Always rotate icon during processing to ensure continuous rotation
             self.progress_icon_index = (self.progress_icon_index + 1) % len(self.progress_icons)
             current_icon = self.progress_icons[self.progress_icon_index]
             
-            # Extract iteration info and rebuild with new icon
+            # Check if we have iteration processing status
+            if "Iteration" in self.current_progress_status and "Processing..." in self.current_progress_status:
+                # Extract iteration info and rebuild with new icon
+                import re
+                # Match both English and Russian patterns
+                match = re.search(r'(\*\*Iteration \d+/\d+\*\* - Processing\.\.\.|\*\*Итерация \d+/\d+\*\* - Обработка\.\.\.)', self.current_progress_status)
+                if match:
+                    iteration_text = match.group(1)
+                    return f"{current_icon} {iteration_text}"
+            
+            # For any processing status, replace existing icon with rotating one
             import re
-            match = re.search(r'(\*\*Iteration \d+/\d+\*\* - Processing\.\.\.)', self.current_progress_status)
-            if match:
-                iteration_text = match.group(1)
-                return f"{current_icon} {iteration_text}"
+            cleaned_status = re.sub(r'^[🔄⚙️🔧⚡] ', '', self.current_progress_status)
+            return f"{current_icon} {cleaned_status}"
         
         return self.current_progress_status
     
@@ -288,7 +289,9 @@ class NextGenApp:
                 
                 # Log tool calls if any
                 if response.tool_calls:
-                    self.debug_streamer.info(f"Tool calls made: {[call['name'] for call in response.tool_calls]}")
+                    tool_names = [call['name'] for call in response.tool_calls]
+                    tool_calls_msg = format_translation("tool_calls_made", self.language, tool_names=tool_names)
+                    self.debug_streamer.info(tool_calls_msg)
                 
                 return history, ""
             else:
@@ -376,10 +379,7 @@ class NextGenApp:
                 elif event_type == "tool_start":
                     # Tool is starting - create a separate message with metadata
                     tool_name = metadata.get("tool_name", "unknown")
-                    if self.language == "ru":
-                        tool_title = metadata.get("title", f"🔧 Инструмент вызван: {tool_name}")
-                    else:
-                        tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
+                    tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name))
                     
                     # Create tool message with metadata for collapsible section
                     tool_message = {
@@ -396,10 +396,7 @@ class NextGenApp:
                 elif event_type == "tool_end":
                     # Tool completed - update the last tool message or create new one
                     tool_name = metadata.get("tool_name", "unknown")
-                    if self.language == "ru":
-                        tool_title = metadata.get("title", f"🔧 Инструмент вызван: {tool_name}")
-                    else:
-                        tool_title = metadata.get("title", f"🔧 Tool called: {tool_name}")
+                    tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name))
                     
                     # Update the last tool message or create new one
                     if tool_messages and tool_messages[-1].get("metadata", {}).get("title") == tool_title:
@@ -527,12 +524,16 @@ class NextGenApp:
             
             # Status and monitoring handlers
             "update_status": self._update_status,
+            "update_token_budget": self._update_token_budget,
             "refresh_logs": self._refresh_logs,
             "refresh_stats": self._refresh_stats,
             "update_all_ui": self.update_all_ui_components,
             "trigger_ui_update": self.trigger_ui_update,
             "get_progress_status": self.get_progress_status,
             "update_progress_display": self.update_progress_display,
+            
+            # LLM selection handlers - removed auto-refresh handler
+            # LLM selection components update only when explicitly triggered
         }
         
         # Add language switch handler if this is the language detection app
@@ -620,6 +621,16 @@ class NextGenApp:
             return get_translation_key("agent_ready", self.language)
         else:
             return get_translation_key("agent_initializing", self.language)
+    
+    def _update_token_budget(self) -> str:
+        """Update token budget display - delegates to chat tab"""
+        chat_tab = self.tab_instances.get('chat')
+        if chat_tab and hasattr(chat_tab, 'format_token_budget_display'):
+            return chat_tab.format_token_budget_display()
+        
+        # Fallback token budget
+        return get_translation_key("token_budget_initializing", self.language)
+    
     
     def _refresh_logs(self) -> str:
         """Refresh logs display - delegates to logs tab"""
@@ -857,7 +868,11 @@ def get_demo(language: str = "en"):
         return app.create_interface()
     except Exception as e:
         print(f"❌ Error creating demo for language {language}: {e}")
-        return gr.Blocks()
+        # Create a minimal working demo to prevent KeyError
+        with gr.Blocks() as demo:
+            gr.Markdown("# CMW Platform Agent")
+            gr.Markdown("Application is initializing...")
+        return demo
 
 # Create a safe demo instance for Gradio reloading
 # This prevents the _queue attribute error by ensuring demo is always valid

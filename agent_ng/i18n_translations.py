@@ -63,10 +63,29 @@ RUSSIAN_TRANSLATIONS = {
     "send_button": "Отправить",
     "clear_button": "Очистить чат",
     
+    # LLM Selection section
+    "llm_selection_title": "🔧 Выбор LLM",
+    "provider_label": "Провайдер",
+    "model_label": "Модель",
+    "provider_model_label": "Провайдер / Модель",
+    "apply_llm_button": "Применить",
+    "llm_apply_success": "✅ LLM изменен: {provider} - {model}",
+    "llm_apply_error": "❌ Ошибка применения LLM",
+    "current_provider": "**Провайдер:** {provider}",
+    "current_model": "**Модель:** {model}",
+    
     # Status section
     "status_title": "🤖 Статус",
     "status_initializing": "🟡 Инициализация...",
     "status_ready": "✅ Готов",
+    "token_budget_title": "💰 Расход токенов",
+    "token_budget_initializing": "🟡 Загрузка...",
+    "token_budget_detailed": """**Расход токенов:**
+- Всего: {total_tokens:,}
+- Диалог: {conversation_tokens:,}
+- Последнее сообщение {percentage}% ({used:,}/{context_window:,}) {status_icon}
+- Среднее на сообщение: {avg_tokens:,}""",
+    "token_budget_unknown": "❓ Неизвестно",
     "progress_title": "📊 Прогресс",
     "progress_ready": "Готов обработать ваш запрос...",
     
@@ -106,8 +125,8 @@ RUSSIAN_TRANSLATIONS = {
     # Agent status details
     "agent_status_ready": "✅ **Агент готов**",
     "agent_status_initializing": "🟡 **Инициализация агента**",
-    "provider_label": "**Провайдер:** {provider}",
-    "model_label": "**Модель:** {model}",
+    "provider_info": "**Провайдер:** {provider}",
+    "model_info": "**Модель:** {model}",
     "status_label": "**Статус:** {status}",
     "tools_label": "**Инструменты:** {count} доступно",
     "last_used_label": "**Последнее использование:** {time}",
@@ -149,9 +168,7 @@ RUSSIAN_TRANSLATIONS = {
         "Не выполняй изменения, ожидай моего одобрения."
     ),
     "quick_list_apps_message": (
-        "Покажи список всех приложений в Comindware Platform. "
-        "Отформатируй красиво в Markdown. "
-        "Покажи системные имена, описания, ссылки, если есть."
+        "Покажи список всех приложений в Comindware Platform. Отформатируй красиво в Markdown."
     ),
     
     # Query example buttons (converted from try_asking_examples)
@@ -183,7 +200,7 @@ RUSSIAN_TRANSLATIONS = {
     "quick_archive_attr_message": "Архивируй/разархивируй атрибут, системное имя \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
     
     # Status messages
-    "processing_complete": "🎉 Обработка завершена",
+    "processing_complete": "Обработка завершена",
     "response_completed": "Ответ завершен",
     "processing_failed": "Обработка не удалась",
     
@@ -200,6 +217,8 @@ RUSSIAN_TRANSLATIONS = {
     "result": "**Результат:** {tool_result}",
     "tool_error": "❌ **Ошибка инструмента: {error}**",
     "unknown_tool": "❌ **Неизвестный инструмент: {tool_name}**",
+    "tools_available": "🔧 Доступно инструментов: {count}",
+    "tool_calls_made": "Вызовы инструментов: {tool_names}",
     
     # Error messages
     "error": "❌ **Ошибка: {error}**"
@@ -256,10 +275,29 @@ ENGLISH_TRANSLATIONS = {
     "send_button": "Send",
     "clear_button": "Clear chat",
     
+    # LLM Selection section
+    "llm_selection_title": "🔧 LLM Selection",
+    "provider_label": "Provider",
+    "model_label": "Model",
+    "provider_model_label": "Provider / Model",
+    "apply_llm_button": "Apply",
+    "llm_apply_success": "✅ LLM changed: {provider} - {model}",
+    "llm_apply_error": "❌ Error applying LLM",
+    "current_provider": "**Provider:** {provider}",
+    "current_model": "**Model:** {model}",
+    
     # Status section
     "status_title": "🤖 Status",
     "status_initializing": "🟡 Initializing...",
     "status_ready": "✅ Ready",
+    "token_budget_title": "💰 Token Usage",
+    "token_budget_initializing": "🟡 Loading...",
+    "token_budget_detailed": """**Token Usage:**
+- Total: {total_tokens:,}
+- Conversation: {conversation_tokens:,}
+- Last message {percentage}% ({used:,}/{context_window:,}) {status_icon}
+- Average per message: {avg_tokens:,}""",
+    "token_budget_unknown": "❓ Unknown",
     "progress_title": "📊 Progress",
     "progress_ready": "Ready to process your request...",
     
@@ -299,8 +337,8 @@ ENGLISH_TRANSLATIONS = {
     # Agent status details
     "agent_status_ready": "✅ **Agent Ready**",
     "agent_status_initializing": "🟡 **Agent Initializing**",
-    "provider_label": "**Provider:** {provider}",
-    "model_label": "**Model:** {model}",
+    "provider_info": "**Provider:** {provider}",
+    "model_info": "**Model:** {model}",
     "status_label": "**Status:** {status}",
     "tools_label": "**Tools:** {count} available",
     "last_used_label": "**Last Used:** {time}",
@@ -342,9 +380,7 @@ ENGLISH_TRANSLATIONS = {
         "Do NOT execute changes yet—await my approval."
     ),
     "quick_list_apps_message": (
-        "List all applications in the platform. "
-        "Format nicely using Markdown. "
-        "Show system names and descriptions if any."
+        "List all applications in the platform. Format nicely using Markdown."
     ),
     
     # Query example buttons (converted from try_asking_examples)
@@ -376,7 +412,7 @@ ENGLISH_TRANSLATIONS = {
     "quick_archive_attr_message": "Archive/unarchive attribute, system name \"Comment\", application \"HR\", template \"Candidates\"",
     
     # Status messages
-    "processing_complete": "🎉 Processing complete",
+    "processing_complete": "Processing complete",
     "response_completed": "Response completed",
     "processing_failed": "Processing failed",
     
@@ -393,6 +429,8 @@ ENGLISH_TRANSLATIONS = {
     "result": "**Result:** {tool_result}",
     "tool_error": "❌ **Tool error: {error}**",
     "unknown_tool": "❌ **Unknown tool: {tool_name}**",
+    "tools_available": "🔧 Tools available: {count}",
+    "tool_calls_made": "Tool calls made: {tool_names}",
     
     # Error messages
     "error": "❌ **Error: {error}**"
