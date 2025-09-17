@@ -383,63 +383,41 @@ class LangChainConversationChain:
                 # Add the AI response with tool calls to messages
                 messages.append(response)
                 
-                # Process tool calls with silent deduplication
-                processed_tools = {}  # Track processed tools to avoid duplicates in same response
-                deduplication_stats = {}  # Track deduplication stats silently
-                print(f"🔍 DEBUG: Processing {len(response.tool_calls)} tool calls")
+                # STEP 1: Filter and count duplicates BEFORE execution
+                deduplicated_tool_calls, duplicate_counts = self._deduplicate_tool_calls(response.tool_calls)
+                print(f"🔍 DEBUG: Original tool calls: {len(response.tool_calls)}, Deduplicated: {len(deduplicated_tool_calls)}")
                 
-                for tool_call in response.tool_calls:
-                    # LangChain tool calls are dictionaries
+                # STEP 2: Execute only deduplicated tool calls
+                tool_calls = []
+                for tool_call in deduplicated_tool_calls:
                     tool_name = tool_call.get('name', 'unknown')
                     tool_args = tool_call.get('args', {})
                     tool_call_id = tool_call.get('id', f"call_{len(tool_calls)}")
                     
-                    # Create a key for this tool call
+                    # Get duplicate count for this tool call
                     tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
+                    duplicate_count = duplicate_counts.get(tool_key, 1)
                     
-                    # Check if we've already processed this exact tool call in this response
-                    if tool_key in processed_tools:
-                        # This is a duplicate within the same response - increment counts silently
-                        processed_tools[tool_key]['count'] += 1
-                        processed_tools[tool_key]['call_ids'].append(tool_call_id)
-                        
-                        # Track deduplication stats silently
-                        deduplication_stats[tool_key]['total_calls'] += 1
-                        deduplication_stats[tool_key]['duplicates'] += 1
-                        
-                        # Skip creating ToolMessage for duplicates - only first call gets a message
-                        # The LLM will see that some call_ids don't have responses, which is fine
-                        print(f"🔍 DEBUG: Skipping duplicate tool call {tool_name} (count: {processed_tools[tool_key]['count']})")
-                        continue
-                    
-                    # Execute tool for first time only
-                    print(f"🔍 DEBUG: Executing tool {tool_name} with args {tool_args}")
+                    # Execute tool once
+                    print(f"🔍 DEBUG: Executing tool {tool_name} with args {tool_args} (count: {duplicate_count})")
                     tool_result = self._execute_tool(tool_name, tool_args)
                     print(f"🔍 DEBUG: Tool {tool_name} result: {tool_result}")
                     
                     # Store the tool call result for future deduplication
                     deduplicator.store_tool_call(tool_name, tool_args, tool_result, conversation_id)
                     
-                    # Store for consolidation
-                    processed_tools[tool_key] = {
+                    # Add to tool_calls for reporting
+                    tool_calls.append({
                         'name': tool_name,
                         'args': tool_args,
                         'result': tool_result,
-                        'count': 1,
-                        'call_ids': [tool_call_id],
-                        'duplicate': False,
-                        'total_duplicate_count': 1
-                    }
+                        'id': tool_call_id,
+                        'duplicate': duplicate_count > 1,
+                        'duplicate_count': duplicate_count
+                    })
                     
-                    # Track deduplication stats silently
-                    deduplication_stats[tool_key] = {
-                        'tool_name': tool_name,
-                        'total_calls': 1,
-                        'duplicates': 0
-                    }
-                    
-                    # Show only the first call in chat
-                    print(f"🔧✅ Used tool: {tool_name}")
+                    # Show tool execution with count
+                    print(f"🔧✅ Used tool: {tool_name} (called {duplicate_count} times)")
                     
                     # Add tool message to conversation (only one per unique tool call)
                     tool_message = ToolMessage(
@@ -448,53 +426,12 @@ class LangChainConversationChain:
                     )
                     messages.append(tool_message)
                 
-                # Store deduplication stats for later display
-                if not hasattr(self, '_deduplication_stats'):
-                    self._deduplication_stats = {}
-                self._deduplication_stats[conversation_id] = deduplication_stats
+                # STEP 3: Store tool calls in memory (already done above)
+                for tool_call in tool_calls:
+                    self.memory_manager.add_tool_call(conversation_id, tool_call)
+                    # Tool messages already added to conversation above
                 
-                # Also store in the agent if available
-                if hasattr(self, 'agent') and self.agent:
-                    if not hasattr(self.agent, '_deduplication_stats'):
-                        self.agent._deduplication_stats = {}
-                    self.agent._deduplication_stats[conversation_id] = deduplication_stats
-                
-                # Store only unique tool calls in memory (deduplicated) and populate tool_calls for reporting
-                for tool_key, tool_info in processed_tools.items():
-                    tool_name = tool_info['name']
-                    tool_args = tool_info['args']
-                    tool_result = tool_info['result']
-                    call_id = tool_info['call_ids'][0]  # Use first call ID for memory
-                    total_count = tool_info.get('count', 1)
-                    
-                    # Add unique tool call to memory
-                    self.memory_manager.add_tool_call(conversation_id, {
-                        'name': tool_name,
-                        'args': tool_args,
-                        'result': tool_result,
-                        'id': call_id,
-                        'duplicate_count': total_count,
-                        'same_response_count': total_count
-                    })
-                    
-                    # Add unique tool message to memory manager
-                    tool_message = ToolMessage(
-                        content=tool_result,
-                        tool_call_id=call_id
-                    )
-                    self.memory_manager.add_message(conversation_id, tool_message)
-                    
-                    # Add to tool_calls for reporting (only unique tools, with correct counts)
-                    tool_calls.append({
-                        'name': tool_name,
-                        'args': tool_args,
-                        'result': tool_result,
-                        'id': call_id,
-                        'duplicate': total_count > 1,
-                        'duplicate_count': total_count
-                    })
-                
-                print(f"🔍 DEBUG: Finished processing tool calls, processed_tools: {len(processed_tools)}")
+                print(f"🔍 DEBUG: Finished processing {len(tool_calls)} unique tool calls")
             else:
                 # No tool calls, we have the final response
                 print(f"🔍 DEBUG: No tool calls detected, processing final response")
@@ -590,6 +527,36 @@ class LangChainConversationChain:
         print(f"🔍 DEBUG: Returning result: {result}")
         return result
     
+    def _deduplicate_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+        """
+        Deduplicate tool calls and count duplicates BEFORE execution.
+        
+        Args:
+            tool_calls: List of tool calls from LLM response
+            
+        Returns:
+            Tuple of (deduplicated_tool_calls, duplicate_counts)
+        """
+        unique_tool_calls = []
+        duplicate_counts = {}
+        
+        for tool_call in tool_calls:
+            tool_name = tool_call.get('name', 'unknown')
+            tool_args = tool_call.get('args', {})
+            tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
+            
+            if tool_key in duplicate_counts:
+                # Increment count for duplicate
+                duplicate_counts[tool_key] += 1
+                print(f"🔍 DEBUG: Found duplicate tool call {tool_name} (total count: {duplicate_counts[tool_key]})")
+            else:
+                # First occurrence - add to unique list and initialize count
+                unique_tool_calls.append(tool_call)
+                duplicate_counts[tool_key] = 1
+                print(f"🔍 DEBUG: Added unique tool call {tool_name}")
+        
+        return unique_tool_calls, duplicate_counts
+
     def _track_token_usage(self, response, messages):
         """Track token usage for LLM response"""
         try:

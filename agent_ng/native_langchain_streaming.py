@@ -14,7 +14,7 @@ Key Features:
 """
 
 import asyncio
-from typing import Dict, List, Optional, Any, AsyncGenerator
+from typing import Dict, List, Optional, Any, Tuple, AsyncGenerator
 from dataclasses import dataclass
 
 # LangChain imports
@@ -106,6 +106,36 @@ class NativeLangChainStreaming:
         template = get_translation_key("result", language)
         return template.format(tool_result=tool_result)
     
+    def _deduplicate_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+        """
+        Deduplicate tool calls and count duplicates BEFORE execution.
+        
+        Args:
+            tool_calls: List of tool calls from LLM response
+            
+        Returns:
+            Tuple of (deduplicated_tool_calls, duplicate_counts)
+        """
+        unique_tool_calls = []
+        duplicate_counts = {}
+        
+        for tool_call in tool_calls:
+            tool_name = tool_call.get('name', 'unknown')
+            tool_args = tool_call.get('args', {})
+            tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
+            
+            if tool_key in duplicate_counts:
+                # Increment count for duplicate
+                duplicate_counts[tool_key] += 1
+                print(f"🔍 DEBUG: Found duplicate tool call {tool_name} (total count: {duplicate_counts[tool_key]})")
+            else:
+                # First occurrence - add to unique list and initialize count
+                unique_tool_calls.append(tool_call)
+                duplicate_counts[tool_key] = 1
+                print(f"🔍 DEBUG: Added unique tool call {tool_name}")
+        
+        return unique_tool_calls, duplicate_counts
+
     def _get_tool_error_message(self, error: str, language: str = "en") -> str:
         """Get the localized tool error message"""
         from .i18n_translations import get_translation_key
@@ -252,25 +282,20 @@ class NativeLangChainStreaming:
                     has_tool_calls = True
                     print(f"🔍 DEBUG: Found {len(accumulated_chunk.tool_calls)} tool calls")
                     
-                    for tool_call in accumulated_chunk.tool_calls:
+                    # STEP 1: Filter and count duplicates BEFORE execution
+                    deduplicated_tool_calls, duplicate_counts = self._deduplicate_tool_calls(accumulated_chunk.tool_calls)
+                    print(f"🔍 DEBUG: Original tool calls: {len(accumulated_chunk.tool_calls)}, Deduplicated: {len(deduplicated_tool_calls)}")
+                    
+                    # STEP 2: Execute only deduplicated tool calls
+                    for tool_call in deduplicated_tool_calls:
                         tool_name = tool_call.get('name')
                         tool_args = tool_call.get('args', {})
                         tool_call_id = tool_call.get('id')
                         
                         if tool_name and tool_call_id in tool_calls_in_progress:
-                            # Create a key for this tool call
+                            # Get duplicate count for this tool call
                             tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
-                            
-                            # Check if we've already processed this exact tool call in this response
-                            if tool_key in processed_tools:
-                                # This is a duplicate within the same response - increment counts silently
-                                processed_tools[tool_key]['count'] += 1
-                                processed_tools[tool_key]['call_ids'].append(tool_call_id)
-                                
-                                # Skip creating ToolMessage for duplicates - only first call gets a message
-                                # The LLM will see that some call_ids don't have responses, which is fine
-                                print(f"🔍 DEBUG: Skipping duplicate tool call {tool_name} (count: {processed_tools[tool_key]['count']})")
-                                continue
+                            duplicate_count = duplicate_counts.get(tool_key, 1)
                             
                             # Find the tool in our tools list
                             tool_obj = None
@@ -281,7 +306,7 @@ class NativeLangChainStreaming:
                             
                             try:
                                 if tool_obj:
-                                    # Execute tool (only for first occurrence)
+                                    # Execute tool once
                                     tool_result = tool_obj.invoke(tool_args)
                                     
                                     # Store the tool call result for future deduplication
@@ -289,25 +314,15 @@ class NativeLangChainStreaming:
                                     deduplicator = get_deduplicator()
                                     deduplicator.store_tool_call(tool_name, tool_args, tool_result, conversation_id)
                                     
-                                    # Track this tool call as processed
-                                    processed_tools[tool_key] = {
-                                        'name': tool_name,
-                                        'args': tool_args,
-                                        'result': tool_result,
-                                        'call_id': tool_call_id,
-                                        'count': 1,
-                                        'call_ids': [tool_call_id]
-                                    }
-                                    
-                                    # Stream tool completion with result in one event
+                                    # Stream tool completion with correct count
                                     yield StreamingEvent(
                                         event_type="tool_end",
-                                        content=f"\n{self._get_call_count_message(1, language)}\n{self._get_result_message(str(tool_result), language)}",
+                                        content=f"\n{self._get_call_count_message(duplicate_count, language)}\n{self._get_result_message(str(tool_result), language)}",
                                         metadata={
                                             "tool_name": tool_name,
                                             "tool_output": str(tool_result),
-                                            "duplicate": False,
-                                            "duplicate_count": 1,
+                                            "duplicate": duplicate_count > 1,
+                                            "duplicate_count": duplicate_count,
                                             "title": self._get_tool_called_message(tool_name, language)
                                         }
                                     )
@@ -318,7 +333,6 @@ class NativeLangChainStreaming:
                                         tool_call_id=tool_call_id
                                     )
                                     messages.append(tool_message)
-                                    # Don't add to memory here - will be added at the end
                                 else:
                                     yield StreamingEvent(
                                         event_type="error",
