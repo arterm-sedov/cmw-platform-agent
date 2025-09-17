@@ -112,6 +112,7 @@ class ChatTab:
                         value=self._get_current_provider_model_combination(),
                         label=self._get_translation("provider_model_label"),
                         interactive=True,
+                        allow_custom_value=True,
                         elem_classes=["provider-model-selector"]
                     )
                     
@@ -396,7 +397,7 @@ class ChatTab:
     def _get_available_provider_model_combinations(self) -> List[str]:
         """Get list of available provider/model combinations in format 'Provider / Model'"""
         if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
-            return []
+            return [""]
         
         try:
             if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
@@ -416,7 +417,15 @@ class ChatTab:
         except Exception as e:
             print(f"Error getting provider/model combinations: {e}")
         
-        return []
+        # Return fallback combinations on error
+        return [
+            "Openrouter / openrouter/anthropic/claude-3.5-sonnet",
+            "Groq / groq/compound",
+            "Gemini / gemini-2.5-pro",
+            "Mistral / mistral-large-latest",
+            "Huggingface / microsoft/DialoGPT-medium",
+            "Gigachat / gigachat"
+        ]
     
     def _get_current_model(self) -> str:
         """Get current LLM model"""
@@ -434,7 +443,10 @@ class ChatTab:
     def _get_current_provider_model_combination(self) -> str:
         """Get current provider/model combination in format 'Provider / Model'"""
         if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
-            return ""
+            # Return fallback value when main app is not available
+            import os
+            provider = os.environ.get("AGENT_PROVIDER", "openrouter")
+            return f"{provider.title()} / {provider}/default-model"
         
         try:
             if hasattr(self.main_app.agent, 'llm_instance') and self.main_app.agent.llm_instance:
@@ -444,7 +456,10 @@ class ChatTab:
         except Exception as e:
             print(f"Error getting current provider/model combination: {e}")
         
-        return ""
+        # Return fallback value on error
+        import os
+        provider = os.environ.get("AGENT_PROVIDER", "openrouter")
+        return f"{provider.title()} / {provider}/default-model"
     
     def _update_models_for_provider(self, provider: str) -> List[str]:
         """Update available models when provider changes"""
