@@ -337,22 +337,23 @@ class ChatTab:
             if budget_info["status"] == "unknown":
                 return self._get_translation("token_budget_unknown")
             
-            # Format based on status
-            if budget_info["status"] == "good":
-                template = self._get_translation("token_budget_good")
-            elif budget_info["status"] == "moderate":
-                template = self._get_translation("token_budget_moderate")
-            elif budget_info["status"] == "warning":
-                template = self._get_translation("token_budget_warning")
-            elif budget_info["status"] == "critical":
-                template = self._get_translation("token_budget_critical")
-            else:
-                template = self._get_translation("token_budget_unknown")
+            # Get cumulative stats for detailed display
+            cumulative_stats = self.main_app.agent.token_tracker.get_cumulative_stats()
             
-            return template.format(
+            # Determine status icon
+            status_icon = "🟢" if budget_info["status"] == "good" else \
+                         "🟡" if budget_info["status"] == "moderate" else \
+                         "🟠" if budget_info["status"] == "warning" else \
+                         "🔴" if budget_info["status"] == "critical" else "❓"
+            
+            return self._get_translation("token_budget_detailed").format(
+                total_tokens=cumulative_stats["conversation_tokens"],
+                conversation_tokens=cumulative_stats["conversation_tokens"],
                 percentage=budget_info["percentage"],
                 used=budget_info["used_tokens"],
-                total=budget_info["context_window"]
+                context_window=budget_info["context_window"],
+                status_icon=status_icon,
+                avg_tokens=cumulative_stats["avg_tokens_per_message"]
             )
         except Exception as e:
             print(f"Error formatting token budget: {e}")
