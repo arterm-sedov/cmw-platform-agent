@@ -100,7 +100,7 @@ class StatsTab:
 {self._get_translation('agent_status_section')}
 - {self._get_translation('status_ready')}: {stats['agent_status']['is_ready']}
 - LLM: {stats['llm_info'].get('model_name', 'Unknown')}
-- {self._get_translation('provider_label').replace('**', '').replace(':', '')}: {stats['llm_info'].get('provider', 'Unknown')}
+- {self._get_translation('provider_info').format(provider=stats['llm_info'].get('provider', 'Unknown'))}
 
 {self._get_translation('conversation_section')}
 - {self._get_translation('messages_label')}: {stats['conversation_stats']['message_count']}
@@ -188,9 +188,9 @@ class StatsTab:
             llm_info = self.agent.get_llm_info()
             return f"""{self._get_translation('agent_status_ready')}
 
-{self._get_translation('provider_label')} {llm_info.get('provider', 'Unknown')}
+{self._get_translation('provider_info').format(provider=llm_info.get('provider', 'Unknown'))}
 
-{self._get_translation('model_label')} {llm_info.get('model_name', 'Unknown')}
+{self._get_translation('model_info').format(model=llm_info.get('model_name', 'Unknown'))}
 
 {self._get_translation('status_label')} {self._get_translation('healthy_status') if llm_info.get('is_healthy', False) else self._get_translation('unhealthy_status')}
 

@@ -516,12 +516,16 @@ class NextGenApp:
             
             # Status and monitoring handlers
             "update_status": self._update_status,
+            "update_token_budget": self._update_token_budget,
             "refresh_logs": self._refresh_logs,
             "refresh_stats": self._refresh_stats,
             "update_all_ui": self.update_all_ui_components,
             "trigger_ui_update": self.trigger_ui_update,
             "get_progress_status": self.get_progress_status,
             "update_progress_display": self.update_progress_display,
+            
+            # LLM selection handlers - removed auto-refresh handler
+            # LLM selection components update only when explicitly triggered
         }
         
         # Add language switch handler if this is the language detection app
@@ -609,6 +613,16 @@ class NextGenApp:
             return get_translation_key("agent_ready", self.language)
         else:
             return get_translation_key("agent_initializing", self.language)
+    
+    def _update_token_budget(self) -> str:
+        """Update token budget display - delegates to chat tab"""
+        chat_tab = self.tab_instances.get('chat')
+        if chat_tab and hasattr(chat_tab, 'format_token_budget_display'):
+            return chat_tab.format_token_budget_display()
+        
+        # Fallback token budget
+        return get_translation_key("token_budget_initializing", self.language)
+    
     
     def _refresh_logs(self) -> str:
         """Refresh logs display - delegates to logs tab"""
@@ -846,7 +860,11 @@ def get_demo(language: str = "en"):
         return app.create_interface()
     except Exception as e:
         print(f"❌ Error creating demo for language {language}: {e}")
-        return gr.Blocks()
+        # Create a minimal working demo to prevent KeyError
+        with gr.Blocks() as demo:
+            gr.Markdown("# CMW Platform Agent")
+            gr.Markdown("Application is initializing...")
+        return demo
 
 # Create a safe demo instance for Gradio reloading
 # This prevents the _queue attribute error by ensuring demo is always valid
