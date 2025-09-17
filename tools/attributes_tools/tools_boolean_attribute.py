@@ -19,6 +19,8 @@ def edit_or_create_boolean_attribute(
     """
     Edit or Create a boolean attribute.
     
+    Boolean attribute stores `true` or `false`.
+    
     Returns:
         dict: {
             "success": bool - True if the attribute was created or edited successfully

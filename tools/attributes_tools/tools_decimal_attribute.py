@@ -39,7 +39,12 @@ def edit_or_create_numeric_attribute(
     group_digits_numbers: Optional[bool] = False
 ) -> Dict[str, Any]:
     """
-    Edit or Create a numeroc attribute.
+    Edit or Create a numeric attribute.
+    
+    Numeric attribute stores decimal numbers with configurable decimal places:
+        - 0: 123
+        - 1: 123.4
+        - 2: 123.45
     
     Returns:
         dict: {

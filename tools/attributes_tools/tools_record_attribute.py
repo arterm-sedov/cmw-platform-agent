@@ -42,7 +42,7 @@ def edit_or_create_record_attribute(
     """
     Edit or Create a record attribute.
     
-    Record attribute is an attribute that is linked to records in a related template.
+    Record attribute is is linked to records in a related template.
     
     Record attribute stores one or several IDs of the lined records in the related template.
     

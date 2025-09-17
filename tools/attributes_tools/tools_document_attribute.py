@@ -69,6 +69,10 @@ def edit_or_create_document_attribute(
     """
     Edit or Create a document attribute.
     
+    Document attribute stores file attachments with configurable file format filters.
+    
+    Can also store signed documents with digital signatures.
+
     Returns:
         dict: {
             "success": bool - True if the attribute was created or edited successfully

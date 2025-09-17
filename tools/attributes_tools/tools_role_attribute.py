@@ -16,7 +16,7 @@ def edit_or_create_role_attribute(
     """
     Edit or Create a role attribute.
     
-    Role attribute is an attribute that is linked to roles in the system.
+    Role attribute is linked to roles in the system.
     
     Role attribute stores one or several linked role IDs.
     

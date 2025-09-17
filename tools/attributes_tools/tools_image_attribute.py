@@ -7,7 +7,7 @@ ALLOWED_EXTENSIONS_SET = set(ALLOWED_EXTENSIONS_LIST)
 ALLOWED_COLOR_RENDERING_MODES_SET = set(ALLOWED_COLOR_RENDERING_MODES_LIST)
 class EditOrCreateImageAttributeSchema(CommonAttributeFields):
     rendering_color_mode: str = Field(
-        description="Image color rendering mode. "
+        description="Image color mode. "
                     "RU: Цветовой режим. "
                     f"Allowed: {ALLOWED_COLOR_RENDERING_MODES_LIST}"
     )
@@ -81,6 +81,10 @@ def edit_or_create_image_attribute(
 ) -> Dict[str, Any]:
     """
     Edit or Create an image attribute.
+    
+    Image attribute stores image files with configurable color modes and dimensions.
+    
+    The image will be converted and stored in the specified color mode and dimensions.
     
     Returns:
         dict: {
