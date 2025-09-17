@@ -227,28 +227,8 @@ class LLMManager:
                     "force_tools": True
                 },
                 {
-                    "model": "deepseek/deepseek-r1-0528:free",
-                    "token_limit": 163840,
-                    "max_tokens": 2048,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "qwen/qwen3-coder:free",
-                    "token_limit": 262144,
-                    "max_tokens": 2048,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
                     "model": "mistralai/mistral-small-3.2-24b-instruct:free",
-                    "token_limit": 90000,
-                    "max_tokens": 2048,
-                    "temperature": 0
-                },
-                {
-                    "model": "openrouter/cypher-alpha:free",
-                    "token_limit": 1000000,
+                    "token_limit": 131072,
                     "max_tokens": 2048,
                     "temperature": 0
                 }
