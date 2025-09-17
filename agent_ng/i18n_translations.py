@@ -78,12 +78,13 @@ RUSSIAN_TRANSLATIONS = {
     "status_title": "🤖 Статус",
     "status_initializing": "🟡 Инициализация...",
     "status_ready": "✅ Готов",
-    "token_budget_title": "💰 Бюджет токенов",
+    "token_budget_title": "💰 Расход токенов",
     "token_budget_initializing": "🟡 Загрузка...",
-    "token_budget_good": "🟢 {percentage}% ({used:,}/{total:,} токенов)",
-    "token_budget_moderate": "🟡 {percentage}% ({used:,}/{total:,} токенов)",
-    "token_budget_warning": "🟠 {percentage}% ({used:,}/{total:,} токенов)",
-    "token_budget_critical": "🔴 {percentage}% ({used:,}/{total:,} токенов)",
+    "token_budget_detailed": """**Расход токенов:**
+- Всего: {total_tokens:,}
+- Диалог: {conversation_tokens:,}
+- Последнее сообщение {percentage}% ({used:,}/{context_window:,}) {status_icon}
+- Среднее на сообщение: {avg_tokens:,}""",
     "token_budget_unknown": "❓ Неизвестно",
     "progress_title": "📊 Прогресс",
     "progress_ready": "Готов обработать ваш запрос...",
@@ -289,12 +290,13 @@ ENGLISH_TRANSLATIONS = {
     "status_title": "🤖 Status",
     "status_initializing": "🟡 Initializing...",
     "status_ready": "✅ Ready",
-    "token_budget_title": "💰 Token Budget",
+    "token_budget_title": "💰 Token Usage",
     "token_budget_initializing": "🟡 Loading...",
-    "token_budget_good": "🟢 {percentage}% ({used:,}/{total:,} tokens)",
-    "token_budget_moderate": "🟡 {percentage}% ({used:,}/{total:,} tokens)",
-    "token_budget_warning": "🟠 {percentage}% ({used:,}/{total:,} tokens)",
-    "token_budget_critical": "🔴 {percentage}% ({used:,}/{total:,} tokens)",
+    "token_budget_detailed": """**Token Usage:**
+- Total: {total_tokens:,}
+- Conversation: {conversation_tokens:,}
+- Last message {percentage}% ({used:,}/{context_window:,}) {status_icon}
+- Average per message: {avg_tokens:,}""",
     "token_budget_unknown": "❓ Unknown",
     "progress_title": "📊 Progress",
     "progress_ready": "Ready to process your request...",
