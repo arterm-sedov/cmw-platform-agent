@@ -64,7 +64,7 @@ ATTRIBUTE_MODEL_DESCRIPTIONS = {
         "Record attribute can be mutually linked with the attribute in the related template. "
         "Mutually linked attributes are automatically cross-linked whenever the values of one of the attributes change.",
     "Role": "Stores one or several linked role IDs.",
-    "String": """Stores a sting value.
+    "String": r"""Stores a sting value.
         Supports various display formats including predefined and custom masks for common Russian data types:
         - LicensePlateNumberRuMask: ([АВЕКМНОРСТУХавекмнорстух]{1}[0-9]{3}[АВЕКМНОРСТУХавекмнорстух]{2} [0-9]{3})
         - IndexRuMask: ([0-9]{6})
@@ -153,8 +153,8 @@ def _set_input_mask(display_format: str) -> str:
         "INNMask": "([0-9]{10})",
         "OGRNMask": "([0-9]{13})",
         "IndividualINNMask": "([0-9]{12})",
-        "PhoneRuMask": "(\+7 \([0-9]{3}\) [0-9]{3}-[0-9]{2}-[0-9]{2})",
-        "EmailMask": "^(([a-zа-яё0-9_-]+\.)*[a-zа-яё0-9_-]+@[a-zа-яё0-9-]+(\.[a-zа-яё0-9-]+)*\.[a-zа-яё]{2,6})?$",
+        "PhoneRuMask": "(\\+7 \\([0-9]{3}\\) [0-9]{3}-[0-9]{2}-[0-9]{2})",
+        "EmailMask": "^(([a-zа-яё0-9_-]+\\.)*[a-zа-яё0-9_-]+@[a-zа-яё0-9-]+(\\.[a-zа-яё0-9-]+)*\\.[a-zа-яё]{2,6})?$",
         "CustomMask": None
     }
 
