@@ -14,7 +14,7 @@ def edit_or_create_role_attribute(
     store_multiple_values: Optional[bool] = False,
 ) -> Dict[str, Any]:
     """
-    Edit or Create a role attribute.
+    Edit or Create a role attribute (Роль).
     
     Role attribute is linked to roles in the system.
     

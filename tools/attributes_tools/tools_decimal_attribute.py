@@ -39,7 +39,7 @@ def edit_or_create_numeric_attribute(
     group_digits_numbers: Optional[bool] = False
 ) -> Dict[str, Any]:
     """
-    Edit or Create a numeric attribute.
+    Edit or Create a numeric attribute (Числовой атрибут).
     
     Numeric attribute stores decimal numbers with configurable decimal places:
         - 0: 123

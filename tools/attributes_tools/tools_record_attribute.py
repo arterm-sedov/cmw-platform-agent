@@ -40,7 +40,7 @@ def edit_or_create_record_attribute(
     related_attribute_system_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Edit or Create a record attribute.
+    Edit or Create a record attribute (Запись, коллекция).
     
     Record attribute is is linked to records in a related template.
     

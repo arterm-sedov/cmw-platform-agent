@@ -47,9 +47,9 @@ def edit_or_create_duration_attribute(
     expression_for_calculation: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Edit or Create a duration attribute.
+    Edit or Create a duration attribute (Длительность).
     
-    Supports various display formats for duration representation.
+    Supports various duration display formats.
     
     - Strictly follow argument schema and its built-in descriptions.
     - Refer to these examples when choosing display_format:
