@@ -110,7 +110,7 @@ class ChatTab:
                     self.components["provider_model_selector"] = gr.Dropdown(
                         choices=self._get_available_provider_model_combinations(),
                         value=self._get_current_provider_model_combination(),
-                        # label=self._get_translation("provider_model_label"),
+                        label=self._get_translation("provider_model_label"),
                         interactive=True,
                         elem_classes=["provider-model-selector"]
                     )
