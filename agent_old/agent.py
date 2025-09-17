@@ -3362,31 +3362,31 @@ class CmwAgent:
                 # Comindware Platform tools - Applications
                 'list_templates', 'list_applications',
                 # Comindware Platform tools - Attributes (Text)
-                'edit_or_create_text_attribute', 'get_text_attribute',
+                'edit_or_create_text_attribute',
                 # Comindware Platform tools - Attributes (Enum)
-                'edit_or_create_enum_attribute', 'get_enum_attribute',
+                'edit_or_create_enum_attribute',
                 # Comindware Platform tools - Attributes (DateTime)
-                'edit_or_create_date_time_attribute', 'get_date_time_attribute',
+                'edit_or_create_date_time_attribute',
                 # Comindware Platform tools - Attributes (Decimal/Numeric)
-                'edit_or_create_numeric_attribute', 'get_numeric_attribute',
+                'edit_or_create_numeric_attribute',
                 # Comindware Platform tools - Attributes (Instance/Record)
-                'edit_or_create_record_attribute', 'get_record_attribute',
+                'edit_or_create_record_attribute',
                 # Comindware Platform tools - Attributes (Image)
-                'edit_or_create_image_attribute', 'get_image_attribute',
+                'edit_or_create_image_attribute',
                 # Comindware Platform tools - Attributes (Drawing)
-                'edit_or_create_drawing_attribute', 'get_drawing_attribute',
+                'edit_or_create_drawing_attribute',
                 # Comindware Platform tools - Attributes (Document)
-                'edit_or_create_document_attribute', 'get_document_attribute',
+                'edit_or_create_document_attribute',
                 # Comindware Platform tools - Attributes (Duration)
-                'edit_or_create_duration_attribute', 'get_duration_attribute',
+                'edit_or_create_duration_attribute',
                 # Comindware Platform tools - Attributes (Account)
-                'edit_or_create_account_attribute', 'get_account_attribute',
+                'edit_or_create_account_attribute',
                 # Comindware Platform tools - Attributes (Boolean)
-                'edit_or_create_boolean_attribute', 'get_boolean_attribute',
+                'edit_or_create_boolean_attribute',
                 # Comindware Platform tools - Attributes (Role)
-                'edit_or_create_role_attribute', 'get_role_attribute',
+                'edit_or_create_role_attribute',
                 # Comindware Platform tools - Attributes (Utility)
-                'delete_attribute', 'archive_or_unarchive_attribute'
+                'delete_attribute', 'archive_or_unarchive_attribute', 'get_attribute'
         ]
         
         # Build a set of tool names for deduplication (handle both __name__ and .name attributes)

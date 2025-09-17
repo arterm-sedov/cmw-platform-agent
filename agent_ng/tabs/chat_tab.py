@@ -44,7 +44,7 @@ class ChatTab:
         """Create the main chat interface with proper layout"""
         with gr.Row():
             with gr.Column(elem_classes=["chat-hints"]):
-                gr.Markdown(f"## {self._get_translation("welcome_title")}", elem_classes=["chat-hints-title"])
+                gr.Markdown(f"## {self._get_translation('welcome_title')}", elem_classes=["chat-hints-title"])
 
                 gr.Markdown(self._get_translation("welcome_description")) 
             
