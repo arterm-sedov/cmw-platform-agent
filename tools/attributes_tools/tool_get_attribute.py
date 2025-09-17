@@ -13,8 +13,11 @@ def get_attribute(
         dict: {
             "success": bool - True if the attribute was fetched successfully
             "status_code": int - HTTP response status code  
-            "raw_response": dict|str|None - Raw response payload for auditing or payload body (sanitized)
             "error": str|None - Error message if operation failed
+            "attribute property 1": value 1,
+            "attribute property 2": value 2,
+            ...
+            "attribute property N": value N
         }
     """
 
@@ -25,7 +28,7 @@ def get_attribute(
 
     return execute_get_operation(
         result_model=AttributeResult,
-        response_mapping=ATTRIBUTE_RESPONE_MAPPING,
+        response_mapping=ATTRIBUTE_RESPONSE_MAPPING,
         endpoint=endpoint
     )
 

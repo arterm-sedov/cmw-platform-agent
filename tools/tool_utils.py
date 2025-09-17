@@ -25,38 +25,38 @@ KEYS_TO_REMOVE_MAPPING = {
     "Boolean": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
     "Account": ['isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio']
 }
-ATTRIBUTE_RESPONE_MAPPING = {
-    "owner": "Template System Name",
-    "alias": "System Name",
-    "type": "Type",
+ATTRIBUTE_RESPONSE_MAPPING = {
+    "owner": "Parent template system name",
+    "alias": "Attribute system name",
+    "type": "Attribute type",
     "format": "Display format",
     "name": "Name",
     "description": "Description",
-    "isSystem": "Is System",
-    "isDisabled": "In Archive",
-    "isUnique": "Control Uniqueness",
+    "isSystem": "Is system",
+    "isDisabled": "Archived",
+    "isUnique": "Control value uniqueness",
     "isIndexed": "Use to search records",
     "isTracked": "Write changes to the log",
     "isDigitGrouping": "Group digits numbers",
     "isMultiValue": "Store multiple values",
     "isTitle": "Use as record title",
     "isCalculated": "Calculate value",
-    "isReadonly": "Is Readonly",
-    "expression": "Expression for calculation",
+    "isReadonly": "Is readonly",
+    "expression": "Expression for value calculation",
     "fileFormat": "File extensions filter",
-    "uriChemeFormats": "Uri chemes filter",
+    "uriSchemeFormats": "Allowed URI schemes  ",
     "instanceAlias": "Related template system name",
     "instanceAttributeAlias": "Related attribute system name",
     "imageColorType": "Rendering color mode",
-    "imageWidth": "Image Width",
-    "imageHeight": "Image Height",
-    "imagePreserveAspectRatio": "Save image aspect ration",
+    "imageWidth": "Image width",
+    "imageHeight": "Image height",
+    "imagePreserveAspectRatio": "Save image aspect ratio",
     "imageXResolution": "X-axis image resolution",
     "imageYResolution": "Y-axis image resolution",
     "decimalPlaces": "Number decimal places",
     "validationMaskRegex": "Custom mask",
     "variants": "Enum values",
-    "linkedRecordTemplate": "Related template Id"
+    "linkedRecordTemplate": "Related template ID"
 }
 
 def remove_values(
@@ -216,12 +216,12 @@ def execute_get_operation(
                 # Цвет
                 color = variant.get("color", "")
 
-                # Формуруем новый элемент
+                # Формируем новый элемент
                 processed_variants.append({
                     "System name": alias_value,
                     "English name": en_name,
                     "Russian name": ru_name,
-                    "Deutsche name": de_name,
+                    "German name": de_name,
                     "Color": color
                 })
 
@@ -236,14 +236,17 @@ def execute_get_operation(
             new_key = response_mapping.get(key, key)
             renamed_data[new_key] = value
         attribute_data = renamed_data
+        
+        
 
     # Формируем финальный результат
     final_result = {
         "success": True,
         "status_code": result["status_code"],
-        "data": attribute_data,
         "error": None
     }
+
+    final_result = {**attribute_data, **final_result}
 
     # Валидируем и возвращаем
     validated = result_model(**final_result)
