@@ -79,7 +79,6 @@ except ImportError:
         from agent_ng.llm_manager import get_llm_manager, LLMInstance
         from agent_ng.langchain_memory import get_memory_manager, create_conversation_chain
         from agent_ng.error_handler import get_error_handler
-        # from agent_ng.streaming_manager import get_streaming_manager  # Moved to .unused
         from agent_ng.message_processor import get_message_processor
         from agent_ng.response_processor import get_response_processor
         from agent_ng.stats_manager import get_stats_manager
@@ -91,7 +90,6 @@ except ImportError:
         get_memory_manager = lambda: None
         create_conversation_chain = lambda *args: None
         get_error_handler = lambda: None
-        # get_streaming_manager = lambda: None  # Moved to .unused
         get_message_processor = lambda: None
         get_response_processor = lambda: None
         get_stats_manager = lambda: None
