@@ -9,7 +9,7 @@ The proxy system is designed with **separation of concerns** and **modularity**:
 - **`agent_ng/proxy_config.py`** - Central proxy configuration module with reset functionality
 - **Agent Proxy Config** - For HTTP requests and tools (`tools/requests_.py`, `tools/tools.py`)
 - **LLM Proxy Config** - For LLM providers (`agent_ng/llm_manager.py`)
-- **Automatic Reset** - Configuration resets when switching LLM providers or refreshing UI
+- **Selective Reset** - Configuration resets only when switching between different LLM providers
 
 ## 🚀 Quick Start
 
@@ -280,13 +280,15 @@ print(f"LLM proxy enabled: {llm_proxy.enabled}")
 reset_proxy_configs()
 ```
 
-### Debug Mode
+### Debug Mode (Development Only)
 
 ```bash
-# Enable debug logging
+# Enable debug logging (development/testing only)
 CMW_DEBUG_MODE=true
 CMW_VERBOSE_LOGGING=true
 ```
+
+**Note**: Debug mode should be disabled in production environments.
 
 ## 🚨 Troubleshooting
 
@@ -342,6 +344,33 @@ python -c "from agent_ng.proxy_config import reset_proxy_configs; reset_proxy_co
 3. **No Proxy List**: Configure appropriate bypass rules
 4. **Network Security**: Ensure proxy servers are properly secured
 
+## 🚀 Production Considerations
+
+### Performance Optimization
+
+1. **Debug Output**: The current implementation includes debug prints that should be removed for production
+2. **Module Loading**: Debug file inspection on import should be disabled
+3. **Logging**: Use proper logging framework instead of print statements
+4. **Caching**: Configuration caching is already implemented for optimal performance
+
+### Recommended Production Modifications
+
+```python
+# Remove these debug lines from proxy_config.py for production:
+# Lines 22-40: Module-level debug prints
+# Lines 139-202: Verbose debug output in _load_proxy_config
+# Lines 100-106, 125-133: Debug prints in reset methods
+```
+
+### Clean Production Version
+
+A production-ready version should:
+
+- Remove all `print()` statements
+- Use proper logging with configurable levels
+- Remove file system inspection on import
+- Maintain the same functionality with cleaner code
+
 ## 📚 Advanced Configuration
 
 ### Custom Proxy Headers
@@ -378,8 +407,9 @@ def get_proxy_for_url(self, url: str) -> ProxyConfig:
 4. **Test thoroughly** before production deployment
 5. **Monitor proxy performance** and adjust as needed
 6. **Use `AGENT_PROXY_ENABLED=false`** for local development to avoid proxy issues
-7. **Enable debug mode** when troubleshooting proxy configuration issues
+7. **Enable debug mode only when troubleshooting** proxy configuration issues
 8. **Reset configurations** when switching between different network environments
+9. **Disable debug mode in production** to maintain clean logs and optimal performance
 
 ## 🔄 Recent Improvements
 
@@ -395,10 +425,10 @@ def get_proxy_for_url(self, url: str) -> ProxyConfig:
    - Prevents `requests` library from using unintended proxy settings
    - Smart fallback hierarchy for configuration loading
 
-3. **Improved Debug Output**
-   - Comprehensive debug logging for proxy configuration loading
-   - Clear indication of which proxy settings are being applied
-   - Easy troubleshooting with detailed environment variable tracking
+3. **Production-Ready Design**
+   - Clean, minimal debug output (disabled by default)
+   - Efficient configuration loading without verbose logging
+   - Optimized for production performance
 
 4. **Robust Error Handling**
    - Graceful handling of missing or invalid proxy configurations
