@@ -124,7 +124,7 @@ class NextGenApp:
         # Progress status storage with translation
         self.current_progress_status = get_translation_key("progress_ready", language)
         self.progress_icon_index = 0
-        self.progress_icons = ["🔄", "⚙️", "🔧", "⚡", "🔄", "⚙️", "🔧", "⚡"]
+        self.progress_icons = ["🔄", "⚙️", "🔧", "⚡"]
         self.is_processing = False
         
         # Initialize synchronously first, then start async initialization
