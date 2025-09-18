@@ -3,6 +3,16 @@ import json
 import requests
 import yaml
 import base64
+import os
+import sys
+
+# Add parent directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+from agent_ng.proxy_config import get_agent_proxy_config
 
 # Load server config from YAML
 def _load_server_config() -> Dict[str, str]:
@@ -58,11 +68,19 @@ def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]
     url = f"{base_url}/{endpoint}"
     headers = _basic_headers()
 
+    proxy_config = get_agent_proxy_config()
+    print(f"🔍 [DEBUG] Making POST request to: {url}")
+    print(f"🔍 [DEBUG] Using proxy config: {proxy_config.to_dict()}")
+    print(f"🔍 [DEBUG] SSL verify: {proxy_config.verify_ssl}")
+    print(f"🔍 [DEBUG] Timeout: {proxy_config.timeout}")
+    
     response = requests.post(
         url,
         headers=headers,
         data=json.dumps(request_body),
-        timeout=30
+        proxies=proxy_config.to_dict(),
+        verify=proxy_config.verify_ssl,
+        timeout=proxy_config.timeout
     )
     response.raise_for_status()
 
@@ -102,11 +120,14 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
     url = f"{base_url}/{endpoint}"
     headers = _basic_headers()
 
+    proxy_config = get_agent_proxy_config()
     response = requests.put(
         url,
         headers=headers,
         data=json.dumps(request_body),
-        timeout=30
+        proxies=proxy_config.to_dict(),
+        verify=proxy_config.verify_ssl,
+        timeout=proxy_config.timeout
     )
     response.raise_for_status()
 
@@ -146,10 +167,13 @@ def _get_request(endpoint: str) -> Dict[str, Any]:
     url = f"{base_url}/{endpoint}"
     headers = _basic_headers()
 
+    proxy_config = get_agent_proxy_config()
     response = requests.get(
         url,
         headers=headers,
-        timeout=30
+        proxies=proxy_config.to_dict(),
+        verify=proxy_config.verify_ssl,
+        timeout=proxy_config.timeout
     )
     response.raise_for_status()
 
@@ -182,10 +206,13 @@ def _delete_request(endpoint: str) -> Dict[str, Any]:
     url = f"{base_url}/{endpoint}"
     headers = _basic_headers()
 
+    proxy_config = get_agent_proxy_config()
     response = requests.delete(
         url,
         headers=headers,
-        timeout=30
+        proxies=proxy_config.to_dict(),
+        verify=proxy_config.verify_ssl,
+        timeout=proxy_config.timeout
     )
     response.raise_for_status()
 

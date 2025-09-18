@@ -18,6 +18,14 @@ import sqlite3
 import cmath
 import time
 import re
+
+# Add parent directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+from agent_ng.proxy_config import get_agent_proxy_config
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 from typing import Any, Dict, List, Optional, Union, Tuple, Literal
 from pydantic import BaseModel, Field, field_validator
@@ -855,7 +863,14 @@ def download_file_from_url(url: str, filename: Optional[str] = None) -> str:
                 filename = f"downloaded_{uuid.uuid4().hex[:8]}"
         temp_dir = tempfile.gettempdir()
         filepath = os.path.join(temp_dir, filename)
-        response = requests.get(url, stream=True)
+        proxy_config = get_agent_proxy_config()
+        response = requests.get(
+            url, 
+            stream=True,
+            proxies=proxy_config.to_dict(),
+            verify=proxy_config.verify_ssl,
+            timeout=proxy_config.timeout
+        )
         response.raise_for_status()
         with open(filepath, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
@@ -895,7 +910,13 @@ def get_task_file(task_id: str, file_name: str) -> str:
     try:
         # Try to download from evaluation API
         evaluation_api_base_url = os.environ.get("EVALUATION_API_BASE_URL", "https://api.gaia-benchmark.com")
-        response = requests.get(f"{evaluation_api_base_url}/files/{task_id}", timeout=15)
+        proxy_config = get_agent_proxy_config()
+        response = requests.get(
+            f"{evaluation_api_base_url}/files/{task_id}", 
+            proxies=proxy_config.to_dict(),
+            verify=proxy_config.verify_ssl,
+            timeout=15
+        )
         response.raise_for_status()
         filepath = os.path.join(directory_name, file_name)
         with open(filepath, 'wb') as file:

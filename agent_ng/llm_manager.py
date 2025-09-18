@@ -55,6 +55,8 @@ except ImportError:
     except ImportError:
         ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
 
+from .proxy_config import apply_llm_proxy_environment, reset_proxy_configs
+
 
 class LLMProvider(Enum):
     """Enumeration of supported LLM providers"""
@@ -314,6 +316,7 @@ class LLMManager:
         self._initialization_logs = []
         self._health_check_interval = 300  # 5 minutes
         self._last_health_check = 0
+        self._last_provider: Optional[str] = None  # Track last provider for reset logic
         
     def _log_initialization(self, message: str, level: str = "INFO"):
         """Log initialization messages"""
@@ -336,6 +339,9 @@ class LLMManager:
             return None
             
         try:
+            # Apply LLM proxy configuration to environment
+            apply_llm_proxy_environment()
+            
             llm = ChatGoogleGenerativeAI(
                 model=model_config["model"],
                 google_api_key=api_key,
@@ -356,6 +362,9 @@ class LLMManager:
             return None
             
         try:
+            # Apply LLM proxy configuration to environment
+            apply_llm_proxy_environment()
+            
             llm = ChatGroq(
                 model=model_config["model"],
                 groq_api_key=api_key,
@@ -376,6 +385,9 @@ class LLMManager:
             return None
             
         try:
+            # Apply LLM proxy configuration to environment
+            apply_llm_proxy_environment()
+            
             # Convert model to repo_id for HuggingFace
             repo_id = model_config["model"]
             task = model_config.get("task", "text-generation")
@@ -403,6 +415,9 @@ class LLMManager:
             return None
             
         try:
+            # Apply LLM proxy configuration to environment
+            apply_llm_proxy_environment()
+            
             base_url = os.getenv(config.api_base_env, "https://openrouter.ai/api/v1")
             llm = ChatOpenAI(
                 model=model_config["model"],
@@ -425,6 +440,9 @@ class LLMManager:
             return None
             
         try:
+            # Apply LLM proxy configuration to environment
+            apply_llm_proxy_environment()
+            
             llm = ChatMistralAI(
                 model=model_config["model"],
                 mistral_api_key=api_key,
@@ -477,6 +495,9 @@ class LLMManager:
         timeout = int(os.environ.get("GIGACHAT_TIMEOUT", "30"))
         
         try:
+            # Apply LLM proxy configuration to environment
+            apply_llm_proxy_environment()
+            
             # Initialize LangChain GigaChat client with proper parameters
             giga_chat = LC_GigaChat(
                 credentials=api_key,
@@ -560,6 +581,13 @@ class LLMManager:
         Returns:
             LLMInstance or None if initialization failed
         """
+        # Only reset proxy configurations when actually switching providers
+        if self._last_provider is not None and self._last_provider != provider:
+            self._log_initialization(f"Switching from {self._last_provider} to {provider}, resetting proxy configs", "INFO")
+            reset_proxy_configs()
+        
+        self._last_provider = provider
+        
         try:
             provider_enum = LLMProvider(provider.lower())
         except ValueError:
