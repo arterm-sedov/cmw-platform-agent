@@ -213,6 +213,20 @@ class LLMManager:
                     "force_tools": True
                 },
                 {
+                    "model": "openai/gpt-oss-120b",
+                    "token_limit": 131072,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                                {
+                    "model": "openai/gpt-5-mini",
+                    "token_limit": 400000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
                     "model": "x-ai/grok-code-fast-1",
                     "token_limit": 256000,
                     "max_tokens": 10000,
@@ -220,16 +234,9 @@ class LLMManager:
                     "force_tools": True
                 },
                 {
-                    "model": "DeepSeek: R1 0528",
+                    "model": "deepseek/deepseek-r1-0528",
                     "token_limit": 163840,
                     "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "openai/gpt-oss-120b",
-                    "token_limit": 131072,
-                    "max_tokens": 32768,
                     "temperature": 0,
                     "force_tools": True
                 },
