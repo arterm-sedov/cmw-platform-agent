@@ -73,6 +73,17 @@ RUSSIAN_TRANSLATIONS = {
     "apply_llm_button": "Применить",
     "llm_apply_success": "✅ LLM изменена: {provider} - {model}",
     "llm_apply_error": "❌ Ошибка применения LLM",
+    
+    # Mistral switching confirmation
+    "mistral_switch_title": "⚠️ Внимание! Переключение на Mistral",
+    "mistral_switch_warning": """
+    Идёт переключение на {provider} / {model}
+
+    Mistral не совместима с другими нейросетями. 
+    Для продолжения работы чат был очищен.
+    """,
+    "mistral_chat_cleared": "Чат очищен для совместимости с Mistral.",
+    "mistral_switch_cancelled": "❌ Переключение на Mistral отменено",
     "current_provider": "Провайдер: {provider}",
     "current_model": "Модель: {model}",
     
@@ -305,6 +316,17 @@ ENGLISH_TRANSLATIONS = {
     "apply_llm_button": "Apply",
     "llm_apply_success": "✅ LLM changed: {provider} - {model}",
     "llm_apply_error": "❌ Error applying LLM",
+    
+    # Mistral switching confirmation
+    "mistral_switch_title": "⚠️ Warning! Switching to Mistral",
+    "mistral_switch_warning": """
+    Switching to {provider} / {model}...
+    
+    Mistral is not compatible with other providers. 
+    The chat was cleared to continue working.
+    """,
+    "mistral_chat_cleared": "Chat cleared for Mistral compatibility.",
+    "mistral_switch_cancelled": "❌ Mistral switching cancelled",
     "current_provider": "Provider: {provider}",
     "current_model": "**Model:** {model}",
     
