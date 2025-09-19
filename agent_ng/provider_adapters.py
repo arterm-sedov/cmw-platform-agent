@@ -14,6 +14,8 @@ Key Features:
 """
 
 import re
+import random
+import string
 from typing import List, Dict, Any, Optional, Union, Callable
 from langchain_core.messages import BaseMessage
 
@@ -22,6 +24,41 @@ try:
     from langchain_mistralai.chat_models import ChatMistralAI
 except ImportError:
     ChatMistralAI = None
+
+
+def generate_mistral_tool_call_id() -> str:
+    """
+    Generate a tool call ID that meets Mistral's requirements.
+    
+    Mistral requires tool call IDs to be:
+    - Exactly 9 characters long
+    - Only alphanumeric characters (a-z, A-Z, 0-9)
+    
+    Returns:
+        A 9-character alphanumeric string suitable for Mistral tool calls
+    """
+    # Generate 9 random alphanumeric characters
+    characters = string.ascii_letters + string.digits  # a-z, A-Z, 0-9
+    return ''.join(random.choice(characters) for _ in range(9))
+
+
+def fix_tool_call_ids_for_mistral(tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Fix tool call IDs in a list of tool calls to meet Mistral's requirements.
+    
+    Args:
+        tool_calls: List of tool call dictionaries
+        
+    Returns:
+        List of tool call dictionaries with fixed IDs
+    """
+    fixed_tool_calls = []
+    for tool_call in tool_calls:
+        fixed_tool_call = tool_call.copy()
+        # Generate a new ID that meets Mistral's requirements
+        fixed_tool_call['id'] = generate_mistral_tool_call_id()
+        fixed_tool_calls.append(fixed_tool_call)
+    return fixed_tool_calls
 
 
 class ProviderDetector:
@@ -250,7 +287,14 @@ class MistralWrapper:
             converted_messages = MistralMessageConverter.convert_messages(messages)
             
             # Call the original invoke method with converted messages
-            return self.llm.invoke(converted_messages, **kwargs)
+            response = self.llm.invoke(converted_messages, **kwargs)
+            
+            # Fix tool call IDs in the response if present
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                response.tool_calls = fix_tool_call_ids_for_mistral(response.tool_calls)
+                print(f"[Mistral Wrapper] Fixed {len(response.tool_calls)} tool call IDs for Mistral compatibility")
+            
+            return response
         except Exception as e:
             # If conversion fails, try with original messages as fallback
             print(f"[Mistral Wrapper] Message conversion failed, using original format: {e}")
@@ -272,11 +316,62 @@ class MistralWrapper:
             converted_messages = MistralMessageConverter.convert_messages(messages)
             
             # Call the original ainvoke method with converted messages
-            return await self.llm.ainvoke(converted_messages, **kwargs)
+            response = await self.llm.ainvoke(converted_messages, **kwargs)
+            
+            # Fix tool call IDs in the response if present
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                response.tool_calls = fix_tool_call_ids_for_mistral(response.tool_calls)
+                print(f"[Mistral Wrapper] Fixed {len(response.tool_calls)} tool call IDs for Mistral compatibility")
+            
+            return response
         except Exception as e:
             # If conversion fails, try with original messages as fallback
             print(f"[Mistral Wrapper] Message conversion failed, using original format: {e}")
             return await self.llm.ainvoke(messages, **kwargs)
+    
+    def stream(self, messages: List[BaseMessage], **kwargs) -> Any:
+        """
+        Stream the LLM response with message conversion for Mistral compatibility.
+        
+        Args:
+            messages: List of LangChain message objects
+            **kwargs: Additional arguments for the LLM
+            
+        Returns:
+            The LLM streaming response
+        """
+        try:
+            # Convert messages to Mistral format
+            converted_messages = MistralMessageConverter.convert_messages(messages)
+            
+            # Call the original stream method with converted messages
+            return self.llm.stream(converted_messages, **kwargs)
+        except Exception as e:
+            # If conversion fails, try with original messages as fallback
+            print(f"[Mistral Wrapper] Message conversion failed, using original format: {e}")
+            return self.llm.stream(messages, **kwargs)
+    
+    async def astream(self, messages: List[BaseMessage], **kwargs) -> Any:
+        """
+        Async stream the LLM response with message conversion for Mistral compatibility.
+        
+        Args:
+            messages: List of LangChain message objects
+            **kwargs: Additional arguments for the LLM
+            
+        Returns:
+            The LLM async streaming response
+        """
+        try:
+            # Convert messages to Mistral format
+            converted_messages = MistralMessageConverter.convert_messages(messages)
+            
+            # Call the original astream method with converted messages
+            return self.llm.astream(converted_messages, **kwargs)
+        except Exception as e:
+            # If conversion fails, try with original messages as fallback
+            print(f"[Mistral Wrapper] Message conversion failed, using original format: {e}")
+            return self.llm.astream(messages, **kwargs)
     
     def __getattr__(self, name):
         """
