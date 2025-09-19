@@ -87,26 +87,26 @@ class ChatTab:
                 )
                 
                 with gr.Row():
-                    self.components["msg"] = gr.Textbox(
+                    self.components["msg"] = gr.MultimodalTextbox(
                         label=self._get_translation("message_label"),
                         placeholder=self._get_translation("message_placeholder"),
                         lines=2,
                         scale=4,
                         max_lines=4,
                         elem_id="message-input",
-                        elem_classes=["message-card"]
+                        elem_classes=["message-card"],
+                        file_types=["image", "audio", "video", "text"],
+                        file_count="multiple"
                     )
                     with gr.Column():
                         self.components["send_btn"] = gr.Button(self._get_translation("send_button"), variant="primary", scale=1, elem_classes=["cmw-button"])
                         self.components["clear_btn"] = gr.Button(self._get_translation("clear_button"), variant="secondary", elem_classes=["cmw-button"])
-                        self.components["download_btn"] = gr.Button(self._get_translation("download_button"), variant="secondary", elem_classes=["cmw-button"])
-                        
-                        # State variables for file download
-                        self.components["file_ready"] = gr.State(False)
-                        self.components["file_path"] = gr.State(None)
-                        
-                        # Static download file component (no render decorator to avoid duplicate IDs)
-                        self.components["download_file"] = self._create_download_file_component()
+                        self.components["download_btn"] = gr.DownloadButton(
+                            label=self._get_translation("download_button"),
+                            variant="secondary",
+                            elem_classes=["cmw-button"],
+                            visible=False
+                        )
                         
                 
             
@@ -120,7 +120,8 @@ class ChatTab:
                     self.components["provider_model_selector"] = gr.Dropdown(
                         choices=self._get_available_provider_model_combinations(),
                         value=self._get_current_provider_model_combination(),
-                        label=self._get_translation("provider_model_label"),
+                        # label=self._get_translation("provider_model_label"),
+                        show_label=False,
                         interactive=True,
                         allow_custom_value=True,
                         elem_classes=["provider-model-selector"]
@@ -173,27 +174,34 @@ class ChatTab:
         
         # Main chat events
         self.components["send_btn"].click(
-            fn=stream_handler,
+            fn=self._stream_message_wrapper,
             inputs=[self.components["msg"], self.components["chatbot"]],
             outputs=[self.components["chatbot"], self.components["msg"]]
         )
         
         self.components["msg"].submit(
-            fn=stream_handler,
+            fn=self._stream_message_wrapper,
             inputs=[self.components["msg"], self.components["chatbot"]],
             outputs=[self.components["chatbot"], self.components["msg"]]
         )
         
         self.components["clear_btn"].click(
             fn=self._clear_chat_with_download_reset,
-            outputs=[self.components["chatbot"], self.components["msg"], self.components["file_ready"], self.components["file_path"], self.components["download_file"]]
+            outputs=[self.components["chatbot"], self.components["msg"], self.components["download_btn"]]
         )
         
-        # Download button event - updates both state variables and file component
+        # Download button event - updates the download button with file path
         self.components["download_btn"].click(
             fn=self._download_conversation_wrapper,
             inputs=[self.components["chatbot"]],
-            outputs=[self.components["file_ready"], self.components["file_path"], self.components["download_file"]]
+            outputs=[self.components["download_btn"]]
+        )
+        
+        # Show download button when there's conversation history
+        self.components["chatbot"].change(
+            fn=self._update_download_button_visibility,
+            inputs=[self.components["chatbot"]],
+            outputs=[self.components["download_btn"]]
         )
         
         # Trigger UI updates after chat events
@@ -201,78 +209,78 @@ class ChatTab:
         
         # Quick action events (using local methods)
         self.components["quick_math_btn"].click(
-            fn=self._quick_math,
+            fn=self._quick_math_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_code_btn"].click(
-            fn=self._quick_code,
+            fn=self._quick_code_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_explain_btn"].click(
-            fn=self._quick_explain,
+            fn=self._quick_explain_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_create_attr_btn"].click(
-            fn=self._quick_create_attr,
+            fn=self._quick_create_attr_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_edit_mask_btn"].click(
-            fn=self._quick_edit_mask,
+            fn=self._quick_edit_mask_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_list_apps_btn"].click(
-            fn=self._quick_list_apps,
+            fn=self._quick_list_apps_multimodal,
             outputs=[self.components["msg"]]
         )
         
         # Query example button events
         self.components["quick_edit_enum_btn"].click(
-            fn=self._quick_edit_enum,
+            fn=self._quick_edit_enum_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_templates_erp_btn"].click(
-            fn=self._quick_templates_erp,
+            fn=self._quick_templates_erp_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_attributes_contractors_btn"].click(
-            fn=self._quick_attributes_contractors,
+            fn=self._quick_attributes_contractors_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_create_comment_attr_btn"].click(
-            fn=self._quick_create_comment_attr,
+            fn=self._quick_create_comment_attr_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_create_id_attr_btn"].click(
-            fn=self._quick_create_id_attr,
+            fn=self._quick_create_id_attr_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_edit_phone_mask_btn"].click(
-            fn=self._quick_edit_phone_mask,
+            fn=self._quick_edit_phone_mask_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_get_comment_attr_btn"].click(
-            fn=self._quick_get_comment_attr,
+            fn=self._quick_get_comment_attr_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_edit_date_time_btn"].click(
-            fn=self._quick_edit_date_time,
+            fn=self._quick_edit_date_time_multimodal,
             outputs=[self.components["msg"]]
         )
         
         self.components["quick_archive_attr_btn"].click(
-            fn=self._quick_archive_attr,
+            fn=self._quick_archive_attr_multimodal,
             outputs=[self.components["msg"]]
         )
         
@@ -320,7 +328,7 @@ class ChatTab:
         """Get the status display component for auto-refresh"""
         return self.components["status_display"]
     
-    def get_message_component(self) -> gr.Textbox:
+    def get_message_component(self) -> gr.MultimodalTextbox:
         """Get the message input component for quick actions"""
         return self.components["msg"]
     
@@ -686,15 +694,38 @@ class ChatTab:
         from ..i18n_translations import get_translation_key
         return get_translation_key(key, self.language)
     
-    def _create_download_file_component(self, value=None, visible=False):
-        """Create a download file component with consistent parameters"""
-        return gr.File(
-            value=value,
-            label=self._get_translation("download_file_label"),
-            visible=visible,
-            interactive=False,
-            elem_classes=["download-file-pane"]
-        )
+    def _stream_message_wrapper(self, multimodal_value, history):
+        """Wrapper to handle MultimodalValue format and extract text for processing"""
+        # Extract text from MultimodalValue format
+        if isinstance(multimodal_value, dict):
+            message = multimodal_value.get("text", "")
+            files = multimodal_value.get("files", [])
+            
+            # If there are files, we could process them here
+            # For now, we'll just include file information in the message
+            if files:
+                file_info = f"\n\n[Files attached: {len(files)} file(s)]"
+                for i, file in enumerate(files, 1):
+                    if isinstance(file, dict):
+                        filename = file.get("orig_name", f"file_{i}")
+                        file_info += f"\n- {filename}"
+                    else:
+                        file_info += f"\n- {file}"
+                message += file_info
+        else:
+            # Fallback for non-dict values
+            message = str(multimodal_value) if multimodal_value else ""
+        
+        # Get the original stream handler
+        stream_handler = self.event_handlers.get("stream_message")
+        if not stream_handler:
+            yield history, ""
+            return
+        
+        # Call the original stream handler with extracted text
+        for result in stream_handler(message, history):
+            yield result
+    
     
     # Quick action methods
     def _quick_math(self) -> str:
@@ -758,6 +789,67 @@ class ChatTab:
         """Generate query archive attribute message"""
         return self._get_translation("quick_archive_attr_message")
     
+    # Multimodal wrapper methods for quick actions
+    def _quick_math_multimodal(self) -> Dict[str, Any]:
+        """Generate math quick action message in MultimodalValue format"""
+        return {"text": self._quick_math(), "files": []}
+    
+    def _quick_code_multimodal(self) -> Dict[str, Any]:
+        """Generate code quick action message in MultimodalValue format"""
+        return {"text": self._quick_code(), "files": []}
+    
+    def _quick_explain_multimodal(self) -> Dict[str, Any]:
+        """Generate explain quick action message in MultimodalValue format"""
+        return {"text": self._quick_explain(), "files": []}
+    
+    def _quick_create_attr_multimodal(self) -> Dict[str, Any]:
+        """Generate create attribute quick action message in MultimodalValue format"""
+        return {"text": self._quick_create_attr(), "files": []}
+    
+    def _quick_edit_mask_multimodal(self) -> Dict[str, Any]:
+        """Generate edit mask quick action message in MultimodalValue format"""
+        return {"text": self._quick_edit_mask(), "files": []}
+    
+    def _quick_list_apps_multimodal(self) -> Dict[str, Any]:
+        """Generate list apps quick action message in MultimodalValue format"""
+        return {"text": self._quick_list_apps(), "files": []}
+    
+    def _quick_edit_enum_multimodal(self) -> Dict[str, Any]:
+        """Generate query list apps message in MultimodalValue format"""
+        return {"text": self._quick_edit_enum(), "files": []}
+    
+    def _quick_templates_erp_multimodal(self) -> Dict[str, Any]:
+        """Generate query templates ERP message in MultimodalValue format"""
+        return {"text": self._quick_templates_erp(), "files": []}
+    
+    def _quick_attributes_contractors_multimodal(self) -> Dict[str, Any]:
+        """Generate query attributes contractors message in MultimodalValue format"""
+        return {"text": self._quick_attributes_contractors(), "files": []}
+    
+    def _quick_create_comment_attr_multimodal(self) -> Dict[str, Any]:
+        """Generate query create comment attribute message in MultimodalValue format"""
+        return {"text": self._quick_create_comment_attr(), "files": []}
+    
+    def _quick_create_id_attr_multimodal(self) -> Dict[str, Any]:
+        """Generate query create ID attribute message in MultimodalValue format"""
+        return {"text": self._quick_create_id_attr(), "files": []}
+    
+    def _quick_edit_phone_mask_multimodal(self) -> Dict[str, Any]:
+        """Generate query edit phone mask message in MultimodalValue format"""
+        return {"text": self._quick_edit_phone_mask(), "files": []}
+    
+    def _quick_get_comment_attr_multimodal(self) -> Dict[str, Any]:
+        """Generate query get comment attribute message in MultimodalValue format"""
+        return {"text": self._quick_get_comment_attr(), "files": []}
+    
+    def _quick_edit_date_time_multimodal(self) -> Dict[str, Any]:
+        """Generate query enum add value message in MultimodalValue format"""
+        return {"text": self._quick_edit_date_time(), "files": []}
+    
+    def _quick_archive_attr_multimodal(self) -> Dict[str, Any]:
+        """Generate query archive attribute message in MultimodalValue format"""
+        return {"text": self._quick_archive_attr(), "files": []}
+    
     def _clear_chat_with_download_reset(self):
         """Clear chat and reset download state"""
         # Get the clear handler from event handlers
@@ -765,21 +857,43 @@ class ChatTab:
         if clear_handler:
             # Call the original clear handler
             chatbot, msg = clear_handler()
-            # Reset download state and file component
-            return chatbot, msg, False, None, self._create_download_file_component()
+            # Reset download button (hide it) and return empty MultimodalValue
+            empty_multimodal = {"text": "", "files": []}
+            return chatbot, empty_multimodal, gr.DownloadButton(visible=False)
         else:
             # Fallback if clear handler not available
-            return [], "", False, None, self._create_download_file_component()
+            empty_multimodal = {"text": "", "files": []}
+            return [], empty_multimodal, gr.DownloadButton(visible=False)
     
     def _download_conversation_wrapper(self, history):
-        """Wrapper to handle the download and update state variables and file component"""
+        """Wrapper to handle the download and update the download button"""
         file_path = self._download_conversation_as_markdown(history)
         if file_path:
-            # Return state variables and updated file component
-            return True, file_path, self._create_download_file_component(value=file_path, visible=True)
+            # Return updated download button with file path and make it visible
+            return gr.DownloadButton(
+                label=self._get_translation("download_button"),
+                value=file_path,
+                variant="secondary",
+                elem_classes=["cmw-button"],
+                visible=True
+            )
         else:
-            # Return state variables and hidden file component
-            return False, None, self._create_download_file_component()
+            # Return hidden download button
+            return gr.DownloadButton(visible=False)
+    
+    def _update_download_button_visibility(self, history):
+        """Update download button visibility based on conversation history"""
+        if history and len(history) > 0:
+            # Show download button when there's conversation history
+            return gr.DownloadButton(
+                label=self._get_translation("download_button"),
+                variant="secondary",
+                elem_classes=["cmw-button"],
+                visible=True
+            )
+        else:
+            # Hide download button when no conversation history
+            return gr.DownloadButton(visible=False)
     
     def _download_conversation_as_markdown(self, history) -> str:
         """
