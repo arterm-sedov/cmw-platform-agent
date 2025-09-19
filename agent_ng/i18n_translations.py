@@ -60,8 +60,10 @@ RUSSIAN_TRANSLATIONS = {
     "chat_label": "Чат с агентом",
     "message_label": "Ваше сообщение",
     "message_placeholder": "Введите ваше сообщение...",
-    "send_button": "Отправить",
-    "clear_button": "Очистить чат",
+        "send_button": "Отправить",
+        "clear_button": "Очистить чат",
+        "download_button": "📥 Собрать файл с диалогом",
+        "download_file_label": "Скачать Markdown",
     
     # LLM Selection section
     "llm_selection_title": "🔧 Выбор LLM",
@@ -272,8 +274,10 @@ ENGLISH_TRANSLATIONS = {
     "chat_label": "Chat with the Agent",
     "message_label": "Your Message",
     "message_placeholder": "Type your message here",
-    "send_button": "Send",
-    "clear_button": "Clear chat",
+        "send_button": "Send",
+        "clear_button": "Clear chat",
+        "download_button": "📥 Compile conversation file",
+        "download_file_label": "Download Markdown",
     
     # LLM Selection section
     "llm_selection_title": "🔧 LLM Selection",
