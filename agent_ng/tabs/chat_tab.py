@@ -99,6 +99,30 @@ class ChatTab:
                     with gr.Column():
                         self.components["send_btn"] = gr.Button(self._get_translation("send_button"), variant="primary", scale=1, elem_classes=["cmw-button"])
                         self.components["clear_btn"] = gr.Button(self._get_translation("clear_button"), variant="secondary", elem_classes=["cmw-button"])
+                        self.components["download_btn"] = gr.Button(self._get_translation("download_button"), variant="secondary", elem_classes=["cmw-button"])
+                        
+                        # State variables for render decorator approach
+                        self.components["file_ready"] = gr.State(False)
+                        self.components["file_path"] = gr.State(None)
+                        
+                        # Dynamic download file component using render decorator
+                        @gr.render(inputs=[self.components["file_ready"], self.components["file_path"]])
+                        def render_download_file(is_ready, file_path):
+                            if is_ready and file_path:
+                                return gr.File(
+                                    value=file_path,
+                                    label=self._get_translation("download_file_label"),
+                                    visible=True,
+                                    interactive=False,
+                                    elem_classes=["download-file-pane"]
+                                )
+                            else:
+                                return None
+                        
+                        # Store the render function reference
+                        self.components["download_file"] = render_download_file
+                        
+                
             
             # Status and Quick Actions sidebar (moved here to be on the right)
             with gr.Column(scale=1):
@@ -175,8 +199,15 @@ class ChatTab:
         )
         
         self.components["clear_btn"].click(
-            fn=clear_handler,
-            outputs=[self.components["chatbot"], self.components["msg"]]
+            fn=self._clear_chat_with_download_reset,
+            outputs=[self.components["chatbot"], self.components["msg"], self.components["file_ready"], self.components["file_path"]]
+        )
+        
+        # Download button event - now updates state variables
+        self.components["download_btn"].click(
+            fn=self._download_conversation_wrapper,
+            inputs=[self.components["chatbot"]],
+            outputs=[self.components["file_ready"], self.components["file_path"]]
         )
         
         # Trigger UI updates after chat events
@@ -624,3 +655,92 @@ class ChatTab:
     def _quick_archive_attr(self) -> str:
         """Generate query archive attribute message"""
         return self._get_translation("quick_archive_attr_message")
+    
+    def _clear_chat_with_download_reset(self):
+        """Clear chat and reset download state"""
+        # Get the clear handler from event handlers
+        clear_handler = self.event_handlers.get("clear_chat")
+        if clear_handler:
+            # Call the original clear handler
+            chatbot, msg = clear_handler()
+            # Reset download state
+            return chatbot, msg, False, None
+        else:
+            # Fallback if clear handler not available
+            return [], "", False, None
+    
+    def _download_conversation_wrapper(self, history):
+        """Wrapper to handle the download and update state variables"""
+        file_path = self._download_conversation_as_markdown(history)
+        if file_path:
+            return True, file_path  # file_ready=True, file_path=path
+        else:
+            return False, None  # file_ready=False, file_path=None
+    
+    def _download_conversation_as_markdown(self, history) -> str:
+        """
+        Download the conversation history as a markdown file.
+        
+        Args:
+            history: List of conversation messages from Gradio chatbot component
+            
+        Returns:
+            File path if successful, None if failed
+        """
+        import os
+        import tempfile
+        from datetime import datetime
+        
+        print(f"DEBUG: Download function called with history type: {type(history)}")
+        print(f"DEBUG: History content: {history}")
+        
+        if not history:
+            print("DEBUG: No history provided")
+            return None
+        
+        # Create timestamped filename
+        timestamp = datetime.now().strftime('%Y%m%d')
+        filename = f"CMW_Copilot_{timestamp}.md"
+        
+        # Create markdown content
+        markdown_content = f"# CMW Platform Agent - Conversation Export\n\n"
+        markdown_content += f"**Exported on:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        markdown_content += f"**Total messages:** {len(history)}\n\n"
+        markdown_content += "---\n\n"
+        
+        # Add conversation messages
+        # Handle the actual format from the debug output
+        for i, message in enumerate(history, 1):
+            if isinstance(message, dict):
+                role = message.get("role", "unknown")
+                content = message.get("content", "")
+                
+                if role == "user":
+                    markdown_content += f"## User Message {i}\n\n"
+                    markdown_content += f"{content}\n\n"
+                elif role == "assistant":
+                    markdown_content += f"## Assistant Response {i}\n\n"
+                    markdown_content += f"{content}\n\n"
+                else:
+                    markdown_content += f"## {role.title()} Message {i}\n\n"
+                    markdown_content += f"{content}\n\n"
+            else:
+                # Fallback for other formats
+                markdown_content += f"## Message {i}\n\n"
+                markdown_content += f"{str(message)}\n\n"
+        
+        # Create file with proper filename
+        try:
+            # Create a temporary directory and file with the proper filename
+            temp_dir = tempfile.mkdtemp()
+            clean_file_path = os.path.join(temp_dir, filename)
+            
+            with open(clean_file_path, 'w', encoding='utf-8') as file:
+                file.write(markdown_content)
+            
+            print(f"DEBUG: Created file: {clean_file_path}")
+            # Return the clean file path for Gradio to handle the download
+            return clean_file_path
+        except Exception as e:
+            print(f"Error creating markdown file: {e}")
+            return None
