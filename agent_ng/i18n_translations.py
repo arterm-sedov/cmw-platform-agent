@@ -138,6 +138,7 @@ RUSSIAN_TRANSLATIONS = {
     "prompt_tokens": "**Токены запроса:** {tokens}",
     "api_tokens": "**API токены:** {tokens}",
     "execution_time": "**Время выполнения:** {time:.2f}с",
+    "provider_model": "**Провайдер/Модель:** {provider} / {model}",
     "deduplication": "**Дедупликация:** {duplicates} дублирующих вызовов предотвращено ({breakdown})",
     "total_tool_calls": "**Всего вызовов инструментов:** {calls}",
     
@@ -364,6 +365,7 @@ ENGLISH_TRANSLATIONS = {
     "prompt_tokens": "**Prompt tokens:** {tokens}",
     "api_tokens": "**API tokens:** {tokens}",
     "execution_time": "**Execution time:** {time:.2f}s",
+    "provider_model": "**Provider/Model:** {provider} / {model}",
     "deduplication": "**Deduplication:** {duplicates} duplicate calls prevented ({breakdown})",
     "total_tool_calls": "**Total tool calls:** {calls}",
     

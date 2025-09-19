@@ -450,6 +450,20 @@ class NextGenApp:
                     print(f"🔍 DEBUG: API token error: {e}")
                     self.debug_streamer.warning(f"Failed to get API token count: {e}")
             
+            # Add provider/model information if available
+            if self.agent and hasattr(self.agent, 'get_llm_info'):
+                try:
+                    llm_info = self.agent.get_llm_info()
+                    if llm_info and 'provider' in llm_info and 'model_name' in llm_info:
+                        provider = llm_info.get('provider', 'Unknown')
+                        model = llm_info.get('model_name', 'Unknown')
+                        token_displays.append(format_translation("provider_model", self.language, 
+                                                               provider=provider, model=model))
+                        print(f"🔍 DEBUG: Added provider/model display: {provider} / {model}")
+                except Exception as e:
+                    print(f"🔍 DEBUG: Provider/model display error: {e}")
+                    self.debug_streamer.warning(f"Failed to get provider/model info: {e}")
+            
             # Add execution time
             execution_time = time.time() - start_time
             token_displays.append(format_translation("execution_time", self.language, time=execution_time))
