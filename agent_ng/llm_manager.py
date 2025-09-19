@@ -208,14 +208,42 @@ class LLMManager:
                 {
                     "model": "deepseek/deepseek-chat-v3.1:free",
                     "token_limit": 163840,
-                    "max_tokens": 2048,
+                    "max_tokens": 163840,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "x-ai/grok-code-fast-1",
+                    "token_limit": 256000,
+                    "max_tokens": 10000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "openai/gpt-oss-120b",
+                    "token_limit": 131072,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "mistralai/codestral-2508",
+                    "token_limit": 256000,
+                    "max_tokens": 256000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "qwen/qwen3-coder-flash",
+                    "token_limit": 128000,
+                    "max_tokens": 65000,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
                     "model": "openrouter/sonoma-dusk-alpha",
                     "token_limit": 2000000,
-                    "max_tokens": 2048,
+                    "max_tokens": 2000000,
                     "temperature": 0,
                     "force_tools": True
                 },
