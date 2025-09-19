@@ -485,7 +485,7 @@ class NextGenApp:
             if token_displays:
                 token_display = "\n\n" + "\n".join(token_displays)
                 # Preserve existing content (including any error messages) and append token display
-                current_content = working_history[-1].get("content", response_content)
+                current_content = working_history[-1].get("content", response_content) or ""
                 working_history[-1] = {"role": "assistant", "content": current_content + token_display}
                 print(f"🔍 DEBUG: Added token display: {token_display}")
             
@@ -513,7 +513,7 @@ class NextGenApp:
             execution_time = time.time() - start_time
             error_msg = format_translation("error_streaming", self.language, error=str(e)) + f"\n\n{format_translation('execution_time', self.language, time=execution_time)}"
             # Preserve existing content and append error message
-            current_content = working_history[-1].get("content", "")
+            current_content = working_history[-1].get("content", "") or ""
             working_history[-1] = {"role": "assistant", "content": current_content + "\n\n" + error_msg}
             # Stop processing state on error
             self.stop_processing()
