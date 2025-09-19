@@ -101,26 +101,12 @@ class ChatTab:
                         self.components["clear_btn"] = gr.Button(self._get_translation("clear_button"), variant="secondary", elem_classes=["cmw-button"])
                         self.components["download_btn"] = gr.Button(self._get_translation("download_button"), variant="secondary", elem_classes=["cmw-button"])
                         
-                        # State variables for render decorator approach
+                        # State variables for file download
                         self.components["file_ready"] = gr.State(False)
                         self.components["file_path"] = gr.State(None)
                         
-                        # Dynamic download file component using render decorator
-                        @gr.render(inputs=[self.components["file_ready"], self.components["file_path"]])
-                        def render_download_file(is_ready, file_path):
-                            if is_ready and file_path:
-                                return gr.File(
-                                    value=file_path,
-                                    label=self._get_translation("download_file_label"),
-                                    visible=True,
-                                    interactive=False,
-                                    elem_classes=["download-file-pane"]
-                                )
-                            else:
-                                return None
-                        
-                        # Store the render function reference
-                        self.components["download_file"] = render_download_file
+                        # Static download file component (no render decorator to avoid duplicate IDs)
+                        self.components["download_file"] = self._create_download_file_component()
                         
                 
             
@@ -200,14 +186,14 @@ class ChatTab:
         
         self.components["clear_btn"].click(
             fn=self._clear_chat_with_download_reset,
-            outputs=[self.components["chatbot"], self.components["msg"], self.components["file_ready"], self.components["file_path"]]
+            outputs=[self.components["chatbot"], self.components["msg"], self.components["file_ready"], self.components["file_path"], self.components["download_file"]]
         )
         
-        # Download button event - now updates state variables
+        # Download button event - updates both state variables and file component
         self.components["download_btn"].click(
             fn=self._download_conversation_wrapper,
             inputs=[self.components["chatbot"]],
-            outputs=[self.components["file_ready"], self.components["file_path"]]
+            outputs=[self.components["file_ready"], self.components["file_path"], self.components["download_file"]]
         )
         
         # Trigger UI updates after chat events
@@ -610,6 +596,16 @@ class ChatTab:
         from ..i18n_translations import get_translation_key
         return get_translation_key(key, self.language)
     
+    def _create_download_file_component(self, value=None, visible=False):
+        """Create a download file component with consistent parameters"""
+        return gr.File(
+            value=value,
+            label=self._get_translation("download_file_label"),
+            visible=visible,
+            interactive=False,
+            elem_classes=["download-file-pane"]
+        )
+    
     # Quick action methods
     def _quick_math(self) -> str:
         """Generate math quick action message"""
@@ -679,19 +675,21 @@ class ChatTab:
         if clear_handler:
             # Call the original clear handler
             chatbot, msg = clear_handler()
-            # Reset download state
-            return chatbot, msg, False, None
+            # Reset download state and file component
+            return chatbot, msg, False, None, self._create_download_file_component()
         else:
             # Fallback if clear handler not available
-            return [], "", False, None
+            return [], "", False, None, self._create_download_file_component()
     
     def _download_conversation_wrapper(self, history):
-        """Wrapper to handle the download and update state variables"""
+        """Wrapper to handle the download and update state variables and file component"""
         file_path = self._download_conversation_as_markdown(history)
         if file_path:
-            return True, file_path  # file_ready=True, file_path=path
+            # Return state variables and updated file component
+            return True, file_path, self._create_download_file_component(value=file_path, visible=True)
         else:
-            return False, None  # file_ready=False, file_path=None
+            # Return state variables and hidden file component
+            return False, None, self._create_download_file_component()
     
     def _download_conversation_as_markdown(self, history) -> str:
         """
