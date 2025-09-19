@@ -124,7 +124,7 @@ class NextGenApp:
         # Progress status storage with translation
         self.current_progress_status = get_translation_key("progress_ready", language)
         self.progress_icon_index = 0
-        self.progress_icons = ["🔄", "⚙️", "🔧", "⚡"]
+        self.progress_icons = ["🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"]
         self.is_processing = False
         
         # Initialize synchronously first, then start async initialization
@@ -236,7 +236,7 @@ class NextGenApp:
             
             # For any processing status, replace existing icon with rotating one
             import re
-            cleaned_status = re.sub(r'^[🔄⚙️🔧⚡] ', '', self.current_progress_status)
+            cleaned_status = re.sub(r'^[🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚🕛🔄⚙️🔧⚡] ', '', self.current_progress_status)
             return f"{current_icon} {cleaned_status}"
         
         return self.current_progress_status

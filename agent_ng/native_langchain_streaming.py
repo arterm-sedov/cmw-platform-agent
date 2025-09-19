@@ -211,8 +211,8 @@ class NativeLangChainStreaming:
                 print(f"🔍 DEBUG: Starting iteration {iteration}")
                 
                 # Stream iteration progress as separate message with pseudo-animation
-                # Cycle through different processing icons for pseudo-animation
-                processing_icons = ["🔄", "⚙️", "🔧", "⚡", "🔄", "⚙️", "🔧", "⚡"]
+                # Cycle through different clock icons for pseudo-animation
+                processing_icons = ["🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"]
                 icon_index = (iteration - 1) % len(processing_icons)
                 current_icon = processing_icons[icon_index]
                 
@@ -221,7 +221,7 @@ class NativeLangChainStreaming:
                 
                 yield StreamingEvent(
                     event_type="iteration_progress",
-                    content=f'{current_icon} **{self._get_iteration_processing_message(iteration, self.max_iterations, language)}**',
+                    content=f'{current_icon} {self._get_iteration_processing_message(iteration, self.max_iterations, language)}',
                     metadata={"iteration": iteration, "max_iterations": self.max_iterations, "icon_index": icon_index}
                 )
                 
@@ -461,15 +461,12 @@ class NativeLangChainStreaming:
             )
             
             # Final iteration progress completion
-            final_icons = ["🎉", "✨", "🏆", "🎯"]
-            final_icon = final_icons[0]  # Always use first icon for final completion
-            
             # Get language from agent if available, otherwise default to English
             language = getattr(agent, 'language', 'en')
             
             yield StreamingEvent(
                 event_type="iteration_progress",
-                content=f"{final_icon} **{self._get_processing_complete_message(language)}**",
+                content=self._get_processing_complete_message(language),
                 metadata={"conversation_complete": True, "final": True}
             )
                 

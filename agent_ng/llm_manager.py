@@ -206,6 +206,13 @@ class LLMManager:
             force_tools=False,
             models=[
                 {
+                    "model": "deepseek/deepseek-chat-v3.1:free",
+                    "token_limit": 163840,
+                    "max_tokens": 2048,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
                     "model": "openrouter/sonoma-dusk-alpha",
                     "token_limit": 2000000,
                     "max_tokens": 2048,
@@ -215,13 +222,6 @@ class LLMManager:
                 {
                     "model": "qwen/qwen3-coder:free",
                     "token_limit": 262144,
-                    "max_tokens": 2048,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "deepseek/deepseek-chat-v3.1:free",
-                    "token_limit": 163840,
                     "max_tokens": 2048,
                     "temperature": 0,
                     "force_tools": True
@@ -709,21 +709,12 @@ class LLMManager:
     
     def get_current_llm_context_window(self) -> int:
         """Get the context window size for the current LLM instance"""
-        import os
+        current_instance = self.get_agent_llm()
+        if current_instance and current_instance.config:
+            # Get token_limit from the current instance's config
+            return current_instance.config.get("token_limit", 0)
         
-        # Get the current provider from environment
-        agent_provider = os.environ.get("AGENT_PROVIDER", "mistral")
-        
-        try:
-            provider_enum = LLMProvider(agent_provider.lower())
-            config = self.LLM_CONFIGS.get(provider_enum)
-            
-            if config and config.models:
-                # Get the first model's token limit as the context window
-                return config.models[0].get("token_limit", 0)
-        except ValueError:
-            pass
-        
+        # No fallback needed - if no current instance, return 0
         return 0
     
     def get_tools(self) -> List[Any]:

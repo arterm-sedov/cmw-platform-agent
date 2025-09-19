@@ -71,17 +71,34 @@ RUSSIAN_TRANSLATIONS = {
     "model_label": "Модель",
     "provider_model_label": "Провайдер / Модель",
     "apply_llm_button": "Применить",
-    "llm_apply_success": "✅ LLM изменен: {provider} - {model}",
+    "llm_apply_success": "✅ LLM изменена: {provider} - {model}",
     "llm_apply_error": "❌ Ошибка применения LLM",
-    "current_provider": "**Провайдер:** {provider}",
-    "current_model": "**Модель:** {model}",
+    "current_provider": "Провайдер: {provider}",
+    "current_model": "Модель: {model}",
     
     # Status section
     "status_title": "🤖 Статус",
     "status_initializing": "🟡 Инициализация...",
-    "status_ready": "✅ Готов",
+    "status_ready": "Готов",
+    "status_ready_true": "Готов: да ✅",
+    "status_ready_false": "Готов: нет ❌",
     "token_budget_title": "💰 Расход токенов",
     "token_budget_initializing": "🟡 Загрузка...",
+    # Token usage components (separated for flexibility)
+    "token_usage_header": "**Расход токенов:**",
+    "token_usage_total": "Всего: {total_tokens:,}",
+    "token_usage_conversation": "Диалог: {conversation_tokens:,}",
+    "token_usage_last_message": "Последнее сообщение {percentage}% ({used:,}/{context_window:,}) {status_icon}",
+    "token_usage_average": "Среднее на сообщение: {avg_tokens:,}",
+    
+    # Status icons for token usage
+    "token_status_good": "🟢",
+    "token_status_moderate": "🟡", 
+    "token_status_warning": "🟠",
+    "token_status_critical": "🔴",
+    "token_status_unknown": "❓",
+    
+    # Legacy combined format (for backward compatibility)
     "token_budget_detailed": """**Расход токенов:**
 - Всего: {total_tokens:,}
 - Диалог: {conversation_tokens:,}
@@ -139,17 +156,12 @@ RUSSIAN_TRANSLATIONS = {
     "agent_status_section": "**Статус агента:**",
     "conversation_section": "**Диалог:**",
     "tools_section": "**Инструменты:**",
-    "token_usage_section": "**Расход токенов:**",
     "messages_label": "Сообщения",
     "user_messages_label": "Пользователь",
     "assistant_messages_label": "Ассистент",
     "total_messages_label": "Всего сообщений",
     "available_label": "Доступно",
     "used_label": "Использовано",
-    "total_persistent_label": "Всего",
-    "current_conversation_label": "Текущий диалог",
-    "average_per_message_label": "Среднее на сообщение",
-    "tokens_label": "токенов",
     "unique_tools_label": "уникальных инструментов",
     "total_calls_label": "Всего вызовов",
     "tools_used_label": "Использовано инструментов",
@@ -202,7 +214,7 @@ RUSSIAN_TRANSLATIONS = {
     "quick_archive_attr_message": "Архивируй/разархивируй атрибут, системное имя \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
     
     # Status messages
-    "processing_complete": "Обработка завершена",
+    "processing_complete": "🎉Обработка завершена",
     "response_completed": "Ответ завершен",
     "processing_failed": "Обработка не удалась",
     
@@ -287,16 +299,33 @@ ENGLISH_TRANSLATIONS = {
     "apply_llm_button": "Apply",
     "llm_apply_success": "✅ LLM changed: {provider} - {model}",
     "llm_apply_error": "❌ Error applying LLM",
-    "current_provider": "**Provider:** {provider}",
+    "current_provider": "Provider: {provider}",
     "current_model": "**Model:** {model}",
     
     # Status section
     "status_title": "🤖 Status",
     "status_initializing": "🟡 Initializing...",
-    "status_ready": "✅ Ready",
-    "token_budget_title": "💰 Token Usage",
+    "status_ready": "Ready",
+    "status_ready_true": "Ready: yes ✅",
+    "status_ready_false": "Ready: no ❌",
+    "token_budget_title": "💰 Token usage",
     "token_budget_initializing": "🟡 Loading...",
-    "token_budget_detailed": """**Token Usage:**
+    # Token usage components (separated for flexibility)
+    "token_usage_header": "**Token usage:**",
+    "token_usage_total": "Total: {total_tokens:,}",
+    "token_usage_conversation": "Conversation: {conversation_tokens:,}",
+    "token_usage_last_message": "Last message {percentage}% ({used:,}/{context_window:,}) {status_icon}",
+    "token_usage_average": "Average per message: {avg_tokens:,}",
+    
+    # Status icons for token usage
+    "token_status_good": "🟢",
+    "token_status_moderate": "🟡", 
+    "token_status_warning": "🟠",
+    "token_status_critical": "🔴",
+    "token_status_unknown": "❓",
+    
+    # Legacy combined format (for backward compatibility)
+    "token_budget_detailed": """**Token usage:**
 - Total: {total_tokens:,}
 - Conversation: {conversation_tokens:,}
 - Last message {percentage}% ({used:,}/{context_window:,}) {status_icon}
@@ -353,17 +382,12 @@ ENGLISH_TRANSLATIONS = {
     "agent_status_section": "**Agent status:**",
     "conversation_section": "**Conversation:**",
     "tools_section": "**Tools:**",
-    "token_usage_section": "**Tokens used:**",
     "messages_label": "Messages",
     "user_messages_label": "User",
     "assistant_messages_label": "Copilot",
     "total_messages_label": "Total messages",
     "available_label": "Available",
     "used_label": "Used",
-    "total_persistent_label": "Total (Persistent)",
-    "current_conversation_label": "Current conversation",
-    "average_per_message_label": "Average per message",
-    "tokens_label": "tokens",
     "unique_tools_label": "unique tools",
     "total_calls_label": "Total Calls",
     "tools_used_label": "Used tools",
@@ -416,16 +440,16 @@ ENGLISH_TRANSLATIONS = {
     "quick_archive_attr_message": "Archive/unarchive attribute, system name \"Comment\", application \"HR\", template \"Candidates\"",
     
     # Status messages
-    "processing_complete": "Processing complete",
+    "processing_complete": "🎉 Processing complete",
     "response_completed": "Response completed",
     "processing_failed": "Processing failed",
     
     # Iteration messages
-    "iteration_processing": "Iteration {iteration}/{max_iterations} - Processing...",
-    "iteration_finished": "Iteration {iteration}/{max_iterations} - Finished",
-    "iteration_completed": "Iteration {iteration} completed - Continuing...",
-    "iteration_max_reached": "Iteration {iteration}/{max_iterations} - Finished (max reached)",
-    "max_iterations_warning": "⚠️ Reached iteration limit ({max_iterations}), conversation may be incomplete",
+    "iteration_processing": "Iteration **{iteration}/{max_iterations}** - Processing...",
+    "iteration_finished": "Iteration **{iteration}/{max_iterations}** - Finished",
+    "iteration_completed": "Iteration **{iteration}** completed - Continuing...",
+    "iteration_max_reached": "Iteration **{iteration}/{max_iterations}** - Finished (max reached)",
+    "max_iterations_warning": "⚠️ Reached iteration limit **({max_iterations})**, conversation may be incomplete",
     
     # Tool messages
     "tool_called": "🔧 Tool called: {tool_name}",

@@ -315,6 +315,15 @@ class ConversationTokenTracker:
         """Start tracking a new conversation"""
         self.last_conversation_tokens = 0
     
+    def reset_current_conversation_budget(self) -> None:
+        """Reset current conversation token budget for model switching"""
+        # Reset the last API tokens to start fresh with new model
+        self._last_api_tokens = None
+        # Reset last prompt tokens as well
+        self._last_prompt_tokens = None
+        # Reset current conversation tokens
+        self.last_conversation_tokens = 0
+    
     def get_last_prompt_tokens(self) -> Optional[TokenCount]:
         """Get the last prompt token count"""
         return self._last_prompt_tokens
