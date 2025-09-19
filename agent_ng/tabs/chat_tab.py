@@ -713,7 +713,7 @@ class ChatTab:
             return None
         
         # Create timestamped filename
-        timestamp = datetime.now().strftime('%Y%m%d')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"CMW_Copilot_{timestamp}.md"
         
         # Create markdown content
