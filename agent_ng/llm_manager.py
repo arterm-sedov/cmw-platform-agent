@@ -49,11 +49,15 @@ if parent_dir not in sys.path:
 
 try:
     from .utils import ensure_valid_answer
+    from .provider_adapters import MistralWrapper, is_mistral_model
 except ImportError:
     try:
         from agent_ng.utils import ensure_valid_answer
+        from agent_ng.provider_adapters import MistralWrapper, is_mistral_model
     except ImportError:
         ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
+        MistralWrapper = None
+        is_mistral_model = lambda x: False
 
 
 class LLMProvider(Enum):
@@ -572,6 +576,11 @@ class LLMManager:
         if llm is None:
             return None
             
+        # Apply Mistral wrapper if this is a Mistral model (regardless of provider)
+        if MistralWrapper and is_mistral_model(model_config["model"]):
+            llm = MistralWrapper(llm)
+            self._log_initialization(f"Applied Mistral wrapper to {model_config['model']}", "INFO")
+        
         # Create LLM instance wrapper
         instance = LLMInstance(
             llm=llm,
