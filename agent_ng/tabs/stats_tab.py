@@ -92,13 +92,10 @@ class StatsTab:
             # Get basic agent statistics
             stats = self.agent.get_stats()
             
-            # Get token statistics
-            token_stats = self._format_token_stats()
-            
-            # Format complete display
+            # Format complete display (token stats removed to avoid duplication with chat tab)
             return f"""
 {self._get_translation('agent_status_section')}
-- {self._get_translation('status_ready')}: {stats['agent_status']['is_ready']}
+- {self._get_translation('status_ready_true' if stats['agent_status']['is_ready'] else 'status_ready_false')}
 - LLM: {stats['llm_info'].get('model_name', 'Unknown')}
 - {self._get_translation('provider_info').format(provider=stats['llm_info'].get('provider', 'Unknown'))}
 
@@ -109,41 +106,11 @@ class StatsTab:
 - {self._get_translation('total_messages_label')}: {stats['conversation_stats']['message_count']}
 
 {self._get_translation('tools_section')}
-- {self._get_translation('available_label')}: {stats['agent_status']['tools_count']}{self._format_tools_stats()}{token_stats}
+- {self._get_translation('available_label')}: {stats['agent_status']['tools_count']}{self._format_tools_stats()}
             """
         except Exception as e:
             return f"{self._get_translation('error_loading_stats')}: {str(e)}"
     
-    def _format_token_stats(self) -> str:
-        """Format token usage statistics"""
-        if not self.agent:
-            return ""
-        
-        try:
-            token_info = self.agent.get_token_display_info()
-            cumulative_stats = token_info.get("cumulative_stats", {})
-            
-            if not cumulative_stats:
-                return ""
-            
-            # Get conversation stats for message count
-            # Only show debug messages if stats have changed
-            conversation_stats = self.agent._get_conversation_stats(debug=False)
-            debug_stats = self._last_conversation_stats != conversation_stats
-            if debug_stats:
-                # Re-get with debug enabled to show the change
-                conversation_stats = self.agent._get_conversation_stats(debug=True)
-            self._last_conversation_stats = conversation_stats.copy() if conversation_stats else None
-            total_messages = conversation_stats.get('message_count', 0)
-            
-            return f"""           
-{self._get_translation('token_usage_section')}
-- {self._get_translation('total_persistent_label')}: {cumulative_stats['conversation_tokens']:,} {self._get_translation('tokens_label')}
-- {self._get_translation('current_conversation_label')}: {cumulative_stats['session_tokens']:,} {self._get_translation('tokens_label')}
-- {self._get_translation('average_per_message_label')}: {cumulative_stats['avg_tokens_per_message']} {self._get_translation('tokens_label')}
-            """
-        except Exception:
-            return ""
     
     def _format_tools_stats(self) -> str:
         """Format tools usage statistics"""

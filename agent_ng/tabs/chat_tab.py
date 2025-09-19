@@ -372,21 +372,27 @@ class ChatTab:
             # Get cumulative stats for detailed display
             cumulative_stats = self.main_app.agent.token_tracker.get_cumulative_stats()
             
-            # Determine status icon
-            status_icon = "🟢" if budget_info["status"] == "good" else \
-                         "🟡" if budget_info["status"] == "moderate" else \
-                         "🟠" if budget_info["status"] == "warning" else \
-                         "🔴" if budget_info["status"] == "critical" else "❓"
+            # Determine status icon using localized translations
+            status_icon = self._get_translation(f"token_status_{budget_info['status']}")
             
-            return self._get_translation("token_budget_detailed").format(
-                total_tokens=cumulative_stats["conversation_tokens"],
-                conversation_tokens=cumulative_stats["conversation_tokens"],
+            # Build token usage display using separated components for better flexibility
+            total = self._get_translation("token_usage_total").format(
+                total_tokens=cumulative_stats["conversation_tokens"]
+            )
+            conversation = self._get_translation("token_usage_conversation").format(
+                conversation_tokens=cumulative_stats["conversation_tokens"]
+            )
+            last_message = self._get_translation("token_usage_last_message").format(
                 percentage=budget_info["percentage"],
                 used=budget_info["used_tokens"],
                 context_window=budget_info["context_window"],
-                status_icon=status_icon,
+                status_icon=status_icon
+            )
+            average = self._get_translation("token_usage_average").format(
                 avg_tokens=cumulative_stats["avg_tokens_per_message"]
             )
+            
+            return f"- {total}\n- {conversation}\n- {last_message}\n- {average}"
         except Exception as e:
             print(f"Error formatting token budget: {e}")
             return self._get_translation("token_budget_unknown")
@@ -533,6 +539,11 @@ class ChatTab:
                         new_llm_instance = self.main_app.agent.llm_manager.get_llm(provider, model_index=model_index)
                         if new_llm_instance:
                             self.main_app.agent.llm_instance = new_llm_instance
+                            
+                            # Reset token budget for the new model
+                            if hasattr(self.main_app.agent, 'token_tracker') and self.main_app.agent.token_tracker:
+                                self.main_app.agent.token_tracker.reset_current_conversation_budget()
+                            
                             return self._get_translation("llm_apply_success").format(provider=provider, model=model)
                         else:
                             return self._get_translation("llm_apply_error")
@@ -579,6 +590,11 @@ class ChatTab:
                         new_llm_instance = self.main_app.agent.llm_manager.get_llm(provider, model_index=model_index)
                         if new_llm_instance:
                             self.main_app.agent.llm_instance = new_llm_instance
+                            
+                            # Reset token budget for the new model
+                            if hasattr(self.main_app.agent, 'token_tracker') and self.main_app.agent.token_tracker:
+                                self.main_app.agent.token_tracker.reset_current_conversation_budget()
+                            
                             return self._get_translation("llm_apply_success").format(provider=provider.title(), model=model)
                         else:
                             return self._get_translation("llm_apply_error")
