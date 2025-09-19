@@ -404,28 +404,35 @@ class ChatTab:
     def _get_available_models(self) -> List[str]:
         """Get list of available models for the current provider"""
         if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
-            return []
+            return [self._get_translation("no_models_available")]
         
         try:
             if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
                 current_provider = self._get_current_provider()
                 config = self.main_app.agent.llm_manager.get_provider_config(current_provider)
                 if config and config.models:
-                    return [model["model"] for model in config.models]
+                    models = [model["model"] for model in config.models]
+                    return models if models else [self._get_translation("no_models_available")]
+                else:
+                    return [self._get_translation("no_models_available")]
         except Exception as e:
             print(f"Error getting available models: {e}")
+            return [self._get_translation("error_loading_providers")]
         
-        return []
+        return [self._get_translation("no_models_available")]
     
     def _get_available_provider_model_combinations(self) -> List[str]:
         """Get list of available provider/model combinations in format 'Provider / Model'"""
         if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
-            return [""]
+            return [self._get_translation("no_providers_available")]
         
         try:
             if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
                 combinations = []
                 available_providers = self.main_app.agent.llm_manager.get_available_providers()
+                
+                if not available_providers:
+                    return [self._get_translation("no_providers_available")]
                 
                 for provider in available_providers:
                     config = self.main_app.agent.llm_manager.get_provider_config(provider)
@@ -436,19 +443,16 @@ class ChatTab:
                             combination = f"{provider.title()} / {model_name}"
                             combinations.append(combination)
                 
+                if not combinations:
+                    return [self._get_translation("no_models_available")]
+                
                 return combinations
         except Exception as e:
             print(f"Error getting provider/model combinations: {e}")
+            return [self._get_translation("error_loading_providers")]
         
-        # Return fallback combinations on error
-        return [
-            "Openrouter / openrouter/anthropic/claude-3.5-sonnet",
-            "Groq / groq/compound",
-            "Gemini / gemini-2.5-pro",
-            "Mistral / mistral-large-latest",
-            "Huggingface / microsoft/DialoGPT-medium",
-            "Gigachat / gigachat"
-        ]
+        # No fallback - return error message
+        return [self._get_translation("no_providers_available")]
     
     def _get_current_model(self) -> str:
         """Get current LLM model"""
