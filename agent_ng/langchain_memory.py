@@ -380,15 +380,17 @@ class LangChainConversationChain:
             print(f"🔍 DEBUG: Response content: {getattr(response, 'content', 'No content')}")
             
             if hasattr(response, 'tool_calls') and response.tool_calls:
-                # Add the AI response with tool calls to messages
+                # Add the AI response with tool calls to messages FIRST
                 messages.append(response)
                 
                 # STEP 1: Filter and count duplicates BEFORE execution
                 deduplicated_tool_calls, duplicate_counts = self._deduplicate_tool_calls(response.tool_calls)
                 print(f"🔍 DEBUG: Original tool calls: {len(response.tool_calls)}, Deduplicated: {len(deduplicated_tool_calls)}")
                 
-                # STEP 2: Execute only deduplicated tool calls
+                # STEP 2: Execute only deduplicated tool calls and create result mapping
                 tool_calls = []
+                tool_result_cache = {}  # Map tool_key -> result for duplicate handling
+                
                 for tool_call in deduplicated_tool_calls:
                     tool_name = tool_call.get('name', 'unknown')
                     tool_args = tool_call.get('args', {})
@@ -406,6 +408,9 @@ class LangChainConversationChain:
                     # Store the tool call result for future deduplication
                     deduplicator.store_tool_call(tool_name, tool_args, tool_result, conversation_id)
                     
+                    # Cache result for duplicate tool calls
+                    tool_result_cache[tool_key] = tool_result
+                    
                     # Add to tool_calls for reporting
                     tool_calls.append({
                         'name': tool_name,
@@ -418,20 +423,44 @@ class LangChainConversationChain:
                     
                     # Show tool execution with count
                     print(f"🔧✅ Used tool: {tool_name} (called {duplicate_count} times)")
+                
+                # STEP 3: Create ToolMessage for EACH original tool call (including duplicates)
+                # This ensures proper tool_call_id mapping and message sequence
+                # CRITICAL: Add ToolMessages to conversation memory, not to working messages list
+                tool_messages = []
+                for original_tool_call in response.tool_calls:
+                    tool_name = original_tool_call.get('name', 'unknown')
+                    tool_args = original_tool_call.get('args', {})
+                    tool_call_id = original_tool_call.get('id', f"call_{len(tool_calls)}")
                     
-                    # Add tool message to conversation (only one per unique tool call)
+                    # Get the tool key for result lookup
+                    tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
+                    
+                    # Get cached result (same for all duplicates)
+                    tool_result = tool_result_cache.get(tool_key, "Tool execution failed")
+                    
+                    # Create ToolMessage with original tool_call_id
                     tool_message = ToolMessage(
                         content=tool_result,
-                        tool_call_id=tool_call_id
+                        tool_call_id=tool_call_id,
+                        name=tool_name
                     )
-                    messages.append(tool_message)
+                    tool_messages.append(tool_message)
+                    print(f"🔍 DEBUG: Created ToolMessage for {tool_name} with ID {tool_call_id}")
                 
-                # STEP 3: Store tool calls in memory (already done above)
+                # CRITICAL: Add ToolMessages to working messages for next LLM call
+                # This ensures proper sequence: AIMessage(with tool_calls) → ToolMessages
+                messages.extend(tool_messages)
+                print(f"🔍 DEBUG: Added {len(tool_messages)} ToolMessages to working messages")
+                
+                # CRITICAL: Continue to next iteration to get final response
+                # Don't break here - we need the final AI response after tool calls
+                
+                # STEP 4: Store tool calls in memory
                 for tool_call in tool_calls:
                     self.memory_manager.add_tool_call(conversation_id, tool_call)
-                    # Tool messages already added to conversation above
                 
-                print(f"🔍 DEBUG: Finished processing {len(tool_calls)} unique tool calls")
+                print(f"🔍 DEBUG: Finished processing {len(tool_calls)} unique tool calls, created {len(response.tool_calls)} ToolMessages")
             else:
                 # No tool calls, we have the final response
                 print(f"🔍 DEBUG: No tool calls detected, processing final response")
