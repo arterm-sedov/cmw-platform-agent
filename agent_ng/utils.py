@@ -7,6 +7,13 @@ but are now part of the next-gen agent architecture.
 
 from typing import Any
 
+# Import from centralized provider adapters
+try:
+    from .provider_adapters import convert_messages_for_mistral
+except ImportError:
+    # Fallback for backward compatibility
+    convert_messages_for_mistral = None
+
 
 def ensure_valid_answer(answer: Any) -> str:
     """

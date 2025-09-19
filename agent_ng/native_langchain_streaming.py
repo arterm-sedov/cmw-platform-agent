@@ -191,7 +191,23 @@ class NativeLangChainStreaming:
                 print("🔍 DEBUG: System message already in memory, skipping storage")
             
             # Add conversation history (excluding system messages to avoid duplication)
-            non_system_history = [msg for msg in chat_history if not isinstance(msg, SystemMessage)]
+            # Filter out orphaned tool messages to prevent message order issues
+            non_system_history = []
+            for i, msg in enumerate(chat_history):
+                if isinstance(msg, SystemMessage):
+                    continue
+                elif isinstance(msg, ToolMessage):
+                    # Only include tool messages that have a corresponding AI message with tool calls
+                    for j in range(i-1, -1, -1):
+                        if (isinstance(chat_history[j], AIMessage) and 
+                            hasattr(chat_history[j], 'tool_calls') and chat_history[j].tool_calls):
+                            tool_call_ids = {tc.get('id') for tc in chat_history[j].tool_calls if tc.get('id')}
+                            if hasattr(msg, 'tool_call_id') and msg.tool_call_id in tool_call_ids:
+                                non_system_history.append(msg)
+                                break
+                else:
+                    non_system_history.append(msg)
+            
             messages.extend(non_system_history)
             
             # Create user message and save to memory
@@ -364,36 +380,36 @@ class NativeLangChainStreaming:
                         )
                         messages.append(ai_message_with_tool_calls)
                         print(f"🔍 DEBUG: Added AIMessage with {len(accumulated_chunk.tool_calls)} tool calls to working messages")
-                    
-                    # STEP 3: Create ToolMessage for EACH original tool call (including duplicates)
-                    # This ensures proper tool_call_id mapping and message sequence
-                    # CRITICAL: Add ToolMessages to working messages for proper sequence
-                    tool_messages = []
-                    for original_tool_call in accumulated_chunk.tool_calls:
-                        tool_name = original_tool_call.get('name')
-                        tool_args = original_tool_call.get('args', {})
-                        tool_call_id = original_tool_call.get('id')
                         
-                        if tool_name and tool_call_id:
-                            # Get the tool key for result lookup
-                            tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
+                        # STEP 3: Create ToolMessage for EACH original tool call (including duplicates)
+                        # This ensures proper tool_call_id mapping and message sequence
+                        # CRITICAL: Add ToolMessages to working messages for proper sequence
+                        tool_messages = []
+                        for original_tool_call in accumulated_chunk.tool_calls:
+                            tool_name = original_tool_call.get('name')
+                            tool_args = original_tool_call.get('args', {})
+                            tool_call_id = original_tool_call.get('id')
                             
-                            # Get cached result (same for all duplicates)
-                            tool_result = tool_result_cache.get(tool_key, "Tool execution failed")
-                            
-                            # Create ToolMessage with original tool_call_id
-                            tool_message = ToolMessage(
-                                content=str(tool_result),
-                                tool_call_id=tool_call_id,
-                                name=tool_name
-                            )
-                            tool_messages.append(tool_message)
-                            print(f"🔍 DEBUG: Created ToolMessage for {tool_name} with ID {tool_call_id}")
-                    
-                    # CRITICAL: Add ToolMessages to working messages for next LLM call
-                    # This ensures proper sequence: AIMessage(with tool_calls) → ToolMessages
-                    messages.extend(tool_messages)
-                    print(f"🔍 DEBUG: Added {len(tool_messages)} ToolMessages to working messages")
+                            if tool_name and tool_call_id:
+                                # Get the tool key for result lookup
+                                tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
+                                
+                                # Get cached result (same for all duplicates)
+                                tool_result = tool_result_cache.get(tool_key, "Tool execution failed")
+                                
+                                # Create ToolMessage with original tool_call_id
+                                tool_message = ToolMessage(
+                                    content=str(tool_result),
+                                    tool_call_id=tool_call_id,
+                                    name=tool_name
+                                )
+                                tool_messages.append(tool_message)
+                                print(f"🔍 DEBUG: Created ToolMessage for {tool_name} with ID {tool_call_id}")
+                        
+                        # CRITICAL: Add ToolMessages to working messages for next LLM call
+                        # This ensures proper sequence: AIMessage(with tool_calls) → ToolMessages
+                        messages.extend(tool_messages)
+                        print(f"🔍 DEBUG: Added {len(tool_messages)} ToolMessages to working messages")
                     
                     # CRITICAL: Continue to next iteration to get final response
                     # Don't break here - we need the final AI response after tool calls
@@ -474,6 +490,12 @@ class NativeLangChainStreaming:
                 if isinstance(message, SystemMessage):
                     print(f"🔍 DEBUG: Skipped system message (handled separately)")
                     continue
+                
+                # Skip empty AIMessages - they cause message order issues
+                if isinstance(message, AIMessage) and not message.content and not message.tool_calls:
+                    print(f"🔍 DEBUG: Skipped empty AIMessage (no content or tool calls)")
+                    continue
+                
                 
                 # Create a unique identifier for this message
                 message_key = (type(message).__name__, message.content if hasattr(message, 'content') else str(message))
