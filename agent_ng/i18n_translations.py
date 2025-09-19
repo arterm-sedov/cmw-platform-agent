@@ -236,7 +236,12 @@ RUSSIAN_TRANSLATIONS = {
     "tool_calls_made": "Вызовы инструментов: {tool_names}",
     
     # Error messages
-    "error": "❌ **Ошибка: {error}**"
+    "error": "❌ **Ошибка: {error}**",
+    
+    # Provider availability messages
+    "no_providers_available": "❌ Нет доступных провайдеров",
+    "no_models_available": "❌ Нет доступных моделей",
+    "error_loading_providers": "❌ Ошибка загрузки провайдеров"
 }
 
 # English translations (fallback)
@@ -463,7 +468,12 @@ ENGLISH_TRANSLATIONS = {
     "tool_calls_made": "Tool calls made: {tool_names}",
     
     # Error messages
-    "error": "❌ **Error: {error}**"
+    "error": "❌ **Error: {error}**",
+    
+    # Provider availability messages
+    "no_providers_available": "❌ No providers available",
+    "no_models_available": "❌ No models available", 
+    "error_loading_providers": "❌ Error loading providers"
 }
 
 def create_i18n_instance(language: str = "en") -> gr.I18n:

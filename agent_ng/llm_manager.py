@@ -679,8 +679,9 @@ class LLMManager:
         """Get list of available providers that can be initialized"""
         available = []
         for provider in LLMProvider:
-            instance = self.get_llm(provider.value)
-            if instance:
+            # Check if API key is available without initializing the LLM
+            config = self.LLM_CONFIGS.get(provider)
+            if config and self._get_api_key(config):
                 available.append(provider.value)
         return available
         
