@@ -484,7 +484,9 @@ class NextGenApp:
             # Combine all token displays
             if token_displays:
                 token_display = "\n\n" + "\n".join(token_displays)
-                working_history[-1] = {"role": "assistant", "content": response_content + token_display}
+                # Preserve existing content (including any error messages) and append token display
+                current_content = working_history[-1].get("content", response_content)
+                working_history[-1] = {"role": "assistant", "content": current_content + token_display}
                 print(f"🔍 DEBUG: Added token display: {token_display}")
             
             # Add tool messages with metadata after the main response
@@ -510,7 +512,9 @@ class NextGenApp:
             self.debug_streamer.error(f"Error in stream chat: {e}")
             execution_time = time.time() - start_time
             error_msg = format_translation("error_streaming", self.language, error=str(e)) + f"\n\n{format_translation('execution_time', self.language, time=execution_time)}"
-            working_history[-1] = {"role": "assistant", "content": error_msg}
+            # Preserve existing content and append error message
+            current_content = working_history[-1].get("content", "")
+            working_history[-1] = {"role": "assistant", "content": current_content + "\n\n" + error_msg}
             # Stop processing state on error
             self.stop_processing()
             yield working_history, ""
