@@ -23,6 +23,9 @@ asyncio-mqtt>=0.11.0
 # sentence-transformers>=2.2.0
 # faiss-cpu>=1.7.4
 
+# PDF processing for ArxivLoader
+pymupdf>=1.23.0
+
 # Development and Testing
 pytest>=7.0.0
 pytest-asyncio>=0.21.0

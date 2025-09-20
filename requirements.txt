@@ -18,7 +18,7 @@ langgraph  # Not used in current codebase
 # Optional: HuggingFace Hub for dataset and file operations (disabled by default)
 huggingface_hub
 arxiv
-#pymupdf  # Not used in current codebase
+pymupdf  # Required for ArxivLoader PDF processing
 wikipedia
 python-dotenv
 #pytesseract  # Not used in current codebase
