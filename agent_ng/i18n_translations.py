@@ -57,11 +57,11 @@ RUSSIAN_TRANSLATIONS = {
     "quick_explain": "💭 Объяснить ML кратко",
     
     # Chat interface
-    "chat_label": "Чат с агентом",
+    "chat_label": "Диалог с агентом",
     "message_label": "Ваше сообщение",
     "message_placeholder": "Введите ваше сообщение...",
         "send_button": "Отправить",
-        "clear_button": "Очистить чат",
+        "clear_button": "Очистить диалог",
         "download_button": "📥 Скачать диалог (Markdown)",
         "download_file_label": "Скачать Markdown",
     
@@ -300,11 +300,11 @@ ENGLISH_TRANSLATIONS = {
     "quick_explain": "💭 Explain ML briefly",
     
     # Chat interface
-    "chat_label": "Chat with the Agent",
+    "chat_label": "Conversation with the Agent",
     "message_label": "Your Message",
     "message_placeholder": "Type your message here",
         "send_button": "Send",
-        "clear_button": "Clear chat",
+        "clear_button": "Clear conversation",
         "download_button": "📥 Download conversation (Markdown)",
         "download_file_label": "Download Markdown",
     
