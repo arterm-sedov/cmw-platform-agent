@@ -34,3 +34,8 @@ def ensure_valid_answer(answer: Any) -> str:
         return "No answer provided"
     else:
         return answer
+
+
+def safe_string(value: Any, default: str = "") -> str:
+    """Convert value to string, handling None gracefully."""
+    return default if value is None else str(value)
