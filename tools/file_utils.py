@@ -174,11 +174,25 @@ class FileUtils:
     def create_tool_response(tool_name: str, result: str = None, error: str = None, 
                            file_info: FileInfo = None) -> str:
         """Create standardized tool response JSON with Pydantic validation."""
+        # Sanitize file_info to remove full paths
+        if file_info:
+            # Create a sanitized copy without the full path
+            sanitized_file_info = FileInfo(
+                exists=file_info.exists,
+                path=None,  # Remove full path for security
+                name=file_info.name,
+                size=file_info.size,
+                extension=file_info.extension,
+                error=file_info.error
+            )
+        else:
+            sanitized_file_info = None
+            
         response = ToolResponse(
             tool_name=tool_name,
             result=result,
             error=error,
-            file_info=file_info
+            file_info=sanitized_file_info
         )
         
         return response.model_dump_json(indent=2)
