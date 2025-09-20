@@ -159,6 +159,12 @@ class CmwAgent:
         self.conversation_history = []
         self.active_streams = {}
         
+        # File data storage (using Gradio's file system)
+        self.current_file_path = None
+        self.current_file_name = None
+        self.current_file_paths = []  # Store multiple file paths
+        self.current_file_names = []  # Store multiple file names
+        
         # Initialize in background
         asyncio.create_task(self._initialize_async())
     
@@ -356,9 +362,14 @@ Always use the appropriate tools to answer questions and show your work step by 
             }
     
     def clear_conversation(self, conversation_id: str = "default") -> None:
-        """Clear conversation history"""
+        """Clear conversation history and file data"""
         chain = self._get_conversation_chain(conversation_id)
         chain.clear_conversation(conversation_id)
+        # Clear file data when clearing conversation
+        self.current_file_path = None
+        self.current_file_name = None
+        self.current_file_paths = []
+        self.current_file_names = []
     
     def is_ready(self) -> bool:
         """Check if the agent is ready to process requests"""

@@ -107,6 +107,14 @@ except ImportError as e:
     ARXIV_AVAILABLE = False
     print(f"Arxiv search requires additional dependencies. Install with: pip install arxiv. Error: {str(e)}")
 
+# Try to import PyMuPDF for PDF processing
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+    print("Warning: PyMuPDF not available. Install with: pip install pymupdf")
+
 try:
     from langchain_community.document_loaders import ArxivLoader
     ARXIVLOADER_AVAILABLE = True
@@ -786,10 +794,18 @@ def arxiv_search(input: str) -> str:
                 "tool_name": "arxiv_search",
                 "error": "Arxiv search not available. Install with: pip install langchain-community"
             })
+        
+        if not PYMUPDF_AVAILABLE:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "arxiv_search",
+                "error": "PyMuPDF package not found, please install it with pip install pymupdf"
+            })
+        
         search_docs = ArxivLoader(query=input, load_max_docs=SEARCH_LIMIT).load()
         formatted_results = "\n\n---\n\n".join(
             [
-                f'<Document source="{doc.metadata["source"]}" page="{doc.metadata.get("page", "")}"/>\n{doc.page_content}'
+                f'<Document title="{doc.metadata.get("Title", "Unknown")}" authors="{doc.metadata.get("Authors", "Unknown")}" published="{doc.metadata.get("Published", "Unknown")}"/>\n{doc.page_content}'
                 for doc in search_docs
             ]
         )
@@ -809,30 +825,56 @@ def arxiv_search(input: str) -> str:
 
 # ========== FILE/DATA TOOLS ==========
 @tool
-def save_and_read_file(content: str, filename: Optional[str] = None) -> str:
+def read_text_based_file(file_path: str) -> str:
     """
-    Save the provided content to a file and return the file path.
-
+    Read text-based files and return raw content as text.
+    
+    This is the general-purpose text file reader that handles most text-based formats.
+    Use this tool for any text file unless there's a specialized tool available.
+    
+    Supported file types:
+    - Text files: .txt, .md, .log, .rtf
+    - Code files: .py, .js, .ts, .html, .htm, .css, .sql, .java, .cpp, .c, .php, .rb, .go
+    - Configuration files: .ini, .cfg, .conf, .env, .properties, .yaml, .yml
+    - Structured text: .json, .xml, .svg
+    - Web files: .html, .htm, .xml
+    - Documentation: .md, .rst, .tex
+    
+    Note: For specialized analysis, use dedicated tools instead:
+    - CSV files (.csv, .tsv): use analyze_csv_file
+    - Excel files (.xlsx, .xls): use analyze_excel_file
+    - Images: use analyze_image or extract_text_from_image
+    
+    The tool automatically detects file encoding and handles multiple encodings
+    (UTF-8, Latin-1, CP1252, ISO-8859-1) to ensure successful text extraction.
+    
     Args:
-        content (str): The content to write to the file.
-        filename (str, optional): The name of the file. If not provided, a random file name is generated.
-
+        file_path (str): The path to the text-based file to read
+        
     Returns:
-        str: The file path where the content was saved.
+        str: The raw text content of the file, or an error message if reading fails
     """
-    temp_dir = tempfile.gettempdir()
-    if filename is None:
-        temp_file = tempfile.NamedTemporaryFile(delete=False, dir=temp_dir)
-        filepath = temp_file.name
+    from .file_utils import FileUtils
+    
+    # Use modular file utilities with Pydantic validation
+    result = FileUtils.read_text_file(file_path)
+    
+    if not result.success:
+        return FileUtils.create_tool_response("read_text_based_file", error=result.error)
+    
+    # Format the result
+    file_info = result.file_info
+    content = result.content
+    encoding = result.encoding
+    size_str = FileUtils.format_file_size(file_info.size)
+    
+    if encoding != 'utf-8':
+        result_text = f"File: {file_info.name} ({size_str}, {encoding} encoding)\n\nContent:\n{content}"
     else:
-        filepath = os.path.join(temp_dir, filename)
-    with open(filepath, "w") as f:
-        f.write(content)
-    return json.dumps({
-        "type": "tool_response",
-        "tool_name": "save_and_read_file",
-        "result": f"File saved to {filepath}. You can read this file to process its contents."
-    })
+        result_text = f"File: {file_info.name} ({size_str})\n\nContent:\n{content}"
+    
+    return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
+
 
 @tool
 def download_file_from_url(url: str, filename: Optional[str] = None) -> str:
@@ -860,75 +902,18 @@ def download_file_from_url(url: str, filename: Optional[str] = None) -> str:
         with open(filepath, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "download_file_from_url",
-            "result": f"File downloaded to {filepath}. You can read this file to process its contents."
-        })
+        from .file_utils import FileUtils
+        return FileUtils.create_tool_response(
+            "download_file_from_url", 
+            result=f"File downloaded to {filepath}. You can read this file to process its contents."
+        )
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "download_file_from_url",
-            "error": f"Error downloading file: {str(e)}"
-        })
+        from .file_utils import FileUtils
+        return FileUtils.create_tool_response(
+            "download_file_from_url", 
+            error=f"Error downloading file: {str(e)}"
+        )
 
-@tool
-def get_task_file(task_id: str, file_name: str) -> str:
-    """
-    Download a file associated with a given task_id from the evaluation API, with a local fallback.
-    
-    This tool is used to download files that are part of Comindware Analyst Copilot benchmark tasks.
-    It first tries to download from the evaluation API, and if that fails
-    (e.g., due to network issues or rate limits),
-    it falls back to local files in the 'files' directory.
-    The file is always saved to a 'downloads' directory.
-
-    Args:
-        task_id (str): The task ID for the file to download.
-        file_name (str): The name of the file to download.
-
-    Returns:
-        str: The absolute file path where the file was downloaded, or an error message if not found.
-    """
-    directory_name = "downloads"
-    os.makedirs(directory_name, exist_ok=True)
-    try:
-        # Try to download from evaluation API
-        evaluation_api_base_url = os.environ.get("EVALUATION_API_BASE_URL", "https://api.gaia-benchmark.com")
-        response = requests.get(f"{evaluation_api_base_url}/files/{task_id}", timeout=15)
-        response.raise_for_status()
-        filepath = os.path.join(directory_name, file_name)
-        with open(filepath, 'wb') as file:
-            file.write(response.content)
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "get_task_file",
-            "result": os.path.abspath(filepath)
-        })
-    except Exception as e:
-        # Fallback to local files
-        try:
-            local_filepath = os.path.join("files", file_name)
-            if os.path.exists(local_filepath):
-                filepath = os.path.join(directory_name, file_name)
-                shutil.copy2(local_filepath, filepath)
-                return json.dumps({
-                    "type": "tool_response",
-                    "tool_name": "get_task_file",
-                    "result": os.path.abspath(filepath)
-                })
-            else:
-                return json.dumps({
-                    "type": "tool_response",
-                    "tool_name": "get_task_file",
-                    "error": f"Error: File {file_name} not found locally or via API"
-                })
-        except Exception as local_error:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "get_task_file",
-                "error": f"Error downloading file: {str(e)}. Local fallback also failed: {str(local_error)}"
-            })
 
 @tool
 def extract_text_from_image(image_path: str) -> str:
@@ -966,56 +951,76 @@ def extract_text_from_image(image_path: str) -> str:
 @tool
 def analyze_csv_file(file_path: str, query: str) -> str:
     """
-    Analyze a CSV file using pandas and return summary statistics and column info.
-
+    Analyze CSV files and return summary statistics and column information.
+    
+    This tool can process CSV files with various formats and encodings:
+    - Standard CSV files: .csv
+    - Tab-separated files: .tsv, .txt (with tab delimiters)
+    - Comma-separated files with different encodings
+    
+    The tool automatically detects delimiters and handles common CSV variations.
+    It provides comprehensive analysis including data types, statistics, and column information.
+    
     Args:
-        file_path (str): The path to the CSV file.
-        query (str): A question or description of the analysis to perform (currently unused).
+        file_path (str): The path to the CSV file (.csv, .tsv, or .txt with tab delimiters)
+        query (str): A question or description of the analysis to perform (currently unused)
 
     Returns:
         str: Summary statistics and column information, or an error message if analysis fails.
     """
+    from .file_utils import FileUtils
+    
+    # Check file exists using utilities with Pydantic validation
+    file_info = FileUtils.get_file_info(file_path)
+    if not file_info.exists:
+        return FileUtils.create_tool_response("analyze_csv_file", error=file_info.error)
+    
     try:
         df = pd.read_csv(file_path)
         result = f"CSV file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
+        result += f"File: {file_info.name} ({FileUtils.format_file_size(file_info.size)})\n"
         result += f"Columns: {', '.join(df.columns)}\n\n"
         result += "Summary statistics:\n"
         result += str(df.describe())
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "analyze_csv_file",
-            "result": result
-        })
+        return FileUtils.create_tool_response("analyze_csv_file", result=result, file_info=file_info)
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "analyze_csv_file",
-            "error": f"Error analyzing CSV file: {str(e)}"
-        })
+        return FileUtils.create_tool_response("analyze_csv_file", error=f"Error analyzing CSV file: {str(e)}")
 
 @tool
 def analyze_excel_file(file_path: str, query: str) -> str:
     """
-    Analyze an Excel file using pandas and return summary statistics and column info.
-
+    Analyze Excel files and return summary statistics and column information.
+    
+    This tool can process Excel files in various formats:
+    - Excel files: .xlsx, .xls
+    - Excel workbooks with multiple sheets
+    - Excel files with different encodings and formats
+    
+    The tool automatically detects sheet structure and provides comprehensive analysis
+    including data types, statistics, column information, and sheet details.
+    
     Args:
-        file_path (str): The path to the Excel file.
-        query (str): A question or description of the analysis to perform (currently unused).
+        file_path (str): The path to the Excel file (.xlsx or .xls)
+        query (str): A question or description of the analysis to perform (currently unused)
 
     Returns:
         str: Summary statistics and column information, or an error message if analysis fails.
     """
+    from .file_utils import FileUtils
+    
+    # Check file exists using utilities with Pydantic validation
+    file_info = FileUtils.get_file_info(file_path)
+    if not file_info.exists:
+        return FileUtils.create_tool_response("analyze_excel_file", error=file_info.error)
+    
     try:
         df = pd.read_excel(file_path)
         result = f"Excel file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
+        result += f"File: {file_info.name} ({FileUtils.format_file_size(file_info.size)})\n"
         result += f"Columns: {', '.join(df.columns)}\n\n"
         result += "Summary statistics:\n"
         result += str(df.describe())
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "analyze_excel_file",
-            "result": result
-        })
+        return FileUtils.create_tool_response("analyze_excel_file", result=result, file_info=file_info)
     except Exception as e:
         # Enhanced error reporting: print columns and head if possible
         try:
@@ -1025,11 +1030,7 @@ def analyze_excel_file(file_path: str, query: str) -> str:
             error_details = f"Error analyzing Excel file: {str(e)}\nColumns: {columns}\nHead: {head}"
         except Exception as inner_e:
             error_details = f"Error analyzing Excel file: {str(e)}\nAdditionally, failed to read columns/head: {str(inner_e)}"
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "analyze_excel_file",
-            "error": error_details
-        })
+        return FileUtils.create_tool_response("analyze_excel_file", error=error_details)
 
 # ========== IMAGE ANALYSIS/GENERATION TOOLS ==========
 @tool
@@ -1813,4 +1814,4 @@ def submit_intermediate_step(step_name: str, description: str, status: str = "in
             "type": "error"
         }
 
-# ========== END OF TOOLS.PY ========== 
+# ========== END OF TOOLS.PY ==========
