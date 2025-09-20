@@ -4,12 +4,38 @@ alwaysApply: true
 
 - Code style: langchain-pure, dry, lean, abstract, modular
 - Ensure LangChain purity.
-- Follow LangChain best practices, patterns, and conventions:
+- Follow LangChain's best practices, patterns, and conventions:
     - https://python.langchain.com/docs/introduction/
+    - https://python.langchain.com/docs/concepts/streaming/
+    - https://python.langchain.com/docs/concepts/runnables/
+    - https://python.langchain.com/docs/concepts/tool_calling/
+    - https://langchain-ai.github.io/langgraph/concepts/memory/
+    - https://python.langchain.com/docs/how_to/
     - https://langchain-ai.github.io/langgraph/concepts/why-langgraph/
+    - https://python.langchain.com/docs/how_to/
+    - https://python.langchain.com/docs/concepts/
+    - https://python.langchain.com/docs/integrations/providers/
+    - https://python.langchain.com/api_reference/
+    - https://langchain-ai.github.io/langgraph/guides/
+    - https://langchain-ai.github.io/langgraph/concepts/streaming/
+    - https://langchain-ai.github.io/langgraph/concepts/memory/
+- Follow Gradio's best practices, patterns, and conventions:
+    - https://www.gradio.app/docs
+    - https://www.gradio.app/guides/the-interface-class/
+    - https://www.gradio.app/guides/interface-state/
+    - https://www.gradio.app/guides/blocks-and-event-listeners/
+    - https://www.gradio.app/guides/controlling-layout/
+    - https://www.gradio.app/guides/dynamic-apps-with-render-decorator/
+- Follow Python's best practices, patterns, and conventions:
+    - https://peps.python.org/pep-0008/
+    - https://peps.python.org/pep-0257/
+    - https://google.github.io/styleguide/pyguide.html
+    - https://docs.python-guide.org/
 - Be super smart, create super lean and dry code.
 - Use abstractions.
 - Use modularization.
+- Ensure testability and extensibility.
+- Always run linter after making any changes
 - When refactoring code, change only the levant parts.
 - Group and isolate code based on its function in different files to avoid clutter.
 - Do not duplicate code, encapsulate any reused code in methods/functions.
@@ -20,9 +46,5 @@ alwaysApply: true
 - Reanalyze your changes twice for any issues you might have introduced.
 - Place imports always on top.
 - Use environment variables for secrets.
-- Ensure testability and extensibility.
-- Put any test scripts into @/misc_files folder.
-- put reports to a relevant docs/**/progress_reports/ folder under /docs/ or its relevant subfolder
-- put tests to /agent_ng/_tests preferably, or under the current folder's _tests where the files are modified or created
-- Always run linter after making any changes
-- Always refer to https://peps.python.org/pep-0008/, https://peps.python.org/pep-0257/
+- Put reports to a relevant `docs/**/progress_reports/` folder under `/docs/` or its relevant `cwd/subfolder`
+- Put tests to `/agent_ng/_tests` preferably, or under a relevant `cwd/_tests` where the files are modified or created, otherwise to `@/misc_files`
