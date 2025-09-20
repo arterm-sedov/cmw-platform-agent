@@ -18,6 +18,7 @@ Based on LangChain's official documentation and best practices.
 
 import asyncio
 import json
+import os
 import time
 import uuid
 from typing import Dict, List, Optional, Any, AsyncGenerator, Tuple
@@ -159,11 +160,10 @@ class CmwAgent:
         self.conversation_history = []
         self.active_streams = {}
         
-        # File data storage (using Gradio's file system)
-        self.current_file_path = None
-        self.current_file_name = None
-        self.current_file_paths = []  # Store multiple file paths
-        self.current_file_names = []  # Store multiple file names
+        # File registry system (lean and secure)
+        self.file_registry = {}  # Maps original_filename -> unique_filename
+        self.session_cache_path = None  # Gradio cache path for this session
+        self.current_files = []  # Current conversation turn files
         
         # Initialize in background
         asyncio.create_task(self._initialize_async())
@@ -365,15 +365,36 @@ Always use the appropriate tools to answer questions and show your work step by 
         """Clear conversation history and file data"""
         chain = self._get_conversation_chain(conversation_id)
         chain.clear_conversation(conversation_id)
-        # Clear file data when clearing conversation
-        self.current_file_path = None
-        self.current_file_name = None
-        self.current_file_paths = []
-        self.current_file_names = []
+        # Clear file registry when clearing conversation
+        self.file_registry = {}
+        self.current_files = []
     
     def is_ready(self) -> bool:
         """Check if the agent is ready to process requests"""
         return self.is_initialized and self.llm_instance is not None
+    
+    def get_file_path(self, original_filename: str) -> str:
+        """
+        Get the full file path for a file by its original filename.
+        
+        Args:
+            original_filename (str): Original filename from user upload
+            
+        Returns:
+            str: Full path to the file in Gradio cache, or None if not found
+        """
+        from tools.file_utils import FileUtils
+        
+        # Check if we have this file in our registry
+        if original_filename in self.file_registry:
+            unique_filename = self.file_registry[original_filename]
+            if self.session_cache_path:
+                full_path = os.path.join(self.session_cache_path, unique_filename)
+                if os.path.exists(full_path):
+                    return full_path
+        
+        # Fallback: search in Gradio cache
+        return FileUtils.find_file_in_gradio_cache(original_filename)
     
     def get_status(self) -> Dict[str, Any]:
         """Get agent status information"""
