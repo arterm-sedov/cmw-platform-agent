@@ -191,12 +191,7 @@ class ChatTab:
             outputs=[self.components["chatbot"], self.components["msg"], self.components["download_btn"]]
         )
         
-        # Download button event - updates the download button with file path
-        self.components["download_btn"].click(
-            fn=self._download_conversation_wrapper,
-            inputs=[self.components["chatbot"]],
-            outputs=[self.components["download_btn"]]
-        )
+        # Download button uses pre-generated file - no click handler needed
         
         # Show download button when there's conversation history
         self.components["chatbot"].change(
@@ -925,35 +920,30 @@ class ChatTab:
             # Fallback if clear handler not available
             empty_multimodal = {"text": "", "files": []}
             return [], empty_multimodal, gr.DownloadButton(visible=False)
-    
-    def _download_conversation_wrapper(self, history):
-        """Wrapper to handle the download and update the download button"""
-        file_path = self._download_conversation_as_markdown(history)
-        if file_path:
-            # Return updated download button with file path and make it visible
-            return gr.DownloadButton(
-                label=self._get_translation("download_button"),
-                value=file_path,
-                variant="secondary",
-                elem_classes=["cmw-button"],
-                visible=True
-            )
-        else:
-            # Return hidden download button
-            return gr.DownloadButton(visible=False)
-    
     def _update_download_button_visibility(self, history):
-        """Update download button visibility based on conversation history"""
+        """Update download button visibility and file based on conversation history"""
         if history and len(history) > 0:
-            # Show download button when there's conversation history
-            return gr.DownloadButton(
-                label=self._get_translation("download_button"),
-                variant="secondary",
-                elem_classes=["cmw-button"],
-                visible=True
-            )
+            # Generate file with fresh timestamp when conversation changes
+            file_path = self._download_conversation_as_markdown(history)
+            if file_path:
+                # Show download button with pre-generated file
+                return gr.DownloadButton(
+                    label=self._get_translation("download_button"),
+                    value=file_path,
+                    variant="secondary",
+                    elem_classes=["cmw-button"],
+                    visible=True
+                )
+            else:
+                # Show button without file if generation fails
+                return gr.DownloadButton(
+                    label=self._get_translation("download_button"),
+                    variant="secondary",
+                    elem_classes=["cmw-button"],
+                    visible=True
+                )
         else:
-            # Hide download button when no conversation history
+            # Hide download button when there's no conversation history
             return gr.DownloadButton(visible=False)
     
     def _download_conversation_as_markdown(self, history) -> str:

@@ -24,7 +24,7 @@ RUSSIAN_TRANSLATIONS = {
     "tab_stats": "📊 Статистика",
     
     # Chat tab content
-    "welcome_title": "💬 Добро пожаловать!",
+    "welcome_title": "Добро пожаловать!",
     "welcome_description": """
     **Ассистент аналитика Comindware** предназначен для работы с сущностями **Comindware Platform**, такими как приложения, шаблоны, атрибуты.
     
@@ -48,7 +48,7 @@ RUSSIAN_TRANSLATIONS = {
     """,
     
     # Quick actions
-    "quick_actions_title": "⚡ Заготовки",
+    "quick_actions_title": "Заготовки",
     "quick_list_apps": "🔎 Список всех приложений",
     "quick_create_attr": "🧩 Создать текстовый атрибут",
     "quick_edit_mask": "🛠️ Редактировать маску телефона",
@@ -267,7 +267,7 @@ ENGLISH_TRANSLATIONS = {
     "tab_stats": "📊 Statistics",
     
     # Chat tab content
-    "welcome_title": "💬 Welcome!",
+    "welcome_title": "Welcome!",
     "welcome_description": """
     **Comindware Analyst Copilot** is designed to work with **Comindware Platform** entities such as applications, templates, and attributes.
     
@@ -291,7 +291,7 @@ ENGLISH_TRANSLATIONS = {
     """,
     
     # Quick actions
-    "quick_actions_title": "⚡ Quick Actions",
+    "quick_actions_title": "Quick Actions",
     "quick_list_apps": "🔎 List all apps",
     "quick_create_attr": "🧩 Create text attribute",
     "quick_edit_mask": "🛠️ Edit phone mask",
