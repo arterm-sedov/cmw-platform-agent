@@ -370,7 +370,7 @@ class ChatTab:
                 total_tokens=cumulative_stats["conversation_tokens"]
             )
             conversation = self._get_translation("token_usage_conversation").format(
-                conversation_tokens=cumulative_stats["conversation_tokens"]
+                conversation_tokens=cumulative_stats["session_tokens"]
             )
             last_message = self._get_translation("token_usage_last_message").format(
                 percentage=budget_info["percentage"],
