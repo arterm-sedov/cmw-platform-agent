@@ -2,7 +2,10 @@
 alwaysApply: true
 ---
 
-- Code style: langchain-pure, dry, lean, abstract, modular
+- Code style: langchain-pure, super dry, super lean, abstract, modular, pythonic, super smart, modular, linted, deduplicated, pydantic, pythonic
+- Always run linter after making any changes
+- Ensure testability and extensibility.
+- When refactoring code, change only the levant parts.
 - Ensure LangChain purity.
 - Follow LangChain's best practices, patterns, and conventions:
     - https://python.langchain.com/docs/introduction/
@@ -19,6 +22,7 @@ alwaysApply: true
     - https://langchain-ai.github.io/langgraph/guides/
     - https://langchain-ai.github.io/langgraph/concepts/streaming/
     - https://langchain-ai.github.io/langgraph/concepts/memory/
+- Ensure Gradio purity when possible.
 - Follow Gradio's best practices, patterns, and conventions:
     - https://www.gradio.app/docs
     - https://www.gradio.app/guides/the-interface-class/
@@ -31,13 +35,6 @@ alwaysApply: true
     - https://peps.python.org/pep-0257/
     - https://google.github.io/styleguide/pyguide.html
     - https://docs.python-guide.org/
-- Be super smart, create super lean and dry code.
-- Implementation must be modular, linted, abstract, deduplicated, pydantic
-- Use abstractions.
-- Use modularization.
-- Ensure testability and extensibility.
-- Always run linter after making any changes
-- When refactoring code, change only the levant parts.
 - Group and isolate code based on its function in different files to avoid clutter.
 - Do not duplicate code, encapsulate any reused code in methods/functions.
 - Never break existing code.
