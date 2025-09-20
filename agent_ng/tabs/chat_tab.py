@@ -10,6 +10,7 @@ Supports internationalization (i18n) with Russian and English translations.
 import gradio as gr
 from typing import Dict, Any, Callable, List, Tuple, Optional
 import asyncio
+import os
 
 class ChatTab:
     """Chat tab component with interface and quick actions"""
@@ -701,17 +702,120 @@ class ChatTab:
             message = multimodal_value.get("text", "")
             files = multimodal_value.get("files", [])
             
-            # If there are files, we could process them here
-            # For now, we'll just include file information in the message
+            # If there are files, add file info and store file data for the agent
             if files:
-                file_info = f"\n\n[Files attached: {len(files)} file(s)]"
+                file_info = f"\n\n[Files: "
+                file_list = []
+                file_data = None
+                file_name = None
+                
                 for i, file in enumerate(files, 1):
                     if isinstance(file, dict):
-                        filename = file.get("orig_name", f"file_{i}")
-                        file_info += f"\n- {filename}"
+                        # Get filename from orig_name or extract from path
+                        filename = file.get("orig_name")
+                        if not filename:
+                            # Extract filename from path if orig_name not available
+                            file_path = file.get("path", "")
+                            filename = os.path.basename(file_path) if file_path else f"file_{i}"
+                        
+                        # Try to get file size from the file object first
+                        file_size = file.get("size", 0)
+                        
+                        # Always show size, even if 0 bytes
+                        if file_size > 0:
+                            # Format size nicely
+                            if file_size < 1024:
+                                size_str = f"{file_size} bytes"
+                            elif file_size < 1024 * 1024:
+                                size_str = f"{file_size // 1024} KB"
+                            else:
+                                size_str = f"{file_size // (1024 * 1024)} MB"
+                            file_list.append(f"{filename} ({size_str})")
+                        else:
+                            file_list.append(f"{filename} (0 bytes)")
+                        
+                        # Store file object for each file
+                        if i == 1:
+                            file_data = file  # Store first file object for backward compatibility
+                            file_name = filename
+                        print(f"📁 Stored file object: {filename} -> {file}")
                     else:
-                        file_info += f"\n- {file}"
+                        # Handle string file paths (current case)
+                        file_path = str(file)
+                        filename = os.path.basename(file_path)
+                        
+                        # Try to get file size
+                        try:
+                            file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+                            if file_size > 0:
+                                if file_size < 1024:
+                                    size_str = f"{file_size} bytes"
+                                elif file_size < 1024 * 1024:
+                                    size_str = f"{file_size // 1024} KB"
+                                else:
+                                    size_str = f"{file_size // (1024 * 1024)} MB"
+                                file_list.append(f"{filename} ({size_str})")
+                            else:
+                                file_list.append(f"{filename} (0 bytes)")
+                        except Exception as e:
+                            print(f"⚠️ Could not get file size for {filename}: {e}")
+                            file_list.append(f"{filename}")
+                        
+                        # Store file path for each file
+                        if i == 1:
+                            file_data = file_path  # Store first file path for backward compatibility
+                            file_name = filename
+                        print(f"📁 Stored file path: {filename} -> {file_path}")
+                
+                file_info += ", ".join(file_list) + "]"
                 message += file_info
+                
+                # Store file paths in the agent FIRST, before adding to message
+                if hasattr(self, 'main_app') and self.main_app and hasattr(self.main_app, 'agent'):
+                    # Store first file for backward compatibility
+                    if file_data and file_name:
+                        self.main_app.agent.current_file_path = file_data
+                        self.main_app.agent.current_file_name = file_name
+                        print(f"📁 Stored first file path in agent: {file_name} -> {file_data}")
+                    
+                    # Store all file paths for multi-file support
+                    self.main_app.agent.current_file_paths = []
+                    self.main_app.agent.current_file_names = []
+                    
+                    # Collect all file paths from the files list
+                    for file in files:
+                        if isinstance(file, dict):
+                            # For file objects, store the entire object
+                            file_path = file  # The entire file object is the path
+                            filename = file.get("orig_name", f"file_{len(self.main_app.agent.current_file_paths) + 1}")
+                            # Store file objects as provided by Gradio (they contain the correct cached paths)
+                            self.main_app.agent.current_file_paths.append(file_path)
+                            self.main_app.agent.current_file_names.append(filename)
+                            print(f"📁 Added to multi-file list: {filename} -> {file_path}")
+                        else:
+                            # For string paths, store the path directly
+                            file_path = str(file)
+                            filename = os.path.basename(file_path)
+                            # Store string paths as provided by Gradio (they are the correct cached paths)
+                            self.main_app.agent.current_file_paths.append(file_path)
+                            self.main_app.agent.current_file_names.append(filename)
+                            print(f"📁 Added to multi-file list: {filename} -> {file_path}")
+                    
+                    print(f"📁 Total files stored: {len(self.main_app.agent.current_file_paths)}")
+                    
+                    # Add file paths for LLM to use in tool calls (only show paths, not orphaned filenames)
+                    if self.main_app.agent.current_file_paths:
+                        message += f"\n\n**Available files for analysis:**\n"
+                        for i, file_obj in enumerate(self.main_app.agent.current_file_paths, 1):
+                            # Extract the actual file path from the file object or use string path directly
+                            if isinstance(file_obj, dict):
+                                actual_path = file_obj.get("path", str(file_obj))
+                            else:
+                                actual_path = str(file_obj)
+                            message += f"- File {i}: `{actual_path}`\n"
+            else:
+                # No files, just use the text message
+                pass
         else:
             # Fallback for non-dict values
             message = str(multimodal_value) if multimodal_value else ""
@@ -722,7 +826,7 @@ class ChatTab:
             yield history, ""
             return
         
-        # Call the original stream handler with extracted text
+        # Call the original stream handler with enhanced message (text + file analysis)
         for result in stream_handler(message, history):
             yield result
     
