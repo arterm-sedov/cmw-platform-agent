@@ -494,32 +494,38 @@ class CodeInterpreter:
 interpreter_instance = CodeInterpreter()
 
 @tool
-def execute_code_multilang(code: str, language: str = "python") -> str:
+def execute_code_multilang(code_reference: str, language: str = "python", agent=None) -> str:
     """Execute code in multiple languages (Python, Bash, SQL, C, Java) and return results.
 
     Args:
-        code (str): The source code to execute.
+        code_reference (str): The source code to execute, filename, or URL to download code from.
         language (str): The language of the code. Supported: "python", "bash", "sql", "c", "java".
+        agent: Agent instance for file resolution (injected automatically).
 
     Returns:
         A string summarizing the execution results (stdout, stderr, errors, plots, dataframes if any).
     """
+    from .file_utils import FileUtils
+    
+    # Resolve code reference (code content, filename, or URL)
+    code_content, detected_language = FileUtils.resolve_code_input(code_reference, agent)
+    
+    # Use detected language or provided language
+    final_language = (detected_language or language).lower()
+    
     supported_languages = ["python", "bash", "sql", "c", "java"]
-    language = language.lower()
+    if final_language not in supported_languages:
+        return FileUtils.create_tool_response(
+            "execute_code_multilang", 
+            error=f"❌ Unsupported language: {final_language}. Supported languages are: {', '.join(supported_languages)}"
+        )
 
-    if language not in supported_languages:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "execute_code_multilang",
-            "error": f"❌ Unsupported language: {language}. Supported languages are: {', '.join(supported_languages)}"
-        })
-
-    result = interpreter_instance.execute_code(code, language=language)
+    result = interpreter_instance.execute_code(code_content, language=final_language)
 
     response = []
 
     if result["status"] == "success":
-        response.append(f"✅ Code executed successfully in **{language.upper()}**")
+        response.append(f"✅ Code executed successfully in **{final_language.upper()}**")
 
         if result.get("stdout"):
             response.append(
@@ -554,17 +560,13 @@ def execute_code_multilang(code: str, language: str = "python") -> str:
             )
 
     else:
-        response.append(f"❌ Code execution failed in **{language.upper()}**")
+        response.append(f"❌ Code execution failed in **{final_language.upper()}**")
         if result.get("stderr"):
             response.append(
                 "\n**Error Log:**\n```\n" + result["stderr"].strip() + "\n```"
             )
 
-    return json.dumps({
-        "type": "tool_response",
-        "tool_name": "execute_code_multilang",
-        "result": "\n".join(response)
-    })
+    return FileUtils.create_tool_response("execute_code_multilang", result="\n".join(response))
 
 # ========== MATH TOOLS ==========
 @tool
@@ -825,7 +827,7 @@ def arxiv_search(input: str) -> str:
 
 # ========== FILE/DATA TOOLS ==========
 @tool
-def read_text_based_file(file_path: str) -> str:
+def read_text_based_file(file_reference: str, agent=None) -> str:
     """
     Read text-based files and return raw content as text.
     
@@ -845,16 +847,26 @@ def read_text_based_file(file_path: str) -> str:
     - Excel files (.xlsx, .xls): use analyze_excel_file
     - Images: use analyze_image or extract_text_from_image
     
-    The tool automatically detects file encoding and handles multiple encodings
-    (UTF-8, Latin-1, CP1252, ISO-8859-1) to ensure successful text extraction.
+    The tool automatically:
+    - Detects file encoding and handles multiple encodings (UTF-8, Latin-1, CP1252, ISO-8859-1)
+    - Resolves filenames to full file paths via agent's file registry
+    - Downloads files from URLs automatically
+    - Provides file metadata (name, size, encoding) in results
     
     Args:
-        file_path (str): The path to the text-based file to read
+        file_reference (str): Original filename from user upload OR URL to download
+        agent: Agent instance for file resolution (injected automatically)
         
     Returns:
-        str: The raw text content of the file, or an error message if reading fails
+        str: The raw text content of the file with metadata, or an error message if reading fails
     """
     from .file_utils import FileUtils
+    
+    # Resolve file reference (filename or URL) to full path
+    file_path = FileUtils.resolve_file_reference(file_reference, agent)
+    
+    if not file_path:
+        return FileUtils.create_tool_response("read_text_based_file", error=f"File not found: {file_reference}")
     
     # Use modular file utilities with Pydantic validation
     result = FileUtils.read_text_file(file_path)
@@ -868,88 +880,54 @@ def read_text_based_file(file_path: str) -> str:
     encoding = result.encoding
     size_str = FileUtils.format_file_size(file_info.size)
     
+    # Show original reference in result
+    display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
+    
     if encoding != 'utf-8':
-        result_text = f"File: {file_info.name} ({size_str}, {encoding} encoding)\n\nContent:\n{content}"
+        result_text = f"File: {display_name} ({size_str}, {encoding} encoding)\n\nContent:\n{content}"
     else:
-        result_text = f"File: {file_info.name} ({size_str})\n\nContent:\n{content}"
+        result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
     
     return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
 
 
-@tool
-def download_file_from_url(url: str, filename: Optional[str] = None) -> str:
-    """
-    Download a file from a URL and save it to a temporary location. Returns the file path.
-
-    Args:
-        url (str): The URL of the file to download.
-        filename (str, optional): The name of the file. If not provided, a name is inferred or generated.
-
-    Returns:
-        str: The file path where the file was downloaded.
-    """
-    try:
-        if not filename:
-            from urllib.parse import urlparse
-            path = urlparse(url).path
-            filename = os.path.basename(path)
-            if not filename:
-                filename = f"downloaded_{uuid.uuid4().hex[:8]}"
-        temp_dir = tempfile.gettempdir()
-        filepath = os.path.join(temp_dir, filename)
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-        with open(filepath, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        from .file_utils import FileUtils
-        return FileUtils.create_tool_response(
-            "download_file_from_url", 
-            result=f"File downloaded to {filepath}. You can read this file to process its contents."
-        )
-    except Exception as e:
-        from .file_utils import FileUtils
-        return FileUtils.create_tool_response(
-            "download_file_from_url", 
-            error=f"Error downloading file: {str(e)}"
-        )
 
 
 @tool
-def extract_text_from_image(image_path: str) -> str:
+def extract_text_from_image(file_reference: str, agent=None) -> str:
     """
     Extract text from an image file using OCR (pytesseract) and return the extracted text.
 
     Args:
-        image_path (str): The path to the image file to process.
+        file_reference (str): Original filename from user upload OR URL to download
+        agent: Agent instance for file resolution (injected automatically)
 
     Returns:
         str: The extracted text, or an error message if extraction fails.
     """
+    from .file_utils import FileUtils
+    
     try:
-        image = Image.open(image_path)
+        # Resolve file reference (filename or URL) to full path
+        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        
+        if not file_path:
+            return FileUtils.create_tool_response("extract_text_from_image", error=f"File not found: {file_reference}")
+        
+        image = Image.open(file_path)
         if PYTESSERACT_AVAILABLE:
             text = pytesseract.image_to_string(image)
         else:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "extract_text_from_image",
-                "error": "OCR not available. Install with: pip install pytesseract"
-            })
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "extract_text_from_image",
-            "result": f"Extracted text from image:\n\n{text}"
-        })
+            return FileUtils.create_tool_response(
+                "extract_text_from_image", 
+                error="OCR not available. Install with: pip install pytesseract"
+            )
+        return FileUtils.create_tool_response("extract_text_from_image", result=f"Extracted text from image:\n\n{text}")
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "extract_text_from_image",
-            "error": f"Error extracting text from image: {str(e)}"
-        })
+        return FileUtils.create_tool_response("extract_text_from_image", error=f"Error extracting text from image: {str(e)}")
 
 @tool
-def analyze_csv_file(file_path: str, query: str) -> str:
+def analyze_csv_file(file_reference: str, query: str, agent=None) -> str:
     """
     Analyze CSV files and return summary statistics and column information.
     
@@ -958,17 +936,27 @@ def analyze_csv_file(file_path: str, query: str) -> str:
     - Tab-separated files: .tsv, .txt (with tab delimiters)
     - Comma-separated files with different encodings
     
-    The tool automatically detects delimiters and handles common CSV variations.
-    It provides comprehensive analysis including data types, statistics, and column information.
+    The tool automatically:
+    - Detects delimiters and handles common CSV variations
+    - Resolves filenames to full file paths via agent's file registry
+    - Downloads files from URLs automatically
+    - Provides comprehensive analysis including data types, statistics, and column information
     
     Args:
-        file_path (str): The path to the CSV file (.csv, .tsv, or .txt with tab delimiters)
+        file_reference (str): Original filename from user upload OR URL to download
         query (str): A question or description of the analysis to perform (currently unused)
+        agent: Agent instance for file resolution (injected automatically)
 
     Returns:
         str: Summary statistics and column information, or an error message if analysis fails.
     """
     from .file_utils import FileUtils
+    
+    # Resolve file reference (filename or URL) to full path
+    file_path = FileUtils.resolve_file_reference(file_reference, agent)
+    
+    if not file_path:
+        return FileUtils.create_tool_response("analyze_csv_file", error=f"File not found: {file_reference}")
     
     # Check file exists using utilities with Pydantic validation
     file_info = FileUtils.get_file_info(file_path)
@@ -987,7 +975,7 @@ def analyze_csv_file(file_path: str, query: str) -> str:
         return FileUtils.create_tool_response("analyze_csv_file", error=f"Error analyzing CSV file: {str(e)}")
 
 @tool
-def analyze_excel_file(file_path: str, query: str) -> str:
+def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
     """
     Analyze Excel files and return summary statistics and column information.
     
@@ -996,17 +984,27 @@ def analyze_excel_file(file_path: str, query: str) -> str:
     - Excel workbooks with multiple sheets
     - Excel files with different encodings and formats
     
-    The tool automatically detects sheet structure and provides comprehensive analysis
-    including data types, statistics, column information, and sheet details.
+    The tool automatically:
+    - Detects sheet structure and provides comprehensive analysis
+    - Resolves filenames to full file paths via agent's file registry
+    - Downloads files from URLs automatically
+    - Provides data types, statistics, column information, and sheet details
     
     Args:
-        file_path (str): The path to the Excel file (.xlsx or .xls)
+        file_reference (str): Original filename from user upload OR URL to download
         query (str): A question or description of the analysis to perform (currently unused)
+        agent: Agent instance for file resolution (injected automatically)
 
     Returns:
         str: Summary statistics and column information, or an error message if analysis fails.
     """
     from .file_utils import FileUtils
+    
+    # Resolve file reference (filename or URL) to full path
+    file_path = FileUtils.resolve_file_reference(file_reference, agent)
+    
+    if not file_path:
+        return FileUtils.create_tool_response("analyze_excel_file", error=f"File not found: {file_reference}")
     
     # Check file exists using utilities with Pydantic validation
     file_info = FileUtils.get_file_info(file_path)
@@ -1034,18 +1032,33 @@ def analyze_excel_file(file_path: str, query: str) -> str:
 
 # ========== IMAGE ANALYSIS/GENERATION TOOLS ==========
 @tool
-def analyze_image(image_base64: str) -> str:
+def analyze_image(file_reference: str, agent=None) -> str:
     """
-    Analyze basic properties of an image (size, mode, color analysis, thumbnail preview) from a base64-encoded image string.
+    Analyze basic properties of an image (size, mode, color analysis, thumbnail preview) from a file reference.
+
+    The tool automatically:
+    - Resolves filenames to full file paths via agent's file registry
+    - Downloads files from URLs automatically
+    - Provides comprehensive image analysis including dimensions, color analysis, and thumbnails
 
     Args:
-        image_base64 (str): The base64-encoded string of the image to analyze.
+        file_reference (str): Original filename from user upload OR URL to download
+        agent: Agent instance for file resolution (injected automatically)
 
     Returns:
         str: JSON string with analysis results including dimensions, mode, color_analysis, and thumbnail.
     """
+    from .file_utils import FileUtils
+    
     try:
-        img = decode_image(image_base64)
+        # Resolve file reference (filename or URL) to full path
+        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        
+        if not file_path:
+            return FileUtils.create_tool_response("analyze_image", error=f"File not found: {file_reference}")
+        
+        # Open image from file path
+        img = Image.open(file_path)
         width, height = img.size
         mode = img.mode
         if mode in ("RGB", "RGBA"):
@@ -1070,17 +1083,9 @@ def analyze_image(image_base64: str) -> str:
             "color_analysis": color_analysis,
             "thumbnail": thumbnail_base64,
         }
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "analyze_image",
-            "result": result
-        }, indent=2)
+        return FileUtils.create_tool_response("analyze_image", result=result)
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "analyze_image",
-            "error": str(e)
-        }, indent=2)
+        return FileUtils.create_tool_response("analyze_image", error=str(e))
 
 class TransformImageParams(BaseModel):
     width: Optional[int] = Field(None, description="New width for resize operation")

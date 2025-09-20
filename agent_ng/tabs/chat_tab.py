@@ -702,117 +702,74 @@ class ChatTab:
             message = multimodal_value.get("text", "")
             files = multimodal_value.get("files", [])
             
-            # If there are files, add file info and store file data for the agent
+            # If there are files, process them with the new lean system
             if files:
+                from tools.file_utils import FileUtils
+                
+                # Initialize session cache path if not set
+                if hasattr(self, 'main_app') and self.main_app and hasattr(self.main_app, 'agent'):
+                    if not self.main_app.agent.session_cache_path:
+                        # Extract session ID from first file path
+                        first_file = files[0] if files else None
+                        if first_file:
+                            if isinstance(first_file, dict):
+                                file_path = first_file.get("path", "")
+                            else:
+                                file_path = str(first_file)
+                            
+                            # Extract session ID from Gradio cache path
+                            # Path format: C:\TEMP\gradio\{session_id}\filename
+                            if "gradio" in file_path:
+                                parts = file_path.split(os.sep)
+                                gradio_index = parts.index("gradio")
+                                if gradio_index + 1 < len(parts):
+                                    session_id = parts[gradio_index + 1]
+                                    self.main_app.agent.session_cache_path = os.path.join(
+                                        FileUtils.get_gradio_cache_path(), "gradio", session_id
+                                    )
+                
+                # Process files with new system
                 file_info = f"\n\n[Files: "
                 file_list = []
-                file_data = None
-                file_name = None
+                current_files = []
                 
                 for i, file in enumerate(files, 1):
+                    # Extract original filename and file path
                     if isinstance(file, dict):
-                        # Get filename from orig_name or extract from path
-                        filename = file.get("orig_name")
-                        if not filename:
-                            # Extract filename from path if orig_name not available
-                            file_path = file.get("path", "")
-                            filename = os.path.basename(file_path) if file_path else f"file_{i}"
-                        
-                        # Try to get file size from the file object first
-                        file_size = file.get("size", 0)
-                        
-                        # Always show size, even if 0 bytes
-                        if file_size > 0:
-                            # Format size nicely
-                            if file_size < 1024:
-                                size_str = f"{file_size} bytes"
-                            elif file_size < 1024 * 1024:
-                                size_str = f"{file_size // 1024} KB"
-                            else:
-                                size_str = f"{file_size // (1024 * 1024)} MB"
-                            file_list.append(f"{filename} ({size_str})")
-                        else:
-                            file_list.append(f"{filename} (0 bytes)")
-                        
-                        # Store file object for each file
-                        if i == 1:
-                            file_data = file  # Store first file object for backward compatibility
-                            file_name = filename
-                        print(f"📁 Stored file object: {filename} -> {file}")
+                        original_filename = file.get("orig_name")
+                        file_path = file.get("path", "")
+                        if not original_filename:
+                            original_filename = os.path.basename(file_path) if file_path else f"file_{i}"
                     else:
-                        # Handle string file paths (current case)
                         file_path = str(file)
-                        filename = os.path.basename(file_path)
-                        
-                        # Try to get file size
-                        try:
-                            file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
-                            if file_size > 0:
-                                if file_size < 1024:
-                                    size_str = f"{file_size} bytes"
-                                elif file_size < 1024 * 1024:
-                                    size_str = f"{file_size // 1024} KB"
-                                else:
-                                    size_str = f"{file_size // (1024 * 1024)} MB"
-                                file_list.append(f"{filename} ({size_str})")
-                            else:
-                                file_list.append(f"{filename} (0 bytes)")
-                        except Exception as e:
-                            print(f"⚠️ Could not get file size for {filename}: {e}")
-                            file_list.append(f"{filename}")
-                        
-                        # Store file path for each file
-                        if i == 1:
-                            file_data = file_path  # Store first file path for backward compatibility
-                            file_name = filename
-                        print(f"📁 Stored file path: {filename} -> {file_path}")
+                        original_filename = os.path.basename(file_path)
+                    
+                    # Generate unique filename for registry
+                    unique_filename = FileUtils.generate_unique_filename(original_filename)
+                    
+                    # Get file size
+                    try:
+                        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+                        if file_size > 0:
+                            size_str = FileUtils.format_file_size(file_size)
+                            file_list.append(f"{original_filename} ({size_str})")
+                        else:
+                            file_list.append(f"{original_filename} (0 bytes)")
+                    except Exception as e:
+                        file_list.append(f"{original_filename}")
+                    
+                    # Store in registry and current files
+                    if hasattr(self, 'main_app') and self.main_app and hasattr(self.main_app, 'agent'):
+                        self.main_app.agent.file_registry[original_filename] = unique_filename
+                        current_files.append(original_filename)
                 
                 file_info += ", ".join(file_list) + "]"
                 message += file_info
                 
-                # Store file paths in the agent FIRST, before adding to message
+                # Store current files in agent
                 if hasattr(self, 'main_app') and self.main_app and hasattr(self.main_app, 'agent'):
-                    # Store first file for backward compatibility
-                    if file_data and file_name:
-                        self.main_app.agent.current_file_path = file_data
-                        self.main_app.agent.current_file_name = file_name
-                        print(f"📁 Stored first file path in agent: {file_name} -> {file_data}")
-                    
-                    # Store all file paths for multi-file support
-                    self.main_app.agent.current_file_paths = []
-                    self.main_app.agent.current_file_names = []
-                    
-                    # Collect all file paths from the files list
-                    for file in files:
-                        if isinstance(file, dict):
-                            # For file objects, store the entire object
-                            file_path = file  # The entire file object is the path
-                            filename = file.get("orig_name", f"file_{len(self.main_app.agent.current_file_paths) + 1}")
-                            # Store file objects as provided by Gradio (they contain the correct cached paths)
-                            self.main_app.agent.current_file_paths.append(file_path)
-                            self.main_app.agent.current_file_names.append(filename)
-                            print(f"📁 Added to multi-file list: {filename} -> {file_path}")
-                        else:
-                            # For string paths, store the path directly
-                            file_path = str(file)
-                            filename = os.path.basename(file_path)
-                            # Store string paths as provided by Gradio (they are the correct cached paths)
-                            self.main_app.agent.current_file_paths.append(file_path)
-                            self.main_app.agent.current_file_names.append(filename)
-                            print(f"📁 Added to multi-file list: {filename} -> {file_path}")
-                    
-                    print(f"📁 Total files stored: {len(self.main_app.agent.current_file_paths)}")
-                    
-                    # Add file paths for LLM to use in tool calls (only show paths, not orphaned filenames)
-                    if self.main_app.agent.current_file_paths:
-                        message += f"\n\n**Available files for analysis:**\n"
-                        for i, file_obj in enumerate(self.main_app.agent.current_file_paths, 1):
-                            # Extract the actual file path from the file object or use string path directly
-                            if isinstance(file_obj, dict):
-                                actual_path = file_obj.get("path", str(file_obj))
-                            else:
-                                actual_path = str(file_obj)
-                            message += f"- File {i}: `{actual_path}`\n"
+                    self.main_app.agent.current_files = current_files
+                    print(f"📁 Registered {len(current_files)} files: {current_files}")
             else:
                 # No files, just use the text message
                 pass

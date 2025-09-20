@@ -627,6 +627,10 @@ class LangChainConversationChain:
             if not tool_func:
                 return f"Error: Tool '{tool_name}' not found"
             
+            # Inject agent instance for file resolution if available
+            if hasattr(self, 'agent') and self.agent:
+                tool_args['agent'] = self.agent
+            
             # Execute the tool
             result = tool_func.invoke(tool_args) if hasattr(tool_func, 'invoke') else tool_func(**tool_args)
             
@@ -635,6 +639,7 @@ class LangChainConversationChain:
             
         except Exception as e:
             return f"Error executing tool '{tool_name}': {str(e)}"
+    
     
     def get_conversation_history(self, conversation_id: str = "default") -> List[BaseMessage]:
         """Get conversation history"""
