@@ -62,7 +62,7 @@ RUSSIAN_TRANSLATIONS = {
     "message_placeholder": "Введите ваше сообщение...",
         "send_button": "Отправить",
         "clear_button": "Очистить чат",
-        "download_button": "📥 Собрать файл с диалогом",
+        "download_button": "📥 Скачать диалог (Markdown)",
         "download_file_label": "Скачать Markdown",
     
     # LLM Selection section
@@ -305,7 +305,7 @@ ENGLISH_TRANSLATIONS = {
     "message_placeholder": "Type your message here",
         "send_button": "Send",
         "clear_button": "Clear chat",
-        "download_button": "📥 Compile conversation file",
+        "download_button": "📥 Download conversation (Markdown)",
         "download_file_label": "Download Markdown",
     
     # LLM Selection section
