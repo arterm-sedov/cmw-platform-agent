@@ -98,10 +98,16 @@ class NativeLangChainStreaming:
         return template.format(total_calls=total_calls)
     
     def _get_result_message(self, tool_result: str, language: str = "en") -> str:
-        """Get the localized result message"""
+        """Get the localized result message with chat display truncation"""
         from .i18n_translations import get_translation_key
         template = get_translation_key("result", language)
-        return template.format(tool_result=tool_result)
+        
+        # Lean truncation for chat display only (200 chars max)
+        display_result = tool_result
+        if len(tool_result) > 200:
+            display_result = tool_result[:200] + "... [truncated]"
+        
+        return template.format(tool_result=display_result)
     
     def _deduplicate_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
         """

@@ -841,6 +841,7 @@ def read_text_based_file(file_reference: str, agent=None) -> str:
     - Structured text: .json, .xml, .svg
     - Web files: .html, .htm, .xml
     - Documentation: .md, .rst, .tex
+    - PDF files: .pdf (extracts text content and metadata)
     
     Note: For specialized analysis, use dedicated tools instead:
     - CSV files (.csv, .tsv): use analyze_csv_file
@@ -868,7 +869,39 @@ def read_text_based_file(file_reference: str, agent=None) -> str:
     if not file_path:
         return FileUtils.create_tool_response("read_text_based_file", error=f"File not found: {file_reference}")
     
-    # Use modular file utilities with Pydantic validation
+    # Get file info for validation
+    file_info = FileUtils.get_file_info(file_path)
+    if not file_info.exists:
+        return FileUtils.create_tool_response("read_text_based_file", error=file_info.error)
+    
+    # Check if it's a PDF file and handle accordingly
+    if file_info.extension == '.pdf':
+        try:
+            from .pdf_utils import PDFUtils
+            
+            if not PDFUtils.is_available():
+                return FileUtils.create_tool_response("read_text_based_file", error="PyMuPDF not available. Install with: pip install pymupdf", file_info=file_info)
+            
+            # Extract text from PDF using LangChain and PyMuPDF4LLM
+            pdf_result = PDFUtils.extract_text_from_pdf(file_path, use_markdown=True)
+            
+            if not pdf_result.success:
+                return FileUtils.create_tool_response("read_text_based_file", error=pdf_result.error_message, file_info=file_info)
+            
+            # Show original reference in result
+            display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
+            size_str = FileUtils.format_file_size(file_info.size)
+            
+            # Format the response - just the content, no internal details
+            content = pdf_result.text_content
+            result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
+            
+            return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
+            
+        except Exception as e:
+            return FileUtils.create_tool_response("read_text_based_file", error=f"Error processing PDF: {str(e)}", file_info=file_info)
+    
+    # Use modular file utilities with Pydantic validation for other text files
     result = FileUtils.read_text_file(file_path)
     
     if not result.success:
@@ -889,9 +922,6 @@ def read_text_based_file(file_reference: str, agent=None) -> str:
         result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
     
     return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
-
-
-
 
 @tool
 def extract_text_from_image(file_reference: str, agent=None) -> str:
@@ -1818,5 +1848,6 @@ def submit_intermediate_step(step_name: str, description: str, status: str = "in
             "error": f"Error submitting step: {str(e)}",
             "type": "error"
         }
+
 
 # ========== END OF TOOLS.PY ==========

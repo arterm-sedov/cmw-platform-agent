@@ -23,8 +23,8 @@ asyncio-mqtt>=0.11.0
 # sentence-transformers>=2.2.0
 # faiss-cpu>=1.7.4
 
-# PDF processing for ArxivLoader
-pymupdf>=1.23.0
+# PDF processing - PyMuPDF4LLM is the best library for LLM processing
+pymupdf4llm>=0.0.1
 
 # Development and Testing
 pytest>=7.0.0

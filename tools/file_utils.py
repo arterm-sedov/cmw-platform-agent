@@ -190,7 +190,7 @@ class FileUtils:
             
         response = ToolResponse(
             tool_name=tool_name,
-            result=result,
+            result=result,  # Full result, no truncation
             error=error,
             file_info=sanitized_file_info
         )
@@ -258,16 +258,112 @@ class FileUtils:
         from urllib.parse import urlparse
         
         try:
-            response = requests.get(url, stream=True)
-            response.raise_for_status()
+            # First make a HEAD request to get Content-Type
+            head_response = requests.head(url)
+            head_response.raise_for_status()
             
             if target_path is None:
-                # Create temp file
+                # Create temp file with proper extension
                 parsed_url = urlparse(url)
                 filename = os.path.basename(parsed_url.path) or "downloaded_file"
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{filename}")
+                # Extract extension from URL
+                _, url_ext = os.path.splitext(filename)
+                
+                # Get Content-Type header
+                content_type = head_response.headers.get('content-type', '').lower()
+                
+                # MIME type to extension mapping
+                mime_to_ext = {
+                    # Documents
+                    'application/pdf': '.pdf',
+                    'application/msword': '.doc',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+                    'application/vnd.ms-excel': '.xls',
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+                    'application/vnd.ms-powerpoint': '.ppt',
+                    'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+                    'application/rtf': '.rtf',
+                    'application/zip': '.zip',
+                    'application/x-zip-compressed': '.zip',
+                    
+                    # Text formats
+                    'text/plain': '.txt',
+                    'text/html': '.html',
+                    'text/css': '.css',
+                    'text/javascript': '.js',
+                    'text/csv': '.csv',
+                    'text/xml': '.xml',
+                    'application/json': '.json',
+                    'application/xml': '.xml',
+                    
+                    # Images
+                    'image/jpeg': '.jpg',
+                    'image/jpg': '.jpg',
+                    'image/png': '.png',
+                    'image/gif': '.gif',
+                    'image/webp': '.webp',
+                    'image/svg+xml': '.svg',
+                    'image/bmp': '.bmp',
+                    'image/tiff': '.tiff',
+                    
+                    # Audio
+                    'audio/mpeg': '.mp3',
+                    'audio/wav': '.wav',
+                    'audio/ogg': '.ogg',
+                    'audio/mp4': '.m4a',
+                    
+                    # Video
+                    'video/mp4': '.mp4',
+                    'video/avi': '.avi',
+                    'video/quicktime': '.mov',
+                    'video/x-msvideo': '.avi',
+                }
+                
+                # Smart extension detection strategy:
+                # 1. If Content-Type is specific and matches known types, use it
+                # 2. If URL has a standard extension, use it
+                # 3. Fallback to Content-Type if URL extension is non-standard
+                
+                ext = None
+                content_type_ext = None
+                url_ext_valid = False
+                
+                # Get extension from Content-Type
+                for mime_type, extension in mime_to_ext.items():
+                    if mime_type in content_type:
+                        content_type_ext = extension
+                        break
+                
+                # Check if URL extension is valid (standard file extension)
+                if url_ext:
+                    # Check if URL extension matches any known extension
+                    known_extensions = set(mime_to_ext.values())
+                    url_ext_valid = url_ext.lower() in known_extensions
+                
+                # Decision logic
+                if content_type_ext and url_ext_valid:
+                    # Both are valid - prefer Content-Type for accuracy
+                    ext = content_type_ext
+                elif content_type_ext and not url_ext_valid:
+                    # Content-Type is valid, URL extension is not standard
+                    ext = content_type_ext
+                elif not content_type_ext and url_ext_valid:
+                    # Only URL extension is valid
+                    ext = url_ext
+                elif url_ext:
+                    # URL extension exists but not standard - use it as fallback
+                    ext = url_ext
+                else:
+                    # No extension found
+                    ext = ''
+                
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
                 target_path = temp_file.name
                 temp_file.close()
+            
+            # Now download the file
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
             
             with open(target_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -511,3 +607,8 @@ class FileUtils:
             '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv'
         }
         return Path(file_path).suffix.lower() in video_extensions
+    
+    @staticmethod
+    def is_pdf_file(file_path: str) -> bool:
+        """Check if file is likely a PDF file based on extension."""
+        return Path(file_path).suffix.lower() == '.pdf'
