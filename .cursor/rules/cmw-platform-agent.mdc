@@ -32,6 +32,7 @@ alwaysApply: true
     - https://google.github.io/styleguide/pyguide.html
     - https://docs.python-guide.org/
 - Be super smart, create super lean and dry code.
+- Implementation must be modular, linted, abstract, deduplicated, pydantic
 - Use abstractions.
 - Use modularization.
 - Ensure testability and extensibility.
