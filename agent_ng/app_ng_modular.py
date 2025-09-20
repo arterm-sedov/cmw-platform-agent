@@ -57,6 +57,7 @@ try:
     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
     from agent_ng.tabs import ChatTab, LogsTab, StatsTab
     from agent_ng.ui_manager import get_ui_manager
+    from agent_ng.utils import safe_string
     from agent_ng.i18n_translations import create_i18n_instance, get_translation_key, format_translation
     print("✅ Successfully imported all modules using absolute imports")
 except ImportError as e1:
@@ -352,7 +353,7 @@ class NextGenApp:
             yield working_history, ""
             
             # Stream response using simple streaming
-            response_content = ""
+            response_content = ""  # Initialize as empty string to prevent None concatenation
             tool_usage = ""
             tool_messages = []  # Store tool messages separately for metadata handling
             
@@ -400,8 +401,8 @@ class NextGenApp:
                     
                     # Update the last tool message or create new one
                     if tool_messages and tool_messages[-1].get("metadata", {}).get("title") == tool_title:
-                        # Update existing tool message
-                        tool_messages[-1]["content"] += content
+                        # Update existing tool message - ensure content is not None
+                        tool_messages[-1]["content"] += safe_string(content)
                     else:
                         # Create new tool message
                         tool_message = {
@@ -416,15 +417,16 @@ class NextGenApp:
                     yield working_history, ""
                     
                 elif event_type == "content":
-                    # Stream content from response
-                    response_content += content
+                    # Stream content from response - ensure content is not None
+                    response_content += safe_string(content)
                     working_history[-1] = {"role": "assistant", "content": response_content}
                     yield working_history, ""
                     
                 elif event_type == "error":
                     # Error occurred
-                    error_msg = f"\n{content}"
-                    working_history[-1] = {"role": "assistant", "content": response_content + error_msg}
+                    error_msg = f"\n{safe_string(content)}"
+                    # Fix: Ensure response_content is not None before concatenation
+                    working_history[-1] = {"role": "assistant", "content": safe_string(response_content) + error_msg}
                     yield working_history, ""
             
             # Add API token count to final response
@@ -499,8 +501,11 @@ class NextGenApp:
             if token_displays:
                 token_display = "\n\n" + "\n".join(token_displays)
                 # Preserve existing content (including any error messages) and append token display
-                current_content = working_history[-1].get("content", response_content) or ""
-                working_history[-1] = {"role": "assistant", "content": current_content + token_display}
+                # Fix: Ensure we never concatenate None with string
+                current_content = working_history[-1].get("content", "") or ""
+                if response_content is not None:
+                    current_content = response_content
+                working_history[-1] = {"role": "assistant", "content": safe_string(current_content) + token_display}
                 print(f"🔍 DEBUG: Added token display: {token_display}")
             
             # Add tool messages with metadata after the main response
@@ -527,8 +532,11 @@ class NextGenApp:
             execution_time = time.time() - start_time
             error_msg = format_translation("error_streaming", self.language, error=str(e)) + f"\n\n{format_translation('execution_time', self.language, time=execution_time)}"
             # Preserve existing content and append error message
+            # Fix: Ensure we never concatenate None with string
             current_content = working_history[-1].get("content", "") or ""
-            working_history[-1] = {"role": "assistant", "content": current_content + "\n\n" + error_msg}
+            if response_content is not None:
+                current_content = response_content
+            working_history[-1] = {"role": "assistant", "content": safe_string(current_content) + "\n\n" + error_msg}
             # Stop processing state on error
             self.stop_processing()
             yield working_history, ""
