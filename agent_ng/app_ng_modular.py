@@ -144,9 +144,7 @@ class NextGenApp:
         self.components = {}
         
         # Progress status storage with translation
-        self.current_progress_status = get_translation_key("progress_ready", language)
-        self.progress_icon_index = 0
-        self.progress_icons = ["🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"]
+        # Progress status is now managed per-session through session manager
         self.is_processing = False
         
         # Initialize synchronously first, then start async initialization
@@ -222,8 +220,8 @@ class NextGenApp:
                         session_data.agent.token_tracker.start_new_conversation()
                     self.debug_streamer.info("Conversation cleared (default session)")
         
-        # Reset progress status
-        self.current_progress_status = get_translation_key("progress_ready", self.language)
+        # Reset progress status for all sessions
+        # Progress status is now managed per-session through session manager
         return [], ""
     
     def get_progress_status(self, request: gr.Request = None) -> str:
@@ -231,36 +229,28 @@ class NextGenApp:
         if request:
             session_id = self.session_manager.get_session_id(request)
             return self.session_manager.get_status(session_id)
-        return self.current_progress_status
+        # Fallback to default status if no request available
+        return get_translation_key("progress_ready", self.language)
     
-    def update_progress_display(self) -> str:
-        """Update the progress display component with rotating icons"""
-        if self.is_processing:
-            # Always rotate icon during processing to ensure continuous rotation
-            self.progress_icon_index = (self.progress_icon_index + 1) % len(self.progress_icons)
-            current_icon = self.progress_icons[self.progress_icon_index]
-            
-            # Check if we have iteration processing status
-            if "Iteration" in self.current_progress_status and "Processing..." in self.current_progress_status:
-                # Extract iteration info and rebuild with new icon
-                import re
-                # Match both English and Russian patterns
-                match = re.search(r'(\*\*Iteration \d+/\d+\*\* - Processing\.\.\.|\*\*Итерация \d+/\d+\*\* - Обработка\.\.\.)', self.current_progress_status)
-                if match:
-                    iteration_text = match.group(1)
-                    return f"{current_icon} {iteration_text}"
-            
-            # For any processing status, replace existing icon with rotating one
-            import re
-            cleaned_status = re.sub(r'^[🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚🕛🔄⚙️🔧⚡] ', '', self.current_progress_status)
-            return f"{current_icon} {cleaned_status}"
+    def update_progress_display(self, request: gr.Request = None) -> str:
+        """Update progress display - session-aware, minimal"""
+        if not request:
+            return get_translation_key("progress_ready", self.language)
         
-        return self.current_progress_status
+        session_id = self.session_manager.get_session_id(request)
+        status = self.session_manager.get_status(session_id)
+        
+        # Add rotating clock icon if processing (UI handles rotation)
+        if self.is_processing:
+            icon = self.session_manager.get_clock_icon()
+            return f"{icon} {status}"
+        
+        return status
+    
     
     def start_processing(self):
         """Mark that processing has started"""
         self.is_processing = True
-        self.progress_icon_index = 0
     
     def stop_processing(self):
         """Mark that processing has stopped"""
@@ -404,13 +394,13 @@ class NextGenApp:
                     
                 elif event_type == "iteration_progress":
                     # Iteration progress - update progress display in sidebar
-                    # Store progress status for UI update - now properly session-aware
-                    self.current_progress_status = content
+                    # Store progress status for UI update - session-specific
                     self.session_manager.set_status(session_id, content)
-
-                    # Update progress display instead of adding to chat
-                    # This will be handled by the UI update mechanism
-                    # For now, just yield the current history without changes
+                    yield working_history, ""
+                    
+                elif event_type == "completion":
+                    # Final completion message - update progress display
+                    self.session_manager.set_status(session_id, content)
                     yield working_history, ""
                     
                 elif event_type == "tool_start":
