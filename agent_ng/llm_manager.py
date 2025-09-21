@@ -663,6 +663,42 @@ class LLMManager:
             LLMInstance or None if initialization failed
         """
         return self.get_llm(provider, use_tools=True, model_index=model_index)
+    
+    def create_new_llm_instance(self, provider: str, model_index: int = 0) -> Optional[LLMInstance]:
+        """
+        Create a NEW LLM instance for the specified provider (not cached).
+        This is used for session isolation - each session gets its own instance.
+        
+        Args:
+            provider: Provider name (e.g., "gemini", "groq")
+            model_index: Index of the model to use (0 for first model)
+            
+        Returns:
+            LLMInstance or None if initialization failed
+        """
+        try:
+            provider_enum = LLMProvider(provider.lower())
+        except ValueError:
+            self._log_initialization(f"Invalid provider: {provider}", "ERROR")
+            return None
+            
+        # Create new instance without caching
+        instance = self._initialize_llm_instance(provider_enum, model_index)
+        if instance:
+            # Bind tools if provider supports them
+            if self.LLM_CONFIGS.get(provider_enum, {}).tool_support:
+                tools_list = self.get_tools()
+                if tools_list:
+                    try:
+                        instance.llm = instance.llm.bind_tools(tools_list)
+                        instance.bound_tools = True
+                        self._log_initialization(f"Tools bound to NEW {provider} instance ({len(tools_list)} tools)", "INFO")
+                    except Exception as e:
+                        self._log_initialization(f"Failed to bind tools to NEW {provider}: {e}", "WARNING")
+                        instance.bound_tools = False
+            
+            return instance
+        return None
         
     def get_agent_llm(self) -> Optional[LLMInstance]:
         """
