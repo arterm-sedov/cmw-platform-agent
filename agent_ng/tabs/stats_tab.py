@@ -107,6 +107,9 @@ class StatsTab:
         if request and hasattr(self, 'main_app') and hasattr(self.main_app, 'session_manager'):
             session_id = self.main_app.session_manager.get_session_id(request)
             agent = self.main_app.session_manager.get_session_agent(session_id)
+        elif hasattr(self, 'main_app') and hasattr(self.main_app, 'session_manager'):
+            # For auto-refresh, show a generic message since we can't determine the session
+            return self._get_translation("stats_auto_refresh_message")
         
         # No fallback to global agent - use session-specific agents only
         
@@ -169,9 +172,9 @@ class StatsTab:
             return ""
     
     # Stats handler methods
-    def refresh_stats(self) -> str:
+    def refresh_stats(self, request: gr.Request = None) -> str:
         """Refresh and return agent statistics"""
-        return self.format_stats_display()
+        return self.format_stats_display(request)
     
     def get_agent_status(self, agent=None) -> str:
         """Get current agent status with comprehensive details from session-specific agent"""

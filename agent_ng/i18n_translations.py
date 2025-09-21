@@ -132,6 +132,7 @@ RUSSIAN_TRANSLATIONS = {
     "stats_loading": "Загрузка статистики...",
     "refresh_stats_button": "🔄 Обновить статистику",
     "agent_not_available": "Агент недоступен",
+    "stats_auto_refresh_message": "📊 Статистика обновляется автоматически. Нажмите кнопку обновления для просмотра данных сессии.",
     "error_loading_stats": "Ошибка загрузки статистики",
     
     # Status messages
@@ -375,6 +376,7 @@ ENGLISH_TRANSLATIONS = {
     "stats_loading": "Loading statistics...",
     "refresh_stats_button": "🔄 Refresh Stats",
     "agent_not_available": "Agent not available",
+    "stats_auto_refresh_message": "📊 Statistics are auto-refreshing. Click refresh button to view session data.",
     "error_loading_stats": "Error loading statistics",
     
     # Status messages
