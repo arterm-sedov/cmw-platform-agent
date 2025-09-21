@@ -17,7 +17,7 @@ def list_applications() -> Dict[str, Any]:
         dict: {
             "success": bool - True if application list was fetched successfully
             "status_code": int - HTTP response status code  
-            "raw_response": dict|str|None - Raw response for auditing or payload body (sanitized)
+            "data": list|None - List of applications if successful
             "error": str|None - Error message if operation failed
         }
     """

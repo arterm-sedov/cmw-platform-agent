@@ -52,19 +52,41 @@ class LogsTab:
             self.components["clear_logs_btn"] = gr.Button(self._get_translation("clear_logs_button"), elem_classes=["cmw-button"])
     
     def _connect_events(self):
-        """Connect all event handlers for the logs tab"""
-        print("🔗 LogsTab: Connecting event handlers...")
+        """Connect all event handlers for the logs tab with concurrency control"""
+        print("🔗 LogsTab: Connecting event handlers with concurrency control...")
         
-        # Use local methods for logs functionality
-        self.components["refresh_logs_btn"].click(
-            fn=self.get_initialization_logs,
-            outputs=[self.components["logs_display"]]
-        )
+        # Get queue manager for concurrency control
+        queue_manager = getattr(self, 'main_app', None)
+        if queue_manager:
+            queue_manager = getattr(queue_manager, 'queue_manager', None)
         
-        self.components["clear_logs_btn"].click(
-            fn=self.clear_logs,
-            outputs=[self.components["logs_display"]]
-        )
+        if queue_manager:
+            # Apply concurrency settings to logs events
+            from agent_ng.queue_manager import apply_concurrency_to_click_event
+            
+            refresh_config = apply_concurrency_to_click_event(
+                queue_manager, 'logs_refresh', self.get_initialization_logs,
+                [], [self.components["logs_display"]]
+            )
+            self.components["refresh_logs_btn"].click(**refresh_config)
+            
+            clear_config = apply_concurrency_to_click_event(
+                queue_manager, 'logs_refresh', self.clear_logs,
+                [], [self.components["logs_display"]]
+            )
+            self.components["clear_logs_btn"].click(**clear_config)
+        else:
+            # Fallback to default behavior
+            print("⚠️ Queue manager not available - using default logs configuration")
+            self.components["refresh_logs_btn"].click(
+                fn=self.get_initialization_logs,
+                outputs=[self.components["logs_display"]]
+            )
+            
+            self.components["clear_logs_btn"].click(
+                fn=self.clear_logs,
+                outputs=[self.components["logs_display"]]
+            )
         
         print("✅ LogsTab: All event handlers connected successfully")
     
@@ -77,24 +99,44 @@ class LogsTab:
         return self.components["logs_display"]
     
     # Logs handler methods
-    def get_initialization_logs(self) -> str:
-        """Get initialization logs as formatted string"""
+    def get_initialization_logs(self, request: gr.Request = None) -> str:
+        """Get initialization logs as formatted string - now session-aware"""
         # Access the main app through event handlers context
         # This will be set by the main app when creating the tab
         if hasattr(self, '_main_app') and self._main_app:
-            # Combine static logs with real-time debug logs
-            static_logs = "\n".join(self._main_app.initialization_logs)
-            debug_logs = self._main_app.log_handler.get_current_logs()
-            
-            if debug_logs and debug_logs != "No logs available yet.":
-                return f"{static_logs}\n\n--- Real-time Debug Logs ---\n\n{debug_logs}"
-            return static_logs
+            # Get session-specific logs
+            if request and hasattr(self._main_app, 'session_manager'):
+                session_id = self._main_app.session_manager.get_session_id(request)
+                
+                # Get session-specific log handler
+                from ..debug_streamer import get_log_handler
+                session_log_handler = get_log_handler(session_id)
+                
+                # Combine static logs with real-time debug logs
+                static_logs = "\n".join(self._main_app.initialization_logs)
+                debug_logs = session_log_handler.get_current_logs()
+                
+                if debug_logs and debug_logs != "No logs available yet.":
+                    return f"{static_logs}\n\n--- Real-time Debug Logs (Session: {session_id}) ---\n\n{debug_logs}"
+                return static_logs
+            else:
+                # For auto-refresh, show only static logs since we can't determine the session
+                static_logs = "\n".join(self._main_app.initialization_logs)
+                return f"{static_logs}\n\n--- Auto-refresh mode: Session-specific logs not available ---"
         return "Logs not available - main app not connected"
     
-    def clear_logs(self) -> str:
-        """Clear logs and return confirmation"""
+    def clear_logs(self, request: gr.Request = None) -> str:
+        """Clear logs and return confirmation - now session-aware"""
         if hasattr(self, '_main_app') and self._main_app:
-            self._main_app.log_handler.clear_logs()
+            # Get session-specific logs
+            session_id = "default"  # Default session
+            if request and hasattr(self._main_app, 'session_manager'):
+                session_id = self._main_app.session_manager.get_session_id(request)
+            
+            # Get session-specific log handler
+            from ..debug_streamer import get_log_handler
+            session_log_handler = get_log_handler(session_id)
+            session_log_handler.clear_logs()
             return self._get_translation("logs_cleared")
         return self._get_translation("logs_not_available")
     
