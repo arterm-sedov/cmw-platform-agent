@@ -253,7 +253,15 @@ RUSSIAN_TRANSLATIONS = {
     # Provider availability messages
     "no_providers_available": "❌ Нет доступных провайдеров",
     "no_models_available": "❌ Нет доступных моделей",
-    "error_loading_providers": "❌ Ошибка загрузки провайдеров"
+    "error_loading_providers": "❌ Ошибка загрузки провайдеров",
+    
+    # UI Icons
+    "clock_icons": ["🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"],
+    "finish_icons": ["🎉", "🏁", "✨", "🎯"],
+    "completion_icons": ["✅", "✔️", "🎯", "✨"],
+    "max_icons": ["⚠️", "⏰", "🔄", "⚡"],
+    "completion_final_icons": ["✅", "🎯", "✨", "🏆"],
+    "error_icons": ["❌", "💥", "⚠️", "🚫"]
 }
 
 # English translations (fallback)
@@ -497,7 +505,15 @@ ENGLISH_TRANSLATIONS = {
     # Provider availability messages
     "no_providers_available": "❌ No providers available",
     "no_models_available": "❌ No models available", 
-    "error_loading_providers": "❌ Error loading providers"
+    "error_loading_providers": "❌ Error loading providers",
+    
+    # UI Icons
+    "clock_icons": ["🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"],
+    "finish_icons": ["🎉", "🏁", "✨", "🎯"],
+    "completion_icons": ["✅", "✔️", "🎯", "✨"],
+    "max_icons": ["⚠️", "⏰", "🔄", "⚡"],
+    "completion_final_icons": ["✅", "🎯", "✨", "🏆"],
+    "error_icons": ["❌", "💥", "⚠️", "🚫"]
 }
 
 def create_i18n_instance(language: str = "en") -> gr.I18n:
