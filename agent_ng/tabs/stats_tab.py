@@ -84,7 +84,7 @@ class StatsTab:
         return get_translation_key(key, self.language)
     
     def format_stats_display(self, request: gr.Request = None) -> str:
-        """Format and return the complete stats display - now session-aware"""
+        """Format and return the complete stats display - always session-aware"""
         # Try to get request from Gradio context if not provided
         if not request:
             try:
@@ -95,20 +95,25 @@ class StatsTab:
             except:
                 pass
         
-        # Use session-aware status if request is available
-        if request and hasattr(self, 'main_app') and hasattr(self.main_app, 'session_status_manager'):
-            session_id = self.main_app.session_status_manager.get_user_session_id(request)
-            return self.main_app.session_status_manager.format_session_stats_display(session_id)
+        # Get session-specific agent
+        agent = None
+        if request and hasattr(self, 'main_app') and hasattr(self.main_app, 'session_manager'):
+            session_id = self.main_app.session_manager.get_session_id(request)
+            agent = self.main_app.session_manager.get_session_agent(session_id)
         
-        # Fallback to original logic for non-session requests
-        if not self.agent:
+        # Fallback to global agent if no session agent available
+        if not agent:
+            agent = self.agent
+        
+        # Format stats with the appropriate agent
+        if not agent:
             return self._get_translation("agent_not_available")
         
         try:
             # Get basic agent statistics
-            stats = self.agent.get_stats()
+            stats = agent.get_stats()
             
-            # Format complete display (token stats removed to avoid duplication with chat tab)
+            # Format complete display using existing translation resources exactly as they are
             return f"""
 {self._get_translation('agent_status_section')}
 - {self._get_translation('status_ready_true' if stats['agent_status']['is_ready'] else 'status_ready_false')}
@@ -126,6 +131,8 @@ class StatsTab:
             """
         except Exception as e:
             return f"{self._get_translation('error_loading_stats')}: {str(e)}"
+    
+    
     
     
     def _format_tools_stats(self) -> str:
