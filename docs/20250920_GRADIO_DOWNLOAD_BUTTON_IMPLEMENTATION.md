@@ -6,7 +6,7 @@
 
 ## Overview
 
-Successfully replaced the complex custom file download implementation with Gradio's native `DownloadButton` component, significantly simplifying the codebase and improving maintainability.
+Successfully replaced the complex custom file download implementation with Gradio's native `DownloadButton` component, significantly simplifying the codebase and improving maintainability. **Updated on 2025-01-18** to optimize file generation timing - now generates markdown files only when streaming completes, not on every chunk update.
 
 ## Changes Made
 
@@ -100,21 +100,32 @@ def _update_download_button_visibility(self, history):
 - Download button automatically appears when conversation history exists
 - Download button automatically hides when conversation is cleared
 - No manual state management required
-- Pre-generates files for immediate download when conversation changes
+- **Optimized:** Files are generated only when streaming completes, not on every chunk update
 
-### 5. Event Connection Strategy
+### 5. Optimized File Generation Timing (NEW)
+
+**Performance Improvement:**
+
+- Changed trigger event from `chatbot.change` to `token_budget_display.change`
+- Files are now generated only when conversation turn ends (token statistics displayed)
+- Reduces CPU usage and I/O operations during active streaming
+- Maintains instant download capability while improving performance
+- Simple and lean approach - same file generation logic, different trigger timing
+
+### 6. Event Connection Strategy
 
 **Key Implementation:**
 
 - Download button uses pre-generated file approach (no click handler needed)
-- Chat history changes trigger file generation and button visibility updates
+- Token budget display changes trigger file generation (conversation turn end)
 - Clear button resets download button state
+- Simple trigger change for optimal performance
 
 ```python
 # Download button uses pre-generated file - no click handler needed
 
-# Show download button when there's conversation history
-self.components["chatbot"].change(
+# Show download button when conversation turn ends (token statistics displayed)
+self.components["token_budget_display"].change(
     fn=self._update_download_button_visibility,
     inputs=[self.components["chatbot"]],
     outputs=[self.components["download_btn"]]
@@ -136,6 +147,7 @@ self.components["clear_btn"].click(
 - Removed separate download wrapper method
 - Simplified event handler signatures
 - Reduced code complexity by ~50 lines
+- **Added:** Optimized trigger timing for file generation
 
 ### 2. **Native Gradio Integration**
 
@@ -151,6 +163,7 @@ self.components["clear_btn"].click(
 - Cleaner UI with fewer components
 - More reliable file download functionality
 - Consistent with Gradio's design patterns
+- **Optimized:** No performance impact during streaming - files generated only when conversation turn ends
 
 ### 4. **Better Maintainability**
 
@@ -169,17 +182,18 @@ self.components["clear_btn"].click(
 
 ### File Download Process
 
-1. Conversation history changes
-2. `_update_download_button_visibility()` is triggered
-3. `_download_conversation_as_markdown()` creates the file
-4. DownloadButton is updated with file path and made visible
-5. User clicks download button for instant download
-6. Gradio handles the actual download
+1. Conversation turn completes (token statistics displayed)
+2. `token_budget_display.change` event triggers
+3. `_update_download_button_visibility()` is called
+4. `_download_conversation_as_markdown()` creates the file
+5. DownloadButton is updated with file path and made visible
+6. User clicks download button for instant download
+7. Gradio handles the actual download
 
 ### Event Flow
 
 ```text
-Chat History Change → _update_download_button_visibility() → Generate File + Show Button
+Conversation Turn End → Token Stats Display → _update_download_button_visibility() → Generate File + Show Button
 Download Button Click → Instant Download (file pre-generated)
 Clear Chat → _clear_chat_with_download_reset() → Hide Button
 ```
@@ -193,9 +207,10 @@ Clear Chat → _clear_chat_with_download_reset() → Hide Button
 - ✅ Gradio DownloadButton availability confirmed
 - ✅ No linting errors
 
-### Test File Created
+### Test Files Created
 
 - `misc_files/test_download_button.py` - Standalone test for DownloadButton functionality
+- `misc_files/test_download_optimization.py` - Test for optimized trigger timing
 
 ## Migration Impact
 
@@ -221,17 +236,25 @@ Clear Chat → _clear_chat_with_download_reset() → Hide Button
    - Added smart visibility management with pre-generation
    - Removed unnecessary state variables
    - Implemented pre-generated file approach for instant downloads
+   - **Optimized:** Changed trigger from `chatbot.change` to `token_budget_display.change`
 
 2. **`misc_files/test_download_button.py`** (New)
 
    - Created test file for DownloadButton functionality
    - Standalone test to verify implementation
 
+3. **`misc_files/test_download_optimization.py`** (New)
+
+   - Created test file for optimized trigger timing
+   - Verifies file generation only occurs at conversation turn end
+
 ## Conclusion
 
 The migration to Gradio's native DownloadButton component successfully simplifies the codebase while maintaining all existing functionality. The implementation is more maintainable, follows Gradio best practices, and provides a better user experience with automatic visibility management and pre-generated files for instant downloads.
 
-**Key Achievement:** Reduced complexity while improving functionality, maintainability, and user experience through pre-generation strategy.
+**Key Achievement:** Reduced complexity while improving functionality, maintainability, and user experience through pre-generation strategy and optimized trigger timing.
+
+**Performance Optimization:** Files are now generated only when conversation turns complete (token statistics displayed), eliminating unnecessary file generation during streaming chunks while maintaining the same user experience.
 
 ---
 
