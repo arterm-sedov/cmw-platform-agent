@@ -96,9 +96,13 @@ class NextGenApp:
         self.initialization_logs = []
         self.is_initializing = False
         self.initialization_complete = False
-        self.session_id = "default"  # LangChain session management
+        # REMOVED: self.session_id = "default"  # This was causing data leakage between users!
         self._ui_update_needed = False
         self.language = language
+        
+        # Session Management - Per-user session tracking
+        self.user_sessions: Dict[str, str] = {}  # user_id -> session_id
+        self.session_agents: Dict[str, NextGenAgent] = {}  # session_id -> agent
         
         # Create i18n instance for the specified language
         self.i18n = create_i18n_instance(language)
@@ -130,6 +134,25 @@ class NextGenApp:
         
         # Initialize synchronously first, then start async initialization
         self._start_async_initialization()
+    
+    def get_user_session_id(self, request: gr.Request = None) -> str:
+        """Generate unique session ID per user - supports anonymous users with session cookies"""
+        if request and hasattr(request, 'session_hash') and request.session_hash:
+            # Anonymous user with Gradio session cookie - most common case
+            return f"gradio_{request.session_hash}"
+        elif request and hasattr(request, 'client'):
+            # Anonymous user with client ID fallback
+            return f"client_{id(request.client)}"
+        else:
+            # Completely anonymous user - generate unique session
+            return f"session_{uuid.uuid4().hex[:16]}_{int(time.time())}"
+    
+    def get_user_agent(self, session_id: str) -> NextGenAgent:
+        """Get or create agent instance for specific session - works for anonymous users"""
+        if session_id not in self.session_agents:
+            self.session_agents[session_id] = NextGenAgent()
+            self.debug_streamer.info(f"Created new agent for session: {session_id}")
+        return self.session_agents[session_id]
     
     def _start_async_initialization(self):
         """Start async initialization in a new event loop"""
@@ -308,7 +331,7 @@ class NextGenApp:
             history.append({"role": "assistant", "content": error_msg})
             return history, ""
     
-    async def stream_chat_with_agent(self, message: str, history: List[Dict[str, str]]) -> AsyncGenerator[Tuple[List[Dict[str, str]], str], None]:
+    async def stream_chat_with_agent(self, message: str, history: List[Dict[str, str]], request: gr.Request = None) -> AsyncGenerator[Tuple[List[Dict[str, str]], str], None]:
         """
         Stream chat with the agent using LangChain-native streaming patterns.
         
@@ -335,7 +358,11 @@ class NextGenApp:
         start_time = time.time()
         
         try:
-            self.debug_streamer.info(f"Streaming message: {message[:50]}...")
+            # Extract session ID from Gradio request for user isolation
+            session_id = self.get_user_session_id(request)
+            user_agent = self.get_user_agent(session_id)
+            
+            self.debug_streamer.info(f"Streaming message for session {session_id}: {message[:50]}...")
             
             # Initialize response
             
@@ -344,9 +371,9 @@ class NextGenApp:
             
             # Get prompt token count for user message (will be displayed below assistant response)
             prompt_tokens = None
-            if self.agent:
+            if user_agent:
                 try:
-                    prompt_tokens = self.agent.count_prompt_tokens_for_chat(history, message)
+                    prompt_tokens = user_agent.count_prompt_tokens_for_chat(history, message)
                 except Exception as e:
                     self.debug_streamer.warning(f"Failed to get prompt token count: {e}")
             
@@ -357,7 +384,7 @@ class NextGenApp:
             tool_usage = ""
             tool_messages = []  # Store tool messages separately for metadata handling
             
-            async for event in self.agent.stream_message(message, self.session_id):
+            async for event in user_agent.stream_message(message, session_id):
                 event_type = event.get("type", "unknown")
                 content = event.get("content", "")
                 metadata = event.get("metadata", {})
@@ -566,7 +593,7 @@ class NextGenApp:
         
         return handlers
     
-    def _stream_message_wrapper(self, message: str, history: List[Dict[str, str]]):
+    def _stream_message_wrapper(self, message: str, history: List[Dict[str, str]], request: gr.Request = None):
         """Stream a message to the agent (synchronous wrapper)"""
         if not message.strip():
             yield history, ""
@@ -587,7 +614,7 @@ class NextGenApp:
                 asyncio.set_event_loop(new_loop)
                 try:
                     async def async_stream():
-                        async for result in self.stream_chat_with_agent(message, history):
+                        async for result in self.stream_chat_with_agent(message, history, request):
                             yield result
                     
                     # Convert async generator to regular generator
@@ -618,7 +645,7 @@ class NextGenApp:
             asyncio.set_event_loop(loop)
             try:
                 async def async_stream():
-                    async for result in self.stream_chat_with_agent(message, history):
+                    async for result in self.stream_chat_with_agent(message, history, request):
                         yield result
                 
                 # Convert async generator to regular generator
