@@ -173,7 +173,7 @@ class ChatTab:
         
         print("✅ ChatTab: Critical event handlers validated")
         
-        # Main chat events
+        # Main chat events - now properly session-aware (gr.Request is automatically passed)
         self.components["send_btn"].click(
             fn=self._stream_message_wrapper,
             inputs=[self.components["msg"], self.components["chatbot"]],
@@ -280,7 +280,7 @@ class ChatTab:
             outputs=[self.components["msg"]]
         )
         
-        # LLM selection events
+        # LLM selection events - now properly session-aware (gr.Request is automatically passed)
         if "apply_llm_btn" in self.components and "provider_model_selector" in self.components and "status_display" in self.components:
             self.components["apply_llm_btn"].click(
                 fn=self._apply_llm_selection_combined,
@@ -547,8 +547,8 @@ class ChatTab:
             print(f"Error applying LLM selection: {e}")
             return self._get_translation("llm_apply_error")
     
-    def _apply_llm_selection_combined(self, provider_model_combination: str) -> str:
-        """Apply the selected LLM provider/model combination"""
+    def _apply_llm_selection_combined(self, provider_model_combination: str, request: gr.Request = None) -> str:
+        """Apply the selected LLM provider/model combination - now properly session-aware"""
         try:
             if not provider_model_combination or " / " not in provider_model_combination:
                 return self._get_translation("llm_apply_error")
@@ -576,10 +576,10 @@ class ChatTab:
                     duration=10
                 )
                 # Apply the LLM selection and clear chat
-                return self._apply_mistral_with_clear(provider, model)
+                return self._apply_mistral_with_clear(provider, model, request)
             
             # For non-Mistral models, apply directly
-            return self._apply_llm_directly(provider, model)
+            return self._apply_llm_directly(provider, model, request)
             
         except Exception as e:
             print(f"Error applying LLM selection: {e}")
@@ -589,14 +589,23 @@ class ChatTab:
         """Check if the selected model is a Mistral model"""
         return provider.lower() == "mistral" or "mistral" in model.lower()
     
-    def _apply_llm_directly(self, provider: str, model: str) -> str:
-        """Apply LLM selection without confirmation dialog"""
+    def _apply_llm_directly(self, provider: str, model: str, request: gr.Request = None) -> str:
+        """Apply LLM selection without confirmation dialog - now properly session-aware"""
         try:
-            # Update environment variable
+            # Update environment variable (global fallback)
             import os
             os.environ["AGENT_PROVIDER"] = provider
             
-            # Reinitialize the agent with new LLM
+            # Use clean session manager for session-aware LLM selection
+            if request and hasattr(self.main_app, 'session_manager'):
+                session_id = self.main_app.session_manager.get_session_id(request)
+                success = self.main_app.session_manager.update_llm_provider(session_id, provider, model)
+                if success:
+                    return self._get_translation("llm_apply_success").format(provider=provider, model=model)
+                else:
+                    return self._get_translation("llm_apply_error")
+            
+            # Fallback: Update global agent if no session context
             if hasattr(self.main_app, 'agent') and self.main_app.agent:
                 # Find the model index
                 if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
@@ -648,7 +657,17 @@ class ChatTab:
                 # Get the clear handler from event handlers
                 clear_handler = self.event_handlers.get("clear_chat")
                 if clear_handler:
-                    chatbot, msg = clear_handler()
+                    # Create a mock request for session isolation
+                    import time
+                    import uuid
+                    
+                    class MockRequest:
+                        def __init__(self):
+                            self.session_hash = f"mock_session_{uuid.uuid4().hex[:8]}_{int(time.time())}"
+                            self.client = type('MockClient', (), {'id': f"client_{uuid.uuid4().hex[:8]}"})()
+                    
+                    request = MockRequest()
+                    chatbot, msg = clear_handler(request)
                     return status, chatbot, msg
                 else:
                     # Fallback clear
@@ -660,18 +679,18 @@ class ChatTab:
             print(f"Error confirming Mistral switch: {e}")
             return self._get_translation("llm_apply_error"), "", ""
     
-    def _apply_mistral_with_clear(self, provider: str, model: str) -> str:
-        """Apply Mistral LLM selection and clear chat history"""
+    def _apply_mistral_with_clear(self, provider: str, model: str, request: gr.Request = None) -> str:
+        """Apply Mistral LLM selection and clear chat history - now properly session-aware"""
         try:
             # Apply the LLM selection
-            status = self._apply_llm_directly(provider, model)
+            status = self._apply_llm_directly(provider, model, request)
             
             # If successful, clear the chat history
             if "success" in status.lower():
                 # Get the clear handler from event handlers
                 clear_handler = self.event_handlers.get("clear_chat")
                 if clear_handler:
-                    clear_handler()  # Clear the chat
+                    clear_handler(request)  # Clear the chat with real request
                     status += f" {self._get_translation('mistral_chat_cleared')}"
             
             return status
@@ -690,8 +709,8 @@ class ChatTab:
         from ..i18n_translations import get_translation_key
         return get_translation_key(key, self.language)
     
-    def _stream_message_wrapper(self, multimodal_value, history):
-        """Wrapper to handle MultimodalValue format and extract text for processing"""
+    def _stream_message_wrapper(self, multimodal_value, history, request: gr.Request = None):
+        """Wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
         # Extract text from MultimodalValue format
         if isinstance(multimodal_value, dict):
             message = multimodal_value.get("text", "")
@@ -779,19 +798,7 @@ class ChatTab:
             return
         
         # Call the original stream handler with enhanced message (text + file analysis)
-        # Create a mock request for session isolation - in production, this would come from Gradio context
-        # For now, we'll use a simple approach that maintains session isolation
-        import time
-        import uuid
-        
-        # Create a mock request with session hash for testing
-        class MockRequest:
-            def __init__(self):
-                self.session_hash = f"mock_session_{uuid.uuid4().hex[:8]}_{int(time.time())}"
-                self.client = type('MockClient', (), {'id': f"client_{uuid.uuid4().hex[:8]}"})()
-        
-        request = MockRequest()
-        
+        # Now properly session-aware with real Gradio request
         for result in stream_handler(message, history, request):
             yield result
     
@@ -919,13 +926,13 @@ class ChatTab:
         """Generate query archive attribute message in MultimodalValue format"""
         return {"text": self._quick_archive_attr(), "files": []}
     
-    def _clear_chat_with_download_reset(self):
-        """Clear chat and reset download state"""
+    def _clear_chat_with_download_reset(self, request: gr.Request = None):
+        """Clear chat and reset download state - now properly session-aware"""
         # Get the clear handler from event handlers
         clear_handler = self.event_handlers.get("clear_chat")
         if clear_handler:
-            # Call the original clear handler
-            chatbot, msg = clear_handler()
+            # Call the original clear handler with real Gradio request
+            chatbot, msg = clear_handler(request)
             # Reset download button (hide it) and return empty MultimodalValue
             empty_multimodal = {"text": "", "files": []}
             return chatbot, empty_multimodal, gr.DownloadButton(visible=False)
