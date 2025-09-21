@@ -102,16 +102,18 @@ class SessionManager:
                             model_index = i
                             break
                     
-                    # Get new LLM instance
-                    new_llm_instance = agent.llm_manager.get_llm(provider, model_index=model_index)
+                    # Create a NEW LLM instance for this session (not shared)
+                    new_llm_instance = agent.llm_manager.create_new_llm_instance(provider, model_index)
                     if new_llm_instance:
+                        # Update the agent's LLM instance
                         agent.llm_instance = new_llm_instance
                         session_data.llm_provider = provider
                         
-                        # Reset token budget
+                        # Reset token budget for this session
                         if hasattr(agent, 'token_tracker') and agent.token_tracker:
                             agent.token_tracker.reset_current_conversation_budget()
                         
+                        print(f"✅ Updated session {session_id} to use {provider}/{model}")
                         return True
             return False
         except Exception as e:
@@ -144,7 +146,24 @@ class SessionData:
         self.llm_provider = "openrouter"  # Default provider
         self.created_at = time.time()
         self.last_activity = time.time()
+        
+        # Initialize the agent with a default LLM instance for this session
+        self._initialize_session_agent()
     
     def update_activity(self) -> None:
         """Update last activity timestamp"""
         self.last_activity = time.time()
+    
+    def _initialize_session_agent(self) -> None:
+        """Initialize the session agent with a unique LLM instance"""
+        try:
+            if hasattr(self.agent, 'llm_manager') and self.agent.llm_manager:
+                # Create a unique LLM instance for this session
+                llm_instance = self.agent.llm_manager.create_new_llm_instance(self.llm_provider)
+                if llm_instance:
+                    self.agent.llm_instance = llm_instance
+                    print(f"✅ Initialized session {self.session_id} with {self.llm_provider}")
+                else:
+                    print(f"⚠️ Failed to initialize LLM for session {self.session_id}")
+        except Exception as e:
+            print(f"❌ Error initializing session agent: {e}")

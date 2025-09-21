@@ -592,10 +592,6 @@ class ChatTab:
     def _apply_llm_directly(self, provider: str, model: str, request: gr.Request = None) -> str:
         """Apply LLM selection without confirmation dialog - now properly session-aware"""
         try:
-            # Update environment variable (global fallback)
-            import os
-            os.environ["AGENT_PROVIDER"] = provider
-            
             # Use clean session manager for session-aware LLM selection
             if request and hasattr(self.main_app, 'session_manager'):
                 session_id = self.main_app.session_manager.get_session_id(request)
