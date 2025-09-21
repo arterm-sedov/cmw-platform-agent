@@ -165,8 +165,22 @@ class CmwAgent:
         self.session_cache_path = None  # Gradio cache path for this session
         self.current_files = []  # Current conversation turn files
         
-        # Initialize in background
-        asyncio.create_task(self._initialize_async())
+        # Initialize in background - handle case when no event loop is running
+        try:
+            asyncio.create_task(self._initialize_async())
+        except RuntimeError:
+            # No event loop running, initialize synchronously
+            import threading
+            def run_async_init():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self._initialize_async())
+                finally:
+                    loop.close()
+            
+            thread = threading.Thread(target=run_async_init, daemon=True)
+            thread.start()
     
     async def _initialize_async(self):
         """Initialize the agent asynchronously"""

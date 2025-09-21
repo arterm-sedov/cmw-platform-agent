@@ -83,8 +83,24 @@ class StatsTab:
         from ..i18n_translations import get_translation_key
         return get_translation_key(key, self.language)
     
-    def format_stats_display(self) -> str:
-        """Format and return the complete stats display"""
+    def format_stats_display(self, request: gr.Request = None) -> str:
+        """Format and return the complete stats display - now session-aware"""
+        # Try to get request from Gradio context if not provided
+        if not request:
+            try:
+                import gradio as gr
+                from gradio.context import Context
+                if hasattr(Context, 'root_block') and Context.root_block:
+                    request = Context.root_block.get_request()
+            except:
+                pass
+        
+        # Use session-aware status if request is available
+        if request and hasattr(self, 'main_app') and hasattr(self.main_app, 'session_status_manager'):
+            session_id = self.main_app.session_status_manager.get_user_session_id(request)
+            return self.main_app.session_status_manager.format_session_stats_display(session_id)
+        
+        # Fallback to original logic for non-session requests
         if not self.agent:
             return self._get_translation("agent_not_available")
         

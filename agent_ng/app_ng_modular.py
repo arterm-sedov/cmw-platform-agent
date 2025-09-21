@@ -100,9 +100,13 @@ class NextGenApp:
         self._ui_update_needed = False
         self.language = language
         
-        # Session Management - Per-user session tracking
-        self.user_sessions: Dict[str, str] = {}  # user_id -> session_id
-        self.session_agents: Dict[str, NextGenAgent] = {}  # session_id -> agent
+        # Session Management - Clean modular approach
+        try:
+            from .session_manager import SessionManager
+        except ImportError:
+            # Fallback for when running as script
+            from session_manager import SessionManager
+        self.session_manager = SessionManager(language)
         
         # Create i18n instance for the specified language
         self.i18n = create_i18n_instance(language)
@@ -136,23 +140,12 @@ class NextGenApp:
         self._start_async_initialization()
     
     def get_user_session_id(self, request: gr.Request = None) -> str:
-        """Generate unique session ID per user - supports anonymous users with session cookies"""
-        if request and hasattr(request, 'session_hash') and request.session_hash:
-            # Anonymous user with Gradio session cookie - most common case
-            return f"gradio_{request.session_hash}"
-        elif request and hasattr(request, 'client'):
-            # Anonymous user with client ID fallback
-            return f"client_{id(request.client)}"
-        else:
-            # Completely anonymous user - generate unique session
-            return f"session_{uuid.uuid4().hex[:16]}_{int(time.time())}"
+        """Get session ID using clean session manager"""
+        return self.session_manager.get_session_id(request)
     
     def get_user_agent(self, session_id: str) -> NextGenAgent:
-        """Get or create agent instance for specific session - works for anonymous users"""
-        if session_id not in self.session_agents:
-            self.session_agents[session_id] = NextGenAgent()
-            self.debug_streamer.info(f"Created new agent for session: {session_id}")
-        return self.session_agents[session_id]
+        """Get agent instance using clean session manager"""
+        return self.session_manager.get_agent(session_id)
     
     def _start_async_initialization(self):
         """Start async initialization in a new event loop"""
@@ -225,20 +218,30 @@ class NextGenApp:
         """Check if the app is ready (LangChain-native pattern)"""
         return self.initialization_complete and self.agent is not None and self.agent.is_ready()
     
-    def clear_conversation(self) -> Tuple[List[Dict[str, str]], str]:
-        """Clear the conversation history (LangChain-native pattern)"""
-        if self.agent:
-            self.agent.clear_conversation(self.session_id)
-            # Start new conversation tracking for token counting
-            if hasattr(self.agent, 'token_tracker'):
-                self.agent.token_tracker.start_new_conversation()
-            self.debug_streamer.info("Conversation cleared")
+    def clear_conversation(self, request: gr.Request = None) -> Tuple[List[Dict[str, str]], str]:
+        """Clear the conversation history (LangChain-native pattern) - now properly session-aware"""
+        if request:
+            # Use clean session manager for session-aware clearing
+            session_id = self.session_manager.get_session_id(request)
+            self.session_manager.clear_conversation(session_id)
+            self.debug_streamer.info(f"Conversation cleared for session: {session_id}")
+        else:
+            # Fallback for non-session requests
+            if self.agent:
+                self.agent.clear_conversation("default")
+                if hasattr(self.agent, 'token_tracker'):
+                    self.agent.token_tracker.start_new_conversation()
+                self.debug_streamer.info("Conversation cleared (global)")
+        
         # Reset progress status
         self.current_progress_status = get_translation_key("progress_ready", self.language)
         return [], ""
     
-    def get_progress_status(self) -> str:
-        """Get the current progress status for the UI"""
+    def get_progress_status(self, request: gr.Request = None) -> str:
+        """Get the current progress status for the UI - now properly session-aware"""
+        if request:
+            session_id = self.session_manager.get_session_id(request)
+            return self.session_manager.get_status(session_id)
         return self.current_progress_status
     
     def update_progress_display(self) -> str:
@@ -396,8 +399,9 @@ class NextGenApp:
                     
                 elif event_type == "iteration_progress":
                     # Iteration progress - update progress display in sidebar
-                    # Store progress status for UI update
+                    # Store progress status for UI update - now properly session-aware
                     self.current_progress_status = content
+                    self.session_manager.set_status(session_id, content)
 
                     # Update progress display instead of adding to chat
                     # This will be handled by the UI update mechanism
@@ -663,13 +667,19 @@ class NextGenApp:
         # Refresh UI after streaming completes (EVENT-DRIVEN)
         self._refresh_ui_after_message()
     
-    def _update_status(self) -> str:
-        """Update status display - delegates to stats tab"""
+    def _update_status(self, request: gr.Request = None) -> str:
+        """Update status display - now properly session-aware using clean session manager"""
+        if request:
+            # Get session-specific status using clean session manager
+            session_id = self.session_manager.get_session_id(request)
+            return self.session_manager.format_session_stats(session_id)
+        
+        # Fallback for non-session requests - use existing stats tab logic
         stats_tab = self.tab_instances.get('stats')
         if stats_tab and hasattr(stats_tab, 'format_stats_display'):
             return stats_tab.format_stats_display()
         
-        # Fallback status
+        # Final fallback
         if self.agent and self.agent.is_ready():
             return get_translation_key("agent_ready", self.language)
         else:
