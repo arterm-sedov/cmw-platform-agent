@@ -83,21 +83,24 @@ class LogsTab:
         # This will be set by the main app when creating the tab
         if hasattr(self, '_main_app') and self._main_app:
             # Get session-specific logs
-            session_id = "default"  # Default session
             if request and hasattr(self._main_app, 'session_manager'):
                 session_id = self._main_app.session_manager.get_session_id(request)
-            
-            # Get session-specific log handler
-            from ..debug_streamer import get_log_handler
-            session_log_handler = get_log_handler(session_id)
-            
-            # Combine static logs with real-time debug logs
-            static_logs = "\n".join(self._main_app.initialization_logs)
-            debug_logs = session_log_handler.get_current_logs()
-            
-            if debug_logs and debug_logs != "No logs available yet.":
-                return f"{static_logs}\n\n--- Real-time Debug Logs (Session: {session_id}) ---\n\n{debug_logs}"
-            return static_logs
+                
+                # Get session-specific log handler
+                from ..debug_streamer import get_log_handler
+                session_log_handler = get_log_handler(session_id)
+                
+                # Combine static logs with real-time debug logs
+                static_logs = "\n".join(self._main_app.initialization_logs)
+                debug_logs = session_log_handler.get_current_logs()
+                
+                if debug_logs and debug_logs != "No logs available yet.":
+                    return f"{static_logs}\n\n--- Real-time Debug Logs (Session: {session_id}) ---\n\n{debug_logs}"
+                return static_logs
+            else:
+                # For auto-refresh, show only static logs since we can't determine the session
+                static_logs = "\n".join(self._main_app.initialization_logs)
+                return f"{static_logs}\n\n--- Auto-refresh mode: Session-specific logs not available ---"
         return "Logs not available - main app not connected"
     
     def clear_logs(self, request: gr.Request = None) -> str:

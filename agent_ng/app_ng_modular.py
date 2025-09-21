@@ -691,11 +691,11 @@ class NextGenApp:
         # Fallback logs
         return "\n".join(self.initialization_logs) if self.initialization_logs else "No logs available"
     
-    def _refresh_stats(self) -> str:
-        """Refresh stats display - delegates to stats tab"""
+    def _refresh_stats(self, request: gr.Request = None) -> str:
+        """Refresh stats display - delegates to stats tab with session awareness"""
         stats_tab = self.tab_instances.get('stats')
         if stats_tab and hasattr(stats_tab, 'format_stats_display'):
-            return stats_tab.format_stats_display()
+            return stats_tab.format_stats_display(request)
         
         # Fallback stats
         if self.is_ready():
