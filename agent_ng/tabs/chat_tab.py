@@ -706,10 +706,13 @@ class ChatTab:
         from ..i18n_translations import get_translation_key
         return get_translation_key(key, self.language)
     
+    
     def _stream_message_with_queue_status(self, multimodal_value, history, request: gr.Request = None):
-        """Wrapper for concurrent processing - Gradio handles queuing natively"""
+        """Wrapper for concurrent processing - relies on Gradio's native queue feedback"""
+        # With status_update_rate="auto", Gradio will show native queue status
+        # No need for custom warnings - Gradio handles this natively
+        
         # Process message with original wrapper
-        # Gradio's native queuing system will handle the user feedback
         for result in self._stream_message_wrapper_internal(multimodal_value, history, request):
             if len(result) >= 2:
                 yield result[0], result[1]
