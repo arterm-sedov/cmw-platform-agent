@@ -45,6 +45,11 @@ class QueueConfig(BaseModel):
         description="Whether to enable Gradio's built-in queuing system"
     )
     
+    status_update_rate: str = Field(
+        default="auto",
+        description="How frequently to send status updates to clients (auto, or number of seconds)"
+    )
+    
     @validator('default_concurrency_limit')
     def validate_concurrency_limit(cls, v):
         """Ensure concurrency limit is reasonable for production use"""
@@ -139,7 +144,8 @@ class ConcurrencyConfig(BaseModel):
             return {}
         
         return {
-            'default_concurrency_limit': self.queue.default_concurrency_limit
+            'default_concurrency_limit': self.queue.default_concurrency_limit,
+            'status_update_rate': self.queue.status_update_rate
         }
     
     def get_event_concurrency(self, event_type: str) -> Dict[str, Any]:
