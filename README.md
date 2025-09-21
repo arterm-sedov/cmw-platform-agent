@@ -24,19 +24,21 @@ hf_oauth_expiration_minutes: 480
 
 Behold the Comindware Analyst Copilot — a robust and extensible system designed for real-world reliability and performance in creating entities within the Comindware Platform.
 
-### 🆕 **LangChain-Native Architecture**
+### 🆕 **LangChain-Native Modular Architecture**
 
-The system now features a **LangChain-native Gradio app** (`app_ng.py`) that provides:
+The system features a **LangChain-native modular Gradio app** (`app_ng_modular.py`) that provides:
 
+- **Modular Tab Architecture**: Separate modules for Chat, Logs, and Stats tabs
 - **Multi-turn Conversations**: Reliable conversation memory with tool calls
 - **Pure LangChain Patterns**: Native LangChain conversation chains and memory
 - **Real-time Streaming**: Live response streaming with tool visualization
 - **Modern UI**: Comprehensive monitoring, debugging, and statistics
-- **OpenRouter Integration**: More predictable and reliable LLM responses
+- **Multi-LLM Support**: OpenRouter, Gemini, Groq, Mistral, and HuggingFace integration
 
 **Quick Start:**
+
 ```bash
-python agent_ng/app_ng.py
+python agent_ng/app_ng_modular.py
 ```
 
 ## 🕵🏻‍♂️ What is this project?
@@ -106,14 +108,23 @@ The agent uses a sophisticated multi-LLM approach with the following providers i
 
 ### Tool Suite
 
-The agent includes 20+ specialized tools:
+The agent includes 20+ specialized tools organized into categories:
 
-- **CMW Platform Tools**: Create templates, attributes, workflows, and other platform entities
+#### CMW Platform Tools
+
+- **Application Tools**: List applications, templates, and platform entities
+- **Attribute Tools**: Create and manage all attribute types (text, boolean, datetime, decimal, document, drawing, duration, image, record, role, account, enum)
+- **Template Tools**: List and manage template attributes
+- **General Operations**: Delete, archive/unarchive, and retrieve attributes
+
+#### Utility Tools
+
 - **Web Search**: Deep research capabilities for gathering information
 - **Code Execution**: Python code execution for data processing
-- **File Analysis**: Document processing and analysis
+- **File Analysis**: Document processing and analysis (PDF, images, text)
 - **Mathematical Operations**: Complex calculations and data analysis
 - **Image Processing**: OCR and image analysis capabilities
+- **Data Processing**: CSV, JSON, and other data format handling
 
 ### Performance Expectations
 
@@ -126,17 +137,53 @@ The agent includes 20+ specialized tools:
 
 The codebase follows a clean modular design with clear separation of concerns:
 
-### Core Modules
-- **`similarity_manager.py`**: Handles vector similarity operations and text matching with optional local embeddings
-- **`tool_call_manager.py`**: Manages tool call deduplication and history tracking
-- **`vector_store.py`**: Optional Supabase vector storage operations
-- **`agent.py`**: Main orchestration logic using the above modules
+### Core Agent Modules (`agent_ng/`)
+
+- **`langchain_agent.py`**: LangChain-native agent implementation with conversation chains
+- **`app_ng_modular.py`**: Main Gradio application with modular tab architecture
+- **`llm_manager.py`**: Multi-provider LLM management and configuration
+- **`error_handler.py`**: Comprehensive error handling and fallback mechanisms
+- **`message_processor.py`**: Message processing and formatting
+- **`response_processor.py`**: Response processing and validation
+- **`stats_manager.py`**: Statistics tracking and monitoring
+- **`trace_manager.py`**: Trace logging and debugging
+- **`debug_streamer.py`**: Debug system and logging
+- **`token_counter.py`**: Token usage tracking and optimization
+- **`session_manager.py`**: Session management and state handling
+- **`queue_manager.py`**: Request queue management
+- **`concurrency_config.py`**: Concurrency and threading configuration
+- **`ui_manager.py`**: UI state management and updates
+- **`tool_deduplicator.py`**: Tool call deduplication and optimization
+- **`streaming_config.py`**: Streaming configuration and settings
+- **`provider_adapters.py`**: LLM provider-specific adapters
+- **`langchain_memory.py`**: LangChain memory management
+- **`native_langchain_streaming.py`**: Native LangChain streaming implementation
+
+### Tab Modules (`agent_ng/tabs/`)
+
+- **`chat_tab.py`**: Main chat interface tab
+- **`logs_tab.py`**: Logs and debugging tab
+- **`stats_tab.py`**: Statistics and monitoring tab
+
+### Tool Modules (`tools/`)
+
+- **`tools.py`**: Core tool functions and consolidated tool definitions
+- **`applications_tools/`**: Application and template management tools
+- **`attributes_tools/`**: Attribute management tools for all attribute types
+- **`templates_tools/`**: Template-related tools and operations
+- **`tool_utils.py`**: Common tool utilities and helpers
+- **`models.py`**: Data models and schemas for tools
+- **`requests_.py`**: HTTP request utilities and helpers
+- **`file_utils.py`**: File handling utilities
+- **`pdf_utils.py`**: PDF processing utilities
 
 ### Key Benefits
-- **No External Dependencies**: Core features work without Supabase or sentence-transformers
-- **Graceful Degradation**: Falls back to basic text similarity when embeddings unavailable
-- **Clean Separation**: Each module has a single responsibility with no circular dependencies
-- **Backward Compatibility**: Existing functionality remains unchanged
+
+- **Modular Design**: Clean separation of concerns with dedicated modules
+- **LangChain Native**: Pure LangChain patterns and best practices
+- **Extensible**: Easy to add new tools and capabilities
+- **Maintainable**: Clear module boundaries and responsibilities
+- **Testable**: Isolated components for comprehensive testing
 
 ## Dataset Structure
 
@@ -365,10 +412,10 @@ Visit the Gradio interface to test the agent interactively:
 ### Programmatic Usage
 
 ```python
-from agent import CmwAgent
+from agent_ng import NextGenAgent
 
 # Initialize the agent
-agent = CmwAgent()
+agent = NextGenAgent()
 
 # Create an entity in CMW Platform
 result = agent("Create a template called 'Customer' with attributes: Name (Text), Email (Text), Phone (Text)")
@@ -396,20 +443,48 @@ runs_data = dataset["runs_new"]["train"]
 
 ## File Structure
 
-The main agent runtime files are:
+The main agent runtime files are organized into modular directories:
 
-```
+```text
 cmw-platform-agent/
-├── agent.py              # Main agent implementation
-├── app.py                # Gradio web interface
-├── tools.py              # Tool definitions and implementations
-├── utils.py              # Core upload functions with validation
-├── system_prompt.json    # System prompt configuration
-├── login_manager.py      # CMW Platform authentication
-├── file_manager.py       # File handling utilities
-├── dataset_manager.py    # Dataset management
-├── vector_store.py       # Vector storage for embeddings
-└── logs/                 # Execution logs and results
+├── agent_ng/                    # Next-generation modular agent
+│   ├── app_ng_modular.py       # Main Gradio application
+│   ├── langchain_agent.py      # LangChain-native agent implementation
+│   ├── llm_manager.py          # Multi-provider LLM management
+│   ├── error_handler.py        # Error handling and fallback
+│   ├── message_processor.py    # Message processing
+│   ├── response_processor.py   # Response processing
+│   ├── stats_manager.py        # Statistics tracking
+│   ├── trace_manager.py        # Trace logging
+│   ├── debug_streamer.py       # Debug system
+│   ├── token_counter.py        # Token usage tracking
+│   ├── session_manager.py      # Session management
+│   ├── queue_manager.py        # Request queue management
+│   ├── ui_manager.py           # UI state management
+│   ├── tool_deduplicator.py    # Tool call deduplication
+│   ├── streaming_config.py     # Streaming configuration
+│   ├── provider_adapters.py    # LLM provider adapters
+│   ├── langchain_memory.py     # LangChain memory management
+│   ├── native_langchain_streaming.py  # Native streaming
+│   ├── concurrency_config.py   # Concurrency configuration
+│   ├── agent_config.py         # Agent configuration
+│   ├── i18n_translations.py    # Internationalization
+│   ├── system_prompt.json      # System prompt configuration
+│   └── tabs/                   # Modular tab components
+│       ├── chat_tab.py         # Chat interface tab
+│       ├── logs_tab.py         # Logs and debugging tab
+│       └── stats_tab.py        # Statistics tab
+├── tools/                      # Tool modules
+│   ├── tools.py               # Core tool functions
+│   ├── applications_tools/    # Application management tools
+│   ├── attributes_tools/      # Attribute management tools
+│   ├── templates_tools/       # Template management tools
+│   ├── tool_utils.py          # Common tool utilities
+│   ├── models.py              # Data models and schemas
+│   ├── requests_.py           # HTTP request utilities
+│   ├── file_utils.py          # File handling utilities
+│   └── pdf_utils.py           # PDF processing utilities
+└── docs/                      # Documentation and reports
 ```
 
 ## CMW Platform Integration
