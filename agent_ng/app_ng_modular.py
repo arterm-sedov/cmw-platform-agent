@@ -668,16 +668,11 @@ class NextGenApp:
         self._refresh_ui_after_message()
     
     def _update_status(self, request: gr.Request = None) -> str:
-        """Update status display - now properly session-aware using clean session manager"""
-        if request:
-            # Get session-specific status using clean session manager
-            session_id = self.session_manager.get_session_id(request)
-            return self.session_manager.format_session_stats(session_id)
-        
-        # Fallback for non-session requests - use existing stats tab logic
+        """Update status display - always session-aware"""
+        # Use stats tab for proper formatting (now always session-aware)
         stats_tab = self.tab_instances.get('stats')
         if stats_tab and hasattr(stats_tab, 'format_stats_display'):
-            return stats_tab.format_stats_display()
+            return stats_tab.format_stats_display(request)
         
         # Final fallback
         if self.agent and self.agent.is_ready():

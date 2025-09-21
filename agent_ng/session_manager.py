@@ -118,62 +118,10 @@ class SessionManager:
             print(f"Error updating session LLM provider: {e}")
             return False
     
-    def format_session_stats(self, session_id: str) -> str:
-        """Format session-specific stats display"""
-        try:
-            session_data = self.get_session_data(session_id)
-            agent = session_data.agent
-            
-            if not agent:
-                return get_translation_key("agent_not_available", self.language)
-            
-            # Get agent statistics
-            stats = agent.get_stats()
-            llm_info = agent.get_llm_info() if hasattr(agent, 'get_llm_info') else {}
-            
-            # Build display parts
-            display_parts = []
-            
-            # Agent status
-            display_parts.append(f"**🤖 {get_translation_key('agent_status_section', self.language)}**")
-            display_parts.append(f"- {get_translation_key('status_ready_true' if stats['agent_status']['is_ready'] else 'status_ready_false', self.language)}")
-            display_parts.append(f"- LLM: {llm_info.get('model_name', 'Unknown')}")
-            display_parts.append(f"- {get_translation_key('provider_info', self.language).format(provider=llm_info.get('provider', 'Unknown'))}")
-            display_parts.append("")
-            
-            # Conversation stats
-            display_parts.append(f"**💬 {get_translation_key('conversation_section', self.language)}:**")
-            display_parts.append(f"- {get_translation_key('messages_label', self.language)}: {stats['conversation_stats']['message_count']}")
-            display_parts.append(f"- {get_translation_key('user_messages_label', self.language)}: {stats['conversation_stats']['user_messages']}")
-            display_parts.append(f"- {get_translation_key('assistant_messages_label', self.language)}: {stats['conversation_stats']['assistant_messages']}")
-            display_parts.append(f"- {get_translation_key('total_messages_label', self.language)}: {stats['conversation_stats']['message_count']}")
-            display_parts.append("")
-            
-            # Tools
-            display_parts.append(f"**🛠️ {get_translation_key('tools_section', self.language)}:**")
-            display_parts.append(f"- {get_translation_key('available_label', self.language)}: {stats['agent_status']['tools_count']}")
-            display_parts.append("")
-            
-            # Token budget - handle gracefully
-            display_parts.append(f"**💰 {get_translation_key('token_budget_title', self.language)}**")
-            if 'token_stats' in stats and stats['token_stats']:
-                token_stats = stats['token_stats']
-                display_parts.append(f"{get_translation_key('total_tokens_label', self.language)}: {token_stats.get('total_tokens', 0):,}")
-                display_parts.append(f"{get_translation_key('dialog_tokens_label', self.language)}: {token_stats.get('total_tokens', 0):,}")
-                display_parts.append(f"{get_translation_key('last_message_tokens_label', self.language)} {token_stats.get('last_message_percentage', 0):.1f}% ({token_stats.get('last_message_tokens', 0):,}/{token_stats.get('context_limit', 0):,}) 🟢")
-                display_parts.append(f"{get_translation_key('avg_tokens_per_message_label', self.language)}: {token_stats.get('avg_tokens_per_message', 0):,}")
-            else:
-                display_parts.append(get_translation_key('token_stats_unavailable', self.language))
-            display_parts.append("")
-            
-            # Progress
-            display_parts.append(f"**📊 {get_translation_key('progress_section', self.language)}**")
-            display_parts.append(session_data.status)
-            
-            return "\n".join(display_parts)
-            
-        except Exception as e:
-            return f"{get_translation_key('error_loading_stats', self.language)}: {str(e)}"
+    def get_session_agent(self, session_id: str) -> CmwAgent:
+        """Get the agent for a specific session - for UI modules to use"""
+        session_data = self.get_session_data(session_id)
+        return session_data.agent
     
     def get_session_count(self) -> int:
         """Get total number of active sessions"""
