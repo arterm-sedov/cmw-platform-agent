@@ -34,6 +34,8 @@ The system features a **LangChain-native modular Gradio app** (`app_ng_modular.p
 - **Real-time Streaming**: Live response streaming with tool visualization
 - **Modern UI**: Comprehensive monitoring, debugging, and statistics
 - **Multi-LLM Support**: OpenRouter, Gemini, Groq, Mistral, and HuggingFace integration
+- **Session Isolation**: Each user gets isolated agent instances
+- **Internationalization**: Full i18n support (English/Russian)
 
 **Quick Start:**
 
@@ -67,13 +69,31 @@ This experimental system is based on current AI agent technology and demonstrate
 - **Comprehensive Tracing**: Complete visibility into the agent's decision-making process
 - **Structured Initialization Summary:** After startup, a clear table shows which models/providers are available, with/without tools, and any errors—so you always know your agent's capabilities.
 
-## 📊 What You'll Find Here
-
-- **Documentation**: Detailed technical specifications and usage guides
-- **CMW Platform Integration**: Tools and utilities for working with Comindware Platform APIs
-- **Entity Creation Capabilities**: Specialized tools for creating templates, attributes, and workflows
-
 ## 🏗️ Technical Architecture
+
+### Core Architecture
+
+The Agent NG is a modern, LangChain-native conversational AI agent built with a clean modular architecture. It features multi-turn conversations with tool calls, session isolation, real-time streaming, and comprehensive error handling.
+
+#### Main Components
+
+1. **CmwAgent** (`langchain_agent.py`) - Main agent orchestrator
+2. **NextGenApp** (`app_ng_modular.py`) - Gradio web application
+3. **LLMManager** (`llm_manager.py`) - LLM provider management
+4. **SessionManager** (`session_manager.py`) - User session isolation
+5. **ErrorHandler** (`error_handler.py`) - Comprehensive error handling
+6. **UI Components** (`tabs/`, `ui_manager.py`) - Modular UI system
+
+#### Key Features
+
+- ✅ **LangChain-Native**: Uses pure LangChain patterns for memory and chains
+- ✅ **Multi-Turn Conversations**: Proper tool call context preservation
+- ✅ **Session Isolation**: Each user gets isolated agent instances
+- ✅ **Real-Time Streaming**: Token-by-token response streaming
+- ✅ **Modular Architecture**: Clean separation of concerns
+- ✅ **Internationalization**: Full i18n support (English/Russian)
+- ✅ **Error Recovery**: Robust error handling and provider fallback
+- ✅ **Tool Integration**: CMW platform tools + utility tools
 
 ### LLM Configuration
 
@@ -126,12 +146,270 @@ The agent includes 20+ specialized tools organized into categories:
 - **Image Processing**: OCR and image analysis capabilities
 - **Data Processing**: CSV, JSON, and other data format handling
 
-### Performance Expectations
+## 🔧 Core Modules
 
-- **Success Rate**: 50-65% entities created successfully
-- **Response Time**: 30-100 seconds per entity creation request (depending on complexity and LLM)
-- **Tool Usage**: 2-8 tool calls per request on average
-- **Fallback Rate**: 20-40% of requests require human clarification
+### 1. CmwAgent (langchain_agent.py)
+
+**Purpose**: Main agent orchestrator using pure LangChain patterns
+
+**Key Features**:
+- LangChain-native memory management
+- Multi-turn conversation support with tool calls
+- Session-specific agent instances
+- File handling with security
+- Comprehensive statistics tracking
+
+**Usage**:
+```python
+agent = CmwAgent(session_id="user_123")
+response = agent.process_message("Calculate 5 + 3", "conversation_1")
+```
+
+### 2. LLMManager (llm_manager.py)
+
+**Purpose**: Centralized LLM provider management
+
+**Supported Providers**:
+- **Gemini** (Google): `gemini-2.5-pro`
+- **OpenRouter**: `deepseek/deepseek-chat-v3.1:free`
+- **Mistral**: `mistral-large-latest`
+- **Groq**: `llama-3.3-70b-versatile`
+- **HuggingFace**: Various models
+- **GigaChat**: Sber's Russian LLM
+
+**Features**:
+- Persistent LLM instances
+- Tool binding and management
+- Provider-specific optimizations
+- Health monitoring
+
+### 3. SessionManager (session_manager.py)
+
+**Purpose**: User session isolation and management
+
+**Features**:
+- Session-specific agent instances
+- Automatic cleanup and resource management
+- Session data isolation
+- Multi-language support
+
+### 4. ErrorHandler (error_handler.py)
+
+**Purpose**: Comprehensive error classification and recovery
+
+**Error Types Handled**:
+- Rate limiting (429 errors)
+- Authentication errors (401)
+- Token limit exceeded
+- Network connectivity issues
+- Provider-specific errors (Mistral tool call IDs, etc.)
+
+**Features**:
+- Vector similarity for error pattern matching
+- Provider failure tracking
+- Automatic retry with exponential backoff
+- Structured error information
+
+### 5. UI System
+
+#### Modular Tab Architecture (tabs/)
+- **ChatTab** (`chat_tab.py`): Main conversation interface
+- **LogsTab** (`logs_tab.py`): Debug and initialization logs
+- **StatsTab** (`stats_tab.py`): Performance metrics and statistics
+
+#### UI Manager (`ui_manager.py`)
+- Centralized UI component management
+- Theme and styling
+- Component state management
+- Event handling coordination
+
+## 🔄 Memory Management
+
+### LangChain Memory (langchain_memory.py)
+
+**Features**:
+- Uses LangChain's `ConversationBufferMemory`
+- Tool call context preservation
+- Session-specific memory instances
+- Automatic conversation summarization
+
+**Memory Types**:
+- **ConversationBufferMemory**: Stores full conversation history
+- **Tool-aware memory**: Preserves tool call results
+- **Session isolation**: Memory per user session
+
+## 🌐 Internationalization
+
+### Language Support (i18n_translations.py)
+
+**Supported Languages**:
+- **English (en)**: Default
+- **Russian (ru)**: Full translation
+
+**Features**:
+- Dynamic language switching
+- UI component translations
+- Error message localization
+- Context-aware translations
+
+**Configuration**:
+```bash
+# Environment variable
+export CMW_DEFAULT_LANGUAGE="ru"
+
+# Command line
+python app_ng_modular.py --ru
+```
+
+## ⚙️ Configuration
+
+### Agent Configuration (agent_config.py)
+
+**Core Settings**:
+```python
+@dataclass
+class RefreshIntervals:
+    status: float = 2.0      # Status updates
+    logs: float = 3.0        # Log refresh
+    stats: float = 4.0       # Statistics refresh
+    progress: float = 2.0    # Progress updates
+```
+
+**Environment Variables**:
+- `CMW_DEFAULT_LANGUAGE`: Default language (ru/en)
+- `CMW_DEFAULT_PORT`: Default port (7860)
+- `CMW_DEBUG_MODE`: Enable debug mode
+- `AGENT_PROVIDER`: LLM provider selection
+
+### Provider Configuration
+
+**Example Environment Setup**:
+```bash
+# LLM Provider APIs
+GEMINI_API_KEY=your_gemini_key
+OPENROUTER_API_KEY=your_openrouter_key
+MISTRAL_API_KEY=your_mistral_key
+GROQ_API_KEY=your_groq_key
+
+# Agent Configuration
+AGENT_PROVIDER=mistral
+CMW_DEFAULT_LANGUAGE=ru
+CMW_DEBUG_MODE=true
+```
+
+## 🔀 Streaming & Real-Time Features
+
+### Native Streaming (native_langchain_streaming.py)
+
+**Features**:
+- Token-by-token streaming
+- Tool usage visualization
+- Real-time progress updates
+- Event-based architecture
+
+**Event Types**:
+- `content`: Main response content
+- `thinking`: Agent reasoning process
+- `tool_use`: Tool execution steps
+- `error`: Error messages
+- `metadata`: Additional information
+
+## 📊 Statistics & Monitoring
+
+### Stats Manager (stats_manager.py)
+
+**Metrics Tracked**:
+- LLM usage statistics
+- Response times
+- Tool call frequency
+- Error rates
+- Session statistics
+
+**Features**:
+- Real-time metrics
+- Export capabilities
+- Performance monitoring
+- Usage analytics
+
+### Debug System (debug_streamer.py)
+
+**Features**:
+- Real-time log streaming
+- Categorized logging
+- Session-specific debug contexts
+- Performance tracing
+
+**Log Categories**:
+- INIT: Initialization events
+- LLM: LLM operations
+- TOOL: Tool executions
+- ERROR: Error handling
+- THINKING: Agent reasoning
+
+## 🚀 Concurrency & Performance
+
+### Queue Management (queue_manager.py)
+
+**Features**:
+- Request queuing
+- Concurrency control
+- Resource management
+- Performance optimization
+
+### Concurrency Configuration (concurrency_config.py)
+
+**Settings**:
+- Maximum concurrent requests
+- Queue limits
+- Timeout configurations
+- Resource allocation
+
+## 🔒 Security Features
+
+### Session Isolation
+- User-specific agent instances
+- Session-based file handling
+- Secure resource cleanup
+- Data privacy protection
+
+### File Security
+- Secure file upload handling
+- Session-specific file storage
+- Automatic cleanup
+- Path sanitization
+
+## 🧪 Testing
+
+### Test Coverage (agent_ng/_tests/)
+
+**Test Categories**:
+- **Unit Tests**: Individual component testing
+- **Integration Tests**: Component interaction testing
+- **End-to-End Tests**: Full workflow testing
+- **Performance Tests**: Load and stress testing
+
+**Key Test Files**:
+- `test_agent_functionality.py`: Core agent features
+- `test_multi_turn_conversations.py`: Conversation flows
+- `test_platform_tools.py`: Tool integration
+- `test_error_handler_comprehensive.py`: Error handling
+
+## 📱 Web Application
+
+### NextGenApp (app_ng_modular.py)
+
+**Features**:
+- Modular tab architecture
+- Real-time UI updates
+- Session management
+- Internationalization
+- Responsive design
+
+**UI Components**:
+- Chat interface with streaming
+- Debug logs with real-time updates
+- Statistics dashboard
+- Configuration controls
 
 ## 🏗️ Modular Architecture
 
@@ -184,6 +462,284 @@ The codebase follows a clean modular design with clear separation of concerns:
 - **Extensible**: Easy to add new tools and capabilities
 - **Maintainable**: Clear module boundaries and responsibilities
 - **Testable**: Isolated components for comprehensive testing
+
+## Performance Statistics
+
+The agent has been evaluated on complex entity creation tasks with the following results:
+
+- **Overall Success Rate**: 50-65%, up to 80% with all four LLMs available
+- **Tool Usage**: Average 2-8 tools per entity creation request
+- **LLM Fallback Rate**: 20-40% of requests require multiple LLMs
+- **Response Time**: 30-120 seconds per entity creation request
+- **Token Usage**: 1K-100K tokens per request (depending on complexity)
+
+### Performance Expectations
+
+- **Success Rate**: 50-65% entities created successfully
+- **Response Time**: 30-100 seconds per entity creation request (depending on complexity and LLM)
+- **Tool Usage**: 2-8 tool calls per request on average
+- **Fallback Rate**: 20-40% of requests require human clarification
+
+## Key Features
+
+### Intelligent Fallback System
+
+The agent automatically tries multiple LLM providers in sequence:
+
+- **OpenRouter** (Primary): Fast, reliable, good tool support, has tight daily limits on free tiers
+- **Google Gemini** (Fallback): High token limits, excellent reasoning
+- **Groq** (Second Fallback): Fast inference, good for simple tasks, has tight token limits per request
+- **HuggingFace** (Final Fallback): Local models, no API costs, does not support tools typically
+
+### Advanced Tool Management
+
+- **Automatic Tool Selection**: LLM chooses appropriate tools based on question
+- **Tool Deduplication**: Prevents duplicate tool calls using vector similarity
+- **Usage Limits**: Prevents excessive tool usage (e.g., max 3 web searches per question)
+- **Error Handling**: Graceful degradation when tools fail
+
+### Sophisticated implementations
+
+- **Recursive Truncation**: Separate methods for base64 and max-length truncation
+- **Recursive JSON Serialization**: Ensures the complex objects ar passable as HuggingFace JSON dataset
+- **Decorator-Based Print Capture**: Captures all print statements into trace data
+- **Multilevel Contextual Logging**: Logs tied to specific execution contexts
+- **Per-LLM Stdout Traces**: Stdout captured separately for each LLM attempt in a human-readable form
+- **Consistent LLM Schema**: Data structures for consistent model identification, configuring and calling
+- **Complete Trace Model**: Hierarchical structure with comprehensive coverage
+- **Structured dataset uploads** to HuggingFace datasets
+- **Schema validation** against `dataset_config.json`
+- **Three data splits**: `init` (initialization), `runs` (legacy aggregated results), and `runs_new` (granular per-question results)
+- **Robust error handling** with fallback mechanisms
+
+### Comprehensive Tracing
+
+Every question generates a complete execution trace including:
+
+- **LLM Interactions**: All input/output for each LLM attempt
+- **Tool Executions**: Detailed logs of every tool call
+- **Performance Metrics**: Token usage, execution times, success rates
+- **Error Information**: Complete error context and fallback decisions
+- **Stdout Capture**: All debug output from each LLM attempt
+
+### Rate Limiting & Reliability
+
+- **Smart Rate Limiting**: Model-specific and provider-specific rate limits
+- **Token Management**: Automatic truncation and summarization
+- **Error Recovery**: Automatic retry with different LLMs
+- **Graceful Degradation**: Continues processing even if some components fail
+- **Smart Rate Limit Handling**: Throttles and retries on 429 errors before falling back to other LLMs
+
+## 🚀 Getting Started
+
+### Quick Start
+
+1. **Install Dependencies**:
+   ```bash
+   pip install -r requirements_ng.txt
+   ```
+
+2. **Set Environment Variables**:
+   ```bash
+   export GEMINI_API_KEY="your_key"
+   export AGENT_PROVIDER="gemini"
+   export CMW_DEFAULT_LANGUAGE="en"
+   ```
+
+3. **Run the Application**:
+   ```bash
+   python agent_ng/app_ng_modular.py
+   ```
+
+### Development Setup
+
+1. **Activate Virtual Environment**:
+   ```bash
+   # Windows
+   .venv\Scripts\Activate.ps1
+   
+   # Linux/Mac
+   source .venv/bin/activate
+   ```
+
+2. **Run Tests**:
+   ```bash
+   python -m pytest agent_ng/_tests/
+   ```
+
+3. **Debug Mode**:
+   ```bash
+   export CMW_DEBUG_MODE=true
+   python agent_ng/app_ng_modular.py
+   ```
+
+## Usage
+
+### Live Demo
+
+Visit the Gradio interface to test the agent interactively:
+
+<https://localhost/cmw-platform-agent>
+
+### Programmatic Usage
+
+```python
+from agent_ng import NextGenAgent
+
+# Initialize the agent
+agent = NextGenAgent()
+
+# Create an entity in CMW Platform
+result = agent("Create a template called 'Customer' with attributes: Name (Text), Email (Text), Phone (Text)")
+
+# Access the results
+print(f"Answer: {result['submitted_answer']}")
+print(f"Similarity: {result['similarity_score']}")
+print(f"LLM Used: {result['llm_used']}")
+```
+
+### Dataset Access
+
+```python
+from datasets import load_dataset
+
+# Load the dataset
+dataset = load_dataset("arterm-sedov/agent-course-final-assignment")
+
+# Access initialization data
+init_data = dataset["init"]["train"]
+
+# Access evaluation results
+runs_data = dataset["runs_new"]["train"]
+```
+
+## File Structure
+
+The main agent runtime files are organized into modular directories:
+
+```text
+cmw-platform-agent/
+├── agent_ng/                    # Next-generation modular agent
+│   ├── app_ng_modular.py       # Main Gradio application
+│   ├── langchain_agent.py      # LangChain-native agent implementation
+│   ├── llm_manager.py          # Multi-provider LLM management
+│   ├── error_handler.py        # Error handling and fallback
+│   ├── message_processor.py    # Message processing
+│   ├── response_processor.py   # Response processing
+│   ├── stats_manager.py        # Statistics tracking
+│   ├── trace_manager.py        # Trace logging
+│   ├── debug_streamer.py       # Debug system
+│   ├── token_counter.py        # Token usage tracking
+│   ├── session_manager.py      # Session management
+│   ├── queue_manager.py        # Request queue management
+│   ├── ui_manager.py           # UI state management
+│   ├── tool_deduplicator.py    # Tool call deduplication
+│   ├── streaming_config.py     # Streaming configuration
+│   ├── provider_adapters.py    # LLM provider adapters
+│   ├── langchain_memory.py     # LangChain memory management
+│   ├── native_langchain_streaming.py  # Native streaming
+│   ├── concurrency_config.py   # Concurrency configuration
+│   ├── agent_config.py         # Agent configuration
+│   ├── i18n_translations.py    # Internationalization
+│   ├── system_prompt.json      # System prompt configuration
+│   └── tabs/                   # Modular tab components
+│       ├── chat_tab.py         # Chat interface tab
+│       ├── logs_tab.py         # Logs and debugging tab
+│       └── stats_tab.py        # Statistics tab
+├── tools/                      # Tool modules
+│   ├── tools.py               # Core tool functions
+│   ├── applications_tools/    # Application management tools
+│   ├── attributes_tools/      # Attribute management tools
+│   ├── templates_tools/       # Template management tools
+│   ├── tool_utils.py          # Common tool utilities
+│   ├── models.py              # Data models and schemas
+│   ├── requests_.py           # HTTP request utilities
+│   ├── file_utils.py          # File handling utilities
+│   └── pdf_utils.py           # PDF processing utilities
+└── docs/                      # Documentation and reports
+```
+
+## CMW Platform Integration
+
+This agent is designed to work with the Comindware Platform, a business process management and workflow automation platform. The agent can:
+
+- **Create Templates**: Define data structures with custom attributes
+- **Configure Workflows**: Set up business processes and automation rules
+- **Manage Entities**: Create, update, and configure platform objects
+- **API Integration**: Interact with CMW Platform APIs for entity management
+
+For more information about the Comindware Platform, see the [CMW Platform Documentation](https://github.com/arterm-sedov/cbap-mkdocs-ru).
+
+## 📝 Known Issues & Solutions
+
+### Mistral Tool Call IDs
+- **Issue**: Mistral requires 9-character alphanumeric tool call IDs
+- **Solution**: Automatic ID conversion in `provider_adapters.py`
+
+### OpenRouter Context Limits
+- **Issue**: DeepSeek has 163,840 token limit
+- **Solution**: Smart context management and chunking
+
+### Session Data Leakage
+- **Issue**: Previous versions had global session state
+- **Solution**: Session-specific agent instances
+
+## 📞 Support & Troubleshooting
+
+### Common Issues
+
+1. **LLM Not Loading**:
+   - Check API keys in environment variables
+   - Verify provider availability
+   - Check network connectivity
+
+2. **Tool Calls Failing**:
+   - Verify tool permissions
+   - Check tool configuration
+   - Review error logs
+
+3. **Session Issues**:
+   - Clear browser cache
+   - Restart application
+   - Check session isolation
+
+### Debug Information
+
+**Enable Debug Mode**:
+```bash
+export CMW_DEBUG_MODE=true
+export CMW_VERBOSE_LOGGING=true
+```
+
+**Check Logs**:
+- Use Logs tab in web interface
+- Monitor console output
+- Review error traces
+
+## 🔮 Future Enhancements
+
+### Planned Features
+1. **LangGraph Integration**: Advanced conversation flows
+2. **Vector Database**: Enhanced memory and retrieval
+3. **Plugin System**: Dynamic tool loading
+4. **Advanced Analytics**: Detailed usage insights
+5. **Mobile Optimization**: Better mobile experience
+
+### Extension Points
+- Custom LLM providers
+- Additional tool integrations
+- Custom UI themes
+- Advanced memory types
+- Workflow automation
+
+## Contributing
+
+This is an experimental research project. Contributions are welcome in the form of:
+
+- **Bug Reports**: Issues with the agent's reasoning or tool usage
+- **Feature Requests**: New tools or capabilities for CMW Platform integration
+- **Performance Improvements**: Optimizations for speed or accuracy
+- **Documentation**: Improvements to this README or code comments
 
 ## Dataset Structure
 
@@ -351,168 +907,4 @@ The dataset contains comprehensive execution traces with the following structure
 }
 ```
 
-## Key Features
-
-### Intelligent Fallback System
-
-The agent automatically tries multiple LLM providers in sequence:
-
-- **OpenRouter** (Primary): Fast, reliable, good tool support, has tight daily limits on free tiers
-- **Google Gemini** (Fallback): High token limits, excellent reasoning
-- **Groq** (Second Fallback): Fast inference, good for simple tasks, has tight token limits per request
-- **HuggingFace** (Final Fallback): Local models, no API costs, does not support tools typically
-
-### Advanced Tool Management
-
-- **Automatic Tool Selection**: LLM chooses appropriate tools based on question
-- **Tool Deduplication**: Prevents duplicate tool calls using vector similarity
-- **Usage Limits**: Prevents excessive tool usage (e.g., max 3 web searches per question)
-- **Error Handling**: Graceful degradation when tools fail
-
-### Sophisticated implementations
-
-- **Recursive Truncation**: Separate methods for base64 and max-length truncation
-- **Recursive JSON Serialization**: Ensures the complex objects ar passable as HuggingFace JSON dataset
-- **Decorator-Based Print Capture**: Captures all print statements into trace data
-- **Multilevel Contextual Logging**: Logs tied to specific execution contexts
-- **Per-LLM Stdout Traces**: Stdout captured separately for each LLM attempt in a human-readable form
-- **Consistent LLM Schema**: Data structures for consistent model identification, configuring and calling
-- **Complete Trace Model**: Hierarchical structure with comprehensive coverage
-- **Structured dataset uploads** to HuggingFace datasets
-- **Schema validation** against `dataset_config.json`
-- **Three data splits**: `init` (initialization), `runs` (legacy aggregated results), and `runs_new` (granular per-question results)
-- **Robust error handling** with fallback mechanisms
-
-### Comprehensive Tracing
-
-Every question generates a complete execution trace including:
-
-- **LLM Interactions**: All input/output for each LLM attempt
-- **Tool Executions**: Detailed logs of every tool call
-- **Performance Metrics**: Token usage, execution times, success rates
-- **Error Information**: Complete error context and fallback decisions
-- **Stdout Capture**: All debug output from each LLM attempt
-
-### Rate Limiting & Reliability
-
-- **Smart Rate Limiting**: Model-specific and provider-specific rate limits
-- **Token Management**: Automatic truncation and summarization
-- **Error Recovery**: Automatic retry with different LLMs
-- **Graceful Degradation**: Continues processing even if some components fail
-- **Smart Rate Limit Handling**: Throttles and retries on 429 errors before falling back to other LLMs
-
-## Usage
-
-### Live Demo
-
-Visit the Gradio interface to test the agent interactively:
-
-<https://localhost/cmw-platform-agent>
-
-### Programmatic Usage
-
-```python
-from agent_ng import NextGenAgent
-
-# Initialize the agent
-agent = NextGenAgent()
-
-# Create an entity in CMW Platform
-result = agent("Create a template called 'Customer' with attributes: Name (Text), Email (Text), Phone (Text)")
-
-# Access the results
-print(f"Answer: {result['submitted_answer']}")
-print(f"Similarity: {result['similarity_score']}")
-print(f"LLM Used: {result['llm_used']}")
-```
-
-### Dataset Access
-
-```python
-from datasets import load_dataset
-
-# Load the dataset
-dataset = load_dataset("arterm-sedov/agent-course-final-assignment")
-
-# Access initialization data
-init_data = dataset["init"]["train"]
-
-# Access evaluation results
-runs_data = dataset["runs_new"]["train"]
-```
-
-## File Structure
-
-The main agent runtime files are organized into modular directories:
-
-```text
-cmw-platform-agent/
-├── agent_ng/                    # Next-generation modular agent
-│   ├── app_ng_modular.py       # Main Gradio application
-│   ├── langchain_agent.py      # LangChain-native agent implementation
-│   ├── llm_manager.py          # Multi-provider LLM management
-│   ├── error_handler.py        # Error handling and fallback
-│   ├── message_processor.py    # Message processing
-│   ├── response_processor.py   # Response processing
-│   ├── stats_manager.py        # Statistics tracking
-│   ├── trace_manager.py        # Trace logging
-│   ├── debug_streamer.py       # Debug system
-│   ├── token_counter.py        # Token usage tracking
-│   ├── session_manager.py      # Session management
-│   ├── queue_manager.py        # Request queue management
-│   ├── ui_manager.py           # UI state management
-│   ├── tool_deduplicator.py    # Tool call deduplication
-│   ├── streaming_config.py     # Streaming configuration
-│   ├── provider_adapters.py    # LLM provider adapters
-│   ├── langchain_memory.py     # LangChain memory management
-│   ├── native_langchain_streaming.py  # Native streaming
-│   ├── concurrency_config.py   # Concurrency configuration
-│   ├── agent_config.py         # Agent configuration
-│   ├── i18n_translations.py    # Internationalization
-│   ├── system_prompt.json      # System prompt configuration
-│   └── tabs/                   # Modular tab components
-│       ├── chat_tab.py         # Chat interface tab
-│       ├── logs_tab.py         # Logs and debugging tab
-│       └── stats_tab.py        # Statistics tab
-├── tools/                      # Tool modules
-│   ├── tools.py               # Core tool functions
-│   ├── applications_tools/    # Application management tools
-│   ├── attributes_tools/      # Attribute management tools
-│   ├── templates_tools/       # Template management tools
-│   ├── tool_utils.py          # Common tool utilities
-│   ├── models.py              # Data models and schemas
-│   ├── requests_.py           # HTTP request utilities
-│   ├── file_utils.py          # File handling utilities
-│   └── pdf_utils.py           # PDF processing utilities
-└── docs/                      # Documentation and reports
-```
-
-## CMW Platform Integration
-
-This agent is designed to work with the Comindware Platform, a business process management and workflow automation platform. The agent can:
-
-- **Create Templates**: Define data structures with custom attributes
-- **Configure Workflows**: Set up business processes and automation rules
-- **Manage Entities**: Create, update, and configure platform objects
-- **API Integration**: Interact with CMW Platform APIs for entity management
-
-For more information about the Comindware Platform, see the [CMW Platform Documentation](https://github.com/arterm-sedov/cbap-mkdocs-ru).
-
-## Performance Statistics
-
-The agent has been evaluated on complex entity creation tasks with the following results:
-
-- **Overall Success Rate**: 50-65%, up to 80% with all four LLMs available
-- **Tool Usage**: Average 2-8 tools per entity creation request
-- **LLM Fallback Rate**: 20-40% of requests require multiple LLMs
-- **Response Time**: 30-120 seconds per entity creation request
-- **Token Usage**: 1K-100K tokens per request (depending on complexity)
-
-## Contributing
-
-This is an experimental research project. Contributions are welcome in the form of:
-
-- **Bug Reports**: Issues with the agent's reasoning or tool usage
-- **Feature Requests**: New tools or capabilities for CMW Platform integration
-- **Performance Improvements**: Optimizations for speed or accuracy
-- **Documentation**: Improvements to this README or code comments
+---
