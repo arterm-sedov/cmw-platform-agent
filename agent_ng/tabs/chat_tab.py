@@ -779,7 +779,20 @@ class ChatTab:
             return
         
         # Call the original stream handler with enhanced message (text + file analysis)
-        for result in stream_handler(message, history):
+        # Create a mock request for session isolation - in production, this would come from Gradio context
+        # For now, we'll use a simple approach that maintains session isolation
+        import time
+        import uuid
+        
+        # Create a mock request with session hash for testing
+        class MockRequest:
+            def __init__(self):
+                self.session_hash = f"mock_session_{uuid.uuid4().hex[:8]}_{int(time.time())}"
+                self.client = type('MockClient', (), {'id': f"client_{uuid.uuid4().hex[:8]}"})()
+        
+        request = MockRequest()
+        
+        for result in stream_handler(message, history, request):
             yield result
     
     
