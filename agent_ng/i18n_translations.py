@@ -166,7 +166,7 @@ RUSSIAN_TRANSLATIONS = {
     "unhealthy_status": "❌ Неисправен",
     
     # Statistics labels
-    "agent_status_section": "**Статус агента:**",
+    "agent_status_section": "**Агент:**",
     "conversation_section": "**Диалог:**",
     "tools_section": "**Инструменты:**",
     "messages_label": "Сообщения",
@@ -410,7 +410,7 @@ ENGLISH_TRANSLATIONS = {
     "unhealthy_status": "❌ Unhealthy",
     
     # Statistics labels
-    "agent_status_section": "**Agent status:**",
+    "agent_status_section": "**Agent:**",
     "conversation_section": "**Conversation:**",
     "tools_section": "**Tools:**",
     "messages_label": "Messages",
