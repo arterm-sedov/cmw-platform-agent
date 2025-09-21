@@ -18,7 +18,7 @@ langgraph  # Not used in current codebase
 # Optional: HuggingFace Hub for dataset and file operations (disabled by default)
 huggingface_hub
 arxiv
-#pymupdf  # Not used in current codebase
+pymupdf4llm  # Best library for LLM-optimized PDF processing with Markdown output
 wikipedia
 python-dotenv
 #pytesseract  # Not used in current codebase

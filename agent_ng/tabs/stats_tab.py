@@ -18,6 +18,7 @@ class StatsTab:
         self.event_handlers = event_handlers
         self.components = {}
         self.agent = None  # Will be set by the app
+        self.main_app = None  # Reference to main app for session management
         self._last_conversation_stats = None  # Track last stats for change detection
         self.language = language
         self.i18n = i18n_instance
@@ -54,14 +55,30 @@ class StatsTab:
             self.components["refresh_stats_btn"] = gr.Button(self._get_translation("refresh_stats_button"), elem_classes=["cmw-button"])
     
     def _connect_events(self):
-        """Connect all event handlers for the stats tab"""
-        print("🔗 StatsTab: Connecting event handlers...")
+        """Connect all event handlers for the stats tab with concurrency control"""
+        print("🔗 StatsTab: Connecting event handlers with concurrency control...")
         
-        # Use local methods for stats functionality
-        self.components["refresh_stats_btn"].click(
-            fn=self.refresh_stats,
-            outputs=[self.components["stats_display"]]
-        )
+        # Get queue manager for concurrency control
+        queue_manager = getattr(self, 'main_app', None)
+        if queue_manager:
+            queue_manager = getattr(queue_manager, 'queue_manager', None)
+        
+        if queue_manager:
+            # Apply concurrency settings to stats refresh
+            from agent_ng.queue_manager import apply_concurrency_to_click_event
+            
+            refresh_config = apply_concurrency_to_click_event(
+                queue_manager, 'stats_refresh', self.refresh_stats,
+                [], [self.components["stats_display"]]
+            )
+            self.components["refresh_stats_btn"].click(**refresh_config)
+        else:
+            # Fallback to default behavior
+            print("⚠️ Queue manager not available - using default stats configuration")
+            self.components["refresh_stats_btn"].click(
+                fn=self.refresh_stats,
+                outputs=[self.components["stats_display"]]
+            )
         
         print("✅ StatsTab: All event handlers connected successfully")
     
@@ -74,8 +91,14 @@ class StatsTab:
         return self.components["stats_display"]
     
     def set_agent(self, agent):
-        """Set the agent reference for stats access"""
-        self.agent = agent
+        """Set the agent reference for stats access (deprecated - use session-specific agents)"""
+        # This method is kept for compatibility but is no longer used
+        # Stats are now accessed through session-specific agents
+        pass
+    
+    def set_main_app(self, app):
+        """Set reference to main app for session management"""
+        self.main_app = app
     
     def _get_translation(self, key: str) -> str:
         """Get a translation for a specific key"""
@@ -83,22 +106,41 @@ class StatsTab:
         from ..i18n_translations import get_translation_key
         return get_translation_key(key, self.language)
     
-    def format_stats_display(self) -> str:
-        """Format and return the complete stats display"""
-        if not self.agent:
+    def format_stats_display(self, request: gr.Request = None) -> str:
+        """Format and return the complete stats display - always session-aware"""
+        # Try to get request from Gradio context if not provided
+        if not request:
+            try:
+                import gradio as gr
+                from gradio.context import Context
+                if hasattr(Context, 'root_block') and Context.root_block:
+                    request = Context.root_block.get_request()
+            except:
+                pass
+        
+        # Get session-specific agent
+        agent = None
+        if request and hasattr(self, 'main_app') and hasattr(self.main_app, 'session_manager'):
+            session_id = self.main_app.session_manager.get_session_id(request)
+            agent = self.main_app.session_manager.get_session_agent(session_id)
+        elif hasattr(self, 'main_app') and hasattr(self.main_app, 'session_manager'):
+            # For auto-refresh, show a generic message since we can't determine the session
+            return self._get_translation("stats_auto_refresh_message")
+        
+        # No fallback to global agent - use session-specific agents only
+        
+        # Format stats with the appropriate agent
+        if not agent:
             return self._get_translation("agent_not_available")
         
         try:
             # Get basic agent statistics
-            stats = self.agent.get_stats()
+            stats = agent.get_stats()
             
-            # Get token statistics
-            token_stats = self._format_token_stats()
-            
-            # Format complete display
+            # Format complete display using existing translation resources exactly as they are
             return f"""
 {self._get_translation('agent_status_section')}
-- {self._get_translation('status_ready')}: {stats['agent_status']['is_ready']}
+- {self._get_translation('status_ready_true' if stats['agent_status']['is_ready'] else 'status_ready_false')}
 - LLM: {stats['llm_info'].get('model_name', 'Unknown')}
 - {self._get_translation('provider_info').format(provider=stats['llm_info'].get('provider', 'Unknown'))}
 
@@ -109,54 +151,26 @@ class StatsTab:
 - {self._get_translation('total_messages_label')}: {stats['conversation_stats']['message_count']}
 
 {self._get_translation('tools_section')}
-- {self._get_translation('available_label')}: {stats['agent_status']['tools_count']}{self._format_tools_stats()}{token_stats}
+- {self._get_translation('available_label')}: {stats['agent_status']['tools_count']}{self._format_tools_stats(agent)}
             """
         except Exception as e:
             return f"{self._get_translation('error_loading_stats')}: {str(e)}"
     
-    def _format_token_stats(self) -> str:
-        """Format token usage statistics"""
-        if not self.agent:
-            return ""
-        
-        try:
-            token_info = self.agent.get_token_display_info()
-            cumulative_stats = token_info.get("cumulative_stats", {})
-            
-            if not cumulative_stats:
-                return ""
-            
-            # Get conversation stats for message count
-            # Only show debug messages if stats have changed
-            conversation_stats = self.agent._get_conversation_stats(debug=False)
-            debug_stats = self._last_conversation_stats != conversation_stats
-            if debug_stats:
-                # Re-get with debug enabled to show the change
-                conversation_stats = self.agent._get_conversation_stats(debug=True)
-            self._last_conversation_stats = conversation_stats.copy() if conversation_stats else None
-            total_messages = conversation_stats.get('message_count', 0)
-            
-            return f"""           
-{self._get_translation('token_usage_section')}
-- {self._get_translation('total_persistent_label')}: {cumulative_stats['conversation_tokens']:,} {self._get_translation('tokens_label')}
-- {self._get_translation('current_conversation_label')}: {cumulative_stats['session_tokens']:,} {self._get_translation('tokens_label')}
-- {self._get_translation('average_per_message_label')}: {cumulative_stats['avg_tokens_per_message']} {self._get_translation('tokens_label')}
-            """
-        except Exception:
-            return ""
     
-    def _format_tools_stats(self) -> str:
-        """Format tools usage statistics"""
-        if not self.agent:
+    
+    
+    def _format_tools_stats(self, agent=None) -> str:
+        """Format tools usage statistics from session-specific agent"""
+        if not agent:
             return ""
         
         try:
             # Get tool usage from memory manager
-            if hasattr(self.agent, 'memory_manager') and self.agent.memory_manager:
+            if hasattr(agent, 'memory_manager') and agent.memory_manager:
                 total_tool_calls = 0
                 unique_tools = set()
                 
-                for conversation_id, conversation in self.agent.memory_manager.memories.items():
+                for conversation_id, conversation in agent.memory_manager.memories.items():
                     for message in conversation:
                         if hasattr(message, 'type') and message.type == "tool":
                             total_tool_calls += 1
@@ -174,18 +188,18 @@ class StatsTab:
             return ""
     
     # Stats handler methods
-    def refresh_stats(self) -> str:
+    def refresh_stats(self, request: gr.Request = None) -> str:
         """Refresh and return agent statistics"""
-        return self.format_stats_display()
+        return self.format_stats_display(request)
     
-    def get_agent_status(self) -> str:
-        """Get current agent status with comprehensive details"""
-        if not self.agent:
+    def get_agent_status(self, agent=None) -> str:
+        """Get current agent status with comprehensive details from session-specific agent"""
+        if not agent:
             return self._get_translation("agent_initializing")
         
-        status = self.agent.get_status()
+        status = agent.get_status()
         if status["is_ready"]:
-            llm_info = self.agent.get_llm_info()
+            llm_info = agent.get_llm_info()
             return f"""{self._get_translation('agent_status_ready')}
 
 {self._get_translation('provider_info').format(provider=llm_info.get('provider', 'Unknown'))}

@@ -24,7 +24,7 @@ RUSSIAN_TRANSLATIONS = {
     "tab_stats": "📊 Статистика",
     
     # Chat tab content
-    "welcome_title": "💬 Добро пожаловать!",
+    "welcome_title": "Добро пожаловать!",
     "welcome_description": """
     **Ассистент аналитика Comindware** предназначен для работы с сущностями **Comindware Platform**, такими как приложения, шаблоны, атрибуты.
     
@@ -48,7 +48,7 @@ RUSSIAN_TRANSLATIONS = {
     """,
     
     # Quick actions
-    "quick_actions_title": "⚡ Заготовки",
+    "quick_actions_title": "Заготовки",
     "quick_list_apps": "🔎 Список всех приложений",
     "quick_create_attr": "🧩 Создать текстовый атрибут",
     "quick_edit_mask": "🛠️ Редактировать маску телефона",
@@ -57,29 +57,59 @@ RUSSIAN_TRANSLATIONS = {
     "quick_explain": "💭 Объяснить ML кратко",
     
     # Chat interface
-    "chat_label": "Чат с агентом",
+    "chat_label": "Диалог с агентом",
     "message_label": "Ваше сообщение",
     "message_placeholder": "Введите ваше сообщение...",
-    "send_button": "Отправить",
-    "clear_button": "Очистить чат",
+        "send_button": "Отправить",
+        "clear_button": "Очистить диалог",
+        "download_button": "📥 Скачать диалог (Markdown)",
+        "download_file_label": "Скачать Markdown",
     
     # LLM Selection section
     "llm_selection_title": "🔧 Выбор LLM",
     "provider_label": "Провайдер",
     "model_label": "Модель",
-    "provider_model_label": "Провайдер / Модель",
+    "provider_model_label": "Провайдер / модель",
     "apply_llm_button": "Применить",
-    "llm_apply_success": "✅ LLM изменен: {provider} - {model}",
+    "llm_apply_success": "✅ LLM изменена: {provider} - {model}",
     "llm_apply_error": "❌ Ошибка применения LLM",
-    "current_provider": "**Провайдер:** {provider}",
-    "current_model": "**Модель:** {model}",
+    
+    # Mistral switching confirmation
+    "mistral_switch_title": "⚠️ Внимание! Переключение на Mistral",
+    "mistral_switch_warning": """
+    Идёт переключение на {provider} / {model}
+
+    Mistral не совместима с другими нейросетями. 
+    Для продолжения работы чат был очищен.
+    """,
+    "mistral_chat_cleared": "Чат очищен для совместимости с Mistral.",
+    "mistral_switch_cancelled": "❌ Переключение на Mistral отменено",
+    "current_provider": "Провайдер: {provider}",
+    "current_model": "Модель: {model}",
     
     # Status section
     "status_title": "🤖 Статус",
     "status_initializing": "🟡 Инициализация...",
-    "status_ready": "✅ Готов",
+    "status_ready": "Готов",
+    "status_ready_true": "Готов: да ✅",
+    "status_ready_false": "Готов: нет ❌",
     "token_budget_title": "💰 Расход токенов",
     "token_budget_initializing": "🟡 Загрузка...",
+    # Token usage components (separated for flexibility)
+    "token_usage_header": "**Расход токенов:**",
+    "token_usage_total": "Всего: {total_tokens:,}",
+    "token_usage_conversation": "Диалог: {conversation_tokens:,}",
+    "token_usage_last_message": "Последнее сообщение {percentage}% ({used:,}/{context_window:,}) {status_icon}",
+    "token_usage_average": "Среднее на сообщение: {avg_tokens:,}",
+    
+    # Status icons for token usage
+    "token_status_good": "🟢",
+    "token_status_moderate": "🟡", 
+    "token_status_warning": "🟠",
+    "token_status_critical": "🔴",
+    "token_status_unknown": "❓",
+    
+    # Legacy combined format (for backward compatibility)
     "token_budget_detailed": """**Расход токенов:**
 - Всего: {total_tokens:,}
 - Диалог: {conversation_tokens:,}
@@ -102,6 +132,7 @@ RUSSIAN_TRANSLATIONS = {
     "stats_loading": "Загрузка статистики...",
     "refresh_stats_button": "🔄 Обновить статистику",
     "agent_not_available": "Агент недоступен",
+    "stats_auto_refresh_message": "📊 Статистика обновляется автоматически. Нажмите кнопку обновления для просмотра данных сессии.",
     "error_loading_stats": "Ошибка загрузки статистики",
     
     # Status messages
@@ -119,6 +150,7 @@ RUSSIAN_TRANSLATIONS = {
     "prompt_tokens": "**Токены запроса:** {tokens}",
     "api_tokens": "**API токены:** {tokens}",
     "execution_time": "**Время выполнения:** {time:.2f}с",
+    "provider_model": "**Провайдер / модель:** {provider} / {model}",
     "deduplication": "**Дедупликация:** {duplicates} дублирующих вызовов предотвращено ({breakdown})",
     "total_tool_calls": "**Всего вызовов инструментов:** {calls}",
     
@@ -134,20 +166,15 @@ RUSSIAN_TRANSLATIONS = {
     "unhealthy_status": "❌ Неисправен",
     
     # Statistics labels
-    "agent_status_section": "**Статус агента:**",
+    "agent_status_section": "**Агент:**",
     "conversation_section": "**Диалог:**",
     "tools_section": "**Инструменты:**",
-    "token_usage_section": "**Расход токенов:**",
     "messages_label": "Сообщения",
     "user_messages_label": "Пользователь",
     "assistant_messages_label": "Ассистент",
     "total_messages_label": "Всего сообщений",
     "available_label": "Доступно",
     "used_label": "Использовано",
-    "total_persistent_label": "Всего",
-    "current_conversation_label": "Текущий диалог",
-    "average_per_message_label": "Среднее на сообщение",
-    "tokens_label": "токенов",
     "unique_tools_label": "уникальных инструментов",
     "total_calls_label": "Всего вызовов",
     "tools_used_label": "Использовано инструментов",
@@ -200,7 +227,7 @@ RUSSIAN_TRANSLATIONS = {
     "quick_archive_attr_message": "Архивируй/разархивируй атрибут, системное имя \"Комментарий\", приложение \"HR\", шаблон \"Кандидаты\"",
     
     # Status messages
-    "processing_complete": "Обработка завершена",
+    "processing_complete": "🎉Обработка завершена",
     "response_completed": "Ответ завершен",
     "processing_failed": "Обработка не удалась",
     
@@ -221,7 +248,12 @@ RUSSIAN_TRANSLATIONS = {
     "tool_calls_made": "Вызовы инструментов: {tool_names}",
     
     # Error messages
-    "error": "❌ **Ошибка: {error}**"
+    "error": "❌ **Ошибка: {error}**",
+    
+    # Provider availability messages
+    "no_providers_available": "❌ Нет доступных провайдеров",
+    "no_models_available": "❌ Нет доступных моделей",
+    "error_loading_providers": "❌ Ошибка загрузки провайдеров"
 }
 
 # English translations (fallback)
@@ -236,7 +268,7 @@ ENGLISH_TRANSLATIONS = {
     "tab_stats": "📊 Statistics",
     
     # Chat tab content
-    "welcome_title": "💬 Welcome!",
+    "welcome_title": "Welcome!",
     "welcome_description": """
     **Comindware Analyst Copilot** is designed to work with **Comindware Platform** entities such as applications, templates, and attributes.
     
@@ -260,7 +292,7 @@ ENGLISH_TRANSLATIONS = {
     """,
     
     # Quick actions
-    "quick_actions_title": "⚡ Quick Actions",
+    "quick_actions_title": "Quick Actions",
     "quick_list_apps": "🔎 List all apps",
     "quick_create_attr": "🧩 Create text attribute",
     "quick_edit_mask": "🛠️ Edit phone mask",
@@ -269,30 +301,60 @@ ENGLISH_TRANSLATIONS = {
     "quick_explain": "💭 Explain ML briefly",
     
     # Chat interface
-    "chat_label": "Chat with the Agent",
+    "chat_label": "Conversation with the Agent",
     "message_label": "Your Message",
     "message_placeholder": "Type your message here",
-    "send_button": "Send",
-    "clear_button": "Clear chat",
+        "send_button": "Send",
+        "clear_button": "Clear conversation",
+        "download_button": "📥 Download conversation (Markdown)",
+        "download_file_label": "Download Markdown",
     
     # LLM Selection section
     "llm_selection_title": "🔧 LLM Selection",
     "provider_label": "Provider",
     "model_label": "Model",
-    "provider_model_label": "Provider / Model",
+    "provider_model_label": "Provider / model",
     "apply_llm_button": "Apply",
     "llm_apply_success": "✅ LLM changed: {provider} - {model}",
     "llm_apply_error": "❌ Error applying LLM",
-    "current_provider": "**Provider:** {provider}",
+    
+    # Mistral switching confirmation
+    "mistral_switch_title": "⚠️ Warning! Switching to Mistral",
+    "mistral_switch_warning": """
+    Switching to {provider} / {model}...
+    
+    Mistral is not compatible with other providers. 
+    The chat was cleared to continue working.
+    """,
+    "mistral_chat_cleared": "Chat cleared for Mistral compatibility.",
+    "mistral_switch_cancelled": "❌ Mistral switching cancelled",
+    "current_provider": "Provider: {provider}",
     "current_model": "**Model:** {model}",
     
     # Status section
     "status_title": "🤖 Status",
     "status_initializing": "🟡 Initializing...",
-    "status_ready": "✅ Ready",
-    "token_budget_title": "💰 Token Usage",
+    "status_ready": "Ready",
+    "status_ready_true": "Ready: yes ✅",
+    "status_ready_false": "Ready: no ❌",
+    "token_budget_title": "💰 Token usage",
     "token_budget_initializing": "🟡 Loading...",
-    "token_budget_detailed": """**Token Usage:**
+    # Token usage components (separated for flexibility)
+    "token_usage_header": "**Token usage:**",
+    "token_usage_total": "Total: {total_tokens:,}",
+    "token_usage_conversation": "Conversation: {conversation_tokens:,}",
+    "token_usage_last_message": "Last message {percentage}% ({used:,}/{context_window:,}) {status_icon}",
+    "token_usage_average": "Average per message: {avg_tokens:,}",
+    
+    # Status icons for token usage
+    "token_status_good": "🟢",
+    "token_status_moderate": "🟡", 
+    "token_status_warning": "🟠",
+    "token_status_critical": "🔴",
+    "token_status_unknown": "❓",
+    
+    # Legacy combined format (for backward compatibility)
+    "token_budget_detailed": """**Token usage:**
 - Total: {total_tokens:,}
 - Conversation: {conversation_tokens:,}
 - Last message {percentage}% ({used:,}/{context_window:,}) {status_icon}
@@ -314,6 +376,7 @@ ENGLISH_TRANSLATIONS = {
     "stats_loading": "Loading statistics...",
     "refresh_stats_button": "🔄 Refresh Stats",
     "agent_not_available": "Agent not available",
+    "stats_auto_refresh_message": "📊 Statistics are auto-refreshing. Click refresh button to view session data.",
     "error_loading_stats": "Error loading statistics",
     
     # Status messages
@@ -331,6 +394,7 @@ ENGLISH_TRANSLATIONS = {
     "prompt_tokens": "**Prompt tokens:** {tokens}",
     "api_tokens": "**API tokens:** {tokens}",
     "execution_time": "**Execution time:** {time:.2f}s",
+    "provider_model": "**Provider / model:** {provider} / {model}",
     "deduplication": "**Deduplication:** {duplicates} duplicate calls prevented ({breakdown})",
     "total_tool_calls": "**Total tool calls:** {calls}",
     
@@ -346,20 +410,15 @@ ENGLISH_TRANSLATIONS = {
     "unhealthy_status": "❌ Unhealthy",
     
     # Statistics labels
-    "agent_status_section": "**Agent status:**",
+    "agent_status_section": "**Agent:**",
     "conversation_section": "**Conversation:**",
     "tools_section": "**Tools:**",
-    "token_usage_section": "**Tokens used:**",
     "messages_label": "Messages",
     "user_messages_label": "User",
     "assistant_messages_label": "Copilot",
     "total_messages_label": "Total messages",
     "available_label": "Available",
     "used_label": "Used",
-    "total_persistent_label": "Total (Persistent)",
-    "current_conversation_label": "Current conversation",
-    "average_per_message_label": "Average per message",
-    "tokens_label": "tokens",
     "unique_tools_label": "unique tools",
     "total_calls_label": "Total Calls",
     "tools_used_label": "Used tools",
@@ -412,16 +471,16 @@ ENGLISH_TRANSLATIONS = {
     "quick_archive_attr_message": "Archive/unarchive attribute, system name \"Comment\", application \"HR\", template \"Candidates\"",
     
     # Status messages
-    "processing_complete": "Processing complete",
+    "processing_complete": "🎉 Processing complete",
     "response_completed": "Response completed",
     "processing_failed": "Processing failed",
     
     # Iteration messages
-    "iteration_processing": "Iteration {iteration}/{max_iterations} - Processing...",
-    "iteration_finished": "Iteration {iteration}/{max_iterations} - Finished",
-    "iteration_completed": "Iteration {iteration} completed - Continuing...",
-    "iteration_max_reached": "Iteration {iteration}/{max_iterations} - Finished (max reached)",
-    "max_iterations_warning": "⚠️ Reached iteration limit ({max_iterations}), conversation may be incomplete",
+    "iteration_processing": "Iteration **{iteration}/{max_iterations}** - Processing...",
+    "iteration_finished": "Iteration **{iteration}/{max_iterations}** - Finished",
+    "iteration_completed": "Iteration **{iteration}** completed - Continuing...",
+    "iteration_max_reached": "Iteration **{iteration}/{max_iterations}** - Finished (max reached)",
+    "max_iterations_warning": "⚠️ Reached iteration limit **({max_iterations})**, conversation may be incomplete",
     
     # Tool messages
     "tool_called": "🔧 Tool called: {tool_name}",
@@ -433,7 +492,12 @@ ENGLISH_TRANSLATIONS = {
     "tool_calls_made": "Tool calls made: {tool_names}",
     
     # Error messages
-    "error": "❌ **Error: {error}**"
+    "error": "❌ **Error: {error}**",
+    
+    # Provider availability messages
+    "no_providers_available": "❌ No providers available",
+    "no_models_available": "❌ No models available", 
+    "error_loading_providers": "❌ Error loading providers"
 }
 
 def create_i18n_instance(language: str = "en") -> gr.I18n:
