@@ -604,7 +604,7 @@ class LangChainConversationChain:
                 print("🔍 DEBUG: Creating new token tracker")
                 # Create a simple token tracker if none exists
                 from .token_counter import get_token_tracker
-                token_tracker = get_token_tracker()
+                token_tracker = get_token_tracker(conversation_id)
                 token_tracker.track_llm_response(response, messages)
         except Exception as e:
             print(f"🔍 DEBUG: Token tracking error: {e}")

@@ -126,13 +126,17 @@ class CmwAgent:
     maintaining all the modular components from NextGenAgent.
     """
     
-    def __init__(self, system_prompt: str = None):
+    def __init__(self, system_prompt: str = None, session_id: str = "default"):
         """
         Initialize the LangChain agent with full modular architecture.
         
         Args:
             system_prompt: System prompt for the agent
+            session_id: Unique session ID for conversation isolation
         """
+        # Store session ID for conversation isolation
+        self.session_id = session_id
+        
         # Initialize all modular components
         self.llm_manager = get_llm_manager()
         self.memory_manager = get_memory_manager()
@@ -141,11 +145,11 @@ class CmwAgent:
         self.message_processor = get_message_processor()
         self.response_processor = get_response_processor()
         self.stats_manager = get_stats_manager()
-        self.trace_manager = get_trace_manager()
+        self.trace_manager = get_trace_manager(self.session_id)
         
         # Initialize token tracker
         from .token_counter import get_token_tracker
-        self.token_tracker = get_token_tracker()
+        self.token_tracker = get_token_tracker(self.session_id)
         
         # Load system prompt
         self.system_prompt = system_prompt or self._load_system_prompt()
@@ -375,8 +379,12 @@ Always use the appropriate tools to answer questions and show your work step by 
                 "metadata": {"error": str(e)}
             }
     
-    def clear_conversation(self, conversation_id: str = "default") -> None:
+    def clear_conversation(self, conversation_id: str = None) -> None:
         """Clear conversation history and file data"""
+        # Use session ID if no conversation ID provided
+        if conversation_id is None:
+            conversation_id = self.session_id
+            
         chain = self._get_conversation_chain(conversation_id)
         chain.clear_conversation(conversation_id)
         # Clear file registry when clearing conversation
@@ -445,7 +453,7 @@ Always use the appropriate tools to answer questions and show your work step by 
                 "conversation_chains": len(self.conversation_chains)
             },
             "llm_manager_stats": self.llm_manager.get_stats() if self.llm_manager else {},
-            "stats_manager_stats": self.stats_manager.get_stats() if self.stats_manager else {},
+            "stats_manager_stats": self.stats_manager.get_stats(self.session_id) if self.stats_manager else {},
             "memory_manager_stats": {
                 "total_memories": len(self.memory_manager.memories) if self.memory_manager else 0
             },
@@ -479,12 +487,19 @@ Always use the appropriate tools to answer questions and show your work step by 
                     print(f"🔍 DEBUG: Memory manager has {len(self.memory_manager.memories)} conversations")
                     print(f"🔍 DEBUG: Memory manager memories: {self.memory_manager.memories}")
                 
-                # Get all conversations and count messages
+                # Get all conversations and count messages for this session
                 total_messages = 0
                 user_messages = 0
                 assistant_messages = 0
                 
-                for conversation_id, conversation in self.memory_manager.memories.items():
+                # Only count messages for this session's conversation
+                session_conversation = self.memory_manager.memories.get(self.session_id)
+                if session_conversation:
+                    conversations_to_process = {self.session_id: session_conversation}
+                else:
+                    conversations_to_process = {}
+                
+                for conversation_id, conversation in conversations_to_process.items():
                     if debug:
                         print(f"🔍 DEBUG: Conversation {conversation_id} type: {type(conversation)}")
                     

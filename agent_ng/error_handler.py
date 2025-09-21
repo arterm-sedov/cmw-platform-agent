@@ -83,7 +83,7 @@ class ErrorHandler:
     
     def __init__(self):
         """Initialize the error handler"""
-        self.provider_failure_counts = {}
+        self.provider_failure_counts = {}  # Will be session-specific: {session_id: {provider: count}}
         self.max_failures_per_provider = 3
         self.failure_reset_time = 3600  # 1 hour
         
@@ -1340,19 +1340,20 @@ class ErrorHandler:
             provider=llm_name.lower()
         )
     
-    def handle_provider_failure(self, provider_type: str, error_type: str = "general") -> bool:
+    def handle_provider_failure(self, provider_type: str, error_type: str = "general", session_id: str = "default") -> bool:
         """
         Track provider failures with simple retry limits.
         
         Args:
             provider_type: Provider name (e.g., "mistral", "gemini", "groq")
             error_type: Type of error that occurred
+            session_id: Session ID for isolation
             
         Returns:
             True if provider should be temporarily skipped, False otherwise
         """
         current_time = time.time()
-        key = f"{provider_type}_{error_type}"
+        key = f"{session_id}_{provider_type}_{error_type}"
         
         if key not in self.provider_failure_counts:
             self.provider_failure_counts[key] = {
@@ -1374,12 +1375,13 @@ class ErrorHandler:
         # Skip provider if too many failures
         return failure_info['count'] >= self.max_failures_per_provider
     
-    def should_skip_provider_temporarily(self, provider_type: str) -> bool:
+    def should_skip_provider_temporarily(self, provider_type: str, session_id: str = "default") -> bool:
         """Check if a provider should be temporarily skipped due to failures."""
         current_time = time.time()
+        session_prefix = f"{session_id}_{provider_type}"
         
         for key, failure_info in self.provider_failure_counts.items():
-            if key.startswith(provider_type):
+            if key.startswith(session_prefix):
                 # Reset if enough time has passed
                 if current_time - failure_info['first_failure'] > self.failure_reset_time:
                     failure_info['count'] = 0
@@ -1391,32 +1393,45 @@ class ErrorHandler:
         
         return False
     
-    def reset_provider_failures(self, provider_type: str = None):
+    def reset_provider_failures(self, provider_type: str = None, session_id: str = "default"):
         """Reset failure counts for a provider or all providers."""
         if provider_type:
-            keys_to_remove = [k for k in self.provider_failure_counts.keys() if k.startswith(provider_type)]
+            session_prefix = f"{session_id}_{provider_type}"
+            keys_to_remove = [k for k in self.provider_failure_counts.keys() if k.startswith(session_prefix)]
             for key in keys_to_remove:
                 del self.provider_failure_counts[key]
         else:
-            self.provider_failure_counts.clear()
+            # Reset all failures for this session
+            session_keys = [k for k in self.provider_failure_counts.keys() if k.startswith(f"{session_id}_")]
+            for key in session_keys:
+                del self.provider_failure_counts[key]
     
-    def get_provider_failure_stats(self) -> Dict[str, Any]:
-        """Get statistics about provider failures."""
+    def get_provider_failure_stats(self, session_id: str = "default") -> Dict[str, Any]:
+        """Get statistics about provider failures for a specific session."""
         current_time = time.time()
         stats = {}
+        session_prefix = f"{session_id}_"
         
         for key, failure_info in self.provider_failure_counts.items():
-            provider, error_type = key.split('_', 1)
-            if provider not in stats:
-                stats[provider] = {}
-            
-            stats[provider][error_type] = {
-                'count': failure_info['count'],
-                'first_failure': failure_info['first_failure'],
-                'last_failure': failure_info['last_failure'],
-                'time_since_last': current_time - failure_info['last_failure'],
-                'should_skip': failure_info['count'] >= self.max_failures_per_provider
-            }
+            if key.startswith(session_prefix):
+                # Remove session prefix to get provider and error type
+                remaining_key = key[len(session_prefix):]
+                parts = remaining_key.split('_', 1)
+                if len(parts) >= 2:
+                    provider, error_type = parts[0], parts[1]
+                else:
+                    provider, error_type = remaining_key, "general"
+                
+                if provider not in stats:
+                    stats[provider] = {}
+                
+                stats[provider][error_type] = {
+                    'count': failure_info['count'],
+                    'first_failure': failure_info['first_failure'],
+                    'last_failure': failure_info['last_failure'],
+                    'time_since_last': current_time - failure_info['last_failure'],
+                    'should_skip': failure_info['count'] >= self.max_failures_per_provider
+                }
         
         return stats
 

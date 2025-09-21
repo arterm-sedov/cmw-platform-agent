@@ -396,20 +396,24 @@ class UsageMetadataCallbackHandler(BaseCallbackHandler):
             pass
 
 
-# Global token tracker instance
-_token_tracker: Optional[ConversationTokenTracker] = None
+# Session-specific token tracker instances
+_token_trackers: Dict[str, ConversationTokenTracker] = {}
 
-def get_token_tracker() -> ConversationTokenTracker:
-    """Get the global token tracker instance"""
-    global _token_tracker
-    if _token_tracker is None:
-        _token_tracker = ConversationTokenTracker()
-    return _token_tracker
+def get_token_tracker(session_id: str = "default") -> ConversationTokenTracker:
+    """Get session-specific token tracker instance"""
+    global _token_trackers
+    if session_id not in _token_trackers:
+        _token_trackers[session_id] = ConversationTokenTracker()
+    return _token_trackers[session_id]
 
-def reset_token_tracker() -> None:
-    """Reset the global token tracker instance"""
-    global _token_tracker
-    _token_tracker = None
+def reset_token_tracker(session_id: str = None) -> None:
+    """Reset token tracker instance(s)"""
+    global _token_trackers
+    if session_id:
+        if session_id in _token_trackers:
+            del _token_trackers[session_id]
+    else:
+        _token_trackers.clear()
 
 
 def convert_chat_history_to_messages(history: List[Dict[str, str]], current_message: str = None) -> List[BaseMessage]:
