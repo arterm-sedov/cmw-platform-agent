@@ -228,13 +228,13 @@ response = agent.process_message("Calculate 5 + 3", "conversation_1")
 ### LangChain Memory (langchain_memory.py)
 
 **Features**:
-- Uses LangChain's `ConversationBufferMemory`
+- Uses LangChain's native memory management
 - Tool call context preservation
 - Session-specific memory instances
 - Automatic conversation summarization
 
 **Memory Types**:
-- **ConversationBufferMemory**: Stores full conversation history
+- **Native LangChain Memory**: Stores full conversation history
 - **Tool-aware memory**: Preserves tool call results
 - **Session isolation**: Memory per user session
 
