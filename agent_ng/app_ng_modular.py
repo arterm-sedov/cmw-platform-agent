@@ -682,11 +682,11 @@ class NextGenApp:
         return get_translation_key("token_budget_initializing", self.language)
     
     
-    def _refresh_logs(self) -> str:
-        """Refresh logs display - delegates to logs tab"""
+    def _refresh_logs(self, request: gr.Request = None) -> str:
+        """Refresh logs display - delegates to logs tab with session awareness"""
         logs_tab = self.tab_instances.get('logs')
         if logs_tab and hasattr(logs_tab, 'get_initialization_logs'):
-            return logs_tab.get_initialization_logs()
+            return logs_tab.get_initialization_logs(request)
         
         # Fallback logs
         return "\n".join(self.initialization_logs) if self.initialization_logs else "No logs available"
@@ -777,7 +777,7 @@ class NextGenApp:
                 
             if StatsTab:
                 stats_tab = StatsTab(event_handlers, language=self.language, i18n_instance=self.i18n)
-                # No global agent - stats tab will get session-specific agents as needed
+                stats_tab.set_main_app(self)  # Set reference to main app for session management
                 tab_modules.append(stats_tab)
                 self.tab_instances['stats'] = stats_tab
             else:

@@ -77,24 +77,41 @@ class LogsTab:
         return self.components["logs_display"]
     
     # Logs handler methods
-    def get_initialization_logs(self) -> str:
-        """Get initialization logs as formatted string"""
+    def get_initialization_logs(self, request: gr.Request = None) -> str:
+        """Get initialization logs as formatted string - now session-aware"""
         # Access the main app through event handlers context
         # This will be set by the main app when creating the tab
         if hasattr(self, '_main_app') and self._main_app:
+            # Get session-specific logs
+            session_id = "default"  # Default session
+            if request and hasattr(self._main_app, 'session_manager'):
+                session_id = self._main_app.session_manager.get_session_id(request)
+            
+            # Get session-specific log handler
+            from ..debug_streamer import get_log_handler
+            session_log_handler = get_log_handler(session_id)
+            
             # Combine static logs with real-time debug logs
             static_logs = "\n".join(self._main_app.initialization_logs)
-            debug_logs = self._main_app.log_handler.get_current_logs()
+            debug_logs = session_log_handler.get_current_logs()
             
             if debug_logs and debug_logs != "No logs available yet.":
-                return f"{static_logs}\n\n--- Real-time Debug Logs ---\n\n{debug_logs}"
+                return f"{static_logs}\n\n--- Real-time Debug Logs (Session: {session_id}) ---\n\n{debug_logs}"
             return static_logs
         return "Logs not available - main app not connected"
     
-    def clear_logs(self) -> str:
-        """Clear logs and return confirmation"""
+    def clear_logs(self, request: gr.Request = None) -> str:
+        """Clear logs and return confirmation - now session-aware"""
         if hasattr(self, '_main_app') and self._main_app:
-            self._main_app.log_handler.clear_logs()
+            # Get session-specific logs
+            session_id = "default"  # Default session
+            if request and hasattr(self._main_app, 'session_manager'):
+                session_id = self._main_app.session_manager.get_session_id(request)
+            
+            # Get session-specific log handler
+            from ..debug_streamer import get_log_handler
+            session_log_handler = get_log_handler(session_id)
+            session_log_handler.clear_logs()
             return self._get_translation("logs_cleared")
         return self._get_translation("logs_not_available")
     

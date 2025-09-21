@@ -18,6 +18,7 @@ class StatsTab:
         self.event_handlers = event_handlers
         self.components = {}
         self.agent = None  # Will be set by the app
+        self.main_app = None  # Reference to main app for session management
         self._last_conversation_stats = None  # Track last stats for change detection
         self.language = language
         self.i18n = i18n_instance
@@ -78,6 +79,10 @@ class StatsTab:
         # This method is kept for compatibility but is no longer used
         # Stats are now accessed through session-specific agents
         pass
+    
+    def set_main_app(self, app):
+        """Set reference to main app for session management"""
+        self.main_app = app
     
     def _get_translation(self, key: str) -> str:
         """Get a translation for a specific key"""
