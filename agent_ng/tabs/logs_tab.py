@@ -52,19 +52,41 @@ class LogsTab:
             self.components["clear_logs_btn"] = gr.Button(self._get_translation("clear_logs_button"), elem_classes=["cmw-button"])
     
     def _connect_events(self):
-        """Connect all event handlers for the logs tab"""
-        print("🔗 LogsTab: Connecting event handlers...")
+        """Connect all event handlers for the logs tab with concurrency control"""
+        print("🔗 LogsTab: Connecting event handlers with concurrency control...")
         
-        # Use local methods for logs functionality
-        self.components["refresh_logs_btn"].click(
-            fn=self.get_initialization_logs,
-            outputs=[self.components["logs_display"]]
-        )
+        # Get queue manager for concurrency control
+        queue_manager = getattr(self, 'main_app', None)
+        if queue_manager:
+            queue_manager = getattr(queue_manager, 'queue_manager', None)
         
-        self.components["clear_logs_btn"].click(
-            fn=self.clear_logs,
-            outputs=[self.components["logs_display"]]
-        )
+        if queue_manager:
+            # Apply concurrency settings to logs events
+            from agent_ng.queue_manager import apply_concurrency_to_click_event
+            
+            refresh_config = apply_concurrency_to_click_event(
+                queue_manager, 'logs_refresh', self.get_initialization_logs,
+                [], [self.components["logs_display"]]
+            )
+            self.components["refresh_logs_btn"].click(**refresh_config)
+            
+            clear_config = apply_concurrency_to_click_event(
+                queue_manager, 'logs_refresh', self.clear_logs,
+                [], [self.components["logs_display"]]
+            )
+            self.components["clear_logs_btn"].click(**clear_config)
+        else:
+            # Fallback to default behavior
+            print("⚠️ Queue manager not available - using default logs configuration")
+            self.components["refresh_logs_btn"].click(
+                fn=self.get_initialization_logs,
+                outputs=[self.components["logs_display"]]
+            )
+            
+            self.components["clear_logs_btn"].click(
+                fn=self.clear_logs,
+                outputs=[self.components["logs_display"]]
+            )
         
         print("✅ LogsTab: All event handlers connected successfully")
     

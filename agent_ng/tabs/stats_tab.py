@@ -55,14 +55,30 @@ class StatsTab:
             self.components["refresh_stats_btn"] = gr.Button(self._get_translation("refresh_stats_button"), elem_classes=["cmw-button"])
     
     def _connect_events(self):
-        """Connect all event handlers for the stats tab"""
-        print("🔗 StatsTab: Connecting event handlers...")
+        """Connect all event handlers for the stats tab with concurrency control"""
+        print("🔗 StatsTab: Connecting event handlers with concurrency control...")
         
-        # Use local methods for stats functionality
-        self.components["refresh_stats_btn"].click(
-            fn=self.refresh_stats,
-            outputs=[self.components["stats_display"]]
-        )
+        # Get queue manager for concurrency control
+        queue_manager = getattr(self, 'main_app', None)
+        if queue_manager:
+            queue_manager = getattr(queue_manager, 'queue_manager', None)
+        
+        if queue_manager:
+            # Apply concurrency settings to stats refresh
+            from agent_ng.queue_manager import apply_concurrency_to_click_event
+            
+            refresh_config = apply_concurrency_to_click_event(
+                queue_manager, 'stats_refresh', self.refresh_stats,
+                [], [self.components["stats_display"]]
+            )
+            self.components["refresh_stats_btn"].click(**refresh_config)
+        else:
+            # Fallback to default behavior
+            print("⚠️ Queue manager not available - using default stats configuration")
+            self.components["refresh_stats_btn"].click(
+                fn=self.refresh_stats,
+                outputs=[self.components["stats_display"]]
+            )
         
         print("✅ StatsTab: All event handlers connected successfully")
     
