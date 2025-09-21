@@ -348,19 +348,32 @@ class ChatTab:
             "apply_llm_btn": self.components.get("apply_llm_btn")
         }
     
-    def format_token_budget_display(self) -> str:
-        """Format and return the token budget display"""
-        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+    def format_token_budget_display(self, request: gr.Request = None) -> str:
+        """Format and return the token budget display - now session-aware"""
+        if not hasattr(self, 'main_app') or not self.main_app:
+            return self._get_translation("token_budget_initializing")
+        
+        # Get session-specific agent
+        agent = None
+        if request and hasattr(self.main_app, 'session_manager'):
+            session_id = self.main_app.session_manager.get_session_id(request)
+            agent = self.main_app.session_manager.get_session_agent(session_id)
+        
+        # Fallback to global agent if no session context
+        if not agent:
+            agent = self.main_app.agent
+        
+        if not agent:
             return self._get_translation("token_budget_initializing")
         
         try:
-            budget_info = self.main_app.agent.get_token_budget_info()
+            budget_info = agent.get_token_budget_info()
             
             if budget_info["status"] == "unknown":
                 return self._get_translation("token_budget_unknown")
             
             # Get cumulative stats for detailed display
-            cumulative_stats = self.main_app.agent.token_tracker.get_cumulative_stats()
+            cumulative_stats = agent.token_tracker.get_cumulative_stats()
             
             # Determine status icon using localized translations
             status_icon = self._get_translation(f"token_status_{budget_info['status']}")
@@ -388,13 +401,13 @@ class ChatTab:
             return self._get_translation("token_budget_unknown")
     
     def _get_available_providers(self) -> List[str]:
-        """Get list of available LLM providers"""
-        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+        """Get list of available LLM providers from session manager"""
+        if not hasattr(self, 'main_app') or not self.main_app:
             return ["openrouter", "groq", "gemini", "mistral", "huggingface", "gigachat"]
         
         try:
-            if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
-                return self.main_app.agent.llm_manager.get_available_providers()
+            if hasattr(self.main_app, 'llm_manager') and self.main_app.llm_manager:
+                return self.main_app.llm_manager.get_available_providers()
         except Exception as e:
             print(f"Error getting available providers: {e}")
         
@@ -406,14 +419,14 @@ class ChatTab:
         return os.environ.get("AGENT_PROVIDER", "openrouter")
     
     def _get_available_models(self) -> List[str]:
-        """Get list of available models for the current provider"""
-        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+        """Get list of available models for the current provider from session manager"""
+        if not hasattr(self, 'main_app') or not self.main_app:
             return [self._get_translation("no_models_available")]
         
         try:
-            if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
+            if hasattr(self.main_app, 'llm_manager') and self.main_app.llm_manager:
                 current_provider = self._get_current_provider()
-                config = self.main_app.agent.llm_manager.get_provider_config(current_provider)
+                config = self.main_app.llm_manager.get_provider_config(current_provider)
                 if config and config.models:
                     models = [model["model"] for model in config.models]
                     return models if models else [self._get_translation("no_models_available")]
@@ -427,19 +440,19 @@ class ChatTab:
     
     def _get_available_provider_model_combinations(self) -> List[str]:
         """Get list of available provider/model combinations in format 'Provider / Model'"""
-        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+        if not hasattr(self, 'main_app') or not self.main_app:
             return [self._get_translation("no_providers_available")]
         
         try:
-            if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
+            if hasattr(self.main_app, 'llm_manager') and self.main_app.llm_manager:
                 combinations = []
-                available_providers = self.main_app.agent.llm_manager.get_available_providers()
+                available_providers = self.main_app.llm_manager.get_available_providers()
                 
                 if not available_providers:
                     return [self._get_translation("no_providers_available")]
                 
                 for provider in available_providers:
-                    config = self.main_app.agent.llm_manager.get_provider_config(provider)
+                    config = self.main_app.llm_manager.get_provider_config(provider)
                     if config and config.models:
                         for model in config.models:
                             model_name = model["model"]
@@ -459,13 +472,17 @@ class ChatTab:
         return [self._get_translation("no_providers_available")]
     
     def _get_current_model(self) -> str:
-        """Get current LLM model"""
-        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+        """Get current LLM model from session manager (fallback to default)"""
+        if not hasattr(self, 'main_app') or not self.main_app:
             return ""
         
         try:
-            if hasattr(self.main_app.agent, 'llm_instance') and self.main_app.agent.llm_instance:
-                return self.main_app.agent.llm_instance.model_name
+            # Try to get from session manager first
+            if hasattr(self.main_app, 'session_manager'):
+                # Get default session for UI display
+                session_data = self.main_app.session_manager.get_session_data("default")
+                if session_data and session_data.agent and hasattr(session_data.agent, 'llm_instance') and session_data.agent.llm_instance:
+                    return session_data.agent.llm_instance.model_name
         except Exception as e:
             print(f"Error getting current model: {e}")
         
@@ -473,17 +490,21 @@ class ChatTab:
     
     def _get_current_provider_model_combination(self) -> str:
         """Get current provider/model combination in format 'Provider / Model'"""
-        if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+        if not hasattr(self, 'main_app') or not self.main_app:
             # Return fallback value when main app is not available
             import os
             provider = os.environ.get("AGENT_PROVIDER", "openrouter")
             return f"{provider.title()} / {provider}/default-model"
         
         try:
-            if hasattr(self.main_app.agent, 'llm_instance') and self.main_app.agent.llm_instance:
-                provider = self.main_app.agent.llm_instance.provider.value
-                model = self.main_app.agent.llm_instance.model_name
-                return f"{provider.title()} / {model}"
+            # Try to get from session manager first
+            if hasattr(self.main_app, 'session_manager'):
+                # Get default session for UI display
+                session_data = self.main_app.session_manager.get_session_data("default")
+                if session_data and session_data.agent and hasattr(session_data.agent, 'llm_instance') and session_data.agent.llm_instance:
+                    provider = session_data.agent.llm_instance.provider.value
+                    model = session_data.agent.llm_instance.model_name
+                    return f"{provider.title()} / {model}"
         except Exception as e:
             print(f"Error getting current provider/model combination: {e}")
         
@@ -493,13 +514,13 @@ class ChatTab:
         return f"{provider.title()} / {provider}/default-model"
     
     def _update_models_for_provider(self, provider: str) -> List[str]:
-        """Update available models when provider changes"""
+        """Update available models when provider changes from session manager"""
         try:
-            if not hasattr(self, 'main_app') or not self.main_app or not self.main_app.agent:
+            if not hasattr(self, 'main_app') or not self.main_app:
                 return []
             
-            if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
-                config = self.main_app.agent.llm_manager.get_provider_config(provider)
+            if hasattr(self.main_app, 'llm_manager') and self.main_app.llm_manager:
+                config = self.main_app.llm_manager.get_provider_config(provider)
                 if config and config.models:
                     return [model["model"] for model in config.models]
         except Exception as e:
@@ -508,44 +529,9 @@ class ChatTab:
         return []
     
     def _apply_llm_selection(self, provider: str, model: str) -> str:
-        """Apply the selected LLM provider and model"""
-        try:
-            if not hasattr(self, 'main_app') or not self.main_app:
-                return self._get_translation("llm_apply_error")
-            
-            # Update environment variable
-            import os
-            os.environ["AGENT_PROVIDER"] = provider
-            
-            # Reinitialize the agent with new LLM
-            if hasattr(self.main_app, 'agent') and self.main_app.agent:
-                # Find the model index
-                if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
-                    config = self.main_app.agent.llm_manager.get_provider_config(provider)
-                    if config and config.models:
-                        model_index = 0
-                        for i, model_config in enumerate(config.models):
-                            if model_config["model"] == model:
-                                model_index = i
-                                break
-                        
-                        # Get new LLM instance
-                        new_llm_instance = self.main_app.agent.llm_manager.get_llm(provider, model_index=model_index)
-                        if new_llm_instance:
-                            self.main_app.agent.llm_instance = new_llm_instance
-                            
-                            # Reset token budget for the new model
-                            if hasattr(self.main_app.agent, 'token_tracker') and self.main_app.agent.token_tracker:
-                                self.main_app.agent.token_tracker.reset_current_conversation_budget()
-                            
-                            return self._get_translation("llm_apply_success").format(provider=provider, model=model)
-                        else:
-                            return self._get_translation("llm_apply_error")
-            
-            return self._get_translation("llm_apply_error")
-        except Exception as e:
-            print(f"Error applying LLM selection: {e}")
-            return self._get_translation("llm_apply_error")
+        """Apply the selected LLM provider and model (deprecated - use session-aware method)"""
+        # This method is deprecated - use _apply_llm_directly instead
+        return self._apply_llm_directly(provider, model)
     
     def _apply_llm_selection_combined(self, provider_model_combination: str, request: gr.Request = None) -> str:
         """Apply the selected LLM provider/model combination - now properly session-aware"""
@@ -592,40 +578,25 @@ class ChatTab:
     def _apply_llm_directly(self, provider: str, model: str, request: gr.Request = None) -> str:
         """Apply LLM selection without confirmation dialog - now properly session-aware"""
         try:
+            print(f"🔄 ChatTab: Applying LLM selection - Provider: {provider}, Model: {model}")
+            print(f"🔄 ChatTab: Request available: {request is not None}")
+            print(f"🔄 ChatTab: Main app has session_manager: {hasattr(self.main_app, 'session_manager')}")
+            
             # Use clean session manager for session-aware LLM selection
             if request and hasattr(self.main_app, 'session_manager'):
                 session_id = self.main_app.session_manager.get_session_id(request)
+                print(f"🔄 ChatTab: Session ID: {session_id}")
                 success = self.main_app.session_manager.update_llm_provider(session_id, provider, model)
+                print(f"🔄 ChatTab: Update result: {success}")
                 if success:
-                    return self._get_translation("llm_apply_success").format(provider=provider, model=model)
+                    # Trigger UI update to refresh status display
+                    if hasattr(self.main_app, 'trigger_ui_update'):
+                        self.main_app.trigger_ui_update()
+                    return self._get_translation("llm_apply_success").format(provider=provider.title(), model=model)
                 else:
                     return self._get_translation("llm_apply_error")
             
-            # Fallback: Update global agent if no session context
-            if hasattr(self.main_app, 'agent') and self.main_app.agent:
-                # Find the model index
-                if hasattr(self.main_app.agent, 'llm_manager') and self.main_app.agent.llm_manager:
-                    config = self.main_app.agent.llm_manager.get_provider_config(provider)
-                    if config and config.models:
-                        model_index = 0
-                        for i, model_config in enumerate(config.models):
-                            if model_config["model"] == model:
-                                model_index = i
-                                break
-                        
-                        # Get new LLM instance
-                        new_llm_instance = self.main_app.agent.llm_manager.get_llm(provider, model_index=model_index)
-                        if new_llm_instance:
-                            self.main_app.agent.llm_instance = new_llm_instance
-                            
-                            # Reset token budget for the new model
-                            if hasattr(self.main_app.agent, 'token_tracker') and self.main_app.agent.token_tracker:
-                                self.main_app.agent.token_tracker.reset_current_conversation_budget()
-                            
-                            return self._get_translation("llm_apply_success").format(provider=provider.title(), model=model)
-                        else:
-                            return self._get_translation("llm_apply_error")
-            
+            # No fallback to global agent - use session-specific agents only
             return self._get_translation("llm_apply_error")
         except Exception as e:
             print(f"Error applying LLM selection: {e}")
@@ -716,27 +687,7 @@ class ChatTab:
             if files:
                 from tools.file_utils import FileUtils
                 
-                # Initialize session cache path if not set
-                if hasattr(self, 'main_app') and self.main_app and hasattr(self.main_app, 'agent'):
-                    if not self.main_app.agent.session_cache_path:
-                        # Extract session ID from first file path
-                        first_file = files[0] if files else None
-                        if first_file:
-                            if isinstance(first_file, dict):
-                                file_path = first_file.get("path", "")
-                            else:
-                                file_path = str(first_file)
-                            
-                            # Extract session ID from Gradio cache path
-                            # Path format: C:\TEMP\gradio\{session_id}\filename
-                            if "gradio" in file_path:
-                                parts = file_path.split(os.sep)
-                                gradio_index = parts.index("gradio")
-                                if gradio_index + 1 < len(parts):
-                                    session_id = parts[gradio_index + 1]
-                                    self.main_app.agent.session_cache_path = os.path.join(
-                                        FileUtils.get_gradio_cache_path(), "gradio", session_id
-                                    )
+                # Session cache paths are now managed by the session manager
                 
                 # Process files with new system
                 file_info = f"\n\n[Files: "
@@ -768,18 +719,14 @@ class ChatTab:
                     except Exception as e:
                         file_list.append(f"{original_filename}")
                     
-                    # Store in registry and current files
-                    if hasattr(self, 'main_app') and self.main_app and hasattr(self.main_app, 'agent'):
-                        self.main_app.agent.file_registry[original_filename] = unique_filename
-                        current_files.append(original_filename)
+                    # Store in registry and current files (deprecated - use session manager)
+                    current_files.append(original_filename)
                 
                 file_info += ", ".join(file_list) + "]"
                 message += file_info
                 
-                # Store current files in agent
-                if hasattr(self, 'main_app') and self.main_app and hasattr(self.main_app, 'agent'):
-                    self.main_app.agent.current_files = current_files
-                    print(f"📁 Registered {len(current_files)} files: {current_files}")
+                # Store current files (deprecated - use session manager)
+                print(f"📁 Registered {len(current_files)} files: {current_files}")
             else:
                 # No files, just use the text message
                 pass

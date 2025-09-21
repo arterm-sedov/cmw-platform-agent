@@ -18,8 +18,8 @@ Based on LangChain's official documentation and best practices.
 
 import asyncio
 import json
-import os
 import time
+import os
 import uuid
 from typing import Dict, List, Optional, Any, AsyncGenerator, Tuple
 from dataclasses import dataclass
@@ -367,12 +367,56 @@ Always use the appropriate tools to answer questions and show your work step by 
         # Add user message to history
         self.conversation_history.append(ChatMessage(role="user", content=message))
         
+        # Track conversation start
+        start_time = time.time()
+        llm_type = "unknown"
+        if self.llm_instance:
+            llm_type = self.llm_instance.provider.value
+        
         try:
             # Stream the response using the updated stream_message method
             async for event in self.stream_message(message, "default"):
                 yield event
                 
+            # Track successful LLM usage
+            response_time = time.time() - start_time
+            print(f"📊 Tracking stats - LLM: {llm_type}, Session: {self.session_id}, Response time: {response_time:.2f}s")
+            if self.stats_manager:
+                self.stats_manager.track_llm_usage(
+                    llm_type=llm_type,
+                    event_type="success",
+                    response_time=response_time,
+                    session_id=self.session_id
+                )
+                
+                # Track conversation
+                self.stats_manager.track_conversation(
+                    conversation_id=self.session_id,
+                    question=message,
+                    answer="[Streamed response]",
+                    llm_used=llm_type,
+                    tool_calls=0,  # TODO: Track actual tool calls
+                    duration=response_time,
+                    session_id=self.session_id
+                )
+                print(f"📊 Stats tracked successfully for session {self.session_id}")
+            else:
+                print(f"❌ No stats manager available for session {self.session_id}")
+                
         except Exception as e:
+            # Track failed LLM usage
+            if self.stats_manager:
+                self.stats_manager.track_llm_usage(
+                    llm_type=llm_type,
+                    event_type="failure",
+                    response_time=time.time() - start_time,
+                    session_id=self.session_id
+                )
+                self.stats_manager.track_error(
+                    error_type=str(e),
+                    llm_type=llm_type
+                )
+            
             yield {
                 "type": "error",
                 "content": f"Error processing message: {str(e)}",
