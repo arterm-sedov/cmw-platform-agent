@@ -100,6 +100,19 @@ class NextGenApp:
         self._ui_update_needed = False
         self.language = language
         
+        # Initialize concurrency management
+        try:
+            from .concurrency_config import get_concurrency_config
+            from .queue_manager import create_queue_manager
+            self.concurrency_config = get_concurrency_config()
+            self.queue_manager = create_queue_manager(self.concurrency_config)
+        except ImportError:
+            # Fallback for when running as script
+            from concurrency_config import get_concurrency_config
+            from queue_manager import create_queue_manager
+            self.concurrency_config = get_concurrency_config()
+            self.queue_manager = create_queue_manager(self.concurrency_config)
+        
         # Session Management - Clean modular approach
         try:
             from .session_manager import SessionManager
@@ -792,6 +805,9 @@ class NextGenApp:
         except Exception as e:
             print(f"❌ Error creating interface: {e}")
             raise
+        
+        # Configure concurrency and queuing
+        self.queue_manager.configure_queue(demo)
         
         # Consolidate all components from UI Manager (single source of truth)
         self.components = self.ui_manager.get_components()

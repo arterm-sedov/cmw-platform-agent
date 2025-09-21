@@ -75,6 +75,9 @@ class ChatTab:
             
         with gr.Row():
             with gr.Column(scale=3):
+                # Queue status will be shown using Gradio's native warning system
+                # No need for HTML component - using gr.Warning() instead
+                
                 # Chat interface with metadata support for thinking transparency
                 self.components["chatbot"] = gr.Chatbot(
                     label=self._get_translation("chat_label"),
@@ -158,8 +161,8 @@ class ChatTab:
         pass
     
     def _connect_events(self):
-        """Connect all event handlers for the chat tab"""
-        print("🔗 ChatTab: Connecting event handlers...")
+        """Connect all event handlers for the chat tab with concurrency control"""
+        print("🔗 ChatTab: Connecting event handlers with concurrency control...")
         
         # Get critical event handlers
         stream_handler = self.event_handlers.get("stream_message")
@@ -173,18 +176,45 @@ class ChatTab:
         
         print("✅ ChatTab: Critical event handlers validated")
         
-        # Main chat events - now properly session-aware (gr.Request is automatically passed)
-        self.components["send_btn"].click(
-            fn=self._stream_message_wrapper,
-            inputs=[self.components["msg"], self.components["chatbot"]],
-            outputs=[self.components["chatbot"], self.components["msg"]]
-        )
+        # Get queue manager for concurrency control
+        queue_manager = getattr(self, 'main_app', None)
+        if queue_manager:
+            queue_manager = getattr(queue_manager, 'queue_manager', None)
         
-        self.components["msg"].submit(
-            fn=self._stream_message_wrapper,
-            inputs=[self.components["msg"], self.components["chatbot"]],
-            outputs=[self.components["chatbot"], self.components["msg"]]
-        )
+        # Main chat events with concurrency control and queue status
+        if queue_manager:
+            # Apply concurrency settings to chat events
+            from agent_ng.queue_manager import apply_concurrency_to_click_event, apply_concurrency_to_submit_event
+            
+            # Send button click with concurrency and queue status
+            send_config = apply_concurrency_to_click_event(
+                queue_manager, 'chat', self._stream_message_with_queue_status,
+                [self.components["msg"], self.components["chatbot"]],
+                [self.components["chatbot"], self.components["msg"]]
+            )
+            self.components["send_btn"].click(**send_config)
+            
+            # Message submit with concurrency and queue status
+            submit_config = apply_concurrency_to_submit_event(
+                queue_manager, 'chat', self._stream_message_with_queue_status,
+                [self.components["msg"], self.components["chatbot"]],
+                [self.components["chatbot"], self.components["msg"]]
+            )
+            self.components["msg"].submit(**submit_config)
+        else:
+            # Fallback to default behavior if queue manager not available
+            print("⚠️ Queue manager not available - using default event configuration")
+            self.components["send_btn"].click(
+                fn=self._stream_message_wrapper,
+                inputs=[self.components["msg"], self.components["chatbot"]],
+                outputs=[self.components["chatbot"], self.components["msg"]]
+            )
+            
+            self.components["msg"].submit(
+                fn=self._stream_message_wrapper,
+                inputs=[self.components["msg"], self.components["chatbot"]],
+                outputs=[self.components["chatbot"], self.components["msg"]]
+            )
         
         self.components["clear_btn"].click(
             fn=self._clear_chat_with_download_reset,
@@ -676,8 +706,27 @@ class ChatTab:
         from ..i18n_translations import get_translation_key
         return get_translation_key(key, self.language)
     
+    def _stream_message_with_queue_status(self, multimodal_value, history, request: gr.Request = None):
+        """Wrapper for concurrent processing - Gradio handles queuing natively"""
+        # Process message with original wrapper
+        # Gradio's native queuing system will handle the user feedback
+        for result in self._stream_message_wrapper_internal(multimodal_value, history, request):
+            if len(result) >= 2:
+                yield result[0], result[1]
+            else:
+                yield result[0], result[1]
+    
     def _stream_message_wrapper(self, multimodal_value, history, request: gr.Request = None):
         """Wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
+        # Fallback mode without queue status
+        for result in self._stream_message_wrapper_internal(multimodal_value, history, request):
+            if len(result) >= 2:
+                yield result[0], result[1]
+            else:
+                yield result[0], result[1]
+    
+    def _stream_message_wrapper_internal(self, multimodal_value, history, request: gr.Request = None):
+        """Internal wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
         # Extract text from MultimodalValue format
         if isinstance(multimodal_value, dict):
             message = multimodal_value.get("text", "")
