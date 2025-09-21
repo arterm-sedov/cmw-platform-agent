@@ -359,45 +359,47 @@ class ThinkingTransparency:
         }
 
 
-# Global debug streamer instance
-_global_debug_streamer: Optional[DebugStreamer] = None
-_global_log_handler: Optional[GradioLogHandler] = None
-_global_thinking_transparency: Optional[ThinkingTransparency] = None
+# Session-specific debug streamer instances
+_debug_streamers: Dict[str, DebugStreamer] = {}
+_log_handlers: Dict[str, GradioLogHandler] = {}
+_thinking_transparencies: Dict[str, ThinkingTransparency] = {}
 
 
 def get_debug_streamer(session_id: str = "default") -> DebugStreamer:
-    """Get the global debug streamer instance"""
-    global _global_debug_streamer
-    if _global_debug_streamer is None:
-        _global_debug_streamer = DebugStreamer(session_id)
-    return _global_debug_streamer
+    """Get session-specific debug streamer instance"""
+    global _debug_streamers
+    if session_id not in _debug_streamers:
+        _debug_streamers[session_id] = DebugStreamer(session_id)
+    return _debug_streamers[session_id]
 
 
 def get_log_handler(session_id: str = "default") -> GradioLogHandler:
-    """Get the global log handler instance"""
-    global _global_log_handler
-    if _global_log_handler is None:
+    """Get session-specific log handler instance"""
+    global _log_handlers
+    if session_id not in _log_handlers:
         debug_streamer = get_debug_streamer(session_id)
-        _global_log_handler = GradioLogHandler(debug_streamer)
-    return _global_log_handler
+        _log_handlers[session_id] = GradioLogHandler(debug_streamer)
+    return _log_handlers[session_id]
 
 
 def get_thinking_transparency(session_id: str = "default") -> ThinkingTransparency:
-    """Get the global thinking transparency instance"""
-    global _global_thinking_transparency
-    if _global_thinking_transparency is None:
+    """Get session-specific thinking transparency instance"""
+    global _thinking_transparencies
+    if session_id not in _thinking_transparencies:
         debug_streamer = get_debug_streamer(session_id)
-        _global_thinking_transparency = ThinkingTransparency(debug_streamer)
-    return _global_thinking_transparency
+        _thinking_transparencies[session_id] = ThinkingTransparency(debug_streamer)
+    return _thinking_transparencies[session_id]
 
 
 def cleanup_debug_system():
     """Cleanup the debug system"""
-    global _global_debug_streamer, _global_log_handler, _global_thinking_transparency
+    global _debug_streamers, _log_handlers, _thinking_transparencies
     
-    if _global_debug_streamer:
-        _global_debug_streamer.stop()
-        _global_debug_streamer = None
+    # Stop all debug streamers
+    for streamer in _debug_streamers.values():
+        streamer.stop()
     
-    _global_log_handler = None
-    _global_thinking_transparency = None
+    # Clear all instances
+    _debug_streamers.clear()
+    _log_handlers.clear()
+    _thinking_transparencies.clear()

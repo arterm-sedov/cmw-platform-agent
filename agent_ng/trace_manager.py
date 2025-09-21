@@ -354,17 +354,21 @@ class TraceManager:
         }
 
 
-# Global trace manager instance
-_trace_manager = None
+# Session-specific trace manager instances
+_trace_managers: Dict[str, TraceManager] = {}
 
-def get_trace_manager() -> TraceManager:
-    """Get the global trace manager instance"""
-    global _trace_manager
-    if _trace_manager is None:
-        _trace_manager = TraceManager()
-    return _trace_manager
+def get_trace_manager(session_id: str = "default") -> TraceManager:
+    """Get session-specific trace manager instance"""
+    global _trace_managers
+    if session_id not in _trace_managers:
+        _trace_managers[session_id] = TraceManager()
+    return _trace_managers[session_id]
 
-def reset_trace_manager():
-    """Reset the global trace manager instance"""
-    global _trace_manager
-    _trace_manager = None
+def reset_trace_manager(session_id: str = None):
+    """Reset trace manager instance(s)"""
+    global _trace_managers
+    if session_id:
+        if session_id in _trace_managers:
+            del _trace_managers[session_id]
+    else:
+        _trace_managers.clear()

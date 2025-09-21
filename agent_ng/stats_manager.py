@@ -89,7 +89,7 @@ class StatsManager:
         for provider in providers:
             self.llm_stats[provider] = LLMStats(name=provider)
     
-    def track_llm_usage(self, llm_type: str, event_type: str, response_time: float = 0.0):
+    def track_llm_usage(self, llm_type: str, event_type: str, response_time: float = 0.0, session_id: str = "default"):
         """
         Track LLM usage statistics.
         
@@ -97,15 +97,19 @@ class StatsManager:
             llm_type: Type of LLM (e.g., 'gemini', 'groq')
             event_type: Type of event ('success', 'failure', 'threshold_pass', 'submitted', 'low_submit')
             response_time: Response time in seconds
+            session_id: Session ID for isolation
         """
-        if llm_type not in self.llm_stats:
-            self.llm_stats[llm_type] = LLMStats(name=llm_type)
+        # Use session-specific key for tracking
+        session_key = f"{session_id}_{llm_type}"
+        if session_key not in self.llm_stats:
+            self.llm_stats[session_key] = LLMStats(name=llm_type)
         
-        stats = self.llm_stats[llm_type]
+        stats = self.llm_stats[session_key]
         current_time = time.time()
         
-        # Update tracking counters
-        self.llm_tracking[llm_type][event_type] += 1
+        # Update session-specific tracking counters
+        session_tracking_key = f"{session_id}_{llm_type}"
+        self.llm_tracking[session_tracking_key][event_type] += 1
         
         # Update LLM stats
         if event_type == 'success':
@@ -139,7 +143,7 @@ class StatsManager:
             self.performance_metrics = self.performance_metrics[-1000:]
     
     def track_conversation(self, conversation_id: str, question: str, answer: str, 
-                          llm_used: str, tool_calls: int = 0, duration: float = 0.0):
+                          llm_used: str, tool_calls: int = 0, duration: float = 0.0, session_id: str = "default"):
         """
         Track conversation statistics.
         
@@ -150,11 +154,22 @@ class StatsManager:
             llm_used: LLM that was used
             tool_calls: Number of tool calls made
             duration: Duration in seconds
+            session_id: Session ID for isolation
         """
-        # Update conversation stats
-        self.conversation_stats.total_questions += 1
-        self.conversation_stats.total_tool_calls += tool_calls
-        self.conversation_stats.total_duration += duration
+        # Update session-specific conversation stats
+        session_conv_key = f"{session_id}_{conversation_id}"
+        if session_conv_key not in self.conversation_histories:
+            self.conversation_histories[session_conv_key] = []
+        
+        # Store conversation data
+        self.conversation_histories[session_conv_key].append({
+            'question': question,
+            'answer': answer,
+            'llm_used': llm_used,
+            'tool_calls': tool_calls,
+            'duration': duration,
+            'timestamp': time.time()
+        })
         
         # Update averages
         if self.conversation_stats.total_questions > 0:
@@ -265,9 +280,38 @@ class StatsManager:
             'timestamp': time.time()
         }
     
-    def get_stats(self) -> Dict[str, Any]:
-        """Get statistics (alias for get_comprehensive_stats)"""
-        return self.get_comprehensive_stats()
+    def get_stats(self, session_id: str = "default") -> Dict[str, Any]:
+        """Get session-specific statistics"""
+        return self.get_session_stats(session_id)
+    
+    def get_session_stats(self, session_id: str) -> Dict[str, Any]:
+        """Get statistics for a specific session"""
+        # Filter stats by session
+        session_llm_stats = {}
+        for key, stats in self.llm_stats.items():
+            if key.startswith(f"{session_id}_"):
+                llm_type = key.replace(f"{session_id}_", "")
+                session_llm_stats[llm_type] = stats
+        
+        # Count session-specific conversations
+        session_conversations = 0
+        for key in self.conversation_histories.keys():
+            if key.startswith(f"{session_id}_"):
+                session_conversations += len(self.conversation_histories[key])
+        
+        return {
+            'llm_stats': session_llm_stats,
+            'conversation_count': session_conversations,
+            'system_stats': self.get_system_stats()  # System stats are global
+        }
+    
+    def get_comprehensive_stats(self) -> Dict[str, Any]:
+        """Get comprehensive statistics (all sessions)"""
+        return {
+            'llm_stats': self.get_llm_stats(),
+            'conversation_stats': self.get_conversation_stats(),
+            'system_stats': self.get_system_stats(),
+        }
     
     def get_llm_stats_json(self) -> str:
         """Get LLM statistics as JSON string"""
