@@ -34,26 +34,6 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.callbacks import BaseCallbackHandler, StreamingStdOutCallbackHandler
 
-# Simple memory implementation to avoid import issues
-class ConversationBufferMemory:
-    """Simple conversation buffer memory implementation"""
-    def __init__(self, memory_key="chat_history", return_messages=True):
-        self.memory_key = memory_key
-        self.return_messages = return_messages
-        self.chat_memory = []
-    
-    def load_memory_variables(self, inputs):
-        return {self.memory_key: self.chat_memory}
-    
-    def save_context(self, inputs, outputs):
-        # Add user input and AI output to memory
-        if "input" in inputs:
-            self.chat_memory.append(HumanMessage(content=inputs["input"]))
-        if "output" in outputs:
-            self.chat_memory.append(AIMessage(content=outputs["output"]))
-    
-    def clear(self):
-        self.chat_memory.clear()
 
 # Local imports
 import sys
@@ -141,7 +121,6 @@ class CmwAgent:
         self.llm_manager = get_llm_manager()
         self.memory_manager = get_memory_manager()
         self.error_handler = get_error_handler()
-        # self.streaming_manager = get_streaming_manager()  # Moved to .unused
         self.message_processor = get_message_processor()
         self.response_processor = get_response_processor()
         self.stats_manager = get_stats_manager()
