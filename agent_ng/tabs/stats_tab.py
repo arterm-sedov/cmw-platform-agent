@@ -74,8 +74,10 @@ class StatsTab:
         return self.components["stats_display"]
     
     def set_agent(self, agent):
-        """Set the agent reference for stats access"""
-        self.agent = agent
+        """Set the agent reference for stats access (deprecated - use session-specific agents)"""
+        # This method is kept for compatibility but is no longer used
+        # Stats are now accessed through session-specific agents
+        pass
     
     def _get_translation(self, key: str) -> str:
         """Get a translation for a specific key"""
@@ -101,9 +103,7 @@ class StatsTab:
             session_id = self.main_app.session_manager.get_session_id(request)
             agent = self.main_app.session_manager.get_session_agent(session_id)
         
-        # Fallback to global agent if no session agent available
-        if not agent:
-            agent = self.agent
+        # No fallback to global agent - use session-specific agents only
         
         # Format stats with the appropriate agent
         if not agent:
@@ -127,7 +127,7 @@ class StatsTab:
 - {self._get_translation('total_messages_label')}: {stats['conversation_stats']['message_count']}
 
 {self._get_translation('tools_section')}
-- {self._get_translation('available_label')}: {stats['agent_status']['tools_count']}{self._format_tools_stats()}
+- {self._get_translation('available_label')}: {stats['agent_status']['tools_count']}{self._format_tools_stats(agent)}
             """
         except Exception as e:
             return f"{self._get_translation('error_loading_stats')}: {str(e)}"
@@ -135,18 +135,18 @@ class StatsTab:
     
     
     
-    def _format_tools_stats(self) -> str:
-        """Format tools usage statistics"""
-        if not self.agent:
+    def _format_tools_stats(self, agent=None) -> str:
+        """Format tools usage statistics from session-specific agent"""
+        if not agent:
             return ""
         
         try:
             # Get tool usage from memory manager
-            if hasattr(self.agent, 'memory_manager') and self.agent.memory_manager:
+            if hasattr(agent, 'memory_manager') and agent.memory_manager:
                 total_tool_calls = 0
                 unique_tools = set()
                 
-                for conversation_id, conversation in self.agent.memory_manager.memories.items():
+                for conversation_id, conversation in agent.memory_manager.memories.items():
                     for message in conversation:
                         if hasattr(message, 'type') and message.type == "tool":
                             total_tool_calls += 1
@@ -168,14 +168,14 @@ class StatsTab:
         """Refresh and return agent statistics"""
         return self.format_stats_display()
     
-    def get_agent_status(self) -> str:
-        """Get current agent status with comprehensive details"""
-        if not self.agent:
+    def get_agent_status(self, agent=None) -> str:
+        """Get current agent status with comprehensive details from session-specific agent"""
+        if not agent:
             return self._get_translation("agent_initializing")
         
-        status = self.agent.get_status()
+        status = agent.get_status()
         if status["is_ready"]:
-            llm_info = self.agent.get_llm_info()
+            llm_info = agent.get_llm_info()
             return f"""{self._get_translation('agent_status_ready')}
 
 {self._get_translation('provider_info').format(provider=llm_info.get('provider', 'Unknown'))}

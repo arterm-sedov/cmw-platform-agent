@@ -162,14 +162,20 @@ class StatsManager:
             self.conversation_histories[session_conv_key] = []
         
         # Store conversation data
-        self.conversation_histories[session_conv_key].append({
+        conversation_data = {
             'question': question,
             'answer': answer,
             'llm_used': llm_used,
             'tool_calls': tool_calls,
             'duration': duration,
             'timestamp': time.time()
-        })
+        }
+        self.conversation_histories[session_conv_key].append(conversation_data)
+        
+        # Update global conversation stats
+        self.conversation_stats.total_questions += 1
+        self.conversation_stats.total_tool_calls += tool_calls
+        self.conversation_stats.total_duration += duration
         
         # Update averages
         if self.conversation_stats.total_questions > 0:
@@ -179,16 +185,6 @@ class StatsManager:
             self.conversation_stats.avg_duration_per_question = (
                 self.conversation_stats.total_duration / self.conversation_stats.total_questions
             )
-        
-        # Store conversation history
-        self.conversation_histories[conversation_id].append({
-            'timestamp': time.time(),
-            'question': question,
-            'answer': answer,
-            'llm_used': llm_used,
-            'tool_calls': tool_calls,
-            'duration': duration
-        })
         
         # Update system stats
         self.system_stats.total_requests += 1

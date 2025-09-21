@@ -89,25 +89,37 @@ class SessionManager:
     def update_llm_provider(self, session_id: str, provider: str, model: str) -> bool:
         """Update LLM provider for the session"""
         try:
+            print(f"🔄 Updating LLM provider for session {session_id}: {provider}/{model}")
             session_data = self.get_session_data(session_id)
             agent = session_data.agent
             
             if hasattr(agent, 'llm_manager') and agent.llm_manager:
+                print(f"🔍 Agent has LLM manager, getting config for {provider}")
                 config = agent.llm_manager.get_provider_config(provider)
                 if config and config.models:
+                    print(f"✅ Found config with {len(config.models)} models")
                     # Find model index
                     model_index = 0
                     for i, model_config in enumerate(config.models):
                         if model_config["model"] == model:
                             model_index = i
+                            print(f"✅ Found model {model} at index {i}")
                             break
                     
                     # Create a NEW LLM instance for this session (not shared)
+                    print(f"🔄 Creating new LLM instance for {provider} at index {model_index}")
                     new_llm_instance = agent.llm_manager.create_new_llm_instance(provider, model_index)
                     if new_llm_instance:
+                        print(f"✅ Created new LLM instance: {new_llm_instance.model_name}")
                         # Update the agent's LLM instance
                         agent.llm_instance = new_llm_instance
                         session_data.llm_provider = provider
+                        
+                        # Verify the update
+                        if hasattr(agent, 'llm_instance') and agent.llm_instance:
+                            print(f"🔍 DEBUG: Agent LLM instance updated to: {agent.llm_instance.provider.value}/{agent.llm_instance.model_name}")
+                        else:
+                            print(f"❌ DEBUG: Agent LLM instance update failed!")
                         
                         # Reset token budget for this session
                         if hasattr(agent, 'token_tracker') and agent.token_tracker:
@@ -115,9 +127,17 @@ class SessionManager:
                         
                         print(f"✅ Updated session {session_id} to use {provider}/{model}")
                         return True
+                    else:
+                        print(f"❌ Failed to create new LLM instance for {provider}")
+                else:
+                    print(f"❌ No config or models found for {provider}")
+            else:
+                print(f"❌ Agent has no LLM manager")
             return False
         except Exception as e:
-            print(f"Error updating session LLM provider: {e}")
+            print(f"❌ Error updating session LLM provider: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def get_session_agent(self, session_id: str) -> CmwAgent:
