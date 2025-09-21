@@ -193,8 +193,8 @@ class ChatTab:
         
         # Download button uses pre-generated file - no click handler needed
         
-        # Show download button when there's conversation history
-        self.components["chatbot"].change(
+        # Show download button when there's conversation history (triggered by token budget updates - conversation turn end)
+        self.components["token_budget_display"].change(
             fn=self._update_download_button_visibility,
             inputs=[self.components["chatbot"]],
             outputs=[self.components["download_btn"]]
