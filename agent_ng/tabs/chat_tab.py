@@ -625,11 +625,12 @@ class ChatTab:
                 else:
                     # Switching from Mistral to Mistral - no need to clear chat
                     status = self._apply_llm_directly(provider, model, request)
-                    return status, [], ""
+                    return status, gr.update(), ""
             
-            # For non-Mistral models, apply directly and return empty chat state
+            # For non-Mistral models, apply directly and preserve current chat state
             status = self._apply_llm_directly(provider, model, request)
-            return status, [], ""
+            # Return current chat state to preserve conversation (don't clear chat for compatible LLMs)
+            return status, gr.update(), ""
             
         except Exception as e:
             print(f"Error applying LLM selection: {e}")
