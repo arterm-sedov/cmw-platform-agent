@@ -29,6 +29,15 @@ from langchain_core.tools import BaseTool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 
+# LangSmith tracing
+try:
+    from langsmith import traceable
+    LANGSMITH_AVAILABLE = True
+except ImportError:
+    LANGSMITH_AVAILABLE = False
+    def traceable(func):
+        return func
+
 # Simple memory implementation to avoid import issues
 class ConversationBufferMemory:
     """Simple conversation buffer memory implementation"""
@@ -63,14 +72,15 @@ if parent_dir not in sys.path:
 try:
     from .llm_manager import get_llm_manager, LLMInstance
     from .utils import ensure_valid_answer
-except ImportError:
+except ImportError as e1:
     try:
         from agent_ng.llm_manager import get_llm_manager, LLMInstance
         from agent_ng.utils import ensure_valid_answer
-    except ImportError:
-        get_llm_manager = lambda: None
-        LLMInstance = None
-        ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
+    except ImportError as e2:
+        print(f"💥 CRITICAL ERROR: Cannot import required modules in langchain_memory!")
+        print(f"   Relative import failed: {e1}")
+        print(f"   Absolute import failed: {e2}")
+        raise ImportError(f"Failed to import required modules in langchain_memory. Relative: {e1}, Absolute: {e2}")
 
 
 @dataclass

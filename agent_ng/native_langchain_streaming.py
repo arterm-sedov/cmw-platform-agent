@@ -11,6 +11,7 @@ Key Features:
 - Proper tool calling with streaming
 - No artificial delays
 - Uses LangChain's built-in streaming capabilities
+- LangSmith tracing at the LLM call level
 """
 
 from typing import Dict, List, Optional, Any, Tuple, AsyncGenerator
@@ -18,6 +19,15 @@ from dataclasses import dataclass
 
 # LangChain imports
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage
+
+# LangSmith tracing
+try:
+    from langsmith import traceable
+    LANGSMITH_AVAILABLE = True
+except ImportError:
+    LANGSMITH_AVAILABLE = False
+    def traceable(func):
+        return func
 
 
 @dataclass
@@ -175,16 +185,15 @@ class NativeLangChainStreaming:
         return template.format(tool_name=tool_name)
     
     def _get_error_message(self, error: str, language: str = "en") -> str:
-        """Get the localized error message"""
-        from .i18n_translations import get_translation_key
-        template = get_translation_key("error", language)
-        return template.format(error=error)
+        """Get the localized error message with icon - let native error wording speak for itself"""
+        return f"❌ {error}"
     
     def _get_agent_language(self, agent) -> str:
         """Get language from agent, defaulting to English"""
         if agent is None:
             return 'en'
         return getattr(agent, 'language', 'en')
+    
     
     async def stream_agent_response(
         self,
@@ -193,7 +202,13 @@ class NativeLangChainStreaming:
         conversation_id: str = "default"
     ) -> AsyncGenerator[StreamingEvent, None]:
         """
-        Stream agent response using native LangChain streaming with proper tool call handling.
+        Stream a complete QA turn using native LangChain streaming.
+        
+        This method handles the entire conversation turn including:
+        - Memory retrieval
+        - LLM streaming
+        - Tool calling
+        - Memory persistence
         
         Based on: https://python.langchain.com/docs/how_to/tool_streaming/
         
@@ -206,6 +221,16 @@ class NativeLangChainStreaming:
             StreamingEvent objects with real-time content
         """
         try:
+            # Safety check for agent
+            if not agent:
+                raise ValueError("Agent is None")
+            
+            if not hasattr(agent, 'llm_instance') or not agent.llm_instance:
+                raise ValueError("Agent has no LLM instance")
+            
+            if not hasattr(agent, 'memory_manager') or not agent.memory_manager:
+                raise ValueError("Agent has no memory manager")
+            
             # Get conversation history
             chat_history = agent.memory_manager.get_conversation_history(conversation_id)
             print(f"🔍 DEBUG: Streaming manager - chat_history length: {len(chat_history) if chat_history else 0}")
@@ -229,31 +254,34 @@ class NativeLangChainStreaming:
             # Add conversation history (excluding system messages to avoid duplication)
             # Filter out orphaned tool messages to prevent message order issues
             non_system_history = []
-            for i, msg in enumerate(chat_history):
-                # Safety check for None message
-                if msg is None:
-                    print(f"🔍 DEBUG: Skipping None message at index {i}")
-                    continue
-                    
-                if isinstance(msg, SystemMessage):
-                    continue
-                elif isinstance(msg, ToolMessage):
-                    # Only include tool messages that have a corresponding AI message with tool calls
-                    for j in range(i-1, -1, -1):
-                        # Safety check for None message in history
-                        if chat_history[j] is None:
-                            continue
-                        if (isinstance(chat_history[j], AIMessage) and 
-                            hasattr(chat_history[j], 'tool_calls') and chat_history[j].tool_calls):
-                            # Safety check for None tool calls
-                            tool_call_ids = {tc.get('id') for tc in chat_history[j].tool_calls if tc is not None and tc.get('id')}
-                            if hasattr(msg, 'tool_call_id') and msg.tool_call_id in tool_call_ids:
-                                non_system_history.append(msg)
-                                break
-                else:
-                    non_system_history.append(msg)
+            if chat_history:
+                for i, msg in enumerate(chat_history):
+                    # Safety check for None message
+                    if msg is None:
+                        print(f"🔍 DEBUG: Skipping None message at index {i}")
+                        continue
+                        
+                    if isinstance(msg, SystemMessage):
+                        continue
+                    elif isinstance(msg, ToolMessage):
+                        # Only include tool messages that have a corresponding AI message with tool calls
+                        for j in range(i-1, -1, -1):
+                            # Safety check for None message in history
+                            if j >= 0 and j < len(chat_history) and chat_history[j] is None:
+                                continue
+                            if (j >= 0 and j < len(chat_history) and 
+                                isinstance(chat_history[j], AIMessage) and 
+                                hasattr(chat_history[j], 'tool_calls') and chat_history[j].tool_calls):
+                                # Safety check for None tool calls
+                                tool_call_ids = {tc.get('id') for tc in chat_history[j].tool_calls if tc is not None and tc.get('id')}
+                                if hasattr(msg, 'tool_call_id') and msg.tool_call_id in tool_call_ids:
+                                    non_system_history.append(msg)
+                                    break
+                    else:
+                        non_system_history.append(msg)
             
             messages.extend(non_system_history)
+            print(f"🔍 DEBUG: Added {len(non_system_history)} messages from history to LLM context")
             
             # Create user message and save to memory
             user_message = HumanMessage(content=message)
@@ -262,7 +290,10 @@ class NativeLangChainStreaming:
             
             # Get LLM with tools (tools are already bound in the LLM instance)
             llm_with_tools = agent.llm_instance.llm
-            print("🔍 DEBUG: Using LLM instance with pre-bound tools")
+            print(f"🔍 DEBUG: Using LLM instance with pre-bound tools - type: {type(llm_with_tools)}")
+            print(f"🔍 DEBUG: LLM instance has tools: {hasattr(llm_with_tools, 'tools')}")
+            if hasattr(llm_with_tools, 'tools'):
+                print(f"🔍 DEBUG: Number of tools: {len(llm_with_tools.tools) if llm_with_tools.tools else 0}")
             
             # Multi-turn conversation loop for proper tool calling
             iteration = 0
@@ -288,20 +319,17 @@ class NativeLangChainStreaming:
                 has_tool_calls = False
                 print(f"🔍 DEBUG: Starting streaming loop for iteration {iteration}")
                 
+                # Stream LLM response - tracing handled by @traceable on stream_agent_response
                 async for chunk in llm_with_tools.astream(messages):
-                    try:
-                        # Accumulate chunks for proper tool call parsing
-                        if accumulated_chunk is None:
-                            accumulated_chunk = chunk
-                        else:
-                            accumulated_chunk = accumulated_chunk + chunk
-                    except Exception as e:
-                        print(f"🔍 DEBUG: Error processing chunk: {e}")
-                        print(f"🔍 DEBUG: Chunk type: {type(chunk)}")
-                        print(f"🔍 DEBUG: Chunk content: {chunk}")
-                        import traceback
-                        traceback.print_exc()
+                    # Essential safety check for None chunk
+                    if chunk is None:
                         continue
+                    
+                    # Accumulate chunks for proper tool call parsing
+                    if accumulated_chunk is None:
+                        accumulated_chunk = chunk
+                    else:
+                        accumulated_chunk = accumulated_chunk + chunk
                     
                     # Stream content as it arrives
                     if hasattr(chunk, 'content') and chunk.content:
@@ -314,21 +342,13 @@ class NativeLangChainStreaming:
                     # Process tool call chunks as they stream
                     if hasattr(chunk, 'tool_call_chunks') and chunk.tool_call_chunks:
                         for tool_call_chunk in chunk.tool_call_chunks:
-                            try:
-                                # Safety check for None tool_call_chunk
-                                if tool_call_chunk is None:
-                                    continue
-                                
-                                tool_name = tool_call_chunk.get('name') if isinstance(tool_call_chunk, dict) else None
-                                tool_call_id = tool_call_chunk.get('id') if isinstance(tool_call_chunk, dict) else None
-                                tool_args = tool_call_chunk.get('args', '') if isinstance(tool_call_chunk, dict) else ''
-                            except Exception as e:
-                                print(f"🔍 DEBUG: Error processing tool_call_chunk: {e}")
-                                print(f"🔍 DEBUG: tool_call_chunk type: {type(tool_call_chunk)}")
-                                print(f"🔍 DEBUG: tool_call_chunk content: {tool_call_chunk}")
-                                import traceback
-                                traceback.print_exc()
+                            # Essential safety check for None tool_call_chunk
+                            if tool_call_chunk is None:
                                 continue
+                            
+                            tool_name = tool_call_chunk.get('name') if isinstance(tool_call_chunk, dict) else None
+                            tool_call_id = tool_call_chunk.get('id') if isinstance(tool_call_chunk, dict) else None
+                            tool_args = tool_call_chunk.get('args', '') if isinstance(tool_call_chunk, dict) else ''
                             
                             if tool_name and tool_call_id not in tool_calls_in_progress:
                                 # New tool call starting
@@ -365,8 +385,10 @@ class NativeLangChainStreaming:
                     tool_result_cache = {}  # Map tool_key -> result for duplicate handling
                     
                     for tool_call in deduplicated_tool_calls:
-                        if not tool_call:
+                        # Essential safety check for None tool_call
+                        if not tool_call or not isinstance(tool_call, dict):
                             continue
+                        
                         tool_name = tool_call.get('name')
                         tool_args = tool_call.get('args', {})
                         tool_call_id = tool_call.get('id')
@@ -462,8 +484,10 @@ class NativeLangChainStreaming:
                         # CRITICAL: Add ToolMessages to working messages for proper sequence
                         tool_messages = []
                         for original_tool_call in accumulated_chunk.tool_calls:
-                            if not original_tool_call:
+                            # Essential safety check for None original_tool_call
+                            if not original_tool_call or not isinstance(original_tool_call, dict):
                                 continue
+                            
                             tool_name = original_tool_call.get('name')
                             tool_args = original_tool_call.get('args', {})
                             tool_call_id = original_tool_call.get('id')
@@ -612,6 +636,13 @@ class NativeLangChainStreaming:
         except Exception as e:
             # Get language from agent
             language = self._get_agent_language(agent)
+            
+            # Enhanced error logging for debugging
+            import traceback
+            print(f"❌ ERROR in stream_agent_response: {e}")
+            print(f"🔍 DEBUG: Error type: {type(e)}")
+            print(f"🔍 DEBUG: Full traceback:")
+            traceback.print_exc()
             
             yield StreamingEvent(
                 event_type="error",

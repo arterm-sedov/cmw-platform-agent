@@ -41,6 +41,10 @@ class AgentSettings:
     debug_mode: bool = False
     verbose_logging: bool = False
     
+    # LangSmith observability settings
+    langsmith_tracing: bool = False
+    langsmith_project: str = "cmw-agent"
+    
     def __post_init__(self):
         """Initialize default values after dataclass creation"""
         if self.supported_languages is None:
@@ -75,6 +79,13 @@ class AgentConfig:
         
         if os.getenv('CMW_VERBOSE_LOGGING', '').lower() in ['true', '1', 'yes']:
             self.settings.verbose_logging = True
+        
+        # LangSmith settings
+        if os.getenv('LANGSMITH_TRACING', '').lower() in ['true', '1', 'yes']:
+            self.settings.langsmith_tracing = True
+        
+        if os.getenv('LANGSMITH_PROJECT'):
+            self.settings.langsmith_project = os.getenv('LANGSMITH_PROJECT')
         
         # Refresh intervals from environment
         self._load_refresh_intervals_from_env()
@@ -119,6 +130,13 @@ class AgentConfig:
             'verbose_logging': self.settings.verbose_logging
         }
     
+    def get_langsmith_settings(self) -> Dict[str, Any]:
+        """Get LangSmith-related settings"""
+        return {
+            'langsmith_tracing': self.settings.langsmith_tracing,
+            'langsmith_project': self.settings.langsmith_project
+        }
+    
     def update_setting(self, category: str, key: str, value: Any):
         """Update a specific setting"""
         if category == 'refresh_intervals':
@@ -133,6 +151,8 @@ class AgentConfig:
         print(f"  Language: {self.settings.default_language}")
         print(f"  Port: {self.settings.default_port}")
         print(f"  Debug Mode: {self.settings.debug_mode}")
+        print(f"  LangSmith Tracing: {self.settings.langsmith_tracing}")
+        print(f"  LangSmith Project: {self.settings.langsmith_project}")
         print(f"  Refresh Intervals:")
         print(f"    Status: {self.settings.refresh_intervals.status}s")
         print(f"    Logs: {self.settings.refresh_intervals.logs}s")
@@ -162,3 +182,9 @@ def get_agent_settings() -> Dict[str, Any]:
 def get_debug_settings() -> Dict[str, Any]:
     """Get debug settings"""
     return config.get_debug_settings()
+
+def get_langsmith_settings() -> Dict[str, Any]:
+    """Get LangSmith settings"""
+    # Create fresh instance to pick up current environment variables
+    fresh_config = AgentConfig()
+    return fresh_config.get_langsmith_settings()

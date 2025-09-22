@@ -50,14 +50,17 @@ if parent_dir not in sys.path:
 try:
     from .utils import ensure_valid_answer
     from .provider_adapters import MistralWrapper, is_mistral_model
+    from .langsmith_config import get_langsmith_config, get_openai_wrapper
 except ImportError:
     try:
         from agent_ng.utils import ensure_valid_answer
         from agent_ng.provider_adapters import MistralWrapper, is_mistral_model
-    except ImportError:
-        ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
-        MistralWrapper = None
-        is_mistral_model = lambda x: False
+        from agent_ng.langsmith_config import get_langsmith_config, get_openai_wrapper
+    except ImportError as e:
+        print(f"💥 CRITICAL ERROR: Cannot import required modules in llm_manager!")
+        print(f"   Import failed: {e}")
+        print("🔧 Please check that all dependencies are installed and modules exist")
+        raise ImportError(f"Failed to import required modules in llm_manager: {e}")
 
 
 class LLMProvider(Enum):
@@ -368,6 +371,12 @@ class LLMManager:
         log_entry = f"[{timestamp}] [{level}] {message}"
         self._initialization_logs.append(log_entry)
         print(log_entry)  # Also print to console for real-time feedback
+    
+    def _wrap_llm_with_langsmith(self, llm: Any, provider: str) -> Any:
+        """Wrap LLM instance with LangSmith tracing if configured (deprecated - use environment variables)"""
+        # LangSmith tracing is now handled via environment variables and @traceable decorators
+        # This method is kept for backward compatibility but does nothing
+        return llm
         
     def _get_api_key(self, config: LLMConfig) -> Optional[str]:
         """Get API key from environment variables"""
@@ -459,6 +468,8 @@ class LLMManager:
                 max_tokens=model_config.get("max_tokens", 2048),
                 streaming=True  # Enable streaming
             )
+            # Wrap with LangSmith tracing
+            llm = self._wrap_llm_with_langsmith(llm, "openrouter")
             self._log_initialization(f"Successfully initialized {config.name} - {model_config['model']}")
             return llm
         except Exception as e:
@@ -479,6 +490,8 @@ class LLMManager:
                 max_tokens=model_config.get("max_tokens", 2048),
                 streaming=True  # Enable streaming
             )
+            # Wrap with LangSmith tracing
+            llm = self._wrap_llm_with_langsmith(llm, "mistral")
             self._log_initialization(f"Successfully initialized {config.name} - {model_config['model']}")
             return llm
         except Exception as e:

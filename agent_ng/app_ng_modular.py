@@ -59,6 +59,7 @@ try:
     from agent_ng.ui_manager import get_ui_manager
     from agent_ng.utils import safe_string
     from agent_ng.i18n_translations import create_i18n_instance, get_translation_key, format_translation
+    from langsmith import traceable
     print("✅ Successfully imported all modules using absolute imports")
 except ImportError as e1:
     print(f"⚠️ Absolute imports failed: {e1}")
@@ -71,20 +72,20 @@ except ImportError as e1:
         from .tabs import ChatTab, LogsTab, StatsTab
         from .ui_manager import get_ui_manager
         from .i18n_translations import create_i18n_instance, get_translation_key, format_translation
+        from langsmith import traceable
         print("✅ Successfully imported all modules using relative imports")
     except ImportError as e2:
         print(f"❌ Both absolute and relative imports failed:")
         print(f"   Absolute: {e1}")
         print(f"   Relative: {e2}")
-        print("⚠️ Running with fallback implementations - some features may not work")
-        # Set defaults to prevent further errors
-        NextGenAgent = None
-        ChatMessage = None
-        LogLevel = None
-        LogCategory = None
-        ChatTab = None
-        LogsTab = None
-        StatsTab = None
+        print("💥 CRITICAL ERROR: Cannot import required modules!")
+        print("🔧 Please check:")
+        print("   1. All dependencies are installed: pip install -r requirements_ng.txt")
+        print("   2. Python path is correct")
+        print("   3. No circular import issues")
+        print("   4. All required modules exist")
+        print("   5. Run from the correct directory")
+        raise ImportError(f"Failed to import required modules. Absolute: {e1}, Relative: {e2}")
 
 
 class NextGenApp:
@@ -295,67 +296,6 @@ class NextGenApp:
                 return session_data.agent.get_conversation_history(session_id)
         return []
     
-    async def chat_with_agent(self, message: str, history: List[Dict[str, str]]) -> Tuple[List[Dict[str, str]], str]:
-        """
-        Chat with the agent using LangChain-native patterns.
-        
-        Args:
-            message: User message
-            history: Chat history as list of message dicts
-            
-        Returns:
-            Updated history and empty message
-        """
-        if not self.is_ready():
-            error_msg = get_translation_key("agent_not_ready", self.language)
-            history.append({"role": "user", "content": message})
-            history.append({"role": "assistant", "content": error_msg})
-            return history, ""
-        
-        if not message.strip():
-            return history, ""
-        
-        try:
-            self.debug_streamer.info(f"Processing message: {message[:50]}...")
-            
-            # Process message with session-specific agent
-            session_id = "default"  # Fallback for non-session requests
-            session_data = self.session_manager.get_session_data(session_id)
-            if session_data and session_data.agent:
-                response = session_data.agent.process_message(message, session_id)
-            else:
-                # Create a new session if none exists
-                session_data = self.session_manager.create_session(session_id)
-                response = session_data.agent.process_message(message, session_id)
-            
-            if response.success:
-                # Add to history
-                history.append({"role": "user", "content": message})
-                history.append({"role": "assistant", "content": response.answer})
-                
-                # Log tool calls if any
-                if response.tool_calls:
-                    tool_names = [call['name'] for call in response.tool_calls]
-                    tool_calls_msg = format_translation("tool_calls_made", self.language, tool_names=tool_names)
-                    self.debug_streamer.info(tool_calls_msg)
-                
-                return history, ""
-            else:
-                error_msg = format_translation("error_processing", self.language, error=response.error)
-                history.append({"role": "user", "content": message})
-                history.append({"role": "assistant", "content": error_msg})
-                return history, ""
-                
-        except Exception as e:
-            try:
-                self.debug_streamer.error(f"Error in chat: {e}")
-            except:
-                # If debug streamer fails, just continue
-                pass
-            error_msg = format_translation("error_processing", self.language, error=str(e))
-            history.append({"role": "user", "content": message})
-            history.append({"role": "assistant", "content": error_msg})
-            return history, ""
     
     async def stream_chat_with_agent(self, message: str, history: List[Dict[str, str]], request: gr.Request = None) -> AsyncGenerator[Tuple[List[Dict[str, str]], str], None]:
         """
@@ -537,19 +477,22 @@ class NextGenApp:
                         yield working_history, ""
                         
                     elif event_type == "error":
-                        # Error occurred - log it but don't add to response content
-                        # print(f"🔍 DEBUG: Error event received: {content}")
-                        # print(f"🔍 DEBUG: Error event - working_history length: {len(working_history)}")
-                        # print(f"🔍 DEBUG: Error event - response_content length: {len(response_content)}")
+                        # Add error message to response content so users can see what went wrong
+                        response_content += content + "\n\n"
+                        
+                        # Update assistant message with error
+                        if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                            working_history[assistant_message_index] = {"role": "assistant", "content": response_content}
+                        else:
+                            working_history.append({"role": "assistant", "content": response_content})
+                            assistant_message_index = len(working_history) - 1
+                        
                         streaming_error_handled = True
-                        # Don't add error message to response content
-                        # Just log it for debugging purposes
-                        # Still yield to keep the UI updated
                         yield working_history, ""
             
             except Exception as e:
                 import traceback
-                print(f"❌ Ошибка потоковой передачи сообщения: {e}")
+                print(f"❌ Error streaming message: {e}")
                 # print(f"🔍 DEBUG: Full traceback:")
                 # traceback.print_exc()
                 streaming_error_handled = True
@@ -1101,6 +1044,10 @@ def main():
     import argparse
     import sys
     import os
+    
+    # Setup LangSmith environment first
+    from agent_ng.langsmith_config import setup_langsmith_environment
+    setup_langsmith_environment()
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='CMW Platform Agent')

@@ -28,6 +28,15 @@ from pathlib import Path
 
 # LangChain imports
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage
+
+# LangSmith tracing
+try:
+    from langsmith import traceable
+    LANGSMITH_AVAILABLE = True
+except ImportError:
+    LANGSMITH_AVAILABLE = False
+    def traceable(func):
+        return func
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda, RunnableParallel
 from langchain_core.tools import BaseTool, tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -53,9 +62,11 @@ try:
     from .message_processor import get_message_processor
     from .response_processor import get_response_processor
     from .stats_manager import get_stats_manager
-    from .trace_manager import get_trace_manager
     from .utils import ensure_valid_answer
-except ImportError:
+        # LangSmith tracing is now handled via direct imports and environment variables
+    print("✅ Successfully imported all modules using relative imports")
+except ImportError as e1:
+    print(f"❌ Relative import failed: {e1}")
     try:
         from agent_ng.llm_manager import get_llm_manager, LLMInstance
         from agent_ng.langchain_memory import get_memory_manager, create_conversation_chain
@@ -63,19 +74,18 @@ except ImportError:
         from agent_ng.message_processor import get_message_processor
         from agent_ng.response_processor import get_response_processor
         from agent_ng.stats_manager import get_stats_manager
-        from agent_ng.trace_manager import get_trace_manager
         from agent_ng.utils import ensure_valid_answer
-    except ImportError:
-        get_llm_manager = lambda: None
-        LLMInstance = None
-        get_memory_manager = lambda: None
-        create_conversation_chain = lambda *args: None
-        get_error_handler = lambda: None
-        get_message_processor = lambda: None
-        get_response_processor = lambda: None
-        get_stats_manager = lambda: None
-        get_trace_manager = lambda: None
-        ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
+        # LangSmith tracing is now handled via direct imports and environment variables
+        print("✅ Successfully imported all modules using absolute imports")
+    except ImportError as e2:
+        print(f"❌ Absolute import failed: {e2}")
+        print("💥 CRITICAL ERROR: Cannot import required modules!")
+        print("🔧 Please check:")
+        print("   1. All dependencies are installed: pip install -r requirements_ng.txt")
+        print("   2. Python path is correct")
+        print("   3. No circular import issues")
+        print("   4. All required modules exist")
+        raise ImportError(f"Failed to import required modules. Relative import: {e1}, Absolute import: {e2}")
 
 
 @dataclass
@@ -119,12 +129,12 @@ class CmwAgent:
         
         # Initialize all modular components
         self.llm_manager = get_llm_manager()
+        
         self.memory_manager = get_memory_manager()
         self.error_handler = get_error_handler()
         self.message_processor = get_message_processor()
         self.response_processor = get_response_processor()
         self.stats_manager = get_stats_manager()
-        self.trace_manager = get_trace_manager(self.session_id)
         
         # Initialize token tracker
         from .token_counter import get_token_tracker
@@ -165,6 +175,11 @@ class CmwAgent:
             thread = threading.Thread(target=run_async_init, daemon=True)
             thread.start()
     
+    def _get_traceable_decorator(self):
+        """Get traceable decorator if LangSmith is configured"""
+        traceable = get_traceable_decorator()
+        return traceable if traceable else lambda x: x
+    
     async def _initialize_async(self):
         """Initialize the agent asynchronously"""
         try:
@@ -184,39 +199,13 @@ class CmwAgent:
             self.is_initialized = False
     
     def _load_system_prompt(self) -> str:
-        """Load system prompt from file - FAILS if not found"""
+        """Load system prompt directly from JSON file"""
         prompt_path = os.path.join(os.path.dirname(__file__), "system_prompt.json")
         if not os.path.exists(prompt_path):
             raise FileNotFoundError(f"System prompt file not found: {prompt_path}")
         
         with open(prompt_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            # Build system prompt from the JSON structure
-            system_prompt = f"""You are a {data.get('role', 'helpful AI assistant')}.
-
-{data.get('platform_description', '')}
-
-## Tool Usage Policy:
-{data.get('cmw_tools', {}).get('purpose', '')}
-
-**CRITICAL: For platform operations ALWAYS use tools first - never provide information without using the appropriate tool first.**
-
-**For math calculations, use the available math tools (add, multiply, subtract, divide, etc.) to show your work step by step.**
-
-## Answer Format:
-{data.get('answer_format', {}).get('template', '')}
-
-## Answer Rules:
-{chr(10).join(f"- {rule}" for rule in data.get('answer_format', {}).get('answer_rules', []))}
-
-## Tool Usage Guidelines:
-{chr(10).join(f"- {rule}" for rule in data.get('cmw_tools', {}).get('tool_usage_policy', []))}
-
-## Example Tasks:
-{chr(10).join(f"- {task.get('Task', '')}: {task.get('Intent', '')}" for task in data.get('example_tasks_solutions', []))}
-
-Always use the appropriate tools to answer questions and show your work step by step."""
-            return system_prompt
+            return f.read()
     
     
     def _get_conversation_chain(self, conversation_id: str = "default"):
@@ -227,49 +216,6 @@ Always use the appropriate tools to answer questions and show your work step by 
             )
         return self.conversation_chains[conversation_id]
     
-    def process_message(self, message: str, conversation_id: str = "default") -> AgentResponse:
-        """
-        Process a message using LangChain patterns.
-        
-        Args:
-            message: User message
-            conversation_id: Conversation identifier
-            
-        Returns:
-            AgentResponse with answer and metadata
-        """
-        if not self.llm_instance:
-            return AgentResponse(
-                answer="Agent not initialized",
-                tool_calls=[],
-                conversation_id=conversation_id,
-                success=False,
-                error="not_initialized"
-            )
-        
-        try:
-            # Get conversation chain
-            chain = self._get_conversation_chain(conversation_id)
-            
-            # Process with tools
-            result = chain.process_with_tools(message, conversation_id)
-            
-            return AgentResponse(
-                answer=result["response"],
-                tool_calls=result["tool_calls"],
-                conversation_id=conversation_id,
-                success=result["success"],
-                error=result.get("error")
-            )
-            
-        except Exception as e:
-            return AgentResponse(
-                answer=f"Error processing message: {str(e)}",
-                tool_calls=[],
-                conversation_id=conversation_id,
-                success=False,
-                error=str(e)
-            )
     
     async def stream_message(self, message: str, conversation_id: str = "default") -> AsyncGenerator[Dict[str, Any], None]:
         """
@@ -317,10 +263,12 @@ Always use the appropriate tools to answer questions and show your work step by 
                 }
             
         except Exception as e:
-            # Stream error
+            # Stream error with icon - let native error wording speak for itself
+            content = f"❌ {str(e)}"
+            
             yield {
                 "type": "error",
-                "content": f"❌ **Error: {str(e)}**",
+                "content": content,
                 "metadata": {"error": str(e)}
             }
     
