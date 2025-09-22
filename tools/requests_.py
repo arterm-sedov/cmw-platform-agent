@@ -193,14 +193,38 @@ def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]
 
         # Return dict for backward compatibility (including body field)
         result = http_response.model_dump()
+        
         result["body"] = request_body
+
         return result
 
-    except requests.exceptions.RequestException as e:
-        # Handle network/request errors
+    except requests.exceptions.Timeout as e:
         error_response = HTTPResponse(
             success=False,
-            status_code=getattr(e.response, 'status_code', 500) if hasattr(e, 'response') else 500,
+            status_code=408,  # Request Timeout
+            raw_response=None,
+            error=f"Request timeout: {str(e)}",
+            base_url=url
+        )
+        result = error_response.model_dump()
+        result["body"] = request_body
+        return result
+    except requests.exceptions.ConnectionError as e:
+        error_response = HTTPResponse(
+            success=False,
+            status_code=503,  # Service Unavailable
+            raw_response=None,
+            error=f"Connection error: {str(e)}",
+            base_url=url
+        )
+        result = error_response.model_dump()
+        result["body"] = request_body
+        return result
+    except requests.exceptions.RequestException as e:
+    # Общий обработчик для всех остальных сетевых ошибок
+        error_response = HTTPResponse(
+            success=False,
+            status_code=500,  # Internal Server Error
             raw_response=None,
             error=f"Request failed: {str(e)}",
             base_url=url
@@ -254,11 +278,33 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
         result["body"] = request_body
         return result
 
-    except requests.exceptions.RequestException as e:
-        # Handle network/request errors
+    except requests.exceptions.Timeout as e:
         error_response = HTTPResponse(
             success=False,
-            status_code=getattr(e.response, 'status_code', 500) if hasattr(e, 'response') else 500,
+            status_code=408,  # Request Timeout
+            raw_response=None,
+            error=f"Request timeout: {str(e)}",
+            base_url=url
+        )
+        result = error_response.model_dump()
+        result["body"] = request_body
+        return result
+    except requests.exceptions.ConnectionError as e:
+        error_response = HTTPResponse(
+            success=False,
+            status_code=503,  # Service Unavailable
+            raw_response=None,
+            error=f"Connection error: {str(e)}",
+            base_url=url
+        )
+        result = error_response.model_dump()
+        result["body"] = request_body
+        return result
+    except requests.exceptions.RequestException as e:
+    # Общий обработчик для всех остальных сетевых ошибок
+        error_response = HTTPResponse(
+            success=False,
+            status_code=500,  # Internal Server Error
             raw_response=None,
             error=f"Request failed: {str(e)}",
             base_url=url
@@ -311,11 +357,29 @@ def _get_request(endpoint: str) -> Dict[str, Any]:
         # Return dict for backward compatibility
         return http_response.model_dump()
 
-    except requests.exceptions.RequestException as e:
-        # Handle network/request errors
+    except requests.exceptions.Timeout as e:
         error_response = HTTPResponse(
             success=False,
-            status_code=getattr(e.response, 'status_code', 500) if hasattr(e, 'response') else 500,
+            status_code=408,  # Request Timeout
+            raw_response=None,
+            error=f"Request timeout: {str(e)}",
+            base_url=url
+        )
+        return error_response.model_dump()
+    except requests.exceptions.ConnectionError as e:
+        error_response = HTTPResponse(
+            success=False,
+            status_code=503,  # Service Unavailable
+            raw_response=None,
+            error=f"Connection error: {str(e)}",
+            base_url=url
+        )
+        return error_response.model_dump()
+    except requests.exceptions.RequestException as e:
+    # Общий обработчик для всех остальных сетевых ошибок
+        error_response = HTTPResponse(
+            success=False,
+            status_code=500,  # Internal Server Error
             raw_response=None,
             error=f"Request failed: {str(e)}",
             base_url=url
@@ -351,11 +415,29 @@ def _delete_request(endpoint: str) -> Dict[str, Any]:
         # Return dict for backward compatibility
         return http_response.model_dump()
 
-    except requests.exceptions.RequestException as e:
-        # Handle network/request errors
+    except requests.exceptions.Timeout as e:
         error_response = HTTPResponse(
             success=False,
-            status_code=getattr(e.response, 'status_code', 500) if hasattr(e, 'response') else 500,
+            status_code=408,  # Request Timeout
+            raw_response=None,
+            error=f"Request timeout: {str(e)}",
+            base_url=url
+        )
+        return error_response.model_dump()
+    except requests.exceptions.ConnectionError as e:
+        error_response = HTTPResponse(
+            success=False,
+            status_code=503,  # Service Unavailable
+            raw_response=None,
+            error=f"Connection error: {str(e)}",
+            base_url=url
+        )
+        return error_response.model_dump()
+    except requests.exceptions.RequestException as e:
+    # Общий обработчик для всех остальных сетевых ошибок
+        error_response = HTTPResponse(
+            success=False,
+            status_code=500,  # Internal Server Error
             raw_response=None,
             error=f"Request failed: {str(e)}",
             base_url=url
