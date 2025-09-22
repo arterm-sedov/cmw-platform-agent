@@ -375,12 +375,13 @@ class FileUtils:
             raise IOError(f"Error downloading file from {url}: {str(e)}")
     
     @staticmethod
-    def generate_unique_filename(original_filename: str) -> str:
+    def generate_unique_filename(original_filename: str, session_id: str = "default") -> str:
         """
-        Generate a unique filename with timestamp and hash for Gradio cache.
+        Generate a unique filename with timestamp and hash (no session prefix since we use session folders).
         
         Args:
             original_filename (str): Original filename from user upload
+            session_id (str): Session ID for isolation (used for folder organization)
             
         Returns:
             str: Unique filename with timestamp and hash
@@ -394,12 +395,12 @@ class FileUtils:
         name_without_ext = path_obj.stem
         extension = path_obj.suffix
         
-        # Generate timestamp and hash
+        # Generate timestamp and hash (include session_id for uniqueness across sessions)
         timestamp = str(int(time.time() * 1000))  # milliseconds
-        hash_suffix = hashlib.md5(f"{original_filename}{timestamp}".encode()).hexdigest()[:8]
+        hash_suffix = hashlib.md5(f"{original_filename}{timestamp}{session_id}".encode()).hexdigest()[:8]
         
-        # Create unique filename
-        unique_name = f"{name_without_ext}_{timestamp}_{hash_suffix}{extension}"
+        # Create unique filename with session ID for better uniqueness and clarity
+        unique_name = f"{session_id}_{name_without_ext}_{timestamp}_{hash_suffix}{extension}"
         
         return unique_name
     
@@ -422,44 +423,6 @@ class FileUtils:
         # Default to system temp directory
         return tempfile.gettempdir()
     
-    @staticmethod
-    def find_file_in_gradio_cache(original_filename: str, session_id: str = None) -> str:
-        """
-        Find a file in Gradio cache by original filename.
-        
-        Args:
-            original_filename (str): Original filename to search for
-            session_id (str, optional): Specific session ID to search in
-            
-        Returns:
-            str: Full path to the file in Gradio cache, or None if not found
-        """
-        import os
-        import glob
-        
-        cache_base = FileUtils.get_gradio_cache_path()
-        
-        if session_id:
-            # Search in specific session directory
-            session_path = os.path.join(cache_base, session_id)
-            if os.path.exists(session_path):
-                # Look for files matching the original name pattern
-                pattern = os.path.join(session_path, f"*{original_filename}")
-                matches = glob.glob(pattern)
-                if matches:
-                    return matches[0]
-        else:
-            # Search in all Gradio cache directories
-            gradio_dirs = glob.glob(os.path.join(cache_base, "gradio", "*"))
-            for gradio_dir in gradio_dirs:
-                if os.path.isdir(gradio_dir):
-                    # Look for files matching the original name pattern
-                    pattern = os.path.join(gradio_dir, f"*{original_filename}")
-                    matches = glob.glob(pattern)
-                    if matches:
-                        return matches[0]
-        
-        return None
     
     @staticmethod
     def resolve_file_reference(file_reference: str, agent=None) -> str:
@@ -486,8 +449,7 @@ class FileUtils:
         if agent and hasattr(agent, 'get_file_path'):
             return agent.get_file_path(file_reference)
         
-        # Fallback: search in Gradio cache
-        return FileUtils.find_file_in_gradio_cache(file_reference)
+        return None
     
     @staticmethod
     def resolve_file_path(original_filename: str, agent=None) -> str:
@@ -504,8 +466,7 @@ class FileUtils:
         if agent and hasattr(agent, 'get_file_path'):
             return agent.get_file_path(original_filename)
         
-        # Fallback: search in Gradio cache
-        return FileUtils.find_file_in_gradio_cache(original_filename)
+        return None
     
     @staticmethod
     def resolve_code_input(code_reference: str, agent=None) -> tuple[str, str]:

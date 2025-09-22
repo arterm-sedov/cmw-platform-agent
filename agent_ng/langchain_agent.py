@@ -143,8 +143,8 @@ class CmwAgent:
         self.conversation_history = []
         self.active_streams = {}
         
-        # File registry system (lean and secure)
-        self.file_registry = {}  # Maps original_filename -> unique_filename
+        # File registry system (lean and secure) - session isolated
+        self.file_registry = {}  # Maps (session_id, original_filename) -> full_file_path
         self.session_cache_path = None  # Gradio cache path for this session
         self.current_files = []  # Current conversation turn files
         
@@ -426,20 +426,54 @@ Always use the appropriate tools to answer questions and show your work step by 
             original_filename (str): Original filename from user upload
             
         Returns:
-            str: Full path to the file in Gradio cache, or None if not found
+            str: Full path to the file, or None if not found
         """
+        # Check if we have this file in our session-isolated registry
+        registry_key = (self.session_id, original_filename)
+        
+        if registry_key in self.file_registry:
+            full_path = self.file_registry[registry_key]
+            if os.path.exists(full_path):
+                return full_path
+        
+        return None
+    
+    def register_file(self, original_filename: str, file_path: str) -> None:
+        """
+        Register a file in the session-isolated file registry.
+        Creates a unique filename and moves the file to Gradio cache.
+        
+        Args:
+            original_filename (str): Original filename from user upload
+            file_path (str): Full path to the original file
+        """
+        import shutil
         from tools.file_utils import FileUtils
         
-        # Check if we have this file in our registry
-        if original_filename in self.file_registry:
-            unique_filename = self.file_registry[original_filename]
-            if self.session_cache_path:
-                full_path = os.path.join(self.session_cache_path, unique_filename)
-                if os.path.exists(full_path):
-                    return full_path
+        # Generate unique filename with timestamp and hash
+        unique_filename = FileUtils.generate_unique_filename(original_filename, self.session_id)
         
-        # Fallback: search in Gradio cache
-        return FileUtils.find_file_in_gradio_cache(original_filename)
+        # Use Gradio cache directory (files will be accessible via Gradio's file access)
+        if not self.session_cache_path:
+            self.session_cache_path = FileUtils.get_gradio_cache_path()
+        
+        # Create unique file path in Gradio cache
+        unique_file_path = os.path.join(self.session_cache_path, unique_filename)
+        
+        # Move and rename file to unique location in Gradio cache
+        try:
+            shutil.move(file_path, unique_file_path)
+            
+            # Register the unique file path in session-isolated registry
+            registry_key = (self.session_id, original_filename)
+            self.file_registry[registry_key] = unique_file_path
+            print(f"📁 Registered file: {original_filename} -> {unique_file_path}")
+            
+        except Exception as e:
+            print(f"⚠️ Failed to move file {original_filename} to Gradio cache: {e}")
+            # Fallback: register original path
+            registry_key = (self.session_id, original_filename)
+            self.file_registry[registry_key] = file_path
     
     def get_status(self) -> Dict[str, Any]:
         """Get agent status information"""

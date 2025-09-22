@@ -338,8 +338,10 @@ class NativeLangChainStreaming:
                             
                             try:
                                 if tool_obj:
-                                    # Execute tool once
-                                    tool_result = tool_obj.invoke(tool_args)
+                                    # Execute tool once with agent context
+                                    # Inject agent instance for file resolution (same as memory manager)
+                                    tool_args_with_agent = {**tool_args, 'agent': agent}
+                                    tool_result = tool_obj.invoke(tool_args_with_agent)
                                     
                                     # Store the tool call result for future deduplication
                                     from .tool_deduplicator import get_deduplicator
