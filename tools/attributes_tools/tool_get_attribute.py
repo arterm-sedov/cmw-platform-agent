@@ -28,9 +28,13 @@ def get_attribute(
 
     return execute_get_operation(
         result_model=AttributeResult,
-        response_mapping=ATTRIBUTE_RESPONSE_MAPPING,
         endpoint=endpoint
     )
 
 if __name__ == "__main__":
-    print("")
+    results = get_attribute.invoke({
+        "application_system_name": "AItestAndApi",
+        "template_system_name": "Test",
+        "system_name": "Test1"
+    })
+    print(results)
