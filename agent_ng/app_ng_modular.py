@@ -411,30 +411,30 @@ class NextGenApp:
             # Tool messages are now added immediately to working_history during streaming
             streaming_error_handled = False  # Flag to track if streaming error was handled
             
-            print(f"🔍 DEBUG: Starting streaming for session {session_id}")
-            print(f"🔍 DEBUG: Working history length before streaming: {len(working_history)}")
+            # print(f"🔍 DEBUG: Starting streaming for session {session_id}")
+            # print(f"🔍 DEBUG: Working history length before streaming: {len(working_history)}")
             
             try:
                 async for event in user_agent.stream_message(message, session_id):
                     # Safety check for None event
                     if event is None:
-                        print("🔍 DEBUG: Received None event, skipping...")
+                        # print("🔍 DEBUG: Received None event, skipping...")
                         continue
                     
                     try:
                         event_type = event.get("type", "unknown")
                         content = event.get("content", "")
                         metadata = event.get("metadata", {})
-                        print(f"🔍 DEBUG: Processing event - type: {event_type}, content length: {len(str(content))}")
+                        # print(f"🔍 DEBUG: Processing event - type: {event_type}, content length: {len(str(content))}")
                     except Exception as e:
                         import traceback
-                        print(f"🔍 DEBUG: Error processing event: {e}")
-                        print(f"🔍 DEBUG: Event data: {event}")
-                        print(f"🔍 DEBUG: Event type: {type(event)}")
-                        print(f"🔍 DEBUG: Event traceback:")
-                        traceback.print_exc()
+                        # print(f"🔍 DEBUG: Error processing event: {e}")
+                        # print(f"🔍 DEBUG: Event data: {event}")
+                        # print(f"🔍 DEBUG: Event type: {type(event)}")
+                        # print(f"🔍 DEBUG: Event traceback:")
+                        # traceback.print_exc()
                         streaming_error_handled = True
-                        print(f"🔍 DEBUG: Set streaming_error_handled to True in event processing")
+                        # print(f"🔍 DEBUG: Set streaming_error_handled to True in event processing")
                         continue
                     
                     if event_type == "thinking":
@@ -498,7 +498,7 @@ class NextGenApp:
                     elif event_type == "content":
                         # Stream content from response - ensure content is not None
                         content_to_add = safe_string(content)
-                        print(f"🔍 DEBUG: Content event - content: '{content_to_add}', length: {len(content_to_add)}")
+                        # print(f"🔍 DEBUG: Content event - content: '{content_to_add}', length: {len(content_to_add)}")
                         
                         # Only add line break when LLM starts answering after tool messages
                         if assistant_message_index < 0 and response_content == "":
@@ -519,20 +519,20 @@ class NextGenApp:
                         if assistant_message_index >= 0 and assistant_message_index < len(working_history):
                             # Update existing assistant message
                             working_history[assistant_message_index] = {"role": "assistant", "content": response_content}
-                            print(f"🔍 DEBUG: Updated existing assistant message at index {assistant_message_index}")
+                            # print(f"🔍 DEBUG: Updated existing assistant message at index {assistant_message_index}")
                         else:
                             # Create new assistant message
                             working_history.append({"role": "assistant", "content": response_content})
                             assistant_message_index = len(working_history) - 1
-                            print(f"🔍 DEBUG: Created new assistant message at index {assistant_message_index}")
+                            # print(f"🔍 DEBUG: Created new assistant message at index {assistant_message_index}")
                         
                         yield working_history, ""
                         
                     elif event_type == "error":
                         # Error occurred - log it but don't add to response content
-                        print(f"🔍 DEBUG: Error event received: {content}")
-                        print(f"🔍 DEBUG: Error event - working_history length: {len(working_history)}")
-                        print(f"🔍 DEBUG: Error event - response_content length: {len(response_content)}")
+                        # print(f"🔍 DEBUG: Error event received: {content}")
+                        # print(f"🔍 DEBUG: Error event - working_history length: {len(working_history)}")
+                        # print(f"🔍 DEBUG: Error event - response_content length: {len(response_content)}")
                         streaming_error_handled = True
                         # Don't add error message to response content
                         # Just log it for debugging purposes
@@ -542,10 +542,10 @@ class NextGenApp:
             except Exception as e:
                 import traceback
                 print(f"❌ Ошибка потоковой передачи сообщения: {e}")
-                print(f"🔍 DEBUG: Full traceback:")
-                traceback.print_exc()
+                # print(f"🔍 DEBUG: Full traceback:")
+                # traceback.print_exc()
                 streaming_error_handled = True
-                print(f"🔍 DEBUG: Set streaming_error_handled to True in streaming loop")
+                # print(f"🔍 DEBUG: Set streaming_error_handled to True in streaming loop")
                 # Continue with the rest of the processing even if streaming fails
                 pass
             
@@ -560,16 +560,17 @@ class NextGenApp:
             # Add API tokens if available from session-specific agent
             if user_agent:
                 try:
-                    print(f"🔍 DEBUG: Getting last API tokens from session agent")
+                    # print(f"🔍 DEBUG: Getting last API tokens from session agent")
                     last_api_tokens = user_agent.get_last_api_tokens()
-                    print(f"🔍 DEBUG: Last API tokens: {last_api_tokens}")
+                    # print(f"🔍 DEBUG: Last API tokens: {last_api_tokens}")
                     if last_api_tokens:
                         token_displays.append(format_translation("api_tokens", self.language, tokens=last_api_tokens.formatted))
-                        print(f"🔍 DEBUG: Added API token display")
+                        # print(f"🔍 DEBUG: Added API token display")
                     else:
-                        print("🔍 DEBUG: No API tokens available")
+                        # print("🔍 DEBUG: No API tokens available")
+                        pass
                 except Exception as e:
-                    print(f"🔍 DEBUG: API token error: {e}")
+                    # print(f"🔍 DEBUG: API token error: {e}")
                     self.debug_streamer.warning(f"Failed to get API token count: {e}")
             
             # Add provider/model information if available - use session-specific agent
@@ -581,9 +582,9 @@ class NextGenApp:
                         model = llm_info.get('model_name', 'Unknown')
                         token_displays.append(format_translation("provider_model", self.language, 
                                                                provider=provider, model=model))
-                        print(f"🔍 DEBUG: Added provider/model display: {provider} / {model}")
+                        # print(f"🔍 DEBUG: Added provider/model display: {provider} / {model}")
                 except Exception as e:
-                    print(f"🔍 DEBUG: Provider/model display error: {e}")
+                    # print(f"🔍 DEBUG: Provider/model display error: {e}")
                     self.debug_streamer.warning(f"Failed to get provider/model info: {e}")
             
             # Calculate execution time for the entire response
@@ -609,12 +610,12 @@ class NextGenApp:
                         token_displays.append(format_translation("deduplication", self.language, 
                                                                duplicates=total_duplicates, 
                                                                breakdown=per_tool_breakdown))
-                        print(f"🔍 DEBUG: Added deduplication stats: {total_duplicates} duplicates")
+                        # print(f"🔍 DEBUG: Added deduplication stats: {total_duplicates} duplicates")
                     
                     # Add total tool calls count
                     if total_tool_calls > 0:
                         token_displays.append(format_translation("total_tool_calls", self.language, calls=total_tool_calls))
-                        print(f"🔍 DEBUG: Added total tool calls: {total_tool_calls}")
+                        # print(f"🔍 DEBUG: Added total tool calls: {total_tool_calls}")
             
             # Add token statistics as a separate metadata block
             if token_displays:
@@ -628,38 +629,37 @@ class NextGenApp:
                     "metadata": {"title": format_translation("token_statistics_title", self.language)}
                 }
                 working_history.append(token_metadata_message)
-                print(f"🔍 DEBUG: Added token metadata block: {token_display}")
+                # print(f"🔍 DEBUG: Added token metadata block: {token_display}")
             
             # Tool messages are now added immediately during streaming, no need to add them here
             # Ensure tool messages are preserved and not overwritten
-            print(f"🔍 DEBUG: Final working history length: {len(working_history)}")
+            # print(f"🔍 DEBUG: Final working history length: {len(working_history)}")
             for i, msg in enumerate(working_history):
                 if msg is None:
-                    print(f"🔍 DEBUG: Message {i} is None, skipping...")
+                    # print(f"🔍 DEBUG: Message {i} is None, skipping...")
                     continue
                 if not isinstance(msg, dict):
-                    print(f"🔍 DEBUG: Message {i} is not a dict (type: {type(msg)}), skipping...")
+                    # print(f"🔍 DEBUG: Message {i} is not a dict (type: {type(msg)}), skipping...")
                     continue
                 if msg.get("metadata", {}).get("title"):
-                    print(f"🔍 DEBUG: Tool message {i}: {msg.get('metadata', {}).get('title', 'No title')}")
+                    # print(f"🔍 DEBUG: Tool message {i}: {msg.get('metadata', {}).get('title', 'No title')}")
+                    pass
                 elif msg.get("role") == "assistant":
-                    print(f"🔍 DEBUG: Assistant message {i}: {len(msg.get('content', ''))} chars")
+                    # print(f"🔍 DEBUG: Assistant message {i}: {len(msg.get('content', ''))} chars")
+                    pass
             
             # Stop processing state
             self.stop_processing()
             
             # Final yield with updated stats
-            print(f"🔍 DEBUG: Final yield - working_history length: {len(working_history)}")
-            print(f"🔍 DEBUG: Final yield - response_content length: {len(response_content)}")
+            # print(f"🔍 DEBUG: Final yield - working_history length: {len(working_history)}")
+            # print(f"🔍 DEBUG: Final yield - response_content length: {len(response_content)}")
             yield working_history, ""
             
         except Exception as e:
             # Log error to terminal but don't add to chat response
-            print(f"🔍 DEBUG: Outer exception handler - streaming_error_handled: {streaming_error_handled}")
-            print(f"🔍 DEBUG: Outer exception handler - error: {e}")
             self.debug_streamer.error(f"Error in stream chat: {e}")
             print(f"❌ Streaming error (logged to terminal only): {e}")
-            # Don't add error message to response content - just log it
             # Stop processing state on error
             self.stop_processing()
             yield working_history, ""
@@ -806,11 +806,12 @@ class NextGenApp:
     def _trigger_ui_update(self):
         """Trigger UI update after agent initialization or message processing"""
         try:
-            print("🔍 DEBUG: Triggering UI update...")
+            # print("🔍 DEBUG: Triggering UI update...")
             # Store the update trigger - the UI will check this
             self._ui_update_needed = True
         except Exception as e:
-            print(f"🔍 DEBUG: Error triggering UI update: {e}")
+            # print(f"🔍 DEBUG: Error triggering UI update: {e}")
+            pass
     
     def check_and_clear_ui_update(self) -> bool:
         """Check if UI update is needed and clear the flag"""
@@ -829,12 +830,13 @@ class NextGenApp:
     def trigger_ui_update(self):
         """Trigger UI update after agent initialization or message processing"""
         try:
-            print("🔍 DEBUG: Triggering UI update...")
+            # print("🔍 DEBUG: Triggering UI update...")
             # This will be called when the agent is ready or after messages
             # The actual UI update will happen through Gradio's event system
             self._ui_update_needed = True
         except Exception as e:
-            print(f"🔍 DEBUG: Error triggering UI update: {e}")
+            # print(f"🔍 DEBUG: Error triggering UI update: {e}")
+            pass
     
     def _refresh_ui_after_message(self):
         """Refresh all UI components after a message is processed (EVENT-DRIVEN)"""
@@ -842,10 +844,11 @@ class NextGenApp:
             # Trigger UI update after message processing
             self.trigger_ui_update()
             
-            print("🔍 DEBUG: UI refreshed after message completion (EVENT-DRIVEN)")
+            # print("🔍 DEBUG: UI refreshed after message completion (EVENT-DRIVEN)")
             
         except Exception as e:
-            print(f"🔍 DEBUG: Error refreshing UI after message: {e}")
+            # print(f"🔍 DEBUG: Error refreshing UI after message: {e}")
+            pass
     
     def create_interface(self) -> gr.Blocks:
         """Create the Gradio interface using UI Manager and modular tabs"""
