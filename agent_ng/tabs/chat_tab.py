@@ -100,12 +100,11 @@ class ChatTab:
                         elem_id="message-input",
                         elem_classes=["message-card"],
                         file_types=[
-                            "image", "audio", "video", "text",  # MIME type categories
                             ".pdf", ".csv", ".tsv", ".xlsx", ".xls",  # Documents and data
                             ".docx", ".pptx", ".vsdx", ".msg", ".eml",  # Office documents
                             ".zip", ".rar", ".tar", ".gz", ".bz2",  # Archives
                             ".dwg", ".bpmn", ".sql", ".conf", ".ico",  # Other supported formats
-                            ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".xml", ".html", ".css", ".md", ".ini", ".sh", ".bat", ".ps1", ".c", ".cpp", ".h", ".hpp", ".java", ".go", ".rs", ".rb", ".php", ".pl", ".swift", ".kt", ".scala", ".sql", ".toml", ".env" # Common text-based code formats
+                            ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".xml", ".html", ".css", ".md", ".ini", ".sh", ".bat", ".ps1", ".c", ".cpp", ".h", ".hpp", ".java", ".go", ".rs", ".rb", ".php", ".pl", ".swift", ".kt", ".scala", ".sql", ".toml", ".env"  # Common text-based code formats
                         ],
                         file_count="multiple"
                     )
