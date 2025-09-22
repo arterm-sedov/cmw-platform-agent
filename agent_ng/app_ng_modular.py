@@ -193,7 +193,11 @@ class NextGenApp:
             self._trigger_ui_update()
                 
         except Exception as e:
-            self.debug_streamer.error(f"Initialization failed: {str(e)}", LogCategory.INIT)
+            try:
+                self.debug_streamer.error(f"Initialization failed: {str(e)}", LogCategory.INIT)
+            except:
+                # If debug streamer fails, just continue
+                pass
             self.initialization_logs.append(format_translation("error_initialization_failed", self.language, error=str(e)))
         
         self.is_initializing = False
@@ -343,7 +347,11 @@ class NextGenApp:
                 return history, ""
                 
         except Exception as e:
-            self.debug_streamer.error(f"Error in chat: {e}")
+            try:
+                self.debug_streamer.error(f"Error in chat: {e}")
+            except:
+                # If debug streamer fails, just continue
+                pass
             error_msg = format_translation("error_processing", self.language, error=str(e))
             history.append({"role": "user", "content": message})
             history.append({"role": "assistant", "content": error_msg})
@@ -658,10 +666,16 @@ class NextGenApp:
             
         except Exception as e:
             # Log error to terminal but don't add to chat response
-            self.debug_streamer.error(f"Error in stream chat: {e}")
+            try:
+                self.debug_streamer.error(f"Error in stream chat: {e}")
+            except:
+                # If debug streamer fails, just continue
+                pass
             print(f"❌ Streaming error (logged to terminal only): {e}")
             # Stop processing state on error
-            self.stop_processing()
+            # self.stop_processing()
+            # Continue gracefully - don't stop processing for streaming errors
+            # The response might still be valid even with streaming issues
             yield working_history, ""
     
     def _create_event_handlers(self) -> Dict[str, Any]:
