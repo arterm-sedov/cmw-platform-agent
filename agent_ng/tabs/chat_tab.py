@@ -763,9 +763,6 @@ class ChatTab:
                         file_path = str(file)
                         original_filename = os.path.basename(file_path)
                     
-                    # Generate unique filename for registry
-                    unique_filename = FileUtils.generate_unique_filename(original_filename)
-                    
                     # Get file size
                     try:
                         file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
@@ -777,8 +774,14 @@ class ChatTab:
                     except Exception as e:
                         file_list.append(f"{original_filename}")
                     
-                    # Store in registry and current files (deprecated - use session manager)
-                    current_files.append(original_filename)
+                    # Register file with agent's session-isolated registry
+                    if hasattr(self, 'main_app') and self.main_app and hasattr(self.main_app, 'session_manager'):
+                        session_id = self.main_app.session_manager.get_session_id(request)
+                        agent = self.main_app.session_manager.get_agent(session_id)
+                        if agent and hasattr(agent, 'register_file'):
+                            agent.register_file(original_filename, file_path)
+                            current_files.append(original_filename)
+                            print(f"📁 Registered file: {original_filename} -> {agent.file_registry.get((session_id, original_filename), 'NOT_FOUND')}")
                 
                 file_info += ", ".join(file_list) + "]"
                 message += file_info
