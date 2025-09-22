@@ -223,7 +223,7 @@ class LLMManager:
                     "temperature": 0,
                     "force_tools": True
                 },
-                                {
+                {
                     "model": "openai/gpt-5-mini",
                     "token_limit": 400000,
                     "max_tokens": 32768,
@@ -276,7 +276,8 @@ class LLMManager:
                     "model": "mistralai/mistral-small-3.2-24b-instruct:free",
                     "token_limit": 131072,
                     "max_tokens": 4096,
-                    "temperature": 0
+                    "temperature": 0,
+                    "force_tools": False
                 }
             ],
             enable_chunking=False
