@@ -192,39 +192,13 @@ class CmwAgent:
             self.is_initialized = False
     
     def _load_system_prompt(self) -> str:
-        """Load system prompt from file - FAILS if not found"""
+        """Load system prompt directly from JSON file"""
         prompt_path = os.path.join(os.path.dirname(__file__), "system_prompt.json")
         if not os.path.exists(prompt_path):
             raise FileNotFoundError(f"System prompt file not found: {prompt_path}")
         
         with open(prompt_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            # Build system prompt from the JSON structure
-            system_prompt = f"""You are a {data.get('role', 'helpful AI assistant')}.
-
-{data.get('platform_description', '')}
-
-## Tool Usage Policy:
-{data.get('cmw_tools', {}).get('purpose', '')}
-
-**CRITICAL: For platform operations ALWAYS use tools first - never provide information without using the appropriate tool first.**
-
-**For math calculations, use the available math tools (add, multiply, subtract, divide, etc.) to show your work step by step.**
-
-## Answer Format:
-{data.get('answer_format', {}).get('template', '')}
-
-## Answer Rules:
-{chr(10).join(f"- {rule}" for rule in data.get('answer_format', {}).get('answer_rules', []))}
-
-## Tool Usage Guidelines:
-{chr(10).join(f"- {rule}" for rule in data.get('cmw_tools', {}).get('tool_usage_policy', []))}
-
-## Example Tasks:
-{chr(10).join(f"- {task.get('Task', '')}: {task.get('Intent', '')}" for task in data.get('example_tasks_solutions', []))}
-
-Always use the appropriate tools to answer questions and show your work step by step."""
-            return system_prompt
+            return f.read()
     
     
     def _get_conversation_chain(self, conversation_id: str = "default"):
