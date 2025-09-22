@@ -407,7 +407,8 @@ class NextGenApp:
             # Stream response using simple streaming
             response_content = ""  # Initialize as empty string to prevent None concatenation
             tool_usage = ""
-            tool_messages = []  # Store tool messages separately for metadata handling
+            assistant_message_index = -1  # Track the index of the assistant message in working_history
+            # Tool messages are now added immediately to working_history during streaming
             
             async for event in user_agent.stream_message(message, session_id):
                 event_type = event.get("type", "unknown")
@@ -415,8 +416,14 @@ class NextGenApp:
                 metadata = event.get("metadata", {})
                 
                 if event_type == "thinking":
-                    # Agent is thinking
-                    working_history[-1] = {"role": "assistant", "content": content}
+                    # Agent is thinking - update or create assistant message
+                    if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                        # Update existing assistant message
+                        working_history[assistant_message_index] = {"role": "assistant", "content": content}
+                    else:
+                        # Create new assistant message
+                        working_history.append({"role": "assistant", "content": content})
+                        assistant_message_index = len(working_history) - 1
                     yield working_history, ""
                     
                 elif event_type == "iteration_progress":
@@ -439,55 +446,75 @@ class NextGenApp:
                     yield working_history, ""
                     
                 elif event_type == "tool_start":
-                    # Tool is starting - create a separate message with metadata
+                    # Tool is starting - immediately add to working history
                     tool_name = metadata.get("tool_name", "unknown")
                     tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name))
                     
-                    # Create tool message with metadata for collapsible section
+                    # Create tool message and immediately add to working history
                     tool_message = {
                         "role": "assistant", 
                         "content": content,
                         "metadata": {"title": tool_title}
                     }
-                    tool_messages.append(tool_message)
-                    
-                    # Don't add tool usage to main response during streaming - will be added as collapsible sections at the end
-                    working_history[-1] = {"role": "assistant", "content": response_content}
+                    working_history.append(tool_message)
                     yield working_history, ""
                     
                 elif event_type == "tool_end":
-                    # Tool completed - update the last tool message or create new one
+                    # Tool completed - immediately add to working history
                     tool_name = metadata.get("tool_name", "unknown")
                     tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name))
                     
-                    # Update the last tool message or create new one
-                    if tool_messages and tool_messages[-1].get("metadata", {}).get("title") == tool_title:
-                        # Update existing tool message - ensure content is not None
-                        tool_messages[-1]["content"] += safe_string(content)
-                    else:
-                        # Create new tool message
-                        tool_message = {
-                            "role": "assistant", 
-                            "content": content,
-                            "metadata": {"title": tool_title}
-                        }
-                        tool_messages.append(tool_message)
-                    
-                    # Don't add tool usage to main response during streaming - will be added as collapsible sections at the end
-                    working_history[-1] = {"role": "assistant", "content": response_content}
+                    # Create tool message and immediately add to working history
+                    tool_message = {
+                        "role": "assistant", 
+                        "content": content,
+                        "metadata": {"title": tool_title}
+                    }
+                    working_history.append(tool_message)
                     yield working_history, ""
                     
                 elif event_type == "content":
                     # Stream content from response - ensure content is not None
                     response_content += safe_string(content)
-                    working_history[-1] = {"role": "assistant", "content": response_content}
+                    
+                    # Update or create assistant message
+                    if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                        # Update existing assistant message
+                        working_history[assistant_message_index] = {"role": "assistant", "content": response_content}
+                        print(f"🔍 DEBUG: Updated existing assistant message at index {assistant_message_index}")
+                    else:
+                        # Create new assistant message - add line breaks if there are tool messages before
+                        # Check if the last few messages are tool messages
+                        has_recent_tool_messages = False
+                        for i in range(max(0, len(working_history) - 3), len(working_history)):
+                            if i >= 0 and working_history[i].get("metadata", {}).get("title"):
+                                has_recent_tool_messages = True
+                                break
+                        
+                        if has_recent_tool_messages:
+                            # There are tool messages before, add proper separation
+                            response_content = "\n\n" + response_content
+                        
+                        working_history.append({"role": "assistant", "content": response_content})
+                        assistant_message_index = len(working_history) - 1
+                        print(f"🔍 DEBUG: Created new assistant message at index {assistant_message_index}")
+                    
                     yield working_history, ""
                     
                 elif event_type == "error":
-                    # Error occurred
+                    # Error occurred - append to assistant message
                     error_msg = f"\n{safe_string(content)}"
-                    # Fix: Ensure response_content is not None before concatenation
-                    working_history[-1] = {"role": "assistant", "content": safe_string(response_content) + error_msg}
+                    response_content += error_msg
+                    
+                    # Update assistant message with error
+                    if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                        # Update existing assistant message
+                        working_history[assistant_message_index] = {"role": "assistant", "content": response_content}
+                    else:
+                        # Create new assistant message
+                        working_history.append({"role": "assistant", "content": response_content})
+                        assistant_message_index = len(working_history) - 1
+                    
                     yield working_history, ""
             
             # Add API token count to final response
@@ -558,29 +585,26 @@ class NextGenApp:
                         token_displays.append(format_translation("total_tool_calls", self.language, calls=total_tool_calls))
                         print(f"🔍 DEBUG: Added total tool calls: {total_tool_calls}")
             
-            # Combine all token displays
+            # Add token statistics as a separate metadata block
             if token_displays:
-                token_display = "\n\n" + "\n".join(token_displays)
-                # Preserve existing content (including any error messages) and append token display
-                # Fix: Ensure we never concatenate None with string
-                current_content = working_history[-1].get("content", "") or ""
-                if response_content is not None:
-                    current_content = response_content
-                working_history[-1] = {"role": "assistant", "content": safe_string(current_content) + token_display}
-                print(f"🔍 DEBUG: Added token display: {token_display}")
+                token_display = "\n".join(token_displays)
+                # Create a separate metadata block for token statistics
+                token_metadata_message = {
+                    "role": "assistant", 
+                    "content": token_display,
+                    "metadata": {"title": "📊 Статистика токенов"}
+                }
+                working_history.append(token_metadata_message)
+                print(f"🔍 DEBUG: Added token metadata block: {token_display}")
             
-            # Add tool messages with metadata after the main response
-            if tool_messages:
-                # Insert tool messages before the final assistant response
-                final_response = working_history[-1]
-                working_history = working_history[:-1]  # Remove the final response temporarily
-                
-                # Add tool messages with metadata
-                for tool_msg in tool_messages:
-                    working_history.append(tool_msg)
-                
-                # Add back the final response
-                working_history.append(final_response)
+            # Tool messages are now added immediately during streaming, no need to add them here
+            # Ensure tool messages are preserved and not overwritten
+            print(f"🔍 DEBUG: Final working history length: {len(working_history)}")
+            for i, msg in enumerate(working_history):
+                if msg.get("metadata", {}).get("title"):
+                    print(f"🔍 DEBUG: Tool message {i}: {msg.get('metadata', {}).get('title', 'No title')}")
+                elif msg.get("role") == "assistant":
+                    print(f"🔍 DEBUG: Assistant message {i}: {len(msg.get('content', ''))} chars")
             
             # Stop processing state
             self.stop_processing()
@@ -594,10 +618,16 @@ class NextGenApp:
             error_msg = format_translation("error_streaming", self.language, error=str(e)) + f"\n\n{format_translation('execution_time', self.language, time=execution_time)}"
             # Preserve existing content and append error message
             # Fix: Ensure we never concatenate None with string
-            current_content = working_history[-1].get("content", "") or ""
-            if response_content is not None:
-                current_content = response_content
-            working_history[-1] = {"role": "assistant", "content": safe_string(current_content) + "\n\n" + error_msg}
+            if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                # Update existing assistant message
+                current_content = working_history[assistant_message_index].get("content", "") or ""
+                if response_content is not None:
+                    current_content = response_content
+                working_history[assistant_message_index] = {"role": "assistant", "content": safe_string(current_content) + "\n\n" + error_msg}
+            else:
+                # Create new assistant message
+                current_content = response_content or ""
+                working_history.append({"role": "assistant", "content": safe_string(current_content) + "\n\n" + error_msg})
             # Stop processing state on error
             self.stop_processing()
             yield working_history, ""
