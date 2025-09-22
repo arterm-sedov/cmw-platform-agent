@@ -110,6 +110,14 @@ ATTRIBUTE_RESPONSE_MAPPING = {
     "linkedRecordTemplate": "Related template ID"
 }
 
+GET_URL_TYPE_MAPPING = {
+    "Record Template": "Record",
+    "Application": "Undefined",
+    "Role Template": "Role",
+    "Process Template": "Process",
+    "Organizational Structure Template": "OrgStructure"
+}
+
 def remove_values(
     obj: Any,
     exclude_values: Set[Any] = None
@@ -318,7 +326,7 @@ def execute_edit_or_create_operation(
     Возвращает словарь с результатом.
     """
     # Убираем None-значения
-    request_body = remove_nones(request_body)
+    request_body = remove_values(request_body)
 
     try:
         if operation == "create":

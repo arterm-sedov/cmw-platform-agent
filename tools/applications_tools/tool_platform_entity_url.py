@@ -1,25 +1,31 @@
 from ..tool_utils import *
+import json
 
 class GetPlatformEntityUrlSchema(BaseModel):
     """
-    Schema for getting platform entity URL by entity ID.
+    Schema for getting platform entity URL by entity system_name and type.
     """
-    entity_id: str = Field(
-        description="The string ID of the entity to generate URL for",
-        min_length=1
+    type: Literal['Application', 'Record Template', 'Role Template', 'Process Template', 'Organizational Structure Template'] = Field(
+        description="Type of the entity to generate URL for"
+    )
+    system_name: str = Field(
+        description="System name of the entity to generate URL for"
     )
 
-    @field_validator("entity_id", mode="before")
+    @field_validator("type", "system_name", mode="before")
     @classmethod
     def non_empty_str(cls, v: Any) -> Any:
         if isinstance(v, str) and v.strip() == "":
-            raise ValueError("Entity ID must be a non-empty string")
+            raise ValueError("Value must be a non-empty string")
         return v
 
 @tool("get_platform_entity_url", return_direct=False, args_schema=GetPlatformEntityUrlSchema)
-def get_platform_entity_url(entity_id: str) -> Dict[str, Any]:
+def get_platform_entity_url(
+    system_name: str,
+    type: str
+    ) -> Dict[str, Any]:
     """
-    Get the URL for an entity by its string ID
+    Get the URL for an entity by its type and sytem name
         
     Returns:
         dict: {
@@ -39,13 +45,39 @@ def get_platform_entity_url(entity_id: str) -> Dict[str, Any]:
             final_result = {
                 "success": False,
                 "status_code": 500,
-                "data": None,
+                "entity_url": None,
                 "error": "Base URL not found in server configuration"
             }
-            validated = AttributeResult(**final_result)
-            return validated.model_dump()
-        
-        # Construct the entity URL
+            return final_result
+
+        entity_type = GET_URL_TYPE_MAPPING[type]
+
+        request_body = {
+        "Type": entity_type
+        }
+
+        endpoint = "api/public/system/Solution/TemplateService/List"
+
+        result = requests_._post_request(request_body, endpoint)
+        result_body = result['raw_response']
+        result_body = json.loads(result_body)
+
+        if entity_type == "Undefined":
+            list_applications = list_applications.func()
+            result_list_applications_body = list_applications['raw_response']
+            application_name = next((item["name"] for item in result_list_applications_body if item["alias"] == system_name))
+
+            result_body = result['raw_response']
+            result_body = json.loads(result_body)
+            entity_id = next((item["solution"] for item in result_body if item["solutionName"] == application_name))
+        else:
+            for item in result_body:
+                alias = item.get("alias", "")
+
+                if alias.strip() == system_name.strip():
+                    entity_id = item['id']
+                    break
+   
         entity_url = f"{base_url}/#Resolver/{entity_id}"
         
         final_result = {
@@ -55,19 +87,20 @@ def get_platform_entity_url(entity_id: str) -> Dict[str, Any]:
             "error": None
         }
         
-        validated = AttributeResult(**final_result)
-        return validated.model_dump()
+        return final_result
         
     except Exception as e:
         final_result = {
             "success": False,
             "status_code": 500,
-            "data": None,
+            "entity_url": None,
             "error": f"Error generating entity URL: {str(e)}"
         }
-        validated = AttributeResult(**final_result)
-        return validated.model_dump()
+        return final_result
 
 if __name__ == "__main__":
-    results = get_platform_entity_url.invoke({"entity_id": "test-entity-123"})
+    results = get_platform_entity_url.invoke({
+        "type": "Record Template",
+        "system_name": "Test"
+    })
     print(results)
