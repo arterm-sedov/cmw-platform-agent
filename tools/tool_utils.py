@@ -232,18 +232,7 @@ def execute_get_operation(
 
     if isinstance(data, dict):
         # Определяем тип атрибута
-        if data.get("globalAlias"):
-            entity_type = data.get("globalAlias")
-            entity_type = entity_type.get("type")
-            if entity_type == "Attribute":
-                type = data.get("type")
-            else:
-                type = entity_type
-        else:
-            entity_type = "Application"
-
-        data = process_data(data, type)
-        data = rename_data(data, f"{caller_name}", entity_type, type)
+        data = process_data(data, f"{caller_name}")
 
     # Формируем финальный результат
     final_result = {
@@ -314,10 +303,21 @@ def execute_edit_or_create_operation(
 
 def process_data(
     data: Dict[str, Any],
-    type: str
+    caller_name: str
 ) -> Dict[str, Any]:
 
     if isinstance(data, dict):
+        # Определяем тип атрибута
+        if data.get("globalAlias"):
+            entity_type = data.get("globalAlias")
+            entity_type = entity_type.get("type")
+            if entity_type == "Attribute":
+                type = data.get("type")
+            else:
+                type = entity_type
+        else:
+            entity_type = "Application"
+
         keys_to_remove = KEYS_TO_REMOVE_MAPPING.get(type, []) # по умолчанию - пустой список
         # Удаляем ненужные ключи (если это словарь)
         for key in keys_to_remove:
@@ -382,6 +382,8 @@ def process_data(
 
                 # Заменяем старый variants на обрботанный
                 data["variants"] = processed_variants
+
+        data = rename_data(data, f"{caller_name}", entity_type, type)
 
     return data
 
