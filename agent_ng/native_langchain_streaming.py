@@ -185,10 +185,8 @@ class NativeLangChainStreaming:
         return template.format(tool_name=tool_name)
     
     def _get_error_message(self, error: str, language: str = "en") -> str:
-        """Get the localized error message"""
-        from .i18n_translations import get_translation_key
-        template = get_translation_key("error", language)
-        return template.format(error=error)
+        """Get the localized error message with icon - let native error wording speak for itself"""
+        return f"❌ {error}"
     
     def _get_agent_language(self, agent) -> str:
         """Get language from agent, defaulting to English"""

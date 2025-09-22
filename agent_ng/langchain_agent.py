@@ -263,10 +263,12 @@ class CmwAgent:
                 }
             
         except Exception as e:
-            # Stream error
+            # Stream error with icon - let native error wording speak for itself
+            content = f"❌ {str(e)}"
+            
             yield {
                 "type": "error",
-                "content": f"❌ **Error: {str(e)}**",
+                "content": content,
                 "metadata": {"error": str(e)}
             }
     
