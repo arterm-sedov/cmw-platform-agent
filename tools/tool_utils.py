@@ -10,6 +10,7 @@ from .models import (
 )
 
 # Common constants
+APPLICATION_ENDPOINT = "webapi/Solution"
 ATTRIBUTE_ENDPOINT = "webapi/Attribute"
 KEYS_TO_REMOVE_MAPPING = {
     "String": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
