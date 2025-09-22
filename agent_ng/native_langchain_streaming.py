@@ -408,8 +408,9 @@ class NativeLangChainStreaming:
                             tool_call_id = original_tool_call.get('id')
                             
                             if tool_name and tool_call_id:
-                                # Get the tool key for result lookup
-                                tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
+                                # Get the tool key for result lookup (exclude agent from key calculation)
+                                cache_args = {k: v for k, v in tool_args.items() if k != 'agent'}
+                                tool_key = f"{tool_name}:{hash(str(sorted(cache_args.items())))}"
                                 
                                 # Get cached result (same for all duplicates)
                                 tool_result = tool_result_cache.get(tool_key, "Tool execution failed")
