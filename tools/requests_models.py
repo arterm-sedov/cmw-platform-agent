@@ -93,20 +93,18 @@ class HTTPResponse(BaseModel):
         """
         Validate that status code is a valid HTTP status code.
         
-        Ensures the status code is within the valid HTTP range (100-599)
-        to prevent invalid status codes from causing issues downstream.
+        Ensures the status code is within the valid HTTP range (100-599).
+        Automatically converts invalid status codes to 500 (Internal Server Error).
         
         Args:
             v (int): The status code to validate
             
         Returns:
-            int: The validated status code
-            
-        Raises:
-            ValueError: If status code is not in valid range (100-599)
+            int: The validated status code (converted to 500 if invalid)
         """
         if not isinstance(v, int) or v < 100 or v > 599:
-            raise ValueError("Status code must be a valid HTTP status code (100-599)")
+            # Convert invalid status codes to 500 (Internal Server Error)
+            return 500
         return v
     
     @field_validator("raw_response", mode="before")

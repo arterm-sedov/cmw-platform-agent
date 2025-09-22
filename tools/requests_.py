@@ -98,8 +98,13 @@ def _basic_headers() -> Dict[str, str]:
         >>> print(headers["Content-Type"])   # "application/json"
     """
     cfg = _load_server_config()
+    
+    # Ensure credentials are not None to prevent concatenation errors
+    login = cfg.login or ""
+    password = cfg.password or ""
+    
     # Encode credentials in base64 for basic authentication
-    credentials = base64.b64encode(f"{cfg.login}:{cfg.password}".encode("ascii")).decode("ascii")
+    credentials = base64.b64encode(f"{login}:{password}".encode("ascii")).decode("ascii")
     return {
         "Authorization": f"Basic {credentials}",
         "Content-Type": "application/json",
@@ -195,7 +200,7 @@ def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]
         # Handle network/request errors
         error_response = HTTPResponse(
             success=False,
-            status_code=getattr(e.response, 'status_code', 0) if hasattr(e, 'response') else 0,
+            status_code=getattr(e.response, 'status_code', 500) if hasattr(e, 'response') else 500,
             raw_response=None,
             error=f"Request failed: {str(e)}",
             base_url=url
@@ -253,7 +258,7 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
         # Handle network/request errors
         error_response = HTTPResponse(
             success=False,
-            status_code=getattr(e.response, 'status_code', 0) if hasattr(e, 'response') else 0,
+            status_code=getattr(e.response, 'status_code', 500) if hasattr(e, 'response') else 500,
             raw_response=None,
             error=f"Request failed: {str(e)}",
             base_url=url
@@ -310,7 +315,7 @@ def _get_request(endpoint: str) -> Dict[str, Any]:
         # Handle network/request errors
         error_response = HTTPResponse(
             success=False,
-            status_code=getattr(e.response, 'status_code', 0) if hasattr(e, 'response') else 0,
+            status_code=getattr(e.response, 'status_code', 500) if hasattr(e, 'response') else 500,
             raw_response=None,
             error=f"Request failed: {str(e)}",
             base_url=url
@@ -350,7 +355,7 @@ def _delete_request(endpoint: str) -> Dict[str, Any]:
         # Handle network/request errors
         error_response = HTTPResponse(
             success=False,
-            status_code=getattr(e.response, 'status_code', 0) if hasattr(e, 'response') else 0,
+            status_code=getattr(e.response, 'status_code', 500) if hasattr(e, 'response') else 500,
             raw_response=None,
             error=f"Request failed: {str(e)}",
             base_url=url
