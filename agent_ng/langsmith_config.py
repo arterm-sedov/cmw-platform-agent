@@ -67,6 +67,7 @@ def setup_langsmith_environment():
         # Set environment variables for LangSmith
         os.environ["LANGSMITH_TRACING"] = "true"
         os.environ["LANGSMITH_API_KEY"] = config.api_key
+        os.environ["LANGSMITH_PROJECT"] = config.project_name
         
         if config.workspace_id:
             os.environ["LANGSMITH_WORKSPACE_ID"] = config.workspace_id
@@ -81,23 +82,9 @@ def setup_langsmith_environment():
         return False
 
 
-def get_traceable_decorator():
-    """Get the traceable decorator if LangSmith is configured"""
-    config = get_langsmith_config()
-    
-    if config.is_configured():
-        try:
-            from langsmith import traceable
-            return traceable
-        except ImportError:
-            print("⚠️ LangSmith not installed. Install with: pip install langsmith")
-            return None
-    else:
-        return None
-
 
 def get_openai_wrapper():
-    """Get OpenAI wrapper for tracing if LangSmith is configured"""
+    """Get OpenAI wrapper for tracing if LangSmith is configured (deprecated - use direct import)"""
     config = get_langsmith_config()
     
     if config.is_configured():

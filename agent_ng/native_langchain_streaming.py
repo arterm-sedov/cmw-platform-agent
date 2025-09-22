@@ -11,6 +11,7 @@ Key Features:
 - Proper tool calling with streaming
 - No artificial delays
 - Uses LangChain's built-in streaming capabilities
+- LangSmith tracing at the LLM call level
 """
 
 from typing import Dict, List, Optional, Any, Tuple, AsyncGenerator
@@ -18,6 +19,15 @@ from dataclasses import dataclass
 
 # LangChain imports
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage
+
+# LangSmith tracing
+try:
+    from langsmith import traceable
+    LANGSMITH_AVAILABLE = True
+except ImportError:
+    LANGSMITH_AVAILABLE = False
+    def traceable(func):
+        return func
 
 
 @dataclass
@@ -186,6 +196,8 @@ class NativeLangChainStreaming:
             return 'en'
         return getattr(agent, 'language', 'en')
     
+    
+    @traceable
     async def stream_agent_response(
         self,
         agent,
@@ -193,7 +205,13 @@ class NativeLangChainStreaming:
         conversation_id: str = "default"
     ) -> AsyncGenerator[StreamingEvent, None]:
         """
-        Stream agent response using native LangChain streaming with proper tool call handling.
+        Stream a complete QA turn using native LangChain streaming.
+        
+        This method handles the entire conversation turn including:
+        - Memory retrieval
+        - LLM streaming
+        - Tool calling
+        - Memory persistence
         
         Based on: https://python.langchain.com/docs/how_to/tool_streaming/
         
@@ -288,6 +306,7 @@ class NativeLangChainStreaming:
                 has_tool_calls = False
                 print(f"🔍 DEBUG: Starting streaming loop for iteration {iteration}")
                 
+                # Stream LLM response - tracing handled by @traceable on stream_agent_response
                 async for chunk in llm_with_tools.astream(messages):
                     try:
                         # Accumulate chunks for proper tool call parsing
