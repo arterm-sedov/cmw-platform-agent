@@ -12,6 +12,7 @@ https://docs.langchain.com/langsmith/observability-quickstart
 import os
 from typing import Optional
 from dotenv import load_dotenv
+from .agent_config import get_langsmith_settings
 
 # Load environment variables
 load_dotenv()
@@ -21,15 +22,15 @@ class LangSmithConfig:
     """Lean LangSmith configuration manager"""
     
     def __init__(self):
-        self.tracing_enabled = self._is_tracing_enabled()
+        # Get centralized configuration
+        langsmith_settings = get_langsmith_settings()
+        self.tracing_enabled = langsmith_settings['langsmith_tracing']
+        self.project_name = langsmith_settings['langsmith_project']
+        
+        # Get additional LangSmith-specific settings from environment
         self.api_key = self._get_api_key()
         self.workspace_id = self._get_workspace_id()
-        self.project_name = self._get_project_name()
         
-    def _is_tracing_enabled(self) -> bool:
-        """Check if LangSmith tracing is enabled"""
-        return os.getenv("LANGSMITH_TRACING", "false").lower() in ("true", "1", "yes")
-    
     def _get_api_key(self) -> Optional[str]:
         """Get LangSmith API key"""
         return os.getenv("LANGSMITH_API_KEY")
@@ -37,10 +38,6 @@ class LangSmithConfig:
     def _get_workspace_id(self) -> Optional[str]:
         """Get LangSmith workspace ID"""
         return os.getenv("LANGSMITH_WORKSPACE_ID")
-    
-    def _get_project_name(self) -> str:
-        """Get project name for traces"""
-        return os.getenv("LANGSMITH_PROJECT", "cmw-platform-agent")
     
     def is_configured(self) -> bool:
         """Check if LangSmith is properly configured"""
@@ -77,7 +74,10 @@ def setup_langsmith_environment():
         print(f"✅ LangSmith tracing enabled for project: {config.project_name}")
         return True
     else:
-        print("ℹ️ LangSmith tracing disabled (set LANGSMITH_TRACING=true and LANGSMITH_API_KEY)")
+        if not config.tracing_enabled:
+            print("ℹ️ LangSmith tracing disabled (set LANGSMITH_TRACING=true in .env)")
+        elif not config.api_key:
+            print("ℹ️ LangSmith API key not found (set LANGSMITH_API_KEY in .env)")
         return False
 
 
@@ -109,8 +109,3 @@ def get_openai_wrapper():
             return None
     else:
         return None
-
-
-# Initialize configuration on import
-_config = get_langsmith_config()
-setup_langsmith_environment()
