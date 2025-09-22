@@ -477,19 +477,22 @@ class NextGenApp:
                         yield working_history, ""
                         
                     elif event_type == "error":
-                        # Error occurred - log it but don't add to response content
-                        # print(f"🔍 DEBUG: Error event received: {content}")
-                        # print(f"🔍 DEBUG: Error event - working_history length: {len(working_history)}")
-                        # print(f"🔍 DEBUG: Error event - response_content length: {len(response_content)}")
+                        # Add error message to response content so users can see what went wrong
+                        response_content += content + "\n\n"
+                        
+                        # Update assistant message with error
+                        if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                            working_history[assistant_message_index] = {"role": "assistant", "content": response_content}
+                        else:
+                            working_history.append({"role": "assistant", "content": response_content})
+                            assistant_message_index = len(working_history) - 1
+                        
                         streaming_error_handled = True
-                        # Don't add error message to response content
-                        # Just log it for debugging purposes
-                        # Still yield to keep the UI updated
                         yield working_history, ""
             
             except Exception as e:
                 import traceback
-                print(f"❌ Ошибка потоковой передачи сообщения: {e}")
+                print(f"❌ Error streaming message: {e}")
                 # print(f"🔍 DEBUG: Full traceback:")
                 # traceback.print_exc()
                 streaming_error_handled = True
