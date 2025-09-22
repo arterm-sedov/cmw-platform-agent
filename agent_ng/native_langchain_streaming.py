@@ -100,18 +100,27 @@ class NativeLangChainStreaming:
     def _get_tool_called_message(self, tool_name: str, language: str = "en") -> str:
         """Get the localized tool called message"""
         from .i18n_translations import get_translation_key
+        # Safety check for None language
+        if language is None:
+            language = "en"
         template = get_translation_key("tool_called", language)
         return template.format(tool_name=tool_name)
     
     def _get_call_count_message(self, total_calls: int, language: str = "en") -> str:
         """Get the localized call count message"""
         from .i18n_translations import get_translation_key
+        # Safety check for None language
+        if language is None:
+            language = "en"
         template = get_translation_key("call_count", language)
         return template.format(total_calls=total_calls)
     
     def _get_result_message(self, tool_result: str, language: str = "en") -> str:
         """Get the localized result message with chat display truncation"""
         from .i18n_translations import get_translation_key
+        # Safety check for None language
+        if language is None:
+            language = "en"
         template = get_translation_key("result", language)
         
         # Lean truncation for chat display only (200 chars max)
@@ -135,6 +144,8 @@ class NativeLangChainStreaming:
         duplicate_counts = {}
         
         for tool_call in tool_calls:
+            if not tool_call:
+                continue
             tool_name = tool_call.get('name', 'unknown')
             tool_args = tool_call.get('args', {})
             tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
@@ -171,6 +182,8 @@ class NativeLangChainStreaming:
     
     def _get_agent_language(self, agent) -> str:
         """Get language from agent, defaulting to English"""
+        if agent is None:
+            return 'en'
         return getattr(agent, 'language', 'en')
     
     async def stream_agent_response(
@@ -195,6 +208,7 @@ class NativeLangChainStreaming:
         try:
             # Get conversation history
             chat_history = agent.memory_manager.get_conversation_history(conversation_id)
+            print(f"🔍 DEBUG: Streaming manager - chat_history length: {len(chat_history) if chat_history else 0}")
             
             # Create messages list for LLM context
             messages = []
@@ -216,14 +230,23 @@ class NativeLangChainStreaming:
             # Filter out orphaned tool messages to prevent message order issues
             non_system_history = []
             for i, msg in enumerate(chat_history):
+                # Safety check for None message
+                if msg is None:
+                    print(f"🔍 DEBUG: Skipping None message at index {i}")
+                    continue
+                    
                 if isinstance(msg, SystemMessage):
                     continue
                 elif isinstance(msg, ToolMessage):
                     # Only include tool messages that have a corresponding AI message with tool calls
                     for j in range(i-1, -1, -1):
+                        # Safety check for None message in history
+                        if chat_history[j] is None:
+                            continue
                         if (isinstance(chat_history[j], AIMessage) and 
                             hasattr(chat_history[j], 'tool_calls') and chat_history[j].tool_calls):
-                            tool_call_ids = {tc.get('id') for tc in chat_history[j].tool_calls if tc.get('id')}
+                            # Safety check for None tool calls
+                            tool_call_ids = {tc.get('id') for tc in chat_history[j].tool_calls if tc is not None and tc.get('id')}
                             if hasattr(msg, 'tool_call_id') and msg.tool_call_id in tool_call_ids:
                                 non_system_history.append(msg)
                                 break
@@ -263,13 +286,22 @@ class NativeLangChainStreaming:
                 tool_calls_in_progress = {}
                 processed_tools = {}  # Track processed tools to avoid duplicates in same response
                 has_tool_calls = False
+                print(f"🔍 DEBUG: Starting streaming loop for iteration {iteration}")
                 
                 async for chunk in llm_with_tools.astream(messages):
-                    # Accumulate chunks for proper tool call parsing
-                    if accumulated_chunk is None:
-                        accumulated_chunk = chunk
-                    else:
-                        accumulated_chunk = accumulated_chunk + chunk
+                    try:
+                        # Accumulate chunks for proper tool call parsing
+                        if accumulated_chunk is None:
+                            accumulated_chunk = chunk
+                        else:
+                            accumulated_chunk = accumulated_chunk + chunk
+                    except Exception as e:
+                        print(f"🔍 DEBUG: Error processing chunk: {e}")
+                        print(f"🔍 DEBUG: Chunk type: {type(chunk)}")
+                        print(f"🔍 DEBUG: Chunk content: {chunk}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
                     
                     # Stream content as it arrives
                     if hasattr(chunk, 'content') and chunk.content:
@@ -282,9 +314,21 @@ class NativeLangChainStreaming:
                     # Process tool call chunks as they stream
                     if hasattr(chunk, 'tool_call_chunks') and chunk.tool_call_chunks:
                         for tool_call_chunk in chunk.tool_call_chunks:
-                            tool_name = tool_call_chunk.get('name')
-                            tool_call_id = tool_call_chunk.get('id')
-                            tool_args = tool_call_chunk.get('args', '')
+                            try:
+                                # Safety check for None tool_call_chunk
+                                if tool_call_chunk is None:
+                                    continue
+                                
+                                tool_name = tool_call_chunk.get('name') if isinstance(tool_call_chunk, dict) else None
+                                tool_call_id = tool_call_chunk.get('id') if isinstance(tool_call_chunk, dict) else None
+                                tool_args = tool_call_chunk.get('args', '') if isinstance(tool_call_chunk, dict) else ''
+                            except Exception as e:
+                                print(f"🔍 DEBUG: Error processing tool_call_chunk: {e}")
+                                print(f"🔍 DEBUG: tool_call_chunk type: {type(tool_call_chunk)}")
+                                print(f"🔍 DEBUG: tool_call_chunk content: {tool_call_chunk}")
+                                import traceback
+                                traceback.print_exc()
+                                continue
                             
                             if tool_name and tool_call_id not in tool_calls_in_progress:
                                 # New tool call starting
@@ -304,8 +348,9 @@ class NativeLangChainStreaming:
                                 # )
                             
                             if tool_call_id in tool_calls_in_progress:
-                                # Accumulate tool arguments
-                                tool_calls_in_progress[tool_call_id]['args'] += tool_args
+                                # Accumulate tool arguments - safety check for None
+                                safe_tool_args = tool_args if tool_args is not None else ""
+                                tool_calls_in_progress[tool_call_id]['args'] += safe_tool_args
                 
                 # Process completed tool calls
                 if hasattr(accumulated_chunk, 'tool_calls') and accumulated_chunk.tool_calls:
@@ -320,13 +365,16 @@ class NativeLangChainStreaming:
                     tool_result_cache = {}  # Map tool_key -> result for duplicate handling
                     
                     for tool_call in deduplicated_tool_calls:
+                        if not tool_call:
+                            continue
                         tool_name = tool_call.get('name')
                         tool_args = tool_call.get('args', {})
                         tool_call_id = tool_call.get('id')
                         
                         if tool_name and tool_call_id in tool_calls_in_progress:
-                            # Get duplicate count for this tool call
-                            tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
+                            # Get duplicate count for this tool call - safety check for None tool_args
+                            safe_tool_args = tool_args if tool_args is not None else {}
+                            tool_key = f"{tool_name}:{hash(str(sorted(safe_tool_args.items())))}"
                             duplicate_count = duplicate_counts.get(tool_key, 1)
                             
                             # Find the tool in our tools list
@@ -340,25 +388,34 @@ class NativeLangChainStreaming:
                                 if tool_obj:
                                     # Execute tool once with agent context
                                     # Inject agent instance for file resolution (same as memory manager)
-                                    tool_args_with_agent = {**tool_args, 'agent': agent}
+                                    tool_args_with_agent = {**safe_tool_args, 'agent': agent}
                                     tool_result = tool_obj.invoke(tool_args_with_agent)
+                                    
+                                    # Safety check for None tool_result
+                                    if tool_result is None:
+                                        print(f"⚠️ Tool {tool_name} returned None result")
+                                        tool_result = "Tool execution completed but returned no result"
                                     
                                     # Store the tool call result for future deduplication
                                     from .tool_deduplicator import get_deduplicator
                                     deduplicator = get_deduplicator()
-                                    deduplicator.store_tool_call(tool_name, tool_args, tool_result, conversation_id)
+                                    deduplicator.store_tool_call(tool_name, safe_tool_args, tool_result, conversation_id)
                                     
                                     # Cache result for duplicate tool calls
                                     tool_result_cache[tool_key] = tool_result
                                     
                                     # CRITICAL: Stream tool completion only ONCE per unique tool
                                     # Show duplicate count in the message but don't stream multiple times
+                                    
+                                    # Safety check for None tool_result to prevent concatenation errors
+                                    safe_tool_result = tool_result if tool_result is not None else "Tool execution returned no result"
+                                    
                                     yield StreamingEvent(
                                         event_type="tool_end",
-                                        content=f"\n{self._get_call_count_message(duplicate_count, language)}\n{self._get_result_message(str(tool_result), language)}",
+                                        content=f"\n{self._get_call_count_message(duplicate_count, language)}\n\n{self._get_result_message(str(safe_tool_result), language)}",
                                         metadata={
                                             "tool_name": tool_name,
-                                            "tool_output": str(tool_result),
+                                            "tool_output": str(safe_tool_result),
                                             "duplicate": duplicate_count > 1,
                                             "duplicate_count": duplicate_count,
                                             "title": self._get_tool_called_message(tool_name, language)
@@ -405,6 +462,8 @@ class NativeLangChainStreaming:
                         # CRITICAL: Add ToolMessages to working messages for proper sequence
                         tool_messages = []
                         for original_tool_call in accumulated_chunk.tool_calls:
+                            if not original_tool_call:
+                                continue
                             tool_name = original_tool_call.get('name')
                             tool_args = original_tool_call.get('args', {})
                             tool_call_id = original_tool_call.get('id')

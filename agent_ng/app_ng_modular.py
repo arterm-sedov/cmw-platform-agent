@@ -409,113 +409,145 @@ class NextGenApp:
             tool_usage = ""
             assistant_message_index = -1  # Track the index of the assistant message in working_history
             # Tool messages are now added immediately to working_history during streaming
+            streaming_error_handled = False  # Flag to track if streaming error was handled
             
-            async for event in user_agent.stream_message(message, session_id):
-                event_type = event.get("type", "unknown")
-                content = event.get("content", "")
-                metadata = event.get("metadata", {})
-                
-                if event_type == "thinking":
-                    # Agent is thinking - update or create assistant message
-                    if assistant_message_index >= 0 and assistant_message_index < len(working_history):
-                        # Update existing assistant message
-                        working_history[assistant_message_index] = {"role": "assistant", "content": content}
-                    else:
-                        # Create new assistant message
-                        working_history.append({"role": "assistant", "content": content})
-                        assistant_message_index = len(working_history) - 1
-                    yield working_history, ""
+            print(f"🔍 DEBUG: Starting streaming for session {session_id}")
+            print(f"🔍 DEBUG: Working history length before streaming: {len(working_history)}")
+            
+            try:
+                async for event in user_agent.stream_message(message, session_id):
+                    # Safety check for None event
+                    if event is None:
+                        print("🔍 DEBUG: Received None event, skipping...")
+                        continue
                     
-                elif event_type == "iteration_progress":
-                    # Iteration progress - update progress display in sidebar
-                    # Store progress status for UI update - session-specific
-                    self.session_manager.set_status(session_id, content)
-                    # Also update global progress for timer-based updates
-                    self.current_global_progress = content
-                    # Reset cache to force update
-                    self.last_progress_display = ""
-                    yield working_history, ""
+                    try:
+                        event_type = event.get("type", "unknown")
+                        content = event.get("content", "")
+                        metadata = event.get("metadata", {})
+                        print(f"🔍 DEBUG: Processing event - type: {event_type}, content length: {len(str(content))}")
+                    except Exception as e:
+                        import traceback
+                        print(f"🔍 DEBUG: Error processing event: {e}")
+                        print(f"🔍 DEBUG: Event data: {event}")
+                        print(f"🔍 DEBUG: Event type: {type(event)}")
+                        print(f"🔍 DEBUG: Event traceback:")
+                        traceback.print_exc()
+                        streaming_error_handled = True
+                        print(f"🔍 DEBUG: Set streaming_error_handled to True in event processing")
+                        continue
                     
-                elif event_type == "completion":
-                    # Final completion message - update progress display
-                    self.session_manager.set_status(session_id, content)
-                    # Also update global progress for timer-based updates
-                    self.current_global_progress = content
-                    # Reset cache to force update
-                    self.last_progress_display = ""
-                    yield working_history, ""
-                    
-                elif event_type == "tool_start":
-                    # Tool is starting - immediately add to working history
-                    tool_name = metadata.get("tool_name", "unknown")
-                    tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name))
-                    
-                    # Create tool message and immediately add to working history
-                    tool_message = {
-                        "role": "assistant", 
-                        "content": content,
-                        "metadata": {"title": tool_title}
-                    }
-                    working_history.append(tool_message)
-                    yield working_history, ""
-                    
-                elif event_type == "tool_end":
-                    # Tool completed - immediately add to working history
-                    tool_name = metadata.get("tool_name", "unknown")
-                    tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name))
-                    
-                    # Create tool message and immediately add to working history
-                    tool_message = {
-                        "role": "assistant", 
-                        "content": content,
-                        "metadata": {"title": tool_title}
-                    }
-                    working_history.append(tool_message)
-                    yield working_history, ""
-                    
-                elif event_type == "content":
-                    # Stream content from response - ensure content is not None
-                    response_content += safe_string(content)
-                    
-                    # Update or create assistant message
-                    if assistant_message_index >= 0 and assistant_message_index < len(working_history):
-                        # Update existing assistant message
-                        working_history[assistant_message_index] = {"role": "assistant", "content": response_content}
-                        print(f"🔍 DEBUG: Updated existing assistant message at index {assistant_message_index}")
-                    else:
-                        # Create new assistant message - add line breaks if there are tool messages before
-                        # Check if the last few messages are tool messages
-                        has_recent_tool_messages = False
-                        for i in range(max(0, len(working_history) - 3), len(working_history)):
-                            if i >= 0 and working_history[i].get("metadata", {}).get("title"):
-                                has_recent_tool_messages = True
-                                break
+                    if event_type == "thinking":
+                        # Agent is thinking - update or create assistant message
+                        if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                            # Update existing assistant message
+                            working_history[assistant_message_index] = {"role": "assistant", "content": content}
+                        else:
+                            # Create new assistant message
+                            working_history.append({"role": "assistant", "content": content})
+                            assistant_message_index = len(working_history) - 1
+                        yield working_history, ""
                         
-                        if has_recent_tool_messages:
-                            # There are tool messages before, add proper separation
-                            response_content = "\n\n" + response_content
+                    elif event_type == "iteration_progress":
+                        # Iteration progress - update progress display in sidebar
+                        # Store progress status for UI update - session-specific
+                        self.session_manager.set_status(session_id, content)
+                        # Also update global progress for timer-based updates
+                        self.current_global_progress = content
+                        # Reset cache to force update
+                        self.last_progress_display = ""
+                        yield working_history, ""
                         
-                        working_history.append({"role": "assistant", "content": response_content})
-                        assistant_message_index = len(working_history) - 1
-                        print(f"🔍 DEBUG: Created new assistant message at index {assistant_message_index}")
-                    
-                    yield working_history, ""
-                    
-                elif event_type == "error":
-                    # Error occurred - append to assistant message
-                    error_msg = f"\n{safe_string(content)}"
-                    response_content += error_msg
-                    
-                    # Update assistant message with error
-                    if assistant_message_index >= 0 and assistant_message_index < len(working_history):
-                        # Update existing assistant message
-                        working_history[assistant_message_index] = {"role": "assistant", "content": response_content}
-                    else:
-                        # Create new assistant message
-                        working_history.append({"role": "assistant", "content": response_content})
-                        assistant_message_index = len(working_history) - 1
-                    
-                    yield working_history, ""
+                    elif event_type == "completion":
+                        # Final completion message - update progress display
+                        self.session_manager.set_status(session_id, content)
+                        # Also update global progress for timer-based updates
+                        self.current_global_progress = content
+                        # Reset cache to force update
+                        self.last_progress_display = ""
+                        yield working_history, ""
+                        
+                    elif event_type == "tool_start":
+                        # Tool is starting - immediately add to working history
+                        tool_name = metadata.get("tool_name", "unknown") if metadata else "unknown"
+                        tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name)) if metadata else format_translation("tool_called", self.language, tool_name="unknown")
+                        
+                        # Create tool message and immediately add to working history
+                        tool_message = {
+                            "role": "assistant", 
+                            "content": content,
+                            "metadata": {"title": tool_title}
+                        }
+                        working_history.append(tool_message)
+                        yield working_history, ""
+                        
+                    elif event_type == "tool_end":
+                        # Tool completed - immediately add to working history
+                        tool_name = metadata.get("tool_name", "unknown") if metadata else "unknown"
+                        tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name)) if metadata else format_translation("tool_called", self.language, tool_name="unknown")
+                        
+                        # Create tool message and immediately add to working history
+                        tool_message = {
+                            "role": "assistant", 
+                            "content": content,
+                            "metadata": {"title": tool_title}
+                        }
+                        working_history.append(tool_message)
+                        yield working_history, ""
+                        
+                    elif event_type == "content":
+                        # Stream content from response - ensure content is not None
+                        content_to_add = safe_string(content)
+                        print(f"🔍 DEBUG: Content event - content: '{content_to_add}', length: {len(content_to_add)}")
+                        
+                        # Only add line break when LLM starts answering after tool messages
+                        if assistant_message_index < 0 and response_content == "":
+                            # This is the very first content, check if there are recent tool messages
+                            has_recent_tool_messages = False
+                            for i in range(max(0, len(working_history) - 3), len(working_history)):
+                                if i >= 0 and working_history[i] and working_history[i].get("metadata", {}).get("title"):
+                                    has_recent_tool_messages = True
+                                    break
+                            
+                            if has_recent_tool_messages:
+                                # Add lean line break only when LLM starts answering after tools
+                                content_to_add = "\n" + content_to_add
+                        
+                        response_content += content_to_add
+                        
+                        # Update or create assistant message
+                        if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                            # Update existing assistant message
+                            working_history[assistant_message_index] = {"role": "assistant", "content": response_content}
+                            print(f"🔍 DEBUG: Updated existing assistant message at index {assistant_message_index}")
+                        else:
+                            # Create new assistant message
+                            working_history.append({"role": "assistant", "content": response_content})
+                            assistant_message_index = len(working_history) - 1
+                            print(f"🔍 DEBUG: Created new assistant message at index {assistant_message_index}")
+                        
+                        yield working_history, ""
+                        
+                    elif event_type == "error":
+                        # Error occurred - log it but don't add to response content
+                        print(f"🔍 DEBUG: Error event received: {content}")
+                        print(f"🔍 DEBUG: Error event - working_history length: {len(working_history)}")
+                        print(f"🔍 DEBUG: Error event - response_content length: {len(response_content)}")
+                        streaming_error_handled = True
+                        # Don't add error message to response content
+                        # Just log it for debugging purposes
+                        # Still yield to keep the UI updated
+                        yield working_history, ""
+            
+            except Exception as e:
+                import traceback
+                print(f"❌ Ошибка потоковой передачи сообщения: {e}")
+                print(f"🔍 DEBUG: Full traceback:")
+                traceback.print_exc()
+                streaming_error_handled = True
+                print(f"🔍 DEBUG: Set streaming_error_handled to True in streaming loop")
+                # Continue with the rest of the processing even if streaming fails
+                pass
             
             # Add API token count to final response
             # Add token counts below assistant response
@@ -554,9 +586,8 @@ class NextGenApp:
                     print(f"🔍 DEBUG: Provider/model display error: {e}")
                     self.debug_streamer.warning(f"Failed to get provider/model info: {e}")
             
-            # Add execution time
+            # Calculate execution time for the entire response
             execution_time = time.time() - start_time
-            token_displays.append(format_translation("execution_time", self.language, time=execution_time))
             
             # Add deduplication stats if available from session-specific agent
             if user_agent and hasattr(user_agent, '_deduplication_stats'):
@@ -587,12 +618,14 @@ class NextGenApp:
             
             # Add token statistics as a separate metadata block
             if token_displays:
+                # Add execution time to the token display
+                token_displays.append(format_translation("execution_time", self.language, time=execution_time))
                 token_display = "\n".join(token_displays)
                 # Create a separate metadata block for token statistics
                 token_metadata_message = {
                     "role": "assistant", 
                     "content": token_display,
-                    "metadata": {"title": "📊 Статистика токенов"}
+                    "metadata": {"title": format_translation("token_statistics_title", self.language)}
                 }
                 working_history.append(token_metadata_message)
                 print(f"🔍 DEBUG: Added token metadata block: {token_display}")
@@ -601,6 +634,12 @@ class NextGenApp:
             # Ensure tool messages are preserved and not overwritten
             print(f"🔍 DEBUG: Final working history length: {len(working_history)}")
             for i, msg in enumerate(working_history):
+                if msg is None:
+                    print(f"🔍 DEBUG: Message {i} is None, skipping...")
+                    continue
+                if not isinstance(msg, dict):
+                    print(f"🔍 DEBUG: Message {i} is not a dict (type: {type(msg)}), skipping...")
+                    continue
                 if msg.get("metadata", {}).get("title"):
                     print(f"🔍 DEBUG: Tool message {i}: {msg.get('metadata', {}).get('title', 'No title')}")
                 elif msg.get("role") == "assistant":
@@ -610,24 +649,17 @@ class NextGenApp:
             self.stop_processing()
             
             # Final yield with updated stats
+            print(f"🔍 DEBUG: Final yield - working_history length: {len(working_history)}")
+            print(f"🔍 DEBUG: Final yield - response_content length: {len(response_content)}")
             yield working_history, ""
             
         except Exception as e:
+            # Log error to terminal but don't add to chat response
+            print(f"🔍 DEBUG: Outer exception handler - streaming_error_handled: {streaming_error_handled}")
+            print(f"🔍 DEBUG: Outer exception handler - error: {e}")
             self.debug_streamer.error(f"Error in stream chat: {e}")
-            execution_time = time.time() - start_time
-            error_msg = format_translation("error_streaming", self.language, error=str(e)) + f"\n\n{format_translation('execution_time', self.language, time=execution_time)}"
-            # Preserve existing content and append error message
-            # Fix: Ensure we never concatenate None with string
-            if assistant_message_index >= 0 and assistant_message_index < len(working_history):
-                # Update existing assistant message
-                current_content = working_history[assistant_message_index].get("content", "") or ""
-                if response_content is not None:
-                    current_content = response_content
-                working_history[assistant_message_index] = {"role": "assistant", "content": safe_string(current_content) + "\n\n" + error_msg}
-            else:
-                # Create new assistant message
-                current_content = response_content or ""
-                working_history.append({"role": "assistant", "content": safe_string(current_content) + "\n\n" + error_msg})
+            print(f"❌ Streaming error (logged to terminal only): {e}")
+            # Don't add error message to response content - just log it
             # Stop processing state on error
             self.stop_processing()
             yield working_history, ""

@@ -95,6 +95,7 @@ RUSSIAN_TRANSLATIONS = {
     "status_ready_false": "Готов: нет ❌",
     "token_budget_title": "💰 Расход токенов",
     "token_budget_initializing": "🟡 Загрузка...",
+    "token_statistics_title": "📊 Статистика",
     # Token usage components (separated for flexibility)
     "token_usage_header": "**Расход токенов:**",
     "token_usage_total": "Всего: {total_tokens:,}",
@@ -348,6 +349,7 @@ ENGLISH_TRANSLATIONS = {
     "status_ready_false": "Ready: no ❌",
     "token_budget_title": "💰 Token usage",
     "token_budget_initializing": "🟡 Loading...",
+    "token_statistics_title": "📊 Statistics",
     # Token usage components (separated for flexibility)
     "token_usage_header": "**Token usage:**",
     "token_usage_total": "Total: {total_tokens:,}",
@@ -544,6 +546,14 @@ def get_translation_key(key: str, language: str = "en") -> str:
     Returns:
         Translated string
     """
+    # Safety check for None key
+    if key is None:
+        return "Unknown"
+    
+    # Safety check for None language
+    if language is None:
+        language = "en"
+    
     if language.lower() == "ru":
         return RUSSIAN_TRANSLATIONS.get(key, ENGLISH_TRANSLATIONS.get(key, key))
     else:
@@ -561,6 +571,14 @@ def format_translation(key: str, language: str = "en", **kwargs) -> str:
     Returns:
         Formatted translated string
     """
+    # Safety check for None key
+    if key is None:
+        return "Unknown"
+    
+    # Safety check for None language
+    if language is None:
+        language = "en"
+    
     template = get_translation_key(key, language)
     try:
         return template.format(**kwargs)

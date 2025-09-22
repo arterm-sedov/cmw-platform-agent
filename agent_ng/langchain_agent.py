@@ -304,11 +304,16 @@ Always use the appropriate tools to answer questions and show your work step by 
             async for event in streaming_manager.stream_agent_response(
                 self, message, conversation_id
             ):
+                # Safety check for None event
+                if event is None:
+                    print("🔍 DEBUG: Received None event from streaming manager, skipping...")
+                    continue
+                
                 # Convert to the expected format
                 yield {
-                    "type": event.event_type,
-                    "content": event.content,
-                    "metadata": event.metadata or {}
+                    "type": getattr(event, 'event_type', 'unknown'),
+                    "content": getattr(event, 'content', ''),
+                    "metadata": getattr(event, 'metadata', None) or {}
                 }
             
         except Exception as e:
