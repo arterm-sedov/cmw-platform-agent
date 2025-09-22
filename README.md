@@ -29,13 +29,15 @@ Behold the Comindware Analyst Copilot — a robust and extensible system designe
 The system features a **LangChain-native modular Gradio app** (`app_ng_modular.py`) that provides:
 
 - **Modular Tab Architecture**: Separate modules for Chat, Logs, and Stats tabs
-- **Multi-turn Conversations**: Reliable conversation memory with tool calls
-- **Pure LangChain Patterns**: Native LangChain conversation chains and memory
-- **Real-time Streaming**: Live response streaming with tool visualization
-- **Modern UI**: Comprehensive monitoring, debugging, and statistics
-- **Multi-LLM Support**: OpenRouter, Gemini, Groq, Mistral, and HuggingFace integration
-- **Session Isolation**: Each user gets isolated agent instances
-- **Internationalization**: Full i18n support (English/Russian)
+- **Multi-turn Conversations**: Reliable conversation memory with tool calls using LangChain's native memory management
+- **Pure LangChain Patterns**: Native LangChain conversation chains, memory, and streaming
+- **Real-time Streaming**: Live response streaming with tool visualization using `astream()` and `astream_events()`
+- **Modern UI**: Comprehensive monitoring, debugging, and statistics with internationalization
+- **Multi-LLM Support**: OpenRouter, Gemini, Groq, Mistral, and HuggingFace integration with automatic fallback
+- **Session Isolation**: Each user gets isolated agent instances with proper session management
+- **Internationalization**: Full i18n support (English/Russian) using Gradio's built-in I18n system
+- **Comprehensive Error Handling**: Advanced error classification and recovery with vector similarity matching
+- **Native LangChain Streaming**: Token-by-token streaming using LangChain's native streaming capabilities
 
 **Quick Start:**
 
@@ -77,23 +79,29 @@ The Agent NG is a modern, LangChain-native conversational AI agent built with a 
 
 #### Main Components
 
-1. **CmwAgent** (`langchain_agent.py`) - Main agent orchestrator
-2. **NextGenApp** (`app_ng_modular.py`) - Gradio web application
-3. **LLMManager** (`llm_manager.py`) - LLM provider management
-4. **SessionManager** (`session_manager.py`) - User session isolation
-5. **ErrorHandler** (`error_handler.py`) - Comprehensive error handling
-6. **UI Components** (`tabs/`, `ui_manager.py`) - Modular UI system
+1. **CmwAgent** (`langchain_agent.py`) - Main agent orchestrator using pure LangChain patterns
+2. **NextGenApp** (`app_ng_modular.py`) - Gradio web application with modular tab architecture
+3. **LLMManager** (`llm_manager.py`) - Multi-provider LLM management with persistent instances
+4. **SessionManager** (`session_manager.py`) - User session isolation and state management
+5. **ErrorHandler** (`error_handler.py`) - Comprehensive error handling with vector similarity matching
+6. **UI Components** (`tabs/`, `ui_manager.py`) - Modular UI system with internationalization
+7. **Memory Management** (`langchain_memory.py`) - LangChain-native memory management
+8. **Streaming** (`native_langchain_streaming.py`) - Native LangChain streaming implementation
+9. **Statistics** (`stats_manager.py`) - Performance metrics and usage tracking
+10. **Tracing** (`trace_manager.py`) - Comprehensive execution tracing and debugging
 
 #### Key Features
 
-- ✅ **LangChain-Native**: Uses pure LangChain patterns for memory and chains
-- ✅ **Multi-Turn Conversations**: Proper tool call context preservation
-- ✅ **Session Isolation**: Each user gets isolated agent instances
-- ✅ **Real-Time Streaming**: Token-by-token response streaming
-- ✅ **Modular Architecture**: Clean separation of concerns
-- ✅ **Internationalization**: Full i18n support (English/Russian)
-- ✅ **Error Recovery**: Robust error handling and provider fallback
-- ✅ **Tool Integration**: CMW platform tools + utility tools
+- ✅ **LangChain-Native**: Uses pure LangChain patterns for memory, chains, and streaming
+- ✅ **Multi-Turn Conversations**: Proper tool call context preservation with LangChain memory
+- ✅ **Session Isolation**: Each user gets isolated agent instances with proper cleanup
+- ✅ **Real-Time Streaming**: Token-by-token response streaming using `astream()` and `astream_events()`
+- ✅ **Modular Architecture**: Clean separation of concerns with dedicated modules
+- ✅ **Internationalization**: Full i18n support (English/Russian) using Gradio's I18n system
+- ✅ **Error Recovery**: Robust error handling with vector similarity and provider fallback
+- ✅ **Tool Integration**: 20+ CMW platform tools + utility tools with proper organization
+- ✅ **Comprehensive Tracing**: Complete execution traces with debug output capture
+- ✅ **Statistics Tracking**: Real-time performance metrics and usage analytics
 
 ### LLM Configuration
 
@@ -132,19 +140,32 @@ The agent includes 20+ specialized tools organized into categories:
 
 #### CMW Platform Tools
 
-- **Application Tools**: List applications, templates, and platform entities
-- **Attribute Tools**: Create and manage all attribute types (text, boolean, datetime, decimal, document, drawing, duration, image, record, role, account, enum)
-- **Template Tools**: List and manage template attributes
+- **Application Tools** (`applications_tools/`): List applications, templates, and platform entities
+- **Attribute Tools** (`attributes_tools/`): Create and manage all attribute types:
+  - Text attributes (`tools_text_attribute.py`)
+  - Boolean attributes (`tools_boolean_attribute.py`)
+  - DateTime attributes (`tools_datetime_attribute.py`)
+  - Decimal/Numeric attributes (`tools_decimal_attribute.py`)
+  - Document attributes (`tools_document_attribute.py`)
+  - Drawing attributes (`tools_drawing_attribute.py`)
+  - Duration attributes (`tools_duration_attribute.py`)
+  - Image attributes (`tools_image_attribute.py`)
+  - Record attributes (`tools_record_attribute.py`)
+  - Role attributes (`tools_role_attribute.py`)
+  - Account attributes (`tools_account_attribute.py`)
+  - Enum attributes (`tools_enum_attribute.py`)
+- **Template Tools** (`templates_tools/`): List and manage template attributes
 - **General Operations**: Delete, archive/unarchive, and retrieve attributes
 
 #### Utility Tools
 
-- **Web Search**: Deep research capabilities for gathering information
-- **Code Execution**: Python code execution for data processing
+- **Web Search**: Deep research capabilities using Tavily, Wikipedia, and Arxiv
+- **Code Execution**: Python code execution for data processing and analysis
 - **File Analysis**: Document processing and analysis (PDF, images, text)
 - **Mathematical Operations**: Complex calculations and data analysis
-- **Image Processing**: OCR and image analysis capabilities
+- **Image Processing**: OCR and image analysis capabilities using pytesseract
 - **Data Processing**: CSV, JSON, and other data format handling
+- **Platform Entity URL**: Generate URLs for Comindware Platform entities
 
 ## 🔧 Core Modules
 
@@ -153,11 +174,14 @@ The agent includes 20+ specialized tools organized into categories:
 **Purpose**: Main agent orchestrator using pure LangChain patterns
 
 **Key Features**:
-- LangChain-native memory management
-- Multi-turn conversation support with tool calls
-- Session-specific agent instances
-- File handling with security
-- Comprehensive statistics tracking
+- LangChain-native memory management with `ConversationBufferMemory`
+- Multi-turn conversation support with tool calls using LangChain chains
+- Session-specific agent instances with proper isolation
+- File handling with security and session-based storage
+- Comprehensive statistics tracking and performance monitoring
+- Native LangChain streaming using `astream()` and `astream_events()`
+- Tool call context preservation across conversation turns
+- LangSmith tracing integration for observability
 
 **Usage**:
 ```python
@@ -167,90 +191,105 @@ response = agent.process_message("Calculate 5 + 3", "conversation_1")
 
 ### 2. LLMManager (llm_manager.py)
 
-**Purpose**: Centralized LLM provider management
+**Purpose**: Centralized LLM provider management with persistent instances
 
 **Supported Providers**:
-- **Gemini** (Google): `gemini-2.5-pro`
-- **OpenRouter**: `deepseek/deepseek-chat-v3.1:free`
-- **Mistral**: `mistral-large-latest`
-- **Groq**: `llama-3.3-70b-versatile`
-- **HuggingFace**: Various models
-- **GigaChat**: Sber's Russian LLM
+- **Gemini** (Google): `gemini-2.5-pro` with 2M token limit
+- **OpenRouter**: `deepseek/deepseek-chat-v3.1:free`, `mistralai/mistral-small-3.2-24b-instruct:free`
+- **Mistral**: `mistral-small-latest`, `mistral-medium-latest`, `mistral-large-latest`
+- **Groq**: `qwen-qwq-32b`, `llama-3.1-8b-instant`, `llama-3.3-70b-8192`
+- **HuggingFace**: Various models including `Qwen/Qwen2.5-Coder-32B-Instruct`
+- **GigaChat**: Sber's Russian LLM (when available)
 
 **Features**:
-- Persistent LLM instances
-- Tool binding and management
-- Provider-specific optimizations
-- Health monitoring
+- Persistent LLM instances across requests
+- Tool binding and management with proper provider adapters
+- Provider-specific optimizations and error handling
+- Health monitoring and automatic fallback
+- Thread-safe operations with proper locking
+- Configuration-driven initialization
+- Rate limiting and token management
 
 ### 3. SessionManager (session_manager.py)
 
 **Purpose**: User session isolation and management
 
 **Features**:
-- Session-specific agent instances
+- Session-specific agent instances with proper isolation
 - Automatic cleanup and resource management
-- Session data isolation
-- Multi-language support
+- Session data isolation with Gradio request handling
+- Multi-language support with i18n integration
+- Clean session lifecycle management
+- Proper Gradio request handling for session identification
 
 ### 4. ErrorHandler (error_handler.py)
 
-**Purpose**: Comprehensive error classification and recovery
+**Purpose**: Comprehensive error classification and recovery with advanced pattern matching
 
 **Error Types Handled**:
-- Rate limiting (429 errors)
-- Authentication errors (401)
-- Token limit exceeded
-- Network connectivity issues
-- Provider-specific errors (Mistral tool call IDs, etc.)
+- Rate limiting (429 errors) with retry timing extraction
+- Authentication errors (401, 403)
+- Token limit exceeded and context too long errors
+- Network connectivity issues and timeouts
+- Provider-specific errors (Mistral tool call IDs, OpenRouter limits, etc.)
+- Service unavailable and internal errors
+- Resource exhausted and capacity exceeded errors
 
 **Features**:
-- Vector similarity for error pattern matching
-- Provider failure tracking
-- Automatic retry with exponential backoff
-- Structured error information
+- Vector similarity for error pattern matching using TF-IDF and cosine similarity
+- Provider failure tracking with session-specific counters
+- Automatic retry with exponential backoff and smart timing
+- Structured error information with recovery suggestions
+- HTTP status code extraction from various error formats
+- Provider-specific error classification and handling
 
 ### 5. UI System
 
 #### Modular Tab Architecture (tabs/)
-- **ChatTab** (`chat_tab.py`): Main conversation interface
-- **LogsTab** (`logs_tab.py`): Debug and initialization logs
-- **StatsTab** (`stats_tab.py`): Performance metrics and statistics
+- **ChatTab** (`chat_tab.py`): Main conversation interface with quick actions and i18n support
+- **LogsTab** (`logs_tab.py`): Debug and initialization logs with real-time updates
+- **StatsTab** (`stats_tab.py`): Performance metrics and statistics with live monitoring
 
 #### UI Manager (`ui_manager.py`)
 - Centralized UI component management
-- Theme and styling
-- Component state management
-- Event handling coordination
+- Theme and styling with custom CSS
+- Component state management and event handling
+- Internationalization integration with Gradio's I18n system
+- Responsive design and user experience optimization
 
 ## 🔄 Memory Management
 
 ### LangChain Memory (langchain_memory.py)
 
 **Features**:
-- Uses LangChain's native memory management
-- Tool call context preservation
-- Session-specific memory instances
-- Automatic conversation summarization
+- Uses LangChain's native memory management with `ConversationBufferMemory`
+- Tool call context preservation across conversation turns
+- Session-specific memory instances with proper isolation
+- Automatic conversation summarization and context management
+- Integration with LangChain conversation chains
+- Proper message formatting for different LLM providers
 
 **Memory Types**:
-- **Native LangChain Memory**: Stores full conversation history
-- **Tool-aware memory**: Preserves tool call results
-- **Session isolation**: Memory per user session
+- **Native LangChain Memory**: Stores full conversation history using LangChain patterns
+- **Tool-aware memory**: Preserves tool call results and context
+- **Session isolation**: Memory per user session with automatic cleanup
+- **Conversation chains**: Proper integration with LangChain's chain architecture
 
 ## 🌐 Internationalization
 
 ### Language Support (i18n_translations.py)
 
 **Supported Languages**:
-- **English (en)**: Default
-- **Russian (ru)**: Full translation
+- **English (en)**: Default language
+- **Russian (ru)**: Full translation with comprehensive UI coverage
 
 **Features**:
-- Dynamic language switching
-- UI component translations
-- Error message localization
-- Context-aware translations
+- Dynamic language switching using Gradio's built-in I18n system
+- Complete UI component translations including tabs, buttons, and messages
+- Error message localization with context-aware translations
+- Quick action button translations
+- Welcome messages and help text in both languages
+- Seamless integration with Gradio's internationalization framework
 
 **Configuration**:
 ```bash
@@ -302,49 +341,60 @@ CMW_DEBUG_MODE=true
 ### Native Streaming (native_langchain_streaming.py)
 
 **Features**:
-- Token-by-token streaming
-- Tool usage visualization
-- Real-time progress updates
-- Event-based architecture
+- Token-by-token streaming using LangChain's native `astream()` and `astream_events()`
+- Tool usage visualization with real-time updates
+- Real-time progress updates and status monitoring
+- Event-based architecture with proper event handling
+- No artificial delays - uses LangChain's built-in streaming capabilities
+- LangSmith tracing integration at the LLM call level
 
 **Event Types**:
-- `content`: Main response content
-- `thinking`: Agent reasoning process
-- `tool_use`: Tool execution steps
-- `error`: Error messages
-- `metadata`: Additional information
+- `content`: Main response content with token-by-token delivery
+- `thinking`: Agent reasoning process and decision making
+- `tool_use`: Tool execution steps with real-time feedback
+- `error`: Error messages and recovery information
+- `metadata`: Additional information and context
+- `streaming`: Real-time streaming events from LangChain
 
 ## 📊 Statistics & Monitoring
 
 ### Stats Manager (stats_manager.py)
 
 **Metrics Tracked**:
-- LLM usage statistics
-- Response times
-- Tool call frequency
-- Error rates
-- Session statistics
+- LLM usage statistics with success/failure rates
+- Response times and performance metrics
+- Tool call frequency and usage patterns
+- Error rates and failure analysis
+- Session statistics and user activity
+- Conversation history and question tracking
+- Token usage and cost analysis
 
 **Features**:
-- Real-time metrics
-- Export capabilities
-- Performance monitoring
-- Usage analytics
+- Real-time metrics with live updates
+- Export capabilities for data analysis
+- Performance monitoring and optimization
+- Usage analytics and insights
+- Comprehensive statistics dashboard
+- Historical data tracking and trends
 
 ### Debug System (debug_streamer.py)
 
 **Features**:
-- Real-time log streaming
-- Categorized logging
-- Session-specific debug contexts
-- Performance tracing
+- Real-time log streaming with live updates
+- Categorized logging with proper log levels
+- Session-specific debug contexts and isolation
+- Performance tracing and execution monitoring
+- Comprehensive debug output capture
+- Integration with trace management system
 
 **Log Categories**:
-- INIT: Initialization events
-- LLM: LLM operations
-- TOOL: Tool executions
-- ERROR: Error handling
-- THINKING: Agent reasoning
+- INIT: Initialization events and startup processes
+- LLM: LLM operations and API calls
+- TOOL: Tool executions and results
+- ERROR: Error handling and recovery
+- THINKING: Agent reasoning and decision making
+- STREAMING: Real-time streaming events
+- SESSION: Session management and user activity
 
 ## 🚀 Concurrency & Performance
 
@@ -417,43 +467,51 @@ The codebase follows a clean modular design with clear separation of concerns:
 
 ### Core Agent Modules (`agent_ng/`)
 
-- **`langchain_agent.py`**: LangChain-native agent implementation with conversation chains
-- **`app_ng_modular.py`**: Main Gradio application with modular tab architecture
-- **`llm_manager.py`**: Multi-provider LLM management and configuration
-- **`error_handler.py`**: Comprehensive error handling and fallback mechanisms
-- **`message_processor.py`**: Message processing and formatting
-- **`response_processor.py`**: Response processing and validation
-- **`stats_manager.py`**: Statistics tracking and monitoring
-- **`trace_manager.py`**: Trace logging and debugging
-- **`debug_streamer.py`**: Debug system and logging
-- **`token_counter.py`**: Token usage tracking and optimization
-- **`session_manager.py`**: Session management and state handling
-- **`queue_manager.py`**: Request queue management
+- **`langchain_agent.py`**: LangChain-native agent implementation with conversation chains and memory
+- **`app_ng_modular.py`**: Main Gradio application with modular tab architecture and i18n support
+- **`llm_manager.py`**: Multi-provider LLM management with persistent instances and health monitoring
+- **`error_handler.py`**: Comprehensive error handling with vector similarity matching and recovery
+- **`message_processor.py`**: Message processing and formatting with proper validation
+- **`response_processor.py`**: Response processing and validation with error handling
+- **`stats_manager.py`**: Statistics tracking and monitoring with real-time updates
+- **`trace_manager.py`**: Trace logging and debugging with comprehensive execution traces
+- **`debug_streamer.py`**: Debug system and logging with categorized output
+- **`token_counter.py`**: Token usage tracking and optimization across providers
+- **`session_manager.py`**: Session management and state handling with proper isolation
+- **`queue_manager.py`**: Request queue management and concurrency control
 - **`concurrency_config.py`**: Concurrency and threading configuration
-- **`ui_manager.py`**: UI state management and updates
+- **`ui_manager.py`**: UI state management and updates with internationalization
 - **`tool_deduplicator.py`**: Tool call deduplication and optimization
 - **`streaming_config.py`**: Streaming configuration and settings
-- **`provider_adapters.py`**: LLM provider-specific adapters
-- **`langchain_memory.py`**: LangChain memory management
-- **`native_langchain_streaming.py`**: Native LangChain streaming implementation
+- **`provider_adapters.py`**: LLM provider-specific adapters and optimizations
+- **`langchain_memory.py`**: LangChain memory management with conversation chains
+- **`native_langchain_streaming.py`**: Native LangChain streaming using astream() and astream_events()
+- **`i18n_translations.py`**: Internationalization support with English/Russian translations
+- **`agent_config.py`**: Centralized configuration management
 
 ### Tab Modules (`agent_ng/tabs/`)
 
-- **`chat_tab.py`**: Main chat interface tab
-- **`logs_tab.py`**: Logs and debugging tab
-- **`stats_tab.py`**: Statistics and monitoring tab
+- **`chat_tab.py`**: Main chat interface tab with quick actions and i18n support
+- **`logs_tab.py`**: Logs and debugging tab with real-time updates
+- **`stats_tab.py`**: Statistics and monitoring tab with live metrics
 
 ### Tool Modules (`tools/`)
 
-- **`tools.py`**: Core tool functions and consolidated tool definitions
+- **`tools.py`**: Core tool functions and consolidated tool definitions with 20+ tools
 - **`applications_tools/`**: Application and template management tools
+  - `tool_list_applications.py`: List platform applications
+  - `tool_list_templates.py`: List application templates
+  - `tool_platform_entity_url.py`: Generate platform entity URLs
 - **`attributes_tools/`**: Attribute management tools for all attribute types
+  - Text, Boolean, DateTime, Decimal, Document, Drawing, Duration, Image, Record, Role, Account, Enum attributes
+  - Delete, archive/unarchive, and retrieve attribute operations
 - **`templates_tools/`**: Template-related tools and operations
+  - `tool_list_attributes.py`: List template attributes
 - **`tool_utils.py`**: Common tool utilities and helpers
 - **`models.py`**: Data models and schemas for tools
 - **`requests_.py`**: HTTP request utilities and helpers
-- **`file_utils.py`**: File handling utilities
-- **`pdf_utils.py`**: PDF processing utilities
+- **`file_utils.py`**: File handling utilities with security
+- **`pdf_utils.py`**: PDF processing utilities with OCR support
 
 ### Key Benefits
 
@@ -620,37 +678,56 @@ The main agent runtime files are organized into modular directories:
 ```text
 cmw-platform-agent/
 ├── agent_ng/                    # Next-generation modular agent
-│   ├── app_ng_modular.py       # Main Gradio application
+│   ├── app_ng_modular.py       # Main Gradio application with modular tabs
 │   ├── langchain_agent.py      # LangChain-native agent implementation
 │   ├── llm_manager.py          # Multi-provider LLM management
-│   ├── error_handler.py        # Error handling and fallback
-│   ├── message_processor.py    # Message processing
-│   ├── response_processor.py   # Response processing
-│   ├── stats_manager.py        # Statistics tracking
-│   ├── trace_manager.py        # Trace logging
-│   ├── debug_streamer.py       # Debug system
+│   ├── error_handler.py        # Error handling with vector similarity
+│   ├── message_processor.py    # Message processing and validation
+│   ├── response_processor.py   # Response processing and validation
+│   ├── stats_manager.py        # Statistics tracking and monitoring
+│   ├── trace_manager.py        # Trace logging and debugging
+│   ├── debug_streamer.py       # Debug system and logging
 │   ├── token_counter.py        # Token usage tracking
-│   ├── session_manager.py      # Session management
+│   ├── session_manager.py      # Session management and isolation
 │   ├── queue_manager.py        # Request queue management
 │   ├── ui_manager.py           # UI state management
 │   ├── tool_deduplicator.py    # Tool call deduplication
 │   ├── streaming_config.py     # Streaming configuration
 │   ├── provider_adapters.py    # LLM provider adapters
 │   ├── langchain_memory.py     # LangChain memory management
-│   ├── native_langchain_streaming.py  # Native streaming
+│   ├── native_langchain_streaming.py  # Native LangChain streaming
 │   ├── concurrency_config.py   # Concurrency configuration
 │   ├── agent_config.py         # Agent configuration
-│   ├── i18n_translations.py    # Internationalization
+│   ├── i18n_translations.py    # Internationalization (EN/RU)
 │   ├── system_prompt.json      # System prompt configuration
 │   └── tabs/                   # Modular tab components
-│       ├── chat_tab.py         # Chat interface tab
+│       ├── chat_tab.py         # Chat interface with quick actions
 │       ├── logs_tab.py         # Logs and debugging tab
-│       └── stats_tab.py        # Statistics tab
-├── tools/                      # Tool modules
-│   ├── tools.py               # Core tool functions
+│       └── stats_tab.py        # Statistics and monitoring tab
+├── tools/                      # Tool modules (20+ tools)
+│   ├── tools.py               # Core tool functions and definitions
 │   ├── applications_tools/    # Application management tools
-│   ├── attributes_tools/      # Attribute management tools
+│   │   ├── tool_list_applications.py
+│   │   ├── tool_list_templates.py
+│   │   └── tool_platform_entity_url.py
+│   ├── attributes_tools/      # Attribute management tools (12 types)
+│   │   ├── tools_text_attribute.py
+│   │   ├── tools_boolean_attribute.py
+│   │   ├── tools_datetime_attribute.py
+│   │   ├── tools_decimal_attribute.py
+│   │   ├── tools_document_attribute.py
+│   │   ├── tools_drawing_attribute.py
+│   │   ├── tools_duration_attribute.py
+│   │   ├── tools_image_attribute.py
+│   │   ├── tools_record_attribute.py
+│   │   ├── tools_role_attribute.py
+│   │   ├── tools_account_attribute.py
+│   │   ├── tools_enum_attribute.py
+│   │   ├── tool_delete_attribute.py
+│   │   ├── tool_archive_or_unarchive_attribute.py
+│   │   └── tool_get_attribute.py
 │   ├── templates_tools/       # Template management tools
+│   │   └── tool_list_attributes.py
 │   ├── tool_utils.py          # Common tool utilities
 │   ├── models.py              # Data models and schemas
 │   ├── requests_.py           # HTTP request utilities
