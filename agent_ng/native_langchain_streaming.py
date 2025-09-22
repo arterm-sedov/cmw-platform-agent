@@ -125,8 +125,8 @@ class NativeLangChainStreaming:
         
         # Lean truncation for chat display only (200 chars max)
         display_result = tool_result
-        if len(tool_result) > 200:
-            display_result = tool_result[:200] + "... [truncated]"
+        if len(tool_result) > 400:
+            display_result = tool_result[:400] + "... [truncated]"
         
         return template.format(tool_result=display_result)
     
