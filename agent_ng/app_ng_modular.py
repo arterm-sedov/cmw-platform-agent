@@ -59,6 +59,7 @@ try:
     from agent_ng.ui_manager import get_ui_manager
     from agent_ng.utils import safe_string
     from agent_ng.i18n_translations import create_i18n_instance, get_translation_key, format_translation
+    from agent_ng.langsmith_config import get_traceable_decorator
     print("✅ Successfully imported all modules using absolute imports")
 except ImportError as e1:
     print(f"⚠️ Absolute imports failed: {e1}")
@@ -71,6 +72,7 @@ except ImportError as e1:
         from .tabs import ChatTab, LogsTab, StatsTab
         from .ui_manager import get_ui_manager
         from .i18n_translations import create_i18n_instance, get_translation_key, format_translation
+        from .langsmith_config import get_traceable_decorator
         print("✅ Successfully imported all modules using relative imports")
     except ImportError as e2:
         print(f"❌ Both absolute and relative imports failed:")
@@ -85,6 +87,7 @@ except ImportError as e1:
         ChatTab = None
         LogsTab = None
         StatsTab = None
+        get_traceable_decorator = lambda: None
 
 
 class NextGenApp:
@@ -159,6 +162,11 @@ class NextGenApp:
     def get_user_agent(self, session_id: str) -> NextGenAgent:
         """Get agent instance using clean session manager"""
         return self.session_manager.get_agent(session_id)
+    
+    def _get_traceable_decorator(self):
+        """Get traceable decorator if LangSmith is configured"""
+        traceable = get_traceable_decorator()
+        return traceable if traceable else lambda x: x
     
     def _start_async_initialization(self):
         """Start async initialization in a new event loop"""
@@ -365,6 +373,337 @@ class NextGenApp:
             message: User message
             history: Chat history
             progress: Optional Gradio Progress tracker
+            
+        Yields:
+            Updated history and empty message
+        """
+        # Apply LangSmith tracing if configured
+        traceable = self._get_traceable_decorator()
+        if traceable:
+            # Create a traced version of this method
+            traced_method = traceable(self._stream_chat_impl)
+            async for result in traced_method(message, history, request):
+                yield result
+            return
+        
+        # Original implementation without tracing
+        if not self.is_ready():
+            error_msg = get_translation_key("agent_not_ready", self.language)
+            history.append({"role": "user", "content": message})
+            history.append({"role": "assistant", "content": error_msg})
+            yield history, ""
+            return
+        
+        if not message.strip():
+            yield history, ""
+            return
+        
+        # Track execution time
+        start_time = time.time()
+        
+        try:
+            # Extract session ID from Gradio request for user isolation
+            session_id = self.get_user_session_id(request)
+            user_agent = self.get_user_agent(session_id)
+            
+            # Debug: Check which LLM instance is being used
+            if user_agent and hasattr(user_agent, 'llm_instance') and user_agent.llm_instance:
+                llm_info = user_agent.get_llm_info()
+                print(f"🔍 DEBUG: Using session agent with LLM: {llm_info.get('provider', 'unknown')}/{llm_info.get('model_name', 'unknown')}")
+            else:
+                print(f"❌ DEBUG: Session agent has no LLM instance!")
+            
+            self.debug_streamer.info(f"Streaming message for session {session_id}: {message[:50]}...")
+            
+            # Initialize response
+            
+            # Add user message to history
+            working_history = history + [{"role": "user", "content": message}, {"role": "assistant", "content": ""}]
+            
+            # Get prompt token count for user message (will be displayed below assistant response)
+            prompt_tokens = None
+            if user_agent:
+                try:
+                    prompt_tokens = user_agent.count_prompt_tokens_for_chat(history, message)
+                except Exception as e:
+                    self.debug_streamer.warning(f"Failed to get prompt token count: {e}")
+            
+            yield working_history, ""
+            
+            # Stream response using simple streaming
+            response_content = ""  # Initialize as empty string to prevent None concatenation
+            tool_usage = ""
+            assistant_message_index = -1  # Track the index of the assistant message in working_history
+            # Tool messages are now added immediately to working_history during streaming
+            streaming_error_handled = False  # Flag to track if streaming error was handled
+            
+            # print(f"🔍 DEBUG: Starting streaming for session {session_id}")
+            # print(f"🔍 DEBUG: Working history length before streaming: {len(working_history)}")
+            
+            try:
+                async for event in user_agent.stream_message(message, session_id):
+                    # Safety check for None event
+                    if event is None:
+                        # print("🔍 DEBUG: Received None event, skipping...")
+                        continue
+                    
+                    try:
+                        event_type = event.get("type", "unknown")
+                        content = event.get("content", "")
+                        metadata = event.get("metadata", {})
+                        # print(f"🔍 DEBUG: Processing event - type: {event_type}, content length: {len(str(content))}")
+                    except Exception as e:
+                        import traceback
+                        # print(f"🔍 DEBUG: Error processing event: {e}")
+                        # print(f"🔍 DEBUG: Event data: {event}")
+                        # print(f"🔍 DEBUG: Event type: {type(event)}")
+                        # print(f"🔍 DEBUG: Event traceback:")
+                        # traceback.print_exc()
+                        streaming_error_handled = True
+                        # print(f"🔍 DEBUG: Set streaming_error_handled to True in event processing")
+                        continue
+                    
+                    if event_type == "thinking":
+                        # Agent is thinking - update or create assistant message
+                        if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                            # Update existing assistant message
+                            working_history[assistant_message_index] = {"role": "assistant", "content": content}
+                        else:
+                            # Create new assistant message
+                            working_history.append({"role": "assistant", "content": content})
+                            assistant_message_index = len(working_history) - 1
+                        yield working_history, ""
+                        
+                    elif event_type == "iteration_progress":
+                        # Iteration progress - update progress display in sidebar
+                        # Store progress status for UI update - session-specific
+                        self.session_manager.set_status(session_id, content)
+                        # Also update global progress for timer-based updates
+                        self.current_global_progress = content
+                        # Reset cache to force update
+                        self.last_progress_display = ""
+                        yield working_history, ""
+                        
+                    elif event_type == "completion":
+                        # Final completion message - update progress display
+                        self.session_manager.set_status(session_id, content)
+                        # Also update global progress for timer-based updates
+                        self.current_global_progress = content
+                        # Reset cache to force update
+                        self.last_progress_display = ""
+                        yield working_history, ""
+                        
+                    elif event_type == "tool_start":
+                        # Tool is starting - immediately add to working history
+                        tool_name = metadata.get("tool_name", "unknown") if metadata else "unknown"
+                        tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name)) if metadata else format_translation("tool_called", self.language, tool_name="unknown")
+                        
+                        # Create tool message and immediately add to working history
+                        tool_message = {
+                            "role": "assistant", 
+                            "content": content,
+                            "metadata": {"title": tool_title}
+                        }
+                        working_history.append(tool_message)
+                        yield working_history, ""
+                        
+                    elif event_type == "tool_end":
+                        # Tool completed - immediately add to working history
+                        tool_name = metadata.get("tool_name", "unknown") if metadata else "unknown"
+                        tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name)) if metadata else format_translation("tool_called", self.language, tool_name="unknown")
+                        
+                        # Create tool message and immediately add to working history
+                        tool_message = {
+                            "role": "assistant", 
+                            "content": content,
+                            "metadata": {"title": tool_title}
+                        }
+                        working_history.append(tool_message)
+                        yield working_history, ""
+                        
+                    elif event_type == "content":
+                        # Stream content from response - ensure content is not None
+                        content_to_add = safe_string(content)
+                        # print(f"🔍 DEBUG: Content event - content: '{content_to_add}', length: {len(content_to_add)}")
+                        
+                        # Only add line break when LLM starts answering after tool messages
+                        if assistant_message_index < 0 and response_content == "":
+                            # This is the very first content, check if there are recent tool messages
+                            has_recent_tool_messages = False
+                            for i in range(max(0, len(working_history) - 3), len(working_history)):
+                                if i >= 0 and working_history[i] and working_history[i].get("metadata", {}).get("title"):
+                                    has_recent_tool_messages = True
+                                    break
+                            
+                            if has_recent_tool_messages:
+                                # Add lean line break only when LLM starts answering after tools
+                                content_to_add = "\n" + content_to_add
+                        
+                        response_content += content_to_add
+                        
+                        # Update or create assistant message
+                        if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                            # Update existing assistant message
+                            working_history[assistant_message_index] = {"role": "assistant", "content": response_content}
+                            # print(f"🔍 DEBUG: Updated existing assistant message at index {assistant_message_index}")
+                        else:
+                            # Create new assistant message
+                            working_history.append({"role": "assistant", "content": response_content})
+                            assistant_message_index = len(working_history) - 1
+                            # print(f"🔍 DEBUG: Created new assistant message at index {assistant_message_index}")
+                        
+                        yield working_history, ""
+                        
+                    elif event_type == "error":
+                        # Error occurred - log it but don't add to response content
+                        # print(f"🔍 DEBUG: Error event received: {content}")
+                        # print(f"🔍 DEBUG: Error event - working_history length: {len(working_history)}")
+                        # print(f"🔍 DEBUG: Error event - response_content length: {len(response_content)}")
+                        streaming_error_handled = True
+                        # Don't add error message to response content
+                        # Just log it for debugging purposes
+                        # Still yield to keep the UI updated
+                        yield working_history, ""
+            
+            except Exception as e:
+                import traceback
+                print(f"❌ Ошибка потоковой передачи сообщения: {e}")
+                # print(f"🔍 DEBUG: Full traceback:")
+                # traceback.print_exc()
+                streaming_error_handled = True
+                # print(f"🔍 DEBUG: Set streaming_error_handled to True in streaming loop")
+                # Continue with the rest of the processing even if streaming fails
+                pass
+            
+            # Add API token count to final response
+            # Add token counts below assistant response
+            token_displays = []
+            
+            # Add prompt tokens if available
+            if prompt_tokens:
+                token_displays.append(format_translation("prompt_tokens", self.language, tokens=prompt_tokens.formatted))
+            
+            # Add API tokens if available from session-specific agent
+            if user_agent:
+                try:
+                    # print(f"🔍 DEBUG: Getting last API tokens from session agent")
+                    last_api_tokens = user_agent.get_last_api_tokens()
+                    # print(f"🔍 DEBUG: Last API tokens: {last_api_tokens}")
+                    if last_api_tokens:
+                        token_displays.append(format_translation("api_tokens", self.language, tokens=last_api_tokens.formatted))
+                        # print(f"🔍 DEBUG: Added API token display")
+                    else:
+                        # print("🔍 DEBUG: No API tokens available")
+                        pass
+                except Exception as e:
+                    # print(f"🔍 DEBUG: API token error: {e}")
+                    self.debug_streamer.warning(f"Failed to get API token count: {e}")
+            
+            # Add provider/model information if available - use session-specific agent
+            if user_agent and hasattr(user_agent, 'get_llm_info'):
+                try:
+                    llm_info = user_agent.get_llm_info()
+                    if llm_info and 'provider' in llm_info and 'model_name' in llm_info:
+                        provider = llm_info.get('provider', 'Unknown')
+                        model = llm_info.get('model_name', 'Unknown')
+                        token_displays.append(format_translation("provider_model", self.language, 
+                                                               provider=provider, model=model))
+                        # print(f"🔍 DEBUG: Added provider/model display: {provider} / {model}")
+                except Exception as e:
+                    # print(f"🔍 DEBUG: Provider/model display error: {e}")
+                    self.debug_streamer.warning(f"Failed to get provider/model info: {e}")
+            
+            # Calculate execution time for the entire response
+            execution_time = time.time() - start_time
+            
+            # Add deduplication stats if available from session-specific agent
+            if user_agent and hasattr(user_agent, '_deduplication_stats'):
+                dedup_stats = user_agent._deduplication_stats.get(session_id, {})
+                if dedup_stats:
+                    dedup_summary = []
+                    total_duplicates = 0
+                    total_tool_calls = 0
+                    
+                    for tool_key, stats in dedup_stats.items():
+                        total_tool_calls += stats['total_calls']
+                        if stats['duplicates'] > 0:
+                            dedup_summary.append(f"{stats['tool_name']}: {stats['duplicates']}")
+                            total_duplicates += stats['duplicates']
+                    
+                    if dedup_summary:
+                        # Show per-tool breakdown
+                        per_tool_breakdown = ", ".join(dedup_summary)
+                        token_displays.append(format_translation("deduplication", self.language, 
+                                                               duplicates=total_duplicates, 
+                                                               breakdown=per_tool_breakdown))
+                        # print(f"🔍 DEBUG: Added deduplication stats: {total_duplicates} duplicates")
+                    
+                    # Add total tool calls count
+                    if total_tool_calls > 0:
+                        token_displays.append(format_translation("total_tool_calls", self.language, calls=total_tool_calls))
+                        # print(f"🔍 DEBUG: Added total tool calls: {total_tool_calls}")
+            
+            # Add token statistics as a separate metadata block
+            if token_displays:
+                # Add execution time to the token display
+                token_displays.append(format_translation("execution_time", self.language, time=execution_time))
+                token_display = "\n".join(token_displays)
+                # Create a separate metadata block for token statistics
+                token_metadata_message = {
+                    "role": "assistant", 
+                    "content": token_display,
+                    "metadata": {"title": format_translation("token_statistics_title", self.language)}
+                }
+                working_history.append(token_metadata_message)
+                # print(f"🔍 DEBUG: Added token metadata block: {token_display}")
+            
+            # Tool messages are now added immediately during streaming, no need to add them here
+            # Ensure tool messages are preserved and not overwritten
+            # print(f"🔍 DEBUG: Final working history length: {len(working_history)}")
+            for i, msg in enumerate(working_history):
+                if msg is None:
+                    # print(f"🔍 DEBUG: Message {i} is None, skipping...")
+                    continue
+                if not isinstance(msg, dict):
+                    # print(f"🔍 DEBUG: Message {i} is not a dict (type: {type(msg)}), skipping...")
+                    continue
+                if msg.get("metadata", {}).get("title"):
+                    # print(f"🔍 DEBUG: Tool message {i}: {msg.get('metadata', {}).get('title', 'No title')}")
+                    pass
+                elif msg.get("role") == "assistant":
+                    # print(f"🔍 DEBUG: Assistant message {i}: {len(msg.get('content', ''))} chars")
+                    pass
+            
+            # Stop processing state
+            self.stop_processing()
+            
+            # Final yield with updated stats
+            # print(f"🔍 DEBUG: Final yield - working_history length: {len(working_history)}")
+            # print(f"🔍 DEBUG: Final yield - response_content length: {len(response_content)}")
+            yield working_history, ""
+            
+        except Exception as e:
+            # Log error to terminal but don't add to chat response
+            try:
+                self.debug_streamer.error(f"Error in stream chat: {e}")
+            except:
+                # If debug streamer fails, just continue
+                pass
+            print(f"❌ Streaming error (logged to terminal only): {e}")
+            # Stop processing state on error
+            # self.stop_processing()
+            # Continue gracefully - don't stop processing for streaming errors
+            # The response might still be valid even with streaming issues
+            yield working_history, ""
+    
+    async def _stream_chat_impl(self, message: str, history: List[Dict[str, str]], request: gr.Request = None) -> AsyncGenerator[Tuple[List[Dict[str, str]], str], None]:
+        """
+        Internal implementation of stream chat with the agent (for LangSmith tracing).
+        
+        Args:
+            message: User message
+            history: Chat history
+            request: Gradio request object
             
         Yields:
             Updated history and empty message

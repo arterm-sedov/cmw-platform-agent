@@ -41,6 +41,10 @@ class AgentSettings:
     debug_mode: bool = False
     verbose_logging: bool = False
     
+    # LangSmith observability settings
+    langsmith_tracing: bool = False
+    langsmith_project: str = "cmw-platform-agent"
+    
     def __post_init__(self):
         """Initialize default values after dataclass creation"""
         if self.supported_languages is None:

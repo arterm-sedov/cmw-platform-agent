@@ -55,6 +55,7 @@ try:
     from .stats_manager import get_stats_manager
     from .trace_manager import get_trace_manager
     from .utils import ensure_valid_answer
+    from .langsmith_config import get_traceable_decorator
 except ImportError:
     try:
         from agent_ng.llm_manager import get_llm_manager, LLMInstance
@@ -65,6 +66,7 @@ except ImportError:
         from agent_ng.stats_manager import get_stats_manager
         from agent_ng.trace_manager import get_trace_manager
         from agent_ng.utils import ensure_valid_answer
+        from agent_ng.langsmith_config import get_traceable_decorator
     except ImportError:
         get_llm_manager = lambda: None
         LLMInstance = None
@@ -76,6 +78,7 @@ except ImportError:
         get_stats_manager = lambda: None
         get_trace_manager = lambda: None
         ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
+        get_traceable_decorator = lambda: None
 
 
 @dataclass
@@ -164,6 +167,11 @@ class CmwAgent:
             
             thread = threading.Thread(target=run_async_init, daemon=True)
             thread.start()
+    
+    def _get_traceable_decorator(self):
+        """Get traceable decorator if LangSmith is configured"""
+        traceable = get_traceable_decorator()
+        return traceable if traceable else lambda x: x
     
     async def _initialize_async(self):
         """Initialize the agent asynchronously"""
