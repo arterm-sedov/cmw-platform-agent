@@ -118,6 +118,7 @@ RUSSIAN_TRANSLATIONS = {
     "token_budget_unknown": "❓ Неизвестно",
     "progress_title": "📊 Прогресс",
     "progress_ready": "Готов обработать ваш запрос...",
+    "progress_processing": "Обработка запроса...",
     
     # Logs tab
     "logs_title": "Журналы инициализации",
@@ -370,6 +371,7 @@ ENGLISH_TRANSLATIONS = {
     "token_budget_unknown": "❓ Unknown",
     "progress_title": "📊 Progress",
     "progress_ready": "Ready to process your request...",
+    "progress_processing": "Processing request...",
     
     # Logs tab
     "logs_title": "Initialization Logs",

@@ -186,11 +186,14 @@ class UIManager:
             )
             print(f"✅ Stats auto-refresh timer set ({intervals.stats}s)")
         
-            # Progress updates (for visual feedback) - event-driven only
-            if "progress_display" in self.components and event_handlers.get("update_progress_display"):
-                # Note: Progress updates are event-driven only (no timer due to gr.Request() limitations)
-                # Clock rotation happens in update_progress_display when called
-                print(f"✅ Progress display ready for event-driven updates")
+        # Progress updates (for visual feedback) - now with timer
+        if "progress_display" in self.components and event_handlers.get("update_progress_display"):
+            progress_timer = gr.Timer(intervals.progress, active=True)  # Use progress interval for faster updates
+            progress_timer.tick(
+                fn=event_handlers["update_progress_display"],
+                outputs=[self.components["progress_display"]]
+            )
+            print(f"✅ Progress auto-refresh timer set ({intervals.progress}s)")
         
         print("🔄 Auto-refresh timers configured successfully")
 
