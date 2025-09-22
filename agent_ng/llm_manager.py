@@ -206,15 +206,15 @@ class LLMManager:
             force_tools=False,
             models=[
                 {
-                    "model": "openrouter/sonoma-dusk-alpha",
-                    "token_limit": 2000000,
+                    "model": "qwen/qwen3-coder:free",
+                    "token_limit": 262144,
                     "max_tokens": 2048,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
-                    "model": "qwen/qwen3-coder:free",
-                    "token_limit": 262144,
+                    "model": "openrouter/sonoma-dusk-alpha",
+                    "token_limit": 2000000,
                     "max_tokens": 2048,
                     "temperature": 0,
                     "force_tools": True
