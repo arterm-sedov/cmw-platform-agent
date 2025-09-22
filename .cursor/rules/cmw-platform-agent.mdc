@@ -2,6 +2,12 @@
 alwaysApply: true
 ---
 
+- Before any coding gather information:
+    - search internet for reference documentation on the frameworks and libraries to use
+    - then go to the official documentation sources you found and digest the best practices
+    - do not read just a page or to, scan the docs and links and doc hierarchy
+    - gather all the information to base your actions on ground truth
+- PLAN your course of action after gathering the reference info.
 - Code style: langchain-pure, super dry, super lean, abstract, modular, pythonic, super smart, modular, linted, deduplicated, pydantic, pythonic
 - Always run linter after making any changes
 - Ensure testability and extensibility.
