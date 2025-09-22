@@ -146,6 +146,7 @@ class NextGenApp:
         # Progress status storage with translation
         # Progress status is now managed per-session through session manager
         self.is_processing = False
+        self.current_global_progress = get_translation_key("progress_ready", language)  # Global progress for timer updates
         
         # Initialize synchronously first, then start async initialization
         self._start_async_initialization()
@@ -235,7 +236,14 @@ class NextGenApp:
     def update_progress_display(self, request: gr.Request = None) -> str:
         """Update progress display - session-aware, minimal"""
         if not request:
-            return get_translation_key("progress_ready", self.language)
+            # Use global progress status for timer-based updates
+            if self.is_processing:
+                icon = self.session_manager.get_clock_icon()
+                result = f"{icon} {self.current_global_progress}"
+                print(f"🔍 DEBUG: Progress update (timer): {result}")
+                return result
+            print(f"🔍 DEBUG: Progress update (timer): {self.current_global_progress}")
+            return self.current_global_progress
         
         session_id = self.session_manager.get_session_id(request)
         status = self.session_manager.get_status(session_id)
@@ -243,18 +251,25 @@ class NextGenApp:
         # Add rotating clock icon if processing (UI handles rotation)
         if self.is_processing:
             icon = self.session_manager.get_clock_icon()
-            return f"{icon} {status}"
+            result = f"{icon} {status}"
+            print(f"🔍 DEBUG: Progress update (request): {result}")
+            return result
         
+        print(f"🔍 DEBUG: Progress update (request): {status}")
         return status
     
     
     def start_processing(self):
         """Mark that processing has started"""
         self.is_processing = True
+        # Update global progress to show processing started
+        self.current_global_progress = get_translation_key("progress_processing", self.language)
     
     def stop_processing(self):
         """Mark that processing has stopped"""
         self.is_processing = False
+        # Update global progress to show ready state
+        self.current_global_progress = get_translation_key("progress_ready", self.language)
     
     def get_conversation_history(self, session_id: str = "default") -> List[BaseMessage]:
         """Get the current conversation history (session-based pattern)"""
@@ -396,11 +411,15 @@ class NextGenApp:
                     # Iteration progress - update progress display in sidebar
                     # Store progress status for UI update - session-specific
                     self.session_manager.set_status(session_id, content)
+                    # Also update global progress for timer-based updates
+                    self.current_global_progress = content
                     yield working_history, ""
                     
                 elif event_type == "completion":
                     # Final completion message - update progress display
                     self.session_manager.set_status(session_id, content)
+                    # Also update global progress for timer-based updates
+                    self.current_global_progress = content
                     yield working_history, ""
                     
                 elif event_type == "tool_start":
