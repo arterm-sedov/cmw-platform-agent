@@ -321,7 +321,7 @@ class ChatTab:
             self.components["apply_llm_btn"].click(
                 fn=self._apply_llm_selection_combined,
                 inputs=[self.components["provider_model_selector"]],
-                outputs=[self.components["status_display"]]
+                outputs=[self.components["status_display"], self.components["chatbot"], self.components["msg"]]
             )
         
         print("✅ ChatTab: All event handlers connected successfully")
@@ -569,43 +569,54 @@ class ChatTab:
         # This method is deprecated - use _apply_llm_directly instead
         return self._apply_llm_directly(provider, model)
     
-    def _apply_llm_selection_combined(self, provider_model_combination: str, request: gr.Request = None) -> str:
+    def _apply_llm_selection_combined(self, provider_model_combination: str, request: gr.Request = None) -> Tuple[str, List[Dict[str, str]], str]:
         """Apply the selected LLM provider/model combination - now properly session-aware"""
         try:
             if not provider_model_combination or " / " not in provider_model_combination:
-                return self._get_translation("llm_apply_error")
+                return self._get_translation("llm_apply_error"), [], ""
             
             # Parse the combination: "Provider / Model"
             parts = provider_model_combination.split(" / ", 1)
             if len(parts) != 2:
-                return self._get_translation("llm_apply_error")
+                return self._get_translation("llm_apply_error"), [], ""
             
             provider = parts[0].lower()  # Convert to lowercase for environment variable
             model = parts[1]
             
             if not hasattr(self, 'main_app') or not self.main_app:
-                return self._get_translation("llm_apply_error")
+                return self._get_translation("llm_apply_error"), [], ""
             
             # Check if switching to Mistral and show native Gradio warning
             if self._is_mistral_model(provider, model):
-                # Show native Gradio warning modal
-                gr.Warning(
-                    message=self._get_translation("mistral_switch_warning").format(
-                        provider=provider.title(), 
-                        model=model
-                    ),
-                    title=self._get_translation("mistral_switch_title"),
-                    duration=10
-                )
-                # Apply the LLM selection and clear chat
-                return self._apply_mistral_with_clear(provider, model, request)
+                # Check if we're switching FROM a non-Mistral provider TO Mistral
+                current_provider_model = self._get_current_provider_model_combination()
+                current_provider = current_provider_model.split(" / ")[0].lower() if " / " in current_provider_model else ""
+                
+                # Only clear chat if switching from non-Mistral to Mistral
+                if current_provider and current_provider != "mistral":
+                    # Show native Gradio warning modal
+                    gr.Warning(
+                        message=self._get_translation("mistral_switch_warning").format(
+                            provider=provider.title(), 
+                            model=model
+                        ),
+                        title=self._get_translation("mistral_switch_title"),
+                        duration=10
+                    )
+                    # Apply the LLM selection and clear chat
+                    return self._apply_mistral_with_clear(provider, model, request)
+                else:
+                    # Switching from Mistral to Mistral - no need to clear chat
+                    status = self._apply_llm_directly(provider, model, request)
+                    return status, [], ""
             
-            # For non-Mistral models, apply directly
-            return self._apply_llm_directly(provider, model, request)
+            # For non-Mistral models, apply directly and return empty chat state
+            status = self._apply_llm_directly(provider, model, request)
+            return status, [], ""
             
         except Exception as e:
             print(f"Error applying LLM selection: {e}")
-            return self._get_translation("llm_apply_error")
+            return self._get_translation("llm_apply_error"), [], ""
     
     def _is_mistral_model(self, provider: str, model: str) -> bool:
         """Check if the selected model is a Mistral model"""
@@ -682,7 +693,7 @@ class ChatTab:
             print(f"Error confirming Mistral switch: {e}")
             return self._get_translation("llm_apply_error"), "", ""
     
-    def _apply_mistral_with_clear(self, provider: str, model: str, request: gr.Request = None) -> str:
+    def _apply_mistral_with_clear(self, provider: str, model: str, request: gr.Request = None) -> Tuple[str, str, str]:
         """Apply Mistral LLM selection and clear chat history - now properly session-aware"""
         try:
             # Apply the LLM selection
@@ -693,14 +704,20 @@ class ChatTab:
                 # Get the clear handler from event handlers
                 clear_handler = self.event_handlers.get("clear_chat")
                 if clear_handler:
-                    clear_handler(request)  # Clear the chat with real request
+                    # Clear the chat and get the updated state
+                    chatbot, msg = clear_handler(request)
                     status += f" {self._get_translation('mistral_chat_cleared')}"
+                    return status, chatbot, msg
+                else:
+                    # Fallback clear - return empty chat
+                    status += f" {self._get_translation('mistral_chat_cleared')}"
+                    return status, [], ""
             
-            return status
+            return status, "", ""
             
         except Exception as e:
             print(f"Error applying Mistral with clear: {e}")
-            return self._get_translation("llm_apply_error")
+            return self._get_translation("llm_apply_error"), "", ""
     
     def _cancel_mistral_switch(self) -> Tuple[bool, str]:
         """Cancel Mistral switching and hide confirmation dialog"""
