@@ -110,6 +110,7 @@ class ChatTab:
                     )
                     with gr.Column():
                         self.components["send_btn"] = gr.Button(self._get_translation("send_button"), variant="primary", scale=1, elem_classes=["cmw-button"])
+                        self.components["stop_btn"] = gr.Button(self._get_translation("stop_button"), variant="stop", scale=1, elem_classes=["cmw-button"], visible=False)
                         self.components["clear_btn"] = gr.Button(self._get_translation("clear_button"), variant="secondary", elem_classes=["cmw-button"])
                         self.components["download_btn"] = gr.DownloadButton(
                             label=self._get_translation("download_button"),
@@ -196,31 +197,39 @@ class ChatTab:
             send_config = apply_concurrency_to_click_event(
                 queue_manager, 'chat', self._stream_message_with_queue_status,
                 [self.components["msg"], self.components["chatbot"]],
-                [self.components["chatbot"], self.components["msg"]]
+                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
             )
-            self.components["send_btn"].click(**send_config)
+            self.streaming_event = self.components["send_btn"].click(**send_config)
             
             # Message submit with concurrency and queue status
             submit_config = apply_concurrency_to_submit_event(
                 queue_manager, 'chat', self._stream_message_with_queue_status,
                 [self.components["msg"], self.components["chatbot"]],
-                [self.components["chatbot"], self.components["msg"]]
+                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
             )
-            self.components["msg"].submit(**submit_config)
+            self.submit_event = self.components["msg"].submit(**submit_config)
         else:
             # Fallback to default behavior if queue manager not available
             print("⚠️ Queue manager not available - using default event configuration")
-            self.components["send_btn"].click(
+            self.streaming_event = self.components["send_btn"].click(
                 fn=self._stream_message_wrapper,
                 inputs=[self.components["msg"], self.components["chatbot"]],
-                outputs=[self.components["chatbot"], self.components["msg"]]
+                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
             )
             
-            self.components["msg"].submit(
+            self.submit_event = self.components["msg"].submit(
                 fn=self._stream_message_wrapper,
                 inputs=[self.components["msg"], self.components["chatbot"]],
-                outputs=[self.components["chatbot"], self.components["msg"]]
+                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
             )
+        
+        # Stop button - cancel both send and submit events and hide itself
+        self.components["stop_btn"].click(
+            fn=self._handle_stop_click,
+            inputs=[self.components["chatbot"]],
+            outputs=[self.components["stop_btn"]],
+            cancels=[self.streaming_event, self.submit_event]
+        )
         
         self.components["clear_btn"].click(
             fn=self._clear_chat_with_download_reset,
@@ -383,6 +392,14 @@ class ChatTab:
             "model_selector": self.components.get("model_selector"),
             "apply_llm_btn": self.components.get("apply_llm_btn")
         }
+    
+    def get_stop_button(self) -> gr.Button:
+        """Get the stop button component for visibility control"""
+        return self.components["stop_btn"]
+    
+    def _handle_stop_click(self, history):
+        """Handle stop button click - hide the button immediately"""
+        return gr.Button(visible=False)
     
     def format_token_budget_display(self, request: gr.Request = None) -> str:
         """Format and return the token budget display - now session-aware"""
@@ -735,21 +752,45 @@ class ChatTab:
         # With status_update_rate="auto", Gradio will show native queue status
         # No need for custom warnings - Gradio handles this natively
         
+        # Show stop button at start of processing
+        yield history, "", gr.Button(visible=True)  # Show stop button
+        
         # Process message with original wrapper
+        last_result = None
         for result in self._stream_message_wrapper_internal(multimodal_value, history, request):
+            last_result = result
             if len(result) >= 2:
-                yield result[0], result[1]
+                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
             else:
-                yield result[0], result[1]
+                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
+        
+        # Hide stop button at end of processing
+        if last_result and len(last_result) >= 2:
+            yield last_result[0], last_result[1], gr.Button(visible=False)
+        else:
+            yield history, "", gr.Button(visible=False)
     
     def _stream_message_wrapper(self, multimodal_value, history, request: gr.Request = None):
         """Wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
         # Fallback mode without queue status
+        
+        # Show stop button at start of processing
+        yield history, "", gr.Button(visible=True)  # Show stop button
+        
+        # Process message with original wrapper
+        last_result = None
         for result in self._stream_message_wrapper_internal(multimodal_value, history, request):
+            last_result = result
             if len(result) >= 2:
-                yield result[0], result[1]
+                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
             else:
-                yield result[0], result[1]
+                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
+        
+        # Hide stop button at end of processing
+        if last_result and len(last_result) >= 2:
+            yield last_result[0], last_result[1], gr.Button(visible=False)
+        else:
+            yield history, "", gr.Button(visible=False)
     
     def _stream_message_wrapper_internal(self, multimodal_value, history, request: gr.Request = None):
         """Internal wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
