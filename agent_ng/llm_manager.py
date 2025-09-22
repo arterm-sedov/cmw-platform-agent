@@ -49,11 +49,15 @@ if parent_dir not in sys.path:
 
 try:
     from .utils import ensure_valid_answer
+    from .provider_adapters import MistralWrapper, is_mistral_model
 except ImportError:
     try:
         from agent_ng.utils import ensure_valid_answer
+        from agent_ng.provider_adapters import MistralWrapper, is_mistral_model
     except ImportError:
         ensure_valid_answer = lambda x: str(x) if x is not None else "No answer provided"
+        MistralWrapper = None
+        is_mistral_model = lambda x: False
 
 
 class LLMProvider(Enum):
@@ -206,31 +210,74 @@ class LLMManager:
             force_tools=False,
             models=[
                 {
-                    "model": "qwen/qwen3-coder:free",
-                    "token_limit": 262144,
-                    "max_tokens": 2048,
+                    "model": "deepseek/deepseek-chat-v3.1:free",
+                    "token_limit": 163840,
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "openai/gpt-oss-120b",
+                    "token_limit": 131072,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "openai/gpt-5-mini",
+                    "token_limit": 400000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "x-ai/grok-code-fast-1",
+                    "token_limit": 256000,
+                    "max_tokens": 10000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "deepseek/deepseek-r1-0528",
+                    "token_limit": 163840,
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "mistralai/codestral-2508",
+                    "token_limit": 256000,
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "qwen/qwen3-coder-flash",
+                    "token_limit": 128000,
+                    "max_tokens": 4096,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
                     "model": "openrouter/sonoma-dusk-alpha",
                     "token_limit": 2000000,
-                    "max_tokens": 2048,
+                    "max_tokens": 4096,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
-                    "model": "deepseek/deepseek-chat-v3.1:free",
-                    "token_limit": 163840,
-                    "max_tokens": 2048,
+                    "model": "qwen/qwen3-coder:free",
+                    "token_limit": 262144,
+                    "max_tokens": 4096,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
                     "model": "mistralai/mistral-small-3.2-24b-instruct:free",
                     "token_limit": 131072,
-                    "max_tokens": 2048,
-                    "temperature": 0
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": False
                 }
             ],
             enable_chunking=False
@@ -530,6 +577,11 @@ class LLMManager:
         if llm is None:
             return None
             
+        # Apply Mistral wrapper if this is a Mistral model (regardless of provider)
+        if MistralWrapper and is_mistral_model(model_config["model"]):
+            llm = MistralWrapper(llm)
+            self._log_initialization(f"Applied Mistral wrapper to {model_config['model']}", "INFO")
+        
         # Create LLM instance wrapper
         instance = LLMInstance(
             llm=llm,
@@ -612,6 +664,42 @@ class LLMManager:
             LLMInstance or None if initialization failed
         """
         return self.get_llm(provider, use_tools=True, model_index=model_index)
+    
+    def create_new_llm_instance(self, provider: str, model_index: int = 0) -> Optional[LLMInstance]:
+        """
+        Create a NEW LLM instance for the specified provider (not cached).
+        This is used for session isolation - each session gets its own instance.
+        
+        Args:
+            provider: Provider name (e.g., "gemini", "groq")
+            model_index: Index of the model to use (0 for first model)
+            
+        Returns:
+            LLMInstance or None if initialization failed
+        """
+        try:
+            provider_enum = LLMProvider(provider.lower())
+        except ValueError:
+            self._log_initialization(f"Invalid provider: {provider}", "ERROR")
+            return None
+            
+        # Create new instance without caching
+        instance = self._initialize_llm_instance(provider_enum, model_index)
+        if instance:
+            # Bind tools if provider supports them
+            if self.LLM_CONFIGS.get(provider_enum, {}).tool_support:
+                tools_list = self.get_tools()
+                if tools_list:
+                    try:
+                        instance.llm = instance.llm.bind_tools(tools_list)
+                        instance.bound_tools = True
+                        self._log_initialization(f"Tools bound to NEW {provider} instance ({len(tools_list)} tools)", "INFO")
+                    except Exception as e:
+                        self._log_initialization(f"Failed to bind tools to NEW {provider}: {e}", "WARNING")
+                        instance.bound_tools = False
+            
+            return instance
+        return None
         
     def get_agent_llm(self) -> Optional[LLMInstance]:
         """
@@ -637,8 +725,9 @@ class LLMManager:
         """Get list of available providers that can be initialized"""
         available = []
         for provider in LLMProvider:
-            instance = self.get_llm(provider.value)
-            if instance:
+            # Check if API key is available without initializing the LLM
+            config = self.LLM_CONFIGS.get(provider)
+            if config and self._get_api_key(config):
                 available.append(provider.value)
         return available
         
@@ -709,21 +798,12 @@ class LLMManager:
     
     def get_current_llm_context_window(self) -> int:
         """Get the context window size for the current LLM instance"""
-        import os
+        current_instance = self.get_agent_llm()
+        if current_instance and current_instance.config:
+            # Get token_limit from the current instance's config
+            return current_instance.config.get("token_limit", 0)
         
-        # Get the current provider from environment
-        agent_provider = os.environ.get("AGENT_PROVIDER", "mistral")
-        
-        try:
-            provider_enum = LLMProvider(agent_provider.lower())
-            config = self.LLM_CONFIGS.get(provider_enum)
-            
-            if config and config.models:
-                # Get the first model's token limit as the context window
-                return config.models[0].get("token_limit", 0)
-        except ValueError:
-            pass
-        
+        # No fallback needed - if no current instance, return 0
         return 0
     
     def get_tools(self) -> List[Any]:

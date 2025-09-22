@@ -315,6 +315,15 @@ class ConversationTokenTracker:
         """Start tracking a new conversation"""
         self.last_conversation_tokens = 0
     
+    def reset_current_conversation_budget(self) -> None:
+        """Reset current conversation token budget for model switching"""
+        # Reset the last API tokens to start fresh with new model
+        self._last_api_tokens = None
+        # Reset last prompt tokens as well
+        self._last_prompt_tokens = None
+        # Reset current conversation tokens
+        self.last_conversation_tokens = 0
+    
     def get_last_prompt_tokens(self) -> Optional[TokenCount]:
         """Get the last prompt token count"""
         return self._last_prompt_tokens
@@ -387,20 +396,24 @@ class UsageMetadataCallbackHandler(BaseCallbackHandler):
             pass
 
 
-# Global token tracker instance
-_token_tracker: Optional[ConversationTokenTracker] = None
+# Session-specific token tracker instances
+_token_trackers: Dict[str, ConversationTokenTracker] = {}
 
-def get_token_tracker() -> ConversationTokenTracker:
-    """Get the global token tracker instance"""
-    global _token_tracker
-    if _token_tracker is None:
-        _token_tracker = ConversationTokenTracker()
-    return _token_tracker
+def get_token_tracker(session_id: str = "default") -> ConversationTokenTracker:
+    """Get session-specific token tracker instance"""
+    global _token_trackers
+    if session_id not in _token_trackers:
+        _token_trackers[session_id] = ConversationTokenTracker()
+    return _token_trackers[session_id]
 
-def reset_token_tracker() -> None:
-    """Reset the global token tracker instance"""
-    global _token_tracker
-    _token_tracker = None
+def reset_token_tracker(session_id: str = None) -> None:
+    """Reset token tracker instance(s)"""
+    global _token_trackers
+    if session_id:
+        if session_id in _token_trackers:
+            del _token_trackers[session_id]
+    else:
+        _token_trackers.clear()
 
 
 def convert_chat_history_to_messages(history: List[Dict[str, str]], current_message: str = None) -> List[BaseMessage]:

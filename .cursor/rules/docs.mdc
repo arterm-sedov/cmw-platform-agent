@@ -8,4 +8,7 @@ When generating reports about changes, readmes, explanations:
 
 1. Place the .md files to @/docs folder
 2. Follow GitHub Markdown format
-3. Add prefix to filename: `YYYYMMDD_`
+3. Add prefix to filename: `YYYYMMDD_`. ALWAYS generate the timestamps using native commands:
+   - PowerShell: `Get-Date -Format "yyyyMMdd"`
+   - Bash/WSL: `date +%Y%m%d`
+   - Python (if venv is active): `python -c "from datetime import datetime; print(datetime.now().strftime('%Y%m%d'))"`

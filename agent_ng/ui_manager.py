@@ -186,9 +186,9 @@ class UIManager:
             )
             print(f"✅ Stats auto-refresh timer set ({intervals.stats}s)")
         
-        # Progress updates (for visual feedback)
+        # Progress updates (for visual feedback) - now with timer
         if "progress_display" in self.components and event_handlers.get("update_progress_display"):
-            progress_timer = gr.Timer(intervals.progress, active=True)
+            progress_timer = gr.Timer(intervals.progress, active=True)  # Use progress interval for faster updates
             progress_timer.tick(
                 fn=event_handlers["update_progress_display"],
                 outputs=[self.components["progress_display"]]

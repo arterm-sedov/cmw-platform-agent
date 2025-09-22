@@ -33,6 +33,18 @@ class NativeLangChainStreaming:
     Native LangChain streaming implementation using astream() and astream_events().
     """
     
+    # Get UI icons from i18n translations
+    def _get_ui_icons(self, language: str = "en"):
+        """Get UI icons from i18n translations"""
+        from .i18n_translations import get_translation_key
+        return {
+            'finish_icons': get_translation_key("finish_icons", language),
+            'completion_icons': get_translation_key("completion_icons", language),
+            'max_icons': get_translation_key("max_icons", language),
+            'completion_final_icons': get_translation_key("completion_final_icons", language),
+            'error_icons': get_translation_key("error_icons", language)
+        }
+    
     def __init__(self):
         self.active_streams = {}
         # Get configuration from centralized config
@@ -98,10 +110,16 @@ class NativeLangChainStreaming:
         return template.format(total_calls=total_calls)
     
     def _get_result_message(self, tool_result: str, language: str = "en") -> str:
-        """Get the localized result message"""
+        """Get the localized result message with chat display truncation"""
         from .i18n_translations import get_translation_key
         template = get_translation_key("result", language)
-        return template.format(tool_result=tool_result)
+        
+        # Lean truncation for chat display only (200 chars max)
+        display_result = tool_result
+        if len(tool_result) > 200:
+            display_result = tool_result[:200] + "... [truncated]"
+        
+        return template.format(tool_result=display_result)
     
     def _deduplicate_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
         """
@@ -151,6 +169,10 @@ class NativeLangChainStreaming:
         template = get_translation_key("error", language)
         return template.format(error=error)
     
+    def _get_agent_language(self, agent) -> str:
+        """Get language from agent, defaulting to English"""
+        return getattr(agent, 'language', 'en')
+    
     async def stream_agent_response(
         self,
         agent,
@@ -191,7 +213,23 @@ class NativeLangChainStreaming:
                 print("🔍 DEBUG: System message already in memory, skipping storage")
             
             # Add conversation history (excluding system messages to avoid duplication)
-            non_system_history = [msg for msg in chat_history if not isinstance(msg, SystemMessage)]
+            # Filter out orphaned tool messages to prevent message order issues
+            non_system_history = []
+            for i, msg in enumerate(chat_history):
+                if isinstance(msg, SystemMessage):
+                    continue
+                elif isinstance(msg, ToolMessage):
+                    # Only include tool messages that have a corresponding AI message with tool calls
+                    for j in range(i-1, -1, -1):
+                        if (isinstance(chat_history[j], AIMessage) and 
+                            hasattr(chat_history[j], 'tool_calls') and chat_history[j].tool_calls):
+                            tool_call_ids = {tc.get('id') for tc in chat_history[j].tool_calls if tc.get('id')}
+                            if hasattr(msg, 'tool_call_id') and msg.tool_call_id in tool_call_ids:
+                                non_system_history.append(msg)
+                                break
+                else:
+                    non_system_history.append(msg)
+            
             messages.extend(non_system_history)
             
             # Create user message and save to memory
@@ -210,19 +248,14 @@ class NativeLangChainStreaming:
                 iteration += 1
                 print(f"🔍 DEBUG: Starting iteration {iteration}")
                 
-                # Stream iteration progress as separate message with pseudo-animation
-                # Cycle through different processing icons for pseudo-animation
-                processing_icons = ["🔄", "⚙️", "🔧", "⚡", "🔄", "⚙️", "🔧", "⚡"]
-                icon_index = (iteration - 1) % len(processing_icons)
-                current_icon = processing_icons[icon_index]
-                
-                # Get language from agent if available, otherwise default to English
-                language = getattr(agent, 'language', 'en')
+                # Stream iteration progress as separate message (no icon - UI will add rotating clock)
+                # Get language from agent
+                language = self._get_agent_language(agent)
                 
                 yield StreamingEvent(
                     event_type="iteration_progress",
-                    content=f'{current_icon} **{self._get_iteration_processing_message(iteration, self.max_iterations, language)}**',
-                    metadata={"iteration": iteration, "max_iterations": self.max_iterations, "icon_index": icon_index}
+                    content=self._get_iteration_processing_message(iteration, self.max_iterations, language),
+                    metadata={"iteration": iteration, "max_iterations": self.max_iterations}
                 )
                 
                 # Use proper LangChain streaming with tool call handling
@@ -283,7 +316,9 @@ class NativeLangChainStreaming:
                     deduplicated_tool_calls, duplicate_counts = self._deduplicate_tool_calls(accumulated_chunk.tool_calls)
                     print(f"🔍 DEBUG: Original tool calls: {len(accumulated_chunk.tool_calls)}, Deduplicated: {len(deduplicated_tool_calls)}")
                     
-                    # STEP 2: Execute only deduplicated tool calls
+                    # STEP 2: Execute only deduplicated tool calls and create result mapping
+                    tool_result_cache = {}  # Map tool_key -> result for duplicate handling
+                    
                     for tool_call in deduplicated_tool_calls:
                         tool_name = tool_call.get('name')
                         tool_args = tool_call.get('args', {})
@@ -311,7 +346,11 @@ class NativeLangChainStreaming:
                                     deduplicator = get_deduplicator()
                                     deduplicator.store_tool_call(tool_name, tool_args, tool_result, conversation_id)
                                     
-                                    # Stream tool completion with correct count
+                                    # Cache result for duplicate tool calls
+                                    tool_result_cache[tool_key] = tool_result
+                                    
+                                    # CRITICAL: Stream tool completion only ONCE per unique tool
+                                    # Show duplicate count in the message but don't stream multiple times
                                     yield StreamingEvent(
                                         event_type="tool_end",
                                         content=f"\n{self._get_call_count_message(duplicate_count, language)}\n{self._get_result_message(str(tool_result), language)}",
@@ -323,13 +362,6 @@ class NativeLangChainStreaming:
                                             "title": self._get_tool_called_message(tool_name, language)
                                         }
                                     )
-                                    
-                                    # Add tool message to conversation (only one per unique tool call)
-                                    tool_message = ToolMessage(
-                                        content=str(tool_result),
-                                        tool_call_id=tool_call_id
-                                    )
-                                    messages.append(tool_message)
                                 else:
                                     yield StreamingEvent(
                                         event_type="error",
@@ -355,20 +387,63 @@ class NativeLangChainStreaming:
                                 # Remove from in-progress
                                 if tool_call_id in tool_calls_in_progress:
                                     del tool_calls_in_progress[tool_call_id]
-                
-                # Add AI message to conversation
-                if accumulated_chunk and hasattr(accumulated_chunk, 'content') and accumulated_chunk.content:
+                    
+                    # CRITICAL: Add AI message with tool_calls to working messages FIRST
+                    if accumulated_chunk and hasattr(accumulated_chunk, 'tool_calls') and accumulated_chunk.tool_calls:
+                        # Add the AIMessage with tool_calls to the working messages
+                        ai_message_with_tool_calls = AIMessage(
+                            content=accumulated_chunk.content or "",
+                            tool_calls=accumulated_chunk.tool_calls
+                        )
+                        messages.append(ai_message_with_tool_calls)
+                        print(f"🔍 DEBUG: Added AIMessage with {len(accumulated_chunk.tool_calls)} tool calls to working messages")
+                        
+                        # STEP 3: Create ToolMessage for EACH original tool call (including duplicates)
+                        # This ensures proper tool_call_id mapping and message sequence
+                        # CRITICAL: Add ToolMessages to working messages for proper sequence
+                        tool_messages = []
+                        for original_tool_call in accumulated_chunk.tool_calls:
+                            tool_name = original_tool_call.get('name')
+                            tool_args = original_tool_call.get('args', {})
+                            tool_call_id = original_tool_call.get('id')
+                            
+                            if tool_name and tool_call_id:
+                                # Get the tool key for result lookup (exclude agent from key calculation)
+                                cache_args = {k: v for k, v in tool_args.items() if k != 'agent'}
+                                tool_key = f"{tool_name}:{hash(str(sorted(cache_args.items())))}"
+                                
+                                # Get cached result (same for all duplicates)
+                                tool_result = tool_result_cache.get(tool_key, "Tool execution failed")
+                                
+                                # Create ToolMessage with original tool_call_id
+                                tool_message = ToolMessage(
+                                    content=str(tool_result),
+                                    tool_call_id=tool_call_id,
+                                    name=tool_name
+                                )
+                                tool_messages.append(tool_message)
+                                print(f"🔍 DEBUG: Created ToolMessage for {tool_name} with ID {tool_call_id}")
+                        
+                        # CRITICAL: Add ToolMessages to working messages for next LLM call
+                        # This ensures proper sequence: AIMessage(with tool_calls) → ToolMessages
+                        messages.extend(tool_messages)
+                        print(f"🔍 DEBUG: Added {len(tool_messages)} ToolMessages to working messages")
+                    
+                    # CRITICAL: Continue to next iteration to get final response
+                    # Don't break here - we need the final AI response after tool calls
+                elif accumulated_chunk and hasattr(accumulated_chunk, 'content') and accumulated_chunk.content:
+                    # Regular AI message without tool calls
                     ai_message = AIMessage(content=accumulated_chunk.content)
                     messages.append(ai_message)
-                    # Don't add to memory here - will be added at the end
+                    print(f"🔍 DEBUG: Added regular AIMessage to working messages")
                 
                 # If no tool calls, we're done
                 if not has_tool_calls:
                     print(f"🔍 DEBUG: No tool calls in iteration {iteration}, conversation complete")
                     
                     # Stream conversation completion
-                    finish_icons = ["🎉", "🏁", "✨", "🎯"]
-                    finish_icon = finish_icons[iteration % len(finish_icons)]
+                    icons = self._get_ui_icons(language)
+                    finish_icon = icons['finish_icons'][iteration % len(icons['finish_icons'])]
                     
                     yield StreamingEvent(
                         event_type="iteration_progress",
@@ -380,8 +455,8 @@ class NativeLangChainStreaming:
                 print(f"🔍 DEBUG: Completed iteration {iteration}, continuing...")
                 
                 # Stream iteration completion as separate message
-                completion_icons = ["✅", "✔️", "🎯", "✨"]
-                completion_icon = completion_icons[iteration % len(completion_icons)]
+                icons = self._get_ui_icons(language)
+                completion_icon = icons['completion_icons'][iteration % len(icons['completion_icons'])]
                 
                 yield StreamingEvent(
                     event_type="iteration_progress",
@@ -394,8 +469,8 @@ class NativeLangChainStreaming:
                 print(f"🔍 DEBUG: Reached max iterations ({self.max_iterations}), stopping conversation")
                 
                 # Stream max iterations completion
-                max_icons = ["⚠️", "⏰", "🔄", "⚡"]
-                max_icon = max_icons[iteration % len(max_icons)]
+                icons = self._get_ui_icons(language)
+                max_icon = icons['max_icons'][iteration % len(icons['max_icons'])]
                 
                 yield StreamingEvent(
                     event_type="iteration_progress",
@@ -434,6 +509,12 @@ class NativeLangChainStreaming:
                     print(f"🔍 DEBUG: Skipped system message (handled separately)")
                     continue
                 
+                # Skip empty AIMessages - they cause message order issues
+                if isinstance(message, AIMessage) and not message.content and not message.tool_calls:
+                    print(f"🔍 DEBUG: Skipped empty AIMessage (no content or tool calls)")
+                    continue
+                
+                
                 # Create a unique identifier for this message
                 message_key = (type(message).__name__, message.content if hasattr(message, 'content') else str(message))
                 
@@ -448,11 +529,9 @@ class NativeLangChainStreaming:
             print(f"🔍 DEBUG: Added {new_messages_added} new messages to memory")
             
             # Final completion event
-            # Get language from agent if available, otherwise default to English
-            language = getattr(agent, 'language', 'en')
-            
-            completion_icons = ["✅", "🎯", "✨", "🏆"]
-            completion_icon = completion_icons[0]  # Always use first icon for completion
+            language = self._get_agent_language(agent)
+            icons = self._get_ui_icons(language)
+            completion_icon = icons['completion_final_icons'][0]  # Always use first icon for completion
             
             yield StreamingEvent(
                 event_type="completion",
@@ -461,21 +540,17 @@ class NativeLangChainStreaming:
             )
             
             # Final iteration progress completion
-            final_icons = ["🎉", "✨", "🏆", "🎯"]
-            final_icon = final_icons[0]  # Always use first icon for final completion
-            
-            # Get language from agent if available, otherwise default to English
-            language = getattr(agent, 'language', 'en')
+            language = self._get_agent_language(agent)
             
             yield StreamingEvent(
                 event_type="iteration_progress",
-                content=f"{final_icon} **{self._get_processing_complete_message(language)}**",
+                content=self._get_processing_complete_message(language),
                 metadata={"conversation_complete": True, "final": True}
             )
                 
         except Exception as e:
-            # Get language from agent if available, otherwise default to English
-            language = getattr(agent, 'language', 'en')
+            # Get language from agent
+            language = self._get_agent_language(agent)
             
             yield StreamingEvent(
                 event_type="error",
@@ -484,9 +559,8 @@ class NativeLangChainStreaming:
             )
             
             # Error completion for progress display
-            
-            error_icons = ["❌", "💥", "⚠️", "🚫"]
-            error_icon = error_icons[0]  # Always use first icon for error
+            icons = self._get_ui_icons(language)
+            error_icon = icons['error_icons'][0]  # Always use first icon for error
             
             yield StreamingEvent(
                 event_type="iteration_progress",

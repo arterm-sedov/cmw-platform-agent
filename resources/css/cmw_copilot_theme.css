@@ -416,7 +416,8 @@ body {
 .quick-actions-card,
 .sidebar-card,
 .message-card,
-.chatbot-card {
+.chatbot-card,
+.download-file-pane {
     /* margin: var(--cmw-space-4) 0 !important; */
     border: 1px solid var(--cmw-border) !important;
     border-radius: var(--cmw-radius-md) !important;
@@ -431,7 +432,8 @@ body {
 }
 
 .chatbot-card label,
-span[data-testid="block-info"]
+span[data-testid="block-info"],
+label[data-testid="block-label"]
 {
     color: var(--cmw-text-strong) !important;
     font-weight: 500 !important;
