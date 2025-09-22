@@ -1,5 +1,6 @@
 from ..tool_utils import *
 import json
+import ast
 
 class GetPlatformEntityUrlSchema(BaseModel):
     """
@@ -39,7 +40,7 @@ def get_platform_entity_url(
     try:
         # Load server config to get base_url
         cfg = requests_._load_server_config()
-        base_url = cfg.get("base_url", "").rstrip("/")
+        base_url = cfg.base_url.rstrip("/")
         
         if not base_url:
             final_result = {
@@ -59,8 +60,8 @@ def get_platform_entity_url(
         endpoint = "api/public/system/Solution/TemplateService/List"
 
         result = requests_._post_request(request_body, endpoint)
-        result_body = result['raw_response']
-        result_body = json.loads(result_body)
+        result_body = result["raw_response"]
+        result_body = ast.literal_eval(result_body)
 
         if entity_type == "Undefined":
             list_applications = list_applications.func()
