@@ -36,7 +36,7 @@ def list_attributes(
         dict: {
             "success": bool - True if attribute list was fetched successfully
             "status_code": int - HTTP response status code  
-            "raw_response": dict|str|None - Raw response for auditing or payload body (sanitized)
+            "data": list|None - List of attributes if successful
             "error": str|None - Error message if operation failed
         }
     """

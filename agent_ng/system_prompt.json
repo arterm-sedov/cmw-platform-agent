@@ -13,6 +13,12 @@
             "For multi-step operations, use different tools or different arguments for each step",
             "If you have enough information to answer, provide the final answer immediately"
         ],
+        "file_handling": [
+            "When user mentions files, use appropriate specific tools based on file type",
+            "Look for files in [Files: filename (size)] format in the message",
+            "Use the filename exactly as shown in the [Files: ...] section for tool calls",
+            "Tools will automatically resolve filenames and fetch them"
+        ],
         "result_handling": {
             "rule": "NEVER include raw JSON/structured tool results in your response",
             "action": "Always transform tool results into human-readable summaries using platform terminology",
@@ -134,6 +140,19 @@
                 }
             },
             "Result": "В шаблоне 'Заявкинаавтомобили' найдено 12 атрибутов:\n\n- Дата заявки (DateClaim) - Format: DateTime\n- Тип автомобиля (CarType) - Format: PlainText\n- Марка автомобиля (CarBrand) - Format: PlainText\n- Модель автомобиля (CarModel) - Format: PlainText\n- VIN (VIN) - Format: CustomMask\n- Паспорт водителя (DriverPassport) - Format: PassportRuMask\n- Номер водительского удостоверения (DriverLicenseNumber) - Format: CustomMask\n- Дата выдачи водительского удостоверения (DriverLicenseIssueDate) - Format: DateTime\n- Срок действия водительского удостоверения (DriverLicenseExpirationDate) - Format: DateTime\n- Контактный телефон (ContactPhone) - Format: PhoneRuMask\n- Комментарий (Comment) - Format: PlainText\n- Статус заявки (ClaimStatus) - Format: PlainText"
+        },
+        {
+            "Task": "Analyze uploaded HTML file",
+            "Intent": "User uploaded an HTML file and wants to understand its contents.",
+            "Plan": "Use read_text_file to get HTML content, then analyze the structure and content.",
+            "Validate": "File names should be available in the message.",
+            "Execute": {
+                "tool": "read_text_file",
+                "params": {
+                    "file_path": "filename"
+                }
+            },
+            "Result": "HTML content extracted and analyzed. Provide summary of the document structure and key information."
         }
     ],
     "cmw_platform_vocabulary": {

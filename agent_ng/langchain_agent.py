@@ -19,6 +19,7 @@ Based on LangChain's official documentation and best practices.
 import asyncio
 import json
 import time
+import os
 import uuid
 from typing import Dict, List, Optional, Any, AsyncGenerator, Tuple
 from dataclasses import dataclass
@@ -33,26 +34,6 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.callbacks import BaseCallbackHandler, StreamingStdOutCallbackHandler
 
-# Simple memory implementation to avoid import issues
-class ConversationBufferMemory:
-    """Simple conversation buffer memory implementation"""
-    def __init__(self, memory_key="chat_history", return_messages=True):
-        self.memory_key = memory_key
-        self.return_messages = return_messages
-        self.chat_memory = []
-    
-    def load_memory_variables(self, inputs):
-        return {self.memory_key: self.chat_memory}
-    
-    def save_context(self, inputs, outputs):
-        # Add user input and AI output to memory
-        if "input" in inputs:
-            self.chat_memory.append(HumanMessage(content=inputs["input"]))
-        if "output" in outputs:
-            self.chat_memory.append(AIMessage(content=outputs["output"]))
-    
-    def clear(self):
-        self.chat_memory.clear()
 
 # Local imports
 import sys
@@ -125,26 +106,29 @@ class CmwAgent:
     maintaining all the modular components from NextGenAgent.
     """
     
-    def __init__(self, system_prompt: str = None):
+    def __init__(self, system_prompt: str = None, session_id: str = "default"):
         """
         Initialize the LangChain agent with full modular architecture.
         
         Args:
             system_prompt: System prompt for the agent
+            session_id: Unique session ID for conversation isolation
         """
+        # Store session ID for conversation isolation
+        self.session_id = session_id
+        
         # Initialize all modular components
         self.llm_manager = get_llm_manager()
         self.memory_manager = get_memory_manager()
         self.error_handler = get_error_handler()
-        # self.streaming_manager = get_streaming_manager()  # Moved to .unused
         self.message_processor = get_message_processor()
         self.response_processor = get_response_processor()
         self.stats_manager = get_stats_manager()
-        self.trace_manager = get_trace_manager()
+        self.trace_manager = get_trace_manager(self.session_id)
         
         # Initialize token tracker
         from .token_counter import get_token_tracker
-        self.token_tracker = get_token_tracker()
+        self.token_tracker = get_token_tracker(self.session_id)
         
         # Load system prompt
         self.system_prompt = system_prompt or self._load_system_prompt()
@@ -159,8 +143,27 @@ class CmwAgent:
         self.conversation_history = []
         self.active_streams = {}
         
-        # Initialize in background
-        asyncio.create_task(self._initialize_async())
+        # File registry system (lean and secure)
+        self.file_registry = {}  # Maps original_filename -> unique_filename
+        self.session_cache_path = None  # Gradio cache path for this session
+        self.current_files = []  # Current conversation turn files
+        
+        # Initialize in background - handle case when no event loop is running
+        try:
+            asyncio.create_task(self._initialize_async())
+        except RuntimeError:
+            # No event loop running, initialize synchronously
+            import threading
+            def run_async_init():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self._initialize_async())
+                finally:
+                    loop.close()
+            
+            thread = threading.Thread(target=run_async_init, daemon=True)
+            thread.start()
     
     async def _initialize_async(self):
         """Initialize the agent asynchronously"""
@@ -343,26 +346,100 @@ Always use the appropriate tools to answer questions and show your work step by 
         # Add user message to history
         self.conversation_history.append(ChatMessage(role="user", content=message))
         
+        # Track conversation start
+        start_time = time.time()
+        llm_type = "unknown"
+        if self.llm_instance:
+            llm_type = self.llm_instance.provider.value
+        
         try:
             # Stream the response using the updated stream_message method
             async for event in self.stream_message(message, "default"):
                 yield event
                 
+            # Track successful LLM usage
+            response_time = time.time() - start_time
+            print(f"📊 Tracking stats - LLM: {llm_type}, Session: {self.session_id}, Response time: {response_time:.2f}s")
+            if self.stats_manager:
+                self.stats_manager.track_llm_usage(
+                    llm_type=llm_type,
+                    event_type="success",
+                    response_time=response_time,
+                    session_id=self.session_id
+                )
+                
+                # Track conversation
+                self.stats_manager.track_conversation(
+                    conversation_id=self.session_id,
+                    question=message,
+                    answer="[Streamed response]",
+                    llm_used=llm_type,
+                    tool_calls=0,  # TODO: Track actual tool calls
+                    duration=response_time,
+                    session_id=self.session_id
+                )
+                print(f"📊 Stats tracked successfully for session {self.session_id}")
+            else:
+                print(f"❌ No stats manager available for session {self.session_id}")
+                
         except Exception as e:
+            # Track failed LLM usage
+            if self.stats_manager:
+                self.stats_manager.track_llm_usage(
+                    llm_type=llm_type,
+                    event_type="failure",
+                    response_time=time.time() - start_time,
+                    session_id=self.session_id
+                )
+                self.stats_manager.track_error(
+                    error_type=str(e),
+                    llm_type=llm_type
+                )
+            
             yield {
                 "type": "error",
                 "content": f"Error processing message: {str(e)}",
                 "metadata": {"error": str(e)}
             }
     
-    def clear_conversation(self, conversation_id: str = "default") -> None:
-        """Clear conversation history"""
+    def clear_conversation(self, conversation_id: str = None) -> None:
+        """Clear conversation history and file data"""
+        # Use session ID if no conversation ID provided
+        if conversation_id is None:
+            conversation_id = self.session_id
+            
         chain = self._get_conversation_chain(conversation_id)
         chain.clear_conversation(conversation_id)
+        # Clear file registry when clearing conversation
+        self.file_registry = {}
+        self.current_files = []
     
     def is_ready(self) -> bool:
         """Check if the agent is ready to process requests"""
         return self.is_initialized and self.llm_instance is not None
+    
+    def get_file_path(self, original_filename: str) -> str:
+        """
+        Get the full file path for a file by its original filename.
+        
+        Args:
+            original_filename (str): Original filename from user upload
+            
+        Returns:
+            str: Full path to the file in Gradio cache, or None if not found
+        """
+        from tools.file_utils import FileUtils
+        
+        # Check if we have this file in our registry
+        if original_filename in self.file_registry:
+            unique_filename = self.file_registry[original_filename]
+            if self.session_cache_path:
+                full_path = os.path.join(self.session_cache_path, unique_filename)
+                if os.path.exists(full_path):
+                    return full_path
+        
+        # Fallback: search in Gradio cache
+        return FileUtils.find_file_in_gradio_cache(original_filename)
     
     def get_status(self) -> Dict[str, Any]:
         """Get agent status information"""
@@ -399,7 +476,7 @@ Always use the appropriate tools to answer questions and show your work step by 
                 "conversation_chains": len(self.conversation_chains)
             },
             "llm_manager_stats": self.llm_manager.get_stats() if self.llm_manager else {},
-            "stats_manager_stats": self.stats_manager.get_stats() if self.stats_manager else {},
+            "stats_manager_stats": self.stats_manager.get_stats(self.session_id) if self.stats_manager else {},
             "memory_manager_stats": {
                 "total_memories": len(self.memory_manager.memories) if self.memory_manager else 0
             },
@@ -433,12 +510,19 @@ Always use the appropriate tools to answer questions and show your work step by 
                     print(f"🔍 DEBUG: Memory manager has {len(self.memory_manager.memories)} conversations")
                     print(f"🔍 DEBUG: Memory manager memories: {self.memory_manager.memories}")
                 
-                # Get all conversations and count messages
+                # Get all conversations and count messages for this session
                 total_messages = 0
                 user_messages = 0
                 assistant_messages = 0
                 
-                for conversation_id, conversation in self.memory_manager.memories.items():
+                # Only count messages for this session's conversation
+                session_conversation = self.memory_manager.memories.get(self.session_id)
+                if session_conversation:
+                    conversations_to_process = {self.session_id: session_conversation}
+                else:
+                    conversations_to_process = {}
+                
+                for conversation_id, conversation in conversations_to_process.items():
                     if debug:
                         print(f"🔍 DEBUG: Conversation {conversation_id} type: {type(conversation)}")
                     

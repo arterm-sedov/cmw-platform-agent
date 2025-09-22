@@ -54,7 +54,7 @@ def list_templates(
         dict: {
             "success": bool - True if operation completed successfully
             "status_code": int - HTTP response status code  
-            "raw_response": dict|str|None - Raw response payload for auditing or payload body (sanitized)
+            "data": list|None - List of templates if successful
             "error": str|None - Error message if operation failed
         }
     """
