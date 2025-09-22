@@ -33,6 +33,18 @@ class NativeLangChainStreaming:
     Native LangChain streaming implementation using astream() and astream_events().
     """
     
+    # Get UI icons from i18n translations
+    def _get_ui_icons(self, language: str = "en"):
+        """Get UI icons from i18n translations"""
+        from .i18n_translations import get_translation_key
+        return {
+            'finish_icons': get_translation_key("finish_icons", language),
+            'completion_icons': get_translation_key("completion_icons", language),
+            'max_icons': get_translation_key("max_icons", language),
+            'completion_final_icons': get_translation_key("completion_final_icons", language),
+            'error_icons': get_translation_key("error_icons", language)
+        }
+    
     def __init__(self):
         self.active_streams = {}
         # Get configuration from centralized config
@@ -157,6 +169,10 @@ class NativeLangChainStreaming:
         template = get_translation_key("error", language)
         return template.format(error=error)
     
+    def _get_agent_language(self, agent) -> str:
+        """Get language from agent, defaulting to English"""
+        return getattr(agent, 'language', 'en')
+    
     async def stream_agent_response(
         self,
         agent,
@@ -232,19 +248,14 @@ class NativeLangChainStreaming:
                 iteration += 1
                 print(f"🔍 DEBUG: Starting iteration {iteration}")
                 
-                # Stream iteration progress as separate message with pseudo-animation
-                # Cycle through different clock icons for pseudo-animation
-                processing_icons = ["🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"]
-                icon_index = (iteration - 1) % len(processing_icons)
-                current_icon = processing_icons[icon_index]
-                
-                # Get language from agent if available, otherwise default to English
-                language = getattr(agent, 'language', 'en')
+                # Stream iteration progress as separate message (no icon - UI will add rotating clock)
+                # Get language from agent
+                language = self._get_agent_language(agent)
                 
                 yield StreamingEvent(
                     event_type="iteration_progress",
-                    content=f'{current_icon} {self._get_iteration_processing_message(iteration, self.max_iterations, language)}',
-                    metadata={"iteration": iteration, "max_iterations": self.max_iterations, "icon_index": icon_index}
+                    content=self._get_iteration_processing_message(iteration, self.max_iterations, language),
+                    metadata={"iteration": iteration, "max_iterations": self.max_iterations}
                 )
                 
                 # Use proper LangChain streaming with tool call handling
@@ -430,8 +441,8 @@ class NativeLangChainStreaming:
                     print(f"🔍 DEBUG: No tool calls in iteration {iteration}, conversation complete")
                     
                     # Stream conversation completion
-                    finish_icons = ["🎉", "🏁", "✨", "🎯"]
-                    finish_icon = finish_icons[iteration % len(finish_icons)]
+                    icons = self._get_ui_icons(language)
+                    finish_icon = icons['finish_icons'][iteration % len(icons['finish_icons'])]
                     
                     yield StreamingEvent(
                         event_type="iteration_progress",
@@ -443,8 +454,8 @@ class NativeLangChainStreaming:
                 print(f"🔍 DEBUG: Completed iteration {iteration}, continuing...")
                 
                 # Stream iteration completion as separate message
-                completion_icons = ["✅", "✔️", "🎯", "✨"]
-                completion_icon = completion_icons[iteration % len(completion_icons)]
+                icons = self._get_ui_icons(language)
+                completion_icon = icons['completion_icons'][iteration % len(icons['completion_icons'])]
                 
                 yield StreamingEvent(
                     event_type="iteration_progress",
@@ -457,8 +468,8 @@ class NativeLangChainStreaming:
                 print(f"🔍 DEBUG: Reached max iterations ({self.max_iterations}), stopping conversation")
                 
                 # Stream max iterations completion
-                max_icons = ["⚠️", "⏰", "🔄", "⚡"]
-                max_icon = max_icons[iteration % len(max_icons)]
+                icons = self._get_ui_icons(language)
+                max_icon = icons['max_icons'][iteration % len(icons['max_icons'])]
                 
                 yield StreamingEvent(
                     event_type="iteration_progress",
@@ -517,11 +528,9 @@ class NativeLangChainStreaming:
             print(f"🔍 DEBUG: Added {new_messages_added} new messages to memory")
             
             # Final completion event
-            # Get language from agent if available, otherwise default to English
-            language = getattr(agent, 'language', 'en')
-            
-            completion_icons = ["✅", "🎯", "✨", "🏆"]
-            completion_icon = completion_icons[0]  # Always use first icon for completion
+            language = self._get_agent_language(agent)
+            icons = self._get_ui_icons(language)
+            completion_icon = icons['completion_final_icons'][0]  # Always use first icon for completion
             
             yield StreamingEvent(
                 event_type="completion",
@@ -530,8 +539,7 @@ class NativeLangChainStreaming:
             )
             
             # Final iteration progress completion
-            # Get language from agent if available, otherwise default to English
-            language = getattr(agent, 'language', 'en')
+            language = self._get_agent_language(agent)
             
             yield StreamingEvent(
                 event_type="iteration_progress",
@@ -540,8 +548,8 @@ class NativeLangChainStreaming:
             )
                 
         except Exception as e:
-            # Get language from agent if available, otherwise default to English
-            language = getattr(agent, 'language', 'en')
+            # Get language from agent
+            language = self._get_agent_language(agent)
             
             yield StreamingEvent(
                 event_type="error",
@@ -550,9 +558,8 @@ class NativeLangChainStreaming:
             )
             
             # Error completion for progress display
-            
-            error_icons = ["❌", "💥", "⚠️", "🚫"]
-            error_icon = error_icons[0]  # Always use first icon for error
+            icons = self._get_ui_icons(language)
+            error_icon = icons['error_icons'][0]  # Always use first icon for error
             
             yield StreamingEvent(
                 event_type="iteration_progress",

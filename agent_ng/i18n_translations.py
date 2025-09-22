@@ -118,6 +118,7 @@ RUSSIAN_TRANSLATIONS = {
     "token_budget_unknown": "❓ Неизвестно",
     "progress_title": "📊 Прогресс",
     "progress_ready": "Готов обработать ваш запрос...",
+    "progress_processing": "Обработка запроса...",
     
     # Logs tab
     "logs_title": "Журналы инициализации",
@@ -253,7 +254,15 @@ RUSSIAN_TRANSLATIONS = {
     # Provider availability messages
     "no_providers_available": "❌ Нет доступных провайдеров",
     "no_models_available": "❌ Нет доступных моделей",
-    "error_loading_providers": "❌ Ошибка загрузки провайдеров"
+    "error_loading_providers": "❌ Ошибка загрузки провайдеров",
+    
+    # UI Icons
+    "clock_icons": ["🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"],
+    "finish_icons": ["🎉", "🏁", "✨", "🎯"],
+    "completion_icons": ["✅", "✔️", "🎯", "✨"],
+    "max_icons": ["⚠️", "⏰", "🔄", "⚡"],
+    "completion_final_icons": ["✅", "🎯", "✨", "🏆"],
+    "error_icons": ["❌", "💥", "⚠️", "🚫"]
 }
 
 # English translations (fallback)
@@ -362,6 +371,7 @@ ENGLISH_TRANSLATIONS = {
     "token_budget_unknown": "❓ Unknown",
     "progress_title": "📊 Progress",
     "progress_ready": "Ready to process your request...",
+    "progress_processing": "Processing request...",
     
     # Logs tab
     "logs_title": "Initialization Logs",
@@ -497,7 +507,15 @@ ENGLISH_TRANSLATIONS = {
     # Provider availability messages
     "no_providers_available": "❌ No providers available",
     "no_models_available": "❌ No models available", 
-    "error_loading_providers": "❌ Error loading providers"
+    "error_loading_providers": "❌ Error loading providers",
+    
+    # UI Icons
+    "clock_icons": ["🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"],
+    "finish_icons": ["🎉", "🏁", "✨", "🎯"],
+    "completion_icons": ["✅", "✔️", "🎯", "✨"],
+    "max_icons": ["⚠️", "⏰", "🔄", "⚡"],
+    "completion_final_icons": ["✅", "🎯", "✨", "🏆"],
+    "error_icons": ["❌", "💥", "⚠️", "🚫"]
 }
 
 def create_i18n_instance(language: str = "en") -> gr.I18n:

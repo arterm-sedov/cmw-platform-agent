@@ -62,6 +62,13 @@ class SessionManager:
         session_data = self.get_session_data(session_id)
         return session_data.status
     
+    def get_clock_icon(self) -> str:
+        """Get RTC-based clock icon for cosmetic rotation"""
+        import time
+        clock_icons = get_translation_key("clock_icons", self.language)
+        return clock_icons[int(time.time()) % len(clock_icons)]
+    
+    
     def set_status(self, session_id: str, status: str) -> None:
         """Set session-specific status"""
         session_data = self.get_session_data(session_id)
