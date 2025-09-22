@@ -147,6 +147,7 @@ class NextGenApp:
         # Progress status is now managed per-session through session manager
         self.is_processing = False
         self.current_global_progress = get_translation_key("progress_ready", language)  # Global progress for timer updates
+        self.last_progress_display = ""  # Cache last display to avoid unnecessary updates
         
         # Initialize synchronously first, then start async initialization
         self._start_async_initialization()
@@ -234,16 +235,20 @@ class NextGenApp:
         return get_translation_key("progress_ready", self.language)
     
     def update_progress_display(self, request: gr.Request = None) -> str:
-        """Update progress display - session-aware, minimal"""
+        """Update progress display - session-aware, minimal with caching"""
         if not request:
             # Use global progress status for timer-based updates
             if self.is_processing:
                 icon = self.session_manager.get_clock_icon()
                 result = f"{icon} {self.current_global_progress}"
-                print(f"🔍 DEBUG: Progress update (timer): {result}")
+            else:
+                result = self.current_global_progress
+            
+            # Only update if content changed to reduce UI blocking
+            if result != self.last_progress_display:
+                self.last_progress_display = result
                 return result
-            print(f"🔍 DEBUG: Progress update (timer): {self.current_global_progress}")
-            return self.current_global_progress
+            return self.last_progress_display
         
         session_id = self.session_manager.get_session_id(request)
         status = self.session_manager.get_status(session_id)
@@ -252,11 +257,14 @@ class NextGenApp:
         if self.is_processing:
             icon = self.session_manager.get_clock_icon()
             result = f"{icon} {status}"
-            print(f"🔍 DEBUG: Progress update (request): {result}")
-            return result
+        else:
+            result = status
         
-        print(f"🔍 DEBUG: Progress update (request): {status}")
-        return status
+        # Only update if content changed to reduce UI blocking
+        if result != self.last_progress_display:
+            self.last_progress_display = result
+            return result
+        return self.last_progress_display
     
     
     def start_processing(self):
@@ -264,12 +272,16 @@ class NextGenApp:
         self.is_processing = True
         # Update global progress to show processing started
         self.current_global_progress = get_translation_key("progress_processing", self.language)
+        # Reset cache to force update
+        self.last_progress_display = ""
     
     def stop_processing(self):
         """Mark that processing has stopped"""
         self.is_processing = False
         # Update global progress to show ready state
         self.current_global_progress = get_translation_key("progress_ready", self.language)
+        # Reset cache to force update
+        self.last_progress_display = ""
     
     def get_conversation_history(self, session_id: str = "default") -> List[BaseMessage]:
         """Get the current conversation history (session-based pattern)"""
@@ -413,6 +425,8 @@ class NextGenApp:
                     self.session_manager.set_status(session_id, content)
                     # Also update global progress for timer-based updates
                     self.current_global_progress = content
+                    # Reset cache to force update
+                    self.last_progress_display = ""
                     yield working_history, ""
                     
                 elif event_type == "completion":
@@ -420,6 +434,8 @@ class NextGenApp:
                     self.session_manager.set_status(session_id, content)
                     # Also update global progress for timer-based updates
                     self.current_global_progress = content
+                    # Reset cache to force update
+                    self.last_progress_display = ""
                     yield working_history, ""
                     
                 elif event_type == "tool_start":
