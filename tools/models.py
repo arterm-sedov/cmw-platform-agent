@@ -8,11 +8,10 @@ class AttributeResult(BaseModel):
     """
     success: bool
     status_code: int
-    data: Optional[Any] = Field(
-        default=None,
-        description="Cleaned attribute data from server response (after removing unnecessary keys)"
-    )
     error: Optional[str] = Field(default=None)
+
+    class Config:
+        extra = 'allow'
 
 class CommonAttributeFields(BaseModel):
     """
