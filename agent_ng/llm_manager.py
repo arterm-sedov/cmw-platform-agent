@@ -372,11 +372,6 @@ class LLMManager:
         self._initialization_logs.append(log_entry)
         print(log_entry)  # Also print to console for real-time feedback
     
-    def _wrap_llm_with_langsmith(self, llm: Any, provider: str) -> Any:
-        """Wrap LLM instance with LangSmith tracing if configured (deprecated - use environment variables)"""
-        # LangSmith tracing is now handled via environment variables and @traceable decorators
-        # This method is kept for backward compatibility but does nothing
-        return llm
         
     def _get_api_key(self, config: LLMConfig) -> Optional[str]:
         """Get API key from environment variables"""
@@ -468,8 +463,7 @@ class LLMManager:
                 max_tokens=model_config.get("max_tokens", 2048),
                 streaming=True  # Enable streaming
             )
-            # Wrap with LangSmith tracing
-            llm = self._wrap_llm_with_langsmith(llm, "openrouter")
+            # LangSmith tracing is handled via @traceable decorators
             self._log_initialization(f"Successfully initialized {config.name} - {model_config['model']}")
             return llm
         except Exception as e:
@@ -490,8 +484,7 @@ class LLMManager:
                 max_tokens=model_config.get("max_tokens", 2048),
                 streaming=True  # Enable streaming
             )
-            # Wrap with LangSmith tracing
-            llm = self._wrap_llm_with_langsmith(llm, "mistral")
+            # LangSmith tracing handled via @traceable decorators
             self._log_initialization(f"Successfully initialized {config.name} - {model_config['model']}")
             return llm
         except Exception as e:
