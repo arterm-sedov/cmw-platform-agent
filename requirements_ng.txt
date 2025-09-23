@@ -28,6 +28,7 @@ pymupdf4llm>=0.0.1
 
 # Observability
 langsmith>=0.1.0
+langfuse>=2.39.0
 
 # Development and Testing
 pytest>=7.0.0
