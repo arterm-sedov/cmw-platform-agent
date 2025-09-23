@@ -195,6 +195,7 @@ class NativeLangChainStreaming:
         return getattr(agent, 'language', 'en')
     
     
+    @traceable
     async def stream_agent_response(
         self,
         agent,
