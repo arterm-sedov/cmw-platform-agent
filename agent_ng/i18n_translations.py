@@ -156,6 +156,7 @@ RUSSIAN_TRANSLATIONS = {
     "provider_model": "**Провайдер / модель:** {provider} / {model}",
     "deduplication": "**Дедупликация:** {duplicates} дублирующих вызовов предотвращено ({breakdown})",
     "total_tool_calls": "**Всего вызовов инструментов:** {calls}",
+    "no_content_response": "⚠️ **Нет ответа от агента.** Попробуйте ещё раз, измените формулировку или переключите модель.",
     
     # Agent status details
     "agent_status_ready": "✅ **Агент готов**",
@@ -411,6 +412,7 @@ ENGLISH_TRANSLATIONS = {
     "provider_model": "**Provider / model:** {provider} / {model}",
     "deduplication": "**Deduplication:** {duplicates} duplicate calls prevented ({breakdown})",
     "total_tool_calls": "**Total tool calls:** {calls}",
+    "no_content_response": "⚠️ **No answer from the agent.** Please try again, rephrase, or switch the model.",
     
     # Agent status details
     "agent_status_ready": "✅ **Agent Ready**",

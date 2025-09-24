@@ -26,7 +26,13 @@ KEYS_TO_REMOVE_MAPPING = {
     "Decimal": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
     "DateTime": ['isUnique', 'isIndexed', 'isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
     "Boolean": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
-    "Account": ['isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio']
+    "Account": ['isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Process": ['isUnique', 'isIndexed', 'isTitle', 'isCalculated', 'isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Conversation": ['isUnique', 'isIndexed', 'isTitle', 'isCalculated', 'isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Color": ['isUnique', 'isIndexed', 'isTitle', 'isCalculated', 'isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Record": ['relatedTemplate', 'isReferenceData', 'isTransferable', 'keyProperty', 'conversationDisplayConfig'],
+    "Application": []
+
 }
 
 ATTRIBUTE_MODEL_DESCRIPTIONS = {
@@ -113,10 +119,24 @@ ATTRIBUTE_RESPONSE_MAPPING = {
     "linkedRecordTemplate": "Related template ID"
 }
 
+TEMPLATE_RESPONSE_MAPPING = {
+    "alias": "Template system name",
+    "type": "Template type",
+    "name": "Name",
+    "description": "Description"
+}
+
+APPLICATION_RESPONSE_MAPPING = {
+    "alias": "Application system name",
+    "name": "Name",
+    "description": "Description",
+    "isDefault": "Use by default"
+}
+
 ENTITY_TYPE_MAPPING = {
     "attribute": [ATTRIBUTE_MODEL_DESCRIPTIONS, ATTRIBUTE_RESPONSE_MAPPING],
-    "template": [],
-    "application": []
+    "template": [None, TEMPLATE_RESPONSE_MAPPING],
+    "application": [None, APPLICATION_RESPONSE_MAPPING]
 }
 
 GET_URL_TYPE_MAPPING = {
@@ -182,11 +202,6 @@ def execute_get_operation(
     endpoint: str
 ) -> Dict[str, Any]:
     """
-    Универсальная функция для постобработки ответа от _get_request.
-    Извлекает, очищает и валидирует данные атрибута.
-
-    :param request_result: Результат вызова _get_request(...)
-    :param keys_to_remove: Список ключей, которые нужно удалить из response
     :param result_model: Pydantic-модель для валидации финального результата (должна иметь поля: success, status_code, data, error)
     :return: Валидированный результат в виде dict (model_dump)
     """
@@ -316,12 +331,13 @@ def process_data(
             else:
                 type = entity_type
         else:
+            type = "Application"
             entity_type = "Application"
-
         keys_to_remove = KEYS_TO_REMOVE_MAPPING.get(type, []) # по умолчанию - пустой список
         # Удаляем ненужные ключи (если это словарь)
-        for key in keys_to_remove:
-            data.pop(key, None)
+        if keys_to_remove is not None:
+            for key in keys_to_remove:
+                data.pop(key, None)
 
         # Обрабатываем globalAlias: вытаскиваем owner и alias, удаляем globalAlias и type
         if "globalAlias" in data:
@@ -343,11 +359,12 @@ def process_data(
             instance_global_alias = data.pop("instanceGlobalAlias", {})
             if isinstance(instance_global_alias, dict):
                 # Добавляем owner и alias в корень, если они есть
-                if "owner" in global_alias:
+                if "owner" in instance_global_alias:
                     data["instanceAlias"] = instance_global_alias["owner"]
                     data["instanceAttributeAlias"] = instance_global_alias["alias"]
                 else:
-                    data["instanceAlias"] = instance_global_alias["alias"]
+                    if "alias" in instance_global_alias:
+                        data["instanceAlias"] = instance_global_alias["alias"]
                 # type игнорируется и не добавляется
 
         # Специальная обработка variants - преобразуем структуру каждого элемента
@@ -384,7 +401,6 @@ def process_data(
                 data["variants"] = processed_variants
 
         data = rename_data(data, f"{caller_name}", entity_type, type)
-
     return data
 
 def rename_data(
@@ -404,13 +420,77 @@ def rename_data(
                 model_description = value[0]
                 model_response = value[1]
                 break
-        if entity_type and entity_type in model_description:
-            renamed_data[f"{entity_type} type description"] = model_description[type]
-
-        for key, value in data.items():
-            # Если ключ есть в маппинге - используем новое имя, иначе оставляем как есть
-            new_key = model_response.get(key, key)
-            renamed_data[new_key] = value
-        data = renamed_data
+        if model_description is not None:
+            if entity_type and entity_type in model_description:
+                renamed_data[f"{entity_type} type description"] = model_description[type]
+        if model_response is not None:
+            for key, value in data.items():
+                # Если ключ есть в маппинге - используем новое имя, иначе оставляем как есть
+                new_key = model_response.get(key, key)
+                renamed_data[new_key] = value
+            data = renamed_data
 
     return data
+
+def execute_list_operation(
+    response_data: Dict[str, Any],
+    result_model: Type[BaseModel]
+) -> Dict[str, Any]:
+    """
+    :param request_result: Результат вызова _get_request(...)
+    :return: Валидированный результат в виде dict (model_dump)
+    """
+
+    stack = inspect.stack()
+    caller_frame = stack[1]
+    caller_name = caller_frame.function
+
+    if not response_data.get('success', False):
+        adapted = {
+            "success": response_data.get("success", False),
+            "status_code": response_data.get("status_code"),
+            "data": None,
+            "error": response_data.get("error")
+        }
+        return result_model(**adapted).model_dump()
+
+    # Извлекаем тело ответа
+    raw_response = response_data.get('raw_response')
+    if raw_response is None:
+        adapted = {
+            "success": False,
+            "status_code": response_data.get("status_code"),
+            "data": None,
+            "error": "No response data received from server"
+        }
+        return result_model(**adapted).model_dump()
+
+    # Проверяем структуру
+    if not isinstance(raw_response, dict) or 'response' not in raw_response:
+        adapted = {
+            "success": False,
+            "status_code": response_data.get("status_code"),
+            "data": None,
+            "error": "Unexpected response structure from server"
+        }
+        return result_model(**adapted).model_dump()
+
+    # Копируем данные, чтобы не мутировать оригинал
+    data = raw_response['response'].copy() if isinstance(raw_response['response'], list) else raw_response['response']
+
+    for i, item in enumerate(data):
+        if isinstance(item, dict):
+            data[i] = process_data(item, f"{caller_name}")
+
+    # Формируем финальный результат
+    final_result = {
+        "success": True,
+        "status_code": response_data["status_code"],
+        "error": None
+    }
+
+    final_result["data"] = data
+
+    # Валидируем и возвращаем
+    validated = result_model(**final_result)
+    return validated.model_dump()
