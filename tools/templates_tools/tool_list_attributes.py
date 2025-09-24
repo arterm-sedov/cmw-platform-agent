@@ -1,9 +1,4 @@
-from typing import Any, Dict, List, Optional, Literal
-from langchain_core.tools import tool
-from pydantic import BaseModel, Field, field_validator, model_validator
-from pydantic.v1.types import NoneBytes
-from .. import requests_ as requests_
-from ..models import AttributeResult
+from ..tool_utils import *
 
 ATTRIBUTE_ENDPOINT = "webapi/Attribute/List"
 
@@ -45,33 +40,10 @@ def list_attributes(
 
     result = requests_._get_request(f"{ATTRIBUTE_ENDPOINT}/{template_global_alias}")
 
-    # Check if the request was successful and has the expected structure
-    if not result.get('success', False):
-        return result
-    
-    result_body = result.get('raw_response')
-    if result_body is None:
-        result.update({"error": "No response data received from server"})
-        return result
-    
-    # Check if result_body has the expected 'response' key
-    if not isinstance(result_body, dict) or 'response' not in result_body:
-        result.update({"error": "Unexpected response structure from server"})
-        return result
-
-    # Extract the data
-    data = result_body['response']
-    
-    # Create the final result with the data
-    final_result = {
-        "success": True,
-        "status_code": result.get("status_code", 200),
-        "data": data,
-        "error": None
-    }
-    
-    validated = AttributeResult(**final_result)
-    return validated.model_dump()
+    return execute_list_operation(
+            response_data = result,
+            result_model=AttributeResult
+    )
 
 if __name__ == "__main__":
     results = list_attributes.invoke({
