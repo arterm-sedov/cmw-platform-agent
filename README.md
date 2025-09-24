@@ -4,7 +4,7 @@ colorFrom: indigo
 colorTo: indigo
 sdk: gradio
 sdk_version: 5.35.0
-app_file: app.py
+app_file: agent_ng/app_ng_modular.py
 pinned: false
 hf_oauth: true
 hf_oauth_expiration_minutes: 480
