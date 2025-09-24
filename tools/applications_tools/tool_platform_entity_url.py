@@ -1,6 +1,7 @@
 from ..tool_utils import *
 import json
 import ast
+from tools import applications_tools
 
 class GetPlatformEntityUrlSchema(BaseModel):
     """
@@ -64,12 +65,10 @@ def get_platform_entity_url(
         result_body = ast.literal_eval(result_body)
 
         if entity_type == "Undefined":
-            list_applications = list_applications.func()
-            result_list_applications_body = list_applications['raw_response']
-            application_name = next((item["name"] for item in result_list_applications_body if item["alias"] == system_name))
+            list_applications = applications_tools.list_applications.func()
+            data_list_applications_body = list_applications['data']
+            application_name = next((item["Name"] for item in data_list_applications_body if item["Application system name"] == system_name))
 
-            result_body = result['raw_response']
-            result_body = json.loads(result_body)
             entity_id = next((item["solution"] for item in result_body if item["solutionName"] == application_name))
         else:
             for item in result_body:
@@ -101,7 +100,7 @@ def get_platform_entity_url(
 
 if __name__ == "__main__":
     results = get_platform_entity_url.invoke({
-        "type": "Record Template",
-        "system_name": "Test"
+        "type": "Application",
+        "system_name": "AItestAndApi"
     })
     print(results)

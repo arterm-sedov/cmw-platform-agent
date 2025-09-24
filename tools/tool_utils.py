@@ -29,7 +29,10 @@ KEYS_TO_REMOVE_MAPPING = {
     "Account": ['isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio'],
     "Process": ['isUnique', 'isIndexed', 'isTitle', 'isCalculated', 'isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
     "Conversation": ['isUnique', 'isIndexed', 'isTitle', 'isCalculated', 'isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
-    "Color": ['isUnique', 'isIndexed', 'isTitle', 'isCalculated', 'isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio']
+    "Color": ['isUnique', 'isIndexed', 'isTitle', 'isCalculated', 'isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
+    "Record": ['relatedTemplate', 'isReferenceData', 'isTransferable', 'keyProperty', 'conversationDisplayConfig'],
+    "Application": []
+
 }
 
 ATTRIBUTE_MODEL_DESCRIPTIONS = {
@@ -116,10 +119,24 @@ ATTRIBUTE_RESPONSE_MAPPING = {
     "linkedRecordTemplate": "Related template ID"
 }
 
+TEMPLATE_RESPONSE_MAPPING = {
+    "alias": "Template system name",
+    "type": "Template type",
+    "name": "Name",
+    "description": "Description"
+}
+
+APPLICATION_RESPONSE_MAPPING = {
+    "alias": "Application system name",
+    "name": "Name",
+    "description": "Description",
+    "isDefault": "Use by default"
+}
+
 ENTITY_TYPE_MAPPING = {
     "attribute": [ATTRIBUTE_MODEL_DESCRIPTIONS, ATTRIBUTE_RESPONSE_MAPPING],
-    "template": [],
-    "application": []
+    "template": [None, TEMPLATE_RESPONSE_MAPPING],
+    "application": [None, APPLICATION_RESPONSE_MAPPING]
 }
 
 GET_URL_TYPE_MAPPING = {
@@ -314,12 +331,14 @@ def process_data(
             else:
                 type = entity_type
         else:
+            type = "Application"
             entity_type = "Application"
 
         keys_to_remove = KEYS_TO_REMOVE_MAPPING.get(type, []) # по умолчанию - пустой список
         # Удаляем ненужные ключи (если это словарь)
-        for key in keys_to_remove:
-            data.pop(key, None)
+        if keys_to_remove != None:
+            for key in keys_to_remove:
+                data.pop(key, None)
 
         # Обрабатываем globalAlias: вытаскиваем owner и alias, удаляем globalAlias и type
         if "globalAlias" in data:
@@ -403,14 +422,15 @@ def rename_data(
                 model_description = value[0]
                 model_response = value[1]
                 break
-        if entity_type and entity_type in model_description:
-            renamed_data[f"{entity_type} type description"] = model_description[type]
-
-        for key, value in data.items():
-            # Если ключ есть в маппинге - используем новое имя, иначе оставляем как есть
-            new_key = model_response.get(key, key)
-            renamed_data[new_key] = value
-        data = renamed_data
+        if model_description != None:
+            if entity_type and entity_type in model_description:
+                renamed_data[f"{entity_type} type description"] = model_description[type]
+        if model_response != None:
+            for key, value in data.items():
+                # Если ключ есть в маппинге - используем новое имя, иначе оставляем как есть
+                new_key = model_response.get(key, key)
+                renamed_data[new_key] = value
+            data = renamed_data
 
     return data
 
