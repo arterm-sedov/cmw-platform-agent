@@ -10,6 +10,10 @@ alwaysApply: true
 - PLAN your course of action after gathering the reference info.
 - Code style: langchain-pure, super dry, super lean, abstract, modular, pythonic, super smart, modular, linted, deduplicated, pydantic, pythonic
 - Always run linter after making any changes:
+    - Use Ruff as the primary linter: `ruff check <file_path>` and `ruff format <file_path>` for specific files
+    - Run before committing: `ruff check <file_path> --fix` and `ruff format <file_path>` for changed files only
+    - Only lint the files that were modified, not the entire codebase
+    - Configuration in pyproject.toml follows LangChain and Gradio best practices
 - Ensure testability and extensibility.
 - When refactoring code, change only the levant parts.
 - Ensure LangChain purity.

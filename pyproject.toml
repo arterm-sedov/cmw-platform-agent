@@ -1,0 +1,105 @@
+[tool.ruff]
+# Ruff configuration for cmw-platform-agent
+# Based on LangChain and Gradio best practices
+
+# Target Python version
+target-version = "py311"
+
+# Line length (PEP 8 standard)
+line-length = 88
+
+# Exclude directories
+exclude = [
+    "__pycache__",
+    ".git",
+    ".venv",
+    "venv",
+    ".pytest_cache",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
+# Include patterns
+include = ["*.py"]
+
+# Rule configuration
+[tool.ruff.lint]
+# Enable all rules
+select = ["E", "W", "F", "I", "N", "UP", "YTT", "ANN", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SIM", "TID", "TCH", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
+
+# Ignore specific rules that conflict with LangChain/Gradio/HuggingFace/Langfuse/Langsmith patterns
+ignore = [
+    "S101",    # Use of assert (common in LangChain tests)
+    "PLR0913", # Too many arguments (LangChain tools often have many params)
+    "PLR0912", # Too many branches (complex LangChain logic)
+    "PLR0915", # Too many statements (LangChain chains can be long)
+    "COM812",  # Missing trailing comma (conflicts with Black)
+    "ISC001",  # Implicitly concatenated string literals (common in prompts)
+    "F401",    # Unused imports (prevent automatic deletion of useful imports)
+    "F403",    # Star imports (common in LangChain patterns)
+    "PLR2004", # Magic value used in comparison (common in HuggingFace configs)
+    "PLR0911", # Too many return statements (LangGraph state management)
+    "PLR0913", # Too many arguments (Gradio components have many params)
+    "ANN401",  # Dynamically typed expressions (HuggingFace transformers)
+    "RUF001",  # Ambiguous unicode characters (international datasets)
+    "PLR0913", # Too many arguments (Langfuse/Langsmith tracing functions)
+    "PLR0912", # Too many branches (Langfuse/Langsmith conditional logic)
+    "ANN401",  # Dynamically typed expressions (Langfuse/Langsmith metadata)
+    "PLR2004", # Magic values (Langfuse/Langsmith configuration constants)
+    "T201",    # Print statements (Langfuse/Langsmith debugging)
+    "BLE001",  # Blind except clauses (Langfuse/Langsmith error handling)
+]
+
+# Rules that should not be automatically fixed to prevent deletion of useful code
+unfixable = [
+    "F401",    # Unused imports - flag but don't auto-remove
+    "F403",    # Star imports - flag but don't auto-remove
+    "F405",    # Name may be undefined due to star import
+    "T201",    # Print statements - flag but don't auto-remove (used for debugging)
+    "T10",     # Debugger statements - flag but don't auto-remove (used for debugging)
+    "BLE001",  # Blind except clauses - flag but don't auto-remove (may be intentional)
+    "C4",      # Comprehension rules - flag but don't auto-remove (preferential style)
+    "DTZ",     # Datetime rules - flag but don't auto-remove (preferential style)
+    "RET",     # Return rules - flag but don't auto-remove (preferential style)
+    "PLR",     # Pylint rules - flag but don't auto-remove (mostly preferential)
+    "ANN",     # Type annotations - flag but don't auto-remove (preferential)
+    "COM",     # Commas - flag but don't auto-remove (preferential style)
+    "ISC",     # Implicit string concatenation - flag but don't auto-remove (preferential)
+    "LOG",     # Logging rules - flag but don't auto-remove (Langfuse/Langsmith logging)
+    "PERF",    # Performance rules - flag but don't auto-remove (observability overhead)
+]
+
+# Allow specific patterns
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**/*.py" = ["S101", "PLR2004", "ANN001", "T201", "T10"]
+"**/misc_files/**/*.py" = ["S101", "PLR2004", "ANN001", "T201", "T10"]
+"**/*langfuse*" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Langfuse files
+"**/*langsmith*" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Langsmith files
+"**/agent_ng/*.py" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Agent files need debugging
+"**/tools/*.py" = ["PLR0913", "ANN401", "BLE001"]  # Tool files
+
+# Import sorting - conservative configuration to preserve imports
+[tool.ruff.lint.isort]
+known-first-party = ["agent_ng", "tools"]
+force-sort-within-sections = true
+# Preserve existing import structure
+combine-as-imports = false
+split-on-trailing-comma = false
+
+# String formatting
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "double"
+
+# Type checking
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
+ignore-fully-untyped = true
+
+# LangChain specific configurations
+[tool.ruff.lint.pylint]
+max-args = 10
+max-locals = 20
+max-branches = 15
+max-statements = 60
