@@ -63,13 +63,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from logging import Handler, Logger
 from logging.handlers import RotatingFileHandler
+import os
 from typing import Optional
 
 from dotenv import load_dotenv
-
 
 _INITIALIZED = False
 
@@ -80,7 +79,7 @@ class _JsonFormatter(logging.Formatter):
     Emits one JSON object per line with core fields and exception info when present.
     """
 
-    def format(self, record: logging.LogRecord) -> str:  # noqa: D401
+    def format(self, record: logging.LogRecord) -> str:
         base = {
             "time": self.formatTime(record, datefmt="%Y-%m-%d %H:%M:%S"),
             "level": record.levelname,
@@ -101,13 +100,13 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(base, ensure_ascii=False)
 
 
-def _parse_bool(value: Optional[str], default: bool) -> bool:
+def _parse_bool(value: str | None, default: bool) -> bool:
     if value is None or value == "":
         return default
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def setup_logging(force: Optional[bool] = None) -> Logger:
+def setup_logging(force: bool | None = None) -> Logger:
     """Configure root logging using environment variables.
 
     Environment variables:
@@ -206,10 +205,15 @@ def setup_logging(force: Optional[bool] = None) -> Logger:
 
     # Attach internal debug handler if available (keeps Logs tab working)
     try:
-        from agent_ng.debug_streamer import get_log_handler  # local import to avoid cycles
+        from agent_ng.debug_streamer import (
+            get_log_handler,  # local import to avoid cycles
+        )
 
         dbg = get_log_handler("app_ng")
         if dbg and isinstance(dbg, Handler) and dbg not in root.handlers:
+            # Align handler level/formatter with root defaults; UI will render its own format
+            dbg.setLevel(level)
+            dbg.setFormatter(formatter)
             root.addHandler(dbg)
     except Exception:
         # Optional integration; ignore on failure
