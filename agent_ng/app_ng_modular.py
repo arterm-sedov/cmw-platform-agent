@@ -232,7 +232,7 @@ class NextGenApp:
             # Initialize session manager (creates agents on-demand per session)
             self.debug_streamer.info("Session manager ready", LogCategory.INIT)
             
-            self.initialization_logs.append("✅ Session manager ready" if self.language == "ru" else "✅ Session manager ready")
+            self.initialization_logs.append("✅ " + get_translation_key("session_manager_ready", self.language))
             self.initialization_complete = True
             
             # Trigger UI update after initialization

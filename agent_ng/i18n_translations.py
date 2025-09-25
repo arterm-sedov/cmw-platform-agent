@@ -235,6 +235,9 @@ RUSSIAN_TRANSLATIONS = {
     "response_completed": "Ответ завершен",
     "processing_failed": "Обработка не удалась",
     
+    # Initialization messages
+    "session_manager_ready": "Менеджер сессий готов",
+    
     # Iteration messages
     "iteration_processing": "Итерация {iteration}/{max_iterations} - Обработка...",
     "iteration_finished": "Итерация {iteration}/{max_iterations} - Завершена",
@@ -490,6 +493,9 @@ ENGLISH_TRANSLATIONS = {
     "processing_complete": "🎉 Processing complete",
     "response_completed": "Response completed",
     "processing_failed": "Processing failed",
+    
+    # Initialization messages
+    "session_manager_ready": "Session manager ready",
     
     # Iteration messages
     "iteration_processing": "Iteration **{iteration}/{max_iterations}** - Processing...",
