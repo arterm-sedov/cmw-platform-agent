@@ -6,3 +6,4 @@ server_config.yml
 .screencasts/
 *.mp4
 *.log
+*.log.*
