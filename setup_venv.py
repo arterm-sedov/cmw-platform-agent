@@ -10,7 +10,7 @@ This script:
 4. Provides comprehensive error handling and user feedback
 
 Usage:
-    python setup_venv.py [--skip-venv] [--skip-deps] [--verbose]
+    python setup_venv.py [--skip-venv] [--skip-deps] [--verbose] [--venv-path PATH]
 """
 
 import os
@@ -92,9 +92,8 @@ def check_python_version():
     print_status(f"Python version: {version.major}.{version.minor}.{version.micro}", "SUCCESS")
     return True
 
-def create_virtual_environment():
-    """Create a virtual environment."""
-    venv_path = Path(".venv")
+def create_virtual_environment(venv_path: Path):
+    """Create a virtual environment at the provided path."""
     
     if venv_path.exists():
         print_status("Virtual environment already exists", "WARNING")
@@ -110,33 +109,33 @@ def create_virtual_environment():
     python_cmd = get_python_command()
     
     try:
-        run_command([python_cmd, "-m", "venv", ".venv"])
+        run_command([python_cmd, "-m", "venv", str(venv_path)])
         print_status("Virtual environment created successfully", "SUCCESS")
         return True
     except subprocess.CalledProcessError:
         print_status("Failed to create virtual environment", "ERROR")
         return False
 
-def get_activation_command():
-    """Get the activation command for the current platform."""
+def get_activation_command(venv_path: Path):
+    """Get the activation command for the current platform for provided venv path."""
     if platform.system() == "Windows":
-        return ".venv\\Scripts\\activate"
+        return f"{venv_path}\\Scripts\\activate"
     else:
-        return "source .venv/bin/activate"
+        return f"source {venv_path}/bin/activate"
 
-def get_python_path():
-    """Get the path to the virtual environment's Python executable."""
+def get_python_path(venv_path: Path):
+    """Get the path to the virtual environment's Python executable for provided venv path."""
     if platform.system() == "Windows":
-        return ".venv\\Scripts\\python.exe"
+        return f"{venv_path}\\Scripts\\python.exe"
     else:
-        return ".venv/bin/python"
+        return f"{venv_path}/bin/python"
 
-def get_pip_path():
-    """Get the path to the virtual environment's pip executable."""
+def get_pip_path(venv_path: Path):
+    """Get the path to the virtual environment's pip executable for provided venv path."""
     if platform.system() == "Windows":
-        return ".venv\\Scripts\\pip.exe"
+        return f"{venv_path}\\Scripts\\pip.exe"
     else:
-        return ".venv/bin/pip"
+        return f"{venv_path}/bin/pip"
 
 def get_requirements_file():
     """Get the appropriate requirements file based on the platform."""
@@ -152,10 +151,10 @@ def get_requirements_file():
         print_status("Using main requirements.txt for Linux/macOS", "INFO")
         return "requirements.txt"
 
-def install_dependencies():
+def install_dependencies(venv_path: Path):
     """Install dependencies using the appropriate requirements file."""
-    pip_cmd = get_pip_path()
-    python_cmd = get_python_path()
+    pip_cmd = get_pip_path(venv_path)
+    python_cmd = get_python_path(venv_path)
     requirements_file = get_requirements_file()
     
     print_status("Installing dependencies...", "INFO")
@@ -208,11 +207,11 @@ def install_dependencies():
         
         return False
 
-def verify_installation():
+def verify_installation(venv_path: Path):
     """Verify that the installation was successful."""
     print_status("Verifying installation...", "INFO")
     
-    python_cmd = get_python_path()
+    python_cmd = get_python_path(venv_path)
     
     # Test imports
     test_imports = [
@@ -255,6 +254,7 @@ def main():
     parser.add_argument("--skip-venv", action="store_true", help="Skip virtual environment creation")
     parser.add_argument("--skip-deps", action="store_true", help="Skip dependency installation")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("--venv-path", default=".venv", help="Path for the virtual environment (default: .venv)")
     
     args = parser.parse_args()
     
@@ -269,23 +269,26 @@ def main():
     if not check_python_version():
         sys.exit(1)
     
+    # Resolve venv path
+    venv_path = Path(args.venv_path)
+
     # Create virtual environment
     if not args.skip_venv:
-        if not create_virtual_environment():
+        if not create_virtual_environment(venv_path):
             sys.exit(1)
     else:
         print_status("Skipping virtual environment creation", "INFO")
     
     # Install dependencies
     if not args.skip_deps:
-        if not install_dependencies():
+        if not install_dependencies(venv_path):
             sys.exit(1)
     else:
         print_status("Skipping dependency installation", "INFO")
     
     # Verify installation
     if not args.skip_deps:
-        if not verify_installation():
+        if not verify_installation(venv_path):
             print_status("Installation verification failed", "ERROR")
             sys.exit(1)
     
@@ -295,7 +298,7 @@ def main():
     print_status("=" * 60, "INFO")
     print_status("Next steps:", "INFO")
     print_status("1. Activate the virtual environment:", "INFO")
-    print_status(f"   {get_activation_command()}", "INFO")
+    print_status(f"   {get_activation_command(venv_path)}", "INFO")
     print_status("2. Set up your environment variables in .env file:", "INFO")
     print_status("   GEMINI_KEY=your_gemini_api_key", "INFO")
     print_status("   SUPABASE_URL=your_supabase_url", "INFO")
