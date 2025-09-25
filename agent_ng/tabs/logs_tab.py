@@ -48,6 +48,7 @@ class LogsTab:
         with gr.Column(scale=1, min_width=400, elem_classes=["logs-card"]):
             self.components["logs_display"] = gr.Textbox(
                 value=self._get_translation("logs_initializing"),
+                show_label=False,
                 label=self._get_translation("logs_title"),
                 lines=20,
                 max_lines=30,

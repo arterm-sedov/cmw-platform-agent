@@ -78,7 +78,7 @@ class ChatTab:
                 self.components["quick_explain_btn"] = gr.Button(self._get_translation("quick_explain"), elem_classes=["cmw-button"])
 
         with gr.Row():
-            with gr.Column(scale=3):
+            with gr.Column(scale=1, min_width=400):
                 # Queue status will be shown using Gradio's native warning system
                 # No need for HTML component - using gr.Warning() instead
 
@@ -126,7 +126,7 @@ class ChatTab:
 
 
             # Status and Quick Actions sidebar (moved here to be on the right)
-            with gr.Column(scale=1):
+            with gr.Column(scale=1, min_width=400):
                 # LLM Selection section
                 with gr.Column(elem_classes=["model-card"]):
                     gr.Markdown(f"### {self._get_translation('llm_selection_title')}", elem_classes=["llm-selection-title"])
