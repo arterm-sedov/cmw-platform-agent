@@ -150,6 +150,12 @@ class NextGenApp:
         self.current_global_progress = get_translation_key("progress_ready", language)  # Global progress for timer updates
         self.last_progress_display = ""  # Cache last display to avoid unnecessary updates
         
+        # Persistent background asyncio loop for streaming to avoid closing gRPC/Gemini loop between turns
+        self._stream_loop = None
+        self._stream_loop_thread = None
+        self._stream_queue_timeout_s = 0.1
+        self._ensure_stream_loop()
+        
         # Initialize synchronously first, then start async initialization
         self._start_async_initialization()
     
@@ -176,6 +182,44 @@ class NextGenApp:
             
             thread = threading.Thread(target=run_async_init, daemon=True)
             thread.start()
+    
+    def _ensure_stream_loop(self):
+        """Ensure a persistent background event loop exists and is running."""
+        try:
+            if self._stream_loop is not None and self._stream_loop.is_running():
+                return
+        except Exception:
+            # Recreate loop if previous loop errored out
+            self._stream_loop = None
+            self._stream_loop_thread = None
+        
+        import threading
+        import asyncio
+        self._stream_loop = asyncio.new_event_loop()
+        
+        def _run_loop_forever():
+            asyncio.set_event_loop(self._stream_loop)
+            self._stream_loop.run_forever()
+        
+        self._stream_loop_thread = threading.Thread(target=_run_loop_forever, daemon=True)
+        self._stream_loop_thread.start()
+    
+    def _submit_stream_task(self, message, history, request, out_queue):
+        """Submit the async streaming producer to the background loop and feed results into out_queue."""
+        import asyncio
+        
+        async def _producer():
+            try:
+                async for result in self.stream_chat_with_agent(message, history, request):
+                    out_queue.put(result)
+            except Exception as e:
+                # Propagate errors to the consumer
+                out_queue.put({"type": "error", "content": f"{e}", "metadata": {"error": str(e)}})
+            finally:
+                # Sentinel to indicate completion
+                out_queue.put(StopIteration)
+        
+        return asyncio.run_coroutine_threadsafe(_producer(), self._stream_loop)
     
     async def _initialize_agent(self):
         """Initialize the session manager (no global agent needed)"""
@@ -655,63 +699,25 @@ class NextGenApp:
         # Start processing state for icon rotation
         self.start_processing()
         
-        # Use the existing event loop or create a new one
+        # Always use the persistent background loop to avoid closing gRPC/Gemini resources
+        self._ensure_stream_loop()
+        import queue
+        out_queue = queue.Queue()
+        future = self._submit_stream_task(message, history, request, out_queue)
+        
         try:
-            loop = asyncio.get_running_loop()
-            # We're in an event loop, need to run in a thread
-            import concurrent.futures
-            import threading
-            
-            def run_in_thread():
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
-                try:
-                    async def async_stream():
-                        async for result in self.stream_chat_with_agent(message, history, request):
-                            yield result
-                    
-                    # Convert async generator to regular generator
-                    async_gen = async_stream()
-                    results = []
-                    while True:
-                        try:
-                            result = new_loop.run_until_complete(async_gen.__anext__())
-                            results.append(result)
-                        except StopAsyncIteration:
-                            break
-                    return results
-                finally:
-                    new_loop.close()
-            
-            # Run in thread and collect all results
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                results = future.result()
-                
-            # Yield all results
-            for result in results:
-                yield result
-                
-        except RuntimeError:
-            # No event loop running, create a new one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            while True:
+                item = out_queue.get()
+                if item is StopIteration:
+                    break
+                yield item
+        finally:
+            # Best-effort cancel if still running
             try:
-                async def async_stream():
-                    async for result in self.stream_chat_with_agent(message, history, request):
-                        yield result
-                
-                # Convert async generator to regular generator
-                async_gen = async_stream()
-                while True:
-                    try:
-                        result = loop.run_until_complete(async_gen.__anext__())
-                        yield result
-                    except StopAsyncIteration:
-                        break
-                
-            finally:
-                loop.close()
+                if not future.done():
+                    future.cancel()
+            except Exception:
+                pass
         
         # Refresh UI after streaming completes (EVENT-DRIVEN)
         self._refresh_ui_after_message()
