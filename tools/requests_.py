@@ -28,115 +28,151 @@ Date: January 18, 2025
 Version: 1.0
 """
 
-from typing import Any, Dict, List, Optional, Union
-import json
-import requests
-import yaml
 import base64
-from .requests_models import HTTPResponse, APIResponse, RequestConfig
+import json
+import os
+from typing import Any
+
+import requests
+from dotenv import load_dotenv
+
+from .requests_models import HTTPResponse, RequestConfig
+
 
 def _load_server_config() -> RequestConfig:
     """
-    Load and validate server configuration using Pydantic validation.
-    
-    This function loads the server configuration from server_config.yml and
-    validates it using the RequestConfig Pydantic model. It ensures all
-    required configuration parameters are present and valid.
-    
+    Load and validate server configuration from environment using python-dotenv.
+
+    This function calls `load_dotenv()` to load variables from a local `.env`
+    file (if present), then reads the following environment variables:
+      - CMW_BASE_URL (required)
+      - CMW_LOGIN (required)
+      - CMW_PASSWORD (required)
+      - CMW_TIMEOUT (optional; defaults to 30 if missing/invalid)
+
+    The resulting values are validated via the `RequestConfig` Pydantic model,
+    ensuring required parameters are present and correct types are enforced.
+
     Returns:
-        RequestConfig: Validated configuration object with all required fields
-        
+        RequestConfig: Validated configuration object with all required fields.
+
     Raises:
-        RuntimeError: If configuration file cannot be loaded or validation fails
-        FileNotFoundError: If server_config.yml file is not found
-        
-    Configuration File Format:
-        The server_config.yml file should contain:
-        ```yaml
-        base_url: "https://platform.comindware.com"
-        login: "your_username"
-        password: "your_password"
-        timeout: 30  # optional, defaults to 30
-        ```
-    
+        RuntimeError: If required environment variables are missing or
+            configuration validation fails.
+
+    Environment variables example (PowerShell):
+        $env:CMW_BASE_URL = "https://platform.comindware.com"
+        $env:CMW_LOGIN = "your_username"
+        $env:CMW_PASSWORD = "your_password"
+        $env:CMW_TIMEOUT = "30"
+
     Example:
         >>> config = _load_server_config()
-        >>> print(config.base_url)  # "https://platform.comindware.com"
-        >>> print(config.timeout)   # 30
+        >>> print(config.base_url)
+        >>> print(config.timeout)
     """
-    with open("server_config.yml", "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f) or {}
-        
-    # Validate configuration using Pydantic to ensure all required fields are present
+    # Load variables from .env if present
+    load_dotenv()
+
+    # Read environment variables
+    base_url_env = os.environ.get("CMW_BASE_URL", "").strip()
+    login_env = os.environ.get("CMW_LOGIN", "").strip()
+    password_env = os.environ.get("CMW_PASSWORD", "").strip()
+    timeout_env = os.environ.get("CMW_TIMEOUT", "").strip()
+
+    # Validate required variables
+    missing = []
+    if not base_url_env:
+        missing.append("CMW_BASE_URL")
+    if not login_env:
+        missing.append("CMW_LOGIN")
+    if not password_env:
+        missing.append("CMW_PASSWORD")
+    if missing:
+        raise RuntimeError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
+
+    # Parse timeout with default
+    try:
+        timeout_val = int(timeout_env) if timeout_env else 30
+    except ValueError:
+        timeout_val = 30
+
+    # Build validated config
     try:
         return RequestConfig(
-            base_url=cfg.get("base_url", ""),
-            login=cfg.get("login", ""),
-            password=cfg.get("password", ""),
-            timeout=cfg.get("timeout", 30)
+            base_url=base_url_env,
+            login=login_env,
+            password=password_env,
+            timeout=timeout_val,
         )
     except Exception as e:
-        raise RuntimeError(f"Invalid server configuration: {e}")
+        raise RuntimeError("Invalid server configuration") from e
 
-def _basic_headers() -> Dict[str, str]:
+
+def _basic_headers() -> dict[str, str]:
     """
     Generate basic authentication headers using validated configuration.
-    
+
     This function creates HTTP headers for basic authentication using the
     validated server configuration. It encodes the credentials in base64
     and sets appropriate content type headers for JSON communication.
-    
+
     Returns:
         Dict[str, str]: Dictionary containing HTTP headers for authentication
             - Authorization: Basic auth header with encoded credentials
             - Content-Type: application/json
             - Accept: application/json
-    
+
     Example:
         >>> headers = _basic_headers()
         >>> print(headers["Authorization"])  # "Basic dXNlcjpwYXNzd29yZA=="
         >>> print(headers["Content-Type"])   # "application/json"
     """
     cfg = _load_server_config()
-    
+
     # Ensure credentials are not None to prevent concatenation errors
     login = cfg.login or ""
     password = cfg.password or ""
-    
+
     # Encode credentials in base64 for basic authentication
-    credentials = base64.b64encode(f"{login}:{password}".encode("ascii")).decode("ascii")
+    credentials = base64.b64encode(f"{login}:{password}".encode("ascii")).decode(
+        "ascii"
+    )
     return {
         "Authorization": f"Basic {credentials}",
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json",
     }
 
-def _check_response_for_errors(response_text: str) -> Optional[str]:
+
+def _check_response_for_errors(response_text: str) -> str | None:
     """
     Check if the response body contains an error even when HTTP status is 200.
-    
+
     This function performs additional validation on API responses to detect
     API-level errors that might be returned with HTTP 200 status codes.
     It's particularly useful for Comindware Platform API responses that may
     indicate errors through the response body rather than HTTP status codes.
-    
+
     Args:
         response_text (str): The raw response text from the API
-        
+
     Returns:
-        Optional[str]: Error message if an error is found, None if response is successful
-        
+        Optional[str]: Error message if found, None if response is successful
+
     Error Detection Logic:
         - Parses response as JSON
         - Checks if response contains "success": false
         - Returns formatted error message if error detected
         - Returns None if response is valid or not JSON
-    
+
     Example:
         >>> # Valid response
         >>> _check_response_for_errors('{"success": true, "data": "example"}')
         None
-        
+
         >>> # Error response
         >>> _check_response_for_errors('{"success": false, "error": "Invalid request"}')
         '{"success": false, "error": "Invalid request"}'
@@ -151,9 +187,10 @@ def _check_response_for_errors(response_text: str) -> Optional[str]:
         pass
     return None
 
-def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
+
+def _post_request(request_body: dict[str, Any], endpoint: str) -> dict[str, Any]:
     """
-    Make a POST request with Pydantic validation while maintaining backward compatibility.
+    Make a POST request with Pydantic validation while keeping backward compatibility.
     Returns a dict for backward compatibility with existing code.
     """
     cfg = _load_server_config()
@@ -162,10 +199,7 @@ def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]
 
     try:
         response = requests.post(
-            url,
-            headers=headers,
-            data=json.dumps(request_body),
-            timeout=cfg.timeout
+            url, headers=headers, data=json.dumps(request_body), timeout=cfg.timeout
         )
         response.raise_for_status()
 
@@ -181,7 +215,7 @@ def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]
             status_code=response.status_code,
             raw_response=raw_response,
             error=None,
-            base_url=url
+            base_url=url,
         )
 
         # Additional API-level error checking for successful HTTP responses
@@ -190,21 +224,13 @@ def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]
             if api_error:
                 http_response.error = api_error
                 http_response.success = False
-
-        # Return dict for backward compatibility (including body field)
-        result = http_response.model_dump()
-        
-        result["body"] = request_body
-
-        return result
-
     except requests.exceptions.Timeout as e:
         error_response = HTTPResponse(
             success=False,
             status_code=408,  # Request Timeout
             raw_response=None,
             error=f"Request timeout: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         result = error_response.model_dump()
         result["body"] = request_body
@@ -215,27 +241,33 @@ def _post_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]
             status_code=503,  # Service Unavailable
             raw_response=None,
             error=f"Connection error: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         result = error_response.model_dump()
         result["body"] = request_body
         return result
     except requests.exceptions.RequestException as e:
-    # Общий обработчик для всех остальных сетевых ошибок
+        # Общий обработчик для всех остальных сетевых ошибок
         error_response = HTTPResponse(
             success=False,
             status_code=500,  # Internal Server Error
             raw_response=None,
             error=f"Request failed: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         result = error_response.model_dump()
         result["body"] = request_body
         return result
+    else:
+        # Return dict for backward compatibility (including body field)
+        result = http_response.model_dump()
+        result["body"] = request_body
+        return result
 
-def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
+
+def _put_request(request_body: dict[str, Any], endpoint: str) -> dict[str, Any]:
     """
-    Make a PUT request with Pydantic validation while maintaining backward compatibility.
+    Make a PUT request with Pydantic validation while keeping backward compatibility.
     Returns a dict for backward compatibility with existing code.
     """
     cfg = _load_server_config()
@@ -244,10 +276,7 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
 
     try:
         response = requests.put(
-            url,
-            headers=headers,
-            data=json.dumps(request_body),
-            timeout=cfg.timeout
+            url, headers=headers, data=json.dumps(request_body), timeout=cfg.timeout
         )
         response.raise_for_status()
 
@@ -263,7 +292,7 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
             status_code=response.status_code,
             raw_response=raw_response,
             error=None,
-            base_url=url
+            base_url=url,
         )
 
         # Additional API-level error checking for successful HTTP responses
@@ -272,19 +301,13 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
             if api_error:
                 http_response.error = api_error
                 http_response.success = False
-
-        # Return dict for backward compatibility (including body field)
-        result = http_response.model_dump()
-        result["body"] = request_body
-        return result
-
     except requests.exceptions.Timeout as e:
         error_response = HTTPResponse(
             success=False,
             status_code=408,  # Request Timeout
             raw_response=None,
             error=f"Request timeout: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         result = error_response.model_dump()
         result["body"] = request_body
@@ -295,27 +318,33 @@ def _put_request(request_body: Dict[str, Any], endpoint: str) -> Dict[str, Any]:
             status_code=503,  # Service Unavailable
             raw_response=None,
             error=f"Connection error: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         result = error_response.model_dump()
         result["body"] = request_body
         return result
     except requests.exceptions.RequestException as e:
-    # Общий обработчик для всех остальных сетевых ошибок
+        # Общий обработчик для всех остальных сетевых ошибок
         error_response = HTTPResponse(
             success=False,
             status_code=500,  # Internal Server Error
             raw_response=None,
             error=f"Request failed: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         result = error_response.model_dump()
         result["body"] = request_body
         return result
+    else:
+        # Return dict for backward compatibility (including body field)
+        result = http_response.model_dump()
+        result["body"] = request_body
+        return result
 
-def _get_request(endpoint: str) -> Dict[str, Any]:
+
+def _get_request(endpoint: str) -> dict[str, Any]:
     """
-    Make a GET request with Pydantic validation while maintaining backward compatibility.
+    Make a GET request with Pydantic validation while keeping backward compatibility.
     Returns a dict for backward compatibility with existing code.
     """
     cfg = _load_server_config()
@@ -323,11 +352,7 @@ def _get_request(endpoint: str) -> Dict[str, Any]:
     headers = _basic_headers()
 
     try:
-        response = requests.get(
-            url,
-            headers=headers,
-            timeout=cfg.timeout
-        )
+        response = requests.get(url, headers=headers, timeout=cfg.timeout)
         response.raise_for_status()
 
         # Parse JSON response with proper error handling
@@ -344,12 +369,14 @@ def _get_request(endpoint: str) -> Dict[str, Any]:
             status_code=response.status_code,
             raw_response=raw_response,
             error=error_msg,
-            base_url=url
+            base_url=url,
         )
 
         # Additional API-level error checking for successful HTTP responses
         if http_response.success and isinstance(raw_response, dict):
-            api_error = _check_response_for_errors(json.dumps(raw_response, ensure_ascii=False))
+            api_error = _check_response_for_errors(
+                json.dumps(raw_response, ensure_ascii=False)
+            )
             if api_error:
                 http_response.error = api_error
                 http_response.success = False
@@ -363,7 +390,7 @@ def _get_request(endpoint: str) -> Dict[str, Any]:
             status_code=408,  # Request Timeout
             raw_response=None,
             error=f"Request timeout: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         return error_response.model_dump()
     except requests.exceptions.ConnectionError as e:
@@ -372,23 +399,24 @@ def _get_request(endpoint: str) -> Dict[str, Any]:
             status_code=503,  # Service Unavailable
             raw_response=None,
             error=f"Connection error: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         return error_response.model_dump()
     except requests.exceptions.RequestException as e:
-    # Общий обработчик для всех остальных сетевых ошибок
+        # Общий обработчик для всех остальных сетевых ошибок
         error_response = HTTPResponse(
             success=False,
             status_code=500,  # Internal Server Error
             raw_response=None,
             error=f"Request failed: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         return error_response.model_dump()
 
-def _delete_request(endpoint: str) -> Dict[str, Any]:
+
+def _delete_request(endpoint: str) -> dict[str, Any]:
     """
-    Make a DELETE request with Pydantic validation while maintaining backward compatibility.
+    Make a DELETE request with Pydantic validation while keeping backward compatibility.
     Returns a dict for backward compatibility with existing code.
     """
     cfg = _load_server_config()
@@ -396,11 +424,7 @@ def _delete_request(endpoint: str) -> Dict[str, Any]:
     headers = _basic_headers()
 
     try:
-        response = requests.delete(
-            url,
-            headers=headers,
-            timeout=cfg.timeout
-        )
+        response = requests.delete(url, headers=headers, timeout=cfg.timeout)
         response.raise_for_status()
 
         # Create Pydantic model for validation
@@ -409,7 +433,7 @@ def _delete_request(endpoint: str) -> Dict[str, Any]:
             status_code=response.status_code,
             raw_response=None,  # DELETE requests typically don't have response body
             error=None,
-            base_url=url
+            base_url=url,
         )
 
         # Return dict for backward compatibility
@@ -421,7 +445,7 @@ def _delete_request(endpoint: str) -> Dict[str, Any]:
             status_code=408,  # Request Timeout
             raw_response=None,
             error=f"Request timeout: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         return error_response.model_dump()
     except requests.exceptions.ConnectionError as e:
@@ -430,16 +454,16 @@ def _delete_request(endpoint: str) -> Dict[str, Any]:
             status_code=503,  # Service Unavailable
             raw_response=None,
             error=f"Connection error: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         return error_response.model_dump()
     except requests.exceptions.RequestException as e:
-    # Общий обработчик для всех остальных сетевых ошибок
+        # Общий обработчик для всех остальных сетевых ошибок
         error_response = HTTPResponse(
             success=False,
             status_code=500,  # Internal Server Error
             raw_response=None,
             error=f"Request failed: {str(e)}",
-            base_url=url
+            base_url=url,
         )
         return error_response.model_dump()
