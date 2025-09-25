@@ -57,6 +57,11 @@ Environment variables (all optional):
   - Values: true | false
   - Default: false
   - Use when reloading or changing logging at runtime
+
+- LOG_CONSOLE_MAX_LENGTH: Maximum length for console log entries before truncation.
+  - Values: integer
+  - Default: 400
+  - Example: LOG_CONSOLE_MAX_LENGTH=500
 """
 
 from __future__ import annotations
@@ -174,10 +179,35 @@ def setup_logging(force: bool | None = None) -> Logger:
             base = " ".join(parts)
         formatter = logging.Formatter(fmt=base, datefmt="%Y-%m-%d %H:%M:%S")
 
-    # Console handler
+    # Console handler with truncation
     console = logging.StreamHandler()
     console.setLevel(level)
-    console.setFormatter(formatter)
+    
+    # Create a custom formatter that truncates long messages
+    class TruncatingFormatter(logging.Formatter):
+        def __init__(self, fmt=None, datefmt=None, max_length=400):
+            super().__init__(fmt, datefmt)
+            self.max_length = max_length
+        
+        def format(self, record):
+            # Get the original formatted message
+            formatted = super().format(record)
+            
+            # Truncate if too long
+            if len(formatted) > self.max_length:
+                truncated = formatted[:self.max_length-3] + "..."
+                return truncated
+            
+            return formatted
+    
+    # Use the truncating formatter for console
+    console_max_length = int(os.getenv("LOG_CONSOLE_MAX_LENGTH", "400"))
+    console_formatter = TruncatingFormatter(
+        fmt=formatter._fmt if hasattr(formatter, '_fmt') else formatter.format,
+        datefmt=formatter.datefmt if hasattr(formatter, 'datefmt') else None,
+        max_length=console_max_length
+    )
+    console.setFormatter(console_formatter)
     root.addHandler(console)
 
     # Optional file handler (with rotation)
@@ -205,18 +235,28 @@ def setup_logging(force: bool | None = None) -> Logger:
 
     # Attach internal debug handler if available (keeps Logs tab working)
     try:
-        from agent_ng.debug_streamer import (
-            get_log_handler,  # local import to avoid cycles
-        )
+        # Try absolute import first
+        try:
+            from agent_ng.debug_streamer import get_log_handler
+        except ImportError:
+            # Fallback to relative import
+            from .debug_streamer import get_log_handler
 
-        dbg = get_log_handler("app_ng")
-        if dbg and isinstance(dbg, Handler) and dbg not in root.handlers:
-            # Align handler level/formatter with root defaults; UI will render its own format
-            dbg.setLevel(level)
-            dbg.setFormatter(formatter)
-            root.addHandler(dbg)
-    except Exception:
+        # Create handlers for common session IDs that might be used
+        session_ids = ["default", "gradio_default", "app_ng"]
+        for session_id in session_ids:
+            try:
+                dbg = get_log_handler(session_id)
+                if dbg and isinstance(dbg, Handler) and dbg not in root.handlers:
+                    # Don't set formatter - let debug_streamer handle its own formatting
+                    dbg.setLevel(level)
+                    root.addHandler(dbg)
+            except Exception:
+                # Continue with other session IDs
+                continue
+    except Exception as e:
         # Optional integration; ignore on failure
+        print(f"Warning: Could not attach debug_streamer handler: {e}")
         pass
 
     _INITIALIZED = True

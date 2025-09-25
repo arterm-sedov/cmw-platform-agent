@@ -126,9 +126,9 @@ class NextGenApp:
         # Create i18n instance for the specified language
         self.i18n = create_i18n_instance(language)
         
-        # Initialize debug system
-        self.debug_streamer = get_debug_streamer("app_ng")
-        self.log_handler = get_log_handler("app_ng")
+        # Initialize debug system - use a default session that will be accessible
+        self.debug_streamer = get_debug_streamer("default")
+        self.log_handler = get_log_handler("default")
         # self.chat_interface = get_chat_interface("app_ng")  # Dead code - never used
         
         # Initialize UI manager with i18n support
@@ -234,6 +234,7 @@ class NextGenApp:
             
             self.initialization_logs.append("✅ " + get_translation_key("session_manager_ready", self.language))
             self.initialization_complete = True
+            
             
             # Trigger UI update after initialization
             self._trigger_ui_update()

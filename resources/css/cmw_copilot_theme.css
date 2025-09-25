@@ -418,7 +418,8 @@ body {
 .message-card,
 .chatbot-card,
 .download-file-pane,
-.stats-card {
+.stats-card,
+.logs-card {
     /* margin: var(--cmw-space-4) 0 !important; */
     border: 1px solid var(--cmw-border) !important;
     border-radius: var(--cmw-radius-md) !important;
@@ -645,6 +646,7 @@ html[data-theme='dark'] .gradio-container .sidebar-card,
 html[data-theme='dark'] .gradio-container .message-card,
 html[data-theme='dark'] .gradio-container .chatbot-card,
 html[data-theme='dark'] .gradio-container .stats-card,
+html[data-theme='dark'] .gradio-container .logs-card,
 body[data-theme='dark'] .gradio-container .chat-hints,
 body[data-theme='dark'] .gradio-container .model-card,
 body[data-theme='dark'] .gradio-container .quick-actions-card,
@@ -652,13 +654,15 @@ body[data-theme='dark'] .gradio-container .sidebar-card,
 body[data-theme='dark'] .gradio-container .message-card,
 body[data-theme='dark'] .gradio-container .chatbot-card,
 body[data-theme='dark'] .gradio-container .stats-card,
+body[data-theme='dark'] .gradio-container .logs-card,
 .dark .gradio-container .chat-hints,
 .dark .gradio-container .model-card,
 .dark .gradio-container .quick-actions-card,
 .dark .gradio-container .sidebar-card,
 .dark .gradio-container .message-card,
 .dark .gradio-container .chatbot-card,
-.dark .gradio-container .stats-card {
+.dark .gradio-container .stats-card,
+.dark .gradio-container .logs-card {
     background: var(--cmw-surface) !important;
     border-color: var(--cmw-border) !important;
 }
@@ -980,7 +984,8 @@ body[data-theme='dark'] .gradio-container [data-testid="markdown"],
 .gradio-container .dark .sidebar-card,
 .gradio-container .dark .message-card,
 .gradio-container .dark .chatbot-card,
-.gradio-container .dark .stats-card {
+.gradio-container .dark .stats-card,
+.gradio-container .dark .logs-card {
     background: var(--cmw-surface) !important;
     border-color: var(--cmw-border) !important;
 }

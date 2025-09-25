@@ -44,16 +44,31 @@ class LogsTab:
 
     def _create_logs_interface(self):
         """Create the logs monitoring interface"""
-        gr.Markdown(f"### {self._get_translation('logs_title')}")
-
-        self.components["logs_display"] = gr.Markdown(
-            self._get_translation("logs_initializing"),
-            elem_classes=["status-card"]
-        )
-
-        with gr.Row():
-            self.components["refresh_logs_btn"] = gr.Button(self._get_translation("refresh_logs_button"), elem_classes=["cmw-button"])
-            self.components["clear_logs_btn"] = gr.Button(self._get_translation("clear_logs_button"), elem_classes=["cmw-button"])
+        # Main logs display area with card-like styling (similar to chatbot card)
+        with gr.Column(scale=1, min_width=400, elem_classes=["logs-card"]):
+            self.components["logs_display"] = gr.Textbox(
+                value=self._get_translation("logs_initializing"),
+                label=self._get_translation("logs_title"),
+                lines=20,
+                max_lines=30,
+                interactive=False,
+                show_copy_button=True,
+                container=True,
+                elem_id="logs-display"
+            )
+        
+        # Control buttons row
+        with gr.Row(equal_height=True):
+            self.components["refresh_logs_btn"] = gr.Button(
+                self._get_translation("refresh_logs_button"), 
+                elem_classes=["cmw-button"],
+                scale=1
+            )
+            self.components["clear_logs_btn"] = gr.Button(
+                self._get_translation("clear_logs_button"), 
+                elem_classes=["cmw-button"],
+                scale=1
+            )
 
     def _connect_events(self):
         """Connect all event handlers for the logs tab with concurrency control"""
@@ -119,9 +134,17 @@ class LogsTab:
                 # Combine static logs with real-time debug logs
                 static_logs = "\n".join(self._main_app.initialization_logs)
                 debug_logs = session_log_handler.get_current_logs()
+                
+                # If no logs for this session, try the default session
+                if debug_logs == "No logs available yet.":
+                    default_handler = get_log_handler("default")
+                    if default_handler:
+                        debug_logs = default_handler.get_current_logs()
 
                 if debug_logs and debug_logs != "No logs available yet.":
-                    return f"{static_logs}\n\n--- Real-time Debug Logs (Session: {session_id}) ---\n\n{debug_logs}"
+                    # Truncate long messages to 400 characters
+                    truncated_debug_logs = self._truncate_logs(debug_logs, 400)
+                    return f"{static_logs}\n\n--- Real-time Debug Logs (Session: {session_id}) ---\n\n{truncated_debug_logs}"
                 return static_logs
             else:
                 # For auto-refresh, show only static logs since we can't determine the session
@@ -147,6 +170,21 @@ class LogsTab:
     def set_main_app(self, main_app):
         """Set reference to main app for accessing logs functionality"""
         self._main_app = main_app
+
+    def _truncate_logs(self, logs: str, max_line_length: int = 400) -> str:
+        """Truncate individual log lines if they exceed the specified length"""
+        lines = logs.split('\n')
+        truncated_lines = []
+        
+        for line in lines:
+            if len(line) <= max_line_length:
+                truncated_lines.append(line)
+            else:
+                # Truncate individual long lines
+                truncated_line = line[:max_line_length-3] + "..."
+                truncated_lines.append(truncated_line)
+        
+        return '\n'.join(truncated_lines)
 
     def _get_translation(self, key: str) -> str:
         """Get a translation for a specific key"""
