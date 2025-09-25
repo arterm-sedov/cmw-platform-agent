@@ -20,12 +20,21 @@ Based on LangChain's official documentation and best practices.
 """
 
 import asyncio
+import logging
 import gradio as gr
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple, AsyncGenerator
 import json
 import time
 from dataclasses import asdict
+
+# Initialize logging early (idempotent)
+try:
+    from agent_ng.logging_config import setup_logging
+    setup_logging()
+    _logger = logging.getLogger(__name__)
+except Exception:
+    _logger = logging.getLogger(__name__)
 # Import configuration with fallback for direct execution
 try:
     from agent_ng.agent_config import config, get_language_settings, get_port_settings
@@ -60,9 +69,9 @@ try:
     from agent_ng.utils import safe_string
     from agent_ng.i18n_translations import create_i18n_instance, get_translation_key, format_translation
     from langsmith import traceable
-    print("✅ Successfully imported all modules using absolute imports")
+    _logger.info("Successfully imported all modules using absolute imports")
 except ImportError as e1:
-    print(f"⚠️ Absolute imports failed: {e1}")
+    _logger.warning("Absolute imports failed: %s", e1)
     # Fallback to relative imports (when running as module)
     try:
         from .langchain_agent import CmwAgent as NextGenAgent, ChatMessage
@@ -73,18 +82,10 @@ except ImportError as e1:
         from .ui_manager import get_ui_manager
         from .i18n_translations import create_i18n_instance, get_translation_key, format_translation
         from langsmith import traceable
-        print("✅ Successfully imported all modules using relative imports")
+        _logger.info("Successfully imported all modules using relative imports")
     except ImportError as e2:
-        print(f"❌ Both absolute and relative imports failed:")
-        print(f"   Absolute: {e1}")
-        print(f"   Relative: {e2}")
-        print("💥 CRITICAL ERROR: Cannot import required modules!")
-        print("🔧 Please check:")
-        print("   1. All dependencies are installed: pip install -r requirements_ng.txt")
-        print("   2. Python path is correct")
-        print("   3. No circular import issues")
-        print("   4. All required modules exist")
-        print("   5. Run from the correct directory")
+        _logger.critical("Both absolute and relative imports failed. Absolute: %s | Relative: %s", e1, e2)
+        _logger.error("Please check: 1) requirements_ng.txt installed 2) PYTHONPATH 3) circular imports 4) modules exist 5) working directory")
         raise ImportError(f"Failed to import required modules. Absolute: {e1}, Relative: {e2}")
 
 
@@ -136,7 +137,7 @@ class NextGenApp:
             if not self.ui_manager:
                 raise ValueError("UI Manager not available")
         except Exception as e:
-            print(f"❌ Failed to initialize UI Manager: {e}")
+            _logger.exception("Failed to initialize UI Manager: %s", e)
             self.ui_manager = None
         
         # Initialize tab modules
@@ -536,9 +537,7 @@ class NextGenApp:
             
             except Exception as e:
                 import traceback
-                print(f"❌ Error streaming message: {e}")
-                # print(f"🔍 DEBUG: Full traceback:")
-                # traceback.print_exc()
+                _logger.error("Error streaming message: %s", e, exc_info=True)
                 streaming_error_handled = True
                 # print(f"🔍 DEBUG: Set streaming_error_handled to True in streaming loop")
                 # Continue with the rest of the processing even if streaming fails
@@ -658,7 +657,7 @@ class NextGenApp:
             except:
                 # If debug streamer fails, just continue
                 pass
-            print(f"❌ Streaming error (logged to terminal only): {e}")
+            _logger.error("Streaming error (terminal log only): %s", e, exc_info=True)
             # Stop processing state on error
             # self.stop_processing()
             # Continue gracefully - don't stop processing for streaming errors
@@ -831,7 +830,7 @@ class NextGenApp:
                 tab_modules.append(chat_tab)
                 self.tab_instances['chat'] = chat_tab
             else:
-                print("⚠️ ChatTab not available")
+                _logger.warning("ChatTab not available")
                 
             if LogsTab:
                 logs_tab = LogsTab(event_handlers, language=self.language, i18n_instance=self.i18n)
@@ -839,7 +838,7 @@ class NextGenApp:
                 tab_modules.append(logs_tab)
                 self.tab_instances['logs'] = logs_tab
             else:
-                print("⚠️ LogsTab not available")
+                _logger.warning("LogsTab not available")
                 
             if StatsTab:
                 stats_tab = StatsTab(event_handlers, language=self.language, i18n_instance=self.i18n)
@@ -847,16 +846,16 @@ class NextGenApp:
                 tab_modules.append(stats_tab)
                 self.tab_instances['stats'] = stats_tab
             else:
-                print("⚠️ StatsTab not available")
+                _logger.warning("StatsTab not available")
         except Exception as e:
-            print(f"❌ Error creating tab modules: {e}")
+            _logger.exception("Error creating tab modules: %s", e)
             raise
         
         # Use UI Manager to create interface
         try:
             demo = self.ui_manager.create_interface(tab_modules, event_handlers)
         except Exception as e:
-            print(f"❌ Error creating interface: {e}")
+            _logger.exception("Error creating interface: %s", e)
             raise
         
         # Configure concurrency and queuing
@@ -965,7 +964,7 @@ def get_demo_with_language_detection():
             if not hasattr(demo, '_queue'):
                 demo._queue = None
         except Exception as e:
-            print(f"❌ Error creating demo: {e}")
+            _logger.exception("Error creating demo: %s", e)
             # Create a minimal working demo with required attributes
             with gr.Blocks() as fallback_demo:
                 gr.Markdown("# CMW Platform Agent")
@@ -984,7 +983,7 @@ def get_demo(language: str = "en"):
         app = NextGenApp(language=language)
         return app.create_interface()
     except Exception as e:
-        print(f"❌ Error creating demo for language {language}: {e}")
+        _logger.exception("Error creating demo for language %s: %s", language, e)
         # Create a minimal working demo to prevent KeyError
         with gr.Blocks() as demo:
             gr.Markdown("# CMW Platform Agent")
@@ -1002,7 +1001,7 @@ def create_safe_demo():
             demo_instance._queue = None
         return demo_instance
     except Exception as e:
-        print(f"❌ Error creating safe demo: {e}")
+        _logger.exception("Error creating safe demo: %s", e)
         # Create a minimal working demo with required attributes
         with gr.Blocks() as demo:
             gr.Markdown("# CMW Platform Agent")
@@ -1019,11 +1018,11 @@ def reload_demo():
     """Reload the demo for Gradio hot reloading"""
     global demo
     try:
-        print("🔄 Reloading demo...")
+        _logger.info("Reloading demo...")
         demo = get_demo_with_language_detection()
         return demo
     except Exception as e:
-        print(f"❌ Error reloading demo: {e}")
+        _logger.exception("Error reloading demo: %s", e)
         # Return current demo or create minimal one
         if demo is None:
             with gr.Blocks() as fallback_demo:
@@ -1088,20 +1087,20 @@ def main():
     if args.auto_port:
         port = find_available_port(default_port, port_settings['auto_port_range'])
         if port is None:
-            print(f"❌ Could not find an available port starting from {default_port}")
+            _logger.error("Could not find an available port starting from %s", default_port)
             sys.exit(1)
     else:
         port = default_port
     
-    print(f"🚀 Starting LangChain-Native LLM Agent App with language detection...")
-    print(f"🌐 Language: {language.upper()}")
-    print(f"🔌 Port: {port}")
+    _logger.info("Starting LangChain-Native LLM Agent App with language detection...")
+    _logger.info("Language: %s", language.upper())
+    _logger.info("Port: %s", port)
     
     # Create app with specified language
     app = NextGenAppWithLanguageDetection(language=language)
     demo = app.create_interface()
     
-    print(f"🌐 Launching Gradio interface on port {port} with language switching...")
+    _logger.info("Launching Gradio interface on port %s with language switching...", port)
     demo.launch(
         debug=True,
         share=False,

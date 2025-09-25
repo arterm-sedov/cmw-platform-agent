@@ -19,6 +19,14 @@ Subpackages provide organized access to specific tool categories:
 - templates_tools: list_attributes
 """
 
+# Initialize logging for tools context (idempotent)
+try:
+    from agent_ng.logging_config import setup_logging  # type: ignore
+    setup_logging()
+except Exception:
+    # Tools can be used standalone; ignore if agent_ng not available
+    pass
+
 # Import all tool modules
 from . import applications_tools
 from . import attributes_tools

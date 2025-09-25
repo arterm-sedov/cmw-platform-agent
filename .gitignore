@@ -5,3 +5,4 @@ __pycache__/
 server_config.yml
 .screencasts/
 *.mp4
+*.log
