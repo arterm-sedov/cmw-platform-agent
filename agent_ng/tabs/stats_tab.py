@@ -30,7 +30,7 @@ class StatsTab:
     def create_tab(self) -> tuple[gr.TabItem, dict[str, Any]]:
         """
         Create the stats tab with all its components.
-        
+
         Returns:
             Tuple of (TabItem, components_dict)
         """
@@ -48,15 +48,31 @@ class StatsTab:
 
     def _create_stats_interface(self):
         """Create the statistics monitoring interface"""
-        self.components["stats_title"] = gr.Markdown(f"### {self._get_translation('stats_title')}")
+        # Main stats display area - similar to logs interface
+        with gr.Column(scale=1, min_width=400):
+            self.components["stats_display"] = gr.Textbox(
+                value=self._get_translation("stats_loading"),
+                label=self._get_translation("stats_title"),
+                lines=20,
+                max_lines=30,
+                interactive=False,
+                show_copy_button=True,
+                container=True,
+                elem_id="stats-display"
+            )
 
-        self.components["stats_display"] = gr.Markdown(
-            self._get_translation("stats_loading"),
-            elem_classes=["status-card"]
-        )
-
-        with gr.Row():
-            self.components["refresh_stats_btn"] = gr.Button(self._get_translation("refresh_stats_button"), elem_classes=["cmw-button"])
+        # Control buttons row
+        with gr.Row(equal_height=True):
+            self.components["refresh_stats_btn"] = gr.Button(
+                self._get_translation("refresh_stats_button"),
+                elem_classes=["cmw-button"],
+                scale=1
+            )
+            self.components["clear_stats_btn"] = gr.Button(
+                self._get_translation("clear_stats_button"),
+                elem_classes=["cmw-button"],
+                scale=1
+            )
 
     def _connect_events(self):
         """Connect all event handlers for the stats tab with concurrency control"""
@@ -68,7 +84,7 @@ class StatsTab:
             queue_manager = getattr(queue_manager, "queue_manager", None)
 
         if queue_manager:
-            # Apply concurrency settings to stats refresh
+            # Apply concurrency settings to stats events
             from agent_ng.queue_manager import apply_concurrency_to_click_event
 
             refresh_config = apply_concurrency_to_click_event(
@@ -76,11 +92,22 @@ class StatsTab:
                 [], [self.components["stats_display"]]
             )
             self.components["refresh_stats_btn"].click(**refresh_config)
+
+            clear_config = apply_concurrency_to_click_event(
+                queue_manager, "stats_clear", self.clear_stats,
+                [], [self.components["stats_display"]]
+            )
+            self.components["clear_stats_btn"].click(**clear_config)
         else:
             # Fallback to default behavior
             logging.getLogger(__name__).warning("⚠️ Queue manager not available - using default stats configuration")
             self.components["refresh_stats_btn"].click(
                 fn=self.refresh_stats,
+                outputs=[self.components["stats_display"]]
+            )
+
+            self.components["clear_stats_btn"].click(
+                fn=self.clear_stats,
                 outputs=[self.components["stats_display"]]
             )
 
@@ -90,7 +117,7 @@ class StatsTab:
         """Get all components created by this tab"""
         return self.components
 
-    def get_stats_display_component(self) -> gr.Markdown:
+    def get_stats_display_component(self) -> gr.Textbox:
         """Get the stats display component for auto-refresh"""
         return self.components["stats_display"]
 
@@ -173,7 +200,7 @@ class StatsTab:
                 total_tool_calls = 0
                 unique_tools = set()
 
-                for conversation_id, conversation in agent.memory_manager.memories.items():
+                for _conversation_id, conversation in agent.memory_manager.memories.items():
                     for message in conversation:
                         if hasattr(message, "type") and message.type == "tool":
                             total_tool_calls += 1
@@ -194,6 +221,10 @@ class StatsTab:
     def refresh_stats(self, request: gr.Request = None) -> str:
         """Refresh and return agent statistics"""
         return self.format_stats_display(request)
+
+    def clear_stats(self, request: gr.Request = None) -> str:
+        """Clear stats and return confirmation"""
+        return self._get_translation("stats_cleared")
 
     def get_agent_status(self, agent=None) -> str:
         """Get current agent status with comprehensive details from session-specific agent"""
