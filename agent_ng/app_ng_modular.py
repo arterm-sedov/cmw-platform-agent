@@ -630,16 +630,19 @@ class NextGenApp:
             # Ensure tool messages are preserved and not overwritten
             # print(f"🔍 DEBUG: Final working history length: {len(working_history)}")
             for i, msg in enumerate(working_history):
+                # Safety check for None first - before any method calls
                 if msg is None:
                     # print(f"🔍 DEBUG: Message {i} is None, skipping...")
                     continue
                 if not isinstance(msg, dict):
                     # print(f"🔍 DEBUG: Message {i} is not a dict (type: {type(msg)}), skipping...")
                     continue
-                if msg.get("metadata", {}).get("title"):
-                    # print(f"🔍 DEBUG: Tool message {i}: {msg.get('metadata', {}).get('title', 'No title')}")
+                # Additional safety for metadata access
+                metadata = msg.get("metadata") if msg else None
+                if metadata and metadata.get("title"):
+                    # print(f"🔍 DEBUG: Tool message {i}: {metadata.get('title', 'No title')}")
                     pass
-                elif msg.get("role") == "assistant":
+                elif msg and msg.get("role") == "assistant":
                     # print(f"🔍 DEBUG: Assistant message {i}: {len(msg.get('content', ''))} chars")
                     pass
             
