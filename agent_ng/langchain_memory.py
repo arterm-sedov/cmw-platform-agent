@@ -333,10 +333,14 @@ class LangChainConversationChain:
             messages.extend(non_system_history)
             messages.append(HumanMessage(content=message))
             
-            # Process with tool calling
-            response = self._run_tool_calling_loop(messages, conversation_id)
-            
-            return response
+            # Streaming is the single executor; memory does not run tool loop
+            # Return a minimal response; persistence is handled by streaming turn
+            return {
+                "response": "Streaming-managed execution; memory does not execute tools",
+                "conversation_id": conversation_id,
+                "tool_calls": [],
+                "success": True
+            }
             
         except Exception as e:
             return {
@@ -347,224 +351,7 @@ class LangChainConversationChain:
                 "error": str(e)
             }
     
-    def _run_tool_calling_loop(self, messages: List[BaseMessage], conversation_id: str) -> Dict[str, Any]:
-        """Run the tool calling loop using LangChain patterns"""
-        tool_calls = []
-        # Get max tool call iterations from centralized config
-        from .streaming_config import get_streaming_config
-        from .tool_deduplicator import get_deduplicator
-        config = get_streaming_config()
-        max_iterations = config.get_max_tool_call_iterations()
-        iteration = 0
-        total_tokens_tracked = False  # Track if we've already counted tokens for this conversation turn
-        final_response = None  # Initialize final_response
-        deduplicator = get_deduplicator()  # Get deduplicator instance
-        
-        while iteration < max_iterations:
-            iteration += 1
-            
-            try:
-                # Get LLM response
-                response = self.llm_instance.llm.invoke(messages)
-                
-                # Track token usage only once per conversation turn (first LLM call)
-                if not total_tokens_tracked:
-                    self._track_token_usage(response, messages)
-                    total_tokens_tracked = True
-                
-            except Exception as e:
-                # Pass LLM errors directly to user - they are valuable information
-                return {
-                    "response": f"LLM Error: {str(e)}",
-                    "conversation_id": conversation_id,
-                    "tool_calls": tool_calls,
-                    "success": False,
-                    "error": str(e)
-                }
-            
-            # Check for tool calls
-            print(f"🔍 DEBUG: Response type: {type(response)}")
-            print(f"🔍 DEBUG: Response has tool_calls: {hasattr(response, 'tool_calls')}")
-            if hasattr(response, 'tool_calls'):
-                print(f"🔍 DEBUG: tool_calls value: {response.tool_calls}")
-            print(f"🔍 DEBUG: Response content: {getattr(response, 'content', 'No content')}")
-            
-            if hasattr(response, 'tool_calls') and response.tool_calls:
-                # Add the AI response with tool calls to messages FIRST
-                messages.append(response)
-                
-                # STEP 1: Filter and count duplicates BEFORE execution
-                deduplicated_tool_calls, duplicate_counts = self._deduplicate_tool_calls(response.tool_calls)
-                print(f"🔍 DEBUG: Original tool calls: {len(response.tool_calls)}, Deduplicated: {len(deduplicated_tool_calls)}")
-                
-                # STEP 2: Execute only deduplicated tool calls and create result mapping
-                tool_calls = []
-                tool_result_cache = {}  # Map tool_key -> result for duplicate handling
-                
-                for tool_call in deduplicated_tool_calls:
-                    tool_name = tool_call.get('name', 'unknown')
-                    tool_args = tool_call.get('args', {})
-                    tool_call_id = tool_call.get('id', f"call_{len(tool_calls)}")
-                    
-                    # Get duplicate count for this tool call
-                    tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
-                    duplicate_count = duplicate_counts.get(tool_key, 1)
-                    
-                    # Execute tool once
-                    print(f"🔍 DEBUG: Executing tool {tool_name} with args {tool_args} (count: {duplicate_count})")
-                    tool_result = self._execute_tool(tool_name, tool_args)
-                    print(f"🔍 DEBUG: Tool {tool_name} result: {tool_result}")
-                    
-                    # Store the tool call result for future deduplication
-                    deduplicator.store_tool_call(tool_name, tool_args, tool_result, conversation_id)
-                    
-                    # Cache result for duplicate tool calls
-                    tool_result_cache[tool_key] = tool_result
-                    
-                    # Add to tool_calls for reporting
-                    tool_calls.append({
-                        'name': tool_name,
-                        'args': tool_args,
-                        'result': tool_result,
-                        'id': tool_call_id,
-                        'duplicate': duplicate_count > 1,
-                        'duplicate_count': duplicate_count
-                    })
-                    
-                    # Show tool execution with count
-                    print(f"🔧✅ Used tool: {tool_name} (called {duplicate_count} times)")
-                
-                # STEP 3: Create ToolMessage for EACH original tool call (including duplicates)
-                # This ensures proper tool_call_id mapping and message sequence
-                # CRITICAL: Add ToolMessages to conversation memory, not to working messages list
-                tool_messages = []
-                for original_tool_call in response.tool_calls:
-                    tool_name = original_tool_call.get('name', 'unknown')
-                    tool_args = original_tool_call.get('args', {})
-                    tool_call_id = original_tool_call.get('id', f"call_{len(tool_calls)}")
-                    
-                    # Get the tool key for result lookup
-                    tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
-                    
-                    # Get cached result (same for all duplicates)
-                    tool_result = tool_result_cache.get(tool_key, "Tool execution failed")
-                    
-                    # Create ToolMessage with original tool_call_id
-                    tool_message = ToolMessage(
-                        content=tool_result,
-                        tool_call_id=tool_call_id,
-                        name=tool_name
-                    )
-                    tool_messages.append(tool_message)
-                    print(f"🔍 DEBUG: Created ToolMessage for {tool_name} with ID {tool_call_id}")
-                
-                # CRITICAL: Add ToolMessages to working messages for next LLM call
-                # This ensures proper sequence: AIMessage(with tool_calls) → ToolMessages
-                messages.extend(tool_messages)
-                print(f"🔍 DEBUG: Added {len(tool_messages)} ToolMessages to working messages")
-                
-                # CRITICAL: Continue to next iteration to get final response
-                # Don't break here - we need the final AI response after tool calls
-                
-                # STEP 4: Store tool calls in memory
-                for tool_call in tool_calls:
-                    self.memory_manager.add_tool_call(conversation_id, tool_call)
-                
-                print(f"🔍 DEBUG: Finished processing {len(tool_calls)} unique tool calls, created {len(response.tool_calls)} ToolMessages")
-            else:
-                # No tool calls, we have the final response
-                print(f"🔍 DEBUG: No tool calls detected, processing final response")
-                final_response = response.content if hasattr(response, 'content') else str(response)
-                print(f"🔍 DEBUG: Final response content: {final_response}")
-                
-                # Check for empty response and retry with reminder
-                if not final_response or not final_response.strip():
-                    print("🔍 DEBUG: Empty response detected, retrying with reminder")
-                    reminder_msg = HumanMessage(content="Please provide a meaningful response. You should answer the user's question or use available tools to help.")
-                    messages.append(reminder_msg)
-                    continue  # Retry the loop with the reminder
-                
-                # Add AI response to messages
-                messages.append(response)
-                
-                # Break out of the loop since we have the final response
-                break
-        
-        # If we exit the loop due to max iterations or tool calls, get final response
-        if not final_response and tool_calls:
-            try:
-                print("🔍 DEBUG: Getting final response after tool calls")
-                # Get one final response from the LLM after all tool calls
-                final_response_obj = self.llm_instance.llm.invoke(messages)
-                
-                # Don't track tokens again - we already tracked them for the first LLM call
-                # The final response is part of the same conversation turn
-                
-                if hasattr(final_response_obj, 'content') and final_response_obj.content.strip():
-                    final_response = final_response_obj.content
-                    messages.append(final_response_obj)
-                else:
-                    # Empty response after tool calls - add reminder and retry once
-                    print("🔍 DEBUG: Empty final response after tool calls, adding reminder")
-                    reminder_msg = HumanMessage(content="Please provide a meaningful final answer based on the tool results above.")
-                    messages.append(reminder_msg)
-                    
-                    # Retry once more
-                    try:
-                        retry_response = self.llm_instance.llm.invoke(messages)
-                        if hasattr(retry_response, 'content') and retry_response.content.strip():
-                            final_response = retry_response.content
-                            messages.append(retry_response)
-                        else:
-                            final_response = "I apologize, but I'm having difficulty providing a response. Please try rephrasing your question."
-                    except Exception as retry_e:
-                        final_response = f"Error getting response: {str(retry_e)}"
-                    
-                print(f"🔍 DEBUG: Final response: {final_response}")
-            except Exception as e:
-                print(f"🔍 DEBUG: Error getting final response: {e}")
-                final_response = f"Error getting final response: {str(e)}"
-        
-        # Ensure we have a response
-        print(f"🔍 DEBUG: Final response before check: {final_response}")
-        if not final_response:
-            print("🔍 DEBUG: No final response, setting default")
-            final_response = "No response available"
-        
-        # Add only NEW messages to memory manager (avoid duplication)
-        # Get existing conversation history to check for duplicates
-        existing_history = self.memory_manager.get_conversation_history(conversation_id)
-        existing_content = {(type(msg).__name__, msg.content) for msg in existing_history if hasattr(msg, 'content')}
-        
-        print(f"🔍 DEBUG: Adding new messages to memory manager (avoiding {len(existing_history)} existing)")
-        new_messages_added = 0
-        for message in messages:
-            # Skip system messages - they should be handled separately to ensure single storage
-            if isinstance(message, SystemMessage):
-                print(f"🔍 DEBUG: Skipped system message (handled separately)")
-                continue
-            
-            # Create a unique identifier for this message
-            message_key = (type(message).__name__, message.content if hasattr(message, 'content') else str(message))
-            
-            # Only add if not already in memory
-            if message_key not in existing_content:
-                self.memory_manager.add_message(conversation_id, message)
-                new_messages_added += 1
-                print(f"🔍 DEBUG: Added new {type(message).__name__} to memory")
-            else:
-                print(f"🔍 DEBUG: Skipped duplicate {type(message).__name__}")
-        
-        print(f"🔍 DEBUG: Added {new_messages_added} new messages to memory")
-            
-        result = {
-            "response": final_response,
-            "conversation_id": conversation_id,
-            "tool_calls": tool_calls,
-            "success": True
-        }
-        print(f"🔍 DEBUG: Returning result: {result}")
-        return result
+    # NOTE: _run_tool_calling_loop was removed; streaming is the sole executor
     
     def _deduplicate_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
         """
@@ -596,7 +383,7 @@ class LangChainConversationChain:
         
         return unique_tool_calls, duplicate_counts
 
-    def _track_token_usage(self, response, messages):
+    def _track_token_usage(self, response, messages, conversation_id: str = "default"):
         """Track token usage for LLM response"""
         try:
             print(f"🔍 DEBUG: _track_token_usage called with response type: {type(response)}")

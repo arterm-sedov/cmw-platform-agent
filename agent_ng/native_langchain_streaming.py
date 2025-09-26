@@ -15,6 +15,7 @@ Key Features:
 """
 
 from collections.abc import AsyncGenerator
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -74,6 +75,8 @@ class NativeLangChainStreaming:
 
     def __init__(self):
         self.active_streams = {}
+        # Module logger
+        self._logger = logging.getLogger(__name__)
         # Get configuration from centralized config
         from .streaming_config import get_streaming_config
 
@@ -402,7 +405,11 @@ class NativeLangChainStreaming:
                     try:
                         handler = get_langfuse_callback_handler()
                         if handler is not None:
-                            runnable_config = {"callbacks": [handler]}
+                            # Add Langfuse session id to metadata as per docs
+                            # https://langfuse.com/docs/observability/features/sessions
+                            session_id = getattr(agent, "session_id", None)
+                            metadata = {"langfuse_session_id": session_id} if session_id else {}
+                            runnable_config = {"callbacks": [handler], "metadata": metadata}
                     except Exception:
                         runnable_config = None
 
@@ -759,7 +766,7 @@ class NativeLangChainStreaming:
                     print(f"🔍 DEBUG: Error tracking API tokens: {e}")
 
             # Add all new messages to memory at the end (avoid duplication)
-            print("🔍 DEBUG: Adding new messages to memory manager")
+            self._logger.debug("Adding new messages to memory manager")
 
             # Get current memory content for deduplication
             current_memory = agent.memory_manager.get_conversation_history(
@@ -803,7 +810,44 @@ class NativeLangChainStreaming:
                 else:
                     print(f"🔍 DEBUG: Skipped duplicate {type(message).__name__}")
 
-            print(f"🔍 DEBUG: Added {new_messages_added} new messages to memory")
+            self._logger.debug("Added %s new messages to memory", new_messages_added)
+
+            # Emit final turn payload for persistence/observability consumers
+            try:
+                ordered_messages_snapshot = []
+                for m in messages:
+                    try:
+                        if isinstance(m, SystemMessage):
+                            role = "system"
+                        elif isinstance(m, HumanMessage):
+                            role = "user"
+                        elif isinstance(m, ToolMessage):
+                            role = "tool"
+                        elif isinstance(m, AIMessage):
+                            role = "assistant"
+                        else:
+                            role = type(m).__name__
+                        ordered_messages_snapshot.append({
+                            "role": role,
+                            "content": getattr(m, "content", ""),
+                            "tool_call_id": getattr(m, "tool_call_id", None),
+                            "tool_calls": getattr(m, "tool_calls", None),
+                            "name": getattr(m, "name", None)
+                        })
+                    except Exception:
+                        continue
+
+                yield StreamingEvent(
+                    event_type="turn_complete",
+                    content="",
+                    metadata={
+                        "ordered_messages": ordered_messages_snapshot,
+                        "conversation_id": conversation_id
+                    }
+                )
+            except Exception:
+                # Non-fatal if snapshot fails
+                pass
 
             # Final completion event
             language = self._get_agent_language(agent)
@@ -832,12 +876,48 @@ class NativeLangChainStreaming:
             language = self._get_agent_language(agent)
 
             # Enhanced error logging for debugging
-            import traceback
+            self._logger.exception("ERROR in stream_agent_response: %s", e)
 
-            print(f"❌ ERROR in stream_agent_response: {e}")
-            print(f"🔍 DEBUG: Error type: {type(e)}")
-            print("🔍 DEBUG: Full traceback:")
-            traceback.print_exc()
+            # Persist partial turn: Human already stored; add completed ToolMessages and a truncated AIMessage if available
+            try:
+                current_memory = agent.memory_manager.get_conversation_history(conversation_id)
+                memory_content = {
+                    (type(msg).__name__, msg.content)
+                    for msg in current_memory
+                    if hasattr(msg, "content")
+                }
+
+                # Collect any ToolMessages and AI messages already in working list
+                partial_messages_to_add = []
+                try:
+                    for m in messages:
+                        if isinstance(m, ToolMessage) or isinstance(m, AIMessage):
+                            key = (type(m).__name__, getattr(m, "content", ""))
+                            if key not in memory_content:
+                                partial_messages_to_add.append(m)
+                except Exception:
+                    pass
+
+                # Add a lean truncated AIMessage if we have partial content
+                try:
+                    partial_text = ""
+                    if "accumulated_chunk" in locals() and hasattr(accumulated_chunk, "content") and accumulated_chunk.content:
+                        partial_text = accumulated_chunk.content
+                    if partial_text:
+                        truncated_msg = AIMessage(content=f"{partial_text} [truncated]")
+                        key = ("AIMessage", truncated_msg.content)
+                        if key not in memory_content:
+                            partial_messages_to_add.append(truncated_msg)
+                except Exception:
+                    pass
+
+                for m in partial_messages_to_add:
+                    try:
+                        agent.memory_manager.add_message(conversation_id, m)
+                    except Exception:
+                        continue
+            except Exception as persist_err:
+                self._logger.debug("Failed partial-turn persistence: %s", persist_err)
 
             yield StreamingEvent(
                 event_type="error",
