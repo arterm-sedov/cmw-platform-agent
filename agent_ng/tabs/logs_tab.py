@@ -153,7 +153,7 @@ class LogsTab:
                                 user_messages = conversation_stats.get('user_messages', 0)
                                 assistant_messages = conversation_stats.get('assistant_messages', 0)
                                 provider = llm_info.get('provider', 'unknown')
-                                model = llm_info.get('model', 'unknown')
+                                model = llm_info.get('model_name', 'unknown')
                                 
                                 last_turn_summary = f"--- Сводка диалога ({timestamp}) ---\n"
                                 last_turn_summary += f"Всего сообщений: {message_count} ({user_messages} user, {assistant_messages} assistant)\n"
