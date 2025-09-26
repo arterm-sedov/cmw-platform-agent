@@ -101,8 +101,8 @@ class NextGenApp:
         # REMOVED: self.session_id = "default"  # This was causing data leakage between users!
         self._ui_update_needed = False
         self.language = language
-        # Optional: holds last turn snapshot for analytics/logs (no persistence)
-        self.current_turn_snapshot = None
+        # Session-aware turn snapshots for analytics/logs (non-persistent)
+        self.session_turn_snapshots = {}  # session_id -> turn_snapshot
         
         # Initialize concurrency management
         try:
@@ -475,11 +475,13 @@ class NextGenApp:
                         yield working_history, ""
 
                     elif event_type == "turn_complete":
-                        # Receive ordered snapshot for analytics/logs without re-persisting
+                        # Store session-aware turn snapshot for analytics/logs (non-persistent)
                         ordered = metadata.get("ordered_messages") if metadata else None
-                        self.current_turn_snapshot = ordered
+                        conversation_id = metadata.get("conversation_id") if metadata else session_id
+                        if ordered and conversation_id:
+                            self.session_turn_snapshots[conversation_id] = ordered
                         try:
-                            self.debug_streamer.info("Turn snapshot received")
+                            self.debug_streamer.info(f"Turn snapshot stored for session {conversation_id}")
                         except Exception:
                             pass
                         yield working_history, ""

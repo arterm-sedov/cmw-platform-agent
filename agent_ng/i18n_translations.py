@@ -130,6 +130,13 @@ RUSSIAN_TRANSLATIONS = {
     "clear_logs_button": "🗑️ Очистить журналы",
     "logs_cleared": "Журналы очищены.",
     "logs_not_available": "Журналы недоступны — основное приложение не подключено",
+    
+    # Turn summary translations
+    "last_turn_summary": "Последний вопрос-ответ",
+    "turn_summary_latest": "Сводка диалога",
+    "conversation_summary": "Сводка диалога",
+    "roles_sequence": "Роли",
+    "tools_used_total": "Инструменты (всего)",
 
     # Stats tab
     "stats_title": "Статистика агента",
@@ -391,6 +398,13 @@ ENGLISH_TRANSLATIONS = {
     "clear_logs_button": "🗑️ Clear Logs",
     "logs_cleared": "Logs cleared.",
     "logs_not_available": "Logs not available - main app not connected",
+    
+    # Turn summary translations
+    "last_turn_summary": "Last conversation turn",
+    "turn_summary_latest": "Turn Summary (latest)",
+    "conversation_summary": "Conversation summary",
+    "roles_sequence": "Roles sequence",
+    "tools_used_total": "Tools used (total)",
 
     # Stats tab
     "stats_title": "Agent Statistics",
