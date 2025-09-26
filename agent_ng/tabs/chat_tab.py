@@ -48,13 +48,6 @@ class ChatTab:
     def _create_chat_interface(self):
         """Create the main chat interface with proper layout"""
         with gr.Row():
-            with gr.Column(elem_classes=["chat-hints"]):
-                gr.Markdown(f"## {self._get_translation('welcome_title')}", elem_classes=["chat-hints-title"])
-
-                gr.Markdown(self._get_translation("welcome_description"))
-
-
-        with gr.Row():
             with gr.Column(scale=3):
                 # Queue status will be shown using Gradio's native warning system
                 # No need for HTML component - using gr.Warning() instead
@@ -100,7 +93,10 @@ class ChatTab:
                             visible=False
                         )
 
-
+                # Welcome block - positioned below chat area in left column
+                with gr.Column(elem_classes=["chat-hints"]):
+                    gr.Markdown(f"## {self._get_translation('welcome_title')}", elem_classes=["chat-hints-title"])
+                    gr.Markdown(self._get_translation("welcome_description"))
 
             # Status and Quick Actions sidebar (moved here to be on the right)
             with gr.Column(scale=1):
@@ -150,6 +146,7 @@ class ChatTab:
                     self.components["progress_display"] = gr.Markdown(
                         self._get_translation("progress_ready")
                     )
+
 
     def _create_sidebar(self):
         """Create the status and quick actions sidebar - now handled in _create_chat_interface"""
