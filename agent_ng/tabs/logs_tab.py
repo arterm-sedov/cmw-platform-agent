@@ -17,7 +17,12 @@ import gradio as gr
 class LogsTab:
     """Logs tab component for monitoring and display"""
 
-    def __init__(self, event_handlers: dict[str, Callable], language: str = "en", i18n_instance: gr.I18n | None = None):
+    def __init__(
+        self,
+        event_handlers: dict[str, Callable],
+        language: str = "en",
+        i18n_instance: gr.I18n | None = None,
+    ):
         self.event_handlers = event_handlers
         self.components = {}
         self.language = language
@@ -26,7 +31,7 @@ class LogsTab:
     def create_tab(self) -> tuple[gr.TabItem, dict[str, Any]]:
         """
         Create the logs tab with all its components.
-        
+
         Returns:
             Tuple of (TabItem, components_dict)
         """
@@ -39,7 +44,9 @@ class LogsTab:
             # Connect event handlers
             self._connect_events()
 
-        logging.getLogger(__name__).info("✅ LogsTab: Successfully created with all components and event handlers")
+        logging.getLogger(__name__).info(
+            "✅ LogsTab: Successfully created with all components and event handlers"
+        )
         return tab, self.components
 
     def _create_logs_interface(self):
@@ -55,25 +62,27 @@ class LogsTab:
                 interactive=False,
                 show_copy_button=True,
                 container=True,
-                elem_id="logs-display"
+                elem_id="logs-display",
             )
-        
+
         # Control buttons row
         with gr.Row(equal_height=True):
             self.components["refresh_logs_btn"] = gr.Button(
-                self._get_translation("refresh_logs_button"), 
+                self._get_translation("refresh_logs_button"),
                 elem_classes=["cmw-button"],
-                scale=1
+                scale=1,
             )
             self.components["clear_logs_btn"] = gr.Button(
-                self._get_translation("clear_logs_button"), 
+                self._get_translation("clear_logs_button"),
                 elem_classes=["cmw-button"],
-                scale=1
+                scale=1,
             )
 
     def _connect_events(self):
         """Connect all event handlers for the logs tab with concurrency control"""
-        logging.getLogger(__name__).debug("🔗 LogsTab: Connecting event handlers with concurrency control...")
+        logging.getLogger(__name__).debug(
+            "🔗 LogsTab: Connecting event handlers with concurrency control..."
+        )
 
         # Get queue manager for concurrency control
         queue_manager = getattr(self, "main_app", None)
@@ -85,30 +94,39 @@ class LogsTab:
             from agent_ng.queue_manager import apply_concurrency_to_click_event
 
             refresh_config = apply_concurrency_to_click_event(
-                queue_manager, "logs_refresh", self.get_initialization_logs,
-                [], [self.components["logs_display"]]
+                queue_manager,
+                "logs_refresh",
+                self.get_initialization_logs,
+                [],
+                [self.components["logs_display"]],
             )
             self.components["refresh_logs_btn"].click(**refresh_config)
 
             clear_config = apply_concurrency_to_click_event(
-                queue_manager, "logs_refresh", self.clear_logs,
-                [], [self.components["logs_display"]]
+                queue_manager,
+                "logs_refresh",
+                self.clear_logs,
+                [],
+                [self.components["logs_display"]],
             )
             self.components["clear_logs_btn"].click(**clear_config)
         else:
             # Fallback to default behavior
-            logging.getLogger(__name__).warning("⚠️ Queue manager not available - using default logs configuration")
+            logging.getLogger(__name__).warning(
+                "⚠️ Queue manager not available - using default logs configuration"
+            )
             self.components["refresh_logs_btn"].click(
                 fn=self.get_initialization_logs,
-                outputs=[self.components["logs_display"]]
+                outputs=[self.components["logs_display"]],
             )
 
             self.components["clear_logs_btn"].click(
-                fn=self.clear_logs,
-                outputs=[self.components["logs_display"]]
+                fn=self.clear_logs, outputs=[self.components["logs_display"]]
             )
 
-        logging.getLogger(__name__).debug("✅ LogsTab: All event handlers connected successfully")
+        logging.getLogger(__name__).debug(
+            "✅ LogsTab: All event handlers connected successfully"
+        )
 
     def get_components(self) -> dict[str, Any]:
         """Get all components created by this tab"""
@@ -130,45 +148,24 @@ class LogsTab:
 
                 # Get session-specific log handler
                 from ..debug_streamer import get_log_handler
+
                 session_log_handler = get_log_handler(session_id)
 
-                # Get conversation summary from existing turn stats (minimal, non-intrusive)
-                last_turn_summary = ""
-                try:
-                    if hasattr(self._main_app, "session_manager") and request:
-                        session_id = self._main_app.session_manager.get_session_id(request)
-                        # Use existing agent stats instead of complex turn_complete event
-                        agent = self._main_app.session_manager.get_session_agent(session_id)
-                        if agent:
-                            stats = agent.get_stats()
-                            conversation_stats = stats.get("conversation_stats", {})
-                            llm_info = stats.get("llm_info", {})
-                            
-                            if conversation_stats.get('message_count', 0) > 0:
-                                from datetime import datetime
-                                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                
-                                # Simple summary using existing data
-                                message_count = conversation_stats.get('message_count', 0)
-                                user_messages = conversation_stats.get('user_messages', 0)
-                                assistant_messages = conversation_stats.get('assistant_messages', 0)
-                                provider = llm_info.get('provider', 'unknown')
-                                model = llm_info.get('model_name', 'unknown')
-                                
-                                last_turn_summary = f"--- Сводка диалога ({timestamp}) ---\n"
-                                last_turn_summary += f"Всего сообщений: {message_count} ({user_messages} user, {assistant_messages} assistant)\n"
-                                last_turn_summary += f"Провайдер / модель: {provider} / {model}\n\n"
-                            else:
-                                last_turn_summary = "--- No conversation yet ---\n"
-                        else:
-                            last_turn_summary = "--- No conversation yet ---\n"
-                except Exception as e:
-                    last_turn_summary = f"--- Error getting conversation summary: {e} ---\n"
+                # Get conversation summary using the dedicated utility
+                from ..conversation_summary import (
+                    generate_detailed_conversation_summary,
+                )
+
+                last_turn_summary = generate_detailed_conversation_summary(
+                    self._main_app.session_manager,
+                    request=request,
+                    language=self.language,
+                )
 
                 # Combine last-turn summary with static logs and real-time debug logs
                 static_logs = "\n".join(self._main_app.initialization_logs)
                 debug_logs = session_log_handler.get_current_logs()
-                
+
                 # Only show logs for the current session - no fallback to default session
                 if debug_logs and debug_logs != "No logs available yet.":
                     # Truncate long messages to 400 characters
@@ -191,9 +188,12 @@ class LogsTab:
 
                 # Get session-specific log handler
                 from ..debug_streamer import get_log_handler
+
                 session_log_handler = get_log_handler(session_id)
                 session_log_handler.clear_logs()
-                return f"{self._get_translation('logs_cleared')} (Session: {session_id})"
+                return (
+                    f"{self._get_translation('logs_cleared')} (Session: {session_id})"
+                )
             else:
                 # For auto-refresh, can't determine session
                 return self._get_translation("logs_not_available")
@@ -205,21 +205,22 @@ class LogsTab:
 
     def _truncate_logs(self, logs: str, max_line_length: int = 400) -> str:
         """Truncate individual log lines if they exceed the specified length"""
-        lines = logs.split('\n')
+        lines = logs.split("\n")
         truncated_lines = []
-        
+
         for line in lines:
             if len(line) <= max_line_length:
                 truncated_lines.append(line)
             else:
                 # Truncate individual long lines
-                truncated_line = line[:max_line_length-3] + "..."
+                truncated_line = line[: max_line_length - 3] + "..."
                 truncated_lines.append(truncated_line)
-        
-        return '\n'.join(truncated_lines)
+
+        return "\n".join(truncated_lines)
 
     def _get_translation(self, key: str) -> str:
         """Get a translation for a specific key"""
         # Always use direct translation for now to avoid i18n metadata issues
         from ..i18n_translations import get_translation_key
+
         return get_translation_key(key, self.language)
