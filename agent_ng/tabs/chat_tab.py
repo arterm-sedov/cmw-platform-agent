@@ -53,29 +53,19 @@ class ChatTab:
 
                 gr.Markdown(self._get_translation("welcome_description"))
 
-            # Prompt examples section (quick action buttons)
+            # Quick actions section - now using a single dropdown
             with gr.Column(elem_classes=["quick-actions-card"]):
                 gr.Markdown(f"## {self._get_translation('quick_actions_title')}", elem_classes=["chat-hints-title"])
 
-                self.components["quick_list_apps_btn"] = gr.Button(self._get_translation("quick_list_apps"), elem_classes=["cmw-button"])
-                self.components["quick_templates_erp_btn"] = gr.Button(self._get_translation("quick_templates_erp"), elem_classes=["cmw-button"])
-                self.components["quick_attributes_contractors_btn"] = gr.Button(self._get_translation("quick_attributes_contractors"), elem_classes=["cmw-button"])
-                self.components["quick_edit_date_time_btn"] = gr.Button(self._get_translation("quick_edit_date_time"), elem_classes=["cmw-button"])
-                self.components["quick_create_comment_attr_btn"] = gr.Button(self._get_translation("quick_create_comment_attr"), elem_classes=["cmw-button"])
-                self.components["quick_create_id_attr_btn"] = gr.Button(self._get_translation("quick_create_id_attr"), elem_classes=["cmw-button"])
-                self.components["quick_edit_phone_mask_btn"] = gr.Button(self._get_translation("quick_edit_phone_mask"), elem_classes=["cmw-button"])
-
-            # Quick actions section
-            with gr.Column(elem_classes=["quick-actions-card"]):
-
-                self.components["quick_edit_enum_btn"] = gr.Button(self._get_translation("quick_edit_enum"), elem_classes=["cmw-button"])
-                self.components["quick_get_comment_attr_btn"] = gr.Button(self._get_translation("quick_get_comment_attr"), elem_classes=["cmw-button"])
-                self.components["quick_create_attr_btn"] = gr.Button(self._get_translation("quick_create_attr"), elem_classes=["cmw-button"])
-                self.components["quick_edit_mask_btn"] = gr.Button(self._get_translation("quick_edit_mask"), elem_classes=["cmw-button"])
-                self.components["quick_archive_attr_btn"] = gr.Button(self._get_translation("quick_archive_attr"), elem_classes=["cmw-button"])
-                self.components["quick_math_btn"] = gr.Button(self._get_translation("quick_math"), elem_classes=["cmw-button"])
-                self.components["quick_code_btn"] = gr.Button(self._get_translation("quick_code"), elem_classes=["cmw-button"])
-                self.components["quick_explain_btn"] = gr.Button(self._get_translation("quick_explain"), elem_classes=["cmw-button"])
+                # Single dropdown for all quick actions
+                self.components["quick_actions_dropdown"] = gr.Dropdown(
+                    choices=self._get_quick_action_choices(),
+                    value=None,
+                    label=self._get_translation("quick_actions_dropdown_label"),
+                    interactive=True,
+                    allow_custom_value=False,
+                    elem_classes=["quick-actions-dropdown"]
+                )
 
         with gr.Row():
             with gr.Column(scale=3):
@@ -254,80 +244,10 @@ class ChatTab:
         # Trigger UI updates after chat events
         self._setup_chat_event_triggers()
 
-        # Quick action events (using local methods)
-        self.components["quick_math_btn"].click(
-            fn=self._quick_math_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_code_btn"].click(
-            fn=self._quick_code_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_explain_btn"].click(
-            fn=self._quick_explain_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_create_attr_btn"].click(
-            fn=self._quick_create_attr_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_edit_mask_btn"].click(
-            fn=self._quick_edit_mask_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_list_apps_btn"].click(
-            fn=self._quick_list_apps_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        # Query example button events
-        self.components["quick_edit_enum_btn"].click(
-            fn=self._quick_edit_enum_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_templates_erp_btn"].click(
-            fn=self._quick_templates_erp_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_attributes_contractors_btn"].click(
-            fn=self._quick_attributes_contractors_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_create_comment_attr_btn"].click(
-            fn=self._quick_create_comment_attr_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_create_id_attr_btn"].click(
-            fn=self._quick_create_id_attr_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_edit_phone_mask_btn"].click(
-            fn=self._quick_edit_phone_mask_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_get_comment_attr_btn"].click(
-            fn=self._quick_get_comment_attr_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_edit_date_time_btn"].click(
-            fn=self._quick_edit_date_time_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_archive_attr_btn"].click(
-            fn=self._quick_archive_attr_multimodal,
+        # Quick action dropdown event (single handler for all actions)
+        self.components["quick_actions_dropdown"].change(
+            fn=self._handle_quick_action_dropdown,
+            inputs=[self.components["quick_actions_dropdown"]],
             outputs=[self.components["msg"]]
         )
 
@@ -753,6 +673,57 @@ class ChatTab:
         from ..i18n_translations import get_translation_key
         return get_translation_key(key, self.language)
 
+    def _get_quick_action_choices(self) -> list[tuple[str, str]]:
+        """Get list of quick action choices for the dropdown"""
+        return [
+            (self._get_translation("quick_list_apps"), "quick_list_apps"),
+            (self._get_translation("quick_templates_erp"), "quick_templates_erp"),
+            (self._get_translation("quick_attributes_contractors"), "quick_attributes_contractors"),
+            (self._get_translation("quick_edit_date_time"), "quick_edit_date_time"),
+            (self._get_translation("quick_create_comment_attr"), "quick_create_comment_attr"),
+            (self._get_translation("quick_create_id_attr"), "quick_create_id_attr"),
+            (self._get_translation("quick_edit_phone_mask"), "quick_edit_phone_mask"),
+            (self._get_translation("quick_edit_enum"), "quick_edit_enum"),
+            (self._get_translation("quick_get_comment_attr"), "quick_get_comment_attr"),
+            (self._get_translation("quick_create_attr"), "quick_create_attr"),
+            (self._get_translation("quick_edit_mask"), "quick_edit_mask"),
+            (self._get_translation("quick_archive_attr"), "quick_archive_attr"),
+            (self._get_translation("quick_math"), "quick_math"),
+            (self._get_translation("quick_code"), "quick_code"),
+            (self._get_translation("quick_explain"), "quick_explain"),
+        ]
+
+    def _handle_quick_action_dropdown(self, selected_action: str) -> dict[str, Any]:
+        """Handle quick action dropdown selection and return appropriate message"""
+        if not selected_action:
+            return {"text": "", "files": []}
+
+        # Map action keys to their corresponding methods
+        action_methods = {
+            "quick_list_apps": self._quick_list_apps_multimodal,
+            "quick_templates_erp": self._quick_templates_erp_multimodal,
+            "quick_attributes_contractors": self._quick_attributes_contractors_multimodal,
+            "quick_edit_date_time": self._quick_edit_date_time_multimodal,
+            "quick_create_comment_attr": self._quick_create_comment_attr_multimodal,
+            "quick_create_id_attr": self._quick_create_id_attr_multimodal,
+            "quick_edit_phone_mask": self._quick_edit_phone_mask_multimodal,
+            "quick_edit_enum": self._quick_edit_enum_multimodal,
+            "quick_get_comment_attr": self._quick_get_comment_attr_multimodal,
+            "quick_create_attr": self._quick_create_attr_multimodal,
+            "quick_edit_mask": self._quick_edit_mask_multimodal,
+            "quick_archive_attr": self._quick_archive_attr_multimodal,
+            "quick_math": self._quick_math_multimodal,
+            "quick_code": self._quick_code_multimodal,
+            "quick_explain": self._quick_explain_multimodal,
+        }
+
+        # Get the appropriate method and call it
+        method = action_methods.get(selected_action)
+        if method:
+            return method()
+        else:
+            return {"text": "", "files": []}
+
 
     def _stream_message_with_queue_status(self, multimodal_value, history, request: gr.Request = None):
         """Wrapper for concurrent processing - relies on Gradio's native queue feedback"""
@@ -1066,7 +1037,7 @@ class ChatTab:
         markdown_content += f"**Total messages:** {len(history)}\n\n"
         # Simple conversation summary using existing agent stats (minimal, non-intrusive)
         try:
-            main_app = getattr(self, 'main_app', None)
+            main_app = getattr(self, "main_app", None)
             if main_app and hasattr(main_app, "session_manager"):
                 # Get current session ID to maintain session isolation
                 try:
@@ -1076,21 +1047,21 @@ class ChatTab:
                 except Exception:
                     # Fallback to default if debug streamer not available
                     session_id = "default"
-                
+
                 # Use existing agent stats instead of complex turn_complete event
                 agent = main_app.session_manager.get_session_agent(session_id)
                 if agent:
                     stats = agent.get_stats()
                     conversation_stats = stats.get("conversation_stats", {})
                     llm_info = stats.get("llm_info", {})
-                    
-                    if conversation_stats.get('message_count', 0) > 0:
-                        message_count = conversation_stats.get('message_count', 0)
-                        user_messages = conversation_stats.get('user_messages', 0)
-                        assistant_messages = conversation_stats.get('assistant_messages', 0)
-                        provider = llm_info.get('provider', 'unknown')
-                        model = llm_info.get('model', 'unknown')
-                        
+
+                    if conversation_stats.get("message_count", 0) > 0:
+                        message_count = conversation_stats.get("message_count", 0)
+                        user_messages = conversation_stats.get("user_messages", 0)
+                        assistant_messages = conversation_stats.get("assistant_messages", 0)
+                        provider = llm_info.get("provider", "unknown")
+                        model = llm_info.get("model", "unknown")
+
                         markdown_content += f"## Сводка диалога ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n\n"
                         markdown_content += f"**Всего сообщений:** {message_count} ({user_messages} user, {assistant_messages} assistant)\n\n"
                         markdown_content += f"**Провайдер / модель:** {provider} / {model}\n\n"
