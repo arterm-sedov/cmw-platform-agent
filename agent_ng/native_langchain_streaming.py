@@ -625,6 +625,17 @@ class NativeLangChainStreaming:
                             f"🔍 DEBUG: Added AIMessage with {len(accumulated_chunk.tool_calls)} tool calls to working messages"
                         )
 
+                        # UI-only separation: emit a lean trailing newline after AI message that calls a tool
+                        # This improves readability without affecting persisted memory
+                        yield StreamingEvent(
+                            event_type="content",
+                            content="\n",
+                            metadata={
+                                "chunk_type": "ui_separator",
+                                "provider": agent.llm_instance.provider.value,
+                            },
+                        )
+
                         # STEP 3: Create ToolMessage for EACH original tool call (including duplicates)
                         # This ensures proper tool_call_id mapping and message sequence
                         # CRITICAL: Add ToolMessages to working messages for proper sequence
