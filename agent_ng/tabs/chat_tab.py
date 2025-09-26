@@ -119,12 +119,6 @@ class ChatTab:
                         elem_classes=["provider-model-selector"]
                     )
 
-                    # Apply button
-                    self.components["apply_llm_btn"] = gr.Button(
-                        self._get_translation("apply_llm_button"),
-                        variant="primary",
-                        elem_classes=["cmw-button"]
-                    )
 
                 # Quick actions section - styled like LLM selection
                 with gr.Column(elem_classes=["model-card"]):
@@ -252,9 +246,9 @@ class ChatTab:
             outputs=[self.components["msg"]]
         )
 
-        # LLM selection events - now properly session-aware (gr.Request is automatically passed)
-        if "apply_llm_btn" in self.components and "provider_model_selector" in self.components and "status_display" in self.components:
-            self.components["apply_llm_btn"].click(
+        # LLM selection events - now applies immediately on dropdown change
+        if "provider_model_selector" in self.components and "status_display" in self.components:
+            self.components["provider_model_selector"].change(
                 fn=self._apply_llm_selection_combined,
                 inputs=[self.components["provider_model_selector"]],
                 outputs=[self.components["status_display"], self.components["chatbot"], self.components["msg"]]
