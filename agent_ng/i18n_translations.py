@@ -15,6 +15,8 @@ import gradio as gr
 
 # Russian translations for all UI text
 RUSSIAN_TRANSLATIONS = {
+    # Language detection resource (fake resource for Gradio I18n)
+    "language": "ru",
     # App title and header
     "app_title": "Ассистент аналитика Comindware",
     "hero_title": "Ассистент аналитика",
@@ -265,6 +267,8 @@ RUSSIAN_TRANSLATIONS = {
 
 # English translations (fallback)
 ENGLISH_TRANSLATIONS = {
+    # Language detection resource (fake resource for Gradio I18n)
+    "language": "en",
     # App title and header
     "app_title": "Comindware Analyst Copilot",
     "hero_title": "Analyst Copilot",

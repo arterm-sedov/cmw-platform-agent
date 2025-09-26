@@ -1020,6 +1020,46 @@ class NextGenAppWithLanguageDetection(NextGenApp):
         super().__init__(language)
         self.current_language = language
         self.supported_languages = ["en", "ru"]
+        
+        # Import the simple language detector
+        try:
+            from .simple_language_detector import get_current_language
+        except ImportError:
+            # Fallback for when running as script
+            from simple_language_detector import get_current_language
+        self.get_current_language = get_current_language
+    
+    def override_language_with_gradio_detection(self, request: gr.Request = None) -> str:
+        """
+        Override the current language with Gradio I18n detection.
+        
+        This method uses Gradio's native I18n system to detect the user's
+        preferred language from their browser settings and overrides the
+        dotenv language setting.
+        
+        Args:
+            request: Gradio request object (optional)
+            
+        Returns:
+            Detected language code ('en' or 'ru')
+        """
+        try:
+            # Use Gradio I18n to detect the current language
+            detected_language = self.get_current_language(request)
+            
+            # Override the current language if detection was successful
+            if detected_language in self.supported_languages:
+                self.language = detected_language
+                self.current_language = detected_language
+                _logger.info(f"🌐 Language overridden with Gradio detection: {detected_language}")
+                return detected_language
+            else:
+                _logger.warning(f"⚠️ Detected language '{detected_language}' not supported, keeping current: {self.language}")
+                return self.language
+                
+        except Exception as e:
+            _logger.warning(f"⚠️ Language detection failed: {e}, keeping current: {self.language}")
+            return self.language
     
     def detect_language_from_url(self):
         """Detect language from URL parameters using environment variables or sys.argv"""
@@ -1224,6 +1264,17 @@ def main():
         language = "ru"
     elif args.english:
         language = "en"
+    
+    # Override language with Gradio I18n detection if no command line override
+    if not (args.russian or args.english):
+        try:
+            from agent_ng.simple_language_detector import get_current_language
+            detected_language = get_current_language()
+            if detected_language in ["en", "ru"]:
+                language = detected_language
+                _logger.info(f"🌐 Language overridden with Gradio detection: {detected_language}")
+        except Exception as e:
+            _logger.warning(f"⚠️ Language detection failed: {e}, using dotenv language: {language}")
     
     # Determine port
     default_port = args.port if args.port is not None else port_settings['default_port']
