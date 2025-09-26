@@ -120,7 +120,7 @@ class LogsTab:
 
     # Logs handler methods
     def get_initialization_logs(self, request: gr.Request = None) -> str:
-        """Get initialization logs as formatted string - now session-aware"""
+        """Get initialization logs as formatted string - session-isolated"""
         # Access the main app through event handlers context
         # This will be set by the main app when creating the tab
         if hasattr(self, "_main_app") and self._main_app:
@@ -136,17 +136,13 @@ class LogsTab:
                 static_logs = "\n".join(self._main_app.initialization_logs)
                 debug_logs = session_log_handler.get_current_logs()
                 
-                # If no logs for this session, try the default session
-                if debug_logs == "No logs available yet.":
-                    default_handler = get_log_handler("default")
-                    if default_handler:
-                        debug_logs = default_handler.get_current_logs()
-
+                # Only show logs for the current session - no fallback to default session
                 if debug_logs and debug_logs != "No logs available yet.":
                     # Truncate long messages to 400 characters
                     truncated_debug_logs = self._truncate_logs(debug_logs, 400)
                     return f"{static_logs}\n\n--- Real-time Debug Logs (Session: {session_id}) ---\n\n{truncated_debug_logs}"
-                return static_logs
+                else:
+                    return f"{static_logs}\n\n--- Session: {session_id} - No real-time logs yet ---"
             else:
                 # For auto-refresh, show only static logs since we can't determine the session
                 static_logs = "\n".join(self._main_app.initialization_logs)
@@ -154,18 +150,20 @@ class LogsTab:
         return "Logs not available - main app not connected"
 
     def clear_logs(self, request: gr.Request = None) -> str:
-        """Clear logs and return confirmation - now session-aware"""
+        """Clear logs and return confirmation - session-isolated"""
         if hasattr(self, "_main_app") and self._main_app:
             # Get session-specific logs
-            session_id = "default"  # Default session
             if request and hasattr(self._main_app, "session_manager"):
                 session_id = self._main_app.session_manager.get_session_id(request)
 
-            # Get session-specific log handler
-            from ..debug_streamer import get_log_handler
-            session_log_handler = get_log_handler(session_id)
-            session_log_handler.clear_logs()
-            return self._get_translation("logs_cleared")
+                # Get session-specific log handler
+                from ..debug_streamer import get_log_handler
+                session_log_handler = get_log_handler(session_id)
+                session_log_handler.clear_logs()
+                return f"{self._get_translation('logs_cleared')} (Session: {session_id})"
+            else:
+                # For auto-refresh, can't determine session
+                return self._get_translation("logs_not_available")
         return self._get_translation("logs_not_available")
 
     def set_main_app(self, main_app):

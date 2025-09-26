@@ -129,6 +129,14 @@ class NextGenApp:
         # Initialize debug system - use a default session that will be accessible
         self.debug_streamer = get_debug_streamer("default")
         self.log_handler = get_log_handler("default")
+        
+        # Initialize session-aware logging
+        try:
+            from .debug_streamer import set_session_context
+        except ImportError:
+            # Fallback for when running as script
+            from debug_streamer import set_session_context
+        self.set_session_context = set_session_context
         # self.chat_interface = get_chat_interface("app_ng")  # Dead code - never used
         
         # Initialize UI manager with i18n support
@@ -373,6 +381,9 @@ class NextGenApp:
             # Extract session ID from Gradio request for user isolation
             session_id = self.get_user_session_id(request)
             user_agent = self.get_user_agent(session_id)
+            
+            # Set session context for logging
+            self.set_session_context(session_id)
             
             # Debug: Check which LLM instance is being used
             if user_agent and hasattr(user_agent, 'llm_instance') and user_agent.llm_instance:

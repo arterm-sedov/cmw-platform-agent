@@ -227,6 +227,84 @@ class DebugStreamer:
         return []
 
 
+class SessionAwareLogHandler(logging.Handler):
+    """
+    Session-aware log handler that routes logs to appropriate session handlers.
+    
+    This handler determines the current session context and routes log records
+    to the appropriate session-specific log handler.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._session_context = threading.local()
+        self._default_session_id = "default"
+        self._global_session_context = {}  # Global session context storage
+        self._context_lock = threading.Lock()
+
+    def set_session_context(self, session_id: str):
+        """Set the current session context for this thread"""
+        self._session_context.session_id = session_id
+        # Also store in global context for cross-thread access
+        with self._context_lock:
+            self._global_session_context[threading.get_ident()] = session_id
+
+    def get_current_session_id(self) -> str:
+        """Get the current session ID for this thread"""
+        # First try thread-local storage
+        thread_local_id = getattr(self._session_context, 'session_id', None)
+        if thread_local_id:
+            return thread_local_id
+        
+        # Fallback to global context
+        with self._context_lock:
+            return self._global_session_context.get(threading.get_ident(), self._default_session_id)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Route log records to the appropriate session handler"""
+        try:
+            # Get current session ID
+            session_id = self.get_current_session_id()
+            
+            # Try to extract session ID from the log record if available
+            if hasattr(record, 'session_id') and record.session_id:
+                session_id = record.session_id
+            elif hasattr(record, 'args') and record.args:
+                # Look for session ID in the log message args
+                for arg in record.args:
+                    if isinstance(arg, str) and 'session' in arg.lower():
+                        # Try to extract session ID from the message
+                        import re
+                        session_match = re.search(r'session[_\s]*([a-zA-Z0-9_]+)', arg, re.IGNORECASE)
+                        if session_match:
+                            session_id = session_match.group(1)
+                            break
+            
+            # Try to extract session ID from the log message itself
+            if session_id == self._default_session_id:
+                import re
+                # Look for patterns like "session_123" or "gradio_abc123" in the message
+                message = record.getMessage()
+                session_match = re.search(r'(?:session[_\s]*|gradio[_\s]*)([a-zA-Z0-9_]+)', message, re.IGNORECASE)
+                if session_match:
+                    session_id = session_match.group(1)
+            
+            # Get session-specific log handler
+            session_handler = get_log_handler(session_id)
+            if session_handler:
+                # Route to session-specific handler
+                session_handler.emit(record)
+        except Exception:
+            # Fallback to default session
+            try:
+                default_handler = get_log_handler(self._default_session_id)
+                if default_handler:
+                    default_handler.emit(record)
+            except Exception:
+                # If all else fails, just pass
+                pass
+
+
 class GradioLogHandler(logging.Handler):
     """
     Handler for streaming logs to Gradio interface.
@@ -391,6 +469,7 @@ class ThinkingTransparency:
 _debug_streamers: dict[str, DebugStreamer] = {}
 _log_handlers: dict[str, GradioLogHandler] = {}
 _thinking_transparencies: dict[str, ThinkingTransparency] = {}
+_session_aware_handler: SessionAwareLogHandler | None = None
 
 
 def get_debug_streamer(session_id: str = "default") -> DebugStreamer:
@@ -419,9 +498,23 @@ def get_thinking_transparency(session_id: str = "default") -> ThinkingTransparen
     return _thinking_transparencies[session_id]
 
 
+def get_session_aware_handler() -> SessionAwareLogHandler:
+    """Get the global session-aware log handler"""
+    global _session_aware_handler
+    if _session_aware_handler is None:
+        _session_aware_handler = SessionAwareLogHandler()
+    return _session_aware_handler
+
+
+def set_session_context(session_id: str):
+    """Set the current session context for logging"""
+    handler = get_session_aware_handler()
+    handler.set_session_context(session_id)
+
+
 def cleanup_debug_system():
     """Cleanup the debug system"""
-    global _debug_streamers, _log_handlers, _thinking_transparencies
+    global _debug_streamers, _log_handlers, _thinking_transparencies, _session_aware_handler
 
     # Stop all debug streamers
     for streamer in _debug_streamers.values():
@@ -431,3 +524,4 @@ def cleanup_debug_system():
     _debug_streamers.clear()
     _log_handlers.clear()
     _thinking_transparencies.clear()
+    _session_aware_handler = None

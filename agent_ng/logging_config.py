@@ -233,16 +233,21 @@ def setup_logging(force: bool | None = None) -> Logger:
     # Propagation
     root.propagate = _parse_bool(os.getenv("LOG_PROPAGATE"), True)
 
-    # Attach internal debug handler if available (keeps Logs tab working)
+    # Attach session-aware debug handlers (keeps Logs tab working)
     try:
         # Try absolute import first
         try:
-            from agent_ng.debug_streamer import get_log_handler
+            from agent_ng.debug_streamer import get_log_handler, SessionAwareLogHandler
         except ImportError:
             # Fallback to relative import
-            from .debug_streamer import get_log_handler
+            from .debug_streamer import get_log_handler, SessionAwareLogHandler
 
-        # Create handlers for common session IDs that might be used
+        # Create a session-aware handler that routes logs to appropriate session handlers
+        session_aware_handler = SessionAwareLogHandler()
+        session_aware_handler.setLevel(level)
+        root.addHandler(session_aware_handler)
+        
+        # Also create handlers for common session IDs that might be used
         session_ids = ["default", "gradio_default", "app_ng"]
         for session_id in session_ids:
             try:
@@ -250,7 +255,7 @@ def setup_logging(force: bool | None = None) -> Logger:
                 if dbg and isinstance(dbg, Handler) and dbg not in root.handlers:
                     # Don't set formatter - let debug_streamer handle its own formatting
                     dbg.setLevel(level)
-                    root.addHandler(dbg)
+                    # Don't add directly to root - let SessionAwareLogHandler manage routing
             except Exception:
                 # Continue with other session IDs
                 continue
