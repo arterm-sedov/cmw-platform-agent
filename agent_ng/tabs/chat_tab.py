@@ -53,19 +53,6 @@ class ChatTab:
 
                 gr.Markdown(self._get_translation("welcome_description"))
 
-            # Quick actions section - now using a single dropdown
-            with gr.Column(elem_classes=["quick-actions-card"]):
-                gr.Markdown(f"## {self._get_translation('quick_actions_title')}", elem_classes=["chat-hints-title"])
-
-                # Single dropdown for all quick actions
-                self.components["quick_actions_dropdown"] = gr.Dropdown(
-                    choices=self._get_quick_action_choices(),
-                    value=None,
-                    label=self._get_translation("quick_actions_dropdown_label"),
-                    interactive=True,
-                    allow_custom_value=False,
-                    elem_classes=["quick-actions-dropdown"]
-                )
 
         with gr.Row():
             with gr.Column(scale=3):
@@ -137,6 +124,20 @@ class ChatTab:
                         self._get_translation("apply_llm_button"),
                         variant="primary",
                         elem_classes=["cmw-button"]
+                    )
+
+                # Quick actions section - styled like LLM selection
+                with gr.Column(elem_classes=["model-card"]):
+                    gr.Markdown(f"### {self._get_translation('quick_actions_title')}", elem_classes=["llm-selection-title"])
+
+                    # Single dropdown for all quick actions - styled like LLM selector
+                    self.components["quick_actions_dropdown"] = gr.Dropdown(
+                        choices=self._get_quick_action_choices(),
+                        value=None,
+                        show_label=False,
+                        interactive=True,
+                        allow_custom_value=False,
+                        elem_classes=["provider-model-selector"]
                     )
 
                 # Status section
