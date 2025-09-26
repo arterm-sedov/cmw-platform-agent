@@ -122,10 +122,13 @@ def generate_detailed_conversation_summary(
                 ) in agent.stats_manager.conversation_histories.items():
                     if conv_key.startswith(session_conv_key):
                         for conv in conversations:
-                            llm_used = conv.get("llm_used")
-                            if llm_used:
-                                actual_model_usage[llm_used] = (
-                                    actual_model_usage.get(llm_used, 0) + 1
+                            # Use full_model_name if available, fallback to llm_used
+                            model_name = conv.get("full_model_name") or conv.get(
+                                "llm_used"
+                            )
+                            if model_name:
+                                actual_model_usage[model_name] = (
+                                    actual_model_usage.get(model_name, 0) + 1
                                 )
             except:
                 pass
@@ -141,7 +144,7 @@ def generate_detailed_conversation_summary(
             unique_models_count = len(
                 actual_model_usage
             )  # Count unique models, not total calls
-            for model_key in actual_model_usage.keys():
+            for model_key in actual_model_usage:
                 # Show each model as (1) since we only care about unique usage
                 model_summary.append(f"{model_key}")
 
@@ -230,6 +233,7 @@ def generate_detailed_conversation_summary(
 
         # Try to get actual conversation message count from memory
         actual_memory_count = memory_count
+        system_prompt_count = 0
         if hasattr(agent, "memory_manager") and agent.memory_manager:
             try:
                 conversation_history = agent.memory_manager.get_conversation_history(
@@ -239,6 +243,13 @@ def generate_detailed_conversation_summary(
                 actual_memory_count = (
                     len(conversation_history) if conversation_history else 0
                 )
+
+                # Count system prompts separately
+                if conversation_history:
+                    from langchain_core.messages import SystemMessage
+                    system_prompt_count = sum(
+                        1 for msg in conversation_history if isinstance(msg, SystemMessage)
+                    )
             except:
                 pass  # Fall back to stats count
 
@@ -249,9 +260,15 @@ def generate_detailed_conversation_summary(
         elif actual_tool_calls:
             total_tool_messages = sum(actual_tool_calls.values())
 
-        # Consolidated format: Memory entries: X (Y user, Z assistant, W tools)
+        # Consolidated format: Memory entries: X (Y system prompt, Z user, W assistant, V tools)
         summary += f"{format_translation('memory_entries', language, count=actual_memory_count)} "
-        summary += f"({user_messages} {format_translation('user_messages_label', language).lower()}, "
+        summary += "("
+
+        # Add system prompt count if present
+        if system_prompt_count > 0:
+            summary += f"{system_prompt_count} {format_translation('system_prompt_label', language).lower()}, "
+
+        summary += f"{user_messages} {format_translation('user_messages_label', language).lower()}, "
         summary += f"{assistant_messages} {format_translation('assistant_messages_label', language).lower()}"
 
         if total_tool_messages > 0:

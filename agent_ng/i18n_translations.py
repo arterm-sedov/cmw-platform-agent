@@ -174,6 +174,7 @@ RUSSIAN_TRANSLATIONS = {
     "total_calls_label": "Всего вызовов",
     "tools_used_label": "Использовано инструментов",
     "tools_label": "Инструменты",
+    "system_prompt_label": "Система",
     "memory_entries": "Записей в памяти: {count}",
     # Quick action messages
     "quick_math_message": "Сколько будет 15 * 23 + 7? Покажите работу пошагово.",
@@ -421,6 +422,7 @@ ENGLISH_TRANSLATIONS = {
     "total_calls_label": "Total Calls",
     "tools_used_label": "Used tools",
     "tools_label": "Tools",
+    "system_prompt_label": "System",
     "memory_entries": "Memory entries: {count}",
     # Quick action messages
     "quick_math_message": "What is 15 * 23 + 7? Please show your work step by step.",
