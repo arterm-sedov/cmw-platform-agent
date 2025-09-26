@@ -671,6 +671,7 @@ class ChatTab:
     def _get_quick_action_choices(self) -> list[tuple[str, str]]:
         """Get list of quick action choices for the dropdown"""
         return [
+            ("", ""),  # Empty first option to allow proper dropdown behavior
             (self._get_translation("quick_list_apps"), "quick_list_apps"),
             (self._get_translation("quick_templates_erp"), "quick_templates_erp"),
             (self._get_translation("quick_attributes_contractors"), "quick_attributes_contractors"),
