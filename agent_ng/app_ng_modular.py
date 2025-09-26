@@ -1029,37 +1029,6 @@ class NextGenAppWithLanguageDetection(NextGenApp):
             from simple_language_detector import get_current_language
         self.get_current_language = get_current_language
     
-    def override_language_with_gradio_detection(self, request: gr.Request = None) -> str:
-        """
-        Override the current language with Gradio I18n detection.
-        
-        This method uses Gradio's native I18n system to detect the user's
-        preferred language from their browser settings and overrides the
-        dotenv language setting.
-        
-        Args:
-            request: Gradio request object (optional)
-            
-        Returns:
-            Detected language code ('en' or 'ru')
-        """
-        try:
-            # Use Gradio I18n to detect the current language
-            detected_language = self.get_current_language(request)
-            
-            # Override the current language if detection was successful
-            if detected_language in self.supported_languages:
-                self.language = detected_language
-                self.current_language = detected_language
-                _logger.info(f"🌐 Language overridden with Gradio detection: {detected_language}")
-                return detected_language
-            else:
-                _logger.warning(f"⚠️ Detected language '{detected_language}' not supported, keeping current: {self.language}")
-                return self.language
-                
-        except Exception as e:
-            _logger.warning(f"⚠️ Language detection failed: {e}, keeping current: {self.language}")
-            return self.language
     
     def detect_language_from_url(self):
         """Detect language from URL parameters using environment variables or sys.argv"""
