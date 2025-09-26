@@ -895,8 +895,3 @@ def get_llm_manager() -> LLMManager:
     return _llm_manager
 
 
-def reset_llm_manager():
-    """Reset the global LLM manager (useful for testing)"""
-    global _llm_manager
-    with _manager_lock:
-        _llm_manager = None

@@ -406,14 +406,6 @@ def get_token_tracker(session_id: str = "default") -> ConversationTokenTracker:
         _token_trackers[session_id] = ConversationTokenTracker()
     return _token_trackers[session_id]
 
-def reset_token_tracker(session_id: str = None) -> None:
-    """Reset token tracker instance(s)"""
-    global _token_trackers
-    if session_id:
-        if session_id in _token_trackers:
-            del _token_trackers[session_id]
-    else:
-        _token_trackers.clear()
 
 
 def convert_chat_history_to_messages(history: List[Dict[str, str]], current_message: str = None) -> List[BaseMessage]:

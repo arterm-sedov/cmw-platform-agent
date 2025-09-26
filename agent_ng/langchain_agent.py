@@ -711,12 +711,5 @@ async def get_agent_ng() -> CmwAgent:
     return _agent_instance
 
 
-def reset_agent_ng():
-    """Reset the global agent (compatible with NextGenAgent)"""
-    global _agent_instance
-    _agent_instance = None
-
-
 # Backward compatibility aliases
 get_langchain_agent = get_agent_ng
-reset_langchain_agent = reset_agent_ng

@@ -26,7 +26,6 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple, AsyncGenerator
 import json
 import time
-from dataclasses import asdict
 
 # Initialize logging early (idempotent)
 try:

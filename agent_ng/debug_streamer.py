@@ -534,16 +534,3 @@ def set_session_context(session_id: str):
     handler.set_session_context(session_id)
 
 
-def cleanup_debug_system():
-    """Cleanup the debug system"""
-    global _debug_streamers, _log_handlers, _thinking_transparencies, _session_aware_handler
-
-    # Stop all debug streamers
-    for streamer in _debug_streamers.values():
-        streamer.stop()
-
-    # Clear all instances
-    _debug_streamers.clear()
-    _log_handlers.clear()
-    _thinking_transparencies.clear()
-    _session_aware_handler = None
