@@ -259,7 +259,126 @@ class NextGenApp:
         
         self.is_initializing = False
     
+    def get_conversation_summary(self, session_id: str, markdown: bool = False) -> str:
+        """
+        Generate unified conversation summary for logs and download frontmatter.
+        
+        Args:
+            session_id: Session ID to get summary for
+            markdown: If True, format for markdown (download). If False, format for plain text (logs).
+            
+        Returns:
+            Formatted conversation summary string
+        """
+        try:
+            from datetime import datetime
+            
+            # Get session-specific agent and stats
+            agent = self.session_manager.get_session_agent(session_id)
+            if not agent:
+                self.debug_streamer.debug(f"No agent found for session: {session_id}")
+                return ""
+            
+            # Get conversation stats
+            stats = agent.get_stats()
+            conversation_stats = stats.get("conversation_stats", {})
+            llm_info = stats.get("llm_info", {})
+            
+            # Get tool information from session-aware turn snapshot
+            tool_names = set()
+            tool_calls_count = 0
+            snapshot = self.session_turn_snapshots.get(session_id)
+            if snapshot and isinstance(snapshot, list):
+                for msg in snapshot:
+                    if msg.get('role') == 'tool' and msg.get('name'):
+                        tool_names.add(msg['name'])
+                    elif msg.get('role') == 'assistant' and msg.get('tool_calls'):
+                        tool_calls_count += len(msg['tool_calls'])
+            
+            # Get roles sequence from snapshot
+            roles_seq = []
+            if snapshot:
+                roles_seq = [m.get("role", "?") for m in snapshot]
+            
+            # Get provider/model info
+            provider = llm_info.get('provider', 'unknown')
+            model = llm_info.get('model', 'unknown')
+            
+            # Format timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Format tool information with total count
+            if tool_names:
+                tool_counts = {}
+                for msg in snapshot:
+                    if msg.get('role') == 'tool' and msg.get('name'):
+                        tool_name = msg['name']
+                        tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+                tools_text = ", ".join([f"{name} ({count})" for name, count in sorted(tool_counts.items())])
+                total_tools = len(tool_counts)
+            else:
+                tools_text = "None"
+                total_tools = 0
+            
+            # Get all used provider/model combinations from conversation history
+            provider_models = set()
+            if agent and hasattr(agent, "memory_manager"):
+                memory = agent.memory_manager.get_memory(session_id)
+                if memory and hasattr(memory, "chat_memory") and hasattr(memory.chat_memory, "messages"):
+                    messages = memory.chat_memory.messages
+                    for msg in messages:
+                        if hasattr(msg, '__class__') and msg.__class__.__name__ == 'AIMessage':
+                            # Check if this message has LLM info in metadata
+                            if hasattr(msg, 'additional_kwargs') and 'llm_provider' in msg.additional_kwargs:
+                                provider = msg.additional_kwargs.get('llm_provider', 'unknown')
+                                model = msg.additional_kwargs.get('llm_model', 'unknown')
+                                provider_models.add(f"{provider} / {model}")
+            
+            # If no provider/model info found in messages, use current
+            if not provider_models:
+                provider_models.add(f"{provider} / {model}")
+            
+            # Format provider/model information
+            if len(provider_models) == 1:
+                providers_text = list(provider_models)[0]
+                total_models = 1
+            else:
+                providers_text = ", ".join(sorted(provider_models))
+                total_models = len(provider_models)
+            
+            # Build summary based on format
+            if markdown:
+                # Markdown format for download
+                summary = f"## {self._get_translation('conversation_summary')} ({timestamp})\n\n"
+                summary += f"**{self._get_translation('total_messages_label')}:** {conversation_stats.get('message_count', 0)} ({conversation_stats.get('user_messages', 0)} user, {conversation_stats.get('assistant_messages', 0)} assistant)\n\n"
+                summary += f"**{self._get_translation('roles_sequence')}:** {' → '.join(roles_seq)}\n\n"
+                summary += f"**{self._get_translation('tools_used_total')} ({total_tools}):** {tools_text}\n\n"
+                summary += f"**{self._get_translation('providers_models_total')} ({total_models}):** {providers_text}\n\n"
+            else:
+                # Plain text format for logs
+                summary = f"--- {self._get_translation('conversation_summary')} ({timestamp}) ---\n"
+                summary += f"Сеанс: {session_id}\n"
+                summary += f"{self._get_translation('total_messages_label')}: {conversation_stats.get('message_count', 0)} ({conversation_stats.get('user_messages', 0)} user, {conversation_stats.get('assistant_messages', 0)} assistant)\n"
+                summary += f"{self._get_translation('roles_sequence')}: {' → '.join(roles_seq)}\n"
+                summary += f"{self._get_translation('tools_used_total')} ({total_tools}): {tools_text}\n"
+                summary += f"{self._get_translation('providers_models_total')} ({total_models}): {providers_text}\n"
+                summary += f"Total conversation tokens: {total_tokens:,}\n"
+                summary += f"Average tokens per conversation: {avg_tokens:,.0f}\n"
+            
+            # Add newline for logs format
+            if not markdown:
+                summary += "\n"
+            
+            return summary
+            
+        except Exception as e:
+            self.debug_streamer.warning(f"Failed to generate conversation summary: {e}")
+            return ""
     
+    def _get_translation(self, key: str) -> str:
+        """Get translation for a key using the current language"""
+        from .i18n_translations import get_translation_key
+        return get_translation_key(key, self.language)
     
     def is_ready(self) -> bool:
         """Check if the app is ready (session-based pattern)"""
@@ -480,10 +599,7 @@ class NextGenApp:
                         conversation_id = metadata.get("conversation_id") if metadata else session_id
                         if ordered and conversation_id:
                             self.session_turn_snapshots[conversation_id] = ordered
-                        try:
-                            self.debug_streamer.info(f"Turn snapshot stored for session {conversation_id}")
-                        except Exception:
-                            pass
+                            self.debug_streamer.info(f"Turn snapshot stored for session {conversation_id} with {len(ordered)} messages")
                         yield working_history, ""
                         
                     elif event_type == "tool_start":

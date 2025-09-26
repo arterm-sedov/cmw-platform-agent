@@ -132,62 +132,38 @@ class LogsTab:
                 from ..debug_streamer import get_log_handler
                 session_log_handler = get_log_handler(session_id)
 
-                # Build lean last-turn summary from session-aware turn snapshot (session-isolated)
+                # Get conversation summary from existing turn stats (minimal, non-intrusive)
                 last_turn_summary = ""
                 try:
                     if hasattr(self._main_app, "session_manager") and request:
                         session_id = self._main_app.session_manager.get_session_id(request)
+                        # Use existing agent stats instead of complex turn_complete event
                         agent = self._main_app.session_manager.get_session_agent(session_id)
-                        
-                        # Get session-specific turn snapshot
-                        snapshot = self._main_app.session_turn_snapshots.get(session_id)
-                        if snapshot and isinstance(snapshot, list):
-                            from datetime import datetime
+                        if agent:
+                            stats = agent.get_stats()
+                            conversation_stats = stats.get("conversation_stats", {})
+                            llm_info = stats.get("llm_info", {})
                             
-                            # Parse the structured snapshot data
-                            roles_seq = [m.get("role", "?") for m in snapshot]
-                            tool_msgs = [m for m in snapshot if m.get("role") == "tool"]
-                            tool_names = set()
-                            tool_count = 0
-                            
-                            for msg in snapshot:
-                                if msg.get("role") == "tool" and msg.get("name"):
-                                    tool_names.add(msg["name"])
-                                elif msg.get("role") == "assistant" and msg.get("tool_calls"):
-                                    tool_count += len(msg["tool_calls"])
-                            
-                            # Get turn stats from agent if available
-                            turn_stats = ""
-                            try:
-                                if hasattr(agent, "token_tracker"):
-                                    stats = agent.token_tracker.get_current_stats()
-                                    if stats:
-                                        prompt_tokens = stats.get("prompt_tokens", 0)
-                                        completion_tokens = stats.get("completion_tokens", 0)
-                                        total_tokens = stats.get("total_tokens", 0)
-                                        provider = stats.get("provider", "unknown")
-                                        model = stats.get("model", "unknown")
-                                        execution_time = stats.get("execution_time", 0)
-                                        
-                                        turn_stats = (
-                                            f"{self._get_translation('prompt_tokens')}: {prompt_tokens} total ({prompt_tokens} input + {completion_tokens} output)\n"
-                                            f"{self._get_translation('api_tokens')}: {total_tokens} total ({prompt_tokens} input + {completion_tokens} output)\n"
-                                            f"{self._get_translation('provider_model')}: {provider} / {model}\n"
-                                            f"{self._get_translation('execution_time')}: {execution_time:.2f}с\n"
-                                        )
-                            except Exception:
-                                pass
-                            
-                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            tools_used_text = f"{', '.join(sorted(tool_names))} ({tool_count})" if tool_names else f"None ({tool_count})"
-                            last_turn_summary = (
-                                f"--- {self._get_translation('conversation_summary')} ({timestamp}) ---\n"
-                                f"{self._get_translation('roles_sequence')}: {' → '.join(roles_seq)}\n"
-                                f"{self._get_translation('tools_used_total')}: {tools_used_text}\n"
-                                f"{turn_stats}\n"
-                            )
-                except Exception:
-                    last_turn_summary = ""
+                            if conversation_stats.get('message_count', 0) > 0:
+                                from datetime import datetime
+                                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                
+                                # Simple summary using existing data
+                                message_count = conversation_stats.get('message_count', 0)
+                                user_messages = conversation_stats.get('user_messages', 0)
+                                assistant_messages = conversation_stats.get('assistant_messages', 0)
+                                provider = llm_info.get('provider', 'unknown')
+                                model = llm_info.get('model', 'unknown')
+                                
+                                last_turn_summary = f"--- Сводка диалога ({timestamp}) ---\n"
+                                last_turn_summary += f"Всего сообщений: {message_count} ({user_messages} user, {assistant_messages} assistant)\n"
+                                last_turn_summary += f"Провайдер / модель: {provider} / {model}\n\n"
+                            else:
+                                last_turn_summary = "--- No conversation yet ---\n"
+                        else:
+                            last_turn_summary = "--- No conversation yet ---\n"
+                except Exception as e:
+                    last_turn_summary = f"--- Error getting conversation summary: {e} ---\n"
 
                 # Combine last-turn summary with static logs and real-time debug logs
                 static_logs = "\n".join(self._main_app.initialization_logs)

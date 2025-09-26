@@ -714,6 +714,91 @@ class NativeLangChainStreaming:
                             "conversation_complete": True,
                         },
                     )
+                    
+                    # Add messages to memory for conversations without tool calls
+                    self._logger.debug("Adding new messages to memory manager")
+                    
+                    # Get current memory content for deduplication
+                    current_memory = agent.memory_manager.get_conversation_history(
+                        conversation_id
+                    )
+                    memory_content = {
+                        (type(msg).__name__, msg.content)
+                        for msg in current_memory
+                        if hasattr(msg, "content")
+                    }
+
+                    new_messages_added = 0
+                    for message in messages:
+                        # Skip system messages - they're handled separately above
+                        if isinstance(message, SystemMessage):
+                            print("🔍 DEBUG: Skipped system message (handled separately)")
+                            continue
+
+                        # Skip empty AIMessages - they cause message order issues
+                        if (
+                            isinstance(message, AIMessage)
+                            and not message.content
+                            and not message.tool_calls
+                        ):
+                            print(
+                                "🔍 DEBUG: Skipped empty AIMessage (no content or tool calls)"
+                            )
+                            continue
+
+                        # Create a unique identifier for this message
+                        message_key = (
+                            type(message).__name__,
+                            message.content if hasattr(message, "content") else str(message),
+                        )
+
+                        # Only add if not already in memory
+                        if message_key not in memory_content:
+                            agent.memory_manager.add_message(conversation_id, message)
+                            new_messages_added += 1
+                            print(f"🔍 DEBUG: Added new {type(message).__name__} to memory")
+                        else:
+                            print(f"🔍 DEBUG: Skipped duplicate {type(message).__name__}")
+
+                    self._logger.debug("Added %s new messages to memory", new_messages_added)
+
+                    # Emit turn_complete event for conversations without tool calls
+                    try:
+                        ordered_messages_snapshot = []
+                        for m in messages:
+                            try:
+                                if isinstance(m, SystemMessage):
+                                    role = "system"
+                                elif isinstance(m, HumanMessage):
+                                    role = "user"
+                                elif isinstance(m, ToolMessage):
+                                    role = "tool"
+                                elif isinstance(m, AIMessage):
+                                    role = "assistant"
+                                else:
+                                    role = type(m).__name__
+                                ordered_messages_snapshot.append({
+                                    "role": role,
+                                    "content": getattr(m, "content", ""),
+                                    "tool_call_id": getattr(m, "tool_call_id", None),
+                                    "tool_calls": getattr(m, "tool_calls", None),
+                                    "name": getattr(m, "name", None)
+                                })
+                            except Exception:
+                                continue
+
+                        yield StreamingEvent(
+                            event_type="turn_complete",
+                            content="",
+                            metadata={
+                                "ordered_messages": ordered_messages_snapshot,
+                                "conversation_id": conversation_id
+                            }
+                        )
+                    except Exception:
+                        # Non-fatal if snapshot fails
+                        pass
+                    
                     break
 
                 print(f"🔍 DEBUG: Completed iteration {iteration}, continuing...")

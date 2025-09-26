@@ -1064,11 +1064,10 @@ class ChatTab:
         markdown_content = "# CMW Platform Agent - Conversation Export\n\n"
         markdown_content += f"**Exported on:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         markdown_content += f"**Total messages:** {len(history)}\n\n"
-        # Optional conversation summary using existing stats
+        # Simple conversation summary using existing agent stats (minimal, non-intrusive)
         try:
             main_app = getattr(self, 'main_app', None)
             if main_app and hasattr(main_app, "session_manager"):
-                from datetime import datetime
                 # Get current session ID to maintain session isolation
                 try:
                     from ..debug_streamer import get_debug_streamer
@@ -1078,31 +1077,23 @@ class ChatTab:
                     # Fallback to default if debug streamer not available
                     session_id = "default"
                 
+                # Use existing agent stats instead of complex turn_complete event
                 agent = main_app.session_manager.get_session_agent(session_id)
-                
-                if agent and hasattr(agent, "get_stats"):
-                    # Reuse existing stats data
+                if agent:
                     stats = agent.get_stats()
                     conversation_stats = stats.get("conversation_stats", {})
                     llm_info = stats.get("llm_info", {})
                     
-                    # Get tool information from session-aware turn snapshot
-                    tool_names = set()
-                    tool_calls_count = 0
-                    snapshot = main_app.session_turn_snapshots.get(session_id)
-                    if snapshot and isinstance(snapshot, list):
-                        for msg in snapshot:
-                            if msg.get('role') == 'tool' and msg.get('name'):
-                                tool_names.add(msg['name'])
-                            elif msg.get('role') == 'assistant' and msg.get('tool_calls'):
-                                tool_calls_count += len(msg['tool_calls'])
-                    
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    markdown_content += f"## {self._get_translation('conversation_summary')} ({timestamp})\n\n"
-                    markdown_content += f"**{self._get_translation('total_messages_label')}:** {conversation_stats.get('message_count', 0)} ({conversation_stats.get('user_messages', 0)} user, {conversation_stats.get('assistant_messages', 0)} assistant)\n\n"
-                    tools_used_text = f"{', '.join(sorted(tool_names))} ({tool_calls_count})" if tool_names else f"None ({tool_calls_count})"
-                    markdown_content += f"**{self._get_translation('tools_used_total')}:** {tools_used_text}\n\n"
-                    markdown_content += f"**{self._get_translation('provider_model')}:** {llm_info.get('provider', 'unknown')} / {llm_info.get('model', 'unknown')}\n\n"
+                    if conversation_stats.get('message_count', 0) > 0:
+                        message_count = conversation_stats.get('message_count', 0)
+                        user_messages = conversation_stats.get('user_messages', 0)
+                        assistant_messages = conversation_stats.get('assistant_messages', 0)
+                        provider = llm_info.get('provider', 'unknown')
+                        model = llm_info.get('model', 'unknown')
+                        
+                        markdown_content += f"## Сводка диалога ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n\n"
+                        markdown_content += f"**Всего сообщений:** {message_count} ({user_messages} user, {assistant_messages} assistant)\n\n"
+                        markdown_content += f"**Провайдер / модель:** {provider} / {model}\n\n"
         except Exception:
             pass
         markdown_content += "---\n\n"
