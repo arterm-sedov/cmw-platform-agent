@@ -11,6 +11,7 @@ This directory contains all the dead code that was identified and extracted from
 ├── debug_utility_functions.py         # Debug and utility functions
 ├── config_setup_functions.py          # Configuration and setup functions
 ├── app_functions.py                   # App-related functions
+├── language_detection_functions.py    # Language detection functions
 ├── stats_export_functions.py          # Statistics and export functions
 ├── test_vector_store.py               # Test file for non-existent vector store
 ├── debug_tools.py                     # Debug script for tool detection
@@ -52,14 +53,21 @@ App-related functions that were never called:
 - `create_safe_demo()` - Create safe demo instance
 - `reload_demo()` - Reload demo for Gradio hot reloading
 
-### 5. Stats/Export Functions (`stats_export_functions.py`)
+### 5. Language Detection Functions (`language_detection_functions.py`)
+Language detection functions that were never called:
+- `detect_language_from_url()` - Detect language from URL parameters using environment variables or sys.argv
+- `detect_language()` - Detect language from URL parameters, headers, or browser settings
+- `get_demo()` - Get or create demo interface for specified language (legacy support)
+- `create_safe_demo()` - Create safe demo instance that won't cause reload errors
+
+### 6. Stats/Export Functions (`stats_export_functions.py`)
 Statistics and export functions that were never used:
 - `export_stats()` - Export statistics to JSON file
 - `get_stats_summary()` - Get human-readable stats summary
 - `get_performance_metrics()` - Get recent performance metrics
 - `get_error_summary()` - Get error summary statistics
 
-### 6. Standalone Test/Debug Files
+### 7. Standalone Test/Debug Files
 Complete files that were standalone and unused:
 - `test_vector_store.py` - Test file for non-existent vector store functionality
 - `debug_tools.py` - Debug script for tool detection and binding
@@ -78,6 +86,7 @@ The following imports were also identified as unused:
 - **Debug/Utility Functions:** 8 functions  
 - **Configuration Functions:** 3 functions
 - **App Functions:** 3 functions
+- **Language Detection Functions:** 4 functions
 - **Stats/Export Functions:** 4 functions
 - **Test Files:** 3 complete files
 - **Unused Imports:** 2 imports
