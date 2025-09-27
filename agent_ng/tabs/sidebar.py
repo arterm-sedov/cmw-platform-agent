@@ -32,7 +32,7 @@ class Sidebar:
         """
         logging.getLogger(__name__).info("✅ Sidebar: Creating common sidebar interface...")
 
-        with gr.Sidebar(open=True, width=320) as sidebar:
+        with gr.Sidebar(open=True, width=420) as sidebar:
             # LLM Selection section
             with gr.Column(elem_classes=["model-card"]):
                 gr.Markdown(f"### {self._get_translation('llm_selection_title')}", elem_classes=["llm-selection-title"])
