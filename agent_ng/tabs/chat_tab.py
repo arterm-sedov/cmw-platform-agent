@@ -185,7 +185,7 @@ class ChatTab:
             send_config = apply_concurrency_to_click_event(
                 queue_manager, "chat", self._stream_message_with_queue_status,
                 [self.components["msg"], self.components["chatbot"]],
-                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
+                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["quick_actions_dropdown"]]
             )
             self.streaming_event = self.components["send_btn"].click(**send_config)
 
@@ -193,7 +193,7 @@ class ChatTab:
             submit_config = apply_concurrency_to_submit_event(
                 queue_manager, "chat", self._stream_message_with_queue_status,
                 [self.components["msg"], self.components["chatbot"]],
-                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
+                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["quick_actions_dropdown"]]
             )
             self.submit_event = self.components["msg"].submit(**submit_config)
         else:
@@ -202,13 +202,13 @@ class ChatTab:
             self.streaming_event = self.components["send_btn"].click(
                 fn=self._stream_message_wrapper,
                 inputs=[self.components["msg"], self.components["chatbot"]],
-                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
+                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["quick_actions_dropdown"]]
             )
 
             self.submit_event = self.components["msg"].submit(
                 fn=self._stream_message_wrapper,
                 inputs=[self.components["msg"], self.components["chatbot"]],
-                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
+                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["quick_actions_dropdown"]]
             )
 
         # Stop button - cancel both send and submit events and hide itself
@@ -717,6 +717,9 @@ class ChatTab:
         else:
             return {"text": "", "files": []}
 
+    def _reset_quick_actions_dropdown(self) -> str:
+        """Reset the quick actions dropdown to None"""
+        return None
 
     def _stream_message_with_queue_status(self, multimodal_value, history, request: gr.Request = None):
         """Wrapper for concurrent processing - relies on Gradio's native queue feedback"""
@@ -724,44 +727,44 @@ class ChatTab:
         # No need for custom warnings - Gradio handles this natively
 
         # Show stop button at start of processing
-        yield history, "", gr.Button(visible=True)  # Show stop button
+        yield history, "", gr.Button(visible=True), None  # Show stop button, no dropdown change
 
         # Process message with original wrapper
         last_result = None
         for result in self._stream_message_wrapper_internal(multimodal_value, history, request):
             last_result = result
             if len(result) >= 2:
-                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
+                yield result[0], result[1], gr.Button(visible=True), None  # Keep stop button visible, no dropdown change
             else:
-                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
+                yield result[0], result[1], gr.Button(visible=True), None  # Keep stop button visible, no dropdown change
 
-        # Hide stop button at end of processing
+        # Hide stop button at end of processing and reset dropdown
         if last_result and len(last_result) >= 2:
-            yield last_result[0], last_result[1], gr.Button(visible=False)
+            yield last_result[0], last_result[1], gr.Button(visible=False), None  # Reset dropdown
         else:
-            yield history, "", gr.Button(visible=False)
+            yield history, "", gr.Button(visible=False), None  # Reset dropdown
 
     def _stream_message_wrapper(self, multimodal_value, history, request: gr.Request = None):
         """Wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
         # Fallback mode without queue status
 
         # Show stop button at start of processing
-        yield history, "", gr.Button(visible=True)  # Show stop button
+        yield history, "", gr.Button(visible=True), None  # Show stop button, no dropdown change
 
         # Process message with original wrapper
         last_result = None
         for result in self._stream_message_wrapper_internal(multimodal_value, history, request):
             last_result = result
             if len(result) >= 2:
-                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
+                yield result[0], result[1], gr.Button(visible=True), None  # Keep stop button visible, no dropdown change
             else:
-                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
+                yield result[0], result[1], gr.Button(visible=True), None  # Keep stop button visible, no dropdown change
 
-        # Hide stop button at end of processing
+        # Hide stop button at end of processing and reset dropdown
         if last_result and len(last_result) >= 2:
-            yield last_result[0], last_result[1], gr.Button(visible=False)
+            yield last_result[0], last_result[1], gr.Button(visible=False), None  # Reset dropdown
         else:
-            yield history, "", gr.Button(visible=False)
+            yield history, "", gr.Button(visible=False), None  # Reset dropdown
 
     def _stream_message_wrapper_internal(self, multimodal_value, history, request: gr.Request = None):
         """Internal wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
