@@ -16,7 +16,12 @@ import gradio as gr
 class Sidebar:
     """Common sidebar component for all tabs"""
 
-    def __init__(self, event_handlers: dict[str, Any], language: str = "en", i18n_instance: gr.I18n | None = None):
+    def __init__(
+        self,
+        event_handlers: dict[str, Any],
+        language: str = "en",
+        i18n_instance: gr.I18n | None = None,
+    ):
         self.event_handlers = event_handlers
         self.components = {}
         self.main_app = None  # Reference to main app for accessing session manager
@@ -30,12 +35,17 @@ class Sidebar:
         Returns:
             Tuple of (Sidebar, components_dict)
         """
-        logging.getLogger(__name__).info("✅ Sidebar: Creating common sidebar interface...")
+        logging.getLogger(__name__).info(
+            "✅ Sidebar: Creating common sidebar interface..."
+        )
 
         with gr.Sidebar(open=True, width=420) as sidebar:
             # LLM Selection section
             with gr.Column(elem_classes=["model-card"]):
-                gr.Markdown(f"### {self._get_translation('llm_selection_title')}", elem_classes=["llm-selection-title"])
+                gr.Markdown(
+                    f"### {self._get_translation('llm_selection_title')}",
+                    elem_classes=["llm-selection-title"],
+                )
 
                 # Combined Provider/Model selector
                 self.components["provider_model_selector"] = gr.Dropdown(
@@ -44,12 +54,15 @@ class Sidebar:
                     show_label=False,
                     interactive=True,
                     allow_custom_value=True,
-                    elem_classes=["provider-model-selector"]
+                    elem_classes=["provider-model-selector"],
                 )
 
             # Quick actions section - styled like LLM selection
             with gr.Column(elem_classes=["model-card"]):
-                gr.Markdown(f"### {self._get_translation('quick_actions_title')}", elem_classes=["llm-selection-title"])
+                gr.Markdown(
+                    f"### {self._get_translation('quick_actions_title')}",
+                    elem_classes=["llm-selection-title"],
+                )
 
                 # Single dropdown for all quick actions - styled like LLM selector
                 self.components["quick_actions_dropdown"] = gr.Dropdown(
@@ -58,22 +71,33 @@ class Sidebar:
                     show_label=False,
                     interactive=True,
                     allow_custom_value=False,
-                    elem_classes=["provider-model-selector"]
+                    elem_classes=["provider-model-selector"],
                 )
 
-            # Status section
+            # Status section - minimal status only
             with gr.Column(elem_classes=["model-card"]):
-                gr.Markdown(f"### {self._get_translation('status_title')}", elem_classes=["status-title"])
-                self.components["status_display"] = gr.Markdown(self._get_translation("status_initializing"))
+                gr.Markdown(
+                    f"### {self._get_translation('status_title')}",
+                    elem_classes=["status-title"],
+                )
+                self.components["status_display"] = gr.Markdown(
+                    self._get_translation("status_ready")
+                )
 
                 # Token budget indicator
-                gr.Markdown(f"### {self._get_translation('token_budget_title')}", elem_classes=["token-budget-title"])
+                gr.Markdown(
+                    f"### {self._get_translation('token_budget_title')}",
+                    elem_classes=["token-budget-title"],
+                )
                 self.components["token_budget_display"] = gr.Markdown(
                     self._get_translation("token_budget_initializing")
                 )
 
                 # Progress indicator
-                gr.Markdown(f"### {self._get_translation('progress_title')}", elem_classes=["progress-title"])
+                gr.Markdown(
+                    f"### {self._get_translation('progress_title')}",
+                    elem_classes=["progress-title"],
+                )
                 self.components["progress_display"] = gr.Markdown(
                     self._get_translation("progress_ready")
                 )
@@ -81,7 +105,9 @@ class Sidebar:
         # Connect sidebar event handlers
         self._connect_sidebar_events()
 
-        logging.getLogger(__name__).info("✅ Sidebar: Successfully created with all components and event handlers")
+        logging.getLogger(__name__).info(
+            "✅ Sidebar: Successfully created with all components and event handlers"
+        )
         return sidebar, self.components
 
     def _connect_sidebar_events(self):
@@ -92,11 +118,14 @@ class Sidebar:
         # This is handled in the UI Manager after all components are available
 
         # LLM selection events - now applies immediately on dropdown change
-        if "provider_model_selector" in self.components and "status_display" in self.components:
+        if (
+            "provider_model_selector" in self.components
+            and "status_display" in self.components
+        ):
             self.components["provider_model_selector"].change(
                 fn=self._apply_llm_selection_combined,
                 inputs=[self.components["provider_model_selector"]],
-                outputs=[self.components["status_display"]]
+                outputs=[self.components["status_display"]],
             )
 
         # Token budget display change event for download button visibility
@@ -104,10 +133,12 @@ class Sidebar:
             self.components["token_budget_display"].change(
                 fn=self._update_download_button_visibility,
                 inputs=[],
-                outputs=[]  # Output will be handled by the main app
+                outputs=[],  # Output will be handled by the main app
             )
 
-        logging.getLogger(__name__).debug("✅ Sidebar: All event handlers connected successfully")
+        logging.getLogger(__name__).debug(
+            "✅ Sidebar: All event handlers connected successfully"
+        )
 
     def set_main_app(self, app):
         """Set reference to main app for accessing session manager and other services"""
@@ -133,12 +164,13 @@ class Sidebar:
         """Get LLM selection components for UI updates"""
         return {
             "provider_model_selector": self.components.get("provider_model_selector"),
-            "quick_actions_dropdown": self.components.get("quick_actions_dropdown")
+            "quick_actions_dropdown": self.components.get("quick_actions_dropdown"),
         }
 
     def _get_translation(self, key: str) -> str:
         """Get a translation for a specific key"""
         from ..i18n_translations import get_translation_key
+
         return get_translation_key(key, self.language)
 
     def _get_available_provider_model_combinations(self) -> list[str]:
@@ -149,7 +181,9 @@ class Sidebar:
         try:
             if hasattr(self.main_app, "llm_manager") and self.main_app.llm_manager:
                 combinations = []
-                available_providers = self.main_app.llm_manager.get_available_providers()
+                available_providers = (
+                    self.main_app.llm_manager.get_available_providers()
+                )
 
                 if not available_providers:
                     return [self._get_translation("no_providers_available")]
@@ -179,6 +213,7 @@ class Sidebar:
         if not hasattr(self, "main_app") or not self.main_app:
             # Return fallback value when main app is not available
             import os
+
             provider = os.environ.get("AGENT_PROVIDER", "openrouter")
             return f"{provider.title()} / {provider}/default-model"
 
@@ -187,7 +222,12 @@ class Sidebar:
             if hasattr(self.main_app, "session_manager"):
                 # Get default session for UI display
                 session_data = self.main_app.session_manager.get_session_data("default")
-                if session_data and session_data.agent and hasattr(session_data.agent, "llm_instance") and session_data.agent.llm_instance:
+                if (
+                    session_data
+                    and session_data.agent
+                    and hasattr(session_data.agent, "llm_instance")
+                    and session_data.agent.llm_instance
+                ):
                     provider = session_data.agent.llm_instance.provider.value
                     model = session_data.agent.llm_instance.model_name
                     return f"{provider.title()} / {model}"
@@ -196,6 +236,7 @@ class Sidebar:
 
         # Return fallback value on error
         import os
+
         provider = os.environ.get("AGENT_PROVIDER", "openrouter")
         return f"{provider.title()} / {provider}/default-model"
 
@@ -205,9 +246,15 @@ class Sidebar:
             ("", ""),  # Empty first option to allow proper dropdown behavior
             (self._get_translation("quick_list_apps"), "quick_list_apps"),
             (self._get_translation("quick_templates_erp"), "quick_templates_erp"),
-            (self._get_translation("quick_attributes_contractors"), "quick_attributes_contractors"),
+            (
+                self._get_translation("quick_attributes_contractors"),
+                "quick_attributes_contractors",
+            ),
             (self._get_translation("quick_edit_date_time"), "quick_edit_date_time"),
-            (self._get_translation("quick_create_comment_attr"), "quick_create_comment_attr"),
+            (
+                self._get_translation("quick_create_comment_attr"),
+                "quick_create_comment_attr",
+            ),
             (self._get_translation("quick_create_id_attr"), "quick_create_id_attr"),
             (self._get_translation("quick_edit_phone_mask"), "quick_edit_phone_mask"),
             (self._get_translation("quick_edit_enum"), "quick_edit_enum"),
@@ -251,10 +298,15 @@ class Sidebar:
         else:
             return ""
 
-    def _apply_llm_selection_combined(self, provider_model_combination: str, request: gr.Request = None) -> str:
+    def _apply_llm_selection_combined(
+        self, provider_model_combination: str, request: gr.Request = None
+    ) -> str:
         """Apply the selected LLM provider/model combination - now properly session-aware"""
         try:
-            if not provider_model_combination or " / " not in provider_model_combination:
+            if (
+                not provider_model_combination
+                or " / " not in provider_model_combination
+            ):
                 return self._get_translation("llm_apply_error")
 
             # Parse the combination: "Provider / Model"
@@ -272,18 +324,21 @@ class Sidebar:
             if self._is_mistral_model(provider, model):
                 # Check if we're switching FROM a non-Mistral provider TO Mistral
                 current_provider_model = self._get_current_provider_model_combination()
-                current_provider = current_provider_model.split(" / ")[0].lower() if " / " in current_provider_model else ""
+                current_provider = (
+                    current_provider_model.split(" / ")[0].lower()
+                    if " / " in current_provider_model
+                    else ""
+                )
 
                 # Only clear chat if switching from non-Mistral to Mistral
                 if current_provider and current_provider != "mistral":
                     # Show native Gradio warning modal
                     gr.Warning(
                         message=self._get_translation("mistral_switch_warning").format(
-                            provider=provider.title(),
-                            model=model
+                            provider=provider.title(), model=model
                         ),
                         title=self._get_translation("mistral_switch_title"),
-                        duration=10
+                        duration=10,
                     )
                     # Apply the LLM selection and clear chat
                     return self._apply_mistral_with_clear(provider, model, request)
@@ -304,24 +359,34 @@ class Sidebar:
         """Check if the selected model is a Mistral model"""
         return provider.lower() == "mistral" or "mistral" in model.lower()
 
-    def _apply_llm_directly(self, provider: str, model: str, request: gr.Request = None) -> str:
+    def _apply_llm_directly(
+        self, provider: str, model: str, request: gr.Request = None
+    ) -> str:
         """Apply LLM selection without confirmation dialog - now properly session-aware"""
         try:
-            print(f"🔄 Sidebar: Applying LLM selection - Provider: {provider}, Model: {model}")
+            print(
+                f"🔄 Sidebar: Applying LLM selection - Provider: {provider}, Model: {model}"
+            )
             print(f"🔄 Sidebar: Request available: {request is not None}")
-            print(f"🔄 Sidebar: Main app has session_manager: {hasattr(self.main_app, 'session_manager')}")
+            print(
+                f"🔄 Sidebar: Main app has session_manager: {hasattr(self.main_app, 'session_manager')}"
+            )
 
             # Use clean session manager for session-aware LLM selection
             if request and hasattr(self.main_app, "session_manager"):
                 session_id = self.main_app.session_manager.get_session_id(request)
                 print(f"🔄 Sidebar: Session ID: {session_id}")
-                success = self.main_app.session_manager.update_llm_provider(session_id, provider, model)
+                success = self.main_app.session_manager.update_llm_provider(
+                    session_id, provider, model
+                )
                 print(f"🔄 Sidebar: Update result: {success}")
                 if success:
                     # Trigger UI update to refresh status display
                     if hasattr(self.main_app, "trigger_ui_update"):
                         self.main_app.trigger_ui_update()
-                    return self._get_translation("llm_apply_success").format(provider=provider.title(), model=model)
+                    return self._get_translation("llm_apply_success").format(
+                        provider=provider.title(), model=model
+                    )
                 else:
                     return self._get_translation("llm_apply_error")
 
@@ -331,7 +396,9 @@ class Sidebar:
             print(f"Error applying LLM selection: {e}")
             return self._get_translation("llm_apply_error")
 
-    def _apply_mistral_with_clear(self, provider: str, model: str, request: gr.Request = None) -> str:
+    def _apply_mistral_with_clear(
+        self, provider: str, model: str, request: gr.Request = None
+    ) -> str:
         """Apply Mistral LLM selection and clear chat history - now properly session-aware"""
         try:
             # Apply the LLM selection
@@ -375,11 +442,15 @@ class Sidebar:
                 self.components["quick_actions_dropdown"].change(
                     fn=self._handle_quick_action_dropdown,
                     inputs=[self.components["quick_actions_dropdown"]],
-                    outputs=[msg_component]  # Output to message input
+                    outputs=[msg_component],  # Output to message input
                 )
-                logging.getLogger(__name__).debug("✅ Sidebar: Quick action dropdown connected to message input")
+                logging.getLogger(__name__).debug(
+                    "✅ Sidebar: Quick action dropdown connected to message input"
+                )
             else:
-                logging.getLogger(__name__).warning("⚠️ Sidebar: Message input component not found for quick actions")
+                logging.getLogger(__name__).warning(
+                    "⚠️ Sidebar: Message input component not found for quick actions"
+                )
 
     def _update_download_button_visibility(self):
         """Update download button visibility - handled by main app"""

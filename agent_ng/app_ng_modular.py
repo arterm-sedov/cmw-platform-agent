@@ -30,6 +30,7 @@ import time
 # Initialize logging early (idempotent)
 try:
     from agent_ng.logging_config import setup_logging
+
     setup_logging()
     _logger = logging.getLogger(__name__)
 except Exception:
@@ -41,6 +42,7 @@ except ImportError:
     # Fallback for direct execution
     import sys
     from pathlib import Path
+
     sys.path.append(str(Path(__file__).parent))
     from agent_config import config, get_language_settings, get_port_settings
 
@@ -61,13 +63,24 @@ if parent_dir not in sys.path:
 try:
     from agent_ng.langchain_agent import CmwAgent as NextGenAgent, ChatMessage
     from agent_ng.llm_manager import get_llm_manager
-    from agent_ng.debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
+    from agent_ng.debug_streamer import (
+        get_debug_streamer,
+        get_log_handler,
+        LogLevel,
+        LogCategory,
+    )
+
     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
     from agent_ng.tabs import ChatTab, LogsTab, StatsTab
     from agent_ng.ui_manager import get_ui_manager
     from agent_ng.utils import safe_string
-    from agent_ng.i18n_translations import create_i18n_instance, get_translation_key, format_translation
+    from agent_ng.i18n_translations import (
+        create_i18n_instance,
+        get_translation_key,
+        format_translation,
+    )
     from langsmith import traceable
+
     _logger.info("Successfully imported all modules using absolute imports")
 except ImportError as e1:
     _logger.warning("Absolute imports failed: %s", e1)
@@ -75,17 +88,37 @@ except ImportError as e1:
     try:
         from .langchain_agent import CmwAgent as NextGenAgent, ChatMessage
         from .llm_manager import get_llm_manager
-        from .debug_streamer import get_debug_streamer, get_log_handler, LogLevel, LogCategory
+        from .debug_streamer import (
+            get_debug_streamer,
+            get_log_handler,
+            LogLevel,
+            LogCategory,
+        )
+
         # from .streaming_chat import get_chat_interface  # Module moved to .unused
         from .tabs import ChatTab, LogsTab, StatsTab
         from .ui_manager import get_ui_manager
-        from .i18n_translations import create_i18n_instance, get_translation_key, format_translation
+        from .i18n_translations import (
+            create_i18n_instance,
+            get_translation_key,
+            format_translation,
+        )
         from langsmith import traceable
+
         _logger.info("Successfully imported all modules using relative imports")
     except ImportError as e2:
-        _logger.critical("Both absolute and relative imports failed. Absolute: %s | Relative: %s", e1, e2)
-        _logger.error("Please check: 1) requirements_ng.txt installed 2) PYTHONPATH 3) circular imports 4) modules exist 5) working directory")
-        raise ImportError(f"Failed to import required modules. Absolute: {e1}, Relative: {e2}")
+        _logger.critical(
+            "Both absolute and relative imports failed. Absolute: %s | Relative: %s",
+            e1,
+            e2,
+        )
+        _logger.error(
+            "Please check: 1) requirements_ng.txt installed 2) PYTHONPATH 3) circular imports 4) modules exist 5) working directory"
+        )
+        raise ImportError(
+            f"Failed to import required modules. Absolute: {e1}, Relative: {e2}"
+        )
+
 
 class NextGenApp:
     """LangChain-native Gradio application with modular tab architecture and i18n support"""
@@ -106,12 +139,14 @@ class NextGenApp:
         try:
             from .concurrency_config import get_concurrency_config
             from .queue_manager import create_queue_manager
+
             self.concurrency_config = get_concurrency_config()
             self.queue_manager = create_queue_manager(self.concurrency_config)
         except ImportError:
             # Fallback for when running as script
             from concurrency_config import get_concurrency_config
             from queue_manager import create_queue_manager
+
             self.concurrency_config = get_concurrency_config()
             self.queue_manager = create_queue_manager(self.concurrency_config)
 
@@ -156,8 +191,12 @@ class NextGenApp:
         # Progress status storage with translation
         # Progress status is now managed per-session through session manager
         self.is_processing = False
-        self.current_global_progress = get_translation_key("progress_ready", language)  # Global progress for timer updates
-        self.last_progress_display = ""  # Cache last display to avoid unnecessary updates
+        self.current_global_progress = get_translation_key(
+            "progress_ready", language
+        )  # Global progress for timer updates
+        self.last_progress_display = (
+            ""  # Cache last display to avoid unnecessary updates
+        )
 
         # Persistent background asyncio loop for streaming to avoid closing gRPC/Gemini loop between turns
         self._stream_loop = None
@@ -186,6 +225,7 @@ class NextGenApp:
         except RuntimeError:
             # No event loop running, start a new one
             import threading
+
             def run_async_init():
                 asyncio.run(self._initialize_agent())
 
@@ -204,13 +244,16 @@ class NextGenApp:
 
         import threading
         import asyncio
+
         self._stream_loop = asyncio.new_event_loop()
 
         def _run_loop_forever():
             asyncio.set_event_loop(self._stream_loop)
             self._stream_loop.run_forever()
 
-        self._stream_loop_thread = threading.Thread(target=_run_loop_forever, daemon=True)
+        self._stream_loop_thread = threading.Thread(
+            target=_run_loop_forever, daemon=True
+        )
         self._stream_loop_thread.start()
 
     def _submit_stream_task(self, message, history, request, out_queue):
@@ -219,11 +262,15 @@ class NextGenApp:
 
         async def _producer():
             try:
-                async for result in self.stream_chat_with_agent(message, history, request):
+                async for result in self.stream_chat_with_agent(
+                    message, history, request
+                ):
                     out_queue.put(result)
             except Exception as e:
                 # Propagate errors to the consumer
-                out_queue.put({"type": "error", "content": f"{e}", "metadata": {"error": str(e)}})
+                out_queue.put(
+                    {"type": "error", "content": f"{e}", "metadata": {"error": str(e)}}
+                )
             finally:
                 # Sentinel to indicate completion
                 out_queue.put(StopIteration)
@@ -233,14 +280,20 @@ class NextGenApp:
     async def _initialize_agent(self):
         """Initialize the session manager (no global agent needed)"""
         self.is_initializing = True
-        self.debug_streamer.info("Starting session manager initialization", LogCategory.INIT)
-        self.initialization_logs.append("🚀 " + get_translation_key("logs_initializing", self.language))
+        self.debug_streamer.info(
+            "Starting session manager initialization", LogCategory.INIT
+        )
+        self.initialization_logs.append(
+            "🚀 " + get_translation_key("logs_initializing", self.language)
+        )
 
         try:
             # Initialize session manager (creates agents on-demand per session)
             self.debug_streamer.info("Session manager ready", LogCategory.INIT)
 
-            self.initialization_logs.append("✅ " + get_translation_key("session_manager_ready", self.language))
+            self.initialization_logs.append(
+                "✅ " + get_translation_key("session_manager_ready", self.language)
+            )
             self.initialization_complete = True
 
             # Trigger UI update after initialization
@@ -248,11 +301,17 @@ class NextGenApp:
 
         except Exception as e:
             try:
-                self.debug_streamer.error(f"Initialization failed: {str(e)}", LogCategory.INIT)
+                self.debug_streamer.error(
+                    f"Initialization failed: {str(e)}", LogCategory.INIT
+                )
             except:
                 # If debug streamer fails, just continue
                 pass
-            self.initialization_logs.append(format_translation("error_initialization_failed", self.language, error=str(e)))
+            self.initialization_logs.append(
+                format_translation(
+                    "error_initialization_failed", self.language, error=str(e)
+                )
+            )
 
         self.is_initializing = False
 
@@ -289,10 +348,10 @@ class NextGenApp:
             snapshot = self.session_turn_snapshots.get(session_id)
             if snapshot and isinstance(snapshot, list):
                 for msg in snapshot:
-                    if msg.get('role') == 'tool' and msg.get('name'):
-                        tool_names.add(msg['name'])
-                    elif msg.get('role') == 'assistant' and msg.get('tool_calls'):
-                        tool_calls_count += len(msg['tool_calls'])
+                    if msg.get("role") == "tool" and msg.get("name"):
+                        tool_names.add(msg["name"])
+                    elif msg.get("role") == "assistant" and msg.get("tool_calls"):
+                        tool_calls_count += len(msg["tool_calls"])
 
             # Get roles sequence from snapshot
             roles_seq = []
@@ -300,8 +359,8 @@ class NextGenApp:
                 roles_seq = [m.get("role", "?") for m in snapshot]
 
             # Get provider/model info
-            provider = llm_info.get('provider', 'unknown')
-            model = llm_info.get('model', 'unknown')
+            provider = llm_info.get("provider", "unknown")
+            model = llm_info.get("model", "unknown")
 
             # Format timestamp
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -310,10 +369,12 @@ class NextGenApp:
             if tool_names:
                 tool_counts = {}
                 for msg in snapshot:
-                    if msg.get('role') == 'tool' and msg.get('name'):
-                        tool_name = msg['name']
+                    if msg.get("role") == "tool" and msg.get("name"):
+                        tool_name = msg["name"]
                         tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
-                tools_text = ", ".join([f"{name} ({count})" for name, count in sorted(tool_counts.items())])
+                tools_text = ", ".join(
+                    [f"{name} ({count})" for name, count in sorted(tool_counts.items())]
+                )
                 total_tools = len(tool_counts)
             else:
                 tools_text = "None"
@@ -323,14 +384,28 @@ class NextGenApp:
             provider_models = set()
             if agent and hasattr(agent, "memory_manager"):
                 memory = agent.memory_manager.get_memory(session_id)
-                if memory and hasattr(memory, "chat_memory") and hasattr(memory.chat_memory, "messages"):
+                if (
+                    memory
+                    and hasattr(memory, "chat_memory")
+                    and hasattr(memory.chat_memory, "messages")
+                ):
                     messages = memory.chat_memory.messages
                     for msg in messages:
-                        if hasattr(msg, '__class__') and msg.__class__.__name__ == 'AIMessage':
+                        if (
+                            hasattr(msg, "__class__")
+                            and msg.__class__.__name__ == "AIMessage"
+                        ):
                             # Check if this message has LLM info in metadata
-                            if hasattr(msg, 'additional_kwargs') and 'llm_provider' in msg.additional_kwargs:
-                                provider = msg.additional_kwargs.get('llm_provider', 'unknown')
-                                model = msg.additional_kwargs.get('llm_model', 'unknown')
+                            if (
+                                hasattr(msg, "additional_kwargs")
+                                and "llm_provider" in msg.additional_kwargs
+                            ):
+                                provider = msg.additional_kwargs.get(
+                                    "llm_provider", "unknown"
+                                )
+                                model = msg.additional_kwargs.get(
+                                    "llm_model", "unknown"
+                                )
                                 provider_models.add(f"{provider} / {model}")
 
             # If no provider/model info found in messages, use current
@@ -362,8 +437,8 @@ class NextGenApp:
                 summary += f"{self._get_translation('tools_used_total')} ({total_tools}): {tools_text}\n"
                 summary += f"{self._get_translation('providers_models_total')} ({total_models}): {providers_text}\n"
                 # Add token statistics if available
-                total_tokens = conversation_stats.get('total_tokens', 0)
-                avg_tokens = conversation_stats.get('avg_tokens', 0)
+                total_tokens = conversation_stats.get("total_tokens", 0)
+                avg_tokens = conversation_stats.get("avg_tokens", 0)
                 if total_tokens > 0:
                     summary += f"Total conversation tokens: {total_tokens:,}\n"
                 if avg_tokens > 0:
@@ -383,13 +458,16 @@ class NextGenApp:
     def _get_translation(self, key: str) -> str:
         """Get translation for a key using the current language"""
         from .i18n_translations import get_translation_key
+
         return get_translation_key(key, self.language)
 
     def is_ready(self) -> bool:
         """Check if the app is ready (session-based pattern)"""
         return self.initialization_complete and self.session_manager is not None
 
-    def clear_conversation(self, request: gr.Request = None) -> Tuple[List[Dict[str, str]], str]:
+    def clear_conversation(
+        self, request: gr.Request = None
+    ) -> Tuple[List[Dict[str, str]], str]:
         """Clear the conversation history (LangChain-native pattern) - now properly session-aware"""
         if request:
             # Use clean session manager for session-aware clearing
@@ -401,11 +479,11 @@ class NextGenApp:
         else:
             # Fallback for non-session requests - use default session
             session_id = "default"
-            if hasattr(self, 'session_manager'):
+            if hasattr(self, "session_manager"):
                 session_data = self.session_manager.get_session_data(session_id)
                 if session_data and session_data.agent:
                     session_data.agent.clear_conversation(session_id)
-                    if hasattr(session_data.agent, 'token_tracker'):
+                    if hasattr(session_data.agent, "token_tracker"):
                         session_data.agent.token_tracker.start_new_conversation()
                     self.debug_streamer.info("Conversation cleared (default session)")
 
@@ -457,7 +535,9 @@ class NextGenApp:
         """Mark that processing has started"""
         self.is_processing = True
         # Update global progress to show processing started
-        self.current_global_progress = get_translation_key("progress_processing", self.language)
+        self.current_global_progress = get_translation_key(
+            "progress_processing", self.language
+        )
         # Reset cache to force update
         self.last_progress_display = ""
 
@@ -465,19 +545,25 @@ class NextGenApp:
         """Mark that processing has stopped"""
         self.is_processing = False
         # Update global progress to show ready state
-        self.current_global_progress = get_translation_key("progress_ready", self.language)
+        self.current_global_progress = get_translation_key(
+            "progress_ready", self.language
+        )
         # Reset cache to force update
         self.last_progress_display = ""
 
-    def get_conversation_history(self, session_id: str = "default") -> List[BaseMessage]:
+    def get_conversation_history(
+        self, session_id: str = "default"
+    ) -> List[BaseMessage]:
         """Get the current conversation history (session-based pattern)"""
-        if hasattr(self, 'session_manager'):
+        if hasattr(self, "session_manager"):
             session_data = self.session_manager.get_session_data(session_id)
             if session_data and session_data.agent:
                 return session_data.agent.get_conversation_history(session_id)
         return []
 
-    async def stream_chat_with_agent(self, message: str, history: List[Dict[str, str]], request: gr.Request = None) -> AsyncGenerator[Tuple[List[Dict[str, str]], str], None]:
+    async def stream_chat_with_agent(
+        self, message: str, history: List[Dict[str, str]], request: gr.Request = None
+    ) -> AsyncGenerator[Tuple[List[Dict[str, str]], str], None]:
         """
         Stream chat with the agent using LangChain-native streaming patterns.
 
@@ -512,26 +598,39 @@ class NextGenApp:
             self.set_session_context(session_id)
 
             # Debug: Check which LLM instance is being used
-            if user_agent and hasattr(user_agent, 'llm_instance') and user_agent.llm_instance:
+            if (
+                user_agent
+                and hasattr(user_agent, "llm_instance")
+                and user_agent.llm_instance
+            ):
                 llm_info = user_agent.get_llm_info()
-                print(f"🔍 DEBUG: Using session agent with LLM: {llm_info.get('provider', 'unknown')}/{llm_info.get('model_name', 'unknown')}")
+                print(
+                    f"🔍 DEBUG: Using session agent with LLM: {llm_info.get('provider', 'unknown')}/{llm_info.get('model_name', 'unknown')}"
+                )
             else:
                 print(f"❌ DEBUG: Session agent has no LLM instance!")
 
             # Use session-specific debug streamer
             session_debug = get_debug_streamer(session_id)
-            session_debug.info(f"Streaming message for session {session_id}: {message[:50]}...")
+            session_debug.info(
+                f"Streaming message for session {session_id}: {message[:50]}..."
+            )
 
             # Initialize response
 
             # Add user message to history
-            working_history = history + [{"role": "user", "content": message}, {"role": "assistant", "content": ""}]
+            working_history = history + [
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": ""},
+            ]
 
             # Get prompt token count for user message (will be displayed below assistant response)
             prompt_tokens = None
             if user_agent:
                 try:
-                    prompt_tokens = user_agent.count_prompt_tokens_for_chat(history, message)
+                    prompt_tokens = user_agent.count_prompt_tokens_for_chat(
+                        history, message
+                    )
                 except Exception as e:
                     # Use session-specific debug streamer
                     session_debug = get_debug_streamer(session_id)
@@ -540,11 +639,17 @@ class NextGenApp:
             yield working_history, ""
 
             # Stream response using simple streaming
-            response_content = ""  # Initialize as empty string to prevent None concatenation
+            response_content = (
+                ""  # Initialize as empty string to prevent None concatenation
+            )
             tool_usage = ""
-            assistant_message_index = -1  # Track the index of the assistant message in working_history
+            assistant_message_index = (
+                -1
+            )  # Track the index of the assistant message in working_history
             # Tool messages are now added immediately to working_history during streaming
-            streaming_error_handled = False  # Flag to track if streaming error was handled
+            streaming_error_handled = (
+                False  # Flag to track if streaming error was handled
+            )
 
             # print(f"🔍 DEBUG: Starting streaming for session {session_id}")
             # print(f"🔍 DEBUG: Working history length before streaming: {len(working_history)}")
@@ -563,6 +668,7 @@ class NextGenApp:
                         # print(f"🔍 DEBUG: Processing event - type: {event_type}, content length: {len(str(content))}")
                     except Exception as e:
                         import traceback
+
                         # print(f"🔍 DEBUG: Error processing event: {e}")
                         # print(f"🔍 DEBUG: Event data: {event}")
                         # print(f"🔍 DEBUG: Event type: {type(event)}")
@@ -574,12 +680,20 @@ class NextGenApp:
 
                     if event_type == "thinking":
                         # Agent is thinking - update or create assistant message
-                        if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                        if (
+                            assistant_message_index >= 0
+                            and assistant_message_index < len(working_history)
+                        ):
                             # Update existing assistant message
-                            working_history[assistant_message_index] = {"role": "assistant", "content": content}
+                            working_history[assistant_message_index] = {
+                                "role": "assistant",
+                                "content": content,
+                            }
                         else:
                             # Create new assistant message
-                            working_history.append({"role": "assistant", "content": content})
+                            working_history.append(
+                                {"role": "assistant", "content": content}
+                            )
                             assistant_message_index = len(working_history) - 1
                         yield working_history, ""
 
@@ -605,38 +719,72 @@ class NextGenApp:
                     elif event_type == "turn_complete":
                         # Store session-aware turn snapshot for analytics/logs (non-persistent)
                         ordered = metadata.get("ordered_messages") if metadata else None
-                        conversation_id = metadata.get("conversation_id") if metadata else session_id
+                        conversation_id = (
+                            metadata.get("conversation_id") if metadata else session_id
+                        )
                         if ordered and conversation_id:
                             self.session_turn_snapshots[conversation_id] = ordered
                             # Use session-specific debug streamer
                             session_debug = get_debug_streamer(session_id)
-                            session_debug.info(f"Turn snapshot stored for session {conversation_id} with {len(ordered)} messages")
+                            session_debug.info(
+                                f"Turn snapshot stored for session {conversation_id} with {len(ordered)} messages"
+                            )
                         yield working_history, ""
 
                     elif event_type == "tool_start":
                         # Tool is starting - immediately add to working history
-                        tool_name = metadata.get("tool_name", "unknown") if metadata else "unknown"
-                        tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name)) if metadata else format_translation("tool_called", self.language, tool_name="unknown")
+                        tool_name = (
+                            metadata.get("tool_name", "unknown")
+                            if metadata
+                            else "unknown"
+                        )
+                        tool_title = (
+                            metadata.get(
+                                "title",
+                                format_translation(
+                                    "tool_called", self.language, tool_name=tool_name
+                                ),
+                            )
+                            if metadata
+                            else format_translation(
+                                "tool_called", self.language, tool_name="unknown"
+                            )
+                        )
 
                         # Create tool message and immediately add to working history
                         tool_message = {
-                            "role": "assistant", 
+                            "role": "assistant",
                             "content": content,
-                            "metadata": {"title": tool_title}
+                            "metadata": {"title": tool_title},
                         }
                         working_history.append(tool_message)
                         yield working_history, ""
 
                     elif event_type == "tool_end":
                         # Tool completed - immediately add to working history
-                        tool_name = metadata.get("tool_name", "unknown") if metadata else "unknown"
-                        tool_title = metadata.get("title", format_translation("tool_called", self.language, tool_name=tool_name)) if metadata else format_translation("tool_called", self.language, tool_name="unknown")
+                        tool_name = (
+                            metadata.get("tool_name", "unknown")
+                            if metadata
+                            else "unknown"
+                        )
+                        tool_title = (
+                            metadata.get(
+                                "title",
+                                format_translation(
+                                    "tool_called", self.language, tool_name=tool_name
+                                ),
+                            )
+                            if metadata
+                            else format_translation(
+                                "tool_called", self.language, tool_name="unknown"
+                            )
+                        )
 
                         # Create tool message and immediately add to working history
                         tool_message = {
-                            "role": "assistant", 
+                            "role": "assistant",
                             "content": content,
-                            "metadata": {"title": tool_title}
+                            "metadata": {"title": tool_title},
                         }
                         working_history.append(tool_message)
                         yield working_history, ""
@@ -650,8 +798,16 @@ class NextGenApp:
                         if assistant_message_index < 0 and response_content == "":
                             # This is the very first content, check if there are recent tool messages
                             has_recent_tool_messages = False
-                            for i in range(max(0, len(working_history) - 3), len(working_history)):
-                                if i >= 0 and working_history[i] and working_history[i].get("metadata", {}).get("title"):
+                            for i in range(
+                                max(0, len(working_history) - 3), len(working_history)
+                            ):
+                                if (
+                                    i >= 0
+                                    and working_history[i]
+                                    and working_history[i]
+                                    .get("metadata", {})
+                                    .get("title")
+                                ):
                                     has_recent_tool_messages = True
                                     break
 
@@ -662,13 +818,21 @@ class NextGenApp:
                         response_content += content_to_add
 
                         # Update or create assistant message
-                        if assistant_message_index >= 0 and assistant_message_index < len(working_history):
+                        if (
+                            assistant_message_index >= 0
+                            and assistant_message_index < len(working_history)
+                        ):
                             # Update existing assistant message
-                            working_history[assistant_message_index] = {"role": "assistant", "content": response_content}
+                            working_history[assistant_message_index] = {
+                                "role": "assistant",
+                                "content": response_content,
+                            }
                             # print(f"🔍 DEBUG: Updated existing assistant message at index {assistant_message_index}")
                         else:
                             # Create new assistant message
-                            working_history.append({"role": "assistant", "content": response_content})
+                            working_history.append(
+                                {"role": "assistant", "content": response_content}
+                            )
                             assistant_message_index = len(working_history) - 1
                             # print(f"🔍 DEBUG: Created new assistant message at index {assistant_message_index}")
 
@@ -679,10 +843,18 @@ class NextGenApp:
                         response_content += content + "\n\n"
 
                         # Update assistant message with error
-                        if assistant_message_index >= 0 and assistant_message_index < len(working_history):
-                            working_history[assistant_message_index] = {"role": "assistant", "content": response_content}
+                        if (
+                            assistant_message_index >= 0
+                            and assistant_message_index < len(working_history)
+                        ):
+                            working_history[assistant_message_index] = {
+                                "role": "assistant",
+                                "content": response_content,
+                            }
                         else:
-                            working_history.append({"role": "assistant", "content": response_content})
+                            working_history.append(
+                                {"role": "assistant", "content": response_content}
+                            )
                             assistant_message_index = len(working_history) - 1
 
                         streaming_error_handled = True
@@ -690,6 +862,7 @@ class NextGenApp:
 
             except Exception as e:
                 import traceback
+
                 _logger.error("Error streaming message: %s", e, exc_info=True)
                 streaming_error_handled = True
                 # print(f"🔍 DEBUG: Set streaming_error_handled to True in streaming loop")
@@ -702,7 +875,11 @@ class NextGenApp:
 
             # Add prompt tokens if available
             if prompt_tokens:
-                token_displays.append(format_translation("prompt_tokens", self.language, tokens=prompt_tokens.formatted))
+                token_displays.append(
+                    format_translation(
+                        "prompt_tokens", self.language, tokens=prompt_tokens.formatted
+                    )
+                )
 
             # Add API tokens if available from session-specific agent
             if user_agent:
@@ -711,7 +888,13 @@ class NextGenApp:
                     last_api_tokens = user_agent.get_last_api_tokens()
                     # print(f"🔍 DEBUG: Last API tokens: {last_api_tokens}")
                     if last_api_tokens:
-                        token_displays.append(format_translation("api_tokens", self.language, tokens=last_api_tokens.formatted))
+                        token_displays.append(
+                            format_translation(
+                                "api_tokens",
+                                self.language,
+                                tokens=last_api_tokens.formatted,
+                            )
+                        )
                         # print(f"🔍 DEBUG: Added API token display")
                     else:
                         # print("🔍 DEBUG: No API tokens available")
@@ -723,14 +906,20 @@ class NextGenApp:
                     session_debug.warning(f"Failed to get API token count: {e}")
 
             # Add provider/model information if available - use session-specific agent
-            if user_agent and hasattr(user_agent, 'get_llm_info'):
+            if user_agent and hasattr(user_agent, "get_llm_info"):
                 try:
                     llm_info = user_agent.get_llm_info()
-                    if llm_info and 'provider' in llm_info and 'model_name' in llm_info:
-                        provider = llm_info.get('provider', 'Unknown')
-                        model = llm_info.get('model_name', 'Unknown')
-                        token_displays.append(format_translation("provider_model", self.language, 
-                                                               provider=provider, model=model))
+                    if llm_info and "provider" in llm_info and "model_name" in llm_info:
+                        provider = llm_info.get("provider", "Unknown")
+                        model = llm_info.get("model_name", "Unknown")
+                        token_displays.append(
+                            format_translation(
+                                "provider_model",
+                                self.language,
+                                provider=provider,
+                                model=model,
+                            )
+                        )
                         # print(f"🔍 DEBUG: Added provider/model display: {provider} / {model}")
                 except Exception as e:
                     # print(f"🔍 DEBUG: Provider/model display error: {e}")
@@ -742,7 +931,7 @@ class NextGenApp:
             execution_time = time.time() - start_time
 
             # Add deduplication stats if available from session-specific agent
-            if user_agent and hasattr(user_agent, '_deduplication_stats'):
+            if user_agent and hasattr(user_agent, "_deduplication_stats"):
                 dedup_stats = user_agent._deduplication_stats.get(session_id, {})
                 if dedup_stats:
                     dedup_summary = []
@@ -750,34 +939,55 @@ class NextGenApp:
                     total_tool_calls = 0
 
                     for tool_key, stats in dedup_stats.items():
-                        total_tool_calls += stats['total_calls']
-                        if stats['duplicates'] > 0:
-                            dedup_summary.append(f"{stats['tool_name']}: {stats['duplicates']}")
-                            total_duplicates += stats['duplicates']
+                        total_tool_calls += stats["total_calls"]
+                        if stats["duplicates"] > 0:
+                            dedup_summary.append(
+                                f"{stats['tool_name']}: {stats['duplicates']}"
+                            )
+                            total_duplicates += stats["duplicates"]
 
                     if dedup_summary:
                         # Show per-tool breakdown
                         per_tool_breakdown = ", ".join(dedup_summary)
-                        token_displays.append(format_translation("deduplication", self.language, 
-                                                               duplicates=total_duplicates, 
-                                                               breakdown=per_tool_breakdown))
+                        token_displays.append(
+                            format_translation(
+                                "deduplication",
+                                self.language,
+                                duplicates=total_duplicates,
+                                breakdown=per_tool_breakdown,
+                            )
+                        )
                         # print(f"🔍 DEBUG: Added deduplication stats: {total_duplicates} duplicates")
 
                     # Add total tool calls count
                     if total_tool_calls > 0:
-                        token_displays.append(format_translation("total_tool_calls", self.language, calls=total_tool_calls))
+                        token_displays.append(
+                            format_translation(
+                                "total_tool_calls",
+                                self.language,
+                                calls=total_tool_calls,
+                            )
+                        )
                         # print(f"🔍 DEBUG: Added total tool calls: {total_tool_calls}")
 
             # Add token statistics as a separate metadata block
             if token_displays:
                 # Add execution time to the token display
-                token_displays.append(format_translation("execution_time", self.language, time=execution_time))
+                token_displays.append(
+                    format_translation(
+                        "execution_time", self.language, time=execution_time
+                    )
+                )
                 token_display = "\n".join(token_displays)
                 # Create a separate metadata block for token statistics
                 token_metadata_message = {
-                    "role": "assistant", 
+                    "role": "assistant",
                     "content": token_display,
-                    "metadata": {"title": format_translation("token_statistics_title", self.language)}
+                    "metadata": {
+                        "title": format_translation(
+                            "token_statistics_title", self.language
+                        )
+                    },
                 }
                 working_history.append(token_metadata_message)
                 # print(f"🔍 DEBUG: Added token metadata block: {token_display}")
@@ -814,7 +1024,7 @@ class NextGenApp:
             # Log error to terminal but don't add to chat response
             try:
                 # Use session-specific debug streamer if available, otherwise app-level
-                if 'session_id' in locals():
+                if "session_id" in locals():
                     session_debug = get_debug_streamer(session_id)
                     session_debug.error(f"Error in stream chat: {e}")
                 else:
@@ -835,7 +1045,6 @@ class NextGenApp:
             # Chat handlers (core functionality)
             "stream_message": self._stream_message_wrapper,
             "clear_chat": self.clear_conversation,
-
             # Status and monitoring handlers
             "update_status": self._update_status,
             "update_token_budget": self._update_token_budget,
@@ -845,7 +1054,6 @@ class NextGenApp:
             "trigger_ui_update": self.trigger_ui_update,
             "get_progress_status": self.get_progress_status,
             "update_progress_display": self.update_progress_display,
-
             # LLM selection handlers - removed auto-refresh handler
             # LLM selection components update only when explicitly triggered
         }
@@ -854,7 +1062,9 @@ class NextGenApp:
 
         return handlers
 
-    def _stream_message_wrapper(self, message: str, history: List[Dict[str, str]], request: gr.Request = None):
+    def _stream_message_wrapper(
+        self, message: str, history: List[Dict[str, str]], request: gr.Request = None
+    ):
         """Stream a message to the agent (synchronous wrapper)"""
         if not message.strip():
             yield history, ""
@@ -866,6 +1076,7 @@ class NextGenApp:
         # Always use the persistent background loop to avoid closing gRPC/Gemini resources
         self._ensure_stream_loop()
         import queue
+
         out_queue = queue.Queue()
         future = self._submit_stream_task(message, history, request, out_queue)
 
@@ -887,22 +1098,18 @@ class NextGenApp:
         self._refresh_ui_after_message()
 
     def _update_status(self, request: gr.Request = None) -> str:
-        """Update status display - always session-aware"""
-        # Use stats tab for proper formatting (now always session-aware)
-        stats_tab = self.tab_instances.get('stats')
-        if stats_tab and hasattr(stats_tab, 'format_stats_display'):
-            return stats_tab.format_stats_display(request)
-
-        # Final fallback
+        """Update status display - minimal status only for sidebar"""
+        # Show minimal status information in sidebar
+        # Detailed stats are available in the stats tab
         if self.is_ready():
-            return get_translation_key("agent_ready", self.language)
+            return get_translation_key("status_ready", self.language)
         else:
-            return get_translation_key("agent_initializing", self.language)
+            return get_translation_key("status_initializing", self.language)
 
     def _update_token_budget(self, request: gr.Request = None) -> str:
         """Update token budget display - delegates to chat tab with session awareness"""
-        chat_tab = self.tab_instances.get('chat')
-        if chat_tab and hasattr(chat_tab, 'format_token_budget_display'):
+        chat_tab = self.tab_instances.get("chat")
+        if chat_tab and hasattr(chat_tab, "format_token_budget_display"):
             return chat_tab.format_token_budget_display(request)
 
         # Fallback token budget
@@ -910,17 +1117,21 @@ class NextGenApp:
 
     def _refresh_logs(self, request: gr.Request = None) -> str:
         """Refresh logs display - delegates to logs tab with session awareness"""
-        logs_tab = self.tab_instances.get('logs')
-        if logs_tab and hasattr(logs_tab, 'get_initialization_logs'):
+        logs_tab = self.tab_instances.get("logs")
+        if logs_tab and hasattr(logs_tab, "get_initialization_logs"):
             return logs_tab.get_initialization_logs(request)
 
         # Fallback logs
-        return "\n".join(self.initialization_logs) if self.initialization_logs else "No logs available"
+        return (
+            "\n".join(self.initialization_logs)
+            if self.initialization_logs
+            else "No logs available"
+        )
 
     def _refresh_stats(self, request: gr.Request = None) -> str:
         """Refresh stats display - delegates to stats tab with session awareness"""
-        stats_tab = self.tab_instances.get('stats')
-        if stats_tab and hasattr(stats_tab, 'format_stats_display'):
+        stats_tab = self.tab_instances.get("stats")
+        if stats_tab and hasattr(stats_tab, "format_stats_display"):
             return stats_tab.format_stats_display(request)
 
         # Fallback stats
@@ -989,26 +1200,34 @@ class NextGenApp:
         tab_modules = []
         try:
             if ChatTab:
-                chat_tab = ChatTab(event_handlers, language=self.language, i18n_instance=self.i18n)
+                chat_tab = ChatTab(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
+                )
                 chat_tab.set_main_app(self)  # Set reference to main app
                 tab_modules.append(chat_tab)
-                self.tab_instances['chat'] = chat_tab
+                self.tab_instances["chat"] = chat_tab
             else:
                 _logger.warning("ChatTab not available")
 
             if LogsTab:
-                logs_tab = LogsTab(event_handlers, language=self.language, i18n_instance=self.i18n)
+                logs_tab = LogsTab(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
+                )
                 logs_tab.set_main_app(self)  # Pass main app reference
                 tab_modules.append(logs_tab)
-                self.tab_instances['logs'] = logs_tab
+                self.tab_instances["logs"] = logs_tab
             else:
                 _logger.warning("LogsTab not available")
 
             if StatsTab:
-                stats_tab = StatsTab(event_handlers, language=self.language, i18n_instance=self.i18n)
-                stats_tab.set_main_app(self)  # Set reference to main app for session management
+                stats_tab = StatsTab(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
+                )
+                stats_tab.set_main_app(
+                    self
+                )  # Set reference to main app for session management
                 tab_modules.append(stats_tab)
-                self.tab_instances['stats'] = stats_tab
+                self.tab_instances["stats"] = stats_tab
             else:
                 _logger.warning("StatsTab not available")
         except Exception as e:
@@ -1017,7 +1236,9 @@ class NextGenApp:
 
         # Use UI Manager to create interface
         try:
-            demo = self.ui_manager.create_interface(tab_modules, event_handlers, main_app=self)
+            demo = self.ui_manager.create_interface(
+                tab_modules, event_handlers, main_app=self
+            )
         except Exception as e:
             _logger.exception("Error creating interface: %s", e)
             raise
@@ -1031,6 +1252,7 @@ class NextGenApp:
         # No global agent - tabs will get session-specific agents as needed
 
         return demo
+
 
 class NextGenAppWithLanguageDetection(NextGenApp):
     """LangChain-native Gradio application with dynamic language detection and switching"""
@@ -1056,25 +1278,25 @@ class NextGenAppWithLanguageDetection(NextGenApp):
             # Primary: Use GRADIO_DEFAULT_LANGUAGE environment variable
             import os
             from dotenv import load_dotenv
+
             load_dotenv()  # Load .env file
 
-            gradio_lang = os.getenv('GRADIO_DEFAULT_LANGUAGE', '').lower()
+            gradio_lang = os.getenv("GRADIO_DEFAULT_LANGUAGE", "").lower()
             if gradio_lang is not None:
                 return gradio_lang
 
             # Secondary: Use Gradio's I18n system for detection
-            i18n = gr.I18n(
-                en={"language": "en"},
-                ru={"language": "ru"}
-            )
+            i18n = gr.I18n(en={"language": "en"}, ru={"language": "ru"})
             detected_language = i18n("language")
             if detected_language is not None:
                 return detected_language
         except Exception:
             return "ru"
 
+
 # Global demo variable for single port architecture
 demo = None
+
 
 def get_demo_with_language_detection():
     """Get or create the demo interface with language detection support"""
@@ -1091,7 +1313,7 @@ def get_demo_with_language_detection():
             demo = app.create_interface()
 
             # Ensure the demo has the required attributes for Gradio reloading
-            if not hasattr(demo, '_queue'):
+            if not hasattr(demo, "_queue"):
                 demo._queue = None
 
             _logger.info(f"🌐 Demo created with detected language: {detected_language}")
@@ -1102,11 +1324,12 @@ def get_demo_with_language_detection():
                 gr.Markdown("# CMW Platform Agent")
                 gr.Markdown("Application is initializing...")
             # Ensure required attributes exist
-            if not hasattr(fallback_demo, '_queue'):
+            if not hasattr(fallback_demo, "_queue"):
                 fallback_demo._queue = None
             demo = fallback_demo
 
     return demo
+
 
 def create_fallback_demo():
     """Create a minimal fallback demo for error cases"""
@@ -1114,9 +1337,10 @@ def create_fallback_demo():
         gr.Markdown("# CMW Platform Agent")
         gr.Markdown("Application is initializing...")
     # Ensure required attributes exist
-    if not hasattr(fallback_demo, '_queue'):
+    if not hasattr(fallback_demo, "_queue"):
         fallback_demo._queue = None
     return fallback_demo
+
 
 # Initialize demo for Gradio reloading - use language detection
 # This ensures demo is available for Gradio's reload mechanism
@@ -1129,6 +1353,7 @@ def initialize_demo():
         # Create a minimal fallback demo
         return create_fallback_demo()
 
+
 # Initialize demo - this will be available for Gradio's static analysis
 # Use a simple approach that Gradio can detect
 try:
@@ -1139,6 +1364,7 @@ except Exception as e:
     with gr.Blocks() as demo:
         gr.Markdown("# CMW Platform Agent")
         gr.Markdown("Application is initializing...")
+
 
 def reload_demo():
     """Reload the demo for Gradio hot reloading"""
@@ -1157,6 +1383,7 @@ def reload_demo():
             return fallback_demo
         return demo
 
+
 def find_available_port(start_port=7860, max_attempts=10):
     """Find an available port starting from start_port"""
     import socket
@@ -1164,11 +1391,12 @@ def find_available_port(start_port=7860, max_attempts=10):
     for port in range(start_port, start_port + max_attempts):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('0.0.0.0', port))
+                s.bind(("0.0.0.0", port))
                 return port
         except OSError:
             continue
     return None
+
 
 def main():
     """Main function to run the application with single port and language detection"""
@@ -1178,15 +1406,26 @@ def main():
 
     # Setup LangSmith environment first
     from agent_ng.langsmith_config import setup_langsmith_environment
+
     setup_langsmith_environment()
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='CMW Platform Agent')
-    parser.add_argument('-en', '--english', action='store_true', help='Start in English')
-    parser.add_argument('-ru', '--russian', action='store_true', help='Start in Russian')
-    parser.add_argument('-p', '--port', type=int, default=None, help='Port to run on (overrides config)')
-    parser.add_argument('--auto-port', action='store_true', help='Automatically find an available port')
-    parser.add_argument('--config', action='store_true', help='Show current configuration')
+    parser = argparse.ArgumentParser(description="CMW Platform Agent")
+    parser.add_argument(
+        "-en", "--english", action="store_true", help="Start in English"
+    )
+    parser.add_argument(
+        "-ru", "--russian", action="store_true", help="Start in Russian"
+    )
+    parser.add_argument(
+        "-p", "--port", type=int, default=None, help="Port to run on (overrides config)"
+    )
+    parser.add_argument(
+        "--auto-port", action="store_true", help="Automatically find an available port"
+    )
+    parser.add_argument(
+        "--config", action="store_true", help="Show current configuration"
+    )
     args = parser.parse_args()
 
     # Show configuration if requested
@@ -1200,7 +1439,7 @@ def main():
 
     # Determine language from command line, environment variable, or config default
     # Priority: Command line > Environment variable > Config default
-    language = language_settings['default_language']
+    language = language_settings["default_language"]
 
     try:
         # Create a temporary app instance to use the integrated language detection
@@ -1208,9 +1447,13 @@ def main():
         detected_language = temp_app.get_current_language()
         if detected_language in ["en", "ru"]:
             language = detected_language
-            _logger.info(f"🌐 Language overridden with Gradio detection: {detected_language}")
+            _logger.info(
+                f"🌐 Language overridden with Gradio detection: {detected_language}"
+            )
     except Exception as e:
-        _logger.warning(f"⚠️ Language detection failed: {e}, using dotenv language: {language}")
+        _logger.warning(
+            f"⚠️ Language detection failed: {e}, using dotenv language: {language}"
+        )
 
     if args.russian:
         language = "ru"
@@ -1219,12 +1462,14 @@ def main():
 
     # Override language with Gradio I18n detection if no command line override
     # Determine port
-    default_port = args.port if args.port is not None else port_settings['default_port']
+    default_port = args.port if args.port is not None else port_settings["default_port"]
 
     if args.auto_port:
-        port = find_available_port(default_port, port_settings['auto_port_range'])
+        port = find_available_port(default_port, port_settings["auto_port_range"])
         if port is None:
-            _logger.error("Could not find an available port starting from %s", default_port)
+            _logger.error(
+                "Could not find an available port starting from %s", default_port
+            )
             sys.exit(1)
     else:
         port = default_port
@@ -1237,14 +1482,17 @@ def main():
     app = NextGenAppWithLanguageDetection(language=language)
     demo = app.create_interface()
 
-    _logger.info("Launching Gradio interface on port %s with language switching...", port)
+    _logger.info(
+        "Launching Gradio interface on port %s with language switching...", port
+    )
     demo.launch(
         debug=True,
         share=False,
         server_name="0.0.0.0",
         server_port=port,
-        show_error=True
+        show_error=True,
     )
+
 
 if __name__ == "__main__":
     main()
