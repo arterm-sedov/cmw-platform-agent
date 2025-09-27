@@ -126,9 +126,9 @@ class NextGenApp:
         # Create i18n instance for the specified language
         self.i18n = create_i18n_instance(language)
 
-        # Initialize debug system - use a default session that will be accessible
-        self.debug_streamer = get_debug_streamer("default")
-        self.log_handler = get_log_handler("default")
+        # Initialize debug system - create a temporary debug streamer for initialization
+        self.debug_streamer = get_debug_streamer("app_init")
+        self.log_handler = get_log_handler("app_init")
 
         # Initialize session-aware logging
         try:
@@ -273,7 +273,9 @@ class NextGenApp:
             # Get session-specific agent and stats
             agent = self.session_manager.get_session_agent(session_id)
             if not agent:
-                self.debug_streamer.debug(f"No agent found for session: {session_id}")
+                # Use session-specific debug streamer
+                session_debug = get_debug_streamer(session_id)
+                session_debug.debug(f"No agent found for session: {session_id}")
                 return ""
 
             # Get conversation stats
@@ -374,6 +376,7 @@ class NextGenApp:
             return summary
 
         except Exception as e:
+            # Use app-level debug streamer for errors
             self.debug_streamer.warning(f"Failed to generate conversation summary: {e}")
             return ""
 
@@ -392,7 +395,9 @@ class NextGenApp:
             # Use clean session manager for session-aware clearing
             session_id = self.session_manager.get_session_id(request)
             self.session_manager.clear_conversation(session_id)
-            self.debug_streamer.info(f"Conversation cleared for session: {session_id}")
+            # Use session-specific debug streamer
+            session_debug = get_debug_streamer(session_id)
+            session_debug.info(f"Conversation cleared for session: {session_id}")
         else:
             # Fallback for non-session requests - use default session
             session_id = "default"
@@ -513,7 +518,9 @@ class NextGenApp:
             else:
                 print(f"❌ DEBUG: Session agent has no LLM instance!")
 
-            self.debug_streamer.info(f"Streaming message for session {session_id}: {message[:50]}...")
+            # Use session-specific debug streamer
+            session_debug = get_debug_streamer(session_id)
+            session_debug.info(f"Streaming message for session {session_id}: {message[:50]}...")
 
             # Initialize response
 
@@ -526,7 +533,9 @@ class NextGenApp:
                 try:
                     prompt_tokens = user_agent.count_prompt_tokens_for_chat(history, message)
                 except Exception as e:
-                    self.debug_streamer.warning(f"Failed to get prompt token count: {e}")
+                    # Use session-specific debug streamer
+                    session_debug = get_debug_streamer(session_id)
+                    session_debug.warning(f"Failed to get prompt token count: {e}")
 
             yield working_history, ""
 
@@ -599,7 +608,9 @@ class NextGenApp:
                         conversation_id = metadata.get("conversation_id") if metadata else session_id
                         if ordered and conversation_id:
                             self.session_turn_snapshots[conversation_id] = ordered
-                            self.debug_streamer.info(f"Turn snapshot stored for session {conversation_id} with {len(ordered)} messages")
+                            # Use session-specific debug streamer
+                            session_debug = get_debug_streamer(session_id)
+                            session_debug.info(f"Turn snapshot stored for session {conversation_id} with {len(ordered)} messages")
                         yield working_history, ""
 
                     elif event_type == "tool_start":
@@ -707,7 +718,9 @@ class NextGenApp:
                         pass
                 except Exception as e:
                     # print(f"🔍 DEBUG: API token error: {e}")
-                    self.debug_streamer.warning(f"Failed to get API token count: {e}")
+                    # Use session-specific debug streamer
+                    session_debug = get_debug_streamer(session_id)
+                    session_debug.warning(f"Failed to get API token count: {e}")
 
             # Add provider/model information if available - use session-specific agent
             if user_agent and hasattr(user_agent, 'get_llm_info'):
@@ -721,7 +734,9 @@ class NextGenApp:
                         # print(f"🔍 DEBUG: Added provider/model display: {provider} / {model}")
                 except Exception as e:
                     # print(f"🔍 DEBUG: Provider/model display error: {e}")
-                    self.debug_streamer.warning(f"Failed to get provider/model info: {e}")
+                    # Use session-specific debug streamer
+                    session_debug = get_debug_streamer(session_id)
+                    session_debug.warning(f"Failed to get provider/model info: {e}")
 
             # Calculate execution time for the entire response
             execution_time = time.time() - start_time
@@ -798,7 +813,12 @@ class NextGenApp:
         except Exception as e:
             # Log error to terminal but don't add to chat response
             try:
-                self.debug_streamer.error(f"Error in stream chat: {e}")
+                # Use session-specific debug streamer if available, otherwise app-level
+                if 'session_id' in locals():
+                    session_debug = get_debug_streamer(session_id)
+                    session_debug.error(f"Error in stream chat: {e}")
+                else:
+                    self.debug_streamer.error(f"Error in stream chat: {e}")
             except:
                 # If debug streamer fails, just continue
                 pass
