@@ -1017,7 +1017,7 @@ class NextGenApp:
 
         # Use UI Manager to create interface
         try:
-            demo = self.ui_manager.create_interface(tab_modules, event_handlers)
+            demo = self.ui_manager.create_interface(tab_modules, event_handlers, main_app=self)
         except Exception as e:
             _logger.exception("Error creating interface: %s", e)
             raise

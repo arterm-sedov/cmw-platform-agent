@@ -48,7 +48,7 @@ class UIManager:
         except Exception as e:
             logging.getLogger(__name__).warning(f"Could not set GRADIO_ALLOWED_PATHS: {e}")
 
-    def create_interface(self, tab_modules: list[Any], event_handlers: dict[str, Callable]) -> gr.Blocks:
+    def create_interface(self, tab_modules: list[Any], event_handlers: dict[str, Callable], main_app=None) -> gr.Blocks:
         """
         Create the main Gradio interface using tab modules with i18n support.
         
@@ -78,6 +78,16 @@ class UIManager:
             with gr.Row(), gr.Column():
                 gr.Markdown(f"# {hero_title}", elem_classes=["hero-title"])
 
+            # Create common sidebar using dedicated sidebar module
+            from .tabs.sidebar import Sidebar
+            sidebar_instance = Sidebar(event_handlers, language=self.language, i18n_instance=self.i18n)
+            sidebar_instance.set_main_app(main_app)  # Pass main app reference
+            
+            sidebar, sidebar_components = sidebar_instance.create_sidebar()
+            # Consolidate sidebar components
+            self.components.update(sidebar_components)
+            self.components["sidebar_instance"] = sidebar_instance
+
             with gr.Tabs():
                 # Create tabs using provided tab modules
                 for tab_module in tab_modules:
@@ -87,6 +97,11 @@ class UIManager:
                         self.components.update(tab_components)
                         # Store tab reference for later use
                         self.components[f"{tab_module.__class__.__name__.lower()}_tab"] = tab_module
+
+            # Connect quick action dropdown after all components are available
+            if "sidebar_instance" in self.components:
+                sidebar_instance = self.components["sidebar_instance"]
+                sidebar_instance.connect_quick_action_dropdown()
 
             # Setup auto-refresh timers
             self._setup_auto_refresh(demo, event_handlers)
@@ -199,6 +214,11 @@ class UIManager:
             logging.getLogger(__name__).debug(f"✅ Progress auto-refresh timer set ({intervals.progress}s)")
 
         logging.getLogger(__name__).info("🔄 Auto-refresh timers configured successfully")
+
+    def _get_translation(self, key: str) -> str:
+        """Get a translation for a specific key"""
+        from ..i18n_translations import get_translation_key
+        return get_translation_key(key, self.language)
 
     def get_components(self) -> dict[str, Any]:
         """Get all components created by the UI manager"""

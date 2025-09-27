@@ -47,105 +47,54 @@ class ChatTab:
 
     def _create_chat_interface(self):
         """Create the main chat interface with proper layout"""
-        with gr.Row():
-            with gr.Column(scale=3):
-                # Queue status will be shown using Gradio's native warning system
-                # No need for HTML component - using gr.Warning() instead
+        # Chat interface with metadata support for thinking transparency
+        self.components["chatbot"] = gr.Chatbot(
+            label=self._get_translation("chat_label"),
+            height=500,
+            show_label=True,
+            container=True,
+            show_copy_button=True,
+            type="messages",
+            elem_id="chatbot-main",
+            elem_classes=["chatbot-card"]
+        )
 
-                # Chat interface with metadata support for thinking transparency
-                self.components["chatbot"] = gr.Chatbot(
-                    label=self._get_translation("chat_label"),
-                    height=500,
-                    show_label=True,
-                    container=True,
-                    show_copy_button=True,
-                    type="messages",
-                    elem_id="chatbot-main",
-                    elem_classes=["chatbot-card"]
+        with gr.Row():
+            self.components["msg"] = gr.MultimodalTextbox(
+                label=self._get_translation("message_label"),
+                placeholder=self._get_translation("message_placeholder"),
+                lines=2,
+                scale=4,
+                max_lines=4,
+                elem_id="message-input",
+                elem_classes=["message-card"],
+                file_types=[
+                    ".pdf", ".csv", ".tsv", ".xlsx", ".xls",  # Documents and data
+                    ".docx", ".pptx", ".vsdx", ".msg", ".eml",  # Office documents
+                    ".zip", ".rar", ".tar", ".gz", ".bz2",  # Archives
+                    ".dwg", ".bpmn", ".sql", ".conf", ".ico",  # Other supported formats
+                    ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".xml", ".html",
+                    ".css", ".md", ".ini", ".sh", ".bat", ".ps1", ".c", ".cpp", ".h",
+                    ".hpp", ".java", ".go", ".rs", ".rb", ".php", ".pl", ".swift",
+                    ".kt", ".scala", ".sql", ".toml", ".env"  # Common text-based code formats
+                ],
+                file_count="multiple"
+            )
+            with gr.Column():
+                self.components["send_btn"] = gr.Button(self._get_translation("send_button"), variant="primary", scale=1, elem_classes=["cmw-button"])
+                self.components["stop_btn"] = gr.Button(self._get_translation("stop_button"), variant="stop", scale=1, elem_classes=["cmw-button"], visible=False)
+                self.components["clear_btn"] = gr.Button(self._get_translation("clear_button"), variant="secondary", elem_classes=["cmw-button"])
+                self.components["download_btn"] = gr.DownloadButton(
+                    label=self._get_translation("download_button"),
+                    variant="secondary",
+                    elem_classes=["cmw-button"],
+                    visible=False
                 )
 
-                with gr.Row():
-                    self.components["msg"] = gr.MultimodalTextbox(
-                        label=self._get_translation("message_label"),
-                        placeholder=self._get_translation("message_placeholder"),
-                        lines=2,
-                        scale=4,
-                        max_lines=4,
-                        elem_id="message-input",
-                        elem_classes=["message-card"],
-                        file_types=[
-                            ".pdf", ".csv", ".tsv", ".xlsx", ".xls",  # Documents and data
-                            ".docx", ".pptx", ".vsdx", ".msg", ".eml",  # Office documents
-                            ".zip", ".rar", ".tar", ".gz", ".bz2",  # Archives
-                            ".dwg", ".bpmn", ".sql", ".conf", ".ico",  # Other supported formats
-                            ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".xml", ".html", ".css", ".md", ".ini", ".sh", ".bat", ".ps1", ".c", ".cpp", ".h", ".hpp", ".java", ".go", ".rs", ".rb", ".php", ".pl", ".swift", ".kt", ".scala", ".sql", ".toml", ".env"  # Common text-based code formats
-                        ],
-                        file_count="multiple"
-                    )
-                    with gr.Column():
-                        self.components["send_btn"] = gr.Button(self._get_translation("send_button"), variant="primary", scale=1, elem_classes=["cmw-button"])
-                        self.components["stop_btn"] = gr.Button(self._get_translation("stop_button"), variant="stop", scale=1, elem_classes=["cmw-button"], visible=False)
-                        self.components["clear_btn"] = gr.Button(self._get_translation("clear_button"), variant="secondary", elem_classes=["cmw-button"])
-                        self.components["download_btn"] = gr.DownloadButton(
-                            label=self._get_translation("download_button"),
-                            variant="secondary",
-                            elem_classes=["cmw-button"],
-                            visible=False
-                        )
-
-                # Welcome block - positioned below chat area in left column
-                with gr.Column(elem_classes=["chat-hints"]):
-                    gr.Markdown(f"## {self._get_translation('welcome_title')}", elem_classes=["chat-hints-title"])
-                    gr.Markdown(self._get_translation("welcome_description"))
-
-            # Status and Quick Actions sidebar (moved here to be on the right)
-            with gr.Column(scale=1):
-                # LLM Selection section
-                with gr.Column(elem_classes=["model-card"]):
-                    gr.Markdown(f"### {self._get_translation('llm_selection_title')}", elem_classes=["llm-selection-title"])
-
-                    # Combined Provider/Model selector
-                    self.components["provider_model_selector"] = gr.Dropdown(
-                        choices=self._get_available_provider_model_combinations(),
-                        value=self._get_current_provider_model_combination(),
-                        # label=self._get_translation("provider_model_label"),
-                        show_label=False,
-                        interactive=True,
-                        allow_custom_value=True,
-                        elem_classes=["provider-model-selector"]
-                    )
-
-
-                # Quick actions section - styled like LLM selection
-                with gr.Column(elem_classes=["model-card"]):
-                    gr.Markdown(f"### {self._get_translation('quick_actions_title')}", elem_classes=["llm-selection-title"])
-
-                    # Single dropdown for all quick actions - styled like LLM selector
-                    self.components["quick_actions_dropdown"] = gr.Dropdown(
-                        choices=self._get_quick_action_choices(),
-                        value=None,
-                        show_label=False,
-                        interactive=True,
-                        allow_custom_value=False,
-                        elem_classes=["provider-model-selector"]
-                    )
-
-                # Status section
-                with gr.Column(elem_classes=["model-card"]):
-                    gr.Markdown(f"### {self._get_translation('status_title')}", elem_classes=["status-title"])
-                    self.components["status_display"] = gr.Markdown(self._get_translation("status_initializing"))
-
-                    # Token budget indicator
-                    gr.Markdown(f"### {self._get_translation('token_budget_title')}", elem_classes=["token-budget-title"])
-                    self.components["token_budget_display"] = gr.Markdown(
-                        self._get_translation("token_budget_initializing")
-                    )
-
-                    # Progress indicator
-                    gr.Markdown(f"### {self._get_translation('progress_title')}", elem_classes=["progress-title"])
-                    self.components["progress_display"] = gr.Markdown(
-                        self._get_translation("progress_ready")
-                    )
+        # Welcome block - positioned below chat area
+        with gr.Column(elem_classes=["chat-hints"]):
+            gr.Markdown(f"## {self._get_translation('welcome_title')}", elem_classes=["chat-hints-title"])
+            gr.Markdown(self._get_translation("welcome_description"))
 
 
     def _create_sidebar(self):
@@ -185,7 +134,7 @@ class ChatTab:
             send_config = apply_concurrency_to_click_event(
                 queue_manager, "chat", self._stream_message_with_queue_status,
                 [self.components["msg"], self.components["chatbot"]],
-                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["quick_actions_dropdown"]]
+                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["download_btn"], self._get_quick_actions_dropdown()]
             )
             self.streaming_event = self.components["send_btn"].click(**send_config)
 
@@ -193,7 +142,7 @@ class ChatTab:
             submit_config = apply_concurrency_to_submit_event(
                 queue_manager, "chat", self._stream_message_with_queue_status,
                 [self.components["msg"], self.components["chatbot"]],
-                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["quick_actions_dropdown"]]
+                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["download_btn"], self._get_quick_actions_dropdown()]
             )
             self.submit_event = self.components["msg"].submit(**submit_config)
         else:
@@ -202,13 +151,13 @@ class ChatTab:
             self.streaming_event = self.components["send_btn"].click(
                 fn=self._stream_message_wrapper,
                 inputs=[self.components["msg"], self.components["chatbot"]],
-                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["quick_actions_dropdown"]]
+                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["download_btn"], self._get_quick_actions_dropdown()]
             )
 
             self.submit_event = self.components["msg"].submit(
                 fn=self._stream_message_wrapper,
                 inputs=[self.components["msg"], self.components["chatbot"]],
-                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["quick_actions_dropdown"]]
+                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"], self.components["download_btn"], self._get_quick_actions_dropdown()]
             )
 
         # Stop button - cancel both send and submit events and hide itself
@@ -226,30 +175,11 @@ class ChatTab:
 
         # Download button uses pre-generated file - no click handler needed
 
-        # Show download button when there's conversation history (triggered by token budget updates - conversation turn end)
-        self.components["token_budget_display"].change(
-            fn=self._update_download_button_visibility,
-            inputs=[self.components["chatbot"]],
-            outputs=[self.components["download_btn"]]
-        )
-
         # Trigger UI updates after chat events
         self._setup_chat_event_triggers()
 
-        # Quick action dropdown event (single handler for all actions)
-        self.components["quick_actions_dropdown"].change(
-            fn=self._handle_quick_action_dropdown,
-            inputs=[self.components["quick_actions_dropdown"]],
-            outputs=[self.components["msg"]]
-        )
-
-        # LLM selection events - now applies immediately on dropdown change
-        if "provider_model_selector" in self.components and "status_display" in self.components:
-            self.components["provider_model_selector"].change(
-                fn=self._apply_llm_selection_combined,
-                inputs=[self.components["provider_model_selector"]],
-                outputs=[self.components["status_display"], self.components["chatbot"], self.components["msg"]]
-            )
+        # Note: Sidebar components (token_budget_display, quick_actions_dropdown, provider_model_selector, status_display)
+        # are now handled by the UI Manager and will be connected there
 
         logging.getLogger(__name__).debug("✅ ChatTab: All event handlers connected successfully")
 
@@ -284,8 +214,9 @@ class ChatTab:
         return self.components
 
     def get_status_component(self) -> gr.Markdown:
-        """Get the status display component for auto-refresh"""
-        return self.components["status_display"]
+        """Get the status display component for auto-refresh - now handled by UI Manager"""
+        # Status display is now in the UI Manager sidebar
+        return None
 
     def get_message_component(self) -> gr.MultimodalTextbox:
         """Get the message input component for quick actions"""
@@ -296,24 +227,35 @@ class ChatTab:
         self.main_app = app
 
     def get_progress_display(self) -> gr.Markdown:
-        """Get the progress display component"""
-        return self.components["progress_display"]
+        """Get the progress display component - now handled by UI Manager"""
+        # These components are now in the UI Manager sidebar
+        return None
 
     def get_token_budget_display(self) -> gr.Markdown:
-        """Get the token budget display component"""
-        return self.components["token_budget_display"]
+        """Get the token budget display component - now handled by UI Manager"""
+        # These components are now in the UI Manager sidebar
+        return None
 
     def get_llm_selection_components(self) -> dict[str, Any]:
-        """Get LLM selection components for UI updates"""
-        return {
-            "provider_selector": self.components.get("provider_selector"),
-            "model_selector": self.components.get("model_selector"),
-            "apply_llm_btn": self.components.get("apply_llm_btn")
-        }
+        """Get LLM selection components for UI updates - now handled by UI Manager"""
+        # These components are now in the UI Manager sidebar
+        return {}
 
     def get_stop_button(self) -> gr.Button:
         """Get the stop button component for visibility control"""
         return self.components["stop_btn"]
+
+    def _get_quick_actions_dropdown(self) -> gr.Dropdown:
+        """Get the quick actions dropdown from the sidebar"""
+        # The dropdown is now in the sidebar, so we need to get it from the main app
+        if hasattr(self, "main_app") and self.main_app:
+            # Try to get from UI Manager components
+            if hasattr(self.main_app, "ui_manager") and self.main_app.ui_manager:
+                components = self.main_app.ui_manager.get_components()
+                return components.get("quick_actions_dropdown")
+        
+        # Fallback - return a dummy component that won't cause errors
+        return gr.Dropdown(visible=False)
 
     def _handle_stop_click(self, history):
         """Handle stop button click - hide the button immediately"""
@@ -727,44 +669,44 @@ class ChatTab:
         # No need for custom warnings - Gradio handles this natively
 
         # Show stop button at start of processing
-        yield history, "", gr.Button(visible=True), None  # Show stop button, no dropdown change
+        yield history, "", gr.Button(visible=True), self._update_download_button_visibility(history), None  # Show stop button, update download, reset dropdown
 
         # Process message with original wrapper
         last_result = None
         for result in self._stream_message_wrapper_internal(multimodal_value, history, request):
             last_result = result
             if len(result) >= 2:
-                yield result[0], result[1], gr.Button(visible=True), None  # Keep stop button visible, no dropdown change
+                yield result[0], result[1], gr.Button(visible=True), self._update_download_button_visibility(result[0]), None  # Keep stop button visible, update download, reset dropdown
             else:
-                yield result[0], result[1], gr.Button(visible=True), None  # Keep stop button visible, no dropdown change
+                yield result[0], result[1], gr.Button(visible=True), self._update_download_button_visibility(result[0]), None  # Keep stop button visible, update download, reset dropdown
 
         # Hide stop button at end of processing and reset dropdown
         if last_result and len(last_result) >= 2:
-            yield last_result[0], last_result[1], gr.Button(visible=False), None  # Reset dropdown
+            yield last_result[0], last_result[1], gr.Button(visible=False), self._update_download_button_visibility(last_result[0]), None  # Reset dropdown
         else:
-            yield history, "", gr.Button(visible=False), None  # Reset dropdown
+            yield history, "", gr.Button(visible=False), self._update_download_button_visibility(history), None  # Reset dropdown
 
     def _stream_message_wrapper(self, multimodal_value, history, request: gr.Request = None):
         """Wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
         # Fallback mode without queue status
 
         # Show stop button at start of processing
-        yield history, "", gr.Button(visible=True), None  # Show stop button, no dropdown change
+        yield history, "", gr.Button(visible=True), self._update_download_button_visibility(history), None  # Show stop button, update download, reset dropdown
 
         # Process message with original wrapper
         last_result = None
         for result in self._stream_message_wrapper_internal(multimodal_value, history, request):
             last_result = result
             if len(result) >= 2:
-                yield result[0], result[1], gr.Button(visible=True), None  # Keep stop button visible, no dropdown change
+                yield result[0], result[1], gr.Button(visible=True), self._update_download_button_visibility(result[0]), None  # Keep stop button visible, update download, reset dropdown
             else:
-                yield result[0], result[1], gr.Button(visible=True), None  # Keep stop button visible, no dropdown change
+                yield result[0], result[1], gr.Button(visible=True), self._update_download_button_visibility(result[0]), None  # Keep stop button visible, update download, reset dropdown
 
         # Hide stop button at end of processing and reset dropdown
         if last_result and len(last_result) >= 2:
-            yield last_result[0], last_result[1], gr.Button(visible=False), None  # Reset dropdown
+            yield last_result[0], last_result[1], gr.Button(visible=False), self._update_download_button_visibility(last_result[0]), None  # Reset dropdown
         else:
-            yield history, "", gr.Button(visible=False), None  # Reset dropdown
+            yield history, "", gr.Button(visible=False), self._update_download_button_visibility(history), None  # Reset dropdown
 
     def _stream_message_wrapper_internal(self, multimodal_value, history, request: gr.Request = None):
         """Internal wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""

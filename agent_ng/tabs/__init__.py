@@ -11,9 +11,11 @@ together to create the complete application interface.
 from .chat_tab import ChatTab
 from .logs_tab import LogsTab
 from .stats_tab import StatsTab
+from .sidebar import Sidebar
 
 __all__ = [
     "ChatTab",
     "LogsTab", 
-    "StatsTab"
+    "StatsTab",
+    "Sidebar"
 ]
