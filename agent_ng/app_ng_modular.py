@@ -1110,7 +1110,15 @@ def initialize_demo():
         return create_fallback_demo()
 
 # Initialize demo - this will be available for Gradio's static analysis
-demo = initialize_demo()
+# Use a simple approach that Gradio can detect
+try:
+    demo = initialize_demo()
+except Exception as e:
+    _logger.exception("Failed to initialize demo at module level: %s", e)
+    # Create a minimal fallback demo that Gradio can detect
+    with gr.Blocks() as demo:
+        gr.Markdown("# CMW Platform Agent")
+        gr.Markdown("Application is initializing...")
 
 def reload_demo():
     """Reload the demo for Gradio hot reloading"""
