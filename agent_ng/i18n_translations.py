@@ -157,7 +157,7 @@ RUSSIAN_TRANSLATIONS = {
     # Agent status details
     "agent_status_ready": "✅ **Агент готов**",
     "agent_status_initializing": "🟡 **Инициализация агента**",
-    "provider_info": "**Провайдер:** {provider}",
+    "provider_info": "Провайдер: {provider}",
     "model_info": "**Модель:** {model}",
     "status_label": "**Статус:** {status}",
     "tools_count_label": "**Инструменты:** {count} доступно",
@@ -409,7 +409,7 @@ ENGLISH_TRANSLATIONS = {
     # Agent status details
     "agent_status_ready": "✅ **Agent Ready**",
     "agent_status_initializing": "🟡 **Agent Initializing**",
-    "provider_info": "**Provider:** {provider}",
+    "provider_info": "Provider: {provider}",
     "model_info": "**Model:** {model}",
     "status_label": "**Status:** {status}",
     "tools_count_label": "**Tools:** {count} available",

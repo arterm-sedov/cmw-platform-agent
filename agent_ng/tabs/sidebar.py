@@ -74,16 +74,15 @@ class Sidebar:
                     elem_classes=["provider-model-selector"],
                 )
 
-            # Status section - minimal status only
             with gr.Column(elem_classes=["model-card"]):
+                # Status and progress indicator
                 gr.Markdown(
                     f"### {self._get_translation('status_title')}",
                     elem_classes=["status-title"],
                 )
-                self.components["status_display"] = gr.Markdown(
-                    self._get_translation("status_ready")
+                self.components["progress_display"] = gr.Markdown(
+                    self._get_translation("status_initializing")
                 )
-
                 # Token budget indicator
                 gr.Markdown(
                     f"### {self._get_translation('token_budget_title')}",
@@ -91,15 +90,6 @@ class Sidebar:
                 )
                 self.components["token_budget_display"] = gr.Markdown(
                     self._get_translation("token_budget_initializing")
-                )
-
-                # Progress indicator
-                gr.Markdown(
-                    f"### {self._get_translation('progress_title')}",
-                    elem_classes=["progress-title"],
-                )
-                self.components["progress_display"] = gr.Markdown(
-                    self._get_translation("progress_ready")
                 )
 
         # Connect sidebar event handlers

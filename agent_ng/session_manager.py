@@ -168,7 +168,7 @@ class SessionData:
     def __init__(self, session_id: str, language: str = "en"):
         self.session_id = session_id
         self.language = language
-        self.agent = CmwAgent(session_id=session_id)  # Pass session ID to agent
+        self.agent = CmwAgent(session_id=session_id, language=language)  # Pass session ID and language to agent
         self.status = get_translation_key("progress_ready", language)
         self.llm_provider = "openrouter"  # Default provider
         self.created_at = time.time()

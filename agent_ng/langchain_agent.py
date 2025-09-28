@@ -142,16 +142,19 @@ class CmwAgent:
     maintaining all the modular components from NextGenAgent.
     """
 
-    def __init__(self, system_prompt: str = None, session_id: str = "default"):
+    def __init__(self, system_prompt: str = None, session_id: str = "default", language: str = "en"):
         """
         Initialize the LangChain agent with full modular architecture.
 
         Args:
             system_prompt: System prompt for the agent
             session_id: Unique session ID for conversation isolation
+            language: Language for the agent (default: "en")
         """
         # Store session ID for conversation isolation
         self.session_id = session_id
+        # Store language for internationalization
+        self.language = language
 
         # Initialize all modular components
         self.llm_manager = get_llm_manager()
