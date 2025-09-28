@@ -159,7 +159,7 @@ class NextGenApp:
         self.session_manager = SessionManager(language)
 
         # Create i18n instance for the specified language
-        self.i18n = create_i18n_instance(language)
+        self.i18n = create_i18n_instance()
 
         # Initialize debug system - create a temporary debug streamer for initialization
         self.debug_streamer = get_debug_streamer("app_init")

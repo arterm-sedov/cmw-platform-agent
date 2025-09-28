@@ -9,7 +9,7 @@ Based on Gradio's internationalization documentation:
 https://www.gradio.app/guides/internationalization
 """
 
-from typing import Any, Dict
+from typing import Any
 
 import gradio as gr
 
@@ -34,8 +34,8 @@ RUSSIAN_TRANSLATIONS = {
 
     **Основные возможности:**
     - **Анализ сущностей**: глубокий анализ приложений, шаблонов и атрибутов в **Comindware Platform**.
-    - **Создание атрибутов**: создание атрибутов всех типов.
-    - **Многоязычная поддержка**: интерфейс на английском и русском языках.
+    - **Работа с атрибутами**: создание, редактирование, удаление атрибутов всех типов.
+    - **Локализация**: агент отвечает на языке вопроса, но может поддерживать разговор на любом языке, который поддерживает выбранная модель. Внутренние размышления агент выполняет на английском языке. Агент может создавать имена сущностей на любых языках. Интерфейс переведён на английский и русский языки.
     """,
     "quick_start_title": "Быстрый старт",
     "quick_start_description": """
@@ -296,20 +296,18 @@ ENGLISH_TRANSLATIONS = {
     "welcome_description": """
     **Comindware Analyst Copilot** is designed to work with **Comindware Platform** entities such as applications, templates, and attributes.
 
-    The Copilot uses deterministic tools ensuring accurate operations.
+    The Copilot uses deterministic tools that do not rely on language models but interact with **Comindware Platform** APIs.
 
     **Key Features:**
-    - 🔍 **Entity Analysis**: Deep analysis of applications, templates, and attributes
-    - 🛠️ **Tool Integration**: Seamless integration with Comindware Platform APIs
-    - 📊 **Data Visualization**: Interactive charts and reports
-    - 🔄 **Real-time Processing**: Live updates and streaming responses
-    - 🌐 **Multi-language Support**: English and Russian interfaces
+    - **Entity Analysis**: Deep analysis of applications, templates, and attributes in **Comindware Platform**.
+    - **Attribute Management**: Creating, editing, and deleting attributes of all types.
+    - **Localization**: The agent responds in the language of the question, but can maintain conversations in any language supported by the selected model. Internal reasoning is performed in English. The agent can create entity names in any language. The interface is translated into English and Russian languages.
     """,
     "quick_start_title": "Quick Start",
     "quick_start_description": """
-    1. Navigate to the Chat tab to begin your conversation.
+    1. Go to the Chat tab to start a conversation.
     2. Select a model in the sidebar.
-    3. Enter your question or select a **quick question** in the sidebar and edit it, for example:
+    3. Enter your question or select a **template** in the sidebar and edit it, for example:
         - What can you do?
         - What can't you do?
         - List all applications in the platform in a convenient list.
@@ -320,9 +318,12 @@ ENGLISH_TRANSLATIONS = {
         - For the "Contact Phone" attribute in application "CRM", template "Leads", change the display format to Russian phone
         - Get attribute: system name "Comment", application "HR", template "Candidates"
         - Archive/unarchive attribute, system name "Comment", application "HR", template "Candidates"
+    4. Click **Send** and wait for the agent's response.
+    5. The agent may take some time to respond, especially when accessing the **Comindware Platform**. Progress is displayed in the sidebar.
+    6. When finished, the agent will show **Processing complete** message in the sidebar.
     """,
     # Quick actions
-    "quick_actions_title": "Quick questions",
+    "quick_actions_title": "Templates",
     "quick_actions_dropdown_placeholder": "Select a quick command...",
     "quick_actions_dropdown_label": "Quick Commands",
     "quick_list_apps": "🔎 List all apps",
@@ -545,12 +546,9 @@ ENGLISH_TRANSLATIONS = {
 }
 
 
-def create_i18n_instance(language: str = "en") -> gr.I18n:
+def create_i18n_instance() -> gr.I18n:
     """
     Create a Gradio I18n instance with translations for all supported languages.
-
-    Args:
-        language: Language code ('en' or 'ru') - used for default language selection
 
     Returns:
         Gradio I18n instance with both English and Russian translations
@@ -579,11 +577,10 @@ def get_translation_key(key: str, language: str = "en") -> str:
 
     if language.lower() == "ru":
         return RUSSIAN_TRANSLATIONS.get(key, ENGLISH_TRANSLATIONS.get(key, key))
-    else:
-        return ENGLISH_TRANSLATIONS.get(key, key)
+    return ENGLISH_TRANSLATIONS.get(key, key)
 
 
-def format_translation(key: str, language: str = "en", **kwargs) -> str:
+def format_translation(key: str, language: str = "en", **kwargs: Any) -> str:
     """
     Get a formatted translation for a specific key with variable substitution.
 
