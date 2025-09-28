@@ -71,7 +71,7 @@ try:
     )
 
     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
-    from agent_ng.tabs import ChatTab, LogsTab, StatsTab
+    from agent_ng.tabs import ChatTab, HomeTab, LogsTab, StatsTab
     from agent_ng.ui_manager import get_ui_manager
     from agent_ng.utils import safe_string
     from agent_ng.i18n_translations import (
@@ -96,7 +96,7 @@ except ImportError as e1:
         )
 
         # from .streaming_chat import get_chat_interface  # Module moved to .unused
-        from .tabs import ChatTab, LogsTab, StatsTab
+        from .tabs import ChatTab, HomeTab, LogsTab, StatsTab
         from .ui_manager import get_ui_manager
         from .i18n_translations import (
             create_i18n_instance,
@@ -1199,6 +1199,17 @@ class NextGenApp:
         # Create tab modules with error handling
         tab_modules = []
         try:
+            # Home tab first (welcome page)
+            if HomeTab:
+                home_tab = HomeTab(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
+                )
+                home_tab.set_main_app(self)  # Set reference to main app
+                tab_modules.append(home_tab)
+                self.tab_instances["home"] = home_tab
+            else:
+                _logger.warning("HomeTab not available")
+
             if ChatTab:
                 chat_tab = ChatTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n

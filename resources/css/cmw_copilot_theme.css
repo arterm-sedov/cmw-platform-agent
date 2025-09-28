@@ -276,7 +276,10 @@ body {
     line-height: 1.25;
     border: none !important;
     background: transparent !important;
-    overflow: unset !important;
+    overflow: hidden !important;
+    overflow-y: hidden !important;
+    max-height: none !important;
+    height: auto !important;
 }
 
 .gradio-container .prose,
@@ -575,6 +578,10 @@ html.dark .gradio-container h4,
 html.dark .gradio-container h5,
 html.dark .gradio-container h6 {
     color: var(--cmw-text-strong) !important;
+    overflow: hidden !important;
+    overflow-y: hidden !important;
+    max-height: none !important;
+    height: auto !important;
 }
 
 /* Dark theme for hero title */
@@ -960,6 +967,10 @@ body[data-theme='dark'] .gradio-container [data-testid="markdown"],
 .gradio-container .dark h5,
 .gradio-container .dark h6 {
     color: var(--cmw-text-strong) !important;
+    overflow: hidden !important;
+    overflow-y: hidden !important;
+    max-height: none !important;
+    height: auto !important;
 }
 
 .gradio-container .dark .hero-title h1 {
@@ -1209,6 +1220,10 @@ html.dark .gradio-container h4,
 html.dark .gradio-container h5,
 html.dark .gradio-container h6 {
     color: var(--cmw-text-strong) !important;
+    overflow: hidden !important;
+    overflow-y: hidden !important;
+    max-height: none !important;
+    height: auto !important;
 }
 
 /* Force dark backgrounds on all containers */

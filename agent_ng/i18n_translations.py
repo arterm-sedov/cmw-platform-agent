@@ -21,30 +21,40 @@ RUSSIAN_TRANSLATIONS = {
     "app_title": "Ассистент аналитика Comindware",
     "hero_title": "Ассистент аналитика",
     # Tab labels
+    "tab_home": "🏠 Главная",
     "tab_chat": "💬 Чат",
     "tab_logs": "📜 Журналы",
     "tab_stats": "📊 Статистика",
-    # Chat tab content
+    # Home tab content
     "welcome_title": "Добро пожаловать!",
     "welcome_description": """
     **Ассистент аналитика Comindware** предназначен для работы с сущностями **Comindware Platform**, такими как приложения, шаблоны, атрибуты.
 
-    Ассистент использует детерминированные инструменты, обеспечивающие высокую точность работы.
+    Ассистент использует детерминированные инструменты, не полагающиеся на языковую модель, а взаимодействующие с API **Comindware Platform**.
 
-    - **Операции с Comindware Platform в приоритете**: помогает получать данные и манипулировать сущностями.
-    - **Оркестрация нескольких моделей**: позволяет использовать различных поставщиков LLM.
-    - **Компактный структурированный вывод**: Намерение → План → Проверка → Выполнение → Результат.
+    **Основные возможности:**
+    - **Анализ сущностей**: глубокий анализ приложений, шаблонов и атрибутов в **Comindware Platform**.
+    - **Создание атрибутов**: создание атрибутов всех типов.
+    - **Многоязычная поддержка**: интерфейс на английском и русском языках.
     """,
-    "try_asking_title": "❓ Варианты запросов:",
-    "try_asking_examples": """
-    - Перечисли все приложения в платформе в удобном списке
-    - Покажи все шаблоны записей в приложении "ERP". Отформатируй красиво используя Markdown.
-    - Выдай список всех атрибутов шаблона "Контрагенты", приложение "ERP"
-    - Создать текстовый атрибут "Комментарий", приложение "HR", шаблон "Кандидаты"
-    - Создай текстовый атрибут "ID клиента", приложение "ERP", шаблон "Контрагенты", особая маска ввода: ([0-9]{10}|[0-9]{12})
-    - Для атрибута "Контактный телефон" в приложении "CRM", шаблон "Лиды", смени формат отображения на российский телефон
-    - Получи атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты"
-    - Архивируй/разархивируй атрибут, системное имя "Комментарий", приложение "HR", шаблон "Кандидаты"
+    "quick_start_title": "Быстрый старт",
+    "quick_start_description": """
+    1. Перейдите на вкладку «Чат» для начала разговора.
+    2. Выберите модель в боковой панели.
+    3. Введите свой вопрос или выберите **заготовку** в левой панели и отредактируйте её, например:
+        - Что ты умеешь?
+        - Чего ты не умеешь?
+        - Перечисли все приложения в платформе в удобном списке.
+        - Покажи все шаблоны записей в приложении "ERP".
+        - Выдай список всех атрибутов шаблона "Контрагенты", приложение "ERP".
+        - Создай текстовый атрибут "Комментарий", приложение "HR", шаблон "Кандидаты".
+        - Создай текстовый атрибут "ID клиента", приложение "ERP", шаблон "Контрагенты", особая маска ввода: ([0-9]{10}|[0-9]{12}).
+        - Для атрибута "Контактный телефон" в приложении "CRM", шаблон "Лиды", смени формат отображения на российский телефон.
+        - Получи атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
+        - Архивируй/разархивируй атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
+    4. Нажмите кнопку «**Отправить**» и дождитесь ответа агента.
+    5. Агент может отвечать некоторое время, особенно если требуется обращение к **Comindware Platform**.  Прогресс отображается в левой панели.
+    6. По окончании работы агент выдаст сообщение «Обработка завершена» в левой панели.
     """,
     # Quick actions
     "quick_actions_title": "Заготовки",
@@ -217,6 +227,10 @@ RUSSIAN_TRANSLATIONS = {
     "quick_edit_date_time_message": 'Создай атрибут даты/времени "Дата создания заявки" в приложении "CRM", шаблон "Лиды" с форматом отображения LongDateLongTime и используй его как заголовок записи для автоматической сортировки по времени',
     "quick_archive_attr": "📦 Архивировать атрибут",
     "quick_archive_attr_message": 'Архивируй/разархивируй атрибут, системное имя "Комментарий", приложение "HR", шаблон "Кандидаты"',
+    "quick_what_can_do": "❓ Что ты умеешь?",
+    "quick_what_can_do_message": "Что ты умеешь?",
+    "quick_what_cannot_do": "❌ Чего ты не умеешь?",
+    "quick_what_cannot_do_message": "Чего ты не умеешь?",
     # Status messages
     "processing_complete": "🎉Обработка завершена",
     "response_completed": "Ответ завершен",
@@ -273,33 +287,42 @@ ENGLISH_TRANSLATIONS = {
     "app_title": "Comindware Analyst Copilot",
     "hero_title": "Analyst Copilot",
     # Tab labels
+    "tab_home": "🏠 Home",
     "tab_chat": "💬 Chat",
     "tab_logs": "📜 Logs",
     "tab_stats": "📊 Statistics",
-    # Chat tab content
+    # Home tab content
     "welcome_title": "Welcome!",
     "welcome_description": """
     **Comindware Analyst Copilot** is designed to work with **Comindware Platform** entities such as applications, templates, and attributes.
 
     The Copilot uses deterministic tools ensuring accurate operations.
 
-    - **Comindware Platform operations first**: Helps get data and manipulate entities.
-    - **Multiple model orchestration**: Supports different LLM providers.
-    - **Compact structured output**: Intent → Plan → Validation → Execution → Result.
+    **Key Features:**
+    - 🔍 **Entity Analysis**: Deep analysis of applications, templates, and attributes
+    - 🛠️ **Tool Integration**: Seamless integration with Comindware Platform APIs
+    - 📊 **Data Visualization**: Interactive charts and reports
+    - 🔄 **Real-time Processing**: Live updates and streaming responses
+    - 🌐 **Multi-language Support**: English and Russian interfaces
     """,
-    "try_asking_title": "❓ Try asking",
-    "try_asking_examples": """
-    - List all applications in the platform. Format nicely using Markdown
-    - List all record templates in app \"ERP\". Format as a list
-    - List all attributes in template \"Counterparties\", app \"ERP\"
-    - Create plain text attribute \"Comment\", app \"HR\", template \"Candidates\"
-    - Create \"Customer ID\" text attribute, app \"ERP\", template \"Counterparties\", custom input mask ([0-9]{10}|[0-9]{12})
-    - For attribute \"Contact Phone\" in app \"CRM\", template \"Leads\", change display format to Russian phone
-    - Fetch attribute: system name \"Comment\", app \"HR\", template \"Candidates\"
-    - Archive/unarchive attribute, system name \"Comment\", app \"HR\", template \"Candidates\"
+    "quick_start_title": "Quick Start",
+    "quick_start_description": """
+    1. Navigate to the Chat tab to begin your conversation.
+    2. Select a model in the sidebar.
+    3. Enter your question or select a **quick question** in the sidebar and edit it, for example:
+        - What can you do?
+        - What can't you do?
+        - List all applications in the platform in a convenient list.
+        - Show all record templates in the "ERP" application.
+        - Get a list of all attributes of the "Counterparties" template, application "ERP"
+        - Create a text attribute "Comment", application "HR", template "Candidates"
+        - Create a text attribute "Customer ID", application "ERP", template "Counterparties", special input mask: ([0-9]{10}|[0-9]{12})
+        - For the "Contact Phone" attribute in application "CRM", template "Leads", change the display format to Russian phone
+        - Get attribute: system name "Comment", application "HR", template "Candidates"
+        - Archive/unarchive attribute, system name "Comment", application "HR", template "Candidates"
     """,
     # Quick actions
-    "quick_actions_title": "Quick Actions",
+    "quick_actions_title": "Quick questions",
     "quick_actions_dropdown_placeholder": "Select a quick command...",
     "quick_actions_dropdown_label": "Quick Commands",
     "quick_list_apps": "🔎 List all apps",
@@ -469,6 +492,10 @@ ENGLISH_TRANSLATIONS = {
     "quick_edit_date_time_message": 'Create a date/time attribute "Lead Creation Date" in application "CRM", template "Leads" with LongDateLongTime display format and use it as record title for automatic time-based sorting',
     "quick_archive_attr": "📦 Archive Attribute",
     "quick_archive_attr_message": 'Archive/unarchive attribute, system name "Comment", application "HR", template "Candidates"',
+    "quick_what_can_do": "❓ What can you do?",
+    "quick_what_can_do_message": "What can you do?",
+    "quick_what_cannot_do": "❌ What can't you do?",
+    "quick_what_cannot_do_message": "What can't you do?",
     # Status messages
     "processing_complete": "🎉 Processing complete",
     "response_completed": "Response completed",

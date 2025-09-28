@@ -234,6 +234,8 @@ class Sidebar:
         """Get list of quick action choices for the dropdown"""
         return [
             ("", ""),  # Empty first option to allow proper dropdown behavior
+            (self._get_translation("quick_what_can_do"), "quick_what_can_do"),
+            (self._get_translation("quick_what_cannot_do"), "quick_what_cannot_do"),
             (self._get_translation("quick_list_apps"), "quick_list_apps"),
             (self._get_translation("quick_templates_erp"), "quick_templates_erp"),
             (
@@ -264,6 +266,8 @@ class Sidebar:
 
         # Map action keys to their corresponding methods
         action_methods = {
+            "quick_what_can_do": self._quick_what_can_do,
+            "quick_what_cannot_do": self._quick_what_cannot_do,
             "quick_list_apps": self._quick_list_apps,
             "quick_templates_erp": self._quick_templates_erp,
             "quick_attributes_contractors": self._quick_attributes_contractors,
@@ -448,6 +452,14 @@ class Sidebar:
         pass
 
     # Quick action methods
+    def _quick_what_can_do(self) -> str:
+        """Generate what can you do quick action message"""
+        return self._get_translation("quick_what_can_do_message")
+
+    def _quick_what_cannot_do(self) -> str:
+        """Generate what can't you do quick action message"""
+        return self._get_translation("quick_what_cannot_do_message")
+
     def _quick_math(self) -> str:
         """Generate math quick action message"""
         return self._get_translation("quick_math_message")
@@ -510,6 +522,14 @@ class Sidebar:
         return self._get_translation("quick_archive_attr_message")
 
     # Multimodal wrapper methods for quick actions
+    def _quick_what_can_do_multimodal(self) -> dict[str, Any]:
+        """Generate what can you do quick action message in MultimodalValue format"""
+        return {"text": self._quick_what_can_do(), "files": []}
+
+    def _quick_what_cannot_do_multimodal(self) -> dict[str, Any]:
+        """Generate what can't you do quick action message in MultimodalValue format"""
+        return {"text": self._quick_what_cannot_do(), "files": []}
+
     def _quick_math_multimodal(self) -> dict[str, Any]:
         """Generate math quick action message in MultimodalValue format"""
         return {"text": self._quick_math(), "files": []}
