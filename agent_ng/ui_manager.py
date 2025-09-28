@@ -119,10 +119,10 @@ class UIManager:
 
 
         # Load initial UI state once on startup
-        if "status_display" in self.components and update_status_handler:
+        if "progress_display" in self.components and update_status_handler:
             demo.load(
                 fn=update_status_handler,
-                outputs=[self.components["status_display"]]
+                outputs=[self.components["progress_display"]]
             )
 
         if "token_budget_display" in self.components and update_token_budget_handler:
@@ -164,11 +164,11 @@ class UIManager:
         intervals = get_refresh_intervals()
 
         # Status updates
-        if "status_display" in self.components and event_handlers.get("update_status"):
+        if "progress_display" in self.components and event_handlers.get("update_status"):
             status_timer = gr.Timer(intervals.status, active=True)
             status_timer.tick(
                 fn=event_handlers["update_status"],
-                outputs=[self.components["status_display"]]
+                outputs=[self.components["progress_display"]]
             )
             logging.getLogger(__name__).debug(f"✅ Status auto-refresh timer set ({intervals.status}s)")
 
