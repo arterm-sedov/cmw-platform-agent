@@ -500,14 +500,23 @@ class NextGenApp:
         return get_translation_key("progress_ready", self.language)
 
     def update_progress_display(self, request: gr.Request = None) -> str:
-        """Update progress display - session-aware, minimal with caching"""
+        """Update progress display - simple state-based, session-aware with caching"""
         if not request:
-            # Use global progress status for timer-based updates
+            # Use global progress status for timer-based updates, but respect session status when processing
             if self.is_processing:
                 icon = self.session_manager.get_clock_icon()
-                result = f"{icon} {self.current_global_progress}"
+                # When processing, check if we have a session status that should override global
+                # Use default session for timer-based updates
+                session_status = self.session_manager.get_status("default")
+                if session_status and session_status != get_translation_key("progress_ready", self.language):
+                    # Use session status from streaming events
+                    result = f"{icon} {session_status}"
+                else:
+                    # Fall back to global progress
+                    result = f"{icon} {self.current_global_progress}"
             else:
-                result = self.current_global_progress
+                # Not processing - show ready status
+                result = get_translation_key("progress_ready", self.language)
 
             # Only update if content changed to reduce UI blocking
             if result != self.last_progress_display:
@@ -518,12 +527,15 @@ class NextGenApp:
         session_id = self.session_manager.get_session_id(request)
         status = self.session_manager.get_status(session_id)
 
-        # Add rotating clock icon if processing (UI handles rotation)
+        # Simple state-based progress display
         if self.is_processing:
+            # During processing, respect the current session status from streaming events
             icon = self.session_manager.get_clock_icon()
+            # Always use the current session status when processing (from streaming events)
             result = f"{icon} {status}"
         else:
-            result = status
+            # Not processing - show ready status
+            result = get_translation_key("progress_ready", self.language)
 
         # Only update if content changed to reduce UI blocking
         if result != self.last_progress_display:
@@ -544,12 +556,25 @@ class NextGenApp:
     def stop_processing(self):
         """Mark that processing has stopped"""
         self.is_processing = False
-        # Update global progress to show ready state
+        # Update global progress to show processing complete
         self.current_global_progress = get_translation_key(
-            "progress_ready", self.language
+            "processing_complete", self.language
         )
         # Reset cache to force update
         self.last_progress_display = ""
+        
+        # Schedule transition back to ready status after 3 seconds
+        import threading
+        def transition_to_ready():
+            import time
+            time.sleep(3)  # Wait 3 seconds
+            self.current_global_progress = get_translation_key(
+                "progress_ready", self.language
+            )
+            self.last_progress_display = ""  # Force update
+        
+        thread = threading.Thread(target=transition_to_ready, daemon=True)
+        thread.start()
 
     def get_conversation_history(
         self, session_id: str = "default"
@@ -1102,7 +1127,7 @@ class NextGenApp:
         # Show minimal status information in sidebar
         # Detailed stats are available in the stats tab
         if self.is_ready():
-            return get_translation_key("status_ready", self.language)
+            return get_translation_key("progress_ready", self.language)
         else:
             return get_translation_key("status_initializing", self.language)
 
