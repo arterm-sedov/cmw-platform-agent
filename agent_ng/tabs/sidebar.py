@@ -3,260 +3,79 @@ Sidebar Module for App NG
 =========================
 
 Handles the common sidebar components that are shared across all tabs.
-This module provides a unified sidebar with LLM selection, quick actions, status, and monitoring components.
+This module provides a unified sidebar with LLM selection, quick actions,
+status, and monitoring components.
 Supports internationalization (i18n) with Russian and English translations.
 """
 
 import logging
 import os
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 import gradio as gr
 
-from ..i18n_translations import get_translation_key
+from agent_ng.i18n_translations import get_translation_key
 
 
 class QuickActionsMixin:
     """Mixin class providing quick action methods for UI components"""
-    
+
+    # Configuration for all quick actions - eliminates repetitive code
+    QUICK_ACTIONS_CONFIG: ClassVar[dict[str, str]] = {
+        "quick_what_can_do": "quick_what_can_do_message",
+        "quick_what_cannot_do": "quick_what_cannot_do_message",
+        "quick_list_apps": "quick_list_apps_message",
+        "quick_templates_erp": "quick_templates_erp_message",
+        "quick_attributes_contractors": "quick_attributes_contractors_message",
+        "quick_edit_date_time": "quick_edit_date_time_message",
+        "quick_create_comment_attr": "quick_create_comment_attr_message",
+        "quick_create_id_attr": "quick_create_id_attr_message",
+        "quick_edit_phone_mask": "quick_edit_phone_mask_message",
+        "quick_edit_enum": "quick_edit_enum_message",
+        "quick_get_comment_attr": "quick_get_comment_attr_message",
+        "quick_create_attr": "quick_create_attr_message",
+        "quick_edit_mask": "quick_edit_mask_message",
+        "quick_archive_attr": "quick_archive_attr_message",
+        "quick_math": "quick_math_message",
+        "quick_code": "quick_code_message",
+        "quick_explain": "quick_explain_message",
+    }
+
     def _get_translation(self, key: str) -> str:
         """Get a translation for a specific key - must be implemented by the class using this mixin"""
-        error_msg = "Classes using QuickActionsMixin must implement _get_translation method"
+        error_msg = (
+            "Classes using QuickActionsMixin must implement _get_translation method"
+        )
         raise NotImplementedError(error_msg)
-    
+
     def _get_quick_action_choices(self) -> list[tuple[str, str]]:
         """Get list of quick action choices for the dropdown"""
-        return [
-            ("", ""),  # Empty first option to allow proper dropdown behavior
-            (self._get_translation("quick_what_can_do"), "quick_what_can_do"),
-            (self._get_translation("quick_what_cannot_do"), "quick_what_cannot_do"),
-            (self._get_translation("quick_list_apps"), "quick_list_apps"),
-            (self._get_translation("quick_templates_erp"), "quick_templates_erp"),
-            (
-                self._get_translation("quick_attributes_contractors"),
-                "quick_attributes_contractors",
-            ),
-            (self._get_translation("quick_edit_date_time"), "quick_edit_date_time"),
-            (
-                self._get_translation("quick_create_comment_attr"),
-                "quick_create_comment_attr",
-            ),
-            (self._get_translation("quick_create_id_attr"), "quick_create_id_attr"),
-            (self._get_translation("quick_edit_phone_mask"), "quick_edit_phone_mask"),
-            (self._get_translation("quick_edit_enum"), "quick_edit_enum"),
-            (self._get_translation("quick_get_comment_attr"), "quick_get_comment_attr"),
-            (self._get_translation("quick_create_attr"), "quick_create_attr"),
-            (self._get_translation("quick_edit_mask"), "quick_edit_mask"),
-            (self._get_translation("quick_archive_attr"), "quick_archive_attr"),
-            (self._get_translation("quick_math"), "quick_math"),
-            (self._get_translation("quick_code"), "quick_code"),
-            (self._get_translation("quick_explain"), "quick_explain"),
-        ]
+        choices = [("", "")]  # Empty first option to allow proper dropdown behavior
+
+        choices.extend(
+            (self._get_translation(action_key), action_key)
+            for action_key in self.QUICK_ACTIONS_CONFIG
+        )
+
+        return choices
 
     def _handle_quick_action_dropdown(self, selected_action: str) -> str:
         """Handle quick action dropdown selection and return appropriate message text"""
-        if not selected_action:
+        if not selected_action or selected_action not in self.QUICK_ACTIONS_CONFIG:
             return ""
 
-        # Map action keys to their corresponding methods
-        action_methods = {
-            "quick_what_can_do": self._quick_what_can_do,
-            "quick_what_cannot_do": self._quick_what_cannot_do,
-            "quick_list_apps": self._quick_list_apps,
-            "quick_templates_erp": self._quick_templates_erp,
-            "quick_attributes_contractors": self._quick_attributes_contractors,
-            "quick_edit_date_time": self._quick_edit_date_time,
-            "quick_create_comment_attr": self._quick_create_comment_attr,
-            "quick_create_id_attr": self._quick_create_id_attr,
-            "quick_edit_phone_mask": self._quick_edit_phone_mask,
-            "quick_edit_enum": self._quick_edit_enum,
-            "quick_get_comment_attr": self._quick_get_comment_attr,
-            "quick_create_attr": self._quick_create_attr,
-            "quick_edit_mask": self._quick_edit_mask,
-            "quick_archive_attr": self._quick_archive_attr,
-            "quick_math": self._quick_math,
-            "quick_code": self._quick_code,
-            "quick_explain": self._quick_explain,
-        }
-
-        # Get the appropriate method and call it
-        method = action_methods.get(selected_action)
-        if method:
-            return method()
-        return ""
+        message_key = self.QUICK_ACTIONS_CONFIG[selected_action]
+        return self._get_translation(message_key)
 
     def _handle_quick_action_dropdown_multimodal(
         self, selected_action: str
     ) -> dict[str, Any]:
         """Handle quick action dropdown selection and return appropriate message in MultimodalValue format"""
-        if not selected_action:
+        if not selected_action or selected_action not in self.QUICK_ACTIONS_CONFIG:
             return {"text": "", "files": []}
 
-        # Map action keys to their corresponding methods
-        action_methods = {
-            "quick_what_can_do": self._quick_what_can_do_multimodal,
-            "quick_what_cannot_do": self._quick_what_cannot_do_multimodal,
-            "quick_list_apps": self._quick_list_apps_multimodal,
-            "quick_templates_erp": self._quick_templates_erp_multimodal,
-            "quick_attributes_contractors": self._quick_attributes_contractors_multimodal,
-            "quick_edit_date_time": self._quick_edit_date_time_multimodal,
-            "quick_create_comment_attr": self._quick_create_comment_attr_multimodal,
-            "quick_create_id_attr": self._quick_create_id_attr_multimodal,
-            "quick_edit_phone_mask": self._quick_edit_phone_mask_multimodal,
-            "quick_edit_enum": self._quick_edit_enum_multimodal,
-            "quick_get_comment_attr": self._quick_get_comment_attr_multimodal,
-            "quick_create_attr": self._quick_create_attr_multimodal,
-            "quick_edit_mask": self._quick_edit_mask_multimodal,
-            "quick_archive_attr": self._quick_archive_attr_multimodal,
-            "quick_math": self._quick_math_multimodal,
-            "quick_code": self._quick_code_multimodal,
-            "quick_explain": self._quick_explain_multimodal,
-        }
-
-        # Get the appropriate method and call it
-        method = action_methods.get(selected_action)
-        if method:
-            return method()
-        return {"text": "", "files": []}
-
-    # Quick action methods - string versions
-    def _quick_what_can_do(self) -> str:
-        """Generate what can you do quick action message"""
-        return self._get_translation("quick_what_can_do_message")
-
-    def _quick_what_cannot_do(self) -> str:
-        """Generate what can't you do quick action message"""
-        return self._get_translation("quick_what_cannot_do_message")
-
-    def _quick_math(self) -> str:
-        """Generate math quick action message"""
-        return self._get_translation("quick_math_message")
-
-    def _quick_code(self) -> str:
-        """Generate code quick action message"""
-        return self._get_translation("quick_code_message")
-
-    def _quick_explain(self) -> str:
-        """Generate explain quick action message"""
-        return self._get_translation("quick_explain_message")
-
-    def _quick_create_attr(self) -> str:
-        """Generate create attribute quick action message"""
-        return self._get_translation("quick_create_attr_message")
-
-    def _quick_edit_mask(self) -> str:
-        """Generate edit mask quick action message"""
-        return self._get_translation("quick_edit_mask_message")
-
-    def _quick_list_apps(self) -> str:
-        """Generate list apps quick action message"""
-        return self._get_translation("quick_list_apps_message")
-
-    # Query example methods
-    def _quick_edit_enum(self) -> str:
-        """Generate query list apps message"""
-        return self._get_translation("quick_edit_enum_message")
-
-    def _quick_templates_erp(self) -> str:
-        """Generate query templates ERP message"""
-        return self._get_translation("quick_templates_erp_message")
-
-    def _quick_attributes_contractors(self) -> str:
-        """Generate query attributes contractors message"""
-        return self._get_translation("quick_attributes_contractors_message")
-
-    def _quick_create_comment_attr(self) -> str:
-        """Generate query create comment attribute message"""
-        return self._get_translation("quick_create_comment_attr_message")
-
-    def _quick_create_id_attr(self) -> str:
-        """Generate query create ID attribute message"""
-        return self._get_translation("quick_create_id_attr_message")
-
-    def _quick_edit_phone_mask(self) -> str:
-        """Generate query edit phone mask message"""
-        return self._get_translation("quick_edit_phone_mask_message")
-
-    def _quick_get_comment_attr(self) -> str:
-        """Generate query get comment attribute message"""
-        return self._get_translation("quick_get_comment_attr_message")
-
-    def _quick_edit_date_time(self) -> str:
-        """Generate query enum add value message"""
-        return self._get_translation("quick_edit_date_time_message")
-
-    def _quick_archive_attr(self) -> str:
-        """Generate query archive attribute message"""
-        return self._get_translation("quick_archive_attr_message")
-
-    # Multimodal wrapper methods for quick actions
-    def _quick_what_can_do_multimodal(self) -> dict[str, Any]:
-        """Generate what can you do quick action message in MultimodalValue format"""
-        return {"text": self._quick_what_can_do(), "files": []}
-
-    def _quick_what_cannot_do_multimodal(self) -> dict[str, Any]:
-        """Generate what can't you do quick action message in MultimodalValue format"""
-        return {"text": self._quick_what_cannot_do(), "files": []}
-
-    def _quick_math_multimodal(self) -> dict[str, Any]:
-        """Generate math quick action message in MultimodalValue format"""
-        return {"text": self._quick_math(), "files": []}
-
-    def _quick_code_multimodal(self) -> dict[str, Any]:
-        """Generate code quick action message in MultimodalValue format"""
-        return {"text": self._quick_code(), "files": []}
-
-    def _quick_explain_multimodal(self) -> dict[str, Any]:
-        """Generate explain quick action message in MultimodalValue format"""
-        return {"text": self._quick_explain(), "files": []}
-
-    def _quick_create_attr_multimodal(self) -> dict[str, Any]:
-        """Generate create attribute quick action message in MultimodalValue format"""
-        return {"text": self._quick_create_attr(), "files": []}
-
-    def _quick_edit_mask_multimodal(self) -> dict[str, Any]:
-        """Generate edit mask quick action message in MultimodalValue format"""
-        return {"text": self._quick_edit_mask(), "files": []}
-
-    def _quick_list_apps_multimodal(self) -> dict[str, Any]:
-        """Generate list apps quick action message in MultimodalValue format"""
-        return {"text": self._quick_list_apps(), "files": []}
-
-    def _quick_edit_enum_multimodal(self) -> dict[str, Any]:
-        """Generate query list apps message in MultimodalValue format"""
-        return {"text": self._quick_edit_enum(), "files": []}
-
-    def _quick_templates_erp_multimodal(self) -> dict[str, Any]:
-        """Generate query templates ERP message in MultimodalValue format"""
-        return {"text": self._quick_templates_erp(), "files": []}
-
-    def _quick_attributes_contractors_multimodal(self) -> dict[str, Any]:
-        """Generate query attributes contractors message in MultimodalValue format"""
-        return {"text": self._quick_attributes_contractors(), "files": []}
-
-    def _quick_create_comment_attr_multimodal(self) -> dict[str, Any]:
-        """Generate query create comment attribute message in MultimodalValue format"""
-        return {"text": self._quick_create_comment_attr(), "files": []}
-
-    def _quick_create_id_attr_multimodal(self) -> dict[str, Any]:
-        """Generate query create ID attribute message in MultimodalValue format"""
-        return {"text": self._quick_create_id_attr(), "files": []}
-
-    def _quick_edit_phone_mask_multimodal(self) -> dict[str, Any]:
-        """Generate query edit phone mask message in MultimodalValue format"""
-        return {"text": self._quick_edit_phone_mask(), "files": []}
-
-    def _quick_get_comment_attr_multimodal(self) -> dict[str, Any]:
-        """Generate query get comment attribute message in MultimodalValue format"""
-        return {"text": self._quick_get_comment_attr(), "files": []}
-
-    def _quick_edit_date_time_multimodal(self) -> dict[str, Any]:
-        """Generate query enum add value message in MultimodalValue format"""
-        return {"text": self._quick_edit_date_time(), "files": []}
-
-    def _quick_archive_attr_multimodal(self) -> dict[str, Any]:
-        """Generate query archive attribute message in MultimodalValue format"""
-        return {"text": self._quick_archive_attr(), "files": []}
+        message_key = self.QUICK_ACTIONS_CONFIG[selected_action]
+        return {"text": self._get_translation(message_key), "files": []}
 
 
 class Sidebar(QuickActionsMixin):
