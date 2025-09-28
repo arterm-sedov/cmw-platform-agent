@@ -735,9 +735,9 @@ class ChatTab(QuickActionsMixin):
             history,
             "",
             gr.Button(visible=True),
-            self._update_download_button_visibility(history),
+            gr.DownloadButton(visible=False),  # Don't update download during streaming
             None,
-        )  # Show stop button, update download, reset dropdown
+        )  # Show stop button, don't update download, reset dropdown
 
         # Process message with original wrapper
         last_result = None
@@ -750,25 +750,25 @@ class ChatTab(QuickActionsMixin):
                     result[0],
                     result[1],
                     gr.Button(visible=True),
-                    self._update_download_button_visibility(result[0]),
+                    gr.DownloadButton(visible=False),  # Don't update download during streaming
                     None,
-                )  # Keep stop button visible, update download, reset dropdown
+                )  # Keep stop button visible, don't update download during streaming, reset dropdown
             else:
                 yield (
                     result[0],
                     result[1],
                     gr.Button(visible=True),
-                    self._update_download_button_visibility(result[0]),
+                    gr.DownloadButton(visible=False),  # Don't update download during streaming
                     None,
-                )  # Keep stop button visible, update download, reset dropdown
+                )  # Keep stop button visible, don't update download during streaming, reset dropdown
 
-        # Hide stop button at end of processing and reset dropdown
+        # Hide stop button at end of processing and update download button
         if last_result and len(last_result) >= 2:
             yield (
                 last_result[0],
                 last_result[1],
                 gr.Button(visible=False),
-                self._update_download_button_visibility(last_result[0]),
+                self._update_download_button_visibility(last_result[0]),  # Update download only at end
                 None,
             )  # Reset dropdown
         else:
@@ -776,7 +776,7 @@ class ChatTab(QuickActionsMixin):
                 history,
                 "",
                 gr.Button(visible=False),
-                self._update_download_button_visibility(history),
+                self._update_download_button_visibility(history),  # Update download only at end
                 None,
             )  # Reset dropdown
 
@@ -791,9 +791,9 @@ class ChatTab(QuickActionsMixin):
             history,
             "",
             gr.Button(visible=True),
-            self._update_download_button_visibility(history),
+            gr.DownloadButton(visible=False),  # Don't update download during streaming
             None,
-        )  # Show stop button, update download, reset dropdown
+        )  # Show stop button, don't update download, reset dropdown
 
         # Process message with original wrapper
         last_result = None
@@ -806,25 +806,25 @@ class ChatTab(QuickActionsMixin):
                     result[0],
                     result[1],
                     gr.Button(visible=True),
-                    self._update_download_button_visibility(result[0]),
+                    gr.DownloadButton(visible=False),  # Don't update download during streaming
                     None,
-                )  # Keep stop button visible, update download, reset dropdown
+                )  # Keep stop button visible, don't update download during streaming, reset dropdown
             else:
                 yield (
                     result[0],
                     result[1],
                     gr.Button(visible=True),
-                    self._update_download_button_visibility(result[0]),
+                    gr.DownloadButton(visible=False),  # Don't update download during streaming
                     None,
-                )  # Keep stop button visible, update download, reset dropdown
+                )  # Keep stop button visible, don't update download during streaming, reset dropdown
 
-        # Hide stop button at end of processing and reset dropdown
+        # Hide stop button at end of processing and update download button
         if last_result and len(last_result) >= 2:
             yield (
                 last_result[0],
                 last_result[1],
                 gr.Button(visible=False),
-                self._update_download_button_visibility(last_result[0]),
+                self._update_download_button_visibility(last_result[0]),  # Update download only at end
                 None,
             )  # Reset dropdown
         else:
@@ -832,7 +832,7 @@ class ChatTab(QuickActionsMixin):
                 history,
                 "",
                 gr.Button(visible=False),
-                self._update_download_button_visibility(history),
+                self._update_download_button_visibility(history),  # Update download only at end
                 None,
             )  # Reset dropdown
 
@@ -929,6 +929,12 @@ class ChatTab(QuickActionsMixin):
 
     def _clear_chat_with_download_reset(self, request: gr.Request = None):
         """Clear chat and reset download state - now properly session-aware"""
+        # Clear download button cache
+        if hasattr(self, "_last_history_str"):
+            delattr(self, "_last_history_str")
+        if hasattr(self, "_last_download_file"):
+            delattr(self, "_last_download_file")
+        
         # Get the clear handler from event handlers
         clear_handler = self.event_handlers.get("clear_chat")
         if clear_handler:
@@ -945,8 +951,17 @@ class ChatTab(QuickActionsMixin):
     def _update_download_button_visibility(self, history):
         """Update download button visibility and file based on conversation history"""
         if history and len(history) > 0:
-            # Generate file with fresh timestamp when conversation changes
-            file_path = self._download_conversation_as_markdown(history)
+            # Check if conversation has changed since last generation
+            history_str = str(history)
+            if not hasattr(self, "_last_history_str") or self._last_history_str != history_str:
+                # Generate file with fresh timestamp when conversation changes
+                file_path = self._download_conversation_as_markdown(history)
+                self._last_history_str = history_str
+                self._last_download_file = file_path
+            else:
+                # Use cached file if conversation hasn't changed
+                file_path = getattr(self, "_last_download_file", None)
+            
             if file_path:
                 # Show download button with pre-generated file
                 return gr.DownloadButton(
@@ -958,12 +973,7 @@ class ChatTab(QuickActionsMixin):
                 )
             else:
                 # Show button without file if generation fails
-                return gr.DownloadButton(
-                    label=self._get_translation("download_button"),
-                    variant="secondary",
-                    elem_classes=["cmw-button"],
-                    visible=True,
-                )
+                return gr.DownloadButton(visible=False)
         else:
             # Hide download button when there's no conversation history
             return gr.DownloadButton(visible=False)
@@ -983,7 +993,7 @@ class ChatTab(QuickActionsMixin):
         import tempfile
 
         print(f"DEBUG: Download function called with history type: {type(history)}")
-        print(f"DEBUG: History content: {history}")
+        print(f"DEBUG: History content: {str(history)[:50]}")
 
         if not history:
             print("DEBUG: No history provided")
