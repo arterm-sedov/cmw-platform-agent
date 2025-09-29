@@ -214,11 +214,11 @@ class ChatTab(QuickActionsMixin):
                 ],
             )
 
-        # Stop button - cancel both send and submit events and hide itself, show download button
+        # Stop button - cancel both send and submit events; hide itself, show download, append stats to chat
         self.components["stop_btn"].click(
             fn=self._handle_stop_click,
             inputs=[self.components["chatbot"]],
-            outputs=[self.components["stop_btn"], self.components["download_btn"]],
+            outputs=[self.components["chatbot"], self.components["stop_btn"], self.components["download_btn"]],
             cancels=[self.streaming_event, self.submit_event],
         )
 
@@ -260,6 +260,9 @@ class ChatTab(QuickActionsMixin):
 
             # Trigger UI update after clear button click
             self.components["clear_btn"].click(fn=trigger_ui_update, outputs=[])
+
+            # Trigger UI update after stop button click (to refresh token budget/status)
+            self.components["stop_btn"].click(fn=trigger_ui_update, outputs=[])
 
             logging.getLogger(__name__).debug(
                 "✅ ChatTab: UI update triggers connected"
@@ -313,11 +316,100 @@ class ChatTab(QuickActionsMixin):
         # Fallback - return a dummy component that won't cause errors
         return gr.Dropdown(visible=False)
 
-    def _handle_stop_click(self, history):
-        """Handle stop button click - hide the button and show download button"""
+    def _handle_stop_click(self, history, request: gr.Request = None):
+        """Handle stop button click: finalize token tracking, append stats, update UI."""
+        try:
+            # Attempt to finalize token accounting for this turn even if stream was interrupted
+            if (
+                hasattr(self, "main_app")
+                and self.main_app
+                and hasattr(self.main_app, "session_manager")
+            ):
+                session_id = (
+                    self.main_app.session_manager.get_session_id(request)
+                    if request
+                    else "default"
+                )
+                agent = self.main_app.session_manager.get_session_agent(session_id)
+                if agent and hasattr(agent, "token_tracker"):
+                    # Get current request messages for estimation fallback
+                    try:
+                        messages = agent.get_conversation_history(session_id)
+                    except Exception:
+                        messages = []
+
+                    # Update prompt tokens explicitly
+                    try:
+                        if messages:
+                            agent.token_tracker.count_prompt_tokens(messages)
+                    except Exception:
+                        pass
+
+                    # Finalize turn token usage using fallback estimation (no API usage needed)
+                    try:
+                        agent.token_tracker.track_llm_response(None, messages)
+                    except Exception:
+                        pass
+
+                    # Build a stats block and append as assistant meta message
+                    try:
+                        prompt_tokens = agent.token_tracker.get_last_prompt_tokens()
+                        api_tokens = agent.token_tracker.get_last_api_tokens()
+                        from ..i18n_translations import get_translation_key as _t
+                        stats_lines = []
+                        if prompt_tokens:
+                            stats_lines.append(
+                                _t("prompt_tokens", self.language).format(tokens=prompt_tokens.formatted)
+                            )
+                        if api_tokens:
+                            stats_lines.append(
+                                _t("api_tokens", self.language).format(tokens=api_tokens.formatted)
+                            )
+                        # Provider/model and execution time where possible
+                        provider = "unknown"
+                        model = "unknown"
+                        try:
+                            if getattr(agent, "llm_instance", None):
+                                provider = agent.llm_instance.provider.value
+                                model = agent.llm_instance.model_name
+                        except Exception:
+                            pass
+                        stats_lines.append(
+                            _t("provider_model", self.language).format(provider=provider, model=model)
+                        )
+                        # Execution time not tracked here; keep lean — omit if not available
+
+                        if stats_lines:
+                            token_display = "\n".join(stats_lines)
+                            token_metadata_message = {
+                                "role": "assistant",
+                                "content": token_display,
+                                "metadata": {"title": _t("token_statistics_title", self.language)},
+                            }
+                            # history is a list of messages for chatbot component
+                            try:
+                                updated_history = list(history) if history else []
+                                updated_history.append(token_metadata_message)
+                                history = updated_history
+                            except Exception:
+                                pass
+                    except Exception:
+                        # Non-fatal: stats block construction may fail silently
+                        pass
+
+                # Ask app to refresh sidebar/status if available
+                try:
+                    if hasattr(self.main_app, "trigger_ui_update"):
+                        self.main_app.trigger_ui_update()
+                except Exception:
+                    pass
+        except Exception:
+            # Non-fatal: UI state update should still proceed
+            pass
+
         # Hide stop button and show download button with current conversation
         download_btn = self._update_download_button_visibility(history)
-        return gr.Button(visible=False), download_btn
+        return history, gr.Button(visible=False), download_btn
 
     def format_token_budget_display(self, request: gr.Request = None) -> str:
         """Format and return the token budget display - now session-aware"""
