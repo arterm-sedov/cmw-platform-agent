@@ -139,14 +139,15 @@ class Sidebar(QuickActionsMixin):
                     elem_classes=["provider-model-selector"],
                 )
 
+            # Status section
             with gr.Column(elem_classes=["model-card"]):
-                # Status and progress indicator
+                # Progress indicator
                 gr.Markdown(
-                    f"### {self._get_translation('status_title')}",
-                    elem_classes=["status-title"],
+                    f"### {self._get_translation('progress_title')}",
+                    elem_classes=["progress-title"],
                 )
                 self.components["progress_display"] = gr.Markdown(
-                    self._get_translation("status_initializing")
+                    self._get_translation("progress_ready")
                 )
                 # Token budget indicator
                 gr.Markdown(
@@ -155,6 +156,14 @@ class Sidebar(QuickActionsMixin):
                 )
                 self.components["token_budget_display"] = gr.Markdown(
                     self._get_translation("token_budget_initializing")
+                )
+                # Status indicator
+                gr.Markdown(
+                    f"### {self._get_translation('status_title')}",
+                    elem_classes=["status-title"],
+                )
+                self.components["status_display"] = gr.Markdown(
+                    self._get_translation("status_initializing")
                 )
 
         # Connect sidebar event handlers
@@ -175,12 +184,12 @@ class Sidebar(QuickActionsMixin):
         # LLM selection events - now applies immediately on dropdown change
         if (
             "provider_model_selector" in self.components
-            and "progress_display" in self.components
+            and "status_display" in self.components
         ):
             self.components["provider_model_selector"].change(
                 fn=self._apply_llm_selection_combined,
                 inputs=[self.components["provider_model_selector"]],
-                outputs=[self.components["progress_display"]],
+                outputs=[self.components["status_display"]],
             )
 
         # Token budget display change event for download button visibility
@@ -205,7 +214,7 @@ class Sidebar(QuickActionsMixin):
 
     def get_status_component(self) -> gr.Markdown:
         """Get the status display component for auto-refresh"""
-        return self.components.get("progress_display")
+        return self.components.get("status_display")
 
     def get_progress_display(self) -> gr.Markdown:
         """Get the progress display component"""
