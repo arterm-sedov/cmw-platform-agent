@@ -878,26 +878,27 @@ class ChatTab(QuickActionsMixin):
             multimodal_value, history, request
         ):
             last_result = result
-            if len(result) >= 2:
-                yield (
-                    result[0],
-                    result[1],
-                    gr.Button(visible=True),
-                    gr.DownloadButton(
-                        visible=False
-                    ),  # Don't update download during streaming
-                    None,
-                )  # Keep stop button visible, don't update download during streaming, reset dropdown
-            else:
-                yield (
-                    result[0],
-                    result[1],
-                    gr.Button(visible=True),
-                    gr.DownloadButton(
-                        visible=False
-                    ),  # Don't update download during streaming
-                    None,
-                )  # Keep stop button visible, don't update download during streaming, reset dropdown
+            # Toggle buttons based on processing state (supports early-finish unlock)
+            stop_visible = True
+            try:
+                if hasattr(self, "main_app") and self.main_app is not None:
+                    stop_visible = bool(self.main_app.is_processing)
+            except Exception:
+                stop_visible = True
+
+            download_btn = (
+                self._update_download_button_visibility(result[0])
+                if not stop_visible
+                else gr.DownloadButton(visible=False)
+            )
+
+            yield (
+                result[0],
+                result[1],
+                gr.Button(visible=stop_visible),
+                download_btn,
+                None,
+            )
 
         # Hide stop button at end of processing and update download button
         if last_result and len(last_result) >= 2:
@@ -943,26 +944,27 @@ class ChatTab(QuickActionsMixin):
             multimodal_value, history, request
         ):
             last_result = result
-            if len(result) >= 2:
-                yield (
-                    result[0],
-                    result[1],
-                    gr.Button(visible=True),
-                    gr.DownloadButton(
-                        visible=False
-                    ),  # Don't update download during streaming
-                    None,
-                )  # Keep stop button visible, don't update download during streaming, reset dropdown
-            else:
-                yield (
-                    result[0],
-                    result[1],
-                    gr.Button(visible=True),
-                    gr.DownloadButton(
-                        visible=False
-                    ),  # Don't update download during streaming
-                    None,
-                )  # Keep stop button visible, don't update download during streaming, reset dropdown
+            # Toggle buttons based on processing state (supports early-finish unlock)
+            stop_visible = True
+            try:
+                if hasattr(self, "main_app") and self.main_app is not None:
+                    stop_visible = bool(self.main_app.is_processing)
+            except Exception:
+                stop_visible = True
+
+            download_btn = (
+                self._update_download_button_visibility(result[0])
+                if not stop_visible
+                else gr.DownloadButton(visible=False)
+            )
+
+            yield (
+                result[0],
+                result[1],
+                gr.Button(visible=stop_visible),
+                download_btn,
+                None,
+            )
 
         # Hide stop button at end of processing and update download button
         if last_result and len(last_result) >= 2:

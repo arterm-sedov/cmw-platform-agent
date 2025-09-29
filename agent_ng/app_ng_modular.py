@@ -693,6 +693,13 @@ class NextGenApp:
                         # Iteration progress - update progress display in sidebar
                         # Store progress status for UI update - session-specific
                         self.session_manager.set_status(session_id, content)
+                        # If this is an early-finish hint, unlock UI now while we wait for finalization
+                        try:
+                            if metadata and metadata.get("early_finish"):
+                                # Stop processing to hide stop button and enable download UI
+                                self.stop_processing(session_id)
+                        except Exception:
+                            pass
                         yield working_history, ""
 
                     elif event_type == "completion":
