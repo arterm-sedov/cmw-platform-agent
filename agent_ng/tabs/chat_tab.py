@@ -218,7 +218,11 @@ class ChatTab(QuickActionsMixin):
         self.components["stop_btn"].click(
             fn=self._handle_stop_click,
             inputs=[self.components["chatbot"]],
-            outputs=[self.components["chatbot"], self.components["stop_btn"], self.components["download_btn"]],
+            outputs=[
+                self.components["chatbot"],
+                self.components["stop_btn"],
+                self.components["download_btn"],
+            ],
             cancels=[self.streaming_event, self.submit_event],
         )
 
@@ -241,6 +245,21 @@ class ChatTab(QuickActionsMixin):
 
         logging.getLogger(__name__).debug(
             "✅ ChatTab: All event handlers connected successfully"
+        )
+
+    def _yield_ui_newline(self, history):
+        """Return a UI-only assistant placeholder with a leading newline.
+
+        This should not affect agent memory; it's purely for chat UI spacing.
+        """
+        ui_history = list(history) if history else []
+        ui_history.append({"role": "assistant", "content": "\n"})
+        return (
+            ui_history,
+            "",
+            gr.Button(visible=True),
+            gr.DownloadButton(visible=False),
+            None,
         )
 
     def _setup_chat_event_triggers(self):
@@ -356,14 +375,19 @@ class ChatTab(QuickActionsMixin):
                         prompt_tokens = agent.token_tracker.get_last_prompt_tokens()
                         api_tokens = agent.token_tracker.get_last_api_tokens()
                         from ..i18n_translations import get_translation_key as _t
+
                         stats_lines = []
                         if prompt_tokens:
                             stats_lines.append(
-                                _t("prompt_tokens", self.language).format(tokens=prompt_tokens.formatted)
+                                _t("prompt_tokens", self.language).format(
+                                    tokens=prompt_tokens.formatted
+                                )
                             )
                         if api_tokens:
                             stats_lines.append(
-                                _t("api_tokens", self.language).format(tokens=api_tokens.formatted)
+                                _t("api_tokens", self.language).format(
+                                    tokens=api_tokens.formatted
+                                )
                             )
                         # Provider/model and execution time where possible
                         provider = "unknown"
@@ -375,7 +399,9 @@ class ChatTab(QuickActionsMixin):
                         except Exception:
                             pass
                         stats_lines.append(
-                            _t("provider_model", self.language).format(provider=provider, model=model)
+                            _t("provider_model", self.language).format(
+                                provider=provider, model=model
+                            )
                         )
                         # Execution time not tracked here; keep lean — omit if not available
 
@@ -384,7 +410,9 @@ class ChatTab(QuickActionsMixin):
                             token_metadata_message = {
                                 "role": "assistant",
                                 "content": token_display,
-                                "metadata": {"title": _t("token_statistics_title", self.language)},
+                                "metadata": {
+                                    "title": _t("token_statistics_title", self.language)
+                                },
                             }
                             # history is a list of messages for chatbot component
                             try:
@@ -841,6 +869,7 @@ class ChatTab(QuickActionsMixin):
             gr.DownloadButton(visible=False),  # Don't update download during streaming
             None,
         )  # Show stop button, don't update download, reset dropdown
+        yield self._yield_ui_newline(history)
 
         # Process message with original wrapper
         last_result = None
@@ -905,6 +934,7 @@ class ChatTab(QuickActionsMixin):
             gr.DownloadButton(visible=False),  # Don't update download during streaming
             None,
         )  # Show stop button, don't update download, reset dropdown
+        yield self._yield_ui_newline(history)
 
         # Process message with original wrapper
         last_result = None
