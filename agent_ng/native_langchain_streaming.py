@@ -428,6 +428,38 @@ class NativeLangChainStreaming:
                     else:
                         accumulated_chunk = accumulated_chunk + chunk
 
+                    # Minimal early-stop detection for OpenRouter-style finish_reason (non-breaking)
+                    # Only consider early stop if we don't see tool calls in this iteration
+                    try:
+                        response_meta = getattr(chunk, "response_metadata", None)
+                        additional = getattr(chunk, "additional_kwargs", None)
+                        normalized_finish = None
+                        native_finish = None
+                        if isinstance(response_meta, dict):
+                            normalized_finish = response_meta.get("finish_reason")
+                            native_finish = response_meta.get("native_finish_reason")
+                        if normalized_finish is None and isinstance(additional, dict):
+                            normalized_finish = additional.get("finish_reason")
+                            native_finish = additional.get("native_finish_reason")
+
+                        if (
+                            normalized_finish in {"stop", "length", "content_filter", "error"}
+                            and not has_tool_calls
+                        ):
+                            # Log and break early to finalize promptly
+                            try:
+                                self._logger.info(
+                                    "Early stop by finish_reason: %s (native=%s)",
+                                    normalized_finish,
+                                    native_finish,
+                                )
+                            except Exception:
+                                pass
+                            break
+                    except Exception:
+                        # Ignore if provider doesn't expose these fields
+                        pass
+
                     # Stream content as it arrives
                     if hasattr(chunk, "content") and chunk.content:
                         yield StreamingEvent(
