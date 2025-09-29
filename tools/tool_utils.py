@@ -3,6 +3,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from . import requests_ as requests_
 from .models import (
+    TemplateResult,
     AttributeResult, 
     CommonAttributeFields, 
     CommonGetAttributeFields,
@@ -14,6 +15,7 @@ import inspect
 # Common constants
 APPLICATION_ENDPOINT = "webapi/Solution"
 ATTRIBUTE_ENDPOINT = "webapi/Attribute"
+RECORD_TEMPLATE_ENDPOINT = "webapi/RecordTemplate"
 KEYS_TO_REMOVE_MAPPING = {
     "String": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
     "Role": ['instanceGlobalAlias', 'isTitle', 'isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio'],
@@ -153,7 +155,7 @@ def remove_values(
 ) -> Any:
     """
     Recursively remove specified values from dicts/lists.
-
+    
     Args:
         obj: The object to clean (dict, list, or any other type)
         exclude_values: Set of values to remove (default: {None, ""})
@@ -165,17 +167,31 @@ def remove_values(
         exclude_values = {None, ""}
 
     if isinstance(obj, dict):
-        return {
-            k: remove_values(v, exclude_values)
-            for k, v in obj.items()
-            if v not in exclude_values
-        }
+        result = {}
+        for k, v in obj.items():
+            cleaned_v = remove_values(v, exclude_values)
+            # Safe comparison: only check membership if cleaned_v is hashable
+            # For unhashable types (dict, list), we assume they should be kept
+            try:
+                if cleaned_v not in exclude_values:
+                    result[k] = cleaned_v
+            except TypeError:
+                # cleaned_v is unhashable (dict, list, etc.), so keep it
+                result[k] = cleaned_v
+        return result
+
     if isinstance(obj, list):
-        return [
-            remove_values(v, exclude_values)
-            for v in obj
-            if v not in exclude_values
-        ]
+        result = []
+        for v in obj:
+            cleaned_v = remove_values(v, exclude_values)
+            try:
+                if cleaned_v not in exclude_values:
+                    result.append(cleaned_v)
+            except TypeError:
+                # cleaned_v is unhashable (dict, list, etc.), so keep it
+                result.append(cleaned_v)
+        return result
+
     return obj
 
 def _set_input_mask(display_format: str) -> str:

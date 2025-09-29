@@ -70,6 +70,7 @@ Updated the tool loading logic to:
 
 ### CMW Tools Now Available
 - **Application Management**: `list_applications`, `list_templates`
+- **Record Template**: `edit_or_create_record_template`
 - **Attribute Management**: `list_attributes`
 - **Text Attributes**: `edit_or_create_text_attribute`
 - **DateTime Attributes**: `edit_or_create_date_time_attribute`

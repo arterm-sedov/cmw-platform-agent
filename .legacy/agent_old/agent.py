@@ -3359,6 +3359,8 @@ class CmwAgent:
                 'wiki_search', 'arxiv_search', 'web_search',
                 # Comindware Platform tools - Templates
                 'list_attributes',
+                # Comindware Platform tools - Templates (Record)
+                'edit_or_create_record_template'
                 # Comindware Platform tools - Applications
                 'list_templates', 'list_applications',
                 # Comindware Platform tools - Attributes (Text)

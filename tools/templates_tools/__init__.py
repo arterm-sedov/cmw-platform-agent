@@ -10,7 +10,9 @@ Available Tools:
 
 # Import all tool functions
 from .tool_list_attributes import list_attributes
+from .tools_record_template import edit_or_create_record_template
 
 __all__ = [
-    'list_attributes'
+    'list_attributes',
+    'edit_or_create_record_template'
 ]

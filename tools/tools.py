@@ -52,6 +52,9 @@ from .templates_tools.tool_list_attributes import list_attributes
 from .applications_tools.tool_list_templates import list_templates
 from .applications_tools.tool_list_applications import list_applications
 
+# Templates tools
+from .templates_tools.tools_record_template import edit_or_create_record_template
+
 # Attributes tools - Text attributes
 from .attributes_tools.tools_text_attribute import edit_or_create_text_attribute
 
