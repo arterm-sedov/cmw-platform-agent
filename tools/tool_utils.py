@@ -3,6 +3,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 from . import requests_ as requests_
 from .models import (
+    TemplateResult,
     AttributeResult, 
     CommonAttributeFields, 
     CommonGetAttributeFields,
@@ -14,6 +15,7 @@ import inspect
 # Common constants
 APPLICATION_ENDPOINT = "webapi/Solution"
 ATTRIBUTE_ENDPOINT = "webapi/Attribute"
+RECORD_TEMPLATE_ENDPOINT = "webapi/RecordTemplate"
 KEYS_TO_REMOVE_MAPPING = {
     "String": ['isMultiValue', 'isMandatory', 'isOwnership', 'instanceGlobalAlias', 'imageColorType', 'imagePreserveAspectRatio'],
     "Role": ['instanceGlobalAlias', 'isTitle', 'isUnique', 'isIndexed', 'isMandatory', 'isOwnership', 'imageColorType', 'imagePreserveAspectRatio'],
