@@ -321,8 +321,7 @@ class ConversationTokenTracker:
         self._last_api_tokens = None
         # Reset last prompt tokens as well
         self._last_prompt_tokens = None
-        # Reset current conversation tokens
-        self.last_conversation_tokens = 0
+        # Do not reset current conversation tokens on model switch; preserve continuity
     
     def get_last_prompt_tokens(self) -> Optional[TokenCount]:
         """Get the last prompt token count"""
