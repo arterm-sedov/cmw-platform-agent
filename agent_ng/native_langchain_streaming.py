@@ -428,8 +428,8 @@ class NativeLangChainStreaming:
                     else:
                         accumulated_chunk = accumulated_chunk + chunk
 
-                    # Minimal early-stop detection for OpenRouter-style finish_reason (non-breaking)
-                    # Only consider early stop if we don't see tool calls in this iteration
+                    # Early-finish hint (no break): if finish_reason signals end and no tool calls in this iteration,
+                    # emit a completion hint so UI can react promptly, but keep reading to allow usage/native counts.
                     try:
                         response_meta = getattr(chunk, "response_metadata", None)
                         additional = getattr(chunk, "additional_kwargs", None)
@@ -446,18 +446,17 @@ class NativeLangChainStreaming:
                             normalized_finish in {"stop", "length", "content_filter", "error"}
                             and not has_tool_calls
                         ):
-                            # Log and break early to finalize promptly
-                            try:
-                                self._logger.info(
-                                    "Early stop by finish_reason: %s (native=%s)",
-                                    normalized_finish,
-                                    native_finish,
-                                )
-                            except Exception:
-                                pass
-                            break
+                            yield StreamingEvent(
+                                event_type="iteration_progress",
+                                content=get_translation_key("processing_complete", language),
+                                metadata={
+                                    "conversation_complete": True,
+                                    "early_finish": True,
+                                    "finish_reason": normalized_finish,
+                                    "native_finish_reason": native_finish,
+                                },
+                            )
                     except Exception:
-                        # Ignore if provider doesn't expose these fields
                         pass
 
                     # Stream content as it arrives
@@ -892,14 +891,10 @@ class NativeLangChainStreaming:
             # Use the last accumulated chunk for token tracking
             final_chunk = accumulated_chunk
 
-            # Track API tokens
+            # Track API tokens at finalization (native or fallback estimation handled by tracker)
             if final_chunk and hasattr(agent, "token_tracker"):
                 try:
-                    if (
-                        hasattr(final_chunk, "usage_metadata")
-                        and final_chunk.usage_metadata
-                    ):
-                        agent.token_tracker.track_llm_response(final_chunk, messages)
+                    agent.token_tracker.track_llm_response(final_chunk, messages)
                 except Exception as e:
                     print(f"🔍 DEBUG: Error tracking API tokens: {e}")
 
