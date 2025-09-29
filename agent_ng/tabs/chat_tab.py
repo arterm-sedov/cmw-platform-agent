@@ -374,18 +374,17 @@ class ChatTab(QuickActionsMixin):
                     try:
                         prompt_tokens = agent.token_tracker.get_last_prompt_tokens()
                         api_tokens = agent.token_tracker.get_last_api_tokens()
-                        from ..i18n_translations import get_translation_key as _t
 
                         stats_lines = []
                         if prompt_tokens:
                             stats_lines.append(
-                                _t("prompt_tokens", self.language).format(
+                                self._get_translation("prompt_tokens").format(
                                     tokens=prompt_tokens.formatted
                                 )
                             )
                         if api_tokens:
                             stats_lines.append(
-                                _t("api_tokens", self.language).format(
+                                self._get_translation("api_tokens").format(
                                     tokens=api_tokens.formatted
                                 )
                             )
@@ -399,7 +398,7 @@ class ChatTab(QuickActionsMixin):
                         except Exception:
                             pass
                         stats_lines.append(
-                            _t("provider_model", self.language).format(
+                            self._get_translation("provider_model").format(
                                 provider=provider, model=model
                             )
                         )
@@ -411,7 +410,9 @@ class ChatTab(QuickActionsMixin):
                                 "role": "assistant",
                                 "content": token_display,
                                 "metadata": {
-                                    "title": _t("token_statistics_title", self.language)
+                                    "title": self._get_translation(
+                                        "token_statistics_title"
+                                        )
                                 },
                             }
                             # history is a list of messages for chatbot component

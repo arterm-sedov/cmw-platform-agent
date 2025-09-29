@@ -871,6 +871,31 @@ class NativeLangChainStreaming:
                 except Exception as e:
                     print(f"🔍 DEBUG: Error tracking API tokens: {e}")
 
+            # Extract normalized/native finish_reason if present (provider-agnostic; OpenRouter supplies both)
+            def _extract_finish_reason(chunk) -> tuple[str | None, str | None]:
+                try:
+                    if not chunk:
+                        return None, None
+                    # Prefer response_metadata.native fields if available
+                    response_meta = getattr(chunk, "response_metadata", None)
+                    if isinstance(response_meta, dict):
+                        normalized = response_meta.get("finish_reason")
+                        native = response_meta.get("native_finish_reason")
+                        if normalized or native:
+                            return normalized, native
+                    # LangChain messages sometimes carry additional_kwargs
+                    additional = getattr(chunk, "additional_kwargs", None)
+                    if isinstance(additional, dict):
+                        normalized = additional.get("finish_reason")
+                        native = additional.get("native_finish_reason")
+                        if normalized or native:
+                            return normalized, native
+                except Exception:
+                    return None, None
+                return None, None
+
+            normalized_finish, native_finish = _extract_finish_reason(final_chunk)
+
             # Add all new messages to memory at the end (avoid duplication)
             self._logger.debug("Adding new messages to memory manager")
 
@@ -951,6 +976,8 @@ class NativeLangChainStreaming:
                     metadata={
                         "ordered_messages": ordered_messages_snapshot,
                         "conversation_id": conversation_id,
+                        "finish_reason": normalized_finish,
+                        "native_finish_reason": native_finish,
                     },
                 )
             except Exception:
@@ -962,7 +989,11 @@ class NativeLangChainStreaming:
             yield StreamingEvent(
                 event_type="completion",
                 content=self._get_response_completed_message(language),
-                metadata={"final_response": True},
+                metadata={
+                    "final_response": True,
+                    "finish_reason": normalized_finish,
+                    "native_finish_reason": native_finish,
+                },
             )
 
             # Final iteration progress completion
