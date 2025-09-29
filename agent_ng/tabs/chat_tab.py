@@ -214,11 +214,11 @@ class ChatTab(QuickActionsMixin):
                 ],
             )
 
-        # Stop button - cancel both send and submit events and hide itself
+        # Stop button - cancel both send and submit events and hide itself, show download button
         self.components["stop_btn"].click(
             fn=self._handle_stop_click,
             inputs=[self.components["chatbot"]],
-            outputs=[self.components["stop_btn"]],
+            outputs=[self.components["stop_btn"], self.components["download_btn"]],
             cancels=[self.streaming_event, self.submit_event],
         )
 
@@ -314,8 +314,10 @@ class ChatTab(QuickActionsMixin):
         return gr.Dropdown(visible=False)
 
     def _handle_stop_click(self, history):
-        """Handle stop button click - hide the button immediately"""
-        return gr.Button(visible=False)
+        """Handle stop button click - hide the button and show download button"""
+        # Hide stop button and show download button with current conversation
+        download_btn = self._update_download_button_visibility(history)
+        return gr.Button(visible=False), download_btn
 
     def format_token_budget_display(self, request: gr.Request = None) -> str:
         """Format and return the token budget display - now session-aware"""
@@ -768,7 +770,7 @@ class ChatTab(QuickActionsMixin):
                 last_result[0],
                 last_result[1],
                 gr.Button(visible=False),
-                self._update_download_button_visibility(last_result[0]),  # Update download only at end
+                self._update_download_button_visibility(last_result[0]),  # Final download update
                 None,
             )  # Reset dropdown
         else:
@@ -776,7 +778,7 @@ class ChatTab(QuickActionsMixin):
                 history,
                 "",
                 gr.Button(visible=False),
-                self._update_download_button_visibility(history),  # Update download only at end
+                self._update_download_button_visibility(history),  # Final download update
                 None,
             )  # Reset dropdown
 
@@ -824,7 +826,7 @@ class ChatTab(QuickActionsMixin):
                 last_result[0],
                 last_result[1],
                 gr.Button(visible=False),
-                self._update_download_button_visibility(last_result[0]),  # Update download only at end
+                self._update_download_button_visibility(last_result[0]),  # Final download update
                 None,
             )  # Reset dropdown
         else:
@@ -832,7 +834,7 @@ class ChatTab(QuickActionsMixin):
                 history,
                 "",
                 gr.Button(visible=False),
-                self._update_download_button_visibility(history),  # Update download only at end
+                self._update_download_button_visibility(history),  # Final download update
                 None,
             )  # Reset dropdown
 
