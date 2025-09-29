@@ -190,6 +190,10 @@ class NextGenApp:
 
         # Processing state for UI feedback
         self.is_processing = False
+        # Per-session stop timestamps for delayed transition to ready
+        self._session_stop_times: dict[str, float] = {}
+        # Per-session last rendered progress string to reduce UI churn
+        self._progress_cache: dict[str, str] = {}
 
         # Persistent background asyncio loop for streaming to avoid closing gRPC/Gemini loop between turns
         self._stream_loop = None
@@ -493,30 +497,51 @@ class NextGenApp:
         return get_translation_key("progress_ready", self.language)
 
     def update_progress_display(self, request: gr.Request = None) -> str:
-        """Update progress display - strictly session-aware"""
+        """Update progress display: session-aware, low-churn, delayed ready after completion."""
+        # No session context → show ready (avoid cross-session leakage)
         if not request:
-            # No request means no session context - return default ready state
             return get_translation_key("progress_ready", self.language)
 
         session_id = self.session_manager.get_session_id(request)
         status = self.session_manager.get_status(session_id)
 
-        # Add rotating clock icon only if processing AND not in ready state
-        if self.is_processing and "ready" not in status.lower():
-            icon = self.session_manager.get_clock_icon()
-            result = f"{icon} {status}"
+        # While processing, show rotating icon + current session status
+        if self.is_processing:
+            if status:
+                icon = self.session_manager.get_clock_icon()
+                rendered = f"{icon} {status}"
+            else:
+                rendered = get_translation_key("progress_ready", self.language)
         else:
-            result = status
+            # After processing ends, keep last status briefly, then switch to ready
+            stop_ts = self._session_stop_times.get(session_id, 0.0)
+            elapsed = time.time() - stop_ts if stop_ts else 999.0
+            if elapsed < 2.0 and status and "ready" not in status.lower():
+                rendered = status
+            else:
+                rendered = get_translation_key("progress_ready", self.language)
+                # Ensure session status converges to ready to prevent stale text
+                try:
+                    self.session_manager.set_status(session_id, rendered)
+                except Exception:
+                    pass
 
-        return result
+        # Reduce UI churn with a small cache
+        last = self._progress_cache.get(session_id)
+        if last == rendered:
+            return last
+        self._progress_cache[session_id] = rendered
+        return rendered
 
     def start_processing(self):
         """Mark that processing has started"""
         self.is_processing = True
 
-    def stop_processing(self):
-        """Mark that processing has stopped"""
+    def stop_processing(self, session_id: str | None = None):
+        """Mark that processing has stopped and record stop time for the session."""
         self.is_processing = False
+        if session_id:
+            self._session_stop_times[session_id] = time.time()
 
     def get_conversation_history(
         self, session_id: str = "default"
@@ -971,8 +996,8 @@ class NextGenApp:
                     # print(f"🔍 DEBUG: Assistant message {i}: {len(msg.get('content', ''))} chars")
                     pass
 
-            # Stop processing state
-            self.stop_processing()
+            # Stop processing state (per-session)
+            self.stop_processing(session_id)
 
             # Final yield with updated stats
             # print(f"🔍 DEBUG: Final yield - working_history length: {len(working_history)}")
