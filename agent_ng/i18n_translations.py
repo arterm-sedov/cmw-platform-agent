@@ -80,7 +80,7 @@ RUSSIAN_TRANSLATIONS = {
     "download_button": "📥 Скачать диалог (Markdown)",
     "download_file_label": "Скачать Markdown",
     # LLM Selection section
-    "llm_selection_title": "🔧 Выбор LLM",
+    "llm_selection_title": "Выбор LLM",
     "provider_label": "Провайдер",
     "model_label": "Модель",
     "provider_model_label": "Провайдер / модель",
@@ -100,12 +100,12 @@ RUSSIAN_TRANSLATIONS = {
     "current_provider": "Провайдер: {provider}",
     "current_model": "Модель: {model}",
     # Status section
-    "status_title": "🤖 Статус",
+    "status_title": "Статус",
     "status_initializing": "🟡 Инициализация...",
     "status_ready": "Готов",
     "status_ready_true": "Готов: да ✅",
     "status_ready_false": "Готов: нет ❌",
-    "token_budget_title": "💰 Расход токенов",
+    "token_budget_title": "Расход токенов",
     "token_budget_initializing": "🟡 Загрузка...",
     "token_statistics_title": "📊 Статистика",
     # Token usage components (separated for flexibility)
@@ -127,7 +127,7 @@ RUSSIAN_TRANSLATIONS = {
 - Последнее сообщение {percentage}% ({used:,}/{context_window:,}) {status_icon}
 - Среднее на сообщение: {avg_tokens:,}""",
     "token_budget_unknown": "❓ Неизвестно",
-    "progress_title": "📊 Прогресс",
+    "progress_title": "Прогресс",
     "progress_ready": "Готов обработать ваш запрос...",
     "progress_processing": "Обработка запроса...",
     # Logs tab
@@ -384,7 +384,7 @@ ENGLISH_TRANSLATIONS = {
     "download_button": "📥 Download conversation (Markdown)",
     "download_file_label": "Download Markdown",
     # LLM Selection section
-    "llm_selection_title": "🔧 LLM Selection",
+    "llm_selection_title": "LLM Selection",
     "provider_label": "Provider",
     "model_label": "Model",
     "provider_model_label": "Provider / model",
@@ -404,12 +404,12 @@ ENGLISH_TRANSLATIONS = {
     "current_provider": "Provider: {provider}",
     "current_model": "**Model:** {model}",
     # Status section
-    "status_title": "🤖 Status",
+    "status_title": "Status",
     "status_initializing": "🟡 Initializing...",
     "status_ready": "Ready",
     "status_ready_true": "Ready: yes ✅",
     "status_ready_false": "Ready: no ❌",
-    "token_budget_title": "💰 Token usage",
+    "token_budget_title": "Token usage",
     "token_budget_initializing": "🟡 Loading...",
     "token_statistics_title": "📊 Statistics",
     # Token usage components (separated for flexibility)
@@ -431,7 +431,7 @@ ENGLISH_TRANSLATIONS = {
 - Last message {percentage}% ({used:,}/{context_window:,}) {status_icon}
 - Average per message: {avg_tokens:,}""",
     "token_budget_unknown": "❓ Unknown",
-    "progress_title": "📊 Progress",
+    "progress_title": "Progress",
     "progress_ready": "Ready to process your request...",
     "progress_processing": "Processing request...",
     # Logs tab
