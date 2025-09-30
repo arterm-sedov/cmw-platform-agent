@@ -158,7 +158,7 @@ class ChatTab(QuickActionsMixin):
             send_config = apply_concurrency_to_click_event(
                 queue_manager,
                 "chat",
-                self._stream_message_with_queue_status,
+                self._stream_message_wrapper,
                 [self.components["msg"], self.components["chatbot"]],
                 [
                     self.components["chatbot"],
@@ -174,7 +174,7 @@ class ChatTab(QuickActionsMixin):
             submit_config = apply_concurrency_to_submit_event(
                 queue_manager,
                 "chat",
-                self._stream_message_with_queue_status,
+                self._stream_message_wrapper,
                 [self.components["msg"], self.components["chatbot"]],
                 [
                     self.components["chatbot"],
@@ -851,78 +851,14 @@ class ChatTab(QuickActionsMixin):
         """Reset the quick actions dropdown to None"""
         return None
 
-    def _stream_message_with_queue_status(
-        self, multimodal_value, history, request: gr.Request = None
-    ):
-        """Wrapper for concurrent processing - relies on Gradio's native queue feedback"""
-        # With status_update_rate="auto", Gradio will show native queue status
-        # No need for custom warnings - Gradio handles this natively
-
-        # Show stop button at start of processing
-        yield (
-            history,
-            "",
-            gr.Button(visible=True),
-            gr.DownloadButton(visible=False),  # Don't update download during streaming
-            None,
-        )  # Show stop button, don't update download, reset dropdown
-        yield self._yield_ui_newline(history)
-
-        # Process message with original wrapper
-        last_result = None
-        for result in self._stream_message_wrapper_internal(
-            multimodal_value, history, request
-        ):
-            last_result = result
-            # Toggle buttons based on processing state (supports early-finish unlock)
-            stop_visible = True
-            try:
-                if hasattr(self, "main_app") and self.main_app is not None:
-                    stop_visible = bool(self.main_app.is_processing)
-            except Exception:
-                stop_visible = True
-
-            download_btn = (
-                self._update_download_button_visibility(result[0])
-                if not stop_visible
-                else gr.DownloadButton(visible=False)
-            )
-
-            yield (
-                result[0],
-                result[1],
-                gr.Button(visible=stop_visible),
-                download_btn,
-                None,
-            )
-
-        # Hide stop button at end of processing and update download button
-        if last_result and len(last_result) >= 2:
-            yield (
-                last_result[0],
-                last_result[1],
-                gr.Button(visible=False),
-                self._update_download_button_visibility(
-                    last_result[0]
-                ),  # Final download update
-                None,
-            )  # Reset dropdown
-        else:
-            yield (
-                history,
-                "",
-                gr.Button(visible=False),
-                self._update_download_button_visibility(
-                    history
-                ),  # Final download update
-                None,
-            )  # Reset dropdown
-
     def _stream_message_wrapper(
         self, multimodal_value, history, request: gr.Request = None
     ):
-        """Wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
-        # Fallback mode without queue status
+        """Wrapper for concurrent processing with Gradio's native queue feedback
+
+        Handles MultimodalValue format and extracts text for processing with proper session awareness.
+        With status_update_rate="auto", Gradio will show native queue status - no need for custom warnings.
+        """
 
         # Show stop button at start of processing
         yield (
