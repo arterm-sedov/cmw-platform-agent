@@ -364,7 +364,9 @@ class LLMManager:
         self._initialization_logs = []
         self._health_check_interval = 300  # 5 minutes
         self._last_health_check = 0
-        
+        # Allowed providers allowlist loaded from environment; None means no restriction
+        self._allowed_providers = self._load_allowed_providers()
+
     def _log_initialization(self, message: str, level: str = "INFO"):
         """Log initialization messages"""
         timestamp = time.strftime("%H:%M:%S")
@@ -379,6 +381,36 @@ class LLMManager:
         if not api_key:
             self._log_initialization(f"API key not found for {config.name} ({config.api_key_env})", "WARNING")
         return api_key
+
+    def _load_allowed_providers(self) -> Optional[set[str]]:
+        """Load allowed providers from env. Empty/missing => allow all.
+
+        Var: LLM_ALLOWED_PROVIDERS
+        Comma separated list, case-insensitive.
+        """
+        try:
+            load_dotenv()
+        except Exception:
+            pass
+        raw = (
+            os.environ.get("LLM_ALLOWED_PROVIDERS")
+            or ""
+        )
+        normalized = [s.strip().lower() for s in raw.split(",") if s.strip()]
+        if not normalized:
+            return None
+        valid = {p.value for p in LLMProvider}
+        allowed = {p for p in normalized if p in valid}
+        if not allowed:
+            return None
+        self._log_initialization(f"Allowed providers from env: {sorted(allowed)}", "INFO")
+        return allowed
+
+    def _is_provider_allowed(self, provider: LLMProvider) -> bool:
+        """Check if provider passes the allowlist (or allow all if None)."""
+        if self._allowed_providers is None:
+            return True
+        return provider.value in self._allowed_providers
         
     def _initialize_gemini_llm(self, config: LLMConfig, model_config: Dict[str, Any]) -> Optional[Any]:
         """Initialize Gemini LLM instance"""
@@ -623,6 +655,10 @@ class LLMManager:
         except ValueError:
             self._log_initialization(f"Invalid provider: {provider}", "ERROR")
             return None
+        # Enforce allowlist
+        if not self._is_provider_allowed(provider_enum):
+            self._log_initialization(f"Provider '{provider_enum.value}' is not allowed by CMW_ALLOWED_PROVIDERS", "ERROR")
+            return None
             
         instance_key = self._get_instance_key(provider_enum, model_index)
         
@@ -688,7 +724,11 @@ class LLMManager:
         except ValueError:
             self._log_initialization(f"Invalid provider: {provider}", "ERROR")
             return None
-            
+        # Enforce allowlist
+        if not self._is_provider_allowed(provider_enum):
+            self._log_initialization(f"Provider '{provider_enum.value}' is not allowed by LLM_ALLOWED_PROVIDERS", "ERROR")
+            return None
+
         # Create new instance without caching
         instance = self._initialize_llm_instance(provider_enum, model_index)
         if instance:
@@ -733,7 +773,7 @@ class LLMManager:
         for provider in LLMProvider:
             # Check if API key is available without initializing the LLM
             config = self.LLM_CONFIGS.get(provider)
-            if config and self._get_api_key(config):
+            if config and self._get_api_key(config) and self._is_provider_allowed(provider):
                 available.append(provider.value)
         return available
         
