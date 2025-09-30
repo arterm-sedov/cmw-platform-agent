@@ -62,7 +62,16 @@ class ConfigTab:
             # Wire events
             self._connect_events()
 
-            self._load_from_state(self.components["config_state"])
+            # Auto-load BrowserState into fields on render (and when it changes)
+            gr.on(
+                triggers=[self.components["config_state"].change],
+                inputs=[self.components["config_state"]],
+                outputs=[
+                    self.components["platform_url"],
+                    self.components["username"],
+                    self.components["password"],
+                ],
+            )(self._load_from_state)
 
         logging.getLogger(__name__).info(
             "✅ ConfigTab: Successfully created with components and wiring"
