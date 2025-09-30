@@ -211,6 +211,9 @@ RUSSIAN_TRANSLATIONS = {
         пределах текущего сеанса.
         """
     ),
+    # Statistics labels
+    "agent_status_section": "**Агент:**",
+    "conversation_section": "**Диалог:**",
     "tools_section": "**Инструменты:**",
     "messages_label": "Сообщения",
     "user_messages_label": "Пользователь",
@@ -218,7 +221,7 @@ RUSSIAN_TRANSLATIONS = {
     "total_messages_label": "Всего сообщений",
     "available_label": "Доступно",
     "used_label": "Использовано",
-    "unique_tools_label": "уникальных инструментов",
+    "unique_tools_label": "уникальных",
     "total_calls_label": "Всего вызовов",
     "tools_used_label": "Использовано инструментов",
     "tools_label": "Инструменты",
@@ -519,7 +522,7 @@ ENGLISH_TRANSLATIONS = {
     "total_messages_label": "Total messages",
     "available_label": "Available",
     "used_label": "Used",
-    "unique_tools_label": "unique tools",
+    "unique_tools_label": "unique",
     "total_calls_label": "Total Calls",
     "tools_used_label": "Used tools",
     "tools_label": "Tools",
