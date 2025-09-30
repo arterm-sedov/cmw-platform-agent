@@ -1091,8 +1091,8 @@ class NextGenApp:
     def _update_status(self, request: gr.Request = None) -> str:
         """Update status display - always session-aware"""
         # Use stats tab for proper formatting (now always session-aware)
-        stats_tab = self.tab_instances.get('stats')
-        if stats_tab and hasattr(stats_tab, 'format_stats_display'):
+        stats_tab = self.tab_instances.get("stats")
+        if stats_tab and hasattr(stats_tab, "format_stats_display"):
             return stats_tab.format_stats_display(request)
 
         # Final fallback
