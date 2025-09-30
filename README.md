@@ -108,7 +108,7 @@ The Agent NG is a modern, LangChain-native conversational AI agent built with a 
 The agent uses a sophisticated multi-LLM approach with the following providers in sequence:
 
 1. **OpenRouter** (Primary)
-   - Models: `deepseek/deepseek-chat-v3-0324:free`, `mistralai/mistral-small-3.2-24b-instruct:free`, `openrouter/cypher-alpha:free`
+   - Models: `x-ai/grok-4-fast:free`, `qwen/qwen3-coder:free`, `openai/gpt-5-mini`, `x-ai/grok-code-fast-1`, `mistralai/codestral-2508`, `deepseek/deepseek-chat-v3.1:free`, `deepseek/deepseek-r1-0528`, `openai/gpt-oss-120b`, `nvidia/nemotron-nano-9b-v2:free`, `qwen/qwen3-coder-flash`
    - Token Limits: 100K-1M tokens
    - Tool Support: ✅ Full tool-calling capabilities
 

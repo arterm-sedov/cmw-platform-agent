@@ -220,6 +220,27 @@ class LLMManager:
                     "force_tools": True
                 },
                 {
+                    "model": "x-ai/grok-4-fast:free",
+                    "token_limit": 2000000,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "nvidia/nemotron-nano-9b-v2:free",
+                    "token_limit": 128000,
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                                {
+                    "model": "qwen/qwen3-coder:free",
+                    "token_limit": 262144,
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
                     "model": "openai/gpt-oss-120b",
                     "token_limit": 131072,
                     "max_tokens": 32768,
@@ -260,27 +281,6 @@ class LLMManager:
                     "max_tokens": 4096,
                     "temperature": 0,
                     "force_tools": True
-                },
-                {
-                    "model": "openrouter/sonoma-dusk-alpha",
-                    "token_limit": 2000000,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "qwen/qwen3-coder:free",
-                    "token_limit": 262144,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "mistralai/mistral-small-3.2-24b-instruct:free",
-                    "token_limit": 131072,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": False
                 }
             ],
             enable_chunking=False
