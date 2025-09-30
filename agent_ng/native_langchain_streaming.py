@@ -22,6 +22,7 @@ from typing import Any
 # LangChain imports
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
+from .debug_streamer import get_debug_streamer
 from .i18n_translations import get_translation_key
 from .session_manager import set_current_session_id
 
@@ -629,29 +630,81 @@ class NativeLangChainStreaming:
                                             ),
                                         },
                                     )
+
+                                    # Remove from in-progress
+                                    del tool_calls_in_progress[tool_call_id]
                                 else:
-                                    yield StreamingEvent(
-                                        event_type="error",
-                                        content=self._get_unknown_tool_message(
-                                            tool_name, language
-                                        ),
-                                        metadata={"tool_name": tool_name},
+                                    # Unknown tool - return as tool result instead of error
+                                    unknown_tool_result = self._get_unknown_tool_message(
+                                        tool_name, language
                                     )
+
+                                    # Cache result for duplicate tool calls
+                                    tool_result_cache[tool_key] = unknown_tool_result
+
+                                    yield StreamingEvent(
+                                        event_type="tool_end",
+                                        content=f"\n{self._get_call_count_message(duplicate_count, language)}\n\n{self._get_result_message(unknown_tool_result, language)}",
+                                        metadata={
+                                            "tool_name": tool_name,
+                                            "tool_output": unknown_tool_result,
+                                            "duplicate": duplicate_count > 1,
+                                            "duplicate_count": duplicate_count,
+                                            "title": self._get_tool_called_message(
+                                                tool_name, language
+                                            ),
+                                        },
+                                    )
+
+                                    # Stream unknown tool to debug logs
+                                    try:
+                                        debug_streamer = get_debug_streamer(conversation_id)
+                                        debug_streamer.warning(
+                                            f"Unknown tool: {tool_name}",
+                                            category="tool_execution",
+                                            metadata={"tool_name": tool_name},
+                                        )
+                                    except Exception:
+                                        pass
+
                                     # Remove from in-progress
                                     del tool_calls_in_progress[tool_call_id]
                                     continue
 
-                                # Remove from in-progress
-                                del tool_calls_in_progress[tool_call_id]
-
                             except Exception as e:
-                                yield StreamingEvent(
-                                    event_type="error",
-                                    content=self._get_tool_error_message(
-                                        str(e), language
-                                    ),
-                                    metadata={"tool_name": tool_name, "error": str(e)},
+                                # Tool execution error - return as tool result instead of separate error
+                                tool_error_result = self._get_tool_error_message(
+                                    str(e), language
                                 )
+
+                                # Cache result for duplicate tool calls
+                                tool_result_cache[tool_key] = tool_error_result
+
+                                yield StreamingEvent(
+                                    event_type="tool_end",
+                                    content=f"\n{self._get_call_count_message(duplicate_count, language)}\n\n{self._get_result_message(tool_error_result, language)}",
+                                    metadata={
+                                        "tool_name": tool_name,
+                                        "tool_output": tool_error_result,
+                                        "duplicate": duplicate_count > 1,
+                                        "duplicate_count": duplicate_count,
+                                        "title": self._get_tool_called_message(
+                                            tool_name, language
+                                        ),
+                                    },
+                                )
+
+                                # Stream tool error to debug logs
+                                try:
+                                    debug_streamer = get_debug_streamer(conversation_id)
+                                    debug_streamer.error(
+                                        f"Tool execution error: {str(e)}",
+                                        category="tool_execution",
+                                        metadata={"tool_name": tool_name, "error": str(e)},
+                                    )
+                                except Exception:
+                                    pass
+
                                 # Remove from in-progress
                                 tool_calls_in_progress.pop(tool_call_id, None)
 
@@ -705,6 +758,7 @@ class NativeLangChainStreaming:
                                 tool_key = f"{tool_name}:{hash(str(sorted(cache_args.items())))}"
 
                                 # Get cached result (same for all duplicates)
+                                # This includes both successful results and error results
                                 tool_result = tool_result_cache.get(
                                     tool_key, "Tool execution failed"
                                 )
@@ -1100,6 +1154,26 @@ class NativeLangChainStreaming:
                 content=self._get_error_message(str(e), language),
                 metadata={"error": str(e)},
             )
+
+            # Persist top-level streamed error as AIMessage
+            try:
+                agent.memory_manager.add_message(
+                    conversation_id,
+                    AIMessage(content=self._get_error_message(str(e), language)),
+                )
+            except Exception:
+                pass
+
+            # Stream top-level error to debug logs
+            try:
+                debug_streamer = get_debug_streamer(conversation_id)
+                debug_streamer.error(
+                    f"Streaming error: {str(e)}",
+                    category="streaming",
+                    metadata={"error": str(e)},
+                )
+            except Exception:
+                pass
 
             # Error completion for progress display
             yield StreamingEvent(
