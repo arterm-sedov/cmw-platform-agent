@@ -247,18 +247,8 @@ def setup_logging(force: bool | None = None) -> Logger:
         session_aware_handler.setLevel(level)
         root.addHandler(session_aware_handler)
         
-        # Also create handlers for common session IDs that might be used
-        session_ids = ["default", "gradio_default", "app_ng"]
-        for session_id in session_ids:
-            try:
-                dbg = get_log_handler(session_id)
-                if dbg and isinstance(dbg, Handler) and dbg not in root.handlers:
-                    # Don't set formatter - let debug_streamer handle its own formatting
-                    dbg.setLevel(level)
-                    # Don't add directly to root - let SessionAwareLogHandler manage routing
-            except Exception:
-                # Continue with other session IDs
-                continue
+        # Session-aware handler will create session handlers on-demand
+        # No need to pre-create handlers for non-existent sessions
     except Exception as e:
         # Optional integration; ignore on failure
         print(f"Warning: Could not attach debug_streamer handler: {e}")

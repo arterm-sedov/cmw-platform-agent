@@ -193,7 +193,7 @@ class StatsTab:
             return f"""
 {self._get_translation("agent_status_section")}
 - {self._get_translation("status_ready_true" if stats["agent_status"]["is_ready"] else "status_ready_false")}
-- LLM: {stats["llm_info"].get("model_name", "Unknown")}
+- {self._get_translation("current_model").format(model=stats["llm_info"].get("model_name", "Unknown"))}
 - {self._get_translation("provider_info").format(provider=stats["llm_info"].get("provider", "Unknown"))}
 
 {self._get_translation("conversation_section")}

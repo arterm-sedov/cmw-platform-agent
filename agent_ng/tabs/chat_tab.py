@@ -15,11 +15,18 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import gradio as gr
 
+from .sidebar import QuickActionsMixin
 
-class ChatTab:
+
+class ChatTab(QuickActionsMixin):
     """Chat tab component with interface and quick actions"""
 
-    def __init__(self, event_handlers: dict[str, Callable], language: str = "en", i18n_instance: gr.I18n | None = None):
+    def __init__(
+        self,
+        event_handlers: dict[str, Callable],
+        language: str = "en",
+        i18n_instance: gr.I18n | None = None,
+    ):
         self.event_handlers = event_handlers
         self.components = {}
         self.main_app = None  # Reference to main app for progress status
@@ -29,7 +36,7 @@ class ChatTab:
     def create_tab(self) -> tuple[gr.TabItem, dict[str, Any]]:
         """
         Create the chat tab with all its components.
-        
+
         Returns:
             Tuple of (TabItem, components_dict)
         """
@@ -42,129 +49,73 @@ class ChatTab:
             # Connect event handlers
             self._connect_events()
 
-        logging.getLogger(__name__).info("✅ ChatTab: Successfully created with all components and event handlers")
+        logging.getLogger(__name__).info(
+            "✅ ChatTab: Successfully created with all components and event handlers"
+        )
         return tab, self.components
 
     def _create_chat_interface(self):
         """Create the main chat interface with proper layout"""
-        with gr.Row():
-            with gr.Column(elem_classes=["chat-hints"]):
-                gr.Markdown(f"## {self._get_translation('welcome_title')}", elem_classes=["chat-hints-title"])
-
-                gr.Markdown(self._get_translation("welcome_description"))
-
-            # Prompt examples section (quick action buttons)
-            with gr.Column(elem_classes=["quick-actions-card"]):
-                gr.Markdown(f"## {self._get_translation('quick_actions_title')}", elem_classes=["chat-hints-title"])
-
-                self.components["quick_list_apps_btn"] = gr.Button(self._get_translation("quick_list_apps"), elem_classes=["cmw-button"])
-                self.components["quick_templates_erp_btn"] = gr.Button(self._get_translation("quick_templates_erp"), elem_classes=["cmw-button"])
-                self.components["quick_attributes_contractors_btn"] = gr.Button(self._get_translation("quick_attributes_contractors"), elem_classes=["cmw-button"])
-                self.components["quick_edit_date_time_btn"] = gr.Button(self._get_translation("quick_edit_date_time"), elem_classes=["cmw-button"])
-                self.components["quick_create_comment_attr_btn"] = gr.Button(self._get_translation("quick_create_comment_attr"), elem_classes=["cmw-button"])
-                self.components["quick_create_id_attr_btn"] = gr.Button(self._get_translation("quick_create_id_attr"), elem_classes=["cmw-button"])
-                self.components["quick_edit_phone_mask_btn"] = gr.Button(self._get_translation("quick_edit_phone_mask"), elem_classes=["cmw-button"])
-
-            # Quick actions section
-            with gr.Column(elem_classes=["quick-actions-card"]):
-
-                self.components["quick_edit_enum_btn"] = gr.Button(self._get_translation("quick_edit_enum"), elem_classes=["cmw-button"])
-                self.components["quick_get_comment_attr_btn"] = gr.Button(self._get_translation("quick_get_comment_attr"), elem_classes=["cmw-button"])
-                self.components["quick_create_attr_btn"] = gr.Button(self._get_translation("quick_create_attr"), elem_classes=["cmw-button"])
-                self.components["quick_edit_mask_btn"] = gr.Button(self._get_translation("quick_edit_mask"), elem_classes=["cmw-button"])
-                self.components["quick_archive_attr_btn"] = gr.Button(self._get_translation("quick_archive_attr"), elem_classes=["cmw-button"])
-                self.components["quick_math_btn"] = gr.Button(self._get_translation("quick_math"), elem_classes=["cmw-button"])
-                self.components["quick_code_btn"] = gr.Button(self._get_translation("quick_code"), elem_classes=["cmw-button"])
-                self.components["quick_explain_btn"] = gr.Button(self._get_translation("quick_explain"), elem_classes=["cmw-button"])
+        # Chat interface with metadata support for thinking transparency
+        self.components["chatbot"] = gr.Chatbot(
+            label=self._get_translation("chat_label"),
+            height=500,
+            show_label=True,
+            container=True,
+            show_copy_button=True,
+            type="messages",
+            elem_id="chatbot-main",
+            elem_classes=["chatbot-card"],
+        )
 
         with gr.Row():
-            with gr.Column(scale=3):
-                # Queue status will be shown using Gradio's native warning system
-                # No need for HTML component - using gr.Warning() instead
-
-                # Chat interface with metadata support for thinking transparency
-                self.components["chatbot"] = gr.Chatbot(
-                    label=self._get_translation("chat_label"),
-                    height=500,
-                    show_label=True,
-                    container=True,
-                    show_copy_button=True,
-                    type="messages",
-                    elem_id="chatbot-main",
-                    elem_classes=["chatbot-card"]
+            self.components["msg"] = gr.MultimodalTextbox(
+                label=self._get_translation("message_label"),
+                placeholder=self._get_translation("message_placeholder"),
+                lines=2,
+                scale=4,
+                max_lines=4,
+                elem_id="message-input",
+                elem_classes=["message-card"],
+                file_types=[
+                    ".pdf", ".csv", ".tsv", ".xlsx", ".xls",  # Documents and data
+                    ".docx", ".pptx", ".vsdx", ".msg", ".eml",  # Office documents
+                    ".zip", ".rar", ".tar", ".gz", ".bz2",  # Archives
+                    ".dwg", ".bpmn", ".sql", ".conf", ".ico",  # Other supported formats
+                    ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".xml", ".html",
+                    ".css", ".md", ".ini", ".sh", ".bat", ".ps1", ".c", ".cpp", ".h",
+                    ".hpp", ".java", ".go", ".rs", ".rb", ".php", ".pl", ".swift",
+                    ".kt", ".scala", ".sql", ".toml", ".env"  # Common text-based code formats
+                ],
+                file_count="multiple",
+            )
+            with gr.Column():
+                self.components["send_btn"] = gr.Button(
+                    self._get_translation("send_button"),
+                    variant="primary",
+                    scale=1,
+                    elem_classes=["cmw-button"],
+                )
+                self.components["stop_btn"] = gr.Button(
+                    self._get_translation("stop_button"),
+                    variant="stop",
+                    scale=1,
+                    elem_classes=["cmw-button"],
+                    visible=False,
+                )
+                self.components["clear_btn"] = gr.Button(
+                    self._get_translation("clear_button"),
+                    variant="secondary",
+                    elem_classes=["cmw-button"],
+                )
+                self.components["download_btn"] = gr.DownloadButton(
+                    label=self._get_translation("download_button"),
+                    variant="secondary",
+                    elem_classes=["cmw-button"],
+                    visible=False,
                 )
 
-                with gr.Row():
-                    self.components["msg"] = gr.MultimodalTextbox(
-                        label=self._get_translation("message_label"),
-                        placeholder=self._get_translation("message_placeholder"),
-                        lines=2,
-                        scale=4,
-                        max_lines=4,
-                        elem_id="message-input",
-                        elem_classes=["message-card"],
-                        file_types=[
-                            ".pdf", ".csv", ".tsv", ".xlsx", ".xls",  # Documents and data
-                            ".docx", ".pptx", ".vsdx", ".msg", ".eml",  # Office documents
-                            ".zip", ".rar", ".tar", ".gz", ".bz2",  # Archives
-                            ".dwg", ".bpmn", ".sql", ".conf", ".ico",  # Other supported formats
-                            ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".xml", ".html", ".css", ".md", ".ini", ".sh", ".bat", ".ps1", ".c", ".cpp", ".h", ".hpp", ".java", ".go", ".rs", ".rb", ".php", ".pl", ".swift", ".kt", ".scala", ".sql", ".toml", ".env"  # Common text-based code formats
-                        ],
-                        file_count="multiple"
-                    )
-                    with gr.Column():
-                        self.components["send_btn"] = gr.Button(self._get_translation("send_button"), variant="primary", scale=1, elem_classes=["cmw-button"])
-                        self.components["stop_btn"] = gr.Button(self._get_translation("stop_button"), variant="stop", scale=1, elem_classes=["cmw-button"], visible=False)
-                        self.components["clear_btn"] = gr.Button(self._get_translation("clear_button"), variant="secondary", elem_classes=["cmw-button"])
-                        self.components["download_btn"] = gr.DownloadButton(
-                            label=self._get_translation("download_button"),
-                            variant="secondary",
-                            elem_classes=["cmw-button"],
-                            visible=False
-                        )
-
-
-
-            # Status and Quick Actions sidebar (moved here to be on the right)
-            with gr.Column(scale=1):
-                # LLM Selection section
-                with gr.Column(elem_classes=["model-card"]):
-                    gr.Markdown(f"### {self._get_translation('llm_selection_title')}", elem_classes=["llm-selection-title"])
-
-                    # Combined Provider/Model selector
-                    self.components["provider_model_selector"] = gr.Dropdown(
-                        choices=self._get_available_provider_model_combinations(),
-                        value=self._get_current_provider_model_combination(),
-                        # label=self._get_translation("provider_model_label"),
-                        show_label=False,
-                        interactive=True,
-                        allow_custom_value=True,
-                        elem_classes=["provider-model-selector"]
-                    )
-
-                    # Apply button
-                    self.components["apply_llm_btn"] = gr.Button(
-                        self._get_translation("apply_llm_button"),
-                        variant="primary",
-                        elem_classes=["cmw-button"]
-                    )
-
-                # Status section
-                with gr.Column(elem_classes=["model-card"]):
-                    gr.Markdown(f"### {self._get_translation('status_title')}", elem_classes=["status-title"])
-                    self.components["status_display"] = gr.Markdown(self._get_translation("status_initializing"))
-
-                    # Token budget indicator
-                    gr.Markdown(f"### {self._get_translation('token_budget_title')}", elem_classes=["token-budget-title"])
-                    self.components["token_budget_display"] = gr.Markdown(
-                        self._get_translation("token_budget_initializing")
-                    )
-
-                    # Progress indicator
-                    gr.Markdown(f"### {self._get_translation('progress_title')}", elem_classes=["progress-title"])
-                    self.components["progress_display"] = gr.Markdown(
-                        self._get_translation("progress_ready")
-                    )
+        # Welcome block moved to dedicated Home tab
 
     def _create_sidebar(self):
         """Create the status and quick actions sidebar - now handled in _create_chat_interface"""
@@ -172,7 +123,9 @@ class ChatTab:
 
     def _connect_events(self):
         """Connect all event handlers for the chat tab with concurrency control"""
-        logging.getLogger(__name__).debug("🔗 ChatTab: Connecting event handlers with concurrency control...")
+        logging.getLogger(__name__).debug(
+            "🔗 ChatTab: Connecting event handlers with concurrency control..."
+        )
 
         # Get critical event handlers
         stream_handler = self.event_handlers.get("stream_message")
@@ -184,7 +137,9 @@ class ChatTab:
         if not clear_handler:
             raise ValueError("clear_chat handler not found in event_handlers")
 
-        logging.getLogger(__name__).debug("✅ ChatTab: Critical event handlers validated")
+        logging.getLogger(__name__).debug(
+            "✅ ChatTab: Critical event handlers validated"
+        )
 
         # Get queue manager for concurrency control
         queue_manager = getattr(self, "main_app", None)
@@ -201,145 +156,111 @@ class ChatTab:
 
             # Send button click with concurrency and queue status
             send_config = apply_concurrency_to_click_event(
-                queue_manager, "chat", self._stream_message_with_queue_status,
+                queue_manager,
+                "chat",
+                self._stream_message_wrapper,
                 [self.components["msg"], self.components["chatbot"]],
-                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
+                [
+                    self.components["chatbot"],
+                    self.components["msg"],
+                    self.components["stop_btn"],
+                    self.components["download_btn"],
+                    self._get_quick_actions_dropdown(),
+                ],
             )
             self.streaming_event = self.components["send_btn"].click(**send_config)
 
             # Message submit with concurrency and queue status
             submit_config = apply_concurrency_to_submit_event(
-                queue_manager, "chat", self._stream_message_with_queue_status,
+                queue_manager,
+                "chat",
+                self._stream_message_wrapper,
                 [self.components["msg"], self.components["chatbot"]],
-                [self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
+                [
+                    self.components["chatbot"],
+                    self.components["msg"],
+                    self.components["stop_btn"],
+                    self.components["download_btn"],
+                    self._get_quick_actions_dropdown(),
+                ],
             )
             self.submit_event = self.components["msg"].submit(**submit_config)
         else:
             # Fallback to default behavior if queue manager not available
-            logging.getLogger(__name__).warning("⚠️ Queue manager not available - using default event configuration")
+            logging.getLogger(__name__).warning(
+                "⚠️ Queue manager not available - using default event configuration"
+            )
             self.streaming_event = self.components["send_btn"].click(
                 fn=self._stream_message_wrapper,
                 inputs=[self.components["msg"], self.components["chatbot"]],
-                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
+                outputs=[
+                    self.components["chatbot"],
+                    self.components["msg"],
+                    self.components["stop_btn"],
+                    self.components["download_btn"],
+                    self._get_quick_actions_dropdown(),
+                ],
             )
 
             self.submit_event = self.components["msg"].submit(
                 fn=self._stream_message_wrapper,
                 inputs=[self.components["msg"], self.components["chatbot"]],
-                outputs=[self.components["chatbot"], self.components["msg"], self.components["stop_btn"]]
+                outputs=[
+                    self.components["chatbot"],
+                    self.components["msg"],
+                    self.components["stop_btn"],
+                    self.components["download_btn"],
+                    self._get_quick_actions_dropdown(),
+                ],
             )
 
-        # Stop button - cancel both send and submit events and hide itself
+        # Stop button - cancel both send and submit events; hide itself, show download, append stats to chat
         self.components["stop_btn"].click(
             fn=self._handle_stop_click,
             inputs=[self.components["chatbot"]],
-            outputs=[self.components["stop_btn"]],
-            cancels=[self.streaming_event, self.submit_event]
+            outputs=[
+                self.components["chatbot"],
+                self.components["stop_btn"],
+                self.components["download_btn"],
+            ],
+            cancels=[self.streaming_event, self.submit_event],
         )
 
         self.components["clear_btn"].click(
             fn=self._clear_chat_with_download_reset,
-            outputs=[self.components["chatbot"], self.components["msg"], self.components["download_btn"]]
+            outputs=[
+                self.components["chatbot"],
+                self.components["msg"],
+                self.components["download_btn"],
+            ],
         )
 
         # Download button uses pre-generated file - no click handler needed
 
-        # Show download button when there's conversation history (triggered by token budget updates - conversation turn end)
-        self.components["token_budget_display"].change(
-            fn=self._update_download_button_visibility,
-            inputs=[self.components["chatbot"]],
-            outputs=[self.components["download_btn"]]
-        )
-
         # Trigger UI updates after chat events
         self._setup_chat_event_triggers()
 
-        # Quick action events (using local methods)
-        self.components["quick_math_btn"].click(
-            fn=self._quick_math_multimodal,
-            outputs=[self.components["msg"]]
+        # Note: Sidebar components (token_budget_display, quick_actions_dropdown, provider_model_selector, progress_display)
+        # are now handled by the UI Manager and will be connected there
+
+        logging.getLogger(__name__).debug(
+            "✅ ChatTab: All event handlers connected successfully"
         )
 
-        self.components["quick_code_btn"].click(
-            fn=self._quick_code_multimodal,
-            outputs=[self.components["msg"]]
+    def _yield_ui_newline(self, history):
+        """Return a UI-only assistant placeholder with a leading newline.
+
+        This should not affect agent memory; it's purely for chat UI spacing.
+        """
+        ui_history = list(history) if history else []
+        ui_history.append({"role": "assistant", "content": "\n"})
+        return (
+            ui_history,
+            "",
+            gr.Button(visible=True),
+            gr.DownloadButton(visible=False),
+            None,
         )
-
-        self.components["quick_explain_btn"].click(
-            fn=self._quick_explain_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_create_attr_btn"].click(
-            fn=self._quick_create_attr_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_edit_mask_btn"].click(
-            fn=self._quick_edit_mask_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_list_apps_btn"].click(
-            fn=self._quick_list_apps_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        # Query example button events
-        self.components["quick_edit_enum_btn"].click(
-            fn=self._quick_edit_enum_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_templates_erp_btn"].click(
-            fn=self._quick_templates_erp_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_attributes_contractors_btn"].click(
-            fn=self._quick_attributes_contractors_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_create_comment_attr_btn"].click(
-            fn=self._quick_create_comment_attr_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_create_id_attr_btn"].click(
-            fn=self._quick_create_id_attr_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_edit_phone_mask_btn"].click(
-            fn=self._quick_edit_phone_mask_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_get_comment_attr_btn"].click(
-            fn=self._quick_get_comment_attr_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_edit_date_time_btn"].click(
-            fn=self._quick_edit_date_time_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        self.components["quick_archive_attr_btn"].click(
-            fn=self._quick_archive_attr_multimodal,
-            outputs=[self.components["msg"]]
-        )
-
-        # LLM selection events - now properly session-aware (gr.Request is automatically passed)
-        if "apply_llm_btn" in self.components and "provider_model_selector" in self.components and "status_display" in self.components:
-            self.components["apply_llm_btn"].click(
-                fn=self._apply_llm_selection_combined,
-                inputs=[self.components["provider_model_selector"]],
-                outputs=[self.components["status_display"], self.components["chatbot"], self.components["msg"]]
-            )
-
-        logging.getLogger(__name__).debug("✅ ChatTab: All event handlers connected successfully")
 
     def _setup_chat_event_triggers(self):
         """Setup event triggers to update other UI components when chat events occur"""
@@ -350,30 +271,30 @@ class ChatTab:
             # Trigger UI update after send button click
             self.components["send_btn"].click(
                 fn=trigger_ui_update,
-                outputs=[]  # No specific outputs, just triggers the update
+                outputs=[],  # No specific outputs, just triggers the update
             )
 
             # Trigger UI update after message submit
-            self.components["msg"].submit(
-                fn=trigger_ui_update,
-                outputs=[]
-            )
+            self.components["msg"].submit(fn=trigger_ui_update, outputs=[])
 
             # Trigger UI update after clear button click
-            self.components["clear_btn"].click(
-                fn=trigger_ui_update,
-                outputs=[]
-            )
+            self.components["clear_btn"].click(fn=trigger_ui_update, outputs=[])
 
-            logging.getLogger(__name__).debug("✅ ChatTab: UI update triggers connected")
+            # Trigger UI update after stop button click (to refresh token budget/status)
+            self.components["stop_btn"].click(fn=trigger_ui_update, outputs=[])
+
+            logging.getLogger(__name__).debug(
+                "✅ ChatTab: UI update triggers connected"
+            )
 
     def get_components(self) -> dict[str, Any]:
         """Get all components created by this tab"""
         return self.components
 
     def get_status_component(self) -> gr.Markdown:
-        """Get the status display component for auto-refresh"""
-        return self.components["status_display"]
+        """Get the status display component for auto-refresh - now handled by UI Manager"""
+        # Status display is now in the UI Manager sidebar
+        return None
 
     def get_message_component(self) -> gr.MultimodalTextbox:
         """Get the message input component for quick actions"""
@@ -384,28 +305,140 @@ class ChatTab:
         self.main_app = app
 
     def get_progress_display(self) -> gr.Markdown:
-        """Get the progress display component"""
-        return self.components["progress_display"]
+        """Get the progress display component - now handled by UI Manager"""
+        # These components are now in the UI Manager sidebar
+        return None
 
     def get_token_budget_display(self) -> gr.Markdown:
-        """Get the token budget display component"""
-        return self.components["token_budget_display"]
+        """Get the token budget display component - now handled by UI Manager"""
+        # These components are now in the UI Manager sidebar
+        return None
 
     def get_llm_selection_components(self) -> dict[str, Any]:
-        """Get LLM selection components for UI updates"""
-        return {
-            "provider_selector": self.components.get("provider_selector"),
-            "model_selector": self.components.get("model_selector"),
-            "apply_llm_btn": self.components.get("apply_llm_btn")
-        }
+        """Get LLM selection components for UI updates - now handled by UI Manager"""
+        # These components are now in the UI Manager sidebar
+        return {}
 
     def get_stop_button(self) -> gr.Button:
         """Get the stop button component for visibility control"""
         return self.components["stop_btn"]
 
-    def _handle_stop_click(self, history):
-        """Handle stop button click - hide the button immediately"""
-        return gr.Button(visible=False)
+    def _get_quick_actions_dropdown(self) -> gr.Dropdown:
+        """Get the quick actions dropdown from the sidebar"""
+        # The dropdown is now in the sidebar, so we need to get it from the main app
+        if hasattr(self, "main_app") and self.main_app:
+            # Try to get from UI Manager components
+            if hasattr(self.main_app, "ui_manager") and self.main_app.ui_manager:
+                components = self.main_app.ui_manager.get_components()
+                return components.get("quick_actions_dropdown")
+
+        # Fallback - return a dummy component that won't cause errors
+        return gr.Dropdown(visible=False)
+
+    def _handle_stop_click(self, history, request: gr.Request = None):
+        """Handle stop button click: finalize token tracking, append stats, update UI."""
+        try:
+            # Attempt to finalize token accounting for this turn even if stream was interrupted
+            if (
+                hasattr(self, "main_app")
+                and self.main_app
+                and hasattr(self.main_app, "session_manager")
+            ):
+                session_id = (
+                    self.main_app.session_manager.get_session_id(request)
+                    if request
+                    else "default"
+                )
+                agent = self.main_app.session_manager.get_session_agent(session_id)
+                if agent and hasattr(agent, "token_tracker"):
+                    # Get current request messages for estimation fallback
+                    try:
+                        messages = agent.get_conversation_history(session_id)
+                    except Exception:
+                        messages = []
+
+                    # Update prompt tokens explicitly
+                    try:
+                        if messages:
+                            agent.token_tracker.count_prompt_tokens(messages)
+                    except Exception:
+                        pass
+
+                    # Finalize turn token usage using fallback estimation (no API usage needed)
+                    try:
+                        agent.token_tracker.track_llm_response(None, messages)
+                    except Exception:
+                        pass
+
+                    # Build a stats block and append as assistant meta message
+                    try:
+                        prompt_tokens = agent.token_tracker.get_last_prompt_tokens()
+                        api_tokens = agent.token_tracker.get_last_api_tokens()
+
+                        stats_lines = []
+                        if prompt_tokens:
+                            stats_lines.append(
+                                self._get_translation("prompt_tokens").format(
+                                    tokens=prompt_tokens.formatted
+                                )
+                            )
+                        if api_tokens:
+                            stats_lines.append(
+                                self._get_translation("api_tokens").format(
+                                    tokens=api_tokens.formatted
+                                )
+                            )
+                        # Provider/model and execution time where possible
+                        provider = "unknown"
+                        model = "unknown"
+                        try:
+                            if getattr(agent, "llm_instance", None):
+                                provider = agent.llm_instance.provider.value
+                                model = agent.llm_instance.model_name
+                        except Exception:
+                            pass
+                        stats_lines.append(
+                            self._get_translation("provider_model").format(
+                                provider=provider, model=model
+                            )
+                        )
+                        # Execution time not tracked here; keep lean — omit if not available
+
+                        if stats_lines:
+                            token_display = "\n".join(stats_lines)
+                            token_metadata_message = {
+                                "role": "assistant",
+                                "content": token_display,
+                                "metadata": {
+                                    "title": self._get_translation(
+                                        "token_statistics_title"
+                                        )
+                                },
+                            }
+                            # history is a list of messages for chatbot component
+                            try:
+                                updated_history = list(history) if history else []
+                                updated_history.append(token_metadata_message)
+                                history = updated_history
+                            except Exception:
+                                pass
+                    except Exception:
+                        # Non-fatal: stats block construction may fail silently
+                        pass
+
+                # Ask app to refresh sidebar/status if available
+                try:
+                    if hasattr(self.main_app, "trigger_ui_update"):
+                        self.main_app.trigger_ui_update()
+                except Exception:
+                    pass
+        except Exception:
+            # Non-fatal: UI state update should still proceed
+            pass
+
+        # Hide stop button and show download button with current conversation
+        download_btn = self._update_download_button_visibility(history)
+        return history, gr.Button(visible=False), download_btn
 
     def format_token_budget_display(self, request: gr.Request = None) -> str:
         """Format and return the token budget display - now session-aware"""
@@ -434,6 +467,15 @@ class ChatTab:
             # Get cumulative stats for detailed display
             cumulative_stats = agent.token_tracker.get_cumulative_stats()
 
+            # Ensure last-message tokens reflect the most recent turn only (session-specific)
+            used_tokens = budget_info.get("used_tokens", 0)
+            try:
+                last_api = agent.get_last_api_tokens()
+                if last_api and hasattr(last_api, "total_tokens"):
+                    used_tokens = last_api.total_tokens
+            except Exception:
+                pass
+
             # Determine status icon using localized translations
             status_icon = self._get_translation(f"token_status_{budget_info['status']}")
 
@@ -446,9 +488,9 @@ class ChatTab:
             )
             last_message = self._get_translation("token_usage_last_message").format(
                 percentage=budget_info["percentage"],
-                used=budget_info["used_tokens"],
+                used=used_tokens,
                 context_window=budget_info["context_window"],
-                status_icon=status_icon
+                status_icon=status_icon,
             )
             average = self._get_translation("token_usage_average").format(
                 avg_tokens=cumulative_stats["avg_tokens_per_message"]
@@ -462,7 +504,14 @@ class ChatTab:
     def _get_available_providers(self) -> list[str]:
         """Get list of available LLM providers from session manager"""
         if not hasattr(self, "main_app") or not self.main_app:
-            return ["openrouter", "groq", "gemini", "mistral", "huggingface", "gigachat"]
+            return [
+                "openrouter",
+                "groq",
+                "gemini",
+                "mistral",
+                "huggingface",
+                "gigachat",
+            ]
 
         try:
             if hasattr(self.main_app, "llm_manager") and self.main_app.llm_manager:
@@ -475,6 +524,7 @@ class ChatTab:
     def _get_current_provider(self) -> str:
         """Get current LLM provider"""
         import os
+
         return os.environ.get("AGENT_PROVIDER", "openrouter")
 
     def _get_available_models(self) -> list[str]:
@@ -488,7 +538,11 @@ class ChatTab:
                 config = self.main_app.llm_manager.get_provider_config(current_provider)
                 if config and config.models:
                     models = [model["model"] for model in config.models]
-                    return models if models else [self._get_translation("no_models_available")]
+                    return (
+                        models
+                        if models
+                        else [self._get_translation("no_models_available")]
+                    )
                 else:
                     return [self._get_translation("no_models_available")]
         except Exception as e:
@@ -505,7 +559,9 @@ class ChatTab:
         try:
             if hasattr(self.main_app, "llm_manager") and self.main_app.llm_manager:
                 combinations = []
-                available_providers = self.main_app.llm_manager.get_available_providers()
+                available_providers = (
+                    self.main_app.llm_manager.get_available_providers()
+                )
 
                 if not available_providers:
                     return [self._get_translation("no_providers_available")]
@@ -540,7 +596,12 @@ class ChatTab:
             if hasattr(self.main_app, "session_manager"):
                 # Get default session for UI display
                 session_data = self.main_app.session_manager.get_session_data("default")
-                if session_data and session_data.agent and hasattr(session_data.agent, "llm_instance") and session_data.agent.llm_instance:
+                if (
+                    session_data
+                    and session_data.agent
+                    and hasattr(session_data.agent, "llm_instance")
+                    and session_data.agent.llm_instance
+                ):
                     return session_data.agent.llm_instance.model_name
         except Exception as e:
             print(f"Error getting current model: {e}")
@@ -552,6 +613,7 @@ class ChatTab:
         if not hasattr(self, "main_app") or not self.main_app:
             # Return fallback value when main app is not available
             import os
+
             provider = os.environ.get("AGENT_PROVIDER", "openrouter")
             return f"{provider.title()} / {provider}/default-model"
 
@@ -560,7 +622,12 @@ class ChatTab:
             if hasattr(self.main_app, "session_manager"):
                 # Get default session for UI display
                 session_data = self.main_app.session_manager.get_session_data("default")
-                if session_data and session_data.agent and hasattr(session_data.agent, "llm_instance") and session_data.agent.llm_instance:
+                if (
+                    session_data
+                    and session_data.agent
+                    and hasattr(session_data.agent, "llm_instance")
+                    and session_data.agent.llm_instance
+                ):
                     provider = session_data.agent.llm_instance.provider.value
                     model = session_data.agent.llm_instance.model_name
                     return f"{provider.title()} / {model}"
@@ -569,6 +636,7 @@ class ChatTab:
 
         # Return fallback value on error
         import os
+
         provider = os.environ.get("AGENT_PROVIDER", "openrouter")
         return f"{provider.title()} / {provider}/default-model"
 
@@ -592,10 +660,15 @@ class ChatTab:
         # This method is deprecated - use _apply_llm_directly instead
         return self._apply_llm_directly(provider, model)
 
-    def _apply_llm_selection_combined(self, provider_model_combination: str, request: gr.Request = None) -> tuple[str, list[dict[str, str]], str]:
+    def _apply_llm_selection_combined(
+        self, provider_model_combination: str, request: gr.Request = None
+    ) -> tuple[str, list[dict[str, str]], str]:
         """Apply the selected LLM provider/model combination - now properly session-aware"""
         try:
-            if not provider_model_combination or " / " not in provider_model_combination:
+            if (
+                not provider_model_combination
+                or " / " not in provider_model_combination
+            ):
                 return self._get_translation("llm_apply_error"), [], ""
 
             # Parse the combination: "Provider / Model"
@@ -613,20 +686,19 @@ class ChatTab:
             if self._is_mistral_model(provider, model):
                 # Check if we're switching FROM a non-Mistral provider TO Mistral
                 current_provider_model = self._get_current_provider_model_combination()
-                current_provider = current_provider_model.split(" / ")[0].lower() if " / " in current_provider_model else ""
+                current_is_mistral = "mistral" in current_provider_model.lower()
 
                 # Only clear chat if switching from non-Mistral to Mistral
-                if current_provider and current_provider != "mistral":
+                if not current_is_mistral:
                     # Show native Gradio warning modal
                     gr.Warning(
                         message=self._get_translation("mistral_switch_warning").format(
-                            provider=provider.title(),
-                            model=model
+                            provider=provider.title(), model=model
                         ),
                         title=self._get_translation("mistral_switch_title"),
-                        duration=10
+                        duration=10,
                     )
-                    # Apply the LLM selection and clear chat
+                    # Apply the LLM selection and clear chat immediately (same as clear button)
                     return self._apply_mistral_with_clear(provider, model, request)
                 else:
                     # Switching from Mistral to Mistral - no need to clear chat
@@ -646,24 +718,34 @@ class ChatTab:
         """Check if the selected model is a Mistral model"""
         return provider.lower() == "mistral" or "mistral" in model.lower()
 
-    def _apply_llm_directly(self, provider: str, model: str, request: gr.Request = None) -> str:
+    def _apply_llm_directly(
+        self, provider: str, model: str, request: gr.Request = None
+    ) -> str:
         """Apply LLM selection without confirmation dialog - now properly session-aware"""
         try:
-            print(f"🔄 ChatTab: Applying LLM selection - Provider: {provider}, Model: {model}")
+            print(
+                f"🔄 ChatTab: Applying LLM selection - Provider: {provider}, Model: {model}"
+            )
             print(f"🔄 ChatTab: Request available: {request is not None}")
-            print(f"🔄 ChatTab: Main app has session_manager: {hasattr(self.main_app, 'session_manager')}")
+            print(
+                f"🔄 ChatTab: Main app has session_manager: {hasattr(self.main_app, 'session_manager')}"
+            )
 
             # Use clean session manager for session-aware LLM selection
             if request and hasattr(self.main_app, "session_manager"):
                 session_id = self.main_app.session_manager.get_session_id(request)
                 print(f"🔄 ChatTab: Session ID: {session_id}")
-                success = self.main_app.session_manager.update_llm_provider(session_id, provider, model)
+                success = self.main_app.session_manager.update_llm_provider(
+                    session_id, provider, model
+                )
                 print(f"🔄 ChatTab: Update result: {success}")
                 if success:
                     # Trigger UI update to refresh status display
                     if hasattr(self.main_app, "trigger_ui_update"):
                         self.main_app.trigger_ui_update()
-                    return self._get_translation("llm_apply_success").format(provider=provider.title(), model=model)
+                    return self._get_translation("llm_apply_success").format(
+                        provider=provider.title(), model=model
+                    )
                 else:
                     return self._get_translation("llm_apply_error")
 
@@ -673,10 +755,15 @@ class ChatTab:
             print(f"Error applying LLM selection: {e}")
             return self._get_translation("llm_apply_error")
 
-    def _confirm_mistral_switch(self, provider_model_combination: str) -> tuple[str, str, str]:
+    def _confirm_mistral_switch(
+        self, provider_model_combination: str
+    ) -> tuple[str, str, str]:
         """Handle Mistral switching confirmation - returns status, chatbot, and message"""
         try:
-            if not provider_model_combination or " / " not in provider_model_combination:
+            if (
+                not provider_model_combination
+                or " / " not in provider_model_combination
+            ):
                 return self._get_translation("llm_apply_error"), "", ""
 
             # Parse the combination: "Provider / Model"
@@ -702,7 +789,11 @@ class ChatTab:
                     class MockRequest:
                         def __init__(self):
                             self.session_hash = f"mock_session_{uuid.uuid4().hex[:8]}_{int(time.time())}"
-                            self.client = type("MockClient", (), {"id": f"client_{uuid.uuid4().hex[:8]}"})()
+                            self.client = type(
+                                "MockClient",
+                                (),
+                                {"id": f"client_{uuid.uuid4().hex[:8]}"},
+                            )()
 
                     request = MockRequest()
                     chatbot, msg = clear_handler(request)
@@ -717,14 +808,16 @@ class ChatTab:
             print(f"Error confirming Mistral switch: {e}")
             return self._get_translation("llm_apply_error"), "", ""
 
-    def _apply_mistral_with_clear(self, provider: str, model: str, request: gr.Request = None) -> tuple[str, str, str]:
+    def _apply_mistral_with_clear(
+        self, provider: str, model: str, request: gr.Request = None
+    ) -> tuple[str, str, str]:
         """Apply Mistral LLM selection and clear chat history - now properly session-aware"""
         try:
             # Apply the LLM selection
             status = self._apply_llm_directly(provider, model, request)
 
             # If successful, clear the chat history
-            if "success" in status.lower():
+            if status and status != self._get_translation("llm_apply_error"):
                 # Get the clear handler from event handlers
                 clear_handler = self.event_handlers.get("clear_chat")
                 if clear_handler:
@@ -751,55 +844,85 @@ class ChatTab:
         """Get a translation for a specific key"""
         # Always use direct translation for now to avoid i18n metadata issues
         from ..i18n_translations import get_translation_key
+
         return get_translation_key(key, self.language)
 
+    def _reset_quick_actions_dropdown(self) -> str:
+        """Reset the quick actions dropdown to None"""
+        return None
 
-    def _stream_message_with_queue_status(self, multimodal_value, history, request: gr.Request = None):
-        """Wrapper for concurrent processing - relies on Gradio's native queue feedback"""
-        # With status_update_rate="auto", Gradio will show native queue status
-        # No need for custom warnings - Gradio handles this natively
+    def _stream_message_wrapper(
+        self, multimodal_value, history, request: gr.Request = None
+    ):
+        """Wrapper for concurrent processing with Gradio's native queue feedback
+
+        Handles MultimodalValue format and extracts text for processing with proper session awareness.
+        With status_update_rate="auto", Gradio will show native queue status - no need for custom warnings.
+        """
 
         # Show stop button at start of processing
-        yield history, "", gr.Button(visible=True)  # Show stop button
+        yield (
+            history,
+            "",
+            gr.Button(visible=True),
+            gr.DownloadButton(visible=False),  # Don't update download during streaming
+            None,
+        )  # Show stop button, don't update download, reset dropdown
+        yield self._yield_ui_newline(history)
 
         # Process message with original wrapper
         last_result = None
-        for result in self._stream_message_wrapper_internal(multimodal_value, history, request):
+        for result in self._stream_message_wrapper_internal(
+            multimodal_value, history, request
+        ):
             last_result = result
-            if len(result) >= 2:
-                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
-            else:
-                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
+            # Toggle buttons based on processing state (supports early-finish unlock)
+            stop_visible = True
+            try:
+                if hasattr(self, "main_app") and self.main_app is not None:
+                    stop_visible = bool(self.main_app.is_processing)
+            except Exception:
+                stop_visible = True
 
-        # Hide stop button at end of processing
+            download_btn = (
+                self._update_download_button_visibility(result[0])
+                if not stop_visible
+                else gr.DownloadButton(visible=False)
+            )
+
+            yield (
+                result[0],
+                result[1],
+                gr.Button(visible=stop_visible),
+                download_btn,
+                None,
+            )
+
+        # Hide stop button at end of processing and update download button
         if last_result and len(last_result) >= 2:
-            yield last_result[0], last_result[1], gr.Button(visible=False)
+            yield (
+                last_result[0],
+                last_result[1],
+                gr.Button(visible=False),
+                self._update_download_button_visibility(
+                    last_result[0]
+                ),  # Final download update
+                None,
+            )  # Reset dropdown
         else:
-            yield history, "", gr.Button(visible=False)
+            yield (
+                history,
+                "",
+                gr.Button(visible=False),
+                self._update_download_button_visibility(
+                    history
+                ),  # Final download update
+                None,
+            )  # Reset dropdown
 
-    def _stream_message_wrapper(self, multimodal_value, history, request: gr.Request = None):
-        """Wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
-        # Fallback mode without queue status
-
-        # Show stop button at start of processing
-        yield history, "", gr.Button(visible=True)  # Show stop button
-
-        # Process message with original wrapper
-        last_result = None
-        for result in self._stream_message_wrapper_internal(multimodal_value, history, request):
-            last_result = result
-            if len(result) >= 2:
-                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
-            else:
-                yield result[0], result[1], gr.Button(visible=True)  # Keep stop button visible
-
-        # Hide stop button at end of processing
-        if last_result and len(last_result) >= 2:
-            yield last_result[0], last_result[1], gr.Button(visible=False)
-        else:
-            yield history, "", gr.Button(visible=False)
-
-    def _stream_message_wrapper_internal(self, multimodal_value, history, request: gr.Request = None):
+    def _stream_message_wrapper_internal(
+        self, multimodal_value, history, request: gr.Request = None
+    ):
         """Internal wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
         # Extract text from MultimodalValue format
         if isinstance(multimodal_value, dict):
@@ -823,14 +946,22 @@ class ChatTab:
                         original_filename = file.get("orig_name")
                         file_path = file.get("path", "")
                         if not original_filename:
-                            original_filename = os.path.basename(file_path) if file_path else f"file_{i}"
+                            original_filename = (
+                                os.path.basename(file_path)
+                                if file_path
+                                else f"file_{i}"
+                            )
                     else:
                         file_path = str(file)
                         original_filename = os.path.basename(file_path)
 
                     # Get file size
                     try:
-                        file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+                        file_size = (
+                            os.path.getsize(file_path)
+                            if os.path.exists(file_path)
+                            else 0
+                        )
                         if file_size > 0:
                             size_str = FileUtils.format_file_size(file_size)
                             file_list.append(f"{original_filename} ({size_str})")
@@ -840,13 +971,21 @@ class ChatTab:
                         file_list.append(f"{original_filename}")
 
                     # Register file with agent's session-isolated registry
-                    if hasattr(self, "main_app") and self.main_app and hasattr(self.main_app, "session_manager"):
-                        session_id = self.main_app.session_manager.get_session_id(request)
+                    if (
+                        hasattr(self, "main_app")
+                        and self.main_app
+                        and hasattr(self.main_app, "session_manager")
+                    ):
+                        session_id = self.main_app.session_manager.get_session_id(
+                            request
+                        )
                         agent = self.main_app.session_manager.get_agent(session_id)
                         if agent and hasattr(agent, "register_file"):
                             agent.register_file(original_filename, file_path)
                             current_files.append(original_filename)
-                            print(f"📁 Registered file: {original_filename} -> {agent.file_registry.get((session_id, original_filename), 'NOT_FOUND')}")
+                            print(
+                                f"📁 Registered file: {original_filename} -> {agent.file_registry.get((session_id, original_filename), 'NOT_FOUND')}"
+                            )
 
                 file_info += ", ".join(file_list) + "]"
                 message += file_info
@@ -871,132 +1010,14 @@ class ChatTab:
         for result in stream_handler(message, history, request):
             yield result
 
-
-    # Quick action methods
-    def _quick_math(self) -> str:
-        """Generate math quick action message"""
-        return self._get_translation("quick_math_message")
-
-    def _quick_code(self) -> str:
-        """Generate code quick action message"""
-        return self._get_translation("quick_code_message")
-
-    def _quick_explain(self) -> str:
-        """Generate explain quick action message"""
-        return self._get_translation("quick_explain_message")
-
-    def _quick_create_attr(self) -> str:
-        """Generate create attribute quick action message"""
-        return self._get_translation("quick_create_attr_message")
-
-    def _quick_edit_mask(self) -> str:
-        """Generate edit mask quick action message"""
-        return self._get_translation("quick_edit_mask_message")
-
-    def _quick_list_apps(self) -> str:
-        """Generate list apps quick action message"""
-        return self._get_translation("quick_list_apps_message")
-
-    # Query example methods
-    def _quick_edit_enum(self) -> str:
-        """Generate query list apps message"""
-        return self._get_translation("quick_edit_enum_message")
-
-    def _quick_templates_erp(self) -> str:
-        """Generate query templates ERP message"""
-        return self._get_translation("quick_templates_erp_message")
-
-    def _quick_attributes_contractors(self) -> str:
-        """Generate query attributes contractors message"""
-        return self._get_translation("quick_attributes_contractors_message")
-
-    def _quick_create_comment_attr(self) -> str:
-        """Generate query create comment attribute message"""
-        return self._get_translation("quick_create_comment_attr_message")
-
-    def _quick_create_id_attr(self) -> str:
-        """Generate query create ID attribute message"""
-        return self._get_translation("quick_create_id_attr_message")
-
-    def _quick_edit_phone_mask(self) -> str:
-        """Generate query edit phone mask message"""
-        return self._get_translation("quick_edit_phone_mask_message")
-
-    def _quick_get_comment_attr(self) -> str:
-        """Generate query get comment attribute message"""
-        return self._get_translation("quick_get_comment_attr_message")
-
-    def _quick_edit_date_time(self) -> str:
-        """Generate query enum add value message"""
-        return self._get_translation("quick_edit_date_time_message")
-
-    def _quick_archive_attr(self) -> str:
-        """Generate query archive attribute message"""
-        return self._get_translation("quick_archive_attr_message")
-
-    # Multimodal wrapper methods for quick actions
-    def _quick_math_multimodal(self) -> dict[str, Any]:
-        """Generate math quick action message in MultimodalValue format"""
-        return {"text": self._quick_math(), "files": []}
-
-    def _quick_code_multimodal(self) -> dict[str, Any]:
-        """Generate code quick action message in MultimodalValue format"""
-        return {"text": self._quick_code(), "files": []}
-
-    def _quick_explain_multimodal(self) -> dict[str, Any]:
-        """Generate explain quick action message in MultimodalValue format"""
-        return {"text": self._quick_explain(), "files": []}
-
-    def _quick_create_attr_multimodal(self) -> dict[str, Any]:
-        """Generate create attribute quick action message in MultimodalValue format"""
-        return {"text": self._quick_create_attr(), "files": []}
-
-    def _quick_edit_mask_multimodal(self) -> dict[str, Any]:
-        """Generate edit mask quick action message in MultimodalValue format"""
-        return {"text": self._quick_edit_mask(), "files": []}
-
-    def _quick_list_apps_multimodal(self) -> dict[str, Any]:
-        """Generate list apps quick action message in MultimodalValue format"""
-        return {"text": self._quick_list_apps(), "files": []}
-
-    def _quick_edit_enum_multimodal(self) -> dict[str, Any]:
-        """Generate query list apps message in MultimodalValue format"""
-        return {"text": self._quick_edit_enum(), "files": []}
-
-    def _quick_templates_erp_multimodal(self) -> dict[str, Any]:
-        """Generate query templates ERP message in MultimodalValue format"""
-        return {"text": self._quick_templates_erp(), "files": []}
-
-    def _quick_attributes_contractors_multimodal(self) -> dict[str, Any]:
-        """Generate query attributes contractors message in MultimodalValue format"""
-        return {"text": self._quick_attributes_contractors(), "files": []}
-
-    def _quick_create_comment_attr_multimodal(self) -> dict[str, Any]:
-        """Generate query create comment attribute message in MultimodalValue format"""
-        return {"text": self._quick_create_comment_attr(), "files": []}
-
-    def _quick_create_id_attr_multimodal(self) -> dict[str, Any]:
-        """Generate query create ID attribute message in MultimodalValue format"""
-        return {"text": self._quick_create_id_attr(), "files": []}
-
-    def _quick_edit_phone_mask_multimodal(self) -> dict[str, Any]:
-        """Generate query edit phone mask message in MultimodalValue format"""
-        return {"text": self._quick_edit_phone_mask(), "files": []}
-
-    def _quick_get_comment_attr_multimodal(self) -> dict[str, Any]:
-        """Generate query get comment attribute message in MultimodalValue format"""
-        return {"text": self._quick_get_comment_attr(), "files": []}
-
-    def _quick_edit_date_time_multimodal(self) -> dict[str, Any]:
-        """Generate query enum add value message in MultimodalValue format"""
-        return {"text": self._quick_edit_date_time(), "files": []}
-
-    def _quick_archive_attr_multimodal(self) -> dict[str, Any]:
-        """Generate query archive attribute message in MultimodalValue format"""
-        return {"text": self._quick_archive_attr(), "files": []}
-
     def _clear_chat_with_download_reset(self, request: gr.Request = None):
         """Clear chat and reset download state - now properly session-aware"""
+        # Clear download button cache
+        if hasattr(self, "_last_history_str"):
+            delattr(self, "_last_history_str")
+        if hasattr(self, "_last_download_file"):
+            delattr(self, "_last_download_file")
+
         # Get the clear handler from event handlers
         clear_handler = self.event_handlers.get("clear_chat")
         if clear_handler:
@@ -1009,11 +1030,24 @@ class ChatTab:
             # Fallback if clear handler not available
             empty_multimodal = {"text": "", "files": []}
             return [], empty_multimodal, gr.DownloadButton(visible=False)
+
     def _update_download_button_visibility(self, history):
         """Update download button visibility and file based on conversation history"""
         if history and len(history) > 0:
-            # Generate file with fresh timestamp when conversation changes
-            file_path = self._download_conversation_as_markdown(history)
+            # Check if conversation has changed since last generation
+            history_str = str(history)
+            if (
+                not hasattr(self, "_last_history_str")
+                or self._last_history_str != history_str
+            ):
+                # Generate file with fresh timestamp when conversation changes
+                file_path = self._download_conversation_as_markdown(history)
+                self._last_history_str = history_str
+                self._last_download_file = file_path
+            else:
+                # Use cached file if conversation hasn't changed
+                file_path = getattr(self, "_last_download_file", None)
+
             if file_path:
                 # Show download button with pre-generated file
                 return gr.DownloadButton(
@@ -1021,16 +1055,11 @@ class ChatTab:
                     value=file_path,
                     variant="secondary",
                     elem_classes=["cmw-button"],
-                    visible=True
+                    visible=True,
                 )
             else:
                 # Show button without file if generation fails
-                return gr.DownloadButton(
-                    label=self._get_translation("download_button"),
-                    variant="secondary",
-                    elem_classes=["cmw-button"],
-                    visible=True
-                )
+                return gr.DownloadButton(visible=False)
         else:
             # Hide download button when there's no conversation history
             return gr.DownloadButton(visible=False)
@@ -1038,10 +1067,10 @@ class ChatTab:
     def _download_conversation_as_markdown(self, history) -> str:
         """
         Download the conversation history as a markdown file.
-        
+
         Args:
             history: List of conversation messages from Gradio chatbot component
-            
+
         Returns:
             File path if successful, None if failed
         """
@@ -1050,7 +1079,7 @@ class ChatTab:
         import tempfile
 
         print(f"DEBUG: Download function called with history type: {type(history)}")
-        print(f"DEBUG: History content: {history}")
+        print(f"DEBUG: History content: {str(history)[:50]}")
 
         if not history:
             print("DEBUG: No history provided")
@@ -1062,38 +1091,45 @@ class ChatTab:
 
         # Create markdown content with lean frontmatter
         markdown_content = "# CMW Platform Agent - Conversation Export\n\n"
-        markdown_content += f"**Exported on:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        markdown_content += (
+            f"**Exported on:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        )
         markdown_content += f"**Total messages:** {len(history)}\n\n"
         # Simple conversation summary using existing agent stats (minimal, non-intrusive)
         try:
-            main_app = getattr(self, 'main_app', None)
+            main_app = getattr(self, "main_app", None)
             if main_app and hasattr(main_app, "session_manager"):
                 # Get current session ID to maintain session isolation
                 try:
                     from ..debug_streamer import get_debug_streamer
+
                     debug_streamer = get_debug_streamer()
                     session_id = debug_streamer.get_current_session_id()
                 except Exception:
                     # Fallback to default if debug streamer not available
                     session_id = "default"
-                
+
                 # Use existing agent stats instead of complex turn_complete event
                 agent = main_app.session_manager.get_session_agent(session_id)
                 if agent:
                     stats = agent.get_stats()
                     conversation_stats = stats.get("conversation_stats", {})
                     llm_info = stats.get("llm_info", {})
-                    
-                    if conversation_stats.get('message_count', 0) > 0:
-                        message_count = conversation_stats.get('message_count', 0)
-                        user_messages = conversation_stats.get('user_messages', 0)
-                        assistant_messages = conversation_stats.get('assistant_messages', 0)
-                        provider = llm_info.get('provider', 'unknown')
-                        model = llm_info.get('model', 'unknown')
-                        
+
+                    if conversation_stats.get("message_count", 0) > 0:
+                        message_count = conversation_stats.get("message_count", 0)
+                        user_messages = conversation_stats.get("user_messages", 0)
+                        assistant_messages = conversation_stats.get(
+                            "assistant_messages", 0
+                        )
+                        provider = llm_info.get("provider", "unknown")
+                        model = llm_info.get("model", "unknown")
+
                         markdown_content += f"## Сводка диалога ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n\n"
                         markdown_content += f"**Всего сообщений:** {message_count} ({user_messages} user, {assistant_messages} assistant)\n\n"
-                        markdown_content += f"**Провайдер / модель:** {provider} / {model}\n\n"
+                        markdown_content += (
+                            f"**Провайдер / модель:** {provider} / {model}\n\n"
+                        )
         except Exception:
             pass
         markdown_content += "---\n\n"

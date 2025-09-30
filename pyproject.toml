@@ -49,6 +49,7 @@ ignore = [
     "PLR2004", # Magic values (Langfuse/Langsmith configuration constants)
     "T201",    # Print statements (Langfuse/Langsmith debugging)
     "BLE001",  # Blind except clauses (Langfuse/Langsmith error handling)
+    "UP032",   # Do not suggest {e!s} over {str(e)} in f-strings
 ]
 
 # Rules that should not be automatically fixed to prevent deletion of useful code
@@ -68,6 +69,7 @@ unfixable = [
     "ISC",     # Implicit string concatenation - flag but don't auto-remove (preferential)
     "LOG",     # Logging rules - flag but don't auto-remove (Langfuse/Langsmith logging)
     "PERF",    # Performance rules - flag but don't auto-remove (observability overhead)
+    "UP032",   # Do not rewrite str(e) to e!s in f-strings
 ]
 
 # Allow specific patterns

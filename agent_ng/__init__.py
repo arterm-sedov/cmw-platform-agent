@@ -14,7 +14,6 @@ Key Modules:
 - message_processor: Message processing and formatting
 - response_processor: Response processing and validation
 - stats_manager: Statistics tracking and monitoring
-- trace_manager: Trace logging and debugging
 - debug_streamer: Debug system and logging
 - streaming_chat: Chat interface components
 - langchain_wrapper: LangChain integration utilities

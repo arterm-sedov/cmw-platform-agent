@@ -22,6 +22,7 @@ def test_cmw_tools():
         # Check for specific CMW tools
         cmw_tool_names = [
             'list_applications', 'list_templates', 'list_attributes',
+            'edit_or_create_record_template',
             'edit_or_create_text_attribute',
             'edit_or_create_date_time_attribute',
             'edit_or_create_numeric_attribute',

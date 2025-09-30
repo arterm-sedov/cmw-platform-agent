@@ -238,7 +238,6 @@ class SessionAwareLogHandler(logging.Handler):
     def __init__(self):
         super().__init__()
         self._session_context = threading.local()
-        self._default_session_id = "default"
         self._global_session_context = {}  # Global session context storage
         self._context_lock = threading.Lock()
 
@@ -258,7 +257,7 @@ class SessionAwareLogHandler(logging.Handler):
         
         # Fallback to global context
         with self._context_lock:
-            return self._global_session_context.get(threading.get_ident(), self._default_session_id)
+            return self._global_session_context.get(threading.get_ident(), None)
 
     def emit(self, record: logging.LogRecord) -> None:
         """Route log records to the appropriate session handler - no fallback to default"""
@@ -280,8 +279,8 @@ class SessionAwareLogHandler(logging.Handler):
                             session_id = session_match.group(1)
                             break
             
-            # Try to extract session ID from the log message itself - improved pattern matching
-            if session_id == self._default_session_id:
+            # Try to extract session ID from the log message itself if not found in context
+            if not session_id:
                 import re
                 message = record.getMessage()
                 
@@ -307,12 +306,12 @@ class SessionAwareLogHandler(logging.Handler):
                                 session_id = id_match.group(1)
             
             # Only route to session-specific handler if we found a valid session ID
-            if session_id and session_id != self._default_session_id:
+            if session_id:
                 session_handler = get_log_handler(session_id)
                 if session_handler:
                     # Route to session-specific handler
                     session_handler.emit(record)
-            # No fallback to default session - logs without session ID are ignored
+            # No fallback - logs without session ID are ignored
         except Exception:
             # No fallback - just ignore logs that can't be routed
             pass
@@ -534,16 +533,3 @@ def set_session_context(session_id: str):
     handler.set_session_context(session_id)
 
 
-def cleanup_debug_system():
-    """Cleanup the debug system"""
-    global _debug_streamers, _log_handlers, _thinking_transparencies, _session_aware_handler
-
-    # Stop all debug streamers
-    for streamer in _debug_streamers.values():
-        streamer.stop()
-
-    # Clear all instances
-    _debug_streamers.clear()
-    _log_handlers.clear()
-    _thinking_transparencies.clear()
-    _session_aware_handler = None

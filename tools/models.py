@@ -1,6 +1,14 @@
 from typing import Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
+class TemplateResult(BaseModel):
+    """
+    Result model for a fetched template.
+    Contains cleaned data after succesful fetch and processing.
+    """
+    success: bool
+    status_code: int
+    error: Optional[str] = Field(default=None)
 class AttributeResult(BaseModel):
     """
     Result model for a fetched attribute.

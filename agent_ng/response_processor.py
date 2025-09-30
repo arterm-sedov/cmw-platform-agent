@@ -351,70 +351,6 @@ class ResponseProcessor:
         
         return validation
     
-    def print_message_components(self, msg: Any, msg_index: int = 0):
-        """
-        Print message components for debugging.
-        
-        Args:
-            msg: Message object
-            msg_index: Message index for display
-        """
-        separator = "------------------------------------------------\n"
-        print(separator) 
-        print(f"Message {msg_index}:")
-        
-        # Get message type dynamically
-        msg_type = getattr(msg, 'type', 'unknown')
-        print(f"  type: {msg_type}")
-        
-        # Define priority attributes to check first
-        priority_attrs = ['content', 'tool_calls', 'function_call', 'name', 'tool_call_id']
-        
-        # Print priority attributes first
-        for attr in priority_attrs:
-            if hasattr(msg, attr):
-                value = getattr(msg, attr)
-                if value is not None:
-                    self._print_attribute(attr, value)
-        
-        # Print other attributes
-        for attr_name in dir(msg):
-            if (not attr_name.startswith('_') and 
-                attr_name not in priority_attrs and 
-                not callable(getattr(msg, attr_name))):
-                try:
-                    value = getattr(msg, attr_name)
-                    if value is not None and value != '':
-                        self._print_attribute(attr_name, value)
-                except Exception:
-                    pass
-        
-        print(separator)
-    
-    def _print_attribute(self, attr_name: str, value: Any):
-        """Print an attribute value in a formatted way"""
-        if isinstance(value, (str, int, float, bool)):
-            print(f"  {attr_name}: {value}")
-        elif isinstance(value, list):
-            if len(value) == 0:
-                print(f"  {attr_name}: []")
-            else:
-                print(f"  {attr_name}: [list with {len(value)} items]")
-                for i, item in enumerate(value[:3]):  # Show first 3 items
-                    print(f"    [{i}]: {str(item)[:100]}...")
-                if len(value) > 3:
-                    print(f"    ... and {len(value) - 3} more items")
-        elif isinstance(value, dict):
-            if len(value) == 0:
-                print(f"  {attr_name}: {{}}")
-            else:
-                print(f"  {attr_name}: {{dict with {len(value)} keys}}")
-                for key, val in list(value.items())[:3]:  # Show first 3 key-value pairs
-                    print(f"    {key}: {str(val)[:100]}...")
-                if len(value) > 3:
-                    print(f"    ... and {len(value) - 3} more keys")
-        else:
-            print(f"  {attr_name}: {type(value).__name__} - {str(value)[:100]}...")
     
     def get_stats(self) -> Dict[str, Any]:
         """Get response processor statistics"""
@@ -435,7 +371,3 @@ def get_response_processor() -> ResponseProcessor:
         _response_processor = ResponseProcessor()
     return _response_processor
 
-def reset_response_processor():
-    """Reset the global response processor instance"""
-    global _response_processor
-    _response_processor = None

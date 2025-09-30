@@ -441,7 +441,3 @@ def get_stats_manager() -> StatsManager:
     return _stats_manager
 
 
-def reset_stats_manager():
-    """Reset the global stats manager instance"""
-    global _stats_manager
-    _stats_manager = None

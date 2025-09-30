@@ -79,7 +79,13 @@ from .attributes_tools import (
     # Enum attributes
     edit_or_create_enum_attribute,
 )
-from .templates_tools import list_attributes
+from .templates_tools import (
+    # General operations
+    list_attributes,
+
+    # Record template
+    edit_or_create_record_template
+    )
 
 __all__ = [
     # Module imports
@@ -101,6 +107,9 @@ __all__ = [
     'delete_attribute',
     'archive_or_unarchive_attribute',
     'get_attribute',
+
+    # Record template
+    'edit_or_create_record_template',
     
     # Text attributes
     'edit_or_create_text_attribute',

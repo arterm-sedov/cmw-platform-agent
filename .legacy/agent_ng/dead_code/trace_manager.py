@@ -364,11 +364,3 @@ def get_trace_manager(session_id: str = "default") -> TraceManager:
         _trace_managers[session_id] = TraceManager()
     return _trace_managers[session_id]
 
-def reset_trace_manager(session_id: str = None):
-    """Reset trace manager instance(s)"""
-    global _trace_managers
-    if session_id:
-        if session_id in _trace_managers:
-            del _trace_managers[session_id]
-    else:
-        _trace_managers.clear()

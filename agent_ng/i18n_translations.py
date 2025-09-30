@@ -9,49 +9,67 @@ Based on Gradio's internationalization documentation:
 https://www.gradio.app/guides/internationalization
 """
 
-from typing import Any, Dict
+from typing import Any
 
 import gradio as gr
 
 # Russian translations for all UI text
 RUSSIAN_TRANSLATIONS = {
+    # Language detection resource (fake resource for Gradio I18n)
+    "language": "ru",
     # App title and header
     "app_title": "Ассистент аналитика Comindware",
     "hero_title": "Ассистент аналитика",
     # Tab labels
+    "tab_home": "🏠 Главная",
     "tab_chat": "💬 Чат",
     "tab_logs": "📜 Журналы",
     "tab_stats": "📊 Статистика",
-    # Chat tab content
+    "tab_config": "⚙️ Настройки",
+    # Home tab content
     "welcome_title": "Добро пожаловать!",
     "welcome_description": """
     **Ассистент аналитика Comindware** предназначен для работы с сущностями **Comindware Platform**, такими как приложения, шаблоны, атрибуты.
 
-    Ассистент использует детерминированные инструменты, обеспечивающие высокую точность работы.
+    Ассистент использует детерминированные инструменты, не полагающиеся на языковую модель, а взаимодействующие с API **Comindware Platform**.
 
-    - **Операции с Comindware Platform в приоритете**: помогает получать данные и манипулировать сущностями.
-    - **Оркестрация нескольких моделей**: позволяет использовать различных поставщиков LLM.
-    - **Компактный структурированный вывод**: Намерение → План → Проверка → Выполнение → Результат.
+    **Основные возможности:**
+    - **Анализ сущностей**: глубокий анализ приложений, шаблонов и атрибутов в **Comindware Platform**.
+    - **Работа с атрибутами**: создание, редактирование, удаление атрибутов всех типов.
+    - **Локализация**: агент отвечает на языке вопроса, но может поддерживать разговор на любом языке, который поддерживает выбранная модель. Внутренние размышления агент выполняет на английском языке. Агент может создавать имена сущностей на любых языках. Интерфейс переведён на английский и русский языки.
     """,
-    "try_asking_title": "❓ Варианты запросов:",
-    "try_asking_examples": """
-    - Перечисли все приложения в платформе в удобном списке
-    - Покажи все шаблоны записей в приложении "ERP". Отформатируй красиво используя Markdown.
-    - Выдай список всех атрибутов шаблона "Контрагенты", приложение "ERP"
-    - Создать текстовый атрибут "Комментарий", приложение "HR", шаблон "Кандидаты"
-    - Создай текстовый атрибут "ID клиента", приложение "ERP", шаблон "Контрагенты", особая маска ввода: ([0-9]{10}|[0-9]{12})
-    - Для атрибута "Контактный телефон" в приложении "CRM", шаблон "Лиды", смени формат отображения на российский телефон
-    - Получи атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты"
-    - Архивируй/разархивируй атрибут, системное имя "Комментарий", приложение "HR", шаблон "Кандидаты"
+    "quick_start_title": "Быстрый старт",
+    "quick_start_description": """
+    1. Настройте подключение к **Comindware Platform** на вкладке «**Настройки**».
+    2. Перейдите на вкладку «**Чат**» для начала разговора.
+    3. Выберите модель в боковой панели.
+    4. Введите свой вопрос или выберите **заготовку** в левой панели и отредактируйте её, например:
+        - Что ты умеешь?
+        - Чего ты не умеешь?
+        - Перечисли все приложения в платформе в удобном списке.
+        - Дай полный аудит всех приложений, шаблонов и атрибутов в системе.
+        - Покажи все шаблоны записей в приложении "ERP".
+        - Выдай список всех атрибутов шаблона "Контрагенты", приложение "ERP".
+        - Создай текстовый атрибут "Комментарий", приложение "HR", шаблон "Кандидаты".
+        - Создай текстовый атрибут "ID клиента", приложение "ERP", шаблон "Контрагенты", особая маска ввода: ([0-9]{10}|[0-9]{12}).
+        - Для атрибута "Контактный телефон" в приложении "CRM", шаблон "Лиды", смени формат отображения на российский телефон.
+        - Получи атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
+        - Архивируй/разархивируй атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
+    5. Нажмите кнопку «**Отправить**» и дождитесь ответа агента.
+    6. Агент может отвечать некоторое время, особенно если требуется обращение к **Comindware Platform**.  Прогресс отображается в левой панели.
+    7. По окончании работы агент выдаст сообщение «Обработка завершена» в левой панели.
     """,
     # Quick actions
     "quick_actions_title": "Заготовки",
+    "quick_actions_dropdown_placeholder": "Выберите быструю команду...",
+    "quick_actions_dropdown_label": "Быстрые команды",
     "quick_list_apps": "🔎 Список всех приложений",
     "quick_create_attr": "🧩 Создать текстовый атрибут",
     "quick_edit_mask": "🛠️ Редактировать маску телефона",
     "quick_math": "🧮 15 * 23 + 7 = ?",
     "quick_code": "💻 Функция проверки простых чисел на Python",
     "quick_explain": "💭 Объяснить ML кратко",
+    "quick_full_audit": "🧾 Полный аудит системы",
     # Chat interface
     "chat_label": "Диалог с агентом",
     "message_label": "Ваше сообщение",
@@ -62,7 +80,7 @@ RUSSIAN_TRANSLATIONS = {
     "download_button": "📥 Скачать диалог (Markdown)",
     "download_file_label": "Скачать Markdown",
     # LLM Selection section
-    "llm_selection_title": "🔧 Выбор LLM",
+    "llm_selection_title": "Выбор LLM",
     "provider_label": "Провайдер",
     "model_label": "Модель",
     "provider_model_label": "Провайдер / модель",
@@ -82,12 +100,12 @@ RUSSIAN_TRANSLATIONS = {
     "current_provider": "Провайдер: {provider}",
     "current_model": "Модель: {model}",
     # Status section
-    "status_title": "🤖 Статус",
+    "status_title": "Статус",
     "status_initializing": "🟡 Инициализация...",
     "status_ready": "Готов",
     "status_ready_true": "Готов: да ✅",
     "status_ready_false": "Готов: нет ❌",
-    "token_budget_title": "💰 Расход токенов",
+    "token_budget_title": "Расход токенов",
     "token_budget_initializing": "🟡 Загрузка...",
     "token_statistics_title": "📊 Статистика",
     # Token usage components (separated for flexibility)
@@ -109,7 +127,7 @@ RUSSIAN_TRANSLATIONS = {
 - Последнее сообщение {percentage}% ({used:,}/{context_window:,}) {status_icon}
 - Среднее на сообщение: {avg_tokens:,}""",
     "token_budget_unknown": "❓ Неизвестно",
-    "progress_title": "📊 Прогресс",
+    "progress_title": "Прогресс",
     "progress_ready": "Готов обработать ваш запрос...",
     "progress_processing": "Обработка запроса...",
     # Logs tab
@@ -153,13 +171,46 @@ RUSSIAN_TRANSLATIONS = {
     # Agent status details
     "agent_status_ready": "✅ **Агент готов**",
     "agent_status_initializing": "🟡 **Инициализация агента**",
-    "provider_info": "**Провайдер:** {provider}",
+    "provider_info": "Провайдер: {provider}",
     "model_info": "**Модель:** {model}",
     "status_label": "**Статус:** {status}",
-    "tools_label": "**Инструменты:** {count} доступно",
+    "tools_count_label": "**Инструменты:** {count} доступно",
     "last_used_label": "**Последнее использование:** {time}",
     "healthy_status": "✅ Исправен",
     "unhealthy_status": "❌ Неисправен",
+    # Config tab
+    "config_title": "Подключение к Comindware Platform",
+    "config_platform_url": "Адрес сервера",
+    "config_username": "Имя пользователя",
+    "config_password": "Пароль",
+    "config_save_button": "💾 Сохранить в браузере",
+    "config_load_button": "🔄 Загрузить из браузера",
+    "config_save_success_session": "✅ Настройки применены для текущего сеанса",
+    "config_save_error": "❌ Ошибка сохранения настроек",
+    "config_load_success": "✅ Настройки загружены",
+    "config_load_error": "❌ Ошибка загрузки настроек",
+    "config_clear_storage_button": "🧹 Очистить хранилище браузера",
+    "config_clear_success": "✅ Хранилище браузера очищено",
+    "config_clear_error": "❌ Не удалось очистить хранилище браузера",
+    "config_help": (
+        """
+        Задайте параметры подключения к **Comindware Platform**:
+
+        - **Адрес сервера** — URL вашего сайта **Comindware Platform**,
+        например `https://your-host`.
+        - **Имя пользователя** и **Пароль** — учетные данные для
+        использования API. **Обычный аккаунт не будет работать.**
+        - Нажмите «**Сохранить в браузере**», чтобы применить параметры к
+        текущему сеансу.
+        - Кнопка «**Загрузить из браузера**» восстановит ранее сохранённые
+        значения.
+        - **Очистить хранилище браузера** удалит сохранённые параметры и
+          очистит поля.
+
+        Данные сохраняются в браузере и применяются только в
+        пределах текущего сеанса.
+        """
+    ),
     # Statistics labels
     "agent_status_section": "**Агент:**",
     "conversation_section": "**Диалог:**",
@@ -170,7 +221,7 @@ RUSSIAN_TRANSLATIONS = {
     "total_messages_label": "Всего сообщений",
     "available_label": "Доступно",
     "used_label": "Использовано",
-    "unique_tools_label": "уникальных инструментов",
+    "unique_tools_label": "уникальных",
     "total_calls_label": "Всего вызовов",
     "tools_used_label": "Использовано инструментов",
     "tools_label": "Инструменты",
@@ -179,7 +230,7 @@ RUSSIAN_TRANSLATIONS = {
     # Quick action messages
     "quick_math_message": "Сколько будет 15 * 23 + 7? Покажите работу пошагово.",
     "quick_code_message": "Напиши функцию на Python проверяющую, является ли число простым. Напиши и запусти тесты.",
-    "quick_explain_message": "Объясни концепцию машинного обучения простыми словами.",
+    "quick_explain_message": "Поищи в интернете. Объясни концепцию машинного обучения простыми словами.",
     "quick_create_attr_message": (
         'Составь план для создания текстового атрибута "ID клиента" в приложении "ERP", шаблон "Контрагенты" '
         "с display_format=CustomMask и маской ([0-9]{{10}}|[0-9]{{12}}), system_name=CustomerID. "
@@ -213,6 +264,11 @@ RUSSIAN_TRANSLATIONS = {
     "quick_edit_date_time_message": 'Создай атрибут даты/времени "Дата создания заявки" в приложении "CRM", шаблон "Лиды" с форматом отображения LongDateLongTime и используй его как заголовок записи для автоматической сортировки по времени',
     "quick_archive_attr": "📦 Архивировать атрибут",
     "quick_archive_attr_message": 'Архивируй/разархивируй атрибут, системное имя "Комментарий", приложение "HR", шаблон "Кандидаты"',
+    "quick_what_can_do": "❓ Что ты умеешь?",
+    "quick_what_can_do_message": "Что ты умеешь?",
+    "quick_what_cannot_do": "❌ Чего ты не умеешь?",
+    "quick_what_cannot_do_message": "Чего ты не умеешь?",
+    "quick_full_audit_message": "Дай полный аудит всех приложений, шаблонов и атрибутов в системе.",
     # Status messages
     "processing_complete": "🎉Обработка завершена",
     "response_completed": "Ответ завершен",
@@ -263,43 +319,61 @@ RUSSIAN_TRANSLATIONS = {
 
 # English translations (fallback)
 ENGLISH_TRANSLATIONS = {
+    # Language detection resource (fake resource for Gradio I18n)
+    "language": "en",
     # App title and header
     "app_title": "Comindware Analyst Copilot",
     "hero_title": "Analyst Copilot",
     # Tab labels
+    "tab_home": "🏠 Home",
     "tab_chat": "💬 Chat",
     "tab_logs": "📜 Logs",
     "tab_stats": "📊 Statistics",
-    # Chat tab content
+    "tab_config": "⚙️ Config",
+    # Home tab content
     "welcome_title": "Welcome!",
     "welcome_description": """
     **Comindware Analyst Copilot** is designed to work with **Comindware Platform** entities such as applications, templates, and attributes.
 
-    The Copilot uses deterministic tools ensuring accurate operations.
+    The Copilot uses deterministic tools that do not rely on language models but interact with **Comindware Platform** APIs.
 
-    - **Comindware Platform operations first**: Helps get data and manipulate entities.
-    - **Multiple model orchestration**: Supports different LLM providers.
-    - **Compact structured output**: Intent → Plan → Validation → Execution → Result.
+    **Key Features:**
+    - **Entity Analysis**: Deep analysis of applications, templates, and attributes in **Comindware Platform**.
+    - **Attribute Management**: Creating, editing, and deleting attributes of all types.
+    - **Localization**: The agent responds in the language of the question, but can maintain conversations in any language supported by the selected model. Internal reasoning is performed in English. The agent can create entity names in any language. The interface is translated into English and Russian languages.
     """,
-    "try_asking_title": "❓ Try asking",
-    "try_asking_examples": """
-    - List all applications in the platform. Format nicely using Markdown
-    - List all record templates in app \"ERP\". Format as a list
-    - List all attributes in template \"Counterparties\", app \"ERP\"
-    - Create plain text attribute \"Comment\", app \"HR\", template \"Candidates\"
-    - Create \"Customer ID\" text attribute, app \"ERP\", template \"Counterparties\", custom input mask ([0-9]{10}|[0-9]{12})
-    - For attribute \"Contact Phone\" in app \"CRM\", template \"Leads\", change display format to Russian phone
-    - Fetch attribute: system name \"Comment\", app \"HR\", template \"Candidates\"
-    - Archive/unarchive attribute, system name \"Comment\", app \"HR\", template \"Candidates\"
+    "quick_start_title": "Quick Start",
+    "quick_start_description": """
+    1. Configure the connection to the **Comindware Platform** in the **Config** tab.
+    2. Go to the **Chat** tab to start a conversation.
+    3. Select a model in the sidebar.
+    4. Enter your question or select a **template** in the sidebar and edit it, for example:
+        - What can you do?
+        - What can't you do?
+        - List all applications in the platform in a convenient list.
+        - Give a full audit of all applications, templates and attributes in the system.
+        - Show all record templates in the "ERP" application.
+        - Get a list of all attributes of the "Counterparties" template, application "ERP"
+        - Create a text attribute "Comment", application "HR", template "Candidates"
+        - Create a text attribute "Customer ID", application "ERP", template "Counterparties", special input mask: ([0-9]{10}|[0-9]{12})
+        - For the "Contact Phone" attribute in application "CRM", template "Leads", change the display format to Russian phone
+        - Get attribute: system name "Comment", application "HR", template "Candidates"
+        - Archive/unarchive attribute, system name "Comment", application "HR", template "Candidates"
+    5. Click **Send** and wait for the agent's response.
+    6. The agent may take some time to respond, especially when accessing the **Comindware Platform**. Progress is displayed in the sidebar.
+    7. When finished, the agent will show **Processing complete** message in the sidebar.
     """,
     # Quick actions
-    "quick_actions_title": "Quick Actions",
+    "quick_actions_title": "Templates",
+    "quick_actions_dropdown_placeholder": "Select a quick command...",
+    "quick_actions_dropdown_label": "Quick Commands",
     "quick_list_apps": "🔎 List all apps",
     "quick_create_attr": "🧩 Create text attribute",
     "quick_edit_mask": "🛠️ Edit phone mask",
     "quick_math": "🧮 15 * 23 + 7 = ?",
     "quick_code": "💻 Python prime check function",
     "quick_explain": "💭 Explain ML briefly",
+    "quick_full_audit": "🧾 Full system audit",
     # Chat interface
     "chat_label": "Conversation with the Agent",
     "message_label": "Your Message",
@@ -310,7 +384,7 @@ ENGLISH_TRANSLATIONS = {
     "download_button": "📥 Download conversation (Markdown)",
     "download_file_label": "Download Markdown",
     # LLM Selection section
-    "llm_selection_title": "🔧 LLM Selection",
+    "llm_selection_title": "LLM Selection",
     "provider_label": "Provider",
     "model_label": "Model",
     "provider_model_label": "Provider / model",
@@ -330,12 +404,12 @@ ENGLISH_TRANSLATIONS = {
     "current_provider": "Provider: {provider}",
     "current_model": "**Model:** {model}",
     # Status section
-    "status_title": "🤖 Status",
+    "status_title": "Status",
     "status_initializing": "🟡 Initializing...",
     "status_ready": "Ready",
     "status_ready_true": "Ready: yes ✅",
     "status_ready_false": "Ready: no ❌",
-    "token_budget_title": "💰 Token usage",
+    "token_budget_title": "Token usage",
     "token_budget_initializing": "🟡 Loading...",
     "token_statistics_title": "📊 Statistics",
     # Token usage components (separated for flexibility)
@@ -357,7 +431,7 @@ ENGLISH_TRANSLATIONS = {
 - Last message {percentage}% ({used:,}/{context_window:,}) {status_icon}
 - Average per message: {avg_tokens:,}""",
     "token_budget_unknown": "❓ Unknown",
-    "progress_title": "📊 Progress",
+    "progress_title": "Progress",
     "progress_ready": "Ready to process your request...",
     "progress_processing": "Processing request...",
     # Logs tab
@@ -401,13 +475,43 @@ ENGLISH_TRANSLATIONS = {
     # Agent status details
     "agent_status_ready": "✅ **Agent Ready**",
     "agent_status_initializing": "🟡 **Agent Initializing**",
-    "provider_info": "**Provider:** {provider}",
+    "provider_info": "Provider: {provider}",
     "model_info": "**Model:** {model}",
     "status_label": "**Status:** {status}",
-    "tools_label": "**Tools:** {count} available",
+    "tools_count_label": "**Tools:** {count} available",
     "last_used_label": "**Last Used:** {time}",
     "healthy_status": "✅ Healthy",
     "unhealthy_status": "❌ Unhealthy",
+    # Config tab
+    "config_title": "Comindware Platform Connection",
+    "config_platform_url": "Server URL",
+    "config_username": "Username",
+    "config_password": "Password",
+    "config_save_button": "💾 Save to browser",
+    "config_load_button": "🔄 Load from browser",
+    "config_save_success_session": "✅ Settings applied for current session",
+    "config_save_error": "❌ Failed to save settings",
+    "config_load_success": "✅ Settings loaded",
+    "config_load_error": "❌ Failed to load settings",
+    "config_clear_storage_button": "🧹 Clear browser storage",
+    "config_clear_success": "✅ Browser storage cleared",
+    "config_clear_error": "❌ Failed to clear browser storage",
+    "config_help": (
+        """
+        Configure connection to the **Comindware Platform**:
+
+        - **Server URL** — your **Comindware Platform** website, e.g.,
+        `https://your-host`.
+        - **Username** and **Password** — credentials with API access rights.
+        **Regular account won't work.**
+        - Click **Save to browser** to apply settings for the current session.
+        - **Load from browser** restores previously saved values.
+        - **Clear browser storage** removes saved settings and clears the fields.
+
+        Settings are stored in the browser storage and applied within the
+        current session only.
+        """
+    ),
     # Statistics labels
     "agent_status_section": "**Agent:**",
     "conversation_section": "**Conversation:**",
@@ -418,7 +522,7 @@ ENGLISH_TRANSLATIONS = {
     "total_messages_label": "Total messages",
     "available_label": "Available",
     "used_label": "Used",
-    "unique_tools_label": "unique tools",
+    "unique_tools_label": "unique",
     "total_calls_label": "Total Calls",
     "tools_used_label": "Used tools",
     "tools_label": "Tools",
@@ -427,7 +531,7 @@ ENGLISH_TRANSLATIONS = {
     # Quick action messages
     "quick_math_message": "What is 15 * 23 + 7? Please show your work step by step.",
     "quick_code_message": "Write a Python function to check if a number is prime. Include tests.",
-    "quick_explain_message": "Explain the concept of machine learning in simple terms.",
+    "quick_explain_message": "Search the web. Explain the concept of machine learning in simple terms.",
     "quick_create_attr_message": (
         'Draft a plan to CREATE a text attribute "Customer ID" in application "ERP", template "Counterparties" '
         "with display_format=CustomMask and mask ([0-9]{{10}}|[0-9]{{12}}), system_name=CustomerID. "
@@ -461,6 +565,11 @@ ENGLISH_TRANSLATIONS = {
     "quick_edit_date_time_message": 'Create a date/time attribute "Lead Creation Date" in application "CRM", template "Leads" with LongDateLongTime display format and use it as record title for automatic time-based sorting',
     "quick_archive_attr": "📦 Archive Attribute",
     "quick_archive_attr_message": 'Archive/unarchive attribute, system name "Comment", application "HR", template "Candidates"',
+    "quick_what_can_do": "❓ What can you do?",
+    "quick_what_can_do_message": "What can you do?",
+    "quick_what_cannot_do": "❌ What can't you do?",
+    "quick_what_cannot_do_message": "What can't you do?",
+    "quick_full_audit_message": "Give a full audit of all applications, templates and attributes in the system.",
     # Status messages
     "processing_complete": "🎉 Processing complete",
     "response_completed": "Response completed",
@@ -510,12 +619,9 @@ ENGLISH_TRANSLATIONS = {
 }
 
 
-def create_i18n_instance(language: str = "en") -> gr.I18n:
+def create_i18n_instance() -> gr.I18n:
     """
     Create a Gradio I18n instance with translations for all supported languages.
-
-    Args:
-        language: Language code ('en' or 'ru') - used for default language selection
 
     Returns:
         Gradio I18n instance with both English and Russian translations
@@ -544,11 +650,10 @@ def get_translation_key(key: str, language: str = "en") -> str:
 
     if language.lower() == "ru":
         return RUSSIAN_TRANSLATIONS.get(key, ENGLISH_TRANSLATIONS.get(key, key))
-    else:
-        return ENGLISH_TRANSLATIONS.get(key, key)
+    return ENGLISH_TRANSLATIONS.get(key, key)
 
 
-def format_translation(key: str, language: str = "en", **kwargs) -> str:
+def format_translation(key: str, language: str = "en", **kwargs: Any) -> str:
     """
     Get a formatted translation for a specific key with variable substitution.
 
