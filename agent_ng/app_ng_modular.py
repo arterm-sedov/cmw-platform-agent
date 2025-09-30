@@ -804,7 +804,7 @@ class NextGenApp:
 
                             if has_recent_tool_messages:
                                 # Add lean line break only when LLM starts answering after tools
-                                content_to_add = "\n" + content_to_add
+                                content_to_add = "\n\n" + content_to_add
 
                         response_content += content_to_add
 
