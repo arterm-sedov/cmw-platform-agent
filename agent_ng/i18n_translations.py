@@ -40,8 +40,8 @@ RUSSIAN_TRANSLATIONS = {
     """,
     "quick_start_title": "Быстрый старт",
     "quick_start_description": """
-    1. Настройте подключение к **Comindware Platform** на вкладке «Настройки».
-    2. Перейдите на вкладку «Чат» для начала разговора.
+    1. Настройте подключение к **Comindware Platform** на вкладке «**Настройки**».
+    2. Перейдите на вкладку «**Чат**» для начала разговора.
     3. Выберите модель в боковой панели.
     4. Введите свой вопрос или выберите **заготовку** в левой панели и отредактируйте её, например:
         - Что ты умеешь?
@@ -69,6 +69,7 @@ RUSSIAN_TRANSLATIONS = {
     "quick_math": "🧮 15 * 23 + 7 = ?",
     "quick_code": "💻 Функция проверки простых чисел на Python",
     "quick_explain": "💭 Объяснить ML кратко",
+    "quick_full_audit": "🧾 Полный аудит системы",
     # Chat interface
     "chat_label": "Диалог с агентом",
     "message_label": "Ваше сообщение",
@@ -226,7 +227,7 @@ RUSSIAN_TRANSLATIONS = {
     # Quick action messages
     "quick_math_message": "Сколько будет 15 * 23 + 7? Покажите работу пошагово.",
     "quick_code_message": "Напиши функцию на Python проверяющую, является ли число простым. Напиши и запусти тесты.",
-    "quick_explain_message": "Объясни концепцию машинного обучения простыми словами.",
+    "quick_explain_message": "Поищи в интернете. Объясни концепцию машинного обучения простыми словами.",
     "quick_create_attr_message": (
         'Составь план для создания текстового атрибута "ID клиента" в приложении "ERP", шаблон "Контрагенты" '
         "с display_format=CustomMask и маской ([0-9]{{10}}|[0-9]{{12}}), system_name=CustomerID. "
@@ -264,6 +265,7 @@ RUSSIAN_TRANSLATIONS = {
     "quick_what_can_do_message": "Что ты умеешь?",
     "quick_what_cannot_do": "❌ Чего ты не умеешь?",
     "quick_what_cannot_do_message": "Чего ты не умеешь?",
+    "quick_full_audit_message": "Дай полный аудит всех приложений, шаблонов и атрибутов в системе.",
     # Status messages
     "processing_complete": "🎉Обработка завершена",
     "response_completed": "Ответ завершен",
@@ -339,8 +341,8 @@ ENGLISH_TRANSLATIONS = {
     """,
     "quick_start_title": "Quick Start",
     "quick_start_description": """
-    1. Configure the connection to the **Comindware Platform** in the Config tab.
-    2. Go to the Chat tab to start a conversation.
+    1. Configure the connection to the **Comindware Platform** in the **Config** tab.
+    2. Go to the **Chat** tab to start a conversation.
     3. Select a model in the sidebar.
     4. Enter your question or select a **template** in the sidebar and edit it, for example:
         - What can you do?
@@ -368,6 +370,7 @@ ENGLISH_TRANSLATIONS = {
     "quick_math": "🧮 15 * 23 + 7 = ?",
     "quick_code": "💻 Python prime check function",
     "quick_explain": "💭 Explain ML briefly",
+    "quick_full_audit": "🧾 Full system audit",
     # Chat interface
     "chat_label": "Conversation with the Agent",
     "message_label": "Your Message",
@@ -525,7 +528,7 @@ ENGLISH_TRANSLATIONS = {
     # Quick action messages
     "quick_math_message": "What is 15 * 23 + 7? Please show your work step by step.",
     "quick_code_message": "Write a Python function to check if a number is prime. Include tests.",
-    "quick_explain_message": "Explain the concept of machine learning in simple terms.",
+    "quick_explain_message": "Search the web. Explain the concept of machine learning in simple terms.",
     "quick_create_attr_message": (
         'Draft a plan to CREATE a text attribute "Customer ID" in application "ERP", template "Counterparties" '
         "with display_format=CustomMask and mask ([0-9]{{10}}|[0-9]{{12}}), system_name=CustomerID. "
@@ -563,6 +566,7 @@ ENGLISH_TRANSLATIONS = {
     "quick_what_can_do_message": "What can you do?",
     "quick_what_cannot_do": "❌ What can't you do?",
     "quick_what_cannot_do_message": "What can't you do?",
+    "quick_full_audit_message": "Give a full audit of all applications, templates and attributes in the system.",
     # Status messages
     "processing_complete": "🎉 Processing complete",
     "response_completed": "Response completed",

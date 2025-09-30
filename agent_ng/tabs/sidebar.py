@@ -25,6 +25,10 @@ class QuickActionsMixin:
         "quick_what_can_do": "quick_what_can_do_message",
         "quick_what_cannot_do": "quick_what_cannot_do_message",
         "quick_list_apps": "quick_list_apps_message",
+        "quick_math": "quick_math_message",
+        "quick_code": "quick_code_message",
+        "quick_explain": "quick_explain_message",
+        "quick_full_audit": "quick_full_audit_message",
         "quick_templates_erp": "quick_templates_erp_message",
         "quick_attributes_contractors": "quick_attributes_contractors_message",
         "quick_edit_date_time": "quick_edit_date_time_message",
@@ -36,9 +40,7 @@ class QuickActionsMixin:
         "quick_create_attr": "quick_create_attr_message",
         "quick_edit_mask": "quick_edit_mask_message",
         "quick_archive_attr": "quick_archive_attr_message",
-        "quick_math": "quick_math_message",
-        "quick_code": "quick_code_message",
-        "quick_explain": "quick_explain_message",
+
     }
 
     def _get_translation(self, key: str) -> str:
