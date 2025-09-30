@@ -14,12 +14,44 @@ Key Features:
 - Proper Gradio request handling
 """
 
+from contextvars import ContextVar
 import logging
 import time
 from typing import Any, Dict, Optional, Tuple
 import uuid
 
 import gradio as gr
+
+# Module-level ContextVar holding the current session id
+_current_session_id: ContextVar[str | None] = ContextVar(
+    "current_session_id", default=None
+)
+
+
+def set_current_session_id(session_id: str | None) -> None:
+    _current_session_id.set(session_id)
+
+
+def get_current_session_id() -> str | None:
+    return _current_session_id.get()
+
+
+# Lightweight per-session config snapshot (URL, username, password)
+_config_by_session: dict[str, dict[str, str]] = {}
+
+
+def set_session_config(session_id: str, config: dict[str, str]) -> None:
+    _config_by_session[session_id] = {
+        "url": (config.get("url") or "").strip(),
+        "username": (config.get("username") or "").strip(),
+        "password": (config.get("password") or "").strip(),
+    }
+
+
+def get_session_config(session_id: str | None) -> dict[str, str] | None:
+    if not session_id:
+        return None
+    return _config_by_session.get(session_id)
 
 # Handle both relative and absolute imports
 try:
@@ -37,16 +69,31 @@ class SessionManager:
     def __init__(self, language: str = "en"):
         self.language = language
         self.sessions: dict[str, SessionData] = {}
+        # Initialize module-level context variable through wrappers if needed
 
     def get_session_id(self, request: gr.Request = None) -> str:
         """Get or create session ID from Gradio request"""
         if request and hasattr(request, "session_hash") and request.session_hash:
-            return f"gradio_{request.session_hash}"
+            sid = f"gradio_{request.session_hash}"
         elif request and hasattr(request, "client"):
-            return f"client_{id(request.client)}"
+            sid = f"client_{id(request.client)}"
         else:
             # Fallback for testing or when no request available
-            return f"session_{uuid.uuid4().hex[:16]}_{int(time.time())}"
+            sid = f"session_{uuid.uuid4().hex[:16]}_{int(time.time())}"
+
+        # Update current session context
+        set_current_session_id(sid)
+        return sid
+
+    # Convenience wrappers for current session context
+    def set_current_session_id(self, session_id: str | None) -> None:
+        set_current_session_id(session_id)
+
+    def get_current_session_id(self) -> str | None:
+        return get_current_session_id()
+
+    def get_last_active_session_id(self) -> str | None:
+        return get_current_session_id()
 
     def get_session_data(self, session_id: str) -> "SessionData":
         """Get or create session data for the given session ID"""

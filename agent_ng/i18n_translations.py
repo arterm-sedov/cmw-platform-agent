@@ -25,6 +25,7 @@ RUSSIAN_TRANSLATIONS = {
     "tab_chat": "💬 Чат",
     "tab_logs": "📜 Журналы",
     "tab_stats": "📊 Статистика",
+    "tab_config": "⚙️ Настройки",
     # Home tab content
     "welcome_title": "Добро пожаловать!",
     "welcome_description": """
@@ -174,6 +175,20 @@ RUSSIAN_TRANSLATIONS = {
     "last_used_label": "**Последнее использование:** {time}",
     "healthy_status": "✅ Исправен",
     "unhealthy_status": "❌ Неисправен",
+    # Config tab
+    "config_title": "Подключение к Comindware Platform",
+    "config_platform_url": "Адрес сервера",
+    "config_username": "Имя пользователя",
+    "config_password": "Пароль",
+    "config_save_button": "💾 Сохранить в браузере",
+    "config_load_button": "🔄 Загрузить из браузера",
+    "config_save_success_session": "✅ Настройки применены для текущего сеанса",
+    "config_save_error": "❌ Ошибка сохранения настроек",
+    "config_load_success": "✅ Настройки загружены",
+    "config_load_error": "❌ Ошибка загрузки настроек",
+    "config_clear_storage_button": "🧹 Очистить хранилище браузера",
+    "config_clear_success": "✅ Хранилище браузера очищено",
+    "config_clear_error": "❌ Не удалось очистить хранилище браузера",
     # Statistics labels
     "agent_status_section": "**Агент:**",
     "conversation_section": "**Диалог:**",
@@ -291,6 +306,7 @@ ENGLISH_TRANSLATIONS = {
     "tab_chat": "💬 Chat",
     "tab_logs": "📜 Logs",
     "tab_stats": "📊 Statistics",
+    "tab_config": "⚙️ Config",
     # Home tab content
     "welcome_title": "Welcome!",
     "welcome_description": """
@@ -440,6 +456,20 @@ ENGLISH_TRANSLATIONS = {
     "last_used_label": "**Last Used:** {time}",
     "healthy_status": "✅ Healthy",
     "unhealthy_status": "❌ Unhealthy",
+    # Config tab
+    "config_title": "Comindware Platform Connection",
+    "config_platform_url": "Server URL",
+    "config_username": "Username",
+    "config_password": "Password",
+    "config_save_button": "💾 Save to browser",
+    "config_load_button": "🔄 Load from browser",
+    "config_save_success_session": "✅ Settings applied for current session",
+    "config_save_error": "❌ Failed to save settings",
+    "config_load_success": "✅ Settings loaded",
+    "config_load_error": "❌ Failed to load settings",
+    "config_clear_storage_button": "🧹 Clear browser storage",
+    "config_clear_success": "✅ Browser storage cleared",
+    "config_clear_error": "❌ Failed to clear browser storage",
     # Statistics labels
     "agent_status_section": "**Agent:**",
     "conversation_section": "**Conversation:**",

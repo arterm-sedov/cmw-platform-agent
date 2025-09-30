@@ -20,12 +20,14 @@ Based on LangChain's official documentation and best practices.
 """
 
 import asyncio
-import logging
-import gradio as gr
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple, AsyncGenerator
+from collections.abc import AsyncGenerator
 import json
+import logging
+from pathlib import Path
 import time
+from typing import Any, Dict, List, Optional, Tuple
+
+import gradio as gr
 
 # Initialize logging early (idempotent)
 try:
@@ -35,23 +37,25 @@ try:
     _logger = logging.getLogger(__name__)
 except Exception:
     _logger = logging.getLogger(__name__)
+
 # Import configuration with fallback for direct execution
 try:
     from agent_ng.agent_config import config, get_language_settings, get_port_settings
 except ImportError:
     # Fallback for direct execution
-    import sys
     from pathlib import Path
+    import sys
 
     sys.path.append(str(Path(__file__).parent))
     from agent_config import config, get_language_settings, get_port_settings
 
 # LangChain imports
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+import os
 
 # Local imports with robust fallback handling
 import sys
-import os
+
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 # Add current directory to path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -59,51 +63,65 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
+# Import session context setter with robust fallback
+try:
+    from agent_ng.session_manager import set_current_session_id
+except ImportError:
+    try:
+        from .session_manager import set_current_session_id
+    except Exception:  # pragma: no cover - ultimate fallback
+        def set_current_session_id(_session_id):  # type: ignore[no-redef]
+            return None
+
 # Try absolute imports first (works from root directory)
 try:
-    from agent_ng.langchain_agent import CmwAgent as NextGenAgent, ChatMessage
-    from agent_ng.llm_manager import get_llm_manager
+    from langsmith import traceable
+
     from agent_ng.debug_streamer import (
+        LogCategory,
+        LogLevel,
         get_debug_streamer,
         get_log_handler,
-        LogLevel,
-        LogCategory,
     )
-
-    # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
-    from agent_ng.tabs import ChatTab, HomeTab, LogsTab, StatsTab
-    from agent_ng.ui_manager import get_ui_manager
-    from agent_ng.utils import safe_string
     from agent_ng.i18n_translations import (
         create_i18n_instance,
-        get_translation_key,
         format_translation,
+        get_translation_key,
     )
-    from langsmith import traceable
+    from agent_ng.langchain_agent import ChatMessage
+    from agent_ng.langchain_agent import CmwAgent as NextGenAgent
+    from agent_ng.llm_manager import get_llm_manager
+
+    # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
+    from agent_ng.tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
+    from agent_ng.ui_manager import get_ui_manager
+    from agent_ng.utils import safe_string
 
     _logger.info("Successfully imported all modules using absolute imports")
 except ImportError as e1:
     _logger.warning("Absolute imports failed: %s", e1)
     # Fallback to relative imports (when running as module)
     try:
-        from .langchain_agent import CmwAgent as NextGenAgent, ChatMessage
-        from .llm_manager import get_llm_manager
+        from langsmith import traceable
+
         from .debug_streamer import (
+            LogCategory,
+            LogLevel,
             get_debug_streamer,
             get_log_handler,
-            LogLevel,
-            LogCategory,
         )
-
-        # from .streaming_chat import get_chat_interface  # Module moved to .unused
-        from .tabs import ChatTab, HomeTab, LogsTab, StatsTab
-        from .ui_manager import get_ui_manager
         from .i18n_translations import (
             create_i18n_instance,
-            get_translation_key,
             format_translation,
+            get_translation_key,
         )
-        from langsmith import traceable
+        from .langchain_agent import ChatMessage
+        from .langchain_agent import CmwAgent as NextGenAgent
+        from .llm_manager import get_llm_manager
+
+        # from .streaming_chat import get_chat_interface  # Module moved to .unused
+        from .tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
+        from .ui_manager import get_ui_manager
 
         _logger.info("Successfully imported all modules using relative imports")
     except ImportError as e2:
@@ -124,6 +142,7 @@ class NextGenApp:
     """LangChain-native Gradio application with modular tab architecture and i18n support"""
 
     def __init__(self, language: str = "en"):
+
         # No global agent - only session-specific agents
         self.llm_manager = get_llm_manager()
         self.initialization_logs = []
@@ -239,8 +258,8 @@ class NextGenApp:
             self._stream_loop = None
             self._stream_loop_thread = None
 
-        import threading
         import asyncio
+        import threading
 
         self._stream_loop = asyncio.new_event_loop()
 
@@ -464,7 +483,7 @@ class NextGenApp:
 
     def clear_conversation(
         self, request: gr.Request = None
-    ) -> Tuple[List[Dict[str, str]], str]:
+    ) -> tuple[list[dict[str, str]], str]:
         """Clear the conversation history (LangChain-native pattern) - now properly session-aware"""
         if request:
             # Use clean session manager for session-aware clearing
@@ -545,7 +564,7 @@ class NextGenApp:
 
     def get_conversation_history(
         self, session_id: str = "default"
-    ) -> List[BaseMessage]:
+    ) -> list[BaseMessage]:
         """Get the current conversation history (session-based pattern)"""
         if hasattr(self, "session_manager"):
             session_data = self.session_manager.get_session_data(session_id)
@@ -554,8 +573,8 @@ class NextGenApp:
         return []
 
     async def stream_chat_with_agent(
-        self, message: str, history: List[Dict[str, str]], request: gr.Request = None
-    ) -> AsyncGenerator[Tuple[List[Dict[str, str]], str], None]:
+        self, message: str, history: list[dict[str, str]], request: gr.Request = None
+    ) -> AsyncGenerator[tuple[list[dict[str, str]], str], None]:
         """
         Stream chat with the agent using LangChain-native streaming patterns.
 
@@ -586,8 +605,9 @@ class NextGenApp:
             session_id = self.get_user_session_id(request)
             user_agent = self.get_user_agent(session_id)
 
-            # Set session context for logging
+            # Set session context for logging and request config resolution
             self.set_session_context(session_id)
+            set_current_session_id(session_id)
 
             # Debug: Check which LLM instance is being used
             if (
@@ -600,7 +620,7 @@ class NextGenApp:
                     f"🔍 DEBUG: Using session agent with LLM: {llm_info.get('provider', 'unknown')}/{llm_info.get('model_name', 'unknown')}"
                 )
             else:
-                print(f"❌ DEBUG: Session agent has no LLM instance!")
+                print("❌ DEBUG: Session agent has no LLM instance!")
 
             # Use session-specific debug streamer
             session_debug = get_debug_streamer(session_id)
@@ -1029,8 +1049,14 @@ class NextGenApp:
             # Continue gracefully - don't stop processing for streaming errors
             # The response might still be valid even with streaming issues
             yield working_history, ""
+        finally:
+            # Clear session context after turn
+            try:
+                set_current_session_id(None)
+            except Exception:
+                pass
 
-    def _create_event_handlers(self) -> Dict[str, Any]:
+    def _create_event_handlers(self) -> dict[str, Any]:
         """Create event handlers for all tabs"""
         handlers = {
             # Chat handlers (core functionality)
@@ -1054,7 +1080,7 @@ class NextGenApp:
         return handlers
 
     def _stream_message_wrapper(
-        self, message: str, history: List[Dict[str, str]], request: gr.Request = None
+        self, message: str, history: list[dict[str, str]], request: gr.Request = None
     ):
         """Stream a message to the agent (synchronous wrapper)"""
         if not message.strip():
@@ -1152,7 +1178,7 @@ class NextGenApp:
             return True
         return False
 
-    def update_all_ui_components(self) -> Tuple[str, str, str]:
+    def update_all_ui_components(self) -> tuple[str, str, str]:
         """Update all UI components and return their values"""
         status = self._update_status()
         stats = self._refresh_stats()
@@ -1236,6 +1262,25 @@ class NextGenApp:
                 self.tab_instances["stats"] = stats_tab
             else:
                 _logger.warning("StatsTab not available")
+
+            # Config tab visibility is controlled by CMW_USE_DOTENV
+            # Show config tab when CMW_USE_DOTENV=false (default), hide when true
+            use_dotenv_flag = os.environ.get("CMW_USE_DOTENV", "true").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            if not use_dotenv_flag and ConfigTab:
+                config_tab = ConfigTab(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
+                )
+                config_tab.set_main_app(self)
+                tab_modules.append(config_tab)
+                self.tab_instances["config"] = config_tab
+            else:
+                _logger.info(
+                    "ConfigTab not shown (CMW_USE_DOTENV is true or tab unavailable)"
+                )
         except Exception as e:
             _logger.exception("Error creating tab modules: %s", e)
             raise
@@ -1283,6 +1328,7 @@ class NextGenAppWithLanguageDetection(NextGenApp):
         try:
             # Primary: Use GRADIO_DEFAULT_LANGUAGE environment variable
             import os
+
             from dotenv import load_dotenv
 
             load_dotenv()  # Load .env file
@@ -1407,8 +1453,8 @@ def find_available_port(start_port=7860, max_attempts=10):
 def main():
     """Main function to run the application with single port and language detection"""
     import argparse
-    import sys
     import os
+    import sys
 
     # Setup LangSmith environment first
     from agent_ng.langsmith_config import setup_langsmith_environment

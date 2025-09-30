@@ -33,18 +33,48 @@ import json
 import os
 from typing import Any
 
-import requests
 from dotenv import load_dotenv
+import requests
 
 from .requests_models import HTTPResponse, RequestConfig
+
+# Import session-aware config access
+try:
+    from agent_ng.session_manager import get_current_session_id, get_session_config
+except Exception:
+    get_config_for_session = None
+    get_current_session_id = None
+
+
+def _get_config_from_tab() -> dict[str, str] | None:
+    """
+    Get configuration values from the config tab's browser state.
+
+    This function attempts to access the config tab instance from the main app
+    and retrieve the current configuration values from the browser state.
+
+    Returns:
+        Dict with config values (url, username, password) or None if not available
+    """
+    # Prefer session-aware config store if available
+    if get_session_config and get_current_session_id:
+        session_id = get_current_session_id()
+        try:
+            return get_session_config(session_id)
+        except Exception:
+            return None
+    return None
 
 
 def _load_server_config() -> RequestConfig:
     """
-    Load and validate server configuration from environment using python-dotenv.
+    Load and validate server configuration based on CMW_USE_DOTENV flag.
 
-    This function calls `load_dotenv()` to load variables from a local `.env`
-    file (if present), then reads the following environment variables:
+    Configuration source behavior:
+    - CMW_USE_DOTENV=true (default): Load from .env using python-dotenv
+    - CMW_USE_DOTENV=false: Read values from ConfigTab (BrowserState snapshot)
+
+    Required configuration values:
       - CMW_BASE_URL (required)
       - CMW_LOGIN (required)
       - CMW_PASSWORD (required)
@@ -71,13 +101,28 @@ def _load_server_config() -> RequestConfig:
         >>> print(config.base_url)
         >>> print(config.timeout)
     """
-    # Load variables from .env if present
-    load_dotenv()
+    # Determine configuration source based on CMW_USE_DOTENV flag
+    use_dotenv_flag = os.environ.get("CMW_USE_DOTENV", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
-    # Read environment variables
-    base_url_env = os.environ.get("CMW_BASE_URL", "").strip()
-    login_env = os.environ.get("CMW_LOGIN", "").strip()
-    password_env = os.environ.get("CMW_PASSWORD", "").strip()
+    if not use_dotenv_flag:
+        # CMW_USE_DOTENV=false: Use config tab (BrowserState snapshot via server cache)
+        config_values = _get_config_from_tab()
+        if isinstance(config_values, dict) and config_values:
+            base_url_env = config_values.get("url", "").strip()
+            login_env = config_values.get("username", "").strip()
+            password_env = config_values.get("password", "").strip()
+    else:
+        # CMW_USE_DOTENV=true: Load from .env file
+        load_dotenv()
+        base_url_env = os.environ.get("CMW_BASE_URL", "").strip()
+        login_env = os.environ.get("CMW_LOGIN", "").strip()
+        password_env = os.environ.get("CMW_PASSWORD", "").strip()
+
+    # Get timeout from environment (always from env, regardless of source)
     timeout_env = os.environ.get("CMW_TIMEOUT", "").strip()
 
     # Validate required variables
@@ -89,9 +134,8 @@ def _load_server_config() -> RequestConfig:
     if not password_env:
         missing.append("CMW_PASSWORD")
     if missing:
-        raise RuntimeError(
-            f"Missing required environment variables: {', '.join(missing)}"
-        )
+        missing_msg = "Missing required environment variables: " + ", ".join(missing)
+        raise RuntimeError(missing_msg)
 
     # Parse timeout with default
     try:
@@ -108,7 +152,8 @@ def _load_server_config() -> RequestConfig:
             timeout=timeout_val,
         )
     except Exception as e:
-        raise RuntimeError("Invalid server configuration") from e
+        err_msg = "Invalid server configuration"
+        raise RuntimeError(err_msg) from e
 
 
 def _basic_headers() -> dict[str, str]:
