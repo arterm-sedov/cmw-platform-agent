@@ -40,12 +40,14 @@ RUSSIAN_TRANSLATIONS = {
     """,
     "quick_start_title": "Быстрый старт",
     "quick_start_description": """
-    1. Перейдите на вкладку «Чат» для начала разговора.
-    2. Выберите модель в боковой панели.
-    3. Введите свой вопрос или выберите **заготовку** в левой панели и отредактируйте её, например:
+    1. Настройте подключение к **Comindware Platform** на вкладке «Настройки».
+    2. Перейдите на вкладку «Чат» для начала разговора.
+    3. Выберите модель в боковой панели.
+    4. Введите свой вопрос или выберите **заготовку** в левой панели и отредактируйте её, например:
         - Что ты умеешь?
         - Чего ты не умеешь?
         - Перечисли все приложения в платформе в удобном списке.
+        - Дай полный аудит всех приложений, шаблонов и атрибутов в системе.
         - Покажи все шаблоны записей в приложении "ERP".
         - Выдай список всех атрибутов шаблона "Контрагенты", приложение "ERP".
         - Создай текстовый атрибут "Комментарий", приложение "HR", шаблон "Кандидаты".
@@ -53,9 +55,9 @@ RUSSIAN_TRANSLATIONS = {
         - Для атрибута "Контактный телефон" в приложении "CRM", шаблон "Лиды", смени формат отображения на российский телефон.
         - Получи атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
         - Архивируй/разархивируй атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
-    4. Нажмите кнопку «**Отправить**» и дождитесь ответа агента.
-    5. Агент может отвечать некоторое время, особенно если требуется обращение к **Comindware Platform**.  Прогресс отображается в левой панели.
-    6. По окончании работы агент выдаст сообщение «Обработка завершена» в левой панели.
+    5. Нажмите кнопку «**Отправить**» и дождитесь ответа агента.
+    6. Агент может отвечать некоторое время, особенно если требуется обращение к **Comindware Platform**.  Прогресс отображается в левой панели.
+    7. По окончании работы агент выдаст сообщение «Обработка завершена» в левой панели.
     """,
     # Quick actions
     "quick_actions_title": "Заготовки",
@@ -189,9 +191,25 @@ RUSSIAN_TRANSLATIONS = {
     "config_clear_storage_button": "🧹 Очистить хранилище браузера",
     "config_clear_success": "✅ Хранилище браузера очищено",
     "config_clear_error": "❌ Не удалось очистить хранилище браузера",
-    # Statistics labels
-    "agent_status_section": "**Агент:**",
-    "conversation_section": "**Диалог:**",
+    "config_help": (
+        """
+        Задайте параметры подключения к **Comindware Platform**:
+
+        - **Адрес сервера** — URL вашего сайта **Comindware Platform**,
+        например `https://your-host`.
+        - **Имя пользователя** и **Пароль** — учетные данные для
+        использования API. **Обычный аккаунт не будет работать.**
+        - Нажмите «**Сохранить в браузере**», чтобы применить параметры к
+        текущему сеансу.
+        - Кнопка «**Загрузить из браузера**» восстановит ранее сохранённые
+        значения.
+        - **Очистить хранилище браузера** удалит сохранённые параметры и
+          очистит поля.
+
+        Данные сохраняются в браузере и применяются только в
+        пределах текущего сеанса.
+        """
+    ),
     "tools_section": "**Инструменты:**",
     "messages_label": "Сообщения",
     "user_messages_label": "Пользователь",
@@ -321,12 +339,14 @@ ENGLISH_TRANSLATIONS = {
     """,
     "quick_start_title": "Quick Start",
     "quick_start_description": """
-    1. Go to the Chat tab to start a conversation.
-    2. Select a model in the sidebar.
-    3. Enter your question or select a **template** in the sidebar and edit it, for example:
+    1. Configure the connection to the **Comindware Platform** in the Config tab.
+    2. Go to the Chat tab to start a conversation.
+    3. Select a model in the sidebar.
+    4. Enter your question or select a **template** in the sidebar and edit it, for example:
         - What can you do?
         - What can't you do?
         - List all applications in the platform in a convenient list.
+        - Give a full audit of all applications, templates and attributes in the system.
         - Show all record templates in the "ERP" application.
         - Get a list of all attributes of the "Counterparties" template, application "ERP"
         - Create a text attribute "Comment", application "HR", template "Candidates"
@@ -334,9 +354,9 @@ ENGLISH_TRANSLATIONS = {
         - For the "Contact Phone" attribute in application "CRM", template "Leads", change the display format to Russian phone
         - Get attribute: system name "Comment", application "HR", template "Candidates"
         - Archive/unarchive attribute, system name "Comment", application "HR", template "Candidates"
-    4. Click **Send** and wait for the agent's response.
-    5. The agent may take some time to respond, especially when accessing the **Comindware Platform**. Progress is displayed in the sidebar.
-    6. When finished, the agent will show **Processing complete** message in the sidebar.
+    5. Click **Send** and wait for the agent's response.
+    6. The agent may take some time to respond, especially when accessing the **Comindware Platform**. Progress is displayed in the sidebar.
+    7. When finished, the agent will show **Processing complete** message in the sidebar.
     """,
     # Quick actions
     "quick_actions_title": "Templates",
@@ -470,6 +490,22 @@ ENGLISH_TRANSLATIONS = {
     "config_clear_storage_button": "🧹 Clear browser storage",
     "config_clear_success": "✅ Browser storage cleared",
     "config_clear_error": "❌ Failed to clear browser storage",
+    "config_help": (
+        """
+        Configure connection to the **Comindware Platform**:
+
+        - **Server URL** — your **Comindware Platform** website, e.g.,
+        `https://your-host`.
+        - **Username** and **Password** — credentials with API access rights.
+        **Regular account won't work.**
+        - Click **Save to browser** to apply settings for the current session.
+        - **Load from browser** restores previously saved values.
+        - **Clear browser storage** removes saved settings and clears the fields.
+
+        Settings are stored in the browser storage and applied within the
+        current session only.
+        """
+    ),
     # Statistics labels
     "agent_status_section": "**Agent:**",
     "conversation_section": "**Conversation:**",

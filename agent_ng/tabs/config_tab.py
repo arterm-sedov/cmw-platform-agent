@@ -99,6 +99,7 @@ class ConfigTab:
                 f"### {self._get_translation('config_title')}",
                 elem_classes=["llm-selection-title"],
             )
+            gr.Markdown(self._get_translation("config_help"))
 
             # Platform URL
             self.components["platform_url"] = gr.Textbox(
@@ -254,7 +255,8 @@ class ConfigTab:
         except Exception as e:
             logging.getLogger(__name__).exception("Save to browser state failed")
             with suppress(Exception):
-                gr.Warning(self._get_translation("config_save_error") + f"\n\n{str(e)}")
+                message = self._get_translation("config_save_error") + "\n\n" + f"{e!s}"
+                gr.Warning(message)
             return current_state or {}
         else:
             return new_state
@@ -334,7 +336,8 @@ class ConfigTab:
         except Exception as e:
             logging.getLogger(__name__).exception("Load from browser state failed")
             with suppress(Exception):
-                gr.Warning(self._get_translation("config_load_error") + f"\n\n{str(e)}")
+                message = self._get_translation("config_load_error") + "\n\n" + f"{e!s}"
+                gr.Warning(message)
             return (
                 gr.update(),
                 gr.update(),
@@ -359,7 +362,9 @@ class ConfigTab:
         except Exception as e:
             logging.getLogger(__name__).exception("Clear browser storage failed")
             with suppress(Exception):
-                gr.Warning(self._get_translation("config_clear_error") + f"\n\n{str(e)}")
+                base = self._get_translation("config_clear_error")
+                details = f"{e!s}"
+                gr.Warning(base + "\n\n" + details)
             # Return original state if clear failed
             return state or {}, gr.update(), gr.update(), gr.update()
 
