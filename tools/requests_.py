@@ -30,6 +30,7 @@ Version: 1.0
 
 import base64
 import json
+import logging
 import os
 from typing import Any
 
@@ -42,7 +43,8 @@ from .requests_models import HTTPResponse, RequestConfig
 try:
     from agent_ng.session_manager import get_current_session_id, get_session_config
 except Exception:
-    get_config_for_session = None
+    # Ensure safe fallbacks if optional session API is unavailable
+    get_session_config = None
     get_current_session_id = None
 
 
@@ -60,9 +62,33 @@ def _get_config_from_tab() -> dict[str, str] | None:
     if get_session_config and get_current_session_id:
         session_id = get_current_session_id()
         try:
-            return get_session_config(session_id)
+            cfg = get_session_config(session_id)
         except Exception:
+            logging.getLogger(__name__).debug(
+                "📥 requests._get_config_from_tab: failed to read session config",
+                exc_info=True,
+            )
             return None
+        else:
+            try:
+                masked = None
+                if isinstance(cfg, dict):
+                    masked = {
+                        "url_present": bool((cfg.get("url") or "").strip()),
+                        "username_len": len(cfg.get("username") or ""),
+                        "password_len": len(cfg.get("password") or ""),
+                    }
+                logging.getLogger(__name__).debug(
+                    "📥 requests._get_config_from_tab: session=%s cfg=%s",
+                    session_id,
+                    masked,
+                )
+            except Exception:
+                logging.getLogger(__name__).debug(
+                    "📥 requests._get_config_from_tab: masking/log failed",
+                    exc_info=True,
+                )
+            return cfg
     return None
 
 
@@ -108,13 +134,26 @@ def _load_server_config() -> RequestConfig:
         "yes",
     )
 
+    # Initialize defaults to avoid UnboundLocalError when branch values are missing
+    base_url_env = ""
+    login_env = ""
+    password_env = ""
+
     if not use_dotenv_flag:
         # CMW_USE_DOTENV=false: Use config tab (BrowserState snapshot via server cache)
         config_values = _get_config_from_tab()
         if isinstance(config_values, dict) and config_values:
-            base_url_env = config_values.get("url", "").strip()
-            login_env = config_values.get("username", "").strip()
-            password_env = config_values.get("password", "").strip()
+            base_url_env = (config_values.get("url") or "").strip()
+            login_env = (config_values.get("username") or "").strip()
+            password_env = (config_values.get("password") or "").strip()
+        else:
+            sid = get_current_session_id() if get_current_session_id else None
+            msg = (
+                "Missing Config Tab values for this session. "
+                "Open the Config tab, fill URL/Username/Password, and click Save. "
+                f"Session: {sid or 'unknown'}"
+            )
+            raise RuntimeError(msg)
     else:
         # CMW_USE_DOTENV=true: Load from .env file
         load_dotenv()
@@ -128,14 +167,31 @@ def _load_server_config() -> RequestConfig:
     # Validate required variables
     missing = []
     if not base_url_env:
-        missing.append("CMW_BASE_URL")
+        missing.append("URL")
     if not login_env:
-        missing.append("CMW_LOGIN")
+        missing.append("Username")
     if not password_env:
-        missing.append("CMW_PASSWORD")
+        missing.append("Password")
     if missing:
-        missing_msg = "Missing required environment variables: " + ", ".join(missing)
-        raise RuntimeError(missing_msg)
+        if use_dotenv_flag:
+            env_names = []
+            if "URL" in missing:
+                env_names.append("CMW_BASE_URL")
+            if "Username" in missing:
+                env_names.append("CMW_LOGIN")
+            if "Password" in missing:
+                env_names.append("CMW_PASSWORD")
+            raise RuntimeError(
+                "Missing required environment variables: " + ", ".join(env_names)
+            )
+        sid = get_current_session_id() if get_current_session_id else None
+        msg = (
+            "Missing required Config Tab values: "
+            + ", ".join(missing)
+            + ". Open the Config tab, fill the fields, and click Save. "
+            f"Session: {sid or 'unknown'}"
+        )
+        raise RuntimeError(msg)
 
     # Parse timeout with default
     try:

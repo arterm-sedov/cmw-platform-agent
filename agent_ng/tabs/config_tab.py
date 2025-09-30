@@ -14,10 +14,9 @@ from typing import Any
 
 import gradio as gr
 
-from agent_ng.session_manager import set_session_config
-
 # Import for translations
 from agent_ng.i18n_translations import get_translation_key
+from agent_ng.session_manager import set_session_config
 
 
 class ConfigTab:
@@ -75,18 +74,15 @@ class ConfigTab:
 
         url_init, login_init, password_init = "", "", ""
 
-        # Config state (use browser persistence when supported by current Gradio)
-        if gr.BrowserState:
-            self.components["config_state"] = gr.BrowserState()
-        else:
-            # Older Gradio without storage kwarg: fallback to session-only state
-            self.components["config_state"] = gr.BrowserState(
-                {
-                    "url": url_init,
-                    "username": login_init,
-                    "password": password_init,
-                }
-            )
+        # Config state in browser localStorage (shared across tabs in same browser)
+        self.components["config_state"] = gr.BrowserState(
+            {
+                "url": url_init,
+                "username": login_init,
+                "password": password_init,
+            },
+            storage_key="cmw_config_v1",
+        )
 
         # Use the same card-like styling used elsewhere (model-card)
         with gr.Column(scale=1, min_width=400, elem_classes=["model-card"]):
@@ -184,7 +180,12 @@ class ConfigTab:
 
     # Event handlers
     def _save_to_state(
-        self, url: str, username: str, password: str, current_state: dict | None
+        self,
+        url: str,
+        username: str,
+        password: str,
+        current_state: dict | None,
+        request: gr.Request | None = None,
     ) -> dict:
         """Save configuration into browser state and update process env."""
         try:
@@ -199,15 +200,45 @@ class ConfigTab:
                 "password": password,
             }
 
-            # Store per-session config via SessionManager if available
-            if self.main_app and hasattr(self.main_app, "session_manager") and hasattr(
-                self.main_app.session_manager, "get_last_active_session_id"
+            # Determine accurate session id
+            session_id = None
+            try:
+                if (
+                    request
+                    and hasattr(request, "session_hash")
+                    and request.session_hash
+                ):
+                    session_id = f"gradio_{request.session_hash}"
+            except Exception:
+                session_id = None
+
+            if not session_id and (
+                self.main_app
+                and hasattr(self.main_app, "session_manager")
+                and hasattr(self.main_app.session_manager, "get_last_active_session_id")
             ):
                 session_id = (
                     self.main_app.session_manager.get_last_active_session_id()  # type: ignore[attr-defined]
                 )
-                if session_id:
-                    set_session_config(session_id, new_state)
+
+            if session_id:
+                set_session_config(session_id, new_state)
+                try:
+                    masked = {
+                        "url_present": bool(url),
+                        "username_len": len(username),
+                        "password_len": len(password),
+                    }
+                    logging.getLogger(__name__).debug(
+                        "🔐 ConfigTab.save -> session=%s stored=%s",
+                        session_id,
+                        masked,
+                    )
+                except Exception:
+                    logging.getLogger(__name__).debug(
+                        "🔐 ConfigTab.save -> debug logging failed",
+                        exc_info=True,
+                    )
 
             with suppress(Exception):
                 gr.Info(self._get_translation("config_save_success_session"))
@@ -219,7 +250,9 @@ class ConfigTab:
         else:
             return new_state
 
-    def _load_from_state(self, state: Any) -> tuple[Any, Any, Any]:
+    def _load_from_state(
+        self, state: Any, request: gr.Request | None = None
+    ) -> tuple[Any, Any, Any]:
         """Load values from browser state only and update fields."""
         try:
             # Normalize state across gradio versions (may come as tuple or dict)
@@ -233,6 +266,52 @@ class ConfigTab:
                 url = state.get("url", "") or ""
                 login = state.get("username", "") or ""
                 pwd = state.get("password", "") or ""
+                # Also propagate BrowserState snapshot into per-session store
+                # for backend
+                try:
+                    session_id = None
+                    try:
+                        if (
+                            request
+                            and hasattr(request, "session_hash")
+                            and request.session_hash
+                        ):
+                            session_id = f"gradio_{request.session_hash}"
+                    except Exception:
+                        session_id = None
+
+                    if not session_id and (
+                        self.main_app
+                        and hasattr(self.main_app, "session_manager")
+                        and hasattr(
+                            self.main_app.session_manager,
+                            "get_last_active_session_id",
+                        )
+                    ):
+                        session_id = (
+                            self.main_app.session_manager.get_last_active_session_id()  # type: ignore[attr-defined]
+                        )
+
+                    if session_id:
+                        set_session_config(
+                            session_id,
+                            {"url": url, "username": login, "password": pwd},
+                        )
+                        logging.getLogger(__name__).debug(
+                            (
+                                "🔄 ConfigTab.load -> propagated "
+                                "BrowserState to session=%s"
+                            ),
+                            session_id,
+                        )
+                except Exception:
+                    logging.getLogger(__name__).debug(
+                        (
+                            "⚠️ ConfigTab.load -> failed to propagate "
+                            "BrowserState to session store"
+                        ),
+                        exc_info=True,
+                    )
             else:
                 url, login, pwd = "", "", ""
 

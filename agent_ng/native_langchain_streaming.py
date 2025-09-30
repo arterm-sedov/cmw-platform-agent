@@ -23,6 +23,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from .i18n_translations import get_translation_key
+from .session_manager import set_current_session_id
 
 # LangSmith tracing
 try:
@@ -443,12 +444,15 @@ class NativeLangChainStreaming:
                             native_finish = additional.get("native_finish_reason")
 
                         if (
-                            normalized_finish in {"stop", "length", "content_filter", "error"}
+                            normalized_finish
+                            in {"stop", "length", "content_filter", "error"}
                             and not has_tool_calls
                         ):
                             yield StreamingEvent(
                                 event_type="iteration_progress",
-                                content=get_translation_key("processing_complete", language),
+                                content=get_translation_key(
+                                    "processing_complete", language
+                                ),
                                 metadata={
                                     "conversation_complete": True,
                                     "early_finish": True,
@@ -570,6 +574,15 @@ class NativeLangChainStreaming:
                                         **safe_tool_args,
                                         "agent": agent,
                                     }
+                                    # Ensure session-bound config is visible to backend tools
+                                    try:
+                                        if (
+                                            hasattr(agent, "session_id")
+                                            and agent.session_id
+                                        ):
+                                            set_current_session_id(agent.session_id)
+                                    except Exception:
+                                        pass
                                     tool_result = tool_obj.invoke(tool_args_with_agent)
 
                                     # Safety check for None tool_result
