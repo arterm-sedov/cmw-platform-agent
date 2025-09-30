@@ -326,14 +326,10 @@ class Sidebar(QuickActionsMixin):
             if self._is_mistral_model(provider, model):
                 # Check if we're switching FROM a non-Mistral provider TO Mistral
                 current_provider_model = self._get_current_provider_model_combination()
-                current_provider = (
-                    current_provider_model.split(" / ")[0].lower()
-                    if " / " in current_provider_model
-                    else ""
-                )
+                current_is_mistral = "mistral" in current_provider_model.lower()
 
                 # Only clear chat if switching from non-Mistral to Mistral
-                if current_provider and current_provider != "mistral":
+                if not current_is_mistral:
                     # Show native Gradio warning modal
                     gr.Warning(
                         message=self._get_translation("mistral_switch_warning").format(
@@ -403,7 +399,7 @@ class Sidebar(QuickActionsMixin):
             status = self._apply_llm_directly(provider, model, request)
 
             # If successful, clear the chat history
-            if "success" in status.lower():
+            if status and status != self._get_translation("llm_apply_error"):
                 # Get the clear handler from event handlers
                 clear_handler = self.event_handlers.get("clear_chat")
                 if clear_handler:
