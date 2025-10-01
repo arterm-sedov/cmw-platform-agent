@@ -7,3 +7,4 @@ server_config.yml
 *.mp4
 *.log
 *.log.*
+cmw-agent.pid
