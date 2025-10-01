@@ -128,11 +128,17 @@ class LLMManager:
             force_tools=True,
             models=[
                 {
-                    "model": "gemini-2.5-pro",
-                    "token_limit": 2000000,
-                    "max_tokens": 2000000,
+                    "model": "gemini-2.5-flash",
+                    "token_limit": 1048576,
+                    "max_tokens": 65536,
                     "temperature": 0
-                }
+                },
+                {
+                    "model": "gemini-2.5-pro",
+                    "token_limit": 1048576,
+                    "max_tokens": 65536,
+                    "temperature": 0
+                },
             ],
             enable_chunking=False
         ),
