@@ -688,10 +688,10 @@ class CmwAgent:
                 "status": "unknown",
             }
 
-        # Get context window from LLM manager
+        # Get context window from the agent's own LLM instance (session-specific)
         context_window = 0
-        if hasattr(self, "llm_manager") and self.llm_manager:
-            context_window = self.llm_manager.get_current_llm_context_window()
+        if hasattr(self, "llm_instance") and self.llm_instance and self.llm_instance.config:
+            context_window = self.llm_instance.config.get("token_limit", 0)
 
         return self.token_tracker.get_token_budget_info(context_window)
 
