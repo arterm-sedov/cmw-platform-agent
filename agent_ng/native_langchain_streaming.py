@@ -400,19 +400,26 @@ class NativeLangChainStreaming:
                 runnable_config = None
                 if _LANGFUSE_AVAILABLE:
                     try:
-                        # Get session_id from agent (should always be available)
+                        # Get session_id from agent or fallback to current session context
                         session_id = None
                         if agent and hasattr(agent, "session_id"):
                             session_id = agent.session_id
                             self._logger.debug(f"🔍 Langfuse: Using session_id from agent: {session_id}")
                         else:
-                            # Fallback to conversation_id (which should be session_id from app)
-                            session_id = conversation_id
-                            self._logger.debug(f"🔍 Langfuse: Using conversation_id as session_id: {session_id}")
+                            # Fallback to current session context
+                            from .session_manager import get_current_session_id
+                            session_id = get_current_session_id()
+                            self._logger.debug(f"🔍 Langfuse: Using session_id from context: {session_id}")
                         
-                        # Create handler - session_id is passed via metadata
-                        handler = get_langfuse_callback_handler()
-                        self._logger.debug(f"🔍 Langfuse: Created handler (session_id will be passed via metadata)")
+                        # Create handler with session_id if available
+                        if session_id:
+                            # Method 1: Pass session_id to CallbackHandler constructor
+                            handler = get_langfuse_callback_handler(session_id=session_id)
+                            self._logger.debug(f"🔍 Langfuse: Created handler with session_id: {session_id}")
+                        else:
+                            # Method 2: Use default handler and pass via metadata
+                            handler = get_langfuse_callback_handler()
+                            self._logger.debug("🔍 Langfuse: Created handler without session_id")
                         
                         if handler is not None:
                             # Add Langfuse session id to metadata as per docs
@@ -427,15 +434,11 @@ class NativeLangChainStreaming:
                                 if session_id
                                 else {}
                             )
-                            self._logger.debug(f"🔍 Langfuse: Handler created successfully: {type(handler)}")
                             self._logger.debug(f"🔍 Langfuse: Metadata: {metadata}")
                             runnable_config = {
                                 "callbacks": [handler],
                                 "metadata": metadata,
                             }
-                            self._logger.debug(f"🔍 Langfuse: Runnable config: {runnable_config}")
-                        else:
-                            self._logger.debug("❌ Langfuse: Handler is None - Langfuse not configured or failed to initialize")
                     except Exception as e:
                         self._logger.debug(f"⚠️ Langfuse callback handler error: {e}")
                         runnable_config = None

@@ -58,7 +58,6 @@ def _ensure_global_langfuse_client():
     
     if _global_langfuse_client is not None:
         return _global_langfuse_client
-    
     config = get_langfuse_config()
     if not config.is_configured():
         return None
@@ -86,7 +85,7 @@ def get_langfuse_callback_handler(session_id: str | None = None):
     Import langfuse lazily to avoid hard dependency when disabled.
     
     Args:
-        session_id: Optional session ID to associate with the handler (passed via metadata)
+        session_id: Optional session ID to associate with the handler
     """
     # Ensure global client is initialized
     client = _ensure_global_langfuse_client()
@@ -95,8 +94,14 @@ def get_langfuse_callback_handler(session_id: str | None = None):
 
     try:
         from langfuse.langchain import CallbackHandler
-        _logger.debug(f"🔍 Langfuse Config: Created CallbackHandler (session_id will be passed via metadata)")
-        return CallbackHandler()
+        
+        # Create handler with session_id if provided
+        if session_id:
+            _logger.debug(f"🔍 Langfuse Config: Created CallbackHandler with session_id: {session_id}")
+            return CallbackHandler(session_id=session_id)
+        else:
+            _logger.debug(f"🔍 Langfuse Config: Created CallbackHandler (session_id will be passed via metadata)")
+            return CallbackHandler()
     except Exception as e:
         _logger.debug(f"❌ Langfuse Config: Failed to create handler: {e}")
         import traceback
