@@ -47,10 +47,13 @@ def get_langfuse_config() -> LangfuseConfig:
     return LangfuseConfig()
 
 
-def get_langfuse_callback_handler():
+def get_langfuse_callback_handler(session_id: str | None = None):
     """Return a Langfuse CallbackHandler if configured, else None.
 
     Import langfuse lazily to avoid hard dependency when disabled.
+    
+    Args:
+        session_id: Optional session ID to associate with the handler
     """
     config = get_langfuse_config()
     if not config.is_configured():
@@ -69,7 +72,12 @@ def get_langfuse_callback_handler():
         Langfuse(
             public_key=config.public_key, secret_key=config.secret_key, host=config.host
         )
-        return CallbackHandler()
+        
+        # Create handler with session_id if provided
+        if session_id:
+            return CallbackHandler(session_id=session_id)
+        else:
+            return CallbackHandler()
     except Exception:
         # Fail-closed to None to keep core app resilient
         return None
