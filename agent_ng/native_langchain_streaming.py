@@ -205,14 +205,14 @@ class NativeLangChainStreaming:
             if tool_key in duplicate_counts:
                 # Increment count for duplicate
                 duplicate_counts[tool_key] += 1
-                print(
+                self._logger.debug(
                     f"🔍 DEBUG: Found duplicate tool call {tool_name} (total count: {duplicate_counts[tool_key]})"
                 )
             else:
                 # First occurrence - add to unique list and initialize count
                 unique_tool_calls.append(tool_call)
                 duplicate_counts[tool_key] = 1
-                print(f"🔍 DEBUG: Added unique tool call {tool_name}")
+                self._logger.debug(f"🔍 DEBUG: Added unique tool call {tool_name}")
 
         return unique_tool_calls, duplicate_counts
 
@@ -279,7 +279,7 @@ class NativeLangChainStreaming:
             chat_history = agent.memory_manager.get_conversation_history(
                 conversation_id
             )
-            print(
+            self._logger.debug(
                 f"🔍 DEBUG: Streaming manager - chat_history length: {len(chat_history) if chat_history else 0}"
             )
 
@@ -297,9 +297,9 @@ class NativeLangChainStreaming:
             if not system_in_history:
                 # Store system message in memory only once
                 agent.memory_manager.add_message(conversation_id, system_message)
-                print("🔍 DEBUG: Added system message to memory (first time)")
+                self._logger.debug("🔍 DEBUG: Added system message to memory (first time)")
             else:
-                print("🔍 DEBUG: System message already in memory, skipping storage")
+                self._logger.debug("🔍 DEBUG: System message already in memory, skipping storage")
 
             # Add conversation history (excluding system messages to avoid duplication)
             # Filter out orphaned tool messages to prevent message order issues
@@ -308,7 +308,7 @@ class NativeLangChainStreaming:
                 for i, msg in enumerate(chat_history):
                     # Safety check for None message
                     if msg is None:
-                        print(f"🔍 DEBUG: Skipping None message at index {i}")
+                        self._logger.debug(f"🔍 DEBUG: Skipping None message at index {i}")
                         continue
 
                     if isinstance(msg, SystemMessage):
@@ -346,7 +346,7 @@ class NativeLangChainStreaming:
                         non_system_history.append(msg)
 
             messages.extend(non_system_history)
-            print(
+            self._logger.debug(
                 f"🔍 DEBUG: Added {len(non_system_history)} messages from history to LLM context"
             )
 
@@ -357,14 +357,14 @@ class NativeLangChainStreaming:
 
             # Get LLM with tools (tools are already bound in the LLM instance)
             llm_with_tools = agent.llm_instance.llm
-            print(
+            self._logger.debug(
                 f"🔍 DEBUG: Using LLM instance with pre-bound tools - type: {type(llm_with_tools)}"
             )
-            print(
+            self._logger.debug(
                 f"🔍 DEBUG: LLM instance has tools: {hasattr(llm_with_tools, 'tools')}"
             )
             if hasattr(llm_with_tools, "tools"):
-                print(
+                self._logger.debug(
                     f"🔍 DEBUG: Number of tools: {len(llm_with_tools.tools) if llm_with_tools.tools else 0}"
                 )
 
@@ -373,7 +373,7 @@ class NativeLangChainStreaming:
 
             while iteration < self.max_iterations:
                 iteration += 1
-                print(f"🔍 DEBUG: Starting iteration {iteration}")
+                self._logger.debug(f"🔍 DEBUG: Starting iteration {iteration}")
 
                 # Stream iteration progress as separate message (no icon - UI will add rotating clock)
 
@@ -393,28 +393,51 @@ class NativeLangChainStreaming:
                 tool_calls_in_progress = {}
                 processed_tools = {}  # Track processed tools to avoid duplicates in same response
                 has_tool_calls = False
-                print(f"🔍 DEBUG: Starting streaming loop for iteration {iteration}")
+                self._logger.debug(f"🔍 DEBUG: Starting streaming loop for iteration {iteration}")
 
                 # Stream LLM response - tracing handled by @traceable on stream_agent_response
                 # Attach optional Langfuse callback handler when available
                 runnable_config = None
                 if _LANGFUSE_AVAILABLE:
                     try:
+                        # Get session_id from agent (should always be available)
+                        session_id = None
+                        if agent and hasattr(agent, "session_id"):
+                            session_id = agent.session_id
+                            self._logger.debug(f"🔍 Langfuse: Using session_id from agent: {session_id}")
+                        else:
+                            # Fallback to conversation_id (which should be session_id from app)
+                            session_id = conversation_id
+                            self._logger.debug(f"🔍 Langfuse: Using conversation_id as session_id: {session_id}")
+                        
+                        # Create handler - session_id is passed via metadata
                         handler = get_langfuse_callback_handler()
+                        self._logger.debug(f"🔍 Langfuse: Created handler (session_id will be passed via metadata)")
+                        
                         if handler is not None:
                             # Add Langfuse session id to metadata as per docs
                             # https://langfuse.com/docs/observability/features/sessions
-                            session_id = getattr(agent, "session_id", None)
+                            # Note: Use snake_case key per Langfuse Python/LangChain docs
+                            # https://langfuse.com/docs/observability/features/sessions
                             metadata = (
-                                {"langfuse_session_id": session_id}
+                                {"langfuse_session_id": session_id,
+                                 "session_id": session_id,
+                                 "langfuseSessionId": session_id,
+                                 }
                                 if session_id
                                 else {}
                             )
+                            self._logger.debug(f"🔍 Langfuse: Handler created successfully: {type(handler)}")
+                            self._logger.debug(f"🔍 Langfuse: Metadata: {metadata}")
                             runnable_config = {
                                 "callbacks": [handler],
                                 "metadata": metadata,
                             }
-                    except Exception:
+                            self._logger.debug(f"🔍 Langfuse: Runnable config: {runnable_config}")
+                        else:
+                            self._logger.debug("❌ Langfuse: Handler is None - Langfuse not configured or failed to initialize")
+                    except Exception as e:
+                        self._logger.debug(f"⚠️ Langfuse callback handler error: {e}")
                         runnable_config = None
 
                 async for chunk in llm_with_tools.astream(
@@ -530,7 +553,7 @@ class NativeLangChainStreaming:
                     and accumulated_chunk.tool_calls
                 ):
                     has_tool_calls = True
-                    print(
+                    self._logger.debug(
                         f"🔍 DEBUG: Found {len(accumulated_chunk.tool_calls)} tool calls"
                     )
 
@@ -538,7 +561,7 @@ class NativeLangChainStreaming:
                     deduplicated_tool_calls, duplicate_counts = (
                         self._deduplicate_tool_calls(accumulated_chunk.tool_calls)
                     )
-                    print(
+                    self._logger.debug(
                         f"🔍 DEBUG: Original tool calls: {len(accumulated_chunk.tool_calls)}, Deduplicated: {len(deduplicated_tool_calls)}"
                     )
 
@@ -588,7 +611,7 @@ class NativeLangChainStreaming:
 
                                     # Safety check for None tool_result
                                     if tool_result is None:
-                                        print(
+                                        self._logger.debug(
                                             f"⚠️ Tool {tool_name} returned None result"
                                         )
                                         tool_result = "Tool execution completed but returned no result"
@@ -720,7 +743,7 @@ class NativeLangChainStreaming:
                             tool_calls=accumulated_chunk.tool_calls,
                         )
                         messages.append(ai_message_with_tool_calls)
-                        print(
+                        self._logger.debug(
                             f"🔍 DEBUG: Added AIMessage with {len(accumulated_chunk.tool_calls)} tool calls to working messages"
                         )
 
@@ -770,14 +793,14 @@ class NativeLangChainStreaming:
                                     name=tool_name,
                                 )
                                 tool_messages.append(tool_message)
-                                print(
+                                self._logger.debug(
                                     f"🔍 DEBUG: Created ToolMessage for {tool_name} with ID {tool_call_id}"
                                 )
 
                         # CRITICAL: Add ToolMessages to working messages for next LLM call
                         # This ensures proper sequence: AIMessage(with tool_calls) → ToolMessages
                         messages.extend(tool_messages)
-                        print(
+                        self._logger.debug(
                             f"🔍 DEBUG: Added {len(tool_messages)} ToolMessages to working messages"
                         )
 
@@ -791,11 +814,11 @@ class NativeLangChainStreaming:
                     # Regular AI message without tool calls
                     ai_message = AIMessage(content=accumulated_chunk.content)
                     messages.append(ai_message)
-                    print("🔍 DEBUG: Added regular AIMessage to working messages")
+                    self._logger.debug("🔍 DEBUG: Added regular AIMessage to working messages")
 
                 # If no tool calls, we're done
                 if not has_tool_calls:
-                    print(
+                    self._logger.debug(
                         f"🔍 DEBUG: No tool calls in iteration {iteration}, conversation complete"
                     )
 
@@ -832,7 +855,7 @@ class NativeLangChainStreaming:
                     for message in messages:
                         # Skip system messages - they're handled separately above
                         if isinstance(message, SystemMessage):
-                            print(
+                            self._logger.debug(
                                 "🔍 DEBUG: Skipped system message (handled separately)"
                             )
                             continue
@@ -843,7 +866,7 @@ class NativeLangChainStreaming:
                             and not message.content
                             and not message.tool_calls
                         ):
-                            print(
+                            self._logger.debug(
                                 "🔍 DEBUG: Skipped empty AIMessage (no content or tool calls)"
                             )
                             continue
@@ -860,11 +883,11 @@ class NativeLangChainStreaming:
                         if message_key not in memory_content:
                             agent.memory_manager.add_message(conversation_id, message)
                             new_messages_added += 1
-                            print(
+                            self._logger.debug(
                                 f"🔍 DEBUG: Added new {type(message).__name__} to memory"
                             )
                         else:
-                            print(
+                            self._logger.debug(
                                 f"🔍 DEBUG: Skipped duplicate {type(message).__name__}"
                             )
 
@@ -915,7 +938,7 @@ class NativeLangChainStreaming:
 
                     break
 
-                print(f"🔍 DEBUG: Completed iteration {iteration}, continuing...")
+                self._logger.debug(f"🔍 DEBUG: Completed iteration {iteration}, continuing...")
 
                 # Stream iteration completion as separate message
                 yield StreamingEvent(
@@ -929,7 +952,7 @@ class NativeLangChainStreaming:
 
             # Check if we hit max iterations
             if iteration >= self.max_iterations:
-                print(
+                self._logger.debug(
                     f"🔍 DEBUG: Reached max iterations ({self.max_iterations}), stopping conversation"
                 )
 
@@ -963,7 +986,7 @@ class NativeLangChainStreaming:
                 try:
                     agent.token_tracker.track_llm_response(final_chunk, messages)
                 except Exception as e:
-                    print(f"🔍 DEBUG: Error tracking API tokens: {e}")
+                    self._logger.debug(f"🔍 DEBUG: Error tracking API tokens: {e}")
 
             # Extract normalized/native finish_reason if present (provider-agnostic; OpenRouter supplies both)
             def _extract_finish_reason(chunk) -> tuple[str | None, str | None]:
@@ -1007,7 +1030,7 @@ class NativeLangChainStreaming:
             for message in messages:
                 # Skip system messages - they're handled separately above
                 if isinstance(message, SystemMessage):
-                    print("🔍 DEBUG: Skipped system message (handled separately)")
+                    self._logger.debug("🔍 DEBUG: Skipped system message (handled separately)")
                     continue
 
                 # Skip empty AIMessages - they cause message order issues
@@ -1016,7 +1039,7 @@ class NativeLangChainStreaming:
                     and not message.content
                     and not message.tool_calls
                 ):
-                    print(
+                    self._logger.debug(
                         "🔍 DEBUG: Skipped empty AIMessage (no content or tool calls)"
                     )
                     continue
@@ -1031,9 +1054,9 @@ class NativeLangChainStreaming:
                 if message_key not in memory_content:
                     agent.memory_manager.add_message(conversation_id, message)
                     new_messages_added += 1
-                    print(f"🔍 DEBUG: Added new {type(message).__name__} to memory")
+                    self._logger.debug(f"🔍 DEBUG: Added new {type(message).__name__} to memory")
                 else:
-                    print(f"🔍 DEBUG: Skipped duplicate {type(message).__name__}")
+                    self._logger.debug(f"🔍 DEBUG: Skipped duplicate {type(message).__name__}")
 
             self._logger.debug("Added %s new messages to memory", new_messages_added)
 

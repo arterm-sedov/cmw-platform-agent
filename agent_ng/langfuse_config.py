@@ -16,6 +16,11 @@ Env vars:
 from __future__ import annotations
 
 import os
+import logging
+
+# Global Langfuse client - initialized once per application
+_global_langfuse_client = None
+_logger = logging.getLogger(__name__)
 
 
 class LangfuseConfig:
@@ -47,29 +52,53 @@ def get_langfuse_config() -> LangfuseConfig:
     return LangfuseConfig()
 
 
-def get_langfuse_callback_handler():
-    """Return a Langfuse CallbackHandler if configured, else None.
-
-    Import langfuse lazily to avoid hard dependency when disabled.
-    """
+def _ensure_global_langfuse_client():
+    """Ensure global Langfuse client is initialized."""
+    global _global_langfuse_client
+    
+    if _global_langfuse_client is not None:
+        return _global_langfuse_client
+    
     config = get_langfuse_config()
     if not config.is_configured():
         return None
-
+    
     try:
-        # Lazy import to avoid import errors when not installed
-        from langfuse import Langfuse  # type: ignore
-        from langfuse.langchain import CallbackHandler  # type: ignore
-    except Exception:
-        # If package missing or runtime import fails, do not break the app
+        from langfuse import Langfuse
+        _logger.debug(f"🔍 Langfuse Config: Initializing global client with public_key={config.public_key[:10]}..., secret_key={config.secret_key[:10]}..., host={config.host}")
+        _global_langfuse_client = Langfuse(
+            public_key=config.public_key, 
+            secret_key=config.secret_key, 
+            host=config.host
+        )
+        _logger.debug(f"🔍 Langfuse Config: Global client initialized: {_global_langfuse_client}")
+        return _global_langfuse_client
+    except Exception as e:
+        _logger.debug(f"❌ Langfuse Config: Failed to initialize global client: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def get_langfuse_callback_handler(session_id: str | None = None):
+    """Return a Langfuse CallbackHandler if configured, else None.
+
+    Import langfuse lazily to avoid hard dependency when disabled.
+    
+    Args:
+        session_id: Optional session ID to associate with the handler (passed via metadata)
+    """
+    # Ensure global client is initialized
+    client = _ensure_global_langfuse_client()
+    if client is None:
         return None
 
     try:
-        # Initialize client (kept local; handler uses global client internally)
-        Langfuse(
-            public_key=config.public_key, secret_key=config.secret_key, host=config.host
-        )
+        from langfuse.langchain import CallbackHandler
+        _logger.debug(f"🔍 Langfuse Config: Created CallbackHandler (session_id will be passed via metadata)")
         return CallbackHandler()
-    except Exception:
-        # Fail-closed to None to keep core app resilient
+    except Exception as e:
+        _logger.debug(f"❌ Langfuse Config: Failed to create handler: {e}")
+        import traceback
+        traceback.print_exc()
         return None
