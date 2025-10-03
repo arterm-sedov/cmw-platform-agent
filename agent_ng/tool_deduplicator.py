@@ -82,8 +82,20 @@ class ToolCallDeduplicator:
             elif isinstance(value, (int, float, bool)):
                 normalized[key] = value
             elif isinstance(value, list):
-                # Sort lists for consistent comparison
-                normalized[key] = sorted(value) if value else []
+                # Normalize list items and sort deterministically via JSON key to avoid direct dict comparisons
+                if not value:
+                    normalized[key] = []
+                else:
+                    normalized_items = [
+                        self._normalize_tool_args(item) if isinstance(item, dict) else item
+                    for item in value]
+                    # Convert all items to JSON strings for deterministic sorting
+                    def _to_sortable(item: Any) -> str:
+                        try:
+                            return json.dumps(item, sort_keys=True, separators=(",", ":"))
+                        except Exception:
+                            return str(item)
+                    normalized[key] = sorted(normalized_items, key=_to_sortable)
             elif isinstance(value, dict):
                 # Recursively normalize nested dicts
                 normalized[key] = self._normalize_tool_args(value)

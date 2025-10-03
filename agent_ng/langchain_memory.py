@@ -369,7 +369,10 @@ class LangChainConversationChain:
         for tool_call in tool_calls:
             tool_name = tool_call.get('name', 'unknown')
             tool_args = tool_call.get('args', {})
-            tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
+            try:
+                tool_key = f"{tool_name}:{hash(json.dumps(tool_args, sort_keys=True, default=str))}"
+            except Exception:
+                tool_key = f"{tool_name}:{hash(str(tool_args))}"
             
             if tool_key in duplicate_counts:
                 # Increment count for duplicate
