@@ -16,6 +16,7 @@ Key Features:
 
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
+import json
 import logging
 from typing import Any
 
@@ -200,7 +201,10 @@ class NativeLangChainStreaming:
                 continue
             tool_name = tool_call.get("name", "unknown")
             tool_args = tool_call.get("args", {})
-            tool_key = f"{tool_name}:{hash(str(sorted(tool_args.items())))}"
+            try:
+                tool_key = f"{tool_name}:{hash(json.dumps(tool_args, sort_keys=True, default=str))}"
+            except Exception:
+                tool_key = f"{tool_name}:{hash(str(tool_args))}"
 
             if tool_key in duplicate_counts:
                 # Increment count for duplicate
@@ -557,7 +561,10 @@ class NativeLangChainStreaming:
                         if tool_name and tool_call_id in tool_calls_in_progress:
                             # Get duplicate count for this tool call - safety check for None tool_args
                             safe_tool_args = tool_args if tool_args is not None else {}
-                            tool_key = f"{tool_name}:{hash(str(sorted(safe_tool_args.items())))}"
+                            try:
+                                tool_key = f"{tool_name}:{hash(json.dumps(safe_tool_args, sort_keys=True, default=str))}"
+                            except Exception:
+                                tool_key = f"{tool_name}:{hash(str(safe_tool_args))}"
                             duplicate_count = duplicate_counts.get(tool_key, 1)
 
                             # Find the tool in our tools list
@@ -752,10 +759,11 @@ class NativeLangChainStreaming:
 
                             if tool_name and tool_call_id:
                                 # Get the tool key for result lookup (exclude agent from key calculation)
-                                cache_args = {
-                                    k: v for k, v in tool_args.items() if k != "agent"
-                                }
-                                tool_key = f"{tool_name}:{hash(str(sorted(cache_args.items())))}"
+                                cache_args = {k: v for k, v in tool_args.items() if k != "agent"}
+                                try:
+                                    tool_key = f"{tool_name}:{hash(json.dumps(cache_args, sort_keys=True, default=str))}"
+                                except Exception:
+                                    tool_key = f"{tool_name}:{hash(str(cache_args))}"
 
                                 # Get cached result (same for all duplicates)
                                 # This includes both successful results and error results

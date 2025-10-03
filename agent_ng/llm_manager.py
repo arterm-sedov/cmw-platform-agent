@@ -888,6 +888,13 @@ class LLMManager:
         except ImportError:
             self._log_initialization("Could not import tools.applications_tools module", "WARNING")
         
+        # Load tools from templates_tools submodule (only if not already loaded)
+        try:
+            import tools.templates_tools as templates_tools_module
+            self._load_tools_from_module(templates_tools_module, tool_list, "tools.templates_tools", tool_names)
+        except ImportError:
+            self._log_initialization("Could not import tools.templates_tools module", "WARNING")
+        
         # Cache the tools list
         self._cached_tools = tool_list
         return tool_list

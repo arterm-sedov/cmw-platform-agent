@@ -1530,9 +1530,10 @@ def main():
     _logger.info("Language: %s", language.upper())
     _logger.info("Port: %s", port)
 
-    # Create app with specified language
-    app = NextGenAppWithLanguageDetection(language=language)
-    demo = app.create_interface()
+    # Use a single global demo instance via the initializer
+    # to prevent desynchronization of blocks_config and fn_index
+    # during reloads and multiple interface creations
+    demo = initialize_demo()
 
     _logger.info(
         "Launching Gradio interface on port %s with language switching...", port
