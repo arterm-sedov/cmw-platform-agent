@@ -13,9 +13,11 @@ Available Tools:
 from .tool_list_applications import list_applications
 from .tool_list_templates import list_templates
 from .tool_platform_entity_url import get_platform_entity_url
+from .tool_record_url import get_record_url
 
 __all__ = [
     'list_applications',
     'list_templates',
-    'get_platform_entity_url'
+    'get_platform_entity_url',
+    'get_record_url'
 ]
