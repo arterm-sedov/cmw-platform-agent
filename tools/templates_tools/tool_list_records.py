@@ -108,7 +108,7 @@ def list_template_records(
         dict: {
             "success": bool - True if record list was fetched successfully
             "status_code": int - HTTP response status code
-            "data": list|None - List of attribute and their values if successful
+            "data": list|None - List of records and their values if successful
             "error": str|None - Error message if operation failed
         }
     """
