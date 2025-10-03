@@ -1,18 +1,19 @@
-"""
-Templates Tools Package
-======================
+# ruff: noqa: N999
+"""Templates Tools Package.
 
-This package contains tools for managing Comindware Platform templates and their attributes.
-
-Available Tools:
-- list_attributes: List all attributes in a specific template
+This package contains tools for managing Comindware Platform templates and records
+and listing template attributes.
 """
 
 # Import all tool functions
-from .tool_list_attributes import list_attributes
-from .tools_record_template import edit_or_create_record_template
+from tools.templates_tools.tool_create_edit_record import create_edit_record
+from tools.templates_tools.tool_list_attributes import list_attributes
+from tools.templates_tools.tool_list_records import list_template_records
+from tools.templates_tools.tools_record_template import edit_or_create_record_template
 
 __all__ = [
-    'list_attributes',
-    'edit_or_create_record_template'
+    "create_edit_record",
+    "edit_or_create_record_template",
+    "list_attributes",
+    "list_template_records",
 ]

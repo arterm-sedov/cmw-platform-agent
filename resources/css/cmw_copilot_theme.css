@@ -432,6 +432,21 @@ body {
     box-shadow: var(--cmw-shadow-soft) !important;
 }
 
+/* Make chat history (Chatbot) vertically resizable */
+#chatbot-main {
+    resize: vertical !important;
+    overflow: auto !important;
+    min-height: 240px !important;
+    max-height: 80vh !important;
+}
+
+/* Make message input textarea vertically resizable */
+#message-input textarea {
+    resize: vertical !important;
+    min-height: 48px !important;
+    max-height: 50vh !important;
+}
+
 .chat-hints {
     padding: 0.5rem;
     margin: 0.20rem 0 !important;
