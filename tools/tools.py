@@ -47,6 +47,7 @@ from langchain_core.tools import tool
 # Expose Comindware Platform tools from all directories
 # Templates tools
 from .templates_tools.tool_list_attributes import list_attributes
+from .templates_tools.tool_list_records import list_template_records
 
 # Applications tools  
 from .applications_tools.tool_list_templates import list_templates
