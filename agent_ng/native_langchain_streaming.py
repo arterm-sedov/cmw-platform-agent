@@ -16,6 +16,7 @@ Key Features:
 
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
+import json
 import logging
 from typing import Any
 
@@ -201,8 +202,7 @@ class NativeLangChainStreaming:
             tool_name = tool_call.get("name", "unknown")
             tool_args = tool_call.get("args", {})
             try:
-                import json as _json
-                tool_key = f"{tool_name}:{hash(_json.dumps(tool_args, sort_keys=True, default=str))}"
+                tool_key = f"{tool_name}:{hash(json.dumps(tool_args, sort_keys=True, default=str))}"
             except Exception:
                 tool_key = f"{tool_name}:{hash(str(tool_args))}"
 
@@ -562,8 +562,7 @@ class NativeLangChainStreaming:
                             # Get duplicate count for this tool call - safety check for None tool_args
                             safe_tool_args = tool_args if tool_args is not None else {}
                             try:
-                                import json as _json
-                                tool_key = f"{tool_name}:{hash(_json.dumps(safe_tool_args, sort_keys=True, default=str))}"
+                                tool_key = f"{tool_name}:{hash(json.dumps(safe_tool_args, sort_keys=True, default=str))}"
                             except Exception:
                                 tool_key = f"{tool_name}:{hash(str(safe_tool_args))}"
                             duplicate_count = duplicate_counts.get(tool_key, 1)
@@ -762,8 +761,7 @@ class NativeLangChainStreaming:
                                 # Get the tool key for result lookup (exclude agent from key calculation)
                                 cache_args = {k: v for k, v in tool_args.items() if k != "agent"}
                                 try:
-                                    import json as _json
-                                    tool_key = f"{tool_name}:{hash(_json.dumps(cache_args, sort_keys=True, default=str))}"
+                                    tool_key = f"{tool_name}:{hash(json.dumps(cache_args, sort_keys=True, default=str))}"
                                 except Exception:
                                     tool_key = f"{tool_name}:{hash(str(cache_args))}"
 

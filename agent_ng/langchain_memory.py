@@ -370,8 +370,7 @@ class LangChainConversationChain:
             tool_name = tool_call.get('name', 'unknown')
             tool_args = tool_call.get('args', {})
             try:
-                import json as _json
-                tool_key = f"{tool_name}:{hash(_json.dumps(tool_args, sort_keys=True, default=str))}"
+                tool_key = f"{tool_name}:{hash(json.dumps(tool_args, sort_keys=True, default=str))}"
             except Exception:
                 tool_key = f"{tool_name}:{hash(str(tool_args))}"
             
