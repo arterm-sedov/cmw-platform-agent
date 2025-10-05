@@ -93,7 +93,7 @@ try:
     from agent_ng.llm_manager import get_llm_manager
 
     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
-    from agent_ng.tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
+    from agent_ng.tabs import ChatTab, ChatNewTab, ConfigTab, HomeTab, LogsTab, StatsTab
     from agent_ng.ui_manager import get_ui_manager
     from agent_ng.utils import safe_string
 
@@ -120,7 +120,7 @@ except ImportError as e1:
         from .llm_manager import get_llm_manager
 
         # from .streaming_chat import get_chat_interface  # Module moved to .unused
-        from .tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
+        from .tabs import ChatTab, ChatNewTab, ConfigTab, HomeTab, LogsTab, StatsTab
         from .ui_manager import get_ui_manager
 
         _logger.info("Successfully imported all modules using relative imports")
@@ -1240,6 +1240,16 @@ class NextGenApp:
                 self.tab_instances["chat"] = chat_tab
             else:
                 _logger.warning("ChatTab not available")
+
+            if ChatNewTab:
+                chat_new_tab = ChatNewTab(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
+                )
+                chat_new_tab.set_main_app(self)  # Set reference to main app
+                tab_modules.append(chat_new_tab)
+                self.tab_instances["chat_new"] = chat_new_tab
+            else:
+                _logger.warning("ChatNewTab not available")
 
             if LogsTab:
                 logs_tab = LogsTab(

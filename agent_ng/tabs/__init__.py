@@ -9,6 +9,7 @@ together to create the complete application interface.
 """
 
 from .chat_tab import ChatTab
+from .chat_tab_new import ChatNewTab
 from .home_tab import HomeTab
 from .logs_tab import LogsTab
 from .stats_tab import StatsTab
@@ -17,6 +18,7 @@ from .sidebar import Sidebar
 
 __all__ = [
     "ChatTab",
+    "ChatNewTab",
     "HomeTab",
     "LogsTab", 
     "StatsTab",

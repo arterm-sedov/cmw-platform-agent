@@ -23,6 +23,7 @@ RUSSIAN_TRANSLATIONS = {
     # Tab labels
     "tab_home": "🏠 Главная",
     "tab_chat": "💬 Чат",
+    "tab_chat_new": "💬 Новый Чат",
     "tab_logs": "📜 Журналы",
     "tab_stats": "📊 Статистика",
     "tab_config": "⚙️ Настройки",
@@ -315,6 +316,15 @@ RUSSIAN_TRANSLATIONS = {
     "max_icons": ["⚠️", "⏰", "🔄", "⚡"],
     "completion_final_icons": ["✅", "🎯", "✨", "🏆"],
     "error_icons": ["❌", "💥", "⚠️", "🚫"],
+    # Chat New tab translations
+    "chat_new_title": "Новый Чат Интерфейс",
+    "chat_new_description": "Современный чат интерфейс с нативным Gradio ChatInterface",
+    "example_1": "Что ты умеешь?",
+    "example_2": "Перечисли все приложения в платформе",
+    "example_3": "🧮 15 * 23 + 7 = ?",
+    "file_upload_label": "Загрузить Файлы",
+    "status_ready": "Готов",
+    "error_no_stream_handler": "Ошибка: Обработчик потока недоступен",
 }
 
 # English translations (fallback)
@@ -327,6 +337,7 @@ ENGLISH_TRANSLATIONS = {
     # Tab labels
     "tab_home": "🏠 Home",
     "tab_chat": "💬 Chat",
+    "tab_chat_new": "💬 Chat New",
     "tab_logs": "📜 Logs",
     "tab_stats": "📊 Statistics",
     "tab_config": "⚙️ Config",
@@ -616,6 +627,15 @@ ENGLISH_TRANSLATIONS = {
     "max_icons": ["⚠️", "⏰", "🔄", "⚡"],
     "completion_final_icons": ["✅", "🎯", "✨", "🏆"],
     "error_icons": ["❌", "💥", "⚠️", "🚫"],
+    # Chat New tab translations
+    "chat_new_title": "New Chat Interface",
+    "chat_new_description": "Modern chat interface with native Gradio ChatInterface",
+    "example_1": "What can you do?",
+    "example_2": "List all applications in the platform",
+    "example_3": "🧮 15 * 23 + 7 = ?",
+    "file_upload_label": "Upload Files",
+    "status_ready": "Ready",
+    "error_no_stream_handler": "Error: No stream handler available",
 }
 
 
