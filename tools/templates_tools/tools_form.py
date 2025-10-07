@@ -1,31 +1,11 @@
 from ..tool_utils import *
+from ..models import CommonFormFields
 
 FORM_ENDPOINT = "webapi/Form"
 
 
-class GetFormSchema(BaseModel):
-    application_system_name: str = Field(
-        description="System name of the application. RU: Системное имя приложения",
-    )
-    template_system_name: str = Field(
-        description="System name of the template. RU: Системное имя шаблона",
-    )
-    form_system_name: str = Field(
-        description="System name of the form. RU: Системное имя формы",
-    )
-
-    @field_validator(
-        "application_system_name",
-        "template_system_name",
-        "form_system_name",
-        mode="before",
-    )
-    @classmethod
-    def non_empty_str(cls, v: Any) -> Any:
-        if isinstance(v, str) and v.strip() == "":
-            msg = "must be a non-empty string"
-            raise ValueError(msg)
-        return v
+class GetFormSchema(CommonFormFields):
+    pass
 
 
 @tool(
@@ -74,7 +54,7 @@ def _normalize_form_terms(data: dict) -> dict:
         # Rename 'alias' to 'systemName' (but not 'globalAlias')
         if key == "alias":
             normalized["systemName"] = value
-        elif "Alias" in key and not "globalalias" in key.lower():
+        elif "Alias" in key and "globalalias" not in key.lower():
             normalized[key.replace("Alias", "SystemName")] = value
         # Rename 'Property' to 'Attribute' in camelCase
         elif "Property" in key:

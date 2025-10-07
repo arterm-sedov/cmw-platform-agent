@@ -143,6 +143,33 @@ class CommonGetAttributeFields(BaseModel):
         return v
 
 
+class CommonFormFields(BaseModel):
+    """
+    Common definitions for form schemas.
+
+    Provides standardized fields to work with form models.
+    """
+    application_system_name: str = Field(
+        description="System name of the application. RU: Системное имя приложения",
+    )
+    template_system_name: str = Field(
+        description="System name of the template. RU: Системное имя шаблона",
+    )
+    form_system_name: str = Field(
+        description="System name of the form. RU: Системное имя формы",
+    )
+
+    @field_validator(
+        "application_system_name",
+        "template_system_name",
+        "form_system_name",
+        mode="before",
+    )
+    def non_empty_str(cls, v: Any) -> Any:  # type: ignore[override]
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
+
 def normalize_operation_archive_unarchive(value: str) -> str:
     """
     Normalize operation values for archive/unarchive operations.
