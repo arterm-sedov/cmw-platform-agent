@@ -46,7 +46,7 @@ def _normalize_form_terms(data: dict) -> dict:
     Translates 'alias' → 'systemName' and 'Property' → 'Attribute'
     while preserving 'globalAlias' structures.
     """
-    if not isinstance(data, dict):
+    if data is None or not isinstance(data, dict):
         return data
 
     normalized = {}
