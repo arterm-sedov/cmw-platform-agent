@@ -429,8 +429,10 @@ def rename_data(
     if isinstance(data, dict):
         # Определяем тип атрибута
         renamed_data = {}
-        
+
         # Добавляем описание типа атрибута как первый элемент
+        model_description = None
+        model_response = None
         for key, value in ENTITY_TYPE_MAPPING.items():
             if caller_name.__contains__(key):
                 model_description = value[0]

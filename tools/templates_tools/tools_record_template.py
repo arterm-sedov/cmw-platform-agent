@@ -51,7 +51,7 @@ def edit_or_create_record_template(
         dict: {
             "success": bool - True if the template was created or edited successfully
             "status_code": int - HTTP response status code  
-            "raw_response": dict|str|None - Raw response for auditing or payload body (sanitized)
+            "raw_response": dict|str|None - template model (sanitized)
             "error": str|None - Error message if operation failed
         }
     """
