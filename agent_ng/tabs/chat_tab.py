@@ -451,9 +451,7 @@ class ChatTab(QuickActionsMixin):
             session_id = self.main_app.session_manager.get_session_id(request)
             agent = self.main_app.session_manager.get_session_agent(session_id)
 
-        # Fallback to global agent if no session context
-        if not agent:
-            agent = self.main_app.agent
+        # No fallback to global agent - use session-specific agents only
 
         if not agent:
             return self._get_translation("token_budget_initializing")

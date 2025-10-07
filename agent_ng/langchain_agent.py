@@ -696,23 +696,5 @@ class CmwAgent:
         return self.token_tracker.get_token_budget_info(context_window)
 
 
-# Global agent instance
-_agent_instance = None
-_agent_lock = asyncio.Lock()
-
-
-async def get_agent_ng() -> CmwAgent:
-    """Get the global LangChain agent instance (compatible with NextGenAgent)"""
-    global _agent_instance
-    if _agent_instance is None:
-        async with _agent_lock:
-            if _agent_instance is None:
-                _agent_instance = CmwAgent()
-                # Wait for initialization
-                while not _agent_instance.is_ready():
-                    await asyncio.sleep(0.1)
-    return _agent_instance
-
-
-# Backward compatibility aliases
-get_langchain_agent = get_agent_ng
+# Note: Global agent instances have been removed in favor of session-specific agents
+# Use SessionManager.get_session_agent(session_id) to get agent instances
