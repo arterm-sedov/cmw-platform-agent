@@ -14,10 +14,12 @@ from .tool_list_applications import list_applications
 from .tool_list_templates import list_templates
 from .tool_platform_entity_url import get_platform_entity_url
 from .tool_record_url import get_record_url
+from .tool_audit_process_schema import audit_process_schema
 
 __all__ = [
     'list_applications',
     'list_templates',
     'get_platform_entity_url',
-    'get_record_url'
+    'get_record_url',
+    'audit_process_schema'
 ]
