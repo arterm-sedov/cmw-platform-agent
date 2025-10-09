@@ -6,7 +6,65 @@ from typing import Dict, Any, List
 ENDPOINT0 = "api/public/system/Process/ProcessAppService/List"      # ← Шаг 1: получить все системы
 ENDPOINT1 = "api/public/system/Process/ProcessAppService/Get"         # ← Шаг 2: получить ActiveDiagramId по system_id
 ENDPOINT2 = "api/public/system/Base/OntologyService/GetAxioms"        # ← Шаг 3: получить элементы по diagram_id
-ENDPOINT3 = "api/public/system/Base/TriggerService/Get"               # ← Для триггеров (проверьте путь!)
+
+def get_element_subtype(data: Dict[str, Any], element_type: str) -> str:
+    """
+    Возвращает подтип элемента в человекочитаемом виде
+    """
+    if element_type == "gateway":
+        gate_kinds = data.get("cmw.process.diagram.activity.gate.kind", [])
+        if "cmw.process.diagram.activity.gate.kind.Exclusive" in gate_kinds:
+            return "И"
+        elif "cmw.process.diagram.activity.gate.kind.Parallel" in gate_kinds:
+            return "ИЛИ"
+        else:
+            return "неизвестный"
+    
+    elif element_type == "sequence_flow":
+        # Определяем подтипы потоков
+        flow_types = data.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", [])
+        if "cmw.process.diagram.activity.ExecutionFlow" in flow_types:
+            return "execution"
+        elif "cmw.process.diagram.activity.SequenceFlow" in flow_types:
+            return "sequence"
+        else:
+            return "неизвестный"
+    
+    elif element_type in ["start_event", "end_event", "intermediate_event"]:
+        event_kinds = data.get("cmw.process.diagram.activity.event.kind", [])
+        if not event_kinds:
+            return "Обычное"
+        
+        event_kind = event_kinds[0] if event_kinds else ""
+        
+        # Определяем подтипы событий
+        if "None" in event_kind:
+            return "Обычное"
+        elif "Timer" in event_kind:
+            return "Таймер"
+        elif "CatchingMessage" in event_kind:
+            return "Получение сообщения"
+        elif "ThrowingMessage" in event_kind:
+            return "Отправка сообщения"
+        elif "Terminate" in event_kind:
+            return "Терминатор"
+        else:
+            return "неизвестный"
+    
+    elif element_type == "task":
+        task_kinds = data.get("cmw.process.diagram.activity.task.kind", [])
+        if "User" in task_kinds:
+            return "Пользовательская задача"
+        elif "Script" in task_kinds:
+            return "Выполнение скрипта"
+        elif "Service" in task_kinds:
+            return "Вызов сервиса"
+        elif "SubProcess" in task_kinds:
+            return "Вызов подпроцесса"
+        else:
+            return "неизвестный"
+    
+    return ""
 
 def get_element_type(rdf_types: List[str]) -> str:
     for t in rdf_types:
@@ -20,21 +78,68 @@ def get_element_type(rdf_types: List[str]) -> str:
                 return "gateway"
             elif short == "ExecutionFlow":
                 return "sequence_flow"
-            elif short == "SubProcess":
+            elif short == "SequenceFlow":
+                return "sequence_flow"
+            elif short == "SubProcess" or short == "EmbeddedProcess":
                 return "sub_process"
-            elif "Task" in short or short == "SomeActivity":
+            elif short == "Task":
                 return "task"
+            elif short == "Pool":
+                return "pool"
+            elif short == "Lane":
+                return "lane"
+            elif short == "IntermediateEvent":
+                return "intermediate_event"
+            elif short == "Event":
+                return "intermediate_event"  # Для промежуточных событий
             else:
                 return "activity"
     return "unknown"
 
+def get_event_definitions(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Извлекает определения событий (таймер, сообщение и т.д.)
+    """
+    definitions = {}
+    
+    # Таймер
+    timer_def = data.get("cmw.process.diagram.activity.event.timerDefinition", [])
+    if timer_def:
+        definitions["timer_definition"] = timer_def[0]
+    
+    # Сообщение
+    message_def = data.get("cmw.process.diagram.activity.event.messageDefinition", [])
+    if message_def:
+        definitions["message_definition"] = message_def[0]
+    
+    # Форма (для задач)
+    form_def = data.get("cmw.process.diagram.activity.task.form", [])
+    if form_def:
+        definitions["form_definition"] = form_def[0]
+    
+    # Скрипт (для задач)
+    script_def = data.get("cmw.process.diagram.activity.task.scriptDefinition", [])
+    if script_def:
+        definitions["script_definition"] = script_def[0]
+    
+    # Пользовательская задача
+    user_def = data.get("cmw.process.diagram.activity.task.userDefinition", [])
+    if user_def:
+        definitions["user_definition"] = user_def[0]
+    
+    # Поток последовательности
+    flow_def = data.get("cmw.process.diagram.activity.flow.sequenceFlowDefinition", [])
+    if flow_def:
+        definitions["flow_definition"] = flow_def[0]
+    
+    return definitions
 
 def fetch_trigger_name(tid: str) -> str:
     try:
         cfg = requests_._load_server_config()
         base_url = cfg.base_url.rstrip("/")
         headers = requests_._basic_headers()
-        url = f"{base_url}/{ENDPOINT3}"
+        url = f"{base_url}/{ENDPOINT2}"
 
         resp = requests.post(url, headers=headers, json=tid, timeout=cfg.timeout)
         resp.raise_for_status()
@@ -49,12 +154,29 @@ def fetch_trigger_name(tid: str) -> str:
 @tool("audit_process_schema", return_direct=False)
 def audit_process_schema(process_template_system_name: str) -> List[Dict[str, Any]]:
     """
-    Аудит схемы процесса по system name шаблона.
+    Аудит BPMN схемы процесса по имени шаблона. 
+    Возвращает структурированный список элементов BPMN диаграммы с их свойствами, 
+    включая пулы, дорожки, шлюзы, события, задачи и потоки последовательности.
     
-    Последовательность:
-      1. endpoint0 (без тела) → список систем → найти id по alias
-      2. endpoint1 (тело = system_id) → {"ActiveDiagramId": "..."}
-      3. endpoint2 (тело = ActiveDiagramId) → получить элементы схемы
+    Параметры:
+    - process_template_system_name: системное имя шаблона процесса для аудита
+    
+    Возвращаемые данные:
+    - id: идентификатор элемента
+    - type: тип элемента (start_event, end_event, gateway, task, sequence_flow, pool, lane и др.)
+    - subtype: подтип элемента (например, "И", "ИЛИ" для шлюзов, "execution" для flow и т.д.)
+    - name: название элемента
+    - lid: локальный идентификатор элемента
+    - systemName: системное имя элемента
+    - owner: владелец/системное имя
+    - x, y: координаты элемента
+    - width, height: размеры элемента
+    - source, target: для потоков последовательности - источник и цель
+    - pointsX, pointsY: для потоков последовательности - массивы координат точек
+    - definitions: словарь с определениями (таймер, сообщение, форма и т.д.)
+    - is_interrupting: флаг прерывания (для событий)
+    - lane_index: индекс дорожки (для дорожек)
+    - on_exit_trigger_names: имена триггеров выхода (для элементов кроме потоков)
     """
     cfg = requests_._load_server_config()
     base_url = cfg.base_url.rstrip("/")
@@ -130,8 +252,37 @@ def audit_process_schema(process_template_system_name: str) -> List[Dict[str, An
         element = {
             "id": elem_id,
             "type": elem_type,
-            "name": name
+            "name": name,
+            "lid": data.get("cmw.process.diagram.activity.lid", [None])[0],
+            "systemName": data.get("cmw.process.diagram.activity.systemName", [None])[0],
+            "owner": data.get("cmw.process.diagram.activity.owner", [None])[0],
+            "x": data.get("cmw.process.diagram.activity.x", [None])[0],
+            "y": data.get("cmw.process.diagram.activity.y", [None])[0],
+            "width": data.get("cmw.process.diagram.activity.width", [None])[0],
+            "height": data.get("cmw.process.diagram.activity.height", [None])[0]
         }
+
+        # Определяем подтип элемента
+        element_subtype = get_element_subtype(data, elem_type)
+        if element_subtype:
+            element["subtype"] = element_subtype
+
+        # Добавляем определения (таймеры, сообщения и т.д.)
+        definitions = get_event_definitions(data)
+        if definitions:
+            element["definitions"] = definitions
+
+        # Для событий добавляем флаг прерывания
+        if elem_type in ["start_event", "end_event", "intermediate_event"]:
+            is_interrupting = data.get("cmw.process.diagram.activity.event.isInterrrupting", [None])[0]
+            if is_interrupting is not None:
+                element["is_interrupting"] = is_interrupting
+
+        # Для дорожек добавляем индекс
+        if elem_type == "lane":
+            lane_index = data.get("cmw.process.diagram.activity.lane.index", [None])[0]
+            if lane_index is not None:
+                element["lane_index"] = lane_index
 
         if elem_type != "sequence_flow":
             trigger_ids = data.get("cmw.process.diagram.activity.exitTrigger", [])
@@ -139,18 +290,11 @@ def audit_process_schema(process_template_system_name: str) -> List[Dict[str, An
                 fetch_trigger_name(tid) for tid in trigger_ids
             ]
 
-        if elem_type == "gateway":
-            kinds = data.get("cmw.process.diagram.activity.gate.kind", [])
-            if "cmw.process.diagram.activity.gate.kind.Exclusive" in kinds:
-                element["gateway_type"] = "exclusive"
-            elif "cmw.process.diagram.activity.gate.kind.Parallel" in kinds:
-                element["gateway_type"] = "parallel"
-            else:
-                element["gateway_type"] = "unknown"
-
         if elem_type == "sequence_flow":
             element["source"] = data.get("cmw.process.diagram.activity.flow.source", [None])[0]
             element["target"] = data.get("cmw.process.diagram.activity.flow.target", [None])[0]
+            element["pointsX"] = data.get("cmw.process.diagram.activity.flow.pointsX", [None])[0]
+            element["pointsY"] = data.get("cmw.process.diagram.activity.flow.pointsY", [None])[0]
 
         elements.append(element)
 
