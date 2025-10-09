@@ -218,6 +218,14 @@ class LLMManager:
             tool_support=True,
             force_tools=False,
             models=[
+                # DeepSeek Models
+                {
+                    "model": "deepseek/deepseek-v3.1-terminus",
+                    "token_limit": 163840,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
                 {
                     "model": "deepseek/deepseek-chat-v3.1:free",
                     "token_limit": 163840,
@@ -226,6 +234,14 @@ class LLMManager:
                     "force_tools": True
                 },
                 {
+                    "model": "deepseek/deepseek-r1-0528",
+                    "token_limit": 163840,
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                # Grok (xAI) Models
+                {
                     "model": "x-ai/grok-4-fast:free",
                     "token_limit": 2000000,
                     "max_tokens": 8192,
@@ -233,16 +249,53 @@ class LLMManager:
                     "force_tools": True
                 },
                 {
-                    "model": "nvidia/nemotron-nano-9b-v2:free",
+                    "model": "x-ai/grok-code-fast-1",
+                    "token_limit": 256000,
+                    "max_tokens": 10000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "x-ai/grok-4-fast",
+                    "token_limit": 2000000,
+                    "max_tokens": 30000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                # Qwen Models
+                {
+                    "model": "qwen/qwen3-coder:free",
+                    "token_limit": 262144,
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "qwen/qwen3-coder-flash",
                     "token_limit": 128000,
                     "max_tokens": 4096,
                     "temperature": 0,
                     "force_tools": True
                 },
-                                {
-                    "model": "qwen/qwen3-coder:free",
-                    "token_limit": 262144,
-                    "max_tokens": 4096,
+                {
+                    "model": "qwen/qwen3-max",
+                    "token_limit": 256000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "qwen/qwen3-coder-plus",
+                    "token_limit": 128000,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                # Other Models
+                {
+                    "model": "anthropic/claude-sonnet-4.5",
+                    "token_limit": 1000000,
+                    "max_tokens": 64000,
                     "temperature": 0,
                     "force_tools": True
                 },
@@ -261,15 +314,8 @@ class LLMManager:
                     "force_tools": True
                 },
                 {
-                    "model": "x-ai/grok-code-fast-1",
-                    "token_limit": 256000,
-                    "max_tokens": 10000,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "deepseek/deepseek-r1-0528",
-                    "token_limit": 163840,
+                    "model": "nvidia/nemotron-nano-9b-v2:free",
+                    "token_limit": 128000,
                     "max_tokens": 4096,
                     "temperature": 0,
                     "force_tools": True
@@ -277,13 +323,6 @@ class LLMManager:
                 {
                     "model": "mistralai/codestral-2508",
                     "token_limit": 256000,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "qwen/qwen3-coder-flash",
-                    "token_limit": 128000,
                     "max_tokens": 4096,
                     "temperature": 0,
                     "force_tools": True
