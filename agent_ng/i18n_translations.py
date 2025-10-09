@@ -78,6 +78,7 @@ RUSSIAN_TRANSLATIONS = {
     "stop_button": "⏹️ Остановить",
     "clear_button": "Очистить диалог",
     "download_button": "📥 Скачать диалог (Markdown)",
+    "download_html_button": "🌐 Скачать диалог (HTML)",
     "download_file_label": "Скачать Markdown",
     # LLM Selection section
     "llm_selection_title": "Выбор LLM",
@@ -382,6 +383,7 @@ ENGLISH_TRANSLATIONS = {
     "stop_button": "⏹️ Stop",
     "clear_button": "Clear conversation",
     "download_button": "📥 Download conversation (Markdown)",
+    "download_html_button": "🌐 Download conversation (HTML)",
     "download_file_label": "Download Markdown",
     # LLM Selection section
     "llm_selection_title": "LLM Selection",

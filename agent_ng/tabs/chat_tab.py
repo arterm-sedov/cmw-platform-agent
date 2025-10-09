@@ -11,6 +11,8 @@ import asyncio
 from collections.abc import Callable
 import logging
 import os
+import tempfile
+import markdown
 from typing import Any, Dict, List, Optional, Tuple
 
 import gradio as gr
@@ -114,6 +116,12 @@ class ChatTab(QuickActionsMixin):
                     elem_classes=["cmw-button"],
                     visible=False,
                 )
+                self.components["download_html_btn"] = gr.DownloadButton(
+                    label=self._get_translation("download_html_button"),
+                    variant="secondary",
+                    elem_classes=["cmw-button"],
+                    visible=False,
+                )
 
         # Welcome block moved to dedicated Home tab
 
@@ -165,6 +173,7 @@ class ChatTab(QuickActionsMixin):
                     self.components["msg"],
                     self.components["stop_btn"],
                     self.components["download_btn"],
+                    self.components["download_html_btn"],
                     self._get_quick_actions_dropdown(),
                 ],
             )
@@ -181,6 +190,7 @@ class ChatTab(QuickActionsMixin):
                     self.components["msg"],
                     self.components["stop_btn"],
                     self.components["download_btn"],
+                    self.components["download_html_btn"],
                     self._get_quick_actions_dropdown(),
                 ],
             )
@@ -198,6 +208,7 @@ class ChatTab(QuickActionsMixin):
                     self.components["msg"],
                     self.components["stop_btn"],
                     self.components["download_btn"],
+                    self.components["download_html_btn"],
                     self._get_quick_actions_dropdown(),
                 ],
             )
@@ -210,6 +221,7 @@ class ChatTab(QuickActionsMixin):
                     self.components["msg"],
                     self.components["stop_btn"],
                     self.components["download_btn"],
+                    self.components["download_html_btn"],
                     self._get_quick_actions_dropdown(),
                 ],
             )
@@ -222,6 +234,7 @@ class ChatTab(QuickActionsMixin):
                 self.components["chatbot"],
                 self.components["stop_btn"],
                 self.components["download_btn"],
+                self.components["download_html_btn"],
             ],
             cancels=[self.streaming_event, self.submit_event],
         )
@@ -232,6 +245,7 @@ class ChatTab(QuickActionsMixin):
                 self.components["chatbot"],
                 self.components["msg"],
                 self.components["download_btn"],
+                self.components["download_html_btn"],
             ],
         )
 
@@ -258,6 +272,7 @@ class ChatTab(QuickActionsMixin):
             ui_history,
             "",
             gr.Button(visible=True),
+            gr.DownloadButton(visible=False),
             gr.DownloadButton(visible=False),
             None,
         )
@@ -437,8 +452,8 @@ class ChatTab(QuickActionsMixin):
             pass
 
         # Hide stop button and show download button with current conversation
-        download_btn = self._update_download_button_visibility(history)
-        return history, gr.Button(visible=False), download_btn
+        download_btns = self._update_download_button_visibility(history)
+        return history, gr.Button(visible=False), download_btns[0], download_btns[1]
 
     def format_token_budget_display(self, request: gr.Request = None) -> str:
         """Format and return the token budget display - now session-aware"""
@@ -864,6 +879,7 @@ class ChatTab(QuickActionsMixin):
             "",
             gr.Button(visible=True),
             gr.DownloadButton(visible=False),  # Don't update download during streaming
+            gr.DownloadButton(visible=False),  # Don't update HTML download during streaming
             None,
         )  # Show stop button, don't update download, reset dropdown
         yield self._yield_ui_newline(history)
@@ -882,39 +898,40 @@ class ChatTab(QuickActionsMixin):
             except Exception:
                 stop_visible = True
 
-            download_btn = (
+            download_btns = (
                 self._update_download_button_visibility(result[0])
                 if not stop_visible
-                else gr.DownloadButton(visible=False)
+                else (gr.DownloadButton(visible=False), gr.DownloadButton(visible=False))
             )
 
             yield (
                 result[0],
                 result[1],
                 gr.Button(visible=stop_visible),
-                download_btn,
+                download_btns[0],
+                download_btns[1],
                 None,
             )
 
         # Hide stop button at end of processing and update download button
         if last_result and len(last_result) >= 2:
+            final_download_btns = self._update_download_button_visibility(last_result[0])
             yield (
                 last_result[0],
                 last_result[1],
                 gr.Button(visible=False),
-                self._update_download_button_visibility(
-                    last_result[0]
-                ),  # Final download update
+                final_download_btns[0],
+                final_download_btns[1],
                 None,
             )  # Reset dropdown
         else:
+            final_download_btns = self._update_download_button_visibility(history)
             yield (
                 history,
                 "",
                 gr.Button(visible=False),
-                self._update_download_button_visibility(
-                    history
-                ),  # Final download update
+                final_download_btns[0],
+                final_download_btns[1],
                 None,
             )  # Reset dropdown
 
@@ -1023,11 +1040,11 @@ class ChatTab(QuickActionsMixin):
             chatbot, msg = clear_handler(request)
             # Reset download button (hide it) and return empty MultimodalValue
             empty_multimodal = {"text": "", "files": []}
-            return chatbot, empty_multimodal, gr.DownloadButton(visible=False)
+            return chatbot, empty_multimodal, gr.DownloadButton(visible=False), gr.DownloadButton(visible=False)
         else:
             # Fallback if clear handler not available
             empty_multimodal = {"text": "", "files": []}
-            return [], empty_multimodal, gr.DownloadButton(visible=False)
+            return [], empty_multimodal, gr.DownloadButton(visible=False), gr.DownloadButton(visible=False)
 
     def _update_download_button_visibility(self, history):
         """Update download button visibility and file based on conversation history"""
@@ -1038,29 +1055,48 @@ class ChatTab(QuickActionsMixin):
                 not hasattr(self, "_last_history_str")
                 or self._last_history_str != history_str
             ):
-                # Generate file with fresh timestamp when conversation changes
-                file_path = self._download_conversation_as_markdown(history)
+                # Generate files with fresh timestamp when conversation changes
+                markdown_file_path = self._download_conversation_as_markdown(history)
+                # HTML file path is now stored in _last_html_file_path by _download_conversation_as_markdown
+                html_file_path = getattr(self, "_last_html_file_path", None)
                 self._last_history_str = history_str
-                self._last_download_file = file_path
+                self._last_download_file = markdown_file_path
+                self._last_download_html_file = html_file_path
             else:
-                # Use cached file if conversation hasn't changed
-                file_path = getattr(self, "_last_download_file", None)
+                # Use cached files if conversation hasn't changed
+                markdown_file_path = getattr(self, "_last_download_file", None)
+                html_file_path = getattr(self, "_last_download_html_file", None)
 
-            if file_path:
-                # Show download button with pre-generated file
-                return gr.DownloadButton(
-                    label=self._get_translation("download_button"),
-                    value=file_path,
-                    variant="secondary",
-                    elem_classes=["cmw-button"],
-                    visible=True,
+            if markdown_file_path and html_file_path:
+                # Show both download buttons with pre-generated files
+                return (
+                    gr.DownloadButton(
+                        label=self._get_translation("download_button"),
+                        value=markdown_file_path,
+                        variant="secondary",
+                        elem_classes=["cmw-button"],
+                        visible=True,
+                    ),
+                    gr.DownloadButton(
+                        label=self._get_translation("download_html_button"),
+                        value=html_file_path,
+                        variant="secondary",
+                        elem_classes=["cmw-button"],
+                        visible=True,
+                    ),
                 )
             else:
-                # Show button without file if generation fails
-                return gr.DownloadButton(visible=False)
+                # Show buttons without files if generation fails
+                return (
+                    gr.DownloadButton(visible=False),
+                    gr.DownloadButton(visible=False),
+                )
         else:
-            # Hide download button when there's no conversation history
-            return gr.DownloadButton(visible=False)
+            # Hide download buttons when there's no conversation history
+            return (
+                gr.DownloadButton(visible=False),
+                gr.DownloadButton(visible=False),
+            )
 
     def _download_conversation_as_markdown(self, history) -> str:
         """
@@ -1075,12 +1111,14 @@ class ChatTab(QuickActionsMixin):
         from datetime import datetime
         import os
         import tempfile
+        import logging
 
-        print(f"DEBUG: Download function called with history type: {type(history)}")
-        print(f"DEBUG: History content: {str(history)[:50]}")
+        logger = logging.getLogger(__name__)
+        logger.debug(f"Download function called with history type: {type(history)}")
+        logger.debug(f"History content: {str(history)[:50]}")
 
         if not history:
-            print("DEBUG: No history provided")
+            logger.warning("No history provided")
             return None
 
         # Create timestamped filename
@@ -1162,9 +1200,90 @@ class ChatTab(QuickActionsMixin):
             with open(clean_file_path, "w", encoding="utf-8") as file:
                 file.write(markdown_content)
 
-            print(f"DEBUG: Created file: {clean_file_path}")
-            # Return the clean file path for Gradio to handle the download
+            logger.debug(f"Created markdown file: {clean_file_path}")
+            
+            # Also generate HTML version and store the path
+            html_file_path = self._generate_conversation_html(markdown_content, filename.replace('.md', '.html'))
+            if html_file_path:
+                logger.debug(f"Also created HTML file: {html_file_path}")
+                # Store the HTML file path for the HTML download button
+                self._last_html_file_path = html_file_path
+            else:
+                self._last_html_file_path = None
+            
+            # Return the markdown file path for Gradio to handle the download
             return clean_file_path
         except Exception as e:
-            print(f"Error creating markdown file: {e}")
+            logger.error(f"Error creating markdown file: {e}")
             return None
+
+
+    def _generate_conversation_html(self, markdown_content: str, filename: str) -> str:
+        """
+        Generate HTML file from markdown content.
+        
+        Args:
+            markdown_content: Markdown content as string
+            filename: HTML filename
+            
+        Returns:
+            HTML file path if successful, None if failed
+        """
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Convert Markdown to HTML
+            html_body = markdown.markdown(markdown_content, extensions=['tables', 'fenced_code'])
+
+            # Load CSS from external file
+            css_content = self._load_export_css()
+            
+            # Create HTML with beautiful styling
+            html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CMW Platform Agent - Conversation Export</title>
+    <style>
+        {css_content}
+    </style>
+</head>
+<body>
+    <div class="content">
+        {html_body}
+    </div>
+</body>
+</html>"""
+
+            # Create file with proper filename
+            temp_dir = tempfile.mkdtemp()
+            clean_file_path = os.path.join(temp_dir, filename)
+
+            with open(clean_file_path, "w", encoding="utf-8") as file:
+                file.write(html_content)
+
+            logger.debug(f"Generated HTML file: {clean_file_path}")
+            return clean_file_path
+        except Exception as e:
+            logger.error(f"Error generating HTML file: {e}")
+            return None
+
+    def _load_export_css(self) -> str:
+        """
+        Load CSS content from the external CSS file.
+        
+        Returns:
+            CSS content as string
+        """
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        # Get the path to the CSS file relative to the project root
+        css_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
+                               "resources", "css", "html_export_theme.css")
+        
+        with open(css_path, "r", encoding="utf-8") as css_file:
+            return css_file.read()

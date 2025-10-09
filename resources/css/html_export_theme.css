@@ -1,0 +1,343 @@
+/* CMW Platform Agent - HTML Export Theme */
+/* ====================================== */
+/* Beautiful styling for exported conversation HTML files */
+
+:root {
+    /* CMW Brand Colors */
+    --cmw-primary: #0575bd;
+    --cmw-primary-fade: #0694EF;
+    --cmw-primary-dark: #04568B;
+    --cmw-primary-text: #ffffff;
+    
+    /* Neutral Colors */
+    --cmw-text: #5a5a5a;
+    --cmw-text-strong: #404040;
+    --cmw-surface: #ffffff;
+    --cmw-surface-alt: #f5f8fc;
+    --cmw-border: #dce2ea;
+    
+    /* Status Colors */
+    --cmw-success: #74c365;
+    --cmw-warning: #F79437;
+    --cmw-error: #e1462c;
+}
+
+/* Base Styles */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6;
+    color: var(--cmw-text);
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: var(--cmw-surface-alt);
+}
+
+/* Header Styles */
+.header {
+    background: linear-gradient(135deg, var(--cmw-primary) 0%, var(--cmw-primary-dark) 100%);
+    color: var(--cmw-primary-text);
+    padding: 30px;
+    border-radius: 10px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 2.5em;
+    font-weight: 300;
+}
+
+.header .meta {
+    margin-top: 15px;
+    opacity: 0.9;
+    font-size: 1.1em;
+}
+
+/* Content Container */
+.content {
+    background: var(--cmw-surface);
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--cmw-text-strong);
+    margin-top: 2em;
+    margin-bottom: 1em;
+}
+
+h1 {
+    border-bottom: 2px solid var(--cmw-border);
+    padding-bottom: 10px;
+}
+
+h2 {
+    color: var(--cmw-primary);
+    border-left: 4px solid var(--cmw-primary);
+    padding-left: 15px;
+}
+
+h3 {
+    color: var(--cmw-primary-dark);
+    border-bottom: 1px solid var(--cmw-border);
+    padding-bottom: 5px;
+}
+
+p {
+    margin-bottom: 1em;
+}
+
+strong {
+    color: var(--cmw-text-strong);
+    font-weight: 600;
+}
+
+/* Code Styling */
+code {
+    background-color: var(--cmw-surface-alt);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.9em;
+    color: var(--cmw-primary-dark);
+}
+
+pre {
+    background-color: var(--cmw-surface-alt);
+    padding: 15px;
+    border-radius: 8px;
+    overflow-x: auto;
+    border-left: 4px solid var(--cmw-success);
+    margin: 1em 0;
+}
+
+pre code {
+    background: none;
+    padding: 0;
+    color: var(--cmw-text-strong);
+}
+
+/* Blockquotes */
+blockquote {
+    border-left: 4px solid var(--cmw-primary);
+    margin: 1em 0;
+    padding-left: 20px;
+    color: var(--cmw-text);
+    font-style: italic;
+    background-color: var(--cmw-surface-alt);
+    padding: 15px 20px;
+    border-radius: 0 8px 8px 0;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+    background-color: var(--cmw-surface);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+th, td {
+    border: 1px solid var(--cmw-border);
+    padding: 12px;
+    text-align: left;
+}
+
+th {
+    background-color: var(--cmw-primary);
+    color: var(--cmw-primary-text);
+    font-weight: 600;
+}
+
+tr:nth-child(even) {
+    background-color: var(--cmw-surface-alt);
+}
+
+/* Horizontal Rules */
+hr {
+    border: none;
+    height: 2px;
+    background: linear-gradient(90deg, var(--cmw-primary), var(--cmw-primary-dark));
+    margin: 2em 0;
+    border-radius: 1px;
+}
+
+/* Lists */
+ul, ol {
+    margin: 1em 0;
+    padding-left: 2em;
+}
+
+li {
+    margin-bottom: 0.5em;
+}
+
+/* Links */
+a {
+    color: var(--cmw-primary);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--cmw-primary-dark);
+    text-decoration: underline;
+}
+
+/* Message-specific styling for conversation exports */
+.message {
+    margin-bottom: 25px;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.message.user {
+    background: linear-gradient(135deg, var(--cmw-primary) 0%, var(--cmw-primary-dark) 100%);
+    color: var(--cmw-primary-text);
+}
+
+.message.assistant {
+    background: var(--cmw-surface);
+    border-left: 4px solid var(--cmw-success);
+}
+
+.message-header {
+    padding: 15px 20px;
+    font-weight: 600;
+    font-size: 1.1em;
+}
+
+.message.user .message-header {
+    background: rgba(255,255,255,0.1);
+}
+
+.message.assistant .message-header {
+    background: var(--cmw-surface-alt);
+    color: var(--cmw-text-strong);
+}
+
+.message-content {
+    padding: 20px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.message.user .message-content {
+    background: rgba(255,255,255,0.05);
+}
+
+.message.assistant .message-content {
+    background: var(--cmw-surface);
+}
+
+.message-number {
+    display: inline-block;
+    background: rgba(255,255,255,0.2);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    margin-right: 10px;
+}
+
+.message.user .message-number {
+    background: rgba(255,255,255,0.3);
+}
+
+.message.assistant .message-number {
+    background: var(--cmw-border);
+    color: var(--cmw-text);
+}
+
+/* Statistics Box */
+.stats {
+    background: var(--cmw-surface);
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-left: 4px solid var(--cmw-primary);
+}
+
+.stats h2 {
+    margin-top: 0;
+    color: var(--cmw-text-strong);
+    border-bottom: 2px solid var(--cmw-border);
+    padding-bottom: 10px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+    
+    .header h1 {
+        font-size: 2em;
+    }
+    
+    .content {
+        padding: 20px;
+    }
+    
+    .message-content {
+        padding: 15px;
+    }
+    
+    table {
+        font-size: 0.9em;
+    }
+    
+    th, td {
+        padding: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .header {
+        padding: 20px;
+    }
+    
+    .content {
+        padding: 15px;
+    }
+    
+    .header h1 {
+        font-size: 1.8em;
+    }
+    
+    h2 {
+        font-size: 1.3em;
+    }
+}
+
+/* Print Styles */
+@media print {
+    body {
+        background-color: white;
+        color: black;
+    }
+    
+    .header {
+        background: var(--cmw-primary) !important;
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+    }
+    
+    .content {
+        box-shadow: none;
+        border: 1px solid var(--cmw-border);
+    }
+    
+    .message {
+        break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid var(--cmw-border);
+    }
+}
