@@ -147,16 +147,16 @@ def fetch_trigger_name(tid: str) -> str:
         names = data.get("cmw.trigger.name", [])
         return names[0] if names else ""
     except (requests.RequestException, ValueError, KeyError, IndexError) as e:
-        print(f"⚠️ Ошибка при получении триггера {tid}: {e}")
+        print(f"⚠️ Ошибка при получении сценария {tid}: {e}")
         return ""
 
 
-@tool("audit_process_schema", return_direct=False)
-def audit_process_schema(process_template_system_name: str) -> List[Dict[str, Any]]:
+@tool("get_process_schema", return_direct=False)
+def get_process_schema(process_template_system_name: str) -> List[Dict[str, Any]]:
     """
-    Аудит BPMN схемы процесса по имени шаблона. 
+    Получает BPMN-диаграмму процесса по имени шаблона процесса. 
     Возвращает структурированный список элементов BPMN диаграммы с их свойствами, 
-    включая пулы, дорожки, шлюзы, события, задачи и потоки последовательности.
+    включая пулы, дорожки, шлюзы, события, задачи и потоки управления.
     
     Параметры:
     - process_template_system_name: системное имя шаблона процесса для аудита
@@ -171,12 +171,12 @@ def audit_process_schema(process_template_system_name: str) -> List[Dict[str, An
     - owner: владелец/системное имя
     - x, y: координаты элемента
     - width, height: размеры элемента
-    - source, target: для потоков последовательности - источник и цель
-    - pointsX, pointsY: для потоков последовательности - массивы координат точек
+    - source, target: для потоков управления - источник и цель
+    - pointsX, pointsY: для потоков управления - массивы координат точек
     - definitions: словарь с определениями (таймер, сообщение, форма и т.д.)
     - is_interrupting: флаг прерывания (для событий)
     - lane_index: индекс дорожки (для дорожек)
-    - on_exit_trigger_names: имена триггеров выхода (для элементов кроме потоков)
+    - on_exit_trigger_names: имена сценариев на выходе из элементов (для элементов кроме потоков)
     """
     cfg = requests_._load_server_config()
     base_url = cfg.base_url.rstrip("/")
@@ -303,7 +303,7 @@ def audit_process_schema(process_template_system_name: str) -> List[Dict[str, An
 
 if __name__ == "__main__":
     try:
-        results = audit_process_schema("TestProcess")
+        results = get_process_schema("TestProcess")
         print("✅ Успешно получены элементы:")
         for r in results:
             print(r)
