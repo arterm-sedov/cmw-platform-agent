@@ -32,14 +32,17 @@ Returns the complete assistant response after processing is finished.
 
 ```json
 {
-  "data": ["Your question here"],
+  "data": ["Your question here", "username", "password", "base_url"],
   "session_hash": "optional-session-id"
 }
 ```
 
 #### Parameters
 
-- `data` (array, required): Contains the user's question as a string
+- `data[0]` (string, required): The user's question
+- `data[1]` (string, optional): Username for Comindware Platform authentication
+- `data[2]` (string, optional): Password for Comindware Platform authentication  
+- `data[3]` (string, optional): Base URL of the Comindware Platform (e.g., "https://your-platform.com")
 - `session_hash` (string, optional): Session identifier for multi-turn conversations
 
 #### Response Format
@@ -62,10 +65,10 @@ Returns the complete assistant response after processing is finished.
 
 **cURL:**
 ```bash
-# Submit question
+# Submit question with authentication
 curl -X POST http://localhost:7860/call/ask \
   -H "Content-Type: application/json" \
-  -d '{"data": ["Hello, who are you?"]}'
+  -d '{"data": ["Hello, who are you?", "myuser", "mypass", "https://my-platform.com"]}'
 
 # Get result (replace EVENT_ID with actual ID)
 curl -N http://localhost:7860/call/ask/EVENT_ID
@@ -78,6 +81,29 @@ from gradio_client import Client
 client = Client("http://localhost:7860/")
 result = client.predict(
     question="Hello, who are you?",
+    username="myuser",
+    password="mypass", 
+    base_url="https://my-platform.com",
+    api_name="/ask"
+)
+print(result)
+```
+
+**Using Environment Variables:**
+```python
+import os
+from dotenv import load_dotenv
+from gradio_client import Client
+
+# Load from root .env file
+load_dotenv()
+
+client = Client("http://localhost:7860/")
+result = client.predict(
+    question="Hello, who are you?",
+    username=os.getenv("CMW_LOGIN"),
+    password=os.getenv("CMW_PASSWORD"), 
+    base_url=os.getenv("CMW_BASE_URL"),
     api_name="/ask"
 )
 print(result)
@@ -95,14 +121,17 @@ Returns incremental chunks of the assistant response as it's being generated.
 
 ```json
 {
-  "data": ["Your question here"],
+  "data": ["Your question here", "username", "password", "base_url"],
   "session_hash": "optional-session-id"
 }
 ```
 
 #### Parameters
 
-- `data` (array, required): Contains the user's question as a string
+- `data[0]` (string, required): The user's question
+- `data[1]` (string, optional): Username for Comindware Platform authentication
+- `data[2]` (string, optional): Password for Comindware Platform authentication  
+- `data[3]` (string, optional): Base URL of the Comindware Platform (e.g., "https://your-platform.com")
 - `session_hash` (string, optional): Session identifier for multi-turn conversations
 
 #### Response Format

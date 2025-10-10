@@ -63,6 +63,9 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
+# Import session manager after path setup
+from agent_ng.session_manager import set_session_config
+
 # Import session context setter with robust fallback
 try:
     from agent_ng.session_manager import set_current_session_id
@@ -1296,7 +1299,22 @@ class NextGenApp:
 
         # Add a minimal server-side API endpoint to ask a question and get final answer
         # This uses the same session isolation as the UI and returns only the last assistant text
-        def _api_ask(question: str, request: gr.Request = None) -> str:
+        def _api_ask(question: str, request: gr.Request = None, username: str = None, password: str = None, base_url: str = None) -> str:
+            # Set session configuration if provided
+            if any([username, password, base_url]):
+                session_id = self.get_user_session_id(request)
+                config = {}
+                if username is not None:
+                    config["username"] = username.strip()
+                if password is not None:
+                    config["password"] = password.strip()
+                if base_url is not None:
+                    config["url"] = base_url.strip()
+                
+                if config:
+                    set_session_config(session_id, config)
+                    _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
+
             history: list[dict[str, str]] = []
             last_history: list[dict[str, str]] | None = None
             # Reuse streaming wrapper to ensure identical behavior/tool calling
@@ -1320,7 +1338,22 @@ class NextGenApp:
             return ""
 
         # Streaming endpoint: yields incremental content for cURL/Client streaming
-        def _api_ask_stream(question: str, request: gr.Request = None):
+        def _api_ask_stream(question: str, request: gr.Request = None, username: str = None, password: str = None, base_url: str = None):
+            # Set session configuration if provided
+            if any([username, password, base_url]):
+                session_id = self.get_user_session_id(request)
+                config = {}
+                if username is not None:
+                    config["username"] = username.strip()
+                if password is not None:
+                    config["password"] = password.strip()
+                if base_url is not None:
+                    config["url"] = base_url.strip()
+                
+                if config:
+                    set_session_config(session_id, config)
+                    _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
+
             session_id = self.get_user_session_id(request)
             user_agent = self.get_user_agent(session_id)
             cumulative = ""
@@ -1384,9 +1417,12 @@ class NextGenApp:
         # Register both API endpoints using shared hidden components
         with demo:
             _in = gr.Textbox(label="question", visible=False)
+            _username = gr.Textbox(label="username", visible=False)
+            _password = gr.Textbox(label="password", type="password", visible=False)
+            _base_url = gr.Textbox(label="base_url", visible=False)
             _out = gr.Textbox(label="answer", visible=False)
-            _in.submit(_api_ask, inputs=_in, outputs=_out, api_name="ask")
-            _in.submit(_api_ask_stream, inputs=_in, outputs=_out, api_name="ask_stream")
+            _in.submit(_api_ask, inputs=[_in, _username, _password, _base_url], outputs=_out, api_name="ask")
+            _in.submit(_api_ask_stream, inputs=[_in, _username, _password, _base_url], outputs=_out, api_name="ask_stream")
 
         # Configure concurrency and queuing AFTER registering named endpoints
         self.queue_manager.configure_queue(demo)
