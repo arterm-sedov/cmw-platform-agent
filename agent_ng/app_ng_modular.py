@@ -1300,6 +1300,8 @@ class NextGenApp:
         # Add a minimal server-side API endpoint to ask a question and get final answer
         # This uses the same session isolation as the UI and returns only the last assistant text
         def _api_ask(question: str, request: gr.Request = None, username: str = None, password: str = None, base_url: str = None) -> str:
+            _logger.info(f"🔗 API /ask called with question: {question[:50]}...")
+            
             # Set session configuration if provided
             if any([username, password, base_url]):
                 session_id = self.get_user_session_id(request)
@@ -1322,6 +1324,7 @@ class NextGenApp:
                 last_history = updated_history
 
             if not last_history:
+                _logger.warning("API /ask: No history generated")
                 return ""
 
             # Find last assistant message without metadata title (final answer)
@@ -1330,15 +1333,22 @@ class NextGenApp:
                     # Prefer messages without a metadata title (avoid token/tool blocks)
                     metadata = msg.get("metadata") if isinstance(msg, dict) else None
                     if not (metadata and metadata.get("title")):
-                        return msg.get("content", "") or ""
+                        response = msg.get("content", "") or ""
+                        _logger.info(f"API /ask: Returning response (length: {len(response)})")
+                        return response
             # Fallback: return the last assistant content even if it had metadata
             for msg in reversed(last_history):
                 if msg and msg.get("role") == "assistant":
-                    return msg.get("content", "") or ""
+                    response = msg.get("content", "") or ""
+                    _logger.info(f"API /ask: Returning fallback response (length: {len(response)})")
+                    return response
+            _logger.warning("API /ask: No assistant message found")
             return ""
 
         # Streaming endpoint: yields incremental content for cURL/Client streaming
         def _api_ask_stream(question: str, request: gr.Request = None, username: str = None, password: str = None, base_url: str = None):
+            _logger.info(f"🔗 API /ask_stream called with question: {question[:50]}...")
+            
             # Set session configuration if provided
             if any([username, password, base_url]):
                 session_id = self.get_user_session_id(request)
@@ -1672,6 +1682,7 @@ def main():
         server_name="0.0.0.0",
         server_port=port,
         show_error=True,
+        show_api=True,  # Enable API documentation for Hugging Face Spaces
     )
 
 
