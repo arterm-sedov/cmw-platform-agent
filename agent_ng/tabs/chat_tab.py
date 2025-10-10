@@ -1239,7 +1239,7 @@ class ChatTab(QuickActionsMixin):
             # Load CSS from external file
             css_content = self._load_export_css()
             
-            # Create HTML with beautiful styling
+            # Create HTML with CSS styling and Mermaid support
             html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1249,6 +1249,33 @@ class ChatTab(QuickActionsMixin):
     <style>
         {css_content}
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {{
+            if (window.mermaid) {{
+                try {{
+                    mermaid.initialize({{ startOnLoad: false, securityLevel: 'loose' }});
+                    // Transform fenced code blocks with language-mermaid into mermaid containers
+                    const mermaidCodes = document.querySelectorAll('pre > code.language-mermaid');
+                    mermaidCodes.forEach(function(codeEl) {{
+                        const graphDefinition = codeEl.textContent || '';
+                        const preEl = codeEl.parentElement;
+                        const container = document.createElement('div');
+                        container.className = 'mermaid';
+                        container.textContent = graphDefinition;
+                        if (preEl) {{
+                            preEl.replaceWith(container);
+                        }}
+                    }});
+                    // Render all mermaid diagrams
+                    mermaid.run();
+                }} catch (e) {{
+                    // Non-fatal: if Mermaid fails, leave code blocks as-is
+                    console && console.warn && console.warn('Mermaid render failed:', e);
+                }}
+            }}
+        }});
+    </script>
 </head>
 <body>
     <div class="content">
