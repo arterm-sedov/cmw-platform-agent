@@ -1294,13 +1294,105 @@ class NextGenApp:
             _logger.exception("Error creating interface: %s", e)
             raise
 
-        # Configure concurrency and queuing
+        # Add a minimal server-side API endpoint to ask a question and get final answer
+        # This uses the same session isolation as the UI and returns only the last assistant text
+        def _api_ask(question: str, request: gr.Request = None) -> str:
+            history: list[dict[str, str]] = []
+            last_history: list[dict[str, str]] | None = None
+            # Reuse streaming wrapper to ensure identical behavior/tool calling
+            for updated_history, _ in self._stream_message_wrapper(question, history, request):
+                last_history = updated_history
+
+            if not last_history:
+                return ""
+
+            # Find last assistant message without metadata title (final answer)
+            for msg in reversed(last_history):
+                if msg and msg.get("role") == "assistant":
+                    # Prefer messages without a metadata title (avoid token/tool blocks)
+                    metadata = msg.get("metadata") if isinstance(msg, dict) else None
+                    if not (metadata and metadata.get("title")):
+                        return msg.get("content", "") or ""
+            # Fallback: return the last assistant content even if it had metadata
+            for msg in reversed(last_history):
+                if msg and msg.get("role") == "assistant":
+                    return msg.get("content", "") or ""
+            return ""
+
+        # Streaming endpoint: yields incremental content for cURL/Client streaming
+        def _api_ask_stream(question: str, request: gr.Request = None):
+            session_id = self.get_user_session_id(request)
+            user_agent = self.get_user_agent(session_id)
+            cumulative = ""
+
+            async def _stream():
+                nonlocal cumulative
+                try:
+                    async for event in user_agent.stream_message(question, session_id):
+                        if not event:
+                            continue
+                        et = event.get("type")
+                        if et == "content":
+                            piece = safe_string(event.get("content", ""))
+                            if not piece:
+                                continue
+                            cumulative += piece
+                            # yield incremental text
+                            yield cumulative
+                        elif et == "error":
+                            # surface error as a final message
+                            err = safe_string(event.get("content", "Error"))
+                            yield err
+                            return
+                    # end for
+                except Exception as e:
+                    yield f"❌ {e}"
+
+            # Proper async-to-sync bridge using threading and queue
+            import asyncio
+            import threading
+            from queue import Queue, Empty
+            
+            def run_async_generator():
+                async def _run():
+                    async for item in _stream():
+                        queue.put(item)
+                    queue.put(None)  # Signal end
+                
+                # Run in a new event loop in a separate thread
+                asyncio.run(_run())
+            
+            queue = Queue()
+            thread = threading.Thread(target=run_async_generator)
+            thread.start()
+            
+            try:
+                while True:
+                    try:
+                        item = queue.get(timeout=30)  # 30 second timeout
+                        if item is None:  # End signal
+                            break
+                        yield item
+                    except Empty:
+                        yield "⏱️ Timeout waiting for response"
+                        break
+            finally:
+                thread.join(timeout=1)
+
+            # Streaming endpoint: generator yields partials; API GET will stream
+
+        # Register both API endpoints using shared hidden components
+        with demo:
+            _in = gr.Textbox(label="question", visible=False)
+            _out = gr.Textbox(label="answer", visible=False)
+            _in.submit(_api_ask, inputs=_in, outputs=_out, api_name="ask")
+            _in.submit(_api_ask_stream, inputs=_in, outputs=_out, api_name="ask_stream")
+
+        # Configure concurrency and queuing AFTER registering named endpoints
         self.queue_manager.configure_queue(demo)
 
         # Consolidate all components from UI Manager (single source of truth)
         self.components = self.ui_manager.get_components()
-
-        # No global agent - tabs will get session-specific agents as needed
 
         return demo
 
