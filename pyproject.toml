@@ -75,7 +75,7 @@ unfixable = [
 # Allow specific patterns
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = ["S101", "PLR2004", "ANN001", "T201", "T10"]
-"**/misc_files/**/*.py" = ["S101", "PLR2004", "ANN001", "T201", "T10"]
+"**/.misc_files/**/*.py" = ["S101", "PLR2004", "ANN001", "T201", "T10"]
 "**/*langfuse*" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Langfuse files
 "**/*langsmith*" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Langsmith files
 "**/agent_ng/*.py" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Agent files need debugging
