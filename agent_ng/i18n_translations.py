@@ -223,9 +223,9 @@ RUSSIAN_TRANSLATIONS = {
     "available_label": "Доступно",
     "used_label": "Использовано",
     "unique_tools_label": "уникальных",
-    "total_calls_label": "Всего вызовов",
+    "total_calls_label": "Инструменты",
     "tools_used_label": "Использовано инструментов",
-    "tools_label": "Инструменты",
+    "tools_label": "Инструментов доступно",
     "system_prompt_label": "Система",
     "memory_entries": "Записей в памяти: {count}",
     # Quick action messages
@@ -525,9 +525,9 @@ ENGLISH_TRANSLATIONS = {
     "available_label": "Available",
     "used_label": "Used",
     "unique_tools_label": "unique",
-    "total_calls_label": "Total Calls",
+    "total_calls_label": "Tools",
     "tools_used_label": "Used tools",
-    "tools_label": "Tools",
+    "tools_label": "Tools available",
     "system_prompt_label": "System",
     "memory_entries": "Memory entries: {count}",
     # Quick action messages
