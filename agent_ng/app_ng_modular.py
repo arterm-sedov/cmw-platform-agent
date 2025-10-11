@@ -26,7 +26,11 @@ import logging
 from pathlib import Path
 import time
 from typing import Any, Dict, List, Optional, Tuple
-
+import uuid
+import time
+import asyncio
+import threading
+from queue import Queue, Empty
 import gradio as gr
 
 # Initialize logging early (idempotent)
@@ -1299,12 +1303,19 @@ class NextGenApp:
 
         # Add a minimal server-side API endpoint to ask a question and get final answer
         # This uses the same session isolation as the UI and returns only the last assistant text
-        def _api_ask(question: str, request: gr.Request = None, username: str = None, password: str = None, base_url: str = None) -> str:
+        def _api_ask(question: str, username: str = None, password: str = None, base_url: str = None, session_id: str = None) -> str:
             _logger.info(f"🔗 API /ask called with question: {question[:50]}...")
             
+            # Use provided session_id or generate a new one
+            if not session_id:
+                session_id = f"api_{uuid.uuid4().hex[:16]}_{int(time.time())}"
+                      
+            # Set session context for logging and request config resolution
+            self.set_session_context(session_id)
+            set_current_session_id(session_id)
+
             # Set session configuration if provided
             if any([username, password, base_url]):
-                session_id = self.get_user_session_id(request)
                 config = {}
                 if username is not None:
                     config["username"] = username.strip()
@@ -1317,41 +1328,56 @@ class NextGenApp:
                     set_session_config(session_id, config)
                     _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
 
-            history: list[dict[str, str]] = []
-            last_history: list[dict[str, str]] | None = None
-            # Reuse streaming wrapper to ensure identical behavior/tool calling
-            for updated_history, _ in self._stream_message_wrapper(question, history, request):
-                last_history = updated_history
+            # Get user agent with session configuration
+            user_agent = self.get_user_agent(session_id)
+            
+            # Collect all streaming content into a single response
+            response_content = ""
+            try:
+                # Use asyncio to run the async stream_message method
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                async def _collect_response():
+                    nonlocal response_content
+                    async for event in user_agent.stream_message(question, session_id):
+                        if not event:
+                            continue
+                        event_type = event.get("type")
+                        if event_type == "content":
+                            content = event.get("content", "")
+                            if content:
+                                response_content += content
+                        elif event_type == "error":
+                            error = event.get("content", "Error")
+                            response_content = f"❌ {error}"
+                            return
+                
+                loop.run_until_complete(_collect_response())
+                loop.close()
+                
+            except Exception as e:
+                _logger.error(f"API /ask error: {e}")
+                return f"❌ {e}"
 
-            if not last_history:
-                _logger.warning("API /ask: No history generated")
-                return ""
-
-            # Find last assistant message without metadata title (final answer)
-            for msg in reversed(last_history):
-                if msg and msg.get("role") == "assistant":
-                    # Prefer messages without a metadata title (avoid token/tool blocks)
-                    metadata = msg.get("metadata") if isinstance(msg, dict) else None
-                    if not (metadata and metadata.get("title")):
-                        response = msg.get("content", "") or ""
-                        _logger.info(f"API /ask: Returning response (length: {len(response)})")
-                        return response
-            # Fallback: return the last assistant content even if it had metadata
-            for msg in reversed(last_history):
-                if msg and msg.get("role") == "assistant":
-                    response = msg.get("content", "") or ""
-                    _logger.info(f"API /ask: Returning fallback response (length: {len(response)})")
-                    return response
-            _logger.warning("API /ask: No assistant message found")
-            return ""
+            _logger.info(f"API /ask: Returning response (length: {len(response_content)})")
+            return response_content
 
         # Streaming endpoint: yields incremental content for cURL/Client streaming
-        def _api_ask_stream(question: str, request: gr.Request = None, username: str = None, password: str = None, base_url: str = None):
+        def _api_ask_stream(question: str, username: str = None, password: str = None, base_url: str = None, session_id: str = None):
             _logger.info(f"🔗 API /ask_stream called with question: {question[:50]}...")
+
+            # Use provided session_id or generate a new one
+            if not session_id:
+                session_id = f"api_{uuid.uuid4().hex[:16]}_{int(time.time())}"
+
+            self.set_session_context(session_id)
+            set_current_session_id(session_id)
+            
+            user_agent = self.get_user_agent(session_id)
             
             # Set session configuration if provided
             if any([username, password, base_url]):
-                session_id = self.get_user_session_id(request)
                 config = {}
                 if username is not None:
                     config["username"] = username.strip()
@@ -1364,8 +1390,6 @@ class NextGenApp:
                     set_session_config(session_id, config)
                     _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
 
-            session_id = self.get_user_session_id(request)
-            user_agent = self.get_user_agent(session_id)
             cumulative = ""
 
             async def _stream():
@@ -1392,9 +1416,6 @@ class NextGenApp:
                     yield f"❌ {e}"
 
             # Proper async-to-sync bridge using threading and queue
-            import asyncio
-            import threading
-            from queue import Queue, Empty
             
             def run_async_generator():
                 async def _run():
@@ -1412,7 +1433,7 @@ class NextGenApp:
             try:
                 while True:
                     try:
-                        item = queue.get(timeout=30)  # 30 second timeout
+                        item = queue.get(timeout=60)  # 30 second timeout
                         if item is None:  # End signal
                             break
                         yield item
@@ -1424,15 +1445,20 @@ class NextGenApp:
 
             # Streaming endpoint: generator yields partials; API GET will stream
 
-        # Register both API endpoints using shared hidden components
+        # Register API endpoints using gr.api() - cleaner approach for HF Spaces
         with demo:
             _in = gr.Textbox(label="question", visible=False)
             _username = gr.Textbox(label="username", visible=False)
             _password = gr.Textbox(label="password", type="password", visible=False)
             _base_url = gr.Textbox(label="base_url", visible=False)
+            _session_id = gr.Textbox(label="session_id", type="password", visible=False)
             _out = gr.Textbox(label="answer", visible=False)
-            _in.submit(_api_ask, inputs=[_in, _username, _password, _base_url], outputs=_out, api_name="ask")
-            _in.submit(_api_ask_stream, inputs=[_in, _username, _password, _base_url], outputs=_out, api_name="ask_stream")
+            #_in.submit(_api_ask, inputs=[_in, _username, _password, _base_url, _session_id], outputs=_out, api_name="ask")
+            _in.submit(_api_ask_stream, inputs=[_in, _username, _password, _base_url, _session_id], outputs=_out, api_name="ask_stream")
+
+            # Use gr.api() to register API endpoints without fake UI elements
+            gr.api(_api_ask, api_name="ask")
+            #gr.api(_api_ask_stream, api_name="ask_stream")
 
         # Configure concurrency and queuing AFTER registering named endpoints
         self.queue_manager.configure_queue(demo)

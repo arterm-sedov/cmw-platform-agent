@@ -31,7 +31,7 @@ https://huggingface.co/spaces/arterm-sedov/cmw-agent
 Возвращает инкрементальные части ответа ассистента по мере их генерации.
 
 **Метод:** `POST`  
-**Путь:** `/call/ask_stream`  
+**Путь:** `/gradio_api/call/ask_stream`  
 **Content-Type:** `application/json`
 
 ### Формат запроса
@@ -84,36 +84,36 @@ data: ["Привет, как дела?"]
 
 ```bash
 # Отправка вопроса
-curl -X POST http://localhost:7860/call/ask_stream \
+curl -X POST http://localhost:7860/gradio_api/call/ask_stream \
   -H "Content-Type: application/json" \
   -d '{"data": ["Привет, как дела?"]}'
 
 # Получение результата (замените EVENT_ID на реальный ID)
-curl -N http://localhost:7860/call/ask_stream/EVENT_ID
+curl -N http://localhost:7860/gradio_api/call/ask_stream/EVENT_ID
 ```
 
 ### С аутентификацией
 
 ```bash
 # Отправка вопроса с учетными данными
-curl -X POST http://localhost:7860/call/ask_stream \
+curl -X POST http://localhost:7860/gradio_api/call/ask_stream \
   -H "Content-Type: application/json" \
   -d '{"data": ["Покажи мои задачи", "myuser", "mypass", "https://my-platform.com"]}'
 
 # Получение результата
-curl -N http://localhost:7860/call/ask_stream/EVENT_ID
+curl -N http://localhost:7860/gradio_api/call/ask_stream/EVENT_ID
 ```
 
 ### С сессией
 
 ```bash
 # Первое сообщение в сессии
-curl -X POST http://localhost:7860/call/ask_stream \
+curl -X POST http://localhost:7860/gradio_api/call/ask_stream \
   -H "Content-Type: application/json" \
   -d '{"data": ["Что такое 2+2?"], "session_hash": "my-session-123"}'
 
 # Следующее сообщение в той же сессии
-curl -X POST http://localhost:7860/call/ask_stream \
+curl -X POST http://localhost:7860/gradio_api/call/ask_stream \
   -H "Content-Type: application/json" \
   -d '{"data": ["А что такое 3+3?"], "session_hash": "my-session-123"}'
 ```
@@ -122,11 +122,11 @@ curl -X POST http://localhost:7860/call/ask_stream \
 
 ```bash
 # Автоматическое получение EVENT_ID и запрос результата
-curl -X POST http://localhost:7860/call/ask_stream \
+curl -X POST http://localhost:7860/gradio_api/call/ask_stream \
   -H "Content-Type: application/json" \
   -d '{"data": ["Стрими это пожалуйста"]}' \
   | awk -F'"' '{ print $4}' \
-  | read EVENT_ID; curl -N http://localhost:7860/call/ask_stream/$EVENT_ID
+  | read EVENT_ID; curl -N http://localhost:7860/gradio_api/call/ask_stream/$EVENT_ID
 ```
 
 ## Управление сессиями
@@ -183,7 +183,7 @@ data: ["Сообщение об ошибке здесь"]
 
 2. **Тестируйте потоковый endpoint:**
    ```bash
-   curl -X POST http://localhost:7860/call/ask_stream \
+   curl -X POST http://localhost:7860/gradio_api/call/ask_stream \
      -H "Content-Type: application/json" \
      -d '{"data": ["Стрими это"]}'
    ```

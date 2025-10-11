@@ -25,7 +25,7 @@ No authentication is required for these endpoints. All requests are processed wi
 Returns the complete assistant response after processing is finished.
 
 **Method:** `POST`  
-**Path:** `/call/ask`  
+**Path:** `/gradio_api/call/ask`  
 **Content-Type:** `application/json`
 
 #### Request Format
@@ -66,12 +66,12 @@ Returns the complete assistant response after processing is finished.
 **cURL:**
 ```bash
 # Submit question with authentication
-curl -X POST http://localhost:7860/call/ask \
+curl -X POST http://localhost:7860/gradio_api/call/ask \
   -H "Content-Type: application/json" \
   -d '{"data": ["Hello, who are you?", "myuser", "mypass", "https://my-platform.com"]}'
 
 # Get result (replace EVENT_ID with actual ID)
-curl -N http://localhost:7860/call/ask/EVENT_ID
+curl -N http://localhost:7860/gradio_api/call/ask/EVENT_ID
 ```
 
 **Python Client:**
@@ -114,7 +114,7 @@ print(result)
 Returns incremental chunks of the assistant response as it's being generated.
 
 **Method:** `POST`  
-**Path:** `/call/ask_stream`  
+**Path:** `/gradio_api/call/ask_stream`  
 **Content-Type:** `application/json`
 
 #### Request Format

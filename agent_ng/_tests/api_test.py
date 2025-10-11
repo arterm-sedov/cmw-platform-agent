@@ -9,10 +9,6 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 
 def normalize_base_url(raw: str) -> str:
 	url = raw.strip()
-	if url.startswith("http://"):
-		url = url.replace("http://", "http://", 1)
-	if url.startswith("https://"):
-		url = url.replace("https://", "https://", 1)
 	if not (url.startswith("http://") or url.startswith("https://")):
 		url = f"http://{url}"
 	if not url.endswith("/"):
@@ -21,8 +17,8 @@ def normalize_base_url(raw: str) -> str:
 
 
 def main() -> int:
-	base_url = normalize_base_url(os.getenv("BASE_URL", "http://127.0.0.1:7860/"))
-	session_hash = os.getenv("SESSION_HASH", "") or None
+	base_url = normalize_base_url(os.getenv("BASE_URL", "http://10.9.7.7:7860/"))
+	session_id = os.getenv("SESSION_ID", "api5464") or None
 	
 	# Load CMW Platform credentials from environment
 	cmw_base_url = os.getenv("CMW_BASE_URL", "")
@@ -38,7 +34,7 @@ def main() -> int:
 	try:
 		client = Client(base_url)
 		kwargs = {
-			"question": "Hello from /ask - what can you help me with? Перечисли приложения в платформе",
+			"question": "Перечисли приложения в платформе",
 		}
 		
 		# Add CMW credentials if available
@@ -49,19 +45,19 @@ def main() -> int:
 		if cmw_base_url:
 			kwargs["base_url"] = cmw_base_url
 			
-		if session_hash:
-			kwargs["session_hash"] = session_hash
+		if session_id:
+			kwargs["session_id"] = session_id
 			
 		result = client.predict(api_name="/ask", **kwargs)
 		print("/ask (final):", result)
 	except Exception as e:
 		print("/ask error:", e)
-
+	return 0
 	# Streaming endpoint
 	try:
 		client_stream = Client(base_url)
 		kwargs = {
-			"question": "Hello streaming from /ask_stream - tell me about your capabilities. Перечисли приложения в платформе",
+			"question": "Перечисли приложения в платформе",
 		}
 		
 		# Add CMW credentials if available
@@ -72,8 +68,8 @@ def main() -> int:
 		if cmw_base_url:
 			kwargs["base_url"] = cmw_base_url
 			
-		if session_hash:
-			kwargs["session_hash"] = session_hash
+		if session_id:
+			kwargs["session_id"] = session_id
 			
 		job = client_stream.submit(api_name="/ask_stream", **kwargs)
 		print("/ask_stream (stream):")
