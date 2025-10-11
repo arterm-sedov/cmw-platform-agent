@@ -168,7 +168,6 @@ class CmwAgent:
         # Agent state
         self.is_initialized = False
         self.conversation_history = []
-        self.active_streams = {}
 
         # File registry system (lean and secure) - session isolated
         self.file_registry = {}  # Maps (session_id, original_filename) -> full_file_path

@@ -78,7 +78,6 @@ class NativeLangChainStreaming:
         }
 
     def __init__(self):
-        self.active_streams = {}
         # Module logger
         self._logger = logging.getLogger(__name__)
         # Get configuration from centralized config
