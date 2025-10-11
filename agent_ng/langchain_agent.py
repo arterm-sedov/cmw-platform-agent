@@ -120,19 +120,6 @@ class ChatMessage:
     content: str
     metadata: Optional[Dict[str, Any]] = None
 
-
-@dataclass
-class AgentResponse:
-    """Structured agent response"""
-
-    answer: str
-    tool_calls: List[Dict[str, Any]]
-    conversation_id: str
-    success: bool
-    error: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-
-
 class CmwAgent:
     """
     Modern agent using pure LangChain patterns with full modular architecture.
