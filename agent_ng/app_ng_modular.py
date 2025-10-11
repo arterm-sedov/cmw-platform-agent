@@ -28,7 +28,6 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
 import time
-import asyncio
 import threading
 from queue import Queue, Empty
 import gradio as gr
@@ -247,7 +246,6 @@ class NextGenApp:
             loop.create_task(self._initialize_agent())
         except RuntimeError:
             # No event loop running, start a new one
-            import threading
 
             def run_async_init():
                 asyncio.run(self._initialize_agent())
@@ -265,8 +263,6 @@ class NextGenApp:
             self._stream_loop = None
             self._stream_loop_thread = None
 
-        import asyncio
-        import threading
 
         self._stream_loop = asyncio.new_event_loop()
 
@@ -281,8 +277,6 @@ class NextGenApp:
 
     def _submit_stream_task(self, message, history, request, out_queue):
         """Submit the async streaming producer to the background loop and feed results into out_queue."""
-        import asyncio
-
         async def _producer():
             try:
                 async for result in self.stream_chat_with_agent(
