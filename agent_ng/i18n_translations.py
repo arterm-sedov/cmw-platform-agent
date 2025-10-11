@@ -113,8 +113,8 @@ RUSSIAN_TRANSLATIONS = {
     "token_usage_header": "**Расход токенов:**",
     "token_usage_total": "Всего: {total_tokens:,}",
     "token_usage_conversation": "Диалог: {conversation_tokens:,}",
-    "token_usage_last_message": "Последнее сообщение {percentage}% ({used:,}/{context_window:,}) {status_icon}",
-    "token_usage_average": "Среднее на сообщение: {avg_tokens:,}",
+    "token_usage_last_message": "Сообщение: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
+    "token_usage_average": "Средний на сообщение: {avg_tokens:,}",
     # Status icons for token usage
     "token_status_good": "🟢",
     "token_status_moderate": "🟡",
@@ -125,7 +125,7 @@ RUSSIAN_TRANSLATIONS = {
     "token_budget_detailed": """**Расход токенов:**
 - Всего: {total_tokens:,}
 - Диалог: {conversation_tokens:,}
-- Последнее сообщение {percentage}% ({used:,}/{context_window:,}) {status_icon}
+- Сообщение {percentage}% ({used:,}/{context_window:,}) {status_icon}
 - Среднее на сообщение: {avg_tokens:,}""",
     "token_budget_unknown": "❓ Неизвестно",
     "progress_title": "Прогресс",
@@ -225,7 +225,7 @@ RUSSIAN_TRANSLATIONS = {
     "unique_tools_label": "уникальных",
     "total_calls_label": "Инструменты",
     "tools_used_label": "Использовано инструментов",
-    "tools_label": "Инструментов доступно",
+    "tools_label": "Инструментов",
     "system_prompt_label": "Система",
     "memory_entries": "Записей в памяти: {count}",
     # Quick action messages
@@ -418,7 +418,7 @@ ENGLISH_TRANSLATIONS = {
     "token_usage_header": "**Token usage:**",
     "token_usage_total": "Total: {total_tokens:,}",
     "token_usage_conversation": "Conversation: {conversation_tokens:,}",
-    "token_usage_last_message": "Last message {percentage}% ({used:,}/{context_window:,}) {status_icon}",
+    "token_usage_last_message": "Message: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
     "token_usage_average": "Average per message: {avg_tokens:,}",
     # Status icons for token usage
     "token_status_good": "🟢",
@@ -527,7 +527,7 @@ ENGLISH_TRANSLATIONS = {
     "unique_tools_label": "unique",
     "total_calls_label": "Tools",
     "tools_used_label": "Used tools",
-    "tools_label": "Tools available",
+    "tools_label": "Tools",
     "system_prompt_label": "System",
     "memory_entries": "Memory entries: {count}",
     # Quick action messages
