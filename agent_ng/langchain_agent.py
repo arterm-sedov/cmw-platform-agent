@@ -26,6 +26,12 @@ from dataclasses import dataclass
 from .token_counter import TokenCount
 from pathlib import Path
 
+try:
+    from ..utils import get_tool_call_count
+except ImportError:
+    # Fallback for when running as script
+    from utils import get_tool_call_count
+
 # LangChain imports
 from langchain_core.messages import (
     BaseMessage,
@@ -451,6 +457,7 @@ class CmwAgent:
                 total_messages = 0
                 user_messages = 0
                 assistant_messages = 0
+                system_prompt_count = 0
 
                 # Only count messages for this session's conversation
                 session_conversation = self.memory_manager.memories.get(self.session_id)
@@ -486,12 +493,19 @@ class CmwAgent:
                                     user_messages += 1
                                 elif message.role == "assistant":
                                     assistant_messages += 1
+                                elif message.role == "system":
+                                    system_prompt_count += 1
                             elif hasattr(message, "type"):
                                 # Handle different message types
                                 if message.type == "human":
                                     user_messages += 1
                                 elif message.type == "ai":
                                     assistant_messages += 1
+                                elif message.type == "system":
+                                    system_prompt_count += 1
+                            # Also check for SystemMessage instances
+                            elif hasattr(message, "__class__") and "System" in message.__class__.__name__:
+                                system_prompt_count += 1
                     elif hasattr(conversation, "__iter__"):
                         # Direct list of messages
                         messages = list(conversation)
@@ -510,12 +524,19 @@ class CmwAgent:
                                     user_messages += 1
                                 elif message.role == "assistant":
                                     assistant_messages += 1
+                                elif message.role == "system":
+                                    system_prompt_count += 1
                             elif hasattr(message, "type"):
                                 # Handle different message types
                                 if message.type == "human":
                                     user_messages += 1
                                 elif message.type == "ai":
                                     assistant_messages += 1
+                                elif message.type == "system":
+                                    system_prompt_count += 1
+                            # Also check for SystemMessage instances
+                            elif hasattr(message, "__class__") and "System" in message.__class__.__name__:
+                                system_prompt_count += 1
                     else:
                         if debug:
                             print(
@@ -526,15 +547,20 @@ class CmwAgent:
                     print(
                         f"🔍 DEBUG: Total stats: {total_messages} total, {user_messages} user, {assistant_messages} assistant"
                     )
+                # Get tool call count using the shared utility function
+                tool_call_count = get_tool_call_count(self, self.session_id)
+                
                 return {
                     "message_count": total_messages,
                     "user_messages": user_messages,
                     "assistant_messages": assistant_messages,
+                    "system_prompt_count": system_prompt_count,
+                    "total_tool_calls": tool_call_count,
                 }
             else:
                 if debug:
                     print("🔍 DEBUG: No memory manager available")
-                return {"message_count": 0, "user_messages": 0, "assistant_messages": 0}
+                return {"message_count": 0, "user_messages": 0, "assistant_messages": 0, "system_prompt_count": 0, "total_tool_calls": 0}
         except Exception as e:
             print(f"🔍 DEBUG: Error getting conversation stats: {e}")
             import traceback

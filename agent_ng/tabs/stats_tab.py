@@ -11,7 +11,6 @@ from collections.abc import Callable
 import logging
 import time
 from typing import Any, Dict, Optional, Tuple
-
 import gradio as gr
 
 
@@ -153,6 +152,7 @@ class StatsTab:
 
         return get_translation_key(key, self.language)
 
+
     def format_stats_display(self, request: gr.Request = None) -> str:
         """Format and return the complete stats display - always session-aware"""
         # Try to get request from Gradio context if not provided
@@ -168,6 +168,7 @@ class StatsTab:
 
         # Get session-specific agent
         agent = None
+        session_id = None
         if (
             request
             and hasattr(self, "main_app")
@@ -187,7 +188,7 @@ class StatsTab:
 
         try:
             # Get basic agent statistics
-            stats = agent.get_stats()
+            stats = agent.get_stats()        
 
             # Format complete display using existing translation resources exactly as they are
             return f"""
@@ -197,47 +198,18 @@ class StatsTab:
 - {self._get_translation("provider_info").format(provider=stats["llm_info"].get("provider", "Unknown"))}
 
 {self._get_translation("conversation_section")}
-- {self._get_translation("messages_label")}: {stats["conversation_stats"]["message_count"]}
+- {self._get_translation("system_prompt_label")}: {stats["conversation_stats"]["system_prompt_count"]}
 - {self._get_translation("user_messages_label")}: {stats["conversation_stats"]["user_messages"]}
 - {self._get_translation("assistant_messages_label")}: {stats["conversation_stats"]["assistant_messages"]}
 - {self._get_translation("total_messages_label")}: {stats["conversation_stats"]["message_count"]}
 
 {self._get_translation("tools_section")}
-- {self._get_translation("available_label")}: {stats["agent_status"]["tools_count"]}{self._format_tools_stats(agent)}
+- {self._get_translation("available_label")}: {stats["agent_status"]["tools_count"]}
+- {self._get_translation("total_calls_label")}: {stats["conversation_stats"]["total_tool_calls"]}
             """
         except Exception as e:
             return f"{self._get_translation('error_loading_stats')}: {e!s}"
 
-    def _format_tools_stats(self, agent=None) -> str:
-        """Format tools usage statistics from session-specific agent"""
-        if not agent:
-            return ""
-
-        try:
-            # Get tool usage from memory manager
-            if hasattr(agent, "memory_manager") and agent.memory_manager:
-                total_tool_calls = 0
-                unique_tools = set()
-
-                for (
-                    _conversation_id,
-                    conversation,
-                ) in agent.memory_manager.memories.items():
-                    for message in conversation:
-                        if hasattr(message, "type") and message.type == "tool":
-                            total_tool_calls += 1
-                            # Try to get tool name from message
-                            if hasattr(message, "name"):
-                                unique_tools.add(message.name)
-
-                if total_tool_calls > 0:
-                    return f"\n- {self._get_translation('used_label')}: {len(unique_tools)} {self._get_translation('unique_tools_label')}\n- {self._get_translation('total_calls_label')}: {total_tool_calls}"
-                else:
-                    return f"\n- {self._get_translation('used_label')}: 0 {self._get_translation('unique_tools_label')}"
-            else:
-                return ""
-        except Exception:
-            return ""
 
     # Stats handler methods
     def refresh_stats(self, request: gr.Request = None) -> str:
