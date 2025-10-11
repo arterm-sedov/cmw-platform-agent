@@ -172,7 +172,6 @@ class CmwAgent:
         # File registry system (lean and secure) - session isolated
         self.file_registry = {}  # Maps (session_id, original_filename) -> full_file_path
         self.session_cache_path = None  # Gradio cache path for this session
-        self.current_files = []  # Current conversation turn files
 
         # Initialize in background - handle case when no event loop is running
         try:
@@ -303,7 +302,6 @@ class CmwAgent:
         chain.clear_conversation(conversation_id)
         # Clear file registry when clearing conversation
         self.file_registry = {}
-        self.current_files = []
 
     def is_ready(self) -> bool:
         """Check if the agent is ready to process requests"""
