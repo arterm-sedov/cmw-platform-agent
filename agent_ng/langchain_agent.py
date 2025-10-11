@@ -167,7 +167,6 @@ class CmwAgent:
 
         # Agent state
         self.is_initialized = False
-        self.conversation_history = []
 
         # File registry system (lean and secure) - session isolated
         self.file_registry = {}  # Maps (session_id, original_filename) -> full_file_path
@@ -376,8 +375,20 @@ class CmwAgent:
             if self.llm_instance
             else None,
             "tools_count": len(self.tools),
-            "conversation_length": len(self.conversation_history),
+            "conversation_length": self._get_conversation_length(),
         }
+
+    def _get_conversation_length(self) -> int:
+        """Get actual conversation length from memory manager"""
+        try:
+            if self.memory_manager:
+                # Get conversation history from memory manager
+                conversation_history = self.memory_manager.get_conversation_history(self.session_id)
+                return len(conversation_history) if conversation_history else 0
+            return 0
+        except Exception:
+            # Fallback to 0 if there's any error
+            return 0
 
     def get_llm_info(self) -> Dict[str, Any]:
         """Get information about the current LLM"""
