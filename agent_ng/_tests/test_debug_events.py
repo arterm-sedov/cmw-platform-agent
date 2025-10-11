@@ -41,7 +41,7 @@ def test_debug_events():
     
     # Simulate event-based calls (like when messages are added)
     print("\nEvent: New message added")
-    stats = agent.get_conversation_stats_debug()  # Debug output enabled
+    stats = agent.get_conversation_stats(debug=True)  # Debug output enabled
     print(f"Stats: {stats}")
     
     print("\n3. Testing change detection in stats tab:")

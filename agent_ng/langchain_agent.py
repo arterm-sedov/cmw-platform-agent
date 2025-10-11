@@ -206,11 +206,6 @@ class CmwAgent:
             thread = threading.Thread(target=run_async_init, daemon=True)
             thread.start()
 
-    def _get_traceable_decorator(self):
-        """Get traceable decorator if LangSmith is configured"""
-        traceable = get_traceable_decorator()
-        return traceable if traceable else lambda x: x
-
     async def _initialize_async(self):
         """Initialize the agent asynchronously"""
         try:
@@ -436,17 +431,6 @@ class CmwAgent:
             },
             "conversation_stats": self._get_conversation_stats(),
         }
-
-    def get_conversation_stats_debug(self) -> Dict[str, int]:
-        """Get conversation statistics with debug output enabled"""
-        return self._get_conversation_stats(debug=True)
-
-    def log_conversation_event(self, event_type: str, details: str = ""):
-        """Log conversation-related events with debug information"""
-        print(f"🔍 EVENT: {event_type} - {details}")
-        if event_type in ["new_message", "conversation_start", "conversation_end"]:
-            # Show debug stats for important events
-            self.get_conversation_stats_debug()
 
     def _get_conversation_stats(self, debug: bool = False) -> Dict[str, int]:
         """Get conversation statistics from memory manager
