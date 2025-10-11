@@ -56,4 +56,4 @@ alwaysApply: true
 - Place imports always on top.
 - Use environment variables for secrets.
 - Put reports to a relevant `docs/**/progress_reports/` folder under `/docs/` or its relevant `cwd/subfolder`
-- Put tests to `/agent_ng/_tests` preferably, or under a relevant `cwd/_tests` where the files are modified or created, otherwise to `@/misc_files`
+- Put tests to `/agent_ng/_tests` preferably, or under a relevant `cwd/_tests` where the files are modified or created, otherwise to `@/.misc_files`

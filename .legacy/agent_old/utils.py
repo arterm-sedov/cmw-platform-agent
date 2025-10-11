@@ -27,7 +27,7 @@ def load_dataset_schema() -> Optional[Dict]:
     possible_paths = [
         Path("dataset_config.json"),  # Current working directory (root)
         Path("./dataset_config.json"),
-        Path("../dataset_config.json"),  # Parent directory (if run from misc_files)
+        Path("../dataset_config.json"),  # Parent directory (if run from .misc_files)
         Path(__file__).parent / "dataset_config.json",
         Path(__file__).parent.parent / "dataset_config.json"
     ]

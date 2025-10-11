@@ -35,7 +35,7 @@ def main():
         return 0
     except ImportError as e:
         print(f"❌ Import error: {e}")
-        print("Make sure you're running from the misc_files directory")
+        print("Make sure you're running from the .misc_files directory")
         return 1
     except Exception as e:
         print(f"❌ Error running checker: {e}")
