@@ -1,8 +1,8 @@
 ---
 emoji: 🕵🏻‍♂️
-colorFrom: indigo
+colorFrom: blue
 colorTo: blue
-sdk: docker
+sdk: gradio
 sdk_version: 5.49.1
 app_file: agent_ng/app_ng_modular.py
 pinned: true
