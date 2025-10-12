@@ -12,7 +12,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
+from .i18n_translations import get_translation_key
 import gradio as gr
 
 # Import configuration with fallback for direct execution
@@ -34,6 +34,10 @@ class UIManager:
         self.i18n = i18n_instance
         self._setup_gradio_paths()
         self.components = {}
+
+    def _get_translation(self, key: str) -> str:
+        """Get translation for a specific key"""
+        return get_translation_key(key, self.language)
 
     def _setup_gradio_paths(self):
         """Setup Gradio static resource paths"""
@@ -215,11 +219,6 @@ class UIManager:
 
         logging.getLogger(__name__).info("🔄 Auto-refresh timers configured successfully")
 
-    def _get_translation(self, key: str) -> str:
-        """Get a translation for a specific key"""
-        from ..i18n_translations import get_translation_key
-        return get_translation_key(key, self.language)
-
     def get_components(self) -> dict[str, Any]:
         """Get all components created by the UI manager"""
         return self.components
@@ -233,12 +232,6 @@ class UIManager:
         for key, component in self.components.items():
             if hasattr(component, "set_agent"):
                 component.set_agent(agent)
-
-    def _get_translation(self, key: str) -> str:
-        """Get a translation for a specific key"""
-        # Always use direct translation to avoid i18n metadata issues
-        from .i18n_translations import get_translation_key
-        return get_translation_key(key, self.language)
 
 # Global instances for different languages
 _ui_manager_en = None

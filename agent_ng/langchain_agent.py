@@ -180,7 +180,10 @@ class CmwAgent:
 
         # Initialize in background - handle case when no event loop is running
         try:
-            asyncio.create_task(self._initialize_async())
+            # Try to get the current event loop
+            loop = asyncio.get_running_loop()
+            # Create task in the current event loop
+            loop.create_task(self._initialize_async())
         except RuntimeError:
             # No event loop running, initialize synchronously
             import threading
@@ -195,6 +198,8 @@ class CmwAgent:
 
             thread = threading.Thread(target=run_async_init, daemon=True)
             thread.start()
+            # Wait for initialization to complete
+            thread.join(timeout=60)  # Wait up to 60 seconds for initialization
 
     async def _initialize_async(self):
         """Initialize the agent asynchronously"""

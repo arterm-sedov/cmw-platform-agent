@@ -85,10 +85,20 @@ class StatsTab:
             "🔗 StatsTab: Connecting event handlers with concurrency control..."
         )
 
-        # Get queue manager for concurrency control
-        queue_manager = getattr(self, "main_app", None)
-        if queue_manager:
-            queue_manager = getattr(queue_manager, "queue_manager", None)
+        # Get queue manager for concurrency control with proper validation
+        queue_manager = None
+        if hasattr(self, "main_app") and self.main_app:
+            queue_manager = getattr(self.main_app, "queue_manager", None)
+            logging.getLogger(__name__).debug(f"Queue manager found: {queue_manager is not None}")
+            if queue_manager:
+                logging.getLogger(__name__).debug(f"Queue manager has config: {hasattr(queue_manager, 'config')}")
+                logging.getLogger(__name__).debug(f"Queue manager type: {type(queue_manager)}")
+            # Validate that queue manager is properly initialized
+            if queue_manager and not hasattr(queue_manager, 'config'):
+                logging.getLogger(__name__).warning("Queue manager found but not properly initialized")
+                queue_manager = None
+            elif queue_manager:
+                logging.getLogger(__name__).debug("Queue manager found and properly initialized")
 
         if queue_manager:
             # Apply concurrency settings to stats events

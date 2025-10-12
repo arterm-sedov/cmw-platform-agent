@@ -60,6 +60,13 @@ import sys
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
+# Set LangChain verbose mode using new pattern (suppresses deprecation warning)
+try:
+    from langchain.globals import set_verbose
+    set_verbose(False)  # Set to True for debugging if needed
+except ImportError:
+    pass  # Older LangChain version, no action needed
+
 # Add current directory to path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
@@ -167,6 +174,8 @@ class NextGenApp:
 
             self.concurrency_config = get_concurrency_config()
             self.queue_manager = create_queue_manager(self.concurrency_config)
+            _logger.debug(f"Queue manager created: {self.queue_manager is not None}")
+            _logger.debug(f"Queue manager has config: {hasattr(self.queue_manager, 'config') if self.queue_manager else False}")
         except ImportError:
             # Fallback for when running as script
             from concurrency_config import get_concurrency_config
@@ -174,6 +183,8 @@ class NextGenApp:
 
             self.concurrency_config = get_concurrency_config()
             self.queue_manager = create_queue_manager(self.concurrency_config)
+            _logger.debug(f"Queue manager created (fallback): {self.queue_manager is not None}")
+            _logger.debug(f"Queue manager has config: {hasattr(self.queue_manager, 'config') if self.queue_manager else False}")
 
         # Session Management - Clean modular approach
         try:
@@ -1285,6 +1296,22 @@ class NextGenApp:
         except Exception as e:
             _logger.exception("Error creating tab modules: %s", e)
             raise
+
+        # Configure queue manager BEFORE creating interface to ensure it's available to tabs
+        try:
+            if hasattr(self, 'queue_manager') and self.queue_manager:
+                _logger.info("Configuring queue manager before interface creation...")
+                _logger.debug(f"Queue manager type: {type(self.queue_manager)}")
+                _logger.debug(f"Queue manager has config: {hasattr(self.queue_manager, 'config')}")
+                # Create a temporary demo to configure the queue manager
+                with gr.Blocks() as temp_demo:
+                    pass
+                self.queue_manager.configure_queue(temp_demo)
+                _logger.info("Queue manager configured successfully")
+            else:
+                _logger.warning("Queue manager not available for configuration")
+        except Exception as e:
+            _logger.warning(f"Failed to configure queue manager: {e}")
 
         # Use UI Manager to create interface
         try:

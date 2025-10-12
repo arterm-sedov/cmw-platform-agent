@@ -10,15 +10,8 @@ Supports internationalization (i18n) with Russian and English translations.
 from collections.abc import Callable
 import logging
 from typing import Any, Optional
-
 import gradio as gr
-
-# Import for fallback translations
-try:
-    from agent_ng.i18n_translations import get_translation_key
-except ImportError:
-    get_translation_key = None
-
+from ..i18n_translations import get_translation_key
 
 class HomeTab:
     """Home tab component for welcome and quick start information"""
@@ -94,17 +87,6 @@ class HomeTab:
         """Set reference to main app for session management"""
         self.main_app = main_app
 
-    def _get_translation(self, key: str, **kwargs: Any) -> str:
-        """Get translation for a key from i18n system"""
-        if self.i18n:
-            try:
-                return self.i18n.t(key, **kwargs)
-            except Exception as e:
-                logging.getLogger(__name__).debug(
-                    "i18n translation failed for key '%s': %s", key, e
-                )
-
-        # Fallback to i18n_translations module
-        if get_translation_key:
-            return get_translation_key(key, self.language)
-        return f"[{key}]"
+    def _get_translation(self, key: str) -> str:
+        """Get translation for a specific key"""
+        return get_translation_key(key, self.language)

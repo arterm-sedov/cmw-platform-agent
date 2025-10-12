@@ -85,9 +85,12 @@ class LogsTab:
         )
 
         # Get queue manager for concurrency control
-        queue_manager = getattr(self, "main_app", None)
-        if queue_manager:
-            queue_manager = getattr(queue_manager, "queue_manager", None)
+        queue_manager = None
+        if hasattr(self, "main_app") and self.main_app:
+            queue_manager = getattr(self.main_app, "queue_manager", None)
+            logging.getLogger(__name__).debug(f"LogsTab: Queue manager found: {queue_manager is not None}")
+            if queue_manager:
+                logging.getLogger(__name__).debug(f"LogsTab: Queue manager has config: {hasattr(queue_manager, 'config')}")
 
         if queue_manager:
             # Apply concurrency settings to logs events
