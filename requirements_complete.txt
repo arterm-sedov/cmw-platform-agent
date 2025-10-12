@@ -1,0 +1,153 @@
+# CMW Platform Agent - Perfect Requirements
+# ==========================================
+# Comprehensive dependencies for agent_ng/, resources/, and tools/ directories
+# Optimized for production deployment with development tools
+
+# =============================================================================
+# CORE FRAMEWORK DEPENDENCIES
+# =============================================================================
+
+# Gradio - Modern web UI framework
+gradio>=4.0.0
+
+# LangChain Ecosystem - Core AI framework
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-community>=0.0.20
+
+# =============================================================================
+# LLM PROVIDER INTEGRATIONS
+# =============================================================================
+
+# OpenAI
+openai>=1.0.0
+langchain-openai>=0.1.0
+
+# Google Gemini
+google-generativeai>=0.3.0
+langchain-google-genai>=1.0.0
+
+# Groq
+groq>=0.4.0
+langchain-groq>=0.1.0
+
+# Mistral
+mistralai>=0.0.8
+langchain-mistralai>=0.1.0
+
+# HuggingFace
+huggingface-hub>=0.19.0
+langchain-huggingface>=0.1.0
+
+# GigaChat
+langchain-gigachat>=0.1.0
+gigachat>=0.1.0
+
+# Search Tools
+langchain-tavily>=0.1.0
+
+# =============================================================================
+# DATA PROCESSING & ANALYSIS
+# =============================================================================
+
+# Core Data Science
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+
+# Image Processing
+pillow>=10.0.0
+
+# Optional: Advanced Data Processing
+matplotlib>=3.7.0  # Optional - with fallback in code
+pytesseract>=0.3.10  # Optional - OCR functionality
+
+# =============================================================================
+# WEB & API INTEGRATIONS
+# =============================================================================
+
+# HTTP Requests
+requests>=2.31.0
+
+# Configuration
+python-dotenv>=1.0.0
+PyYAML>=6.0
+
+# =============================================================================
+# DOCUMENT PROCESSING
+# =============================================================================
+
+# PDF Processing - Best library for LLM processing
+pymupdf4llm>=0.0.1
+
+# Excel Processing
+openpyxl>=3.1.0
+
+# Web Scraping (optional)
+beautifulsoup4>=4.12.0
+
+# Markdown Processing
+markdown>=3.4.0
+
+# =============================================================================
+# OBSERVABILITY & MONITORING
+# =============================================================================
+
+# LangSmith - Primary observability
+langsmith>=0.1.0
+
+# Langfuse - Alternative observability
+langfuse>=2.39.0
+
+# =============================================================================
+# TOKEN COUNTING & UTILITIES
+# =============================================================================
+
+# Token Counting
+tiktoken>=0.5.0
+
+# Data Validation
+pydantic>=2.0.0
+
+# =============================================================================
+# SEARCH & RESEARCH TOOLS
+# =============================================================================
+
+# Wikipedia
+wikipedia>=1.4.0
+
+# ArXiv
+arxiv>=2.1.0
+
+# =============================================================================
+# DATABASE & STORAGE (Optional)
+# =============================================================================
+
+# Supabase (optional - for vector storage)
+supabase>=2.0.0
+pgvector>=0.2.0
+
+# =============================================================================
+# DEVELOPMENT & TESTING
+# =============================================================================
+
+# Testing Framework
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
+# Code Quality
+ruff>=0.1.0  # Fast, modern linter (replaces black + flake8)
+black>=23.0.0  # Code formatter
+flake8>=6.0.0  # Linter
+
+# =============================================================================
+# OPTIONAL ADVANCED FEATURES
+# =============================================================================
+
+# MQTT Support (if needed)
+asyncio-mqtt>=0.11.0
+
+# Advanced ML (optional)
+# sentence-transformers>=2.2.0  # Uncomment if vector similarity needed
+# faiss-cpu>=1.7.4  # Uncomment if vector similarity needed
+

@@ -145,11 +145,11 @@ def get_requirements_file():
             print_status(f"Using Windows-specific requirements: {requirements_file}", "INFO")
             return requirements_file
         else:
-            print_status("Windows requirements file not found, using main requirements.txt", "WARNING")
-            return "requirements.txt"
+            print_status("Windows requirements file not found, using main requirements_complete.txt", "WARNING")
+            return "requirements_complete.txt"
     else:
-        print_status("Using main requirements.txt for Linux/macOS", "INFO")
-        return "requirements.txt"
+        print_status("Using main requirements_complete.txt for Linux/macOS", "INFO")
+        return "requirements_complete.txt"
 
 def install_dependencies(venv_path: Path):
     """Install dependencies using the appropriate requirements file."""
@@ -191,10 +191,10 @@ def install_dependencies(venv_path: Path):
         
         # If Windows requirements failed, try main requirements as fallback
         if platform.system() == "Windows" and requirements_file == "requirements.win.txt":
-            print_status("Trying main requirements.txt as fallback...", "WARNING")
+            print_status("Trying main requirements_complete.txt as fallback...", "WARNING")
             try:
-                run_command([pip_cmd, "install", "-r", "requirements.txt"])
-                print_status("Dependencies installed using main requirements.txt", "SUCCESS")
+                run_command([pip_cmd, "install", "-r", "requirements_complete.txt"])
+                print_status("Dependencies installed using main requirements_complete.txt", "SUCCESS")
                 print_status("Note: TensorFlow not installed - sentence-transformers may not work optimally", "WARNING")
                 print_status("To install TensorFlow manually, try:", "INFO")
                 print_status("  pip install tensorflow-cpu", "INFO")
