@@ -15,6 +15,9 @@ import pandas as pd
 import subprocess
 import sys
 import sqlite3
+
+# Check if we're running on Hugging Face Spaces
+HF_SPACES = os.environ.get('SPACE_ID') is not None
 import cmath
 import time
 import re
@@ -342,7 +345,7 @@ class CodeInterpreter:
                         })
                 if dataframes:
                     result["dataframes"] = dataframes
-                
+
                 # Check for plots (only if matplotlib is available)
                 plots = []
                 if MATPLOTLIB_AVAILABLE and plt is not None:
@@ -375,6 +378,9 @@ class CodeInterpreter:
     
     def _execute_bash(self, code: str) -> Dict[str, Any]:
         """Execute Bash code."""
+        if HF_SPACES:
+            return {"status": "error", "stderr": "Bash execution not available on Hugging Face Spaces"}
+        
         try:
             result = subprocess.run(
                 code, 
@@ -420,6 +426,9 @@ class CodeInterpreter:
     
     def _execute_c(self, code: str) -> Dict[str, Any]:
         """Execute C code by compiling and running."""
+        if HF_SPACES:
+            return {"status": "error", "stderr": "C code execution not available on Hugging Face Spaces"}
+        
         try:
             # Create temporary C file
             c_file = os.path.join(self.working_directory, "temp_code.c")
@@ -458,6 +467,9 @@ class CodeInterpreter:
     
     def _execute_java(self, code: str) -> Dict[str, Any]:
         """Execute Java code by compiling and running."""
+        if HF_SPACES:
+            return {"status": "error", "stderr": "Java code execution not available on Hugging Face Spaces"}
+        
         try:
             # Create temporary Java file
             java_file = os.path.join(self.working_directory, "TempCode.java")

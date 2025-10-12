@@ -1,7 +1,6 @@
-# CMW Platform Agent - Perfect Requirements
-# ==========================================
-# Comprehensive dependencies for agent_ng/, resources/, and tools/ directories
-# Optimized for production deployment with development tools
+# CMW Platform Agent - Requirements for Hugging Face Spaces
+# ======================================
+# Only libraries actually used in agent_ng/ and tools/ directories for Hugging Face Spaces
 
 # =============================================================================
 # CORE FRAMEWORK DEPENDENCIES
@@ -71,7 +70,6 @@ requests>=2.31.0
 
 # Configuration
 python-dotenv>=1.0.0
-PyYAML>=6.0
 
 # =============================================================================
 # DOCUMENT PROCESSING
@@ -80,17 +78,23 @@ PyYAML>=6.0
 # PDF Processing - Best library for LLM processing
 pymupdf4llm>=0.0.1
 
-# Excel Processing
-openpyxl>=3.1.0
 
-# Web Scraping (optional)
-beautifulsoup4>=4.12.0
+# =============================================================================
+# TEXT PROCESSING (used in chat_tab.py)
+# =============================================================================
 
 # Markdown Processing
 markdown>=3.4.0
 
 # =============================================================================
-# OBSERVABILITY & MONITORING
+
+# Plotting
+matplotlib>=3.7.0 
+# OCR for image text extraction
+pytesseract>=0.3.10
+
+# =============================================================================
+# OBSERVABILITY
 # =============================================================================
 
 # LangSmith - Primary observability
@@ -108,7 +112,6 @@ tiktoken>=0.5.0
 
 # Data Validation
 pydantic>=2.0.0
-
 # =============================================================================
 # SEARCH & RESEARCH TOOLS
 # =============================================================================
@@ -118,36 +121,3 @@ wikipedia>=1.4.0
 
 # ArXiv
 arxiv>=2.1.0
-
-# =============================================================================
-# DATABASE & STORAGE (Optional)
-# =============================================================================
-
-# Supabase (optional - for vector storage)
-supabase>=2.0.0
-pgvector>=0.2.0
-
-# =============================================================================
-# DEVELOPMENT & TESTING
-# =============================================================================
-
-# Testing Framework
-pytest>=7.0.0
-pytest-asyncio>=0.21.0
-
-# Code Quality
-ruff>=0.1.0  # Fast, modern linter (replaces black + flake8)
-black>=23.0.0  # Code formatter
-flake8>=6.0.0  # Linter
-
-# =============================================================================
-# OPTIONAL ADVANCED FEATURES
-# =============================================================================
-
-# MQTT Support (if needed)
-asyncio-mqtt>=0.11.0
-
-# Advanced ML (optional)
-# sentence-transformers>=2.2.0  # Uncomment if vector similarity needed
-# faiss-cpu>=1.7.4  # Uncomment if vector similarity needed
-
