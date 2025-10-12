@@ -1,13 +1,15 @@
 ---
 emoji: 🕵🏻‍♂️
 colorFrom: indigo
-colorTo: indigo
+colorTo: blue
 sdk: gradio
-sdk_version: 5.47.0
+sdk_version: 5.49.1
 app_file: agent_ng/app_ng_modular.py
-pinned: false
+pinned: true
 hf_oauth: true
 hf_oauth_expiration_minutes: 480
+license: mit
+title: CMW Copilot
 ---
 
 # Comindware Analyst Copilot
