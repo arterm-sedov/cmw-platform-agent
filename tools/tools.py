@@ -1038,7 +1038,7 @@ def analyze_image(file_reference: str, agent=None) -> str:
             "color_analysis": color_analysis,
             "thumbnail": thumbnail_base64,
         }
-        return FileUtils.create_tool_response("analyze_image", result=result)
+        return FileUtils.create_tool_response("analyze_image", result=json.dumps(result))
     except Exception as e:
         return FileUtils.create_tool_response("analyze_image", error=str(e))
 
@@ -1215,7 +1215,10 @@ class GenerateSimpleImageParams(BaseModel):
 
 @tool(args_schema=GenerateSimpleImageParams)
 def generate_simple_image(image_type: str, width: int = 500, height: int = 500, 
-                         params: Optional[Dict[str, Any]] = None) -> str:
+                         color: Optional[str] = None, start_color: Optional[List[int]] = None,
+                         end_color: Optional[List[int]] = None, direction: Optional[str] = None,
+                         square_size: Optional[int] = None, color1: Optional[str] = None,
+                         color2: Optional[str] = None) -> str:
     """
     Generate simple images like gradients, solid colors, checkerboard, or noise patterns.
 
@@ -1223,15 +1226,19 @@ def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
         image_type (str): The type of image to generate.
         width (int): The width of the generated image.
         height (int): The height of the generated image.
-        params (Dict[str, Any], optional): Additional parameters for image generation.
+        color (str, optional): Solid color for 'solid' type or RGB string.
+        start_color (List[int], optional): Gradient start color [r, g, b].
+        end_color (List[int], optional): Gradient end color [r, g, b].
+        direction (str, optional): Gradient direction ('horizontal' or 'vertical').
+        square_size (int, optional): Square size for checkerboard.
+        color2 (str, optional): Second color for checkerboard.
 
     Returns:
         str: JSON string with the generated image as base64 or error message.
     """
     try:
-        params = params or {}
         if image_type == "solid":
-            color_str = params.get("color", "255,255,255")
+            color_str = color or "255,255,255"
             # Parse color string to RGB tuple
             if "," in color_str and color_str.replace(",", "").replace(" ", "").isdigit():
                 try:
@@ -1250,9 +1257,9 @@ def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
                     color = (255, 255, 255)
             img = Image.new("RGB", (width, height), color)
         elif image_type == "gradient":
-            start_color = params.get("start_color", [255, 0, 0])
-            end_color = params.get("end_color", [0, 0, 255])
-            direction = params.get("direction", "horizontal")
+            start_color = start_color or [255, 0, 0]
+            end_color = end_color or [0, 0, 255]
+            direction = direction or "horizontal"
             img = Image.new("RGB", (width, height))
             draw = ImageDraw.Draw(img)
             if direction == "horizontal":
@@ -1271,9 +1278,9 @@ def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
             noise_array = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
             img = Image.fromarray(noise_array, "RGB")
         elif image_type == "checkerboard":
-            square_size = params.get("square_size", 50)
-            color1 = params.get("color1", "white")
-            color2 = params.get("color2", "black")
+            square_size = square_size or 50
+            color1 = color1 or "white"  # Use provided color1 or default to white
+            color2 = color2 or "black"
             img = Image.new("RGB", (width, height))
             for y in range(0, height, square_size):
                 for x in range(0, width, square_size):

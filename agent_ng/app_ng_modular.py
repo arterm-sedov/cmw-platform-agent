@@ -23,14 +23,15 @@ import asyncio
 from collections.abc import AsyncGenerator
 import json
 import logging
+import re
 from pathlib import Path
 import time
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
-import time
 import threading
 from queue import Queue, Empty
 import gradio as gr
+
 
 # Initialize logging early (idempotent)
 try:
@@ -628,11 +629,13 @@ class NextGenApp:
                 and user_agent.llm_instance
             ):
                 llm_info = user_agent.get_llm_info()
-                print(
-                    f"🔍 DEBUG: Using session agent with LLM: {llm_info.get('provider', 'unknown')}/{llm_info.get('model_name', 'unknown')}"
+                session_debug = get_debug_streamer(session_id)
+                session_debug.debug(
+                    f"Using session agent with LLM: {llm_info.get('provider', 'unknown')}/{llm_info.get('model_name', 'unknown')}"
                 )
             else:
-                print("❌ DEBUG: Session agent has no LLM instance!")
+                session_debug = get_debug_streamer(session_id)
+                session_debug.warning("Session agent has no LLM instance!")
 
             # Use session-specific debug streamer
             session_debug = get_debug_streamer(session_id)
@@ -810,6 +813,62 @@ class NextGenApp:
                             "metadata": {"title": tool_title},
                         }
                         working_history.append(tool_message)
+
+                        # Check for rich content in tool response
+                        try:
+                            from .content_converter import get_content_converter
+                            from tools.file_utils import FileUtils
+
+                            converter = get_content_converter()
+
+                            # Try to parse content as JSON to extract rich content
+                            try:
+                                tool_response = json.loads(content)
+                                if isinstance(tool_response, dict):
+                                    # Extract media attachments from tool response
+                                    media_attachments = FileUtils.extract_media_from_response(tool_response)
+
+                                    # Convert media attachments to Gradio components
+                                    for attachment in media_attachments:
+                                        if attachment.get("type") == "media_attachment":
+                                            file_path = attachment.get("file_path")
+                                            if file_path and FileUtils.file_exists(file_path):
+                                                # Convert to appropriate Gradio component
+                                                converted = converter.convert_content(file_path)
+                                                if converted:
+                                                    # Add as separate rich content message
+                                                    rich_message = {
+                                                        "role": "assistant",
+                                                        "content": converted,
+                                                        "metadata": {"title": f"Media: {attachment.get('media_type', 'file')}"}
+                                                    }
+                                                    working_history.append(rich_message)
+                            except (json.JSONDecodeError, Exception):
+                                # Content is not JSON, check for file paths in text
+                                if isinstance(content, str):
+                                    # Look for file paths in the content
+                                    import re
+                                    file_path_pattern = r'([A-Za-z]:[\\/][^\s]+|[\\/][^\s]+\.(png|jpg|jpeg|gif|webp|svg|tiff|bmp|mp4|webm|avi|mov|wav|mp3|m4a|ogg|flac|aac|html))'
+                                    matches = re.findall(file_path_pattern, content, re.IGNORECASE)
+
+                                    for match in matches:
+                                        file_path = match[0]
+                                        if FileUtils.file_exists(file_path):
+                                            converted = converter.convert_content(file_path)
+                                            if converted:
+                                                # Add as separate rich content message
+                                                rich_message = {
+                                                    "role": "assistant",
+                                                    "content": converted,
+                                                    "metadata": {"title": "Media Attachment"}
+                                                }
+                                                working_history.append(rich_message)
+                        except Exception as e:
+                            # Non-fatal: continue without rich content processing
+                            session_debug = get_debug_streamer(session_id)
+                            session_debug.warning(f"Rich content processing error: {e}")
+
+                        # Yield updated history after tool_end processing
                         yield working_history, ""
 
                     elif event_type == "content":
@@ -839,6 +898,19 @@ class NextGenApp:
                                 content_to_add = "\n\n" + content_to_add
 
                         response_content += content_to_add
+
+                        # Check for base64 images in the content
+                        try:
+                            # Look for base64 image patterns in the accumulated content
+                            if FileUtils.is_base64_image(response_content):
+                                converter = get_content_converter()
+                                converted = converter.convert_content(response_content)
+                                if converted and not isinstance(converted, str):
+                                    # Replace the text content with the converted component
+                                    response_content = converted
+                        except Exception as e:
+                            # Non-fatal: continue with text content
+                            pass
 
                         # Update or create assistant message
                         if (
@@ -1326,11 +1398,11 @@ class NextGenApp:
         # This uses the same session isolation as the UI and returns only the last assistant text
         def _api_ask(question: str, username: str = None, password: str = None, base_url: str = None, session_id: str = None) -> str:
             _logger.info(f"🔗 API /ask called with question: {question[:50]}...")
-            
+
             # Use provided session_id or generate a new one
             if not session_id:
                 session_id = f"api_{uuid.uuid4().hex[:16]}_{int(time.time())}"
-                      
+
             # Set session context for logging and request config resolution
             self.set_session_context(session_id)
             set_current_session_id(session_id)
@@ -1344,21 +1416,21 @@ class NextGenApp:
                     config["password"] = password.strip()
                 if base_url is not None:
                     config["url"] = base_url.strip()
-                
+
                 if config:
                     set_session_config(session_id, config)
                     _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
 
             # Get user agent with session configuration
             user_agent = self.get_user_agent(session_id)
-            
+
             # Collect all streaming content into a single response
             response_content = ""
             try:
                 # Use asyncio to run the async stream_message method
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                
+
                 async def _collect_response():
                     nonlocal response_content
                     async for event in user_agent.stream_message(question, session_id):
@@ -1373,10 +1445,10 @@ class NextGenApp:
                             error = event.get("content", "Error")
                             response_content = f"❌ {error}"
                             return
-                
+
                 loop.run_until_complete(_collect_response())
                 loop.close()
-                
+
             except Exception as e:
                 _logger.error(f"API /ask error: {e}")
                 return f"❌ {e}"
@@ -1394,9 +1466,9 @@ class NextGenApp:
 
             self.set_session_context(session_id)
             set_current_session_id(session_id)
-            
+
             user_agent = self.get_user_agent(session_id)
-            
+
             # Set session configuration if provided
             if any([username, password, base_url]):
                 config = {}
@@ -1406,7 +1478,7 @@ class NextGenApp:
                     config["password"] = password.strip()
                 if base_url is not None:
                     config["url"] = base_url.strip()
-                
+
                 if config:
                     set_session_config(session_id, config)
                     _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
@@ -1437,20 +1509,20 @@ class NextGenApp:
                     yield f"❌ {e}"
 
             # Proper async-to-sync bridge using threading and queue
-            
+
             def run_async_generator():
                 async def _run():
                     async for item in _stream():
                         queue.put(item)
                     queue.put(None)  # Signal end
-                
+
                 # Run in a new event loop in a separate thread
                 asyncio.run(_run())
-            
+
             queue = Queue()
             thread = threading.Thread(target=run_async_generator)
             thread.start()
-            
+
             try:
                 while True:
                     try:

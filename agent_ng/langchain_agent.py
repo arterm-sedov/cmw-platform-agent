@@ -27,7 +27,7 @@ from .token_counter import TokenCount
 from pathlib import Path
 
 try:
-    from ..utils import get_tool_call_count
+    from .utils import get_tool_call_count
 except ImportError:
     # Fallback for when running as script
     from utils import get_tool_call_count

@@ -260,7 +260,7 @@ class FileUtils:
             headers = {
                 'User-Agent': 'CMW-Platform-Agent/1.0 (+https://github.com/arterm-sedov/cmw-platform-agent) Mozilla/5.0'
             }
-            
+
             # First make a HEAD request to get Content-Type
             logger.info(f"Attempting to download from URL: {url}")
             head_response = requests.head(url, headers=headers, timeout=30, allow_redirects=True)
@@ -584,3 +584,270 @@ class FileUtils:
     def is_pdf_file(file_path: str) -> bool:
         """Check if file is likely a PDF file based on extension."""
         return Path(file_path).suffix.lower() == '.pdf'
+
+    @staticmethod
+    def get_mime_type(file_path: str) -> str:
+        """Get MIME type for a file based on extension and content."""
+        import mimetypes
+
+        # First try mimetypes module
+        mime_type, _ = mimetypes.guess_type(file_path)
+        if mime_type:
+            return mime_type
+
+        # Fallback to extension-based detection
+        ext = Path(file_path).suffix.lower()
+        mime_map = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml',
+            '.tiff': 'image/tiff',
+            '.bmp': 'image/bmp',
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm',
+            '.avi': 'video/x-msvideo',
+            '.mov': 'video/quicktime',
+            '.wav': 'audio/wav',
+            '.mp3': 'audio/mpeg',
+            '.ogg': 'audio/ogg',
+            '.flac': 'audio/flac',
+            '.aac': 'audio/aac',
+            '.m4a': 'audio/mp4',
+            '.html': 'text/html',
+            '.htm': 'text/html',
+            '.json': 'application/json',
+            '.xml': 'application/xml',
+            '.pdf': 'application/pdf'
+        }
+
+        return mime_map.get(ext, 'application/octet-stream')
+
+    @staticmethod
+    def detect_media_type(file_path: str) -> str:
+        """Detect media type category for a file."""
+        if FileUtils.is_image_file(file_path):
+            return 'image'
+        elif FileUtils.is_video_file(file_path):
+            return 'video'
+        elif FileUtils.is_audio_file(file_path):
+            return 'audio'
+        elif Path(file_path).suffix.lower() == '.html':
+            return 'html'
+        elif Path(file_path).suffix.lower() in ['.png', '.svg'] and 'plot' in file_path.lower():
+            return 'plot'
+        else:
+            return 'unknown'
+
+    @staticmethod
+    def create_media_attachment(file_path: str, caption: str = None, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Create a media attachment dictionary for rich content.
+
+        Args:
+            file_path: Path to the media file
+            caption: Optional caption for the media
+            metadata: Optional metadata dictionary
+
+        Returns:
+            Dict with media attachment information
+        """
+        if not FileUtils.file_exists(file_path):
+            return {
+                "type": "error",
+                "error": f"File not found: {file_path}"
+            }
+
+        file_info = FileUtils.get_file_info(file_path)
+        media_type = FileUtils.detect_media_type(file_path)
+        mime_type = FileUtils.get_mime_type(file_path)
+
+        attachment = {
+            "type": "media_attachment",
+            "media_type": media_type,
+            "file_path": file_path,
+            "mime_type": mime_type,
+            "file_info": file_info.dict() if file_info else None
+        }
+
+        if caption:
+            attachment["caption"] = caption
+
+        if metadata:
+            attachment["metadata"] = metadata
+
+        return attachment
+
+    @staticmethod
+    def add_media_to_response(tool_response: Dict[str, Any], file_path: str, 
+                            caption: str = None, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Add media attachment to an existing tool response.
+
+        Args:
+            tool_response: Existing tool response dictionary
+            file_path: Path to the media file
+            caption: Optional caption for the media
+            metadata: Optional metadata dictionary
+
+        Returns:
+            Updated tool response with media attachment
+        """
+        if "media_attachments" not in tool_response:
+            tool_response["media_attachments"] = []
+
+        media_attachment = FileUtils.create_media_attachment(file_path, caption, metadata)
+        tool_response["media_attachments"].append(media_attachment)
+
+        return tool_response
+
+    @staticmethod
+    def extract_media_from_response(tool_response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Extract media attachments from a tool response.
+
+        Args:
+            tool_response: Tool response dictionary
+
+        Returns:
+            List of media attachment dictionaries
+        """
+        media_attachments = []
+
+        # Check for explicit media_attachments field
+        if "media_attachments" in tool_response:
+            media_attachments.extend(tool_response["media_attachments"])
+
+        # Check for file paths in result field
+        if "result" in tool_response and isinstance(tool_response["result"], dict):
+            result = tool_response["result"]
+            for key, value in result.items():
+                if isinstance(value, str) and FileUtils.file_exists(value):
+                    media_attachment = FileUtils.create_media_attachment(value, f"File: {key}")
+                    media_attachments.append(media_attachment)
+
+        return media_attachments
+
+    @staticmethod
+    def is_base64_image(data: str) -> bool:
+        """Check if string contains base64 image data."""
+        import base64
+
+        # Check for data URI
+        if data.startswith('data:image/'):
+            return True
+
+        # Check for raw base64 image patterns
+        if len(data) > 100:
+            try:
+                # Remove whitespace
+                clean_data = ''.join(data.split())
+                # Try to decode
+                decoded = base64.b64decode(clean_data)
+                # Check for image magic numbers
+                image_magic = [
+                    b'\x89PNG\r\n\x1a\n',  # PNG
+                    b'\xff\xd8\xff',       # JPEG
+                    b'GIF87a',            # GIF
+                    b'GIF89a',            # GIF
+                    b'RIFF',              # WebP
+                    b'BM'                 # BMP
+                ]
+                return any(decoded.startswith(magic) for magic in image_magic)
+            except:
+                return False
+
+        return False
+
+    @staticmethod
+    def save_base64_to_file(base64_data: str, output_path: str = None, 
+                          file_extension: str = None, session_id: str = None) -> str:
+        """
+        Save base64 data to a file.
+
+        Args:
+            base64_data: Base64 encoded data (with or without data URI prefix)
+            output_path: Optional output file path
+            file_extension: Optional file extension for temp file
+            session_id: Optional session ID to save in session-isolated directory
+
+        Returns:
+            Path to the saved file
+        """
+        import base64
+        import tempfile
+        import uuid
+        from datetime import datetime
+
+        # Extract base64 data from data URI if present
+        if base64_data.startswith('data:'):
+            # Parse data URI: data:image/png;base64,iVBOR...
+            header, data = base64_data.split(',', 1)
+            mime_type = header.split(':')[1].split(';')[0]
+            if not file_extension:
+                file_extension = mimetypes.guess_extension(mime_type) or '.bin'
+        else:
+            data = base64_data
+            if not file_extension:
+                file_extension = '.bin'
+
+        # Create output path if not provided
+        if not output_path:
+            if session_id:
+                # Save to session-isolated directory
+                session_dir = Path(f".gradio/sessions/{session_id}")
+                session_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                unique_id = str(uuid.uuid4())[:8]
+                filename = f"llm_image_{timestamp}_{unique_id}{file_extension}"
+                output_path = str(session_dir / filename)
+            else:
+                # Fall back to temp directory
+                temp_fd, output_path = tempfile.mkstemp(suffix=file_extension)
+                os.close(temp_fd)
+
+        # Decode and save
+        try:
+            decoded_data = base64.b64decode(data)
+            with open(output_path, 'wb') as f:
+                f.write(decoded_data)
+            return output_path
+        except Exception as e:
+            raise ValueError(f"Failed to save base64 data: {str(e)}")
+
+    @staticmethod
+    def create_gallery_attachment(image_paths: List[str], captions: List[str] = None) -> Dict[str, Any]:
+        """
+        Create a gallery attachment for multiple images.
+
+        Args:
+            image_paths: List of image file paths
+            captions: Optional list of captions for each image
+
+        Returns:
+            Gallery attachment dictionary
+        """
+        if not image_paths:
+            return {"type": "error", "error": "No image paths provided"}
+
+        # Validate all image files
+        valid_images = []
+        for i, path in enumerate(image_paths):
+            if FileUtils.file_exists(path) and FileUtils.is_image_file(path):
+                image_info = {
+                    "path": path,
+                    "caption": captions[i] if captions and i < len(captions) else None
+                }
+                valid_images.append(image_info)
+
+        if not valid_images:
+            return {"type": "error", "error": "No valid image files found"}
+
+        return {
+            "type": "gallery_attachment",
+            "media_type": "gallery",
+            "images": valid_images,
+            "count": len(valid_images)
+        }

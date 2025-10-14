@@ -1013,6 +1013,46 @@ class ChatTab(QuickActionsMixin):
 
                 # Store current files (deprecated - use session manager)
                 print(f"📁 Registered {len(current_files)} files: {current_files}")
+
+                # Convert uploaded files to rich content
+                try:
+                    from ..content_converter import get_content_converter
+                    from tools.file_utils import FileUtils
+
+                    converter = get_content_converter()
+                    rich_content_messages = []
+
+                    for file in files:
+                        # Extract file path from file object
+                        if isinstance(file, dict):
+                            file_path = file.get("path", "")
+                        else:
+                            file_path = str(file)
+
+                        if file_path and FileUtils.file_exists(file_path):
+                            # Convert file to rich content
+                            converted = converter.convert_content(file_path)
+                            if converted and isinstance(converted, list) and len(converted) > 0:
+                                # For Gradio Chatbot with type="messages", content should be the component directly
+                                # or a dict with "path" key for file paths
+                                for component in converted:
+                                    if hasattr(component, 'value') and component.value:
+                                        # Create rich content message with file path
+                                        rich_message = {
+                                            "role": "user",
+                                            "content": {"path": file_path}
+                                        }
+                                        rich_content_messages.append(rich_message)
+                                        break
+
+                    # Add rich content messages to history
+                    if rich_content_messages:
+                        history.extend(rich_content_messages)
+                        # Skip the original message since we have rich content
+                        message = ""
+
+                except Exception as e:
+                    print(f"Error converting uploaded files to rich content: {e}")
             else:
                 # No files, just use the text message
                 pass
