@@ -89,6 +89,7 @@ class ChatTab(QuickActionsMixin):
                     ".hpp", ".java", ".go", ".rs", ".rb", ".php", ".pl", ".swift",
                     ".kt", ".scala", ".sql", ".toml", ".env",  # Common text-based code formats
                     ".wav", ".mp3",  ".aiff", ".ogg", ".flac", ".aac",  # Audio files
+                    ".mp4", ".mpeg", ".mpg", ".mov", ".avi", ".flv", ".webm", ".wmv", ".3gp", ".3gpp",  # Video files
                     ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tiff"  # Image files
                 ],
                 file_count="multiple",
