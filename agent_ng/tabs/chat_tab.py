@@ -87,7 +87,9 @@ class ChatTab(QuickActionsMixin):
                     ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".xml", ".html",
                     ".css", ".md", ".ini", ".sh", ".bat", ".ps1", ".c", ".cpp", ".h",
                     ".hpp", ".java", ".go", ".rs", ".rb", ".php", ".pl", ".swift",
-                    ".kt", ".scala", ".sql", ".toml", ".env"  # Common text-based code formats
+                    ".kt", ".scala", ".sql", ".toml", ".env",  # Common text-based code formats
+                    ".wav", ".mp3",  ".aiff", ".ogg", ".flac", ".aac",  # Audio files
+                    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tiff"  # Image files
                 ],
                 file_count="multiple",
             )

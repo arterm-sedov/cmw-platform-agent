@@ -52,7 +52,7 @@ from langchain_core.tools import tool
 from .templates_tools.tool_list_attributes import list_attributes
 from .templates_tools.tool_list_records import list_template_records
 
-# Applications tools  
+# Applications tools
 from .applications_tools.tool_list_templates import list_templates
 from .applications_tools.tool_list_applications import list_applications
 
@@ -261,7 +261,6 @@ class CodeInterpreter:
         self.working_directory = working_directory or os.path.join(os.getcwd()) 
         if not os.path.exists(self.working_directory):
             os.makedirs(self.working_directory)
-        
         # Use global imports that are already available
         self.globals = {
             "__builtins__": __builtins__,
@@ -269,21 +268,16 @@ class CodeInterpreter:
             "pd": pd,
             "Image": Image,
         }
-        
         # Only add plt to globals if it's available
         if MATPLOTLIB_AVAILABLE:
             self.globals["plt"] = plt
-        
         self.temp_sqlite_db = os.path.join(tempfile.gettempdir(), "code_exec.db")
-    
     def execute_code(self, code: str, language: str = "python") -> Dict[str, Any]:
         """
         Execute code in the specified language with safety controls.
-        
         Args:
             code (str): The source code to execute
             language (str): The programming language
-            
         Returns:
             Dict containing execution results, status, and outputs
         """
@@ -302,7 +296,6 @@ class CodeInterpreter:
                 return {"status": "error", "stderr": f"Unsupported language: {language}"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    
     def _execute_python(self, code: str) -> Dict[str, Any]:
         """Execute Python code with safety controls."""
         try:
@@ -310,30 +303,23 @@ class CodeInterpreter:
             # Create string buffers to capture output
             stdout_buffer = io.StringIO()
             stderr_buffer = io.StringIO()
-            
             # Store original stdout/stderr
             old_stdout = sys.stdout
             old_stderr = sys.stderr
-            
             # Redirect stdout/stderr to our buffers
             sys.stdout = stdout_buffer
             sys.stderr = stderr_buffer
-            
             try:
                 # Create a copy of globals for this execution
                 local_globals = self.globals.copy()
                 local_globals['__name__'] = '__main__'
-                
                 # Execute the code
                 exec(code, local_globals)
-                
                 # Get captured output
                 stdout_content = stdout_buffer.getvalue()
                 stderr_content = stderr_buffer.getvalue()
-                
                 # Capture any variables that might be dataframes or plots
                 result = {"status": "success", "stdout": stdout_content, "stderr": stderr_content, "result": None}
-                
                 # Check for dataframes
                 dataframes = []
                 for name, value in local_globals.items():
@@ -363,24 +349,19 @@ class CodeInterpreter:
                         print(f"Warning: Plot handling failed: {plot_error}")
                 if plots:
                     result["plots"] = plots
-                
                 return result
-                
             finally:
                 # Restore original stdout/stderr
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
                 stdout_buffer.close()
                 stderr_buffer.close()
-            
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    
     def _execute_bash(self, code: str) -> Dict[str, Any]:
         """Execute Bash code."""
         if HF_SPACES:
             return {"status": "error", "stderr": "Bash execution not available on Hugging Face Spaces"}
-        
         try:
             result = subprocess.run(
                 code, 
@@ -399,16 +380,13 @@ class CodeInterpreter:
             return {"status": "error", "stderr": "Execution timed out"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    
     def _execute_sql(self, code: str) -> Dict[str, Any]:
         """Execute SQL code using SQLite."""
         try:
             conn = sqlite3.connect(self.temp_sqlite_db)
             cursor = conn.cursor()
-            
             # Execute SQL
             cursor.execute(code)
-            
             # Fetch results if it's a SELECT
             if code.strip().upper().startswith('SELECT'):
                 results = cursor.fetchall()
@@ -417,34 +395,27 @@ class CodeInterpreter:
             else:
                 conn.commit()
                 result = {"status": "success", "message": f"Executed: {code}"}
-            
             conn.close()
             return result
-            
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    
     def _execute_c(self, code: str) -> Dict[str, Any]:
         """Execute C code by compiling and running."""
         if HF_SPACES:
             return {"status": "error", "stderr": "C code execution not available on Hugging Face Spaces"}
-        
         try:
             # Create temporary C file
             c_file = os.path.join(self.working_directory, "temp_code.c")
             with open(c_file, 'w') as f:
                 f.write(code)
-            
             # Compile
             compile_result = subprocess.run(
                 ["gcc", "-o", os.path.join(self.working_directory, "temp_program"), c_file],
                 capture_output=True,
                 text=True
             )
-            
             if compile_result.returncode != 0:
                 return {"status": "error", "stderr": f"Compilation failed: {compile_result.stderr}"}
-            
             # Run
             run_result = subprocess.run(
                 [os.path.join(self.working_directory, "temp_program")],
@@ -452,40 +423,33 @@ class CodeInterpreter:
                 text=True,
                 timeout=self.max_execution_time
             )
-            
             return {
                 "status": "success",
                 "stdout": run_result.stdout,
                 "stderr": run_result.stderr,
                 "returncode": run_result.returncode
             }
-            
         except subprocess.TimeoutExpired:
             return {"status": "error", "stderr": "Execution timed out"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    
     def _execute_java(self, code: str) -> Dict[str, Any]:
         """Execute Java code by compiling and running."""
         if HF_SPACES:
             return {"status": "error", "stderr": "Java code execution not available on Hugging Face Spaces"}
-        
         try:
             # Create temporary Java file
             java_file = os.path.join(self.working_directory, "TempCode.java")
             with open(java_file, 'w') as f:
                 f.write(code)
-            
             # Compile
             compile_result = subprocess.run(
                 ["javac", java_file],
                 capture_output=True,
                 text=True
             )
-            
             if compile_result.returncode != 0:
                 return {"status": "error", "stderr": f"Compilation failed: {compile_result.stderr}"}
-            
             # Run
             run_result = subprocess.run(
                 ["java", "-cp", self.working_directory, "TempCode"],
@@ -493,14 +457,12 @@ class CodeInterpreter:
                 text=True,
                 timeout=self.max_execution_time
             )
-            
             return {
                 "status": "success",
                 "stdout": run_result.stdout,
                 "stderr": run_result.stderr,
                 "returncode": run_result.returncode
             }
-            
         except subprocess.TimeoutExpired:
             return {"status": "error", "stderr": "Execution timed out"}
         except Exception as e:
@@ -522,13 +484,10 @@ def execute_code_multilang(code_reference: str, language: str = "python", agent=
         A string summarizing the execution results (stdout, stderr, errors, plots, dataframes if any).
     """
     from .file_utils import FileUtils
-    
     # Resolve code reference (code content, filename, or URL)
     code_content, detected_language = FileUtils.resolve_code_input(code_reference, agent)
-    
     # Use detected language or provided language
     final_language = (detected_language or language).lower()
-    
     supported_languages = ["python", "bash", "sql", "c", "java"]
     if final_language not in supported_languages:
         return FileUtils.create_tool_response(
@@ -730,7 +689,6 @@ def wiki_search(input: str) -> str:
 def web_search(input: str) -> str:
     """
     Search the web using Tavily for a query and return up to 3 results as formatted text.
-    
     Tavily is a search API that provides real-time web search results. This tool is useful for:
     - Finding current information about recent events
     - Searching for specific facts, statistics, or data
@@ -759,7 +717,6 @@ def web_search(input: str) -> str:
                 "error": "TAVILY_API_KEY not found in environment variables. Please set it in your .env file."
             })
         search_result = TavilySearch(max_results=SEARCH_LIMIT).invoke(input)
-        
         # Handle different response types
         if isinstance(search_result, str):
             # If Tavily returned a string (error message or direct answer)
@@ -812,14 +769,12 @@ def arxiv_search(input: str) -> str:
                 "tool_name": "arxiv_search",
                 "error": "Arxiv search not available. Install with: pip install langchain-community"
             })
-        
         if not PYMUPDF_AVAILABLE:
             return json.dumps({
                 "type": "tool_response",
                 "tool_name": "arxiv_search",
                 "error": "PyMuPDF package not found, please install it with pip install pymupdf"
             })
-        
         search_docs = ArxivLoader(query=input, load_max_docs=SEARCH_LIMIT).load()
         formatted_results = "\n\n---\n\n".join(
             [
@@ -838,18 +793,13 @@ def arxiv_search(input: str) -> str:
             "tool_name": "arxiv_search",
             "error": f"Error in Arxiv search: {str(e)}"
         })
-
- 
-
 # ========== FILE/DATA TOOLS ==========
 @tool
 def read_text_based_file(file_reference: str, agent=None) -> str:
     """
     Read text-based files and return raw content as text.
-    
     This is the general-purpose text file reader that handles most text-based formats.
     Use this tool for any text file unless there's a specialized tool available.
-    
     Supported file types:
     - Text files: .txt, .md, .log, .rtf
     - Code files: .py, .js, .ts, .html, .htm, .css, .sql, .java, .cpp, .c, .php, .rb, .go
@@ -858,85 +808,64 @@ def read_text_based_file(file_reference: str, agent=None) -> str:
     - Web files: .html, .htm, .xml
     - Documentation: .md, .rst, .tex
     - PDF files: .pdf (extracts text content and metadata)
-    
     Note: For specialized analysis, use dedicated tools instead:
     - CSV files (.csv, .tsv): use analyze_csv_file
     - Excel files (.xlsx, .xls): use analyze_excel_file
     - Images: use analyze_image or extract_text_from_image
-    
     The tool automatically:
     - Detects file encoding and handles multiple encodings (UTF-8, Latin-1, CP1252, ISO-8859-1)
     - Resolves filenames to full file paths via agent's file registry
     - Downloads files from URLs automatically
     - Provides file metadata (name, size, encoding) in results
-    
     Args:
         file_reference (str): Original filename from user upload OR URL to download
         agent: Agent instance for file resolution (injected automatically)
-        
     Returns:
         str: The raw text content of the file with metadata, or an error message if reading fails
     """
     from .file_utils import FileUtils
-    
     # Resolve file reference (filename or URL) to full path
     file_path = FileUtils.resolve_file_reference(file_reference, agent)
-    
     if not file_path:
         return FileUtils.create_tool_response("read_text_based_file", error=f"File not found: {file_reference}")
-    
     # Get file info for validation
     file_info = FileUtils.get_file_info(file_path)
     if not file_info.exists:
         return FileUtils.create_tool_response("read_text_based_file", error=file_info.error)
-    
     # Check if it's a PDF file and handle accordingly
     if file_info.extension == '.pdf':
         try:
             from .pdf_utils import PDFUtils
-            
             if not PDFUtils.is_available():
                 return FileUtils.create_tool_response("read_text_based_file", error="PyMuPDF not available. Install with: pip install pymupdf", file_info=file_info)
-            
             # Extract text from PDF using LangChain and PyMuPDF4LLM
             pdf_result = PDFUtils.extract_text_from_pdf(file_path, use_markdown=True)
-            
             if not pdf_result.success:
                 return FileUtils.create_tool_response("read_text_based_file", error=pdf_result.error_message, file_info=file_info)
-            
             # Show original reference in result
             display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
             size_str = FileUtils.format_file_size(file_info.size)
-            
             # Format the response - just the content, no internal details
             content = pdf_result.text_content
             result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
-            
             return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
-            
         except Exception as e:
             return FileUtils.create_tool_response("read_text_based_file", error=f"Error processing PDF: {str(e)}", file_info=file_info)
-    
     # Use modular file utilities with Pydantic validation for other text files
     result = FileUtils.read_text_file(file_path)
-    
     if not result.success:
         return FileUtils.create_tool_response("read_text_based_file", error=result.error)
-    
     # Format the result
     file_info = result.file_info
     content = result.content
     encoding = result.encoding
     size_str = FileUtils.format_file_size(file_info.size)
-    
     # Show original reference in result
     display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
-    
     if encoding != 'utf-8':
         result_text = f"File: {display_name} ({size_str}, {encoding} encoding)\n\nContent:\n{content}"
     else:
         result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
-    
     return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
 
 @tool
@@ -952,14 +881,11 @@ def extract_text_from_image(file_reference: str, agent=None) -> str:
         str: The extracted text, or an error message if extraction fails.
     """
     from .file_utils import FileUtils
-    
     try:
         # Resolve file reference (filename or URL) to full path
         file_path = FileUtils.resolve_file_reference(file_reference, agent)
-        
         if not file_path:
             return FileUtils.create_tool_response("extract_text_from_image", error=f"File not found: {file_reference}")
-        
         image = Image.open(file_path)
         if PYTESSERACT_AVAILABLE:
             text = pytesseract.image_to_string(image)
@@ -976,18 +902,15 @@ def extract_text_from_image(file_reference: str, agent=None) -> str:
 def analyze_csv_file(file_reference: str, query: str, agent=None) -> str:
     """
     Analyze CSV files and return summary statistics and column information.
-    
     This tool can process CSV files with various formats and encodings:
     - Standard CSV files: .csv
     - Tab-separated files: .tsv, .txt (with tab delimiters)
     - Comma-separated files with different encodings
-    
     The tool automatically:
     - Detects delimiters and handles common CSV variations
     - Resolves filenames to full file paths via agent's file registry
     - Downloads files from URLs automatically
     - Provides comprehensive analysis including data types, statistics, and column information
-    
     Args:
         file_reference (str): Original filename from user upload OR URL to download
         query (str): A question or description of the analysis to perform (currently unused)
@@ -997,18 +920,14 @@ def analyze_csv_file(file_reference: str, query: str, agent=None) -> str:
         str: Summary statistics and column information, or an error message if analysis fails.
     """
     from .file_utils import FileUtils
-    
     # Resolve file reference (filename or URL) to full path
     file_path = FileUtils.resolve_file_reference(file_reference, agent)
-    
     if not file_path:
         return FileUtils.create_tool_response("analyze_csv_file", error=f"File not found: {file_reference}")
-    
     # Check file exists using utilities with Pydantic validation
     file_info = FileUtils.get_file_info(file_path)
     if not file_info.exists:
         return FileUtils.create_tool_response("analyze_csv_file", error=file_info.error)
-    
     try:
         df = pd.read_csv(file_path)
         result = f"CSV file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
@@ -1024,18 +943,15 @@ def analyze_csv_file(file_reference: str, query: str, agent=None) -> str:
 def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
     """
     Analyze Excel files and return summary statistics and column information.
-    
     This tool can process Excel files in various formats:
     - Excel files: .xlsx, .xls
     - Excel workbooks with multiple sheets
     - Excel files with different encodings and formats
-    
     The tool automatically:
     - Detects sheet structure and provides comprehensive analysis
     - Resolves filenames to full file paths via agent's file registry
     - Downloads files from URLs automatically
     - Provides data types, statistics, column information, and sheet details
-    
     Args:
         file_reference (str): Original filename from user upload OR URL to download
         query (str): A question or description of the analysis to perform (currently unused)
@@ -1045,18 +961,14 @@ def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
         str: Summary statistics and column information, or an error message if analysis fails.
     """
     from .file_utils import FileUtils
-    
     # Resolve file reference (filename or URL) to full path
     file_path = FileUtils.resolve_file_reference(file_reference, agent)
-    
     if not file_path:
         return FileUtils.create_tool_response("analyze_excel_file", error=f"File not found: {file_reference}")
-    
     # Check file exists using utilities with Pydantic validation
     file_info = FileUtils.get_file_info(file_path)
     if not file_info.exists:
         return FileUtils.create_tool_response("analyze_excel_file", error=file_info.error)
-    
     try:
         df = pd.read_excel(file_path)
         result = f"Excel file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
@@ -1095,14 +1007,11 @@ def analyze_image(file_reference: str, agent=None) -> str:
         str: JSON string with analysis results including dimensions, mode, color_analysis, and thumbnail.
     """
     from .file_utils import FileUtils
-    
     try:
         # Resolve file reference (filename or URL) to full path
         file_path = FileUtils.resolve_file_reference(file_reference, agent)
-        
         if not file_path:
             return FileUtils.create_tool_response("analyze_image", error=f"File not found: {file_reference}")
-        
         # Open image from file path
         img = Image.open(file_path)
         width, height = img.size
@@ -1493,30 +1402,25 @@ def combine_images(images_base64: List[str], operation: str,
 def understand_video(youtube_url: str, prompt: str, system_prompt: str = None) -> str:
     """
     Analyze a YouTube video using Google Gemini's video understanding capabilities.
-    
     This tool can understand video content, extract information, and answer questions
     about what happens in the video.
     It uses the Gemini API and requires the GEMINI_KEY environment variable to be set.
-    
     Args:
         youtube_url (str): The URL of the YouTube video to analyze.
         prompt (str): A question or request regarding the video content.
         system_prompt (str, optional): System prompt for formatting guidance.
-    
     Returns:
         str: Analysis of the video content based on the prompt, or error message.
     """
     try:
         client = _get_gemini_client()
-        
         # Create enhanced prompt with system prompt if provided
         if system_prompt:
             enhanced_prompt = f"{system_prompt}\n\nAnalyze the video at {youtube_url} and answer the following question:\n{prompt}\n\nProvide your answer in the required FINAL ANSWER format."
         else:
             enhanced_prompt = prompt
-        
         video_description = client.models.generate_content(
-            model="gemini-2.5-pro",
+            model="gemini-2.5-flash",
             contents=types.Content(
                 parts=[
                     types.Part(file_data=types.FileData(file_uri=youtube_url)),
@@ -1537,39 +1441,53 @@ def understand_video(youtube_url: str, prompt: str, system_prompt: str = None) -
         })
 
 @tool
-def understand_audio(file_path: str, prompt: str, system_prompt: str = None) -> str:
+def understand_audio(file_reference: str, prompt: str, system_prompt: str = None, agent=None) -> str:
     """
     Analyze an audio file using Google Gemini's audio understanding capabilities.
-    
     This tool can transcribe audio, understand spoken content, and answer questions
     about the audio content.
     It uses the Gemini API and requires the GEMINI_KEY environment variable to be set.
     The audio file is uploaded to Gemini and then analyzed with the provided prompt.
-    
     Args:
-        file_path (str): The path to the local audio file to analyze, or base64 encoded audio data.
+        file_reference (str): Original filename from user upload OR URL to download OR base64 encoded audio data.
         prompt (str): A question or request regarding the audio content.
         system_prompt (str, optional): System prompt for formatting guidance.
-    
+        agent: Agent instance for file resolution (injected automatically)
     Returns:
         str: Analysis of the audio content based on the prompt, or error message.
     """
+    from .file_utils import FileUtils
     try:
         client = _get_gemini_client()
-        
-        # Check if file_path is base64 data or actual file path
-        if file_path.startswith('/') or os.path.exists(file_path):
-            # It's a file path
-            mp3_file = client.files.upload(file=file_path)
+        if not client:
+            return json.dumps({
+                "type": "tool_response",
+                "tool_name": "understand_audio",
+                "error": "Gemini client not available. Check GEMINI_KEY environment variable."
+            })
+
+        # First try to resolve as file reference (uploaded file or URL)
+        resolved_path = FileUtils.resolve_file_reference(file_reference, agent)
+
+        if resolved_path:
+            # It's a file (uploaded or downloaded from URL)
+            try:
+                mp3_file = client.files.upload(file=resolved_path)
+            except Exception as upload_error:
+                return json.dumps({
+                    "type": "tool_response",
+                    "tool_name": "understand_audio",
+                    "error": f"Error uploading audio file to Gemini: {str(upload_error)}"
+                })
         else:
-            # Assume it's base64 data
+            # Try base64 fallback
             try:
                 # Decode base64 and create temporary file
-                audio_data = base64.b64decode(file_path)
+                audio_data = base64.b64decode(file_reference)
                 with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
                     temp_file.write(audio_data)
                     temp_file_path = temp_file.name
-                
+
                 try:
                     mp3_file = client.files.upload(file=temp_file_path)
                 finally:
@@ -1579,19 +1497,17 @@ def understand_audio(file_path: str, prompt: str, system_prompt: str = None) -> 
                 return json.dumps({
                     "type": "tool_response",
                     "tool_name": "understand_audio",
-                    "error": f"Error processing audio data: {str(decode_error)}. Expected base64 encoded audio data or valid file path."
+                    "error": f"Error processing audio data: {str(decode_error)}. Expected base64 encoded audio data, valid file path, or URL."
                 })
-        
         # Create enhanced prompt with system prompt if provided
         if system_prompt:
             enhanced_prompt = f"{system_prompt}\n\nAnalyze the audio file and answer the following question:\n{prompt}\n\nProvide your answer in the required FINAL ANSWER format."
         else:
             enhanced_prompt = prompt
-        
         contents = [enhanced_prompt, mp3_file]
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-pro",
+                model="gemini-2.5-flash",
                 contents=contents
             )
             return json.dumps({
@@ -1623,7 +1539,6 @@ def web_search_deep_research_exa_ai(instructions: str) -> str:
 
     The tool researches a topic, verifies facts and outputs a structured answer.
     It deeply crawls websites to find the right answer, results and links.
-    
     RESPONSE STRUCTURE:
     The tool returns a structured response with the following format:
     1. Task ID and Status
@@ -1631,20 +1546,17 @@ def web_search_deep_research_exa_ai(instructions: str) -> str:
     3. Inferred Schema (JSON schema describing the response data structure)
     4. Data (JSON object containing the answer according to the schema)
     5. Citations (source references)
-    
     SCHEMA INFERENCE:
     The tool automatically infers the appropriate schema based on your question.
     For example, a schema might include:
     - Person data: {"firstName", "lastName", "nationality", "year", etc.}
     - Event data: {"event", "date", "location", "participants", etc.}
     - Fact data: {"fact", "source", "context", etc.}
-    
     DATA EXTRACTION:
     To extract the answer from the response:
     1. Look for the "Data" section in the response
     2. Parse the JSON object in the "Data" field  according to the schema
     3. Extract the relevant fields based on your question
-    
     Args:
         instructions (str): Direct question or research instructions.
 
@@ -1689,7 +1601,6 @@ def web_search_deep_research_exa_ai(instructions: str) -> str:
 class SubmitAnswerSchema(BaseModel):
     """
     Schema for submitting final answers with structured metadata.
-    
     Use this when ready to provide a final answer and the analysis is complete.
     """
     answer: str = Field(
@@ -1721,7 +1632,6 @@ class SubmitAnswerSchema(BaseModel):
 class SubmitIntermediateStepSchema(BaseModel):
     """
     Schema for submitting intermediate reasoning steps or progress updates.
-    
     Use this to document intermediate steps in your reasoning process, 
     progress updates, or partial findings before reaching a final conclusion.
     """
@@ -1767,7 +1677,6 @@ class SubmitIntermediateStepSchema(BaseModel):
 class SubmitAnswerResult(BaseModel):
     """
     Structured result model for submit_answer operations.
-    
     This model standardizes the response format for final answer submissions,
     providing consistent success/error handling and response structure.
     """
@@ -1779,7 +1688,6 @@ class SubmitAnswerResult(BaseModel):
 class SubmitIntermediateStepResult(BaseModel):
     """
     Structured result model for submit_intermediate_step operations.
-    
     This model standardizes the response format for intermediate step submissions,
     providing consistent success/error handling and response structure.
     """
@@ -1794,17 +1702,13 @@ class SubmitIntermediateStepResult(BaseModel):
 def submit_answer(answer: str, confidence: float = 1.0, sources: List[str] = None, reasoning: str = None) -> Dict[str, Any]:
     """
     Submit a final answer using Schema-Guided Reasoning (SGR).
-    
     This tool forces the LLM to explicitly state its conclusion rather than leaving it implicit.
     It preserves structured metadata while ensuring clean integration with the streaming pipeline.
-    
     Use this tool when ready to provide an answer for the current question. This can be:
     - A final answer after completing all reasoning steps
     - An answer to a sub-question in a multi-turn conversation
     - A response that concludes the current analysis phase
-    
     This tool preserves context across multiple conversation turns.
-    
     Returns:
         dict: Structured response with answer and metadata
     """
@@ -1833,13 +1737,10 @@ def submit_intermediate_step(step_name: str, description: str, status: str = "in
                            confidence: float = None, issues: List[str] = None) -> Dict[str, Any]:
     """
     Submit an intermediate reasoning step using Schema-Guided Reasoning (SGR).
-    
     Use this tool to document intermediate steps in your reasoning process, 
     progress updates, or partial findings before reaching a final conclusion.
-    
     This tool helps track the agent's thought process and enables better debugging.
     It helps guide structured thinking and makes the reasoning process transparent and debuggable.
-    
     Returns:
         dict: Structured response with step details and metadata
     """
@@ -1864,6 +1765,4 @@ def submit_intermediate_step(step_name: str, description: str, status: str = "in
             "error": f"Error submitting step: {str(e)}",
             "type": "error"
         }
-
-
 # ========== END OF TOOLS.PY ==========
