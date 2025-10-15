@@ -1205,6 +1205,9 @@ def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParam
         }, indent=2)
 
 class GenerateSimpleImageParams(BaseModel):
+    image_type: str = Field(..., description="Type of image to generate: 'solid', 'gradient', 'checkerboard', 'noise'")
+    width: int = Field(500, description="Width of the generated image")
+    height: int = Field(500, description="Height of the generated image")
     color: Optional[str] = Field(None, description="Solid color for 'solid' type (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
     start_color: Optional[List[int]] = Field(None, description="Gradient start color [r, g, b]")
     end_color: Optional[List[int]] = Field(None, description="Gradient end color [r, g, b]")
