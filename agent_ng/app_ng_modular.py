@@ -818,31 +818,63 @@ class NextGenApp:
                         try:
                             from .content_converter import get_content_converter
                             from tools.file_utils import FileUtils
+                            import gradio as gr
 
                             converter = get_content_converter()
+                            rich_components = []
 
                             # Try to parse content as JSON to extract rich content
                             try:
                                 tool_response = json.loads(content)
                                 if isinstance(tool_response, dict):
+                                    # Check for base64 images in common tool response fields
+                                    base64_fields = [
+                                        'generated_image', 'modified_image', 'transformed_image', 
+                                        'combined_image', 'thumbnail', 'result'
+                                    ]
+
+                                    for field in base64_fields:
+                                        if field in tool_response and isinstance(tool_response[field], str):
+                                            value = tool_response[field]
+                                            # Check if it's base64 image data
+                                            if FileUtils.is_base64_image(value):
+                                                # Create temporary file from base64
+                                                temp_file = FileUtils.save_base64_to_file(
+                                                    value, 
+                                                    file_extension='.png',
+                                                    session_id=session_id
+                                                )
+                                                if temp_file and FileUtils.file_exists(temp_file):
+                                                    # Create Gradio Image component
+                                                    img_component = gr.Image(value=temp_file)
+                                                    rich_components.append(img_component)
+
+                                    # Check for file paths in plots field (from code execution)
+                                    if 'plots' in tool_response and isinstance(tool_response['plots'], list):
+                                        for plot_path in tool_response['plots']:
+                                            if isinstance(plot_path, str) and FileUtils.file_exists(plot_path):
+                                                img_component = gr.Image(value=plot_path)
+                                                rich_components.append(img_component)
+
                                     # Extract media attachments from tool response
                                     media_attachments = FileUtils.extract_media_from_response(tool_response)
-
-                                    # Convert media attachments to Gradio components
                                     for attachment in media_attachments:
                                         if attachment.get("type") == "media_attachment":
                                             file_path = attachment.get("file_path")
                                             if file_path and FileUtils.file_exists(file_path):
                                                 # Convert to appropriate Gradio component
                                                 converted = converter.convert_content(file_path)
-                                                if converted:
-                                                    # Add as separate rich content message
-                                                    rich_message = {
-                                                        "role": "assistant",
-                                                        "content": converted,
-                                                        "metadata": {"title": f"Media: {attachment.get('media_type', 'file')}"}
-                                                    }
-                                                    working_history.append(rich_message)
+                                                if converted and not isinstance(converted, str):
+                                                    rich_components.append(converted)
+
+                                    # If we found rich components, update the tool message content
+                                    if rich_components:
+                                        # Create mixed content: text + components
+                                        mixed_content = [content] + rich_components
+                                        # Update the last tool message with rich content
+                                        if working_history and working_history[-1].get("role") == "assistant":
+                                            working_history[-1]["content"] = mixed_content
+
                             except (json.JSONDecodeError, Exception):
                                 # Content is not JSON, check for file paths in text
                                 if isinstance(content, str):
@@ -855,14 +887,15 @@ class NextGenApp:
                                         file_path = match[0]
                                         if FileUtils.file_exists(file_path):
                                             converted = converter.convert_content(file_path)
-                                            if converted:
-                                                # Add as separate rich content message
-                                                rich_message = {
-                                                    "role": "assistant",
-                                                    "content": converted,
-                                                    "metadata": {"title": "Media Attachment"}
-                                                }
-                                                working_history.append(rich_message)
+                                            if converted and not isinstance(converted, str):
+                                                rich_components.append(converted)
+
+                                    # If we found rich components, update the tool message content
+                                    if rich_components:
+                                        mixed_content = [content] + rich_components
+                                        if working_history and working_history[-1].get("role") == "assistant":
+                                            working_history[-1]["content"] = mixed_content
+
                         except Exception as e:
                             # Non-fatal: continue without rich content processing
                             session_debug = get_debug_streamer(session_id)
@@ -901,13 +934,22 @@ class NextGenApp:
 
                         # Check for base64 images in the content
                         try:
+                            from tools.file_utils import FileUtils
+                            import gradio as gr
+
                             # Look for base64 image patterns in the accumulated content
                             if FileUtils.is_base64_image(response_content):
-                                converter = get_content_converter()
-                                converted = converter.convert_content(response_content)
-                                if converted and not isinstance(converted, str):
-                                    # Replace the text content with the converted component
-                                    response_content = converted
+                                # Create temporary file from base64
+                                temp_file = FileUtils.save_base64_to_file(
+                                    response_content, 
+                                    file_extension='.png',
+                                    session_id=session_id
+                                )
+                                if temp_file and FileUtils.file_exists(temp_file):
+                                    # Create Gradio Image component
+                                    img_component = gr.Image(value=temp_file)
+                                    # Replace the text content with the component
+                                    response_content = img_component
                         except Exception as e:
                             # Non-fatal: continue with text content
                             pass

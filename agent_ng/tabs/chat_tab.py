@@ -1018,9 +1018,10 @@ class ChatTab(QuickActionsMixin):
                 try:
                     from ..content_converter import get_content_converter
                     from tools.file_utils import FileUtils
+                    import gradio as gr
 
                     converter = get_content_converter()
-                    rich_content_messages = []
+                    rich_components = []
 
                     for file in files:
                         # Extract file path from file object
@@ -1032,23 +1033,29 @@ class ChatTab(QuickActionsMixin):
                         if file_path and FileUtils.file_exists(file_path):
                             # Convert file to rich content
                             converted = converter.convert_content(file_path)
-                            if converted and isinstance(converted, list) and len(converted) > 0:
-                                # For Gradio Chatbot with type="messages", content should be the component directly
-                                # or a dict with "path" key for file paths
-                                for component in converted:
-                                    if hasattr(component, 'value') and component.value:
-                                        # Create rich content message with file path
-                                        rich_message = {
-                                            "role": "user",
-                                            "content": {"path": file_path}
-                                        }
-                                        rich_content_messages.append(rich_message)
-                                        break
+                            if converted and not isinstance(converted, str):
+                                # If it's a list of components, add them all
+                                if isinstance(converted, list):
+                                    rich_components.extend(converted)
+                                else:
+                                    # Single component
+                                    rich_components.append(converted)
 
-                    # Add rich content messages to history
-                    if rich_content_messages:
-                        history.extend(rich_content_messages)
-                        # Skip the original message since we have rich content
+                    # If we have rich components, create a mixed content message
+                    if rich_components:
+                        # Create mixed content: text + components
+                        if message.strip():
+                            mixed_content = [message] + rich_components
+                        else:
+                            mixed_content = rich_components
+
+                        # Add the mixed content message to history
+                        rich_message = {
+                            "role": "user",
+                            "content": mixed_content
+                        }
+                        history.append(rich_message)
+                        # Clear the text message since we have rich content
                         message = ""
 
                 except Exception as e:
