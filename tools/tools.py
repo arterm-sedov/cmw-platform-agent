@@ -471,6 +471,190 @@ class CodeInterpreter:
 # Create a global instance for use by tools
 interpreter_instance = CodeInterpreter()
 
+# ========== PANDAS QUERY/PIPELINE HELPERS ==========
+def _safe_to_markdown(df: pd.DataFrame, max_rows: int = 10, max_cols: int = 20) -> str:
+    preview_df = df.head(max_rows)
+    if max_cols is not None:
+        preview_df = preview_df.iloc[:, :max_cols]
+    try:
+        return preview_df.to_markdown(index=False)
+    except Exception:
+        return preview_df.to_string(index=False)
+
+
+def _dataframe_schema(df: pd.DataFrame) -> Dict[str, str]:
+    return {str(col): str(dtype) for col, dtype in df.dtypes.items()}
+
+
+def _truncate_records(df: pd.DataFrame, max_rows: int = 100, max_cols: int = 50, max_cell_chars: int = 500) -> List[Dict[str, Any]]:
+    limited = df.head(max_rows)
+    if max_cols is not None:
+        limited = limited.iloc[:, :max_cols]
+    def _truncate_val(v: Any) -> Any:
+        try:
+            s = str(v)
+        except Exception:
+            return v
+        if len(s) > max_cell_chars:
+            return s[: max_cell_chars - 1] + "…"
+        return v
+    return [{k: _truncate_val(v) for k, v in row.items()} for row in limited.to_dict(orient="records")]
+
+
+_ALLOWED_OPS: Dict[str, Literal["df_method", "special"]] = {
+    "query": "df_method",
+    "assign": "df_method",
+    "rename": "df_method",
+    "drop": "df_method",
+    "dropna": "df_method",
+    "fillna": "df_method",
+    "astype": "df_method",
+    "sort_values": "df_method",
+    "head": "df_method",
+    "tail": "df_method",
+    "sample": "df_method",
+    "value_counts": "df_method",
+    "nlargest": "df_method",
+    "nsmallest": "df_method",
+    "reset_index": "df_method",
+    "set_index": "df_method",
+    "pivot_table": "df_method",
+    "melt": "df_method",
+    "stack": "df_method",
+    "unstack": "df_method",
+    "groupby": "special",
+}
+
+
+def _coerce_tabular(obj: Any, step_name: str) -> pd.DataFrame:
+    if isinstance(obj, pd.DataFrame):
+        return obj
+    if isinstance(obj, pd.Series):
+        return obj.to_frame(name=step_name or "value").reset_index()
+    # Fallback: try to build a DataFrame
+    return pd.DataFrame(obj)
+
+
+def _dispatch_pipeline(df: pd.DataFrame, steps: List[Dict[str, Any]]) -> pd.DataFrame:
+    current = df
+    for i, step in enumerate(steps):
+        if not isinstance(step, dict):
+            raise ValueError(f"Pipeline step {i} must be an object")
+        op = step.get("op")
+        if not isinstance(op, str) or op.startswith("__"):
+            raise ValueError(f"Invalid op at step {i}")
+        kind = _ALLOWED_OPS.get(op)
+        if kind is None:
+            raise ValueError(f"Op '{op}' not allowed")
+        if kind == "df_method":
+            method = getattr(current, op, None)
+            if method is None or not callable(method):
+                raise ValueError(f"Method '{op}' not available on DataFrame")
+            kwargs = {k: v for k, v in step.items() if k != "op"}
+            result = method(**kwargs) if kwargs else method()
+            current = _coerce_tabular(result, op)
+        else:
+            # special ops
+            if op == "groupby":
+                by = step.get("by")
+                gb = current.groupby(by=by, dropna=False, observed=False)
+                if "agg" in step:
+                    result = gb.agg(step.get("agg"))
+                    current = _coerce_tabular(result, op)
+                elif step.get("size") is True:
+                    current = gb.size().reset_index(name="size")
+                else:
+                    raise ValueError("groupby requires 'agg' or size=true")
+            else:
+                raise ValueError(f"Unsupported special op: {op}")
+    return current
+
+
+def _apply_pandas_query(
+    df: pd.DataFrame,
+    query: Optional[str],
+    preview_opts: Optional[Dict[str, Any]] = None,
+    plot_opts: Optional[Dict[str, Any]] = None,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    preview = preview_opts or {"rows": 10, "cols": 20, "include_schema": True}
+    plots: List[str] = []
+    original_shape = tuple(df.shape)
+
+    # Parse query formats
+    transformed = df
+    if query and isinstance(query, str) and query.strip():
+        q = query.strip()
+        try:
+            if q.startswith("{") and q.endswith("}"):
+                cfg = json.loads(q)
+                if isinstance(cfg.get("pipeline"), list):
+                    transformed = _dispatch_pipeline(df, cfg["pipeline"])  # type: ignore[arg-type]
+                elif isinstance(cfg.get("expr"), str):
+                    transformed = df.query(cfg["expr"])  # type: ignore[arg-type]
+                plot_opts = cfg.get("plot") or plot_opts
+                preview = cfg.get("preview") or preview
+            elif q.startswith("[") and q.endswith("]"):
+                steps = json.loads(q)
+                transformed = _dispatch_pipeline(df, steps)
+            elif q.lower().startswith("expr:"):
+                expr = q.split(":", 1)[1].strip()
+                transformed = df.query(expr)
+            else:
+                # Treat as expr body
+                transformed = df.query(q)
+        except Exception as e:
+            raise ValueError(f"Failed to apply query: {e}")
+
+    # Optional plotting
+    if plot_opts and MATPLOTLIB_AVAILABLE and plt is not None:
+        try:
+            kind = plot_opts.get("kind", "bar")
+            x = plot_opts.get("x")
+            y = plot_opts.get("y")
+            fig = plt.figure()
+            ax = fig.gca()
+            data = transformed
+            if x is None and y is None and kind in ("bar", "barh"):
+                # simple overview: first non-numeric column value_counts
+                non_numeric = [c for c in data.columns if not pd.api.types.is_numeric_dtype(data[c])]
+                target_col = non_numeric[0] if non_numeric else data.columns[0]
+                vc = data[target_col].value_counts().head(20)
+                vc.plot(kind=kind, ax=ax)
+            else:
+                data.plot(kind=kind, x=x, y=y, ax=ax)
+            plot_path = os.path.join(tempfile.gettempdir(), f"df_plot_{uuid.uuid4().hex}.png")
+            fig.savefig(plot_path, bbox_inches="tight")
+            plt.close(fig)
+            plots.append(encode_image(plot_path))
+        except Exception:
+            # Ignore plotting errors silently to avoid breaking core path
+            pass
+
+    # Build preview payload
+    rows = int(preview.get("rows", 10))
+    cols = int(preview.get("cols", 20))
+    include_schema = bool(preview.get("include_schema", True))
+
+    table_markdown = _safe_to_markdown(transformed, rows, cols)
+    table_records = _truncate_records(transformed, max_rows=min(rows, 1000), max_cols=min(cols, 100))
+    payload: Dict[str, Any] = {
+        "original_shape": original_shape,
+        "shape": tuple(transformed.shape),
+        "table_markdown": table_markdown,
+        "table_records": table_records,
+    }
+    if include_schema:
+        payload["schema"] = _dataframe_schema(transformed)
+    # Optional describe on small dataframes
+    try:
+        if transformed.shape[0] <= 5000 and transformed.shape[1] <= 50:
+            payload["describe_summary"] = str(transformed.describe(include="all", datetime_is_numeric=True))
+    except Exception:
+        pass
+    if plots:
+        payload["plots"] = plots
+    return transformed, payload
+
 @tool
 def execute_code_multilang(code_reference: str, language: str = "python", agent=None) -> str:
     """Execute code in multiple languages (Python, Bash, SQL, C, Java) and return results.
@@ -901,23 +1085,46 @@ def extract_text_from_image(file_reference: str, agent=None) -> str:
 @tool
 def analyze_csv_file(file_reference: str, query: str, agent=None) -> str:
     """
-    Analyze CSV files and return summary statistics and column information.
-    This tool can process CSV files with various formats and encodings:
-    - Standard CSV files: .csv
-    - Tab-separated files: .tsv, .txt (with tab delimiters)
-    - Comma-separated files with different encodings
-    The tool automatically:
-    - Detects delimiters and handles common CSV variations
-    - Resolves filenames to full file paths via agent's file registry
-    - Downloads files from URLs automatically
-    - Provides comprehensive analysis including data types, statistics, and column information
-    Args:
-        file_reference (str): Original filename from user upload OR URL to download
-        query (str): A question or description of the analysis to perform (currently unused)
-        agent: Agent instance for file resolution (injected automatically)
+    Analyze CSV/TSV text files and optionally apply a safe pandas-powered query/pipeline.
 
-    Returns:
-        str: Summary statistics and column information, or an error message if analysis fails.
+    Input formats:
+    - File: filename OR a direct URL (downloaded automatically)
+    - Delimiters/encodings are auto-detected by pandas
+
+    Query formats (optional):
+    1) Empty or missing → default preview: markdown table, schema, shape, describe (small frames)
+    2) Expression string: "expr: <pandas DataFrame.query expression>"
+       - Use backticks around column names with spaces or non-identifier chars, e.g.: expr: `"`Колонка с пробелом` > 0`"
+       - Examples:
+         - expr: A > 0 and C == 'x'
+         - expr: `"`Инструкции` == 'foo'` (note backticks for non-ASCII/space names)
+    3) JSON pipeline (list):
+       [
+         {"op": "query", "expr": "B > 1.0"},
+         {"op": "head", "n": 10}
+       ]
+       Allowed ops (allowlisted): query, assign, rename, drop, dropna, fillna, astype, sort_values,
+       head, tail, sample, value_counts, nlargest, nsmallest, reset_index, set_index, pivot_table,
+       melt, stack, unstack, groupby (+ agg or size=true)
+    4) JSON object: {"pipeline": [...], "preview": {"rows": 10, "cols": 20, "include_schema": true},
+                    "plot": {"kind": "bar", "x": "region", "y": "net"}}
+
+    Security & limitations:
+    - No arbitrary Python; only allowlisted pandas ops
+    - For column names with spaces/non-ASCII, wrap with backticks in expr
+    - No cross-file merges/joins; single file only
+    - Large frames are previewed (row/column caps); full data is not returned
+
+    Returns (tool_response JSON string):
+    - result: human-readable header + optional summary
+    - extra: {
+        table_markdown: str,
+        table_records: list[dict] (truncated),
+        schema: dict[col -> dtype],
+        shape: (rows, cols),
+        describe_summary: str (optional),
+        plots: [base64_png] (optional)
+      }
     """
     from .file_utils import FileUtils
     # Resolve file reference (filename or URL) to full path
@@ -930,35 +1137,77 @@ def analyze_csv_file(file_reference: str, query: str, agent=None) -> str:
         return FileUtils.create_tool_response("analyze_csv_file", error=file_info.error)
     try:
         df = pd.read_csv(file_path)
-        result = f"CSV file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
-        result += f"File: {file_info.name} ({FileUtils.format_file_size(file_info.size)})\n"
-        result += f"Columns: {', '.join(df.columns)}\n\n"
-        result += "Summary statistics:\n"
-        result += str(df.describe())
-        return FileUtils.create_tool_response("analyze_csv_file", result=result, file_info=file_info)
+        # Apply optional pandas query/pipeline and build preview payload
+        _, payload = _apply_pandas_query(
+            df,
+            query=query if isinstance(query, str) and query.strip() else None,
+            preview_opts=None,
+            plot_opts=None,
+        )
+        # Compose human-friendly header
+        header = (
+            f"CSV file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
+            f"File: {file_info.name} ({FileUtils.format_file_size(file_info.size)})\n"
+        )
+        # Assemble result text: table markdown plus optional describe
+        result_parts = [header]
+        if payload.get("table_markdown"):
+            result_parts.append("Preview:\n" + payload["table_markdown"])
+        if payload.get("describe_summary"):
+            result_parts.append("\n\nSummary statistics:\n" + str(payload["describe_summary"]))
+        result_text = "\n".join(result_parts)
+        # Attach structured payload (shape, schema, records, plots)
+        return FileUtils.create_tool_response(
+            "analyze_csv_file",
+            result=result_text,
+            file_info=file_info,
+            extra=payload,
+        )
     except Exception as e:
         return FileUtils.create_tool_response("analyze_csv_file", error=f"Error analyzing CSV file: {str(e)}")
 
 @tool
 def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
     """
-    Analyze Excel files and return summary statistics and column information.
-    This tool can process Excel files in various formats:
-    - Excel files: .xlsx, .xls
-    - Excel workbooks with multiple sheets
-    - Excel files with different encodings and formats
-    The tool automatically:
-    - Detects sheet structure and provides comprehensive analysis
-    - Resolves filenames to full file paths via agent's file registry
-    - Downloads files from URLs automatically
-    - Provides data types, statistics, column information, and sheet details
-    Args:
-        file_reference (str): Original filename from user upload OR URL to download
-        query (str): A question or description of the analysis to perform (currently unused)
-        agent: Agent instance for file resolution (injected automatically)
+    Analyze Excel files and optionally apply a safe pandas-powered query/pipeline.
 
-    Returns:
-        str: Summary statistics and column information, or an error message if analysis fails.
+    Input formats:
+    - .xlsx/.xls files via filename or direct URL (downloaded automatically)
+    - Uses pandas read_excel (requires a compatible engine, e.g., openpyxl)
+
+    Query formats (optional):
+    1) Empty or missing → default preview: markdown table, schema, shape, describe (small frames)
+    2) Expression string: "expr: <pandas DataFrame.query expression>"
+       - Use backticks around column names with spaces or non-identifier chars, e.g.: expr: `"`Колонка с пробелом` > 0`"
+       - Examples:
+         - expr: A > 0 and C == 'x'
+         - expr: `"`Инструкции` == 'foo'` (note backticks for non-ASCII/space names)
+    3) JSON pipeline (list):
+       [
+         {"op": "query", "expr": "B > 1.0"},
+         {"op": "head", "n": 10}
+       ]
+       Allowed ops (allowlisted): query, assign, rename, drop, dropna, fillna, astype, sort_values,
+       head, tail, sample, value_counts, nlargest, nsmallest, reset_index, set_index, pivot_table,
+       melt, stack, unstack, groupby (+ agg or size=true)
+    4) JSON object: {"pipeline": [...], "preview": {"rows": 10, "cols": 20, "include_schema": true},
+                    "plot": {"kind": "bar", "x": "region", "y": "net"}}
+
+    Limitations:
+    - Single-sheet parse by pandas default (typically the first sheet)
+    - No merges/joins; no arbitrary Python
+    - For columns with spaces/non-ASCII, use backticks in expr
+    
+    Returns (tool_response JSON string):
+    - result: human-readable header + optional summary
+    - extra: {
+        table_markdown: str,
+        table_records: list[dict] (truncated),
+        schema: dict[col -> dtype],
+        shape: (rows, cols),
+        describe_summary: str (optional),
+        plots: [base64_png] (optional)
+      }
     """
     from .file_utils import FileUtils
     # Resolve file reference (filename or URL) to full path
@@ -971,12 +1220,29 @@ def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
         return FileUtils.create_tool_response("analyze_excel_file", error=file_info.error)
     try:
         df = pd.read_excel(file_path)
-        result = f"Excel file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
-        result += f"File: {file_info.name} ({FileUtils.format_file_size(file_info.size)})\n"
-        result += f"Columns: {', '.join(df.columns)}\n\n"
-        result += "Summary statistics:\n"
-        result += str(df.describe())
-        return FileUtils.create_tool_response("analyze_excel_file", result=result, file_info=file_info)
+        # Apply optional pandas query/pipeline and build preview payload
+        _, payload = _apply_pandas_query(
+            df,
+            query=query if isinstance(query, str) and query.strip() else None,
+            preview_opts=None,
+            plot_opts=None,
+        )
+        header = (
+            f"Excel file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
+            f"File: {file_info.name} ({FileUtils.format_file_size(file_info.size)})\n"
+        )
+        result_parts = [header]
+        if payload.get("table_markdown"):
+            result_parts.append("Preview:\n" + payload["table_markdown"])
+        if payload.get("describe_summary"):
+            result_parts.append("\n\nSummary statistics:\n" + str(payload["describe_summary"]))
+        result_text = "\n".join(result_parts)
+        return FileUtils.create_tool_response(
+            "analyze_excel_file",
+            result=result_text,
+            file_info=file_info,
+            extra=payload,
+        )
     except Exception as e:
         # Enhanced error reporting: print columns and head if possible
         try:
