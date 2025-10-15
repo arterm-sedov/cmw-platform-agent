@@ -30,7 +30,7 @@ Behold the Comindware Analyst Copilot — a robust and extensible system designe
 
 The system features a **LangChain-native modular Gradio app** (`app_ng_modular.py`) that provides:
 
-- **Modular Tab Architecture**: Separate modules for Chat, Logs, and Stats tabs
+- **Modular Tab Architecture**: Separate modules for Home, Chat, Config, Logs, and Stats tabs with shared Sidebar
 - **Multi-turn Conversations**: Reliable conversation memory with tool calls using LangChain's native memory management
 - **Pure LangChain Patterns**: Native LangChain conversation chains, memory, and streaming
 - **Real-time Streaming**: Live response streaming with tool visualization using `astream()` and `astream_events()`
@@ -68,7 +68,7 @@ To create an agent that will allow batch entity creation within the CMW Platform
 
 This experimental system is based on current AI agent technology and demonstrates:
 
-- **Advanced Tool Usage**: Seamless integration of 20+ specialized tools including AI-powered tools and third-party AI engines
+- **Advanced Tool Usage**: Seamless integration of 30+ specialized tools including AI-powered tools and third-party AI engines
 - **Multi-Provider Resilience**: Automatic testing and switching between different LLM providers
 - **Comprehensive Tracing**: Complete visibility into the agent's decision-making process
 - **Structured Initialization Summary:** After startup, a clear table shows which models/providers are available, with/without tools, and any errors—so you always know your agent's capabilities.
@@ -90,7 +90,9 @@ The Agent NG is a modern, LangChain-native conversational AI agent built with a 
 7. **Memory Management** (`langchain_memory.py`) - LangChain-native memory management
 8. **Streaming** (`native_langchain_streaming.py`) - Native LangChain streaming implementation
 9. **Statistics** (`stats_manager.py`) - Performance metrics and usage tracking
-10. **Tracing** (`trace_manager.py`) - Comprehensive execution tracing and debugging
+10. **Debug System** (`debug_streamer.py`) - Real-time debug logging and event streaming
+11. **Conversation Summary** (`conversation_summary.py`) - Conversation summarization and context management
+12. **Token Counter** (`token_counter.py`) - Token usage tracking and optimization
 
 #### Key Features
 
@@ -101,7 +103,7 @@ The Agent NG is a modern, LangChain-native conversational AI agent built with a 
 - ✅ **Modular Architecture**: Clean separation of concerns with dedicated modules
 - ✅ **Internationalization**: Full i18n support (English/Russian) using Gradio's I18n system
 - ✅ **Error Recovery**: Robust error handling with vector similarity and provider fallback
-- ✅ **Tool Integration**: 20+ CMW platform tools + utility tools with proper organization
+- ✅ **Tool Integration**: 30+ CMW platform tools + utility tools with proper organization
 - ✅ **Comprehensive Tracing**: Complete execution traces with debug output capture
 - ✅ **Statistics Tracking**: Real-time performance metrics and usage analytics
 
@@ -138,11 +140,18 @@ The agent uses a sophisticated multi-LLM approach with the following providers i
 
 ### Tool Suite
 
-The agent includes 20+ specialized tools organized into categories:
+The agent includes 30+ specialized tools organized into categories:
 
-#### CMW Platform Tools
+#### CMW Platform Tools (20+ tools)
 
-- **Application Tools** (`applications_tools/`): List applications, templates, and platform entities
+- **Application Tools** (`applications_tools/`): 
+  - `list_applications` - List all applications in the platform
+  - `list_templates` - List all templates in a specific application
+  - `get_platform_entity_url` - Generate URLs for platform entities
+  - `get_record_url` - Generate direct URLs to specific records
+  - `get_process_schema` - Audit and analyze process schemas
+  - `create_app` - Create new applications
+
 - **Attribute Tools** (`attributes_tools/`): Create and manage all attribute types:
   - Text attributes (`tools_text_attribute.py`)
   - Boolean attributes (`tools_boolean_attribute.py`)
@@ -156,18 +165,50 @@ The agent includes 20+ specialized tools organized into categories:
   - Role attributes (`tools_role_attribute.py`)
   - Account attributes (`tools_account_attribute.py`)
   - Enum attributes (`tools_enum_attribute.py`)
-- **Template Tools** (`templates_tools/`): List and manage template attributes
-- **General Operations**: Delete, archive/unarchive, and retrieve attributes
+  - General Operations: `delete_attribute`, `archive_or_unarchive_attribute`, `get_attribute`
 
-#### Utility Tools
+- **Template Tools** (`templates_tools/`): 
+  - `list_attributes` - List template attributes
+  - `list_template_records` - List records in a template
+  - `edit_or_create_record_template` - Create or edit record templates
+  - `create_edit_record` - Create or edit records
+  - `get_form` - Retrieve form configurations
+  - `list_forms` - List available forms
 
-- **Web Search**: Deep research capabilities using Tavily, Wikipedia, and Arxiv
-- **Code Execution**: Python code execution for data processing and analysis
-- **File Analysis**: Document processing and analysis (PDF, images, text)
-- **Mathematical Operations**: Complex calculations and data analysis
-- **Image Processing**: OCR and image analysis capabilities using pytesseract
-- **Data Processing**: CSV, JSON, and other data format handling
-- **Platform Entity URL**: Generate URLs for Comindware Platform entities
+#### Utility Tools (10+ tools)
+
+- **Search & Research**: 
+  - `web_search` - Deep research using Tavily
+  - `wiki_search` - Wikipedia search capabilities
+  - `arxiv_search` - Academic paper search
+  - `web_search_deep_research_exa_ai` - Advanced research with Exa AI
+
+- **Code Execution**: 
+  - `execute_code_multilang` - Multi-language code execution (Python, Bash, SQL, C, Java)
+
+- **File Analysis**: 
+  - `read_text_based_file` - Read various text file formats
+  - `analyze_csv_file` - CSV data analysis
+  - `analyze_excel_file` - Excel data analysis
+  - `extract_text_from_image` - OCR text extraction
+
+- **Image Processing**: 
+  - `analyze_image` - Image analysis and description
+  - `transform_image` - Image transformation operations
+  - `draw_on_image` - Drawing and annotation on images
+  - `generate_simple_image` - Generate simple images
+  - `combine_images` - Combine multiple images
+
+- **Video/Audio Analysis**: 
+  - `understand_video` - Video analysis using Gemini
+  - `understand_audio` - Audio analysis using Gemini
+
+- **Mathematical Operations**: 
+  - `multiply`, `add`, `subtract`, `divide`, `modulus`, `power`, `square_root`
+
+- **Schema-Guided Reasoning**: 
+  - `submit_answer` - Submit final answers with structured reasoning
+  - `submit_intermediate_step` - Document intermediate reasoning steps
 
 ## 🔧 Core Modules
 
@@ -248,9 +289,12 @@ response = agent.process_message("Calculate 5 + 3", "conversation_1")
 ### 5. UI System
 
 #### Modular Tab Architecture (tabs/)
+- **HomeTab** (`home_tab.py`): Welcome page with quick start guidance and session-aware content
 - **ChatTab** (`chat_tab.py`): Main conversation interface with quick actions and i18n support
+- **ConfigTab** (`config_tab.py`): Comindware Platform connection settings (URL, username, password)
 - **LogsTab** (`logs_tab.py`): Debug and initialization logs with real-time updates
 - **StatsTab** (`stats_tab.py`): Performance metrics and statistics with live monitoring
+- **Sidebar** (`sidebar.py`): Shared sidebar with LLM selection, quick actions, and status monitoring
 
 #### UI Manager (`ui_manager.py`)
 - Centralized UI component management
@@ -258,6 +302,27 @@ response = agent.process_message("Calculate 5 + 3", "conversation_1")
 - Component state management and event handling
 - Internationalization integration with Gradio's I18n system
 - Responsive design and user experience optimization
+
+### Quick Actions (Sidebar)
+
+The sidebar provides quick action buttons for common tasks:
+
+- **What can I do?** - Shows agent capabilities and available tools
+- **What can't I do?** - Explains limitations and restrictions
+- **List Applications** - Quick access to list platform applications
+- **Math Operations** - Quick math calculations
+- **Code Execution** - Multi-language code execution
+- **Explain Concepts** - Get explanations of complex topics
+- **Full Platform Audit** - Comprehensive platform analysis
+- **ERP Templates** - Work with ERP-related templates
+- **Contractor Attributes** - Manage contractor-related attributes
+- **DateTime Editing** - Date and time attribute management
+- **Comment Attributes** - Create and manage comment attributes
+- **ID Attributes** - Create and manage ID attributes
+- **Phone Mask Editing** - Edit phone number masks
+- **Enum Management** - Manage enumeration attributes
+- **Attribute Operations** - General attribute management
+- **Archive Attributes** - Archive or unarchive attributes
 
 ## 🔄 Memory Management
 
@@ -476,7 +541,6 @@ The codebase follows a clean modular design with clear separation of concerns:
 - **`message_processor.py`**: Message processing and formatting with proper validation
 - **`response_processor.py`**: Response processing and validation with error handling
 - **`stats_manager.py`**: Statistics tracking and monitoring with real-time updates
-- **`trace_manager.py`**: Trace logging and debugging with comprehensive execution traces
 - **`debug_streamer.py`**: Debug system and logging with categorized output
 - **`token_counter.py`**: Token usage tracking and optimization across providers
 - **`session_manager.py`**: Session management and state handling with proper isolation
@@ -488,32 +552,47 @@ The codebase follows a clean modular design with clear separation of concerns:
 - **`provider_adapters.py`**: LLM provider-specific adapters and optimizations
 - **`langchain_memory.py`**: LangChain memory management with conversation chains
 - **`native_langchain_streaming.py`**: Native LangChain streaming using astream() and astream_events()
+- **`conversation_summary.py`**: Conversation summarization and context management
 - **`i18n_translations.py`**: Internationalization support with English/Russian translations
 - **`agent_config.py`**: Centralized configuration management
+- **`logging_config.py`**: Logging configuration and setup
+- **`langsmith_config.py`**: LangSmith tracing configuration
+- **`langfuse_config.py`**: Langfuse integration configuration
 
 ### Tab Modules (`agent_ng/tabs/`)
 
+- **`home_tab.py`**: Welcome page with quick start guidance and session-aware content
 - **`chat_tab.py`**: Main chat interface tab with quick actions and i18n support
+- **`config_tab.py`**: Comindware Platform connection settings (URL, username, password)
 - **`logs_tab.py`**: Logs and debugging tab with real-time updates
 - **`stats_tab.py`**: Statistics and monitoring tab with live metrics
+- **`sidebar.py`**: Shared sidebar with LLM selection, quick actions, and status monitoring
 
 ### Tool Modules (`tools/`)
 
-- **`tools.py`**: Core tool functions and consolidated tool definitions with 20+ tools
+- **`tools.py`**: Core tool functions and consolidated tool definitions with 30+ tools
 - **`applications_tools/`**: Application and template management tools
   - `tool_list_applications.py`: List platform applications
   - `tool_list_templates.py`: List application templates
   - `tool_platform_entity_url.py`: Generate platform entity URLs
+  - `tool_record_url.py`: Generate direct URLs to specific records
+  - `tool_audit_process_schema.py`: Audit and analyze process schemas
+  - `tools_applications.py`: Create new applications
 - **`attributes_tools/`**: Attribute management tools for all attribute types
   - Text, Boolean, DateTime, Decimal, Document, Drawing, Duration, Image, Record, Role, Account, Enum attributes
   - Delete, archive/unarchive, and retrieve attribute operations
 - **`templates_tools/`**: Template-related tools and operations
   - `tool_list_attributes.py`: List template attributes
+  - `tool_list_records.py`: List template records
+  - `tool_create_edit_record.py`: Create or edit records
+  - `tools_record_template.py`: Create or edit record templates
+  - `tools_form.py`: Form management (get_form, list_forms)
 - **`tool_utils.py`**: Common tool utilities and helpers
 - **`models.py`**: Data models and schemas for tools
 - **`requests_.py`**: HTTP request utilities and helpers
 - **`file_utils.py`**: File handling utilities with security
 - **`pdf_utils.py`**: PDF processing utilities with OCR support
+- **`requests_models.py`**: Request models and schemas
 
 ### Key Benefits
 
@@ -561,26 +640,25 @@ The agent automatically tries multiple LLM providers in sequence:
 ### Sophisticated implementations
 
 - **Recursive Truncation**: Separate methods for base64 and max-length truncation
-- **Recursive JSON Serialization**: Ensures the complex objects ar passable as HuggingFace JSON dataset
-- **Decorator-Based Print Capture**: Captures all print statements into trace data
+- **Decorator-Based Print Capture**: Captures all print statements into debug logs
 - **Multilevel Contextual Logging**: Logs tied to specific execution contexts
-- **Per-LLM Stdout Traces**: Stdout captured separately for each LLM attempt in a human-readable form
-- **Consistent LLM Schema**: Data structures for consistent model identification, configuring and calling
-- **Complete Trace Model**: Hierarchical structure with comprehensive coverage
-- **Structured dataset uploads** to HuggingFace datasets
-- **Schema validation** against `dataset_config.json`
-- **Three data splits**: `init` (initialization), `runs` (legacy aggregated results), and `runs_new` (granular per-question results)
-- **Robust error handling** with fallback mechanisms
+- **Per-LLM Debug Traces**: Debug output captured separately for each LLM attempt
+- **Consistent LLM Schema**: Data structures for consistent model identification and configuration
+- **Complete Debug Model**: Hierarchical structure with comprehensive coverage
+- **Real-time Streaming**: Live debug output with categorized logging
+- **Session Isolation**: User-specific debug contexts and session management
+- **Robust Error Handling**: Advanced error classification with vector similarity matching
 
-### Comprehensive Tracing
+### Comprehensive Debug System
 
-Every question generates a complete execution trace including:
+Every conversation generates complete debug information including:
 
-- **LLM Interactions**: All input/output for each LLM attempt
-- **Tool Executions**: Detailed logs of every tool call
-- **Performance Metrics**: Token usage, execution times, success rates
-- **Error Information**: Complete error context and fallback decisions
-- **Stdout Capture**: All debug output from each LLM attempt
+- **LLM Interactions**: All input/output for each LLM attempt with real-time streaming
+- **Tool Executions**: Detailed logs of every tool call with execution times
+- **Performance Metrics**: Token usage, response times, success rates across providers
+- **Error Information**: Complete error context with vector similarity matching and recovery suggestions
+- **Session Tracking**: User activity and session-specific debug contexts
+- **Live Monitoring**: Real-time debug output with categorized logging (INIT, LLM, TOOL, ERROR, THINKING, STREAMING, SESSION)
 
 ### Rate Limiting & Reliability
 
@@ -658,20 +736,14 @@ print(f"Similarity: {result['similarity_score']}")
 print(f"LLM Used: {result['llm_used']}")
 ```
 
-### Dataset Access
+### Live Monitoring
 
-```python
-from datasets import load_dataset
+Access real-time monitoring through the web interface:
 
-# Load the dataset
-dataset = load_dataset("arterm-sedov/agent-course-final-assignment")
-
-# Access initialization data
-init_data = dataset["init"]["train"]
-
-# Access evaluation results
-runs_data = dataset["runs_new"]["train"]
-```
+- **Logs Tab**: Live debug output and system events
+- **Stats Tab**: Performance metrics and usage analytics
+- **Config Tab**: Platform connection settings and configuration
+- **Home Tab**: Quick start guidance and system status
 
 ## File Structure
 
@@ -687,7 +759,6 @@ cmw-platform-agent/
 │   ├── message_processor.py    # Message processing and validation
 │   ├── response_processor.py   # Response processing and validation
 │   ├── stats_manager.py        # Statistics tracking and monitoring
-│   ├── trace_manager.py        # Trace logging and debugging
 │   ├── debug_streamer.py       # Debug system and logging
 │   ├── token_counter.py        # Token usage tracking
 │   ├── session_manager.py      # Session management and isolation
@@ -698,20 +769,30 @@ cmw-platform-agent/
 │   ├── provider_adapters.py    # LLM provider adapters
 │   ├── langchain_memory.py     # LangChain memory management
 │   ├── native_langchain_streaming.py  # Native LangChain streaming
+│   ├── conversation_summary.py # Conversation summarization
 │   ├── concurrency_config.py   # Concurrency configuration
 │   ├── agent_config.py         # Agent configuration
+│   ├── logging_config.py       # Logging configuration
+│   ├── langsmith_config.py     # LangSmith tracing configuration
+│   ├── langfuse_config.py      # Langfuse integration configuration
 │   ├── i18n_translations.py    # Internationalization (EN/RU)
 │   ├── system_prompt.json      # System prompt configuration
 │   └── tabs/                   # Modular tab components
+│       ├── home_tab.py         # Welcome page with quick start
 │       ├── chat_tab.py         # Chat interface with quick actions
+│       ├── config_tab.py       # Platform connection settings
 │       ├── logs_tab.py         # Logs and debugging tab
-│       └── stats_tab.py        # Statistics and monitoring tab
-├── tools/                      # Tool modules (20+ tools)
+│       ├── stats_tab.py        # Statistics and monitoring tab
+│       └── sidebar.py          # Shared sidebar with LLM selection
+├── tools/                      # Tool modules (30+ tools)
 │   ├── tools.py               # Core tool functions and definitions
 │   ├── applications_tools/    # Application management tools
 │   │   ├── tool_list_applications.py
 │   │   ├── tool_list_templates.py
-│   │   └── tool_platform_entity_url.py
+│   │   ├── tool_platform_entity_url.py
+│   │   ├── tool_record_url.py
+│   │   ├── tool_audit_process_schema.py
+│   │   └── tools_applications.py
 │   ├── attributes_tools/      # Attribute management tools (12 types)
 │   │   ├── tools_text_attribute.py
 │   │   ├── tools_boolean_attribute.py
@@ -729,14 +810,77 @@ cmw-platform-agent/
 │   │   ├── tool_archive_or_unarchive_attribute.py
 │   │   └── tool_get_attribute.py
 │   ├── templates_tools/       # Template management tools
-│   │   └── tool_list_attributes.py
+│   │   ├── tool_list_attributes.py
+│   │   ├── tool_list_records.py
+│   │   ├── tool_create_edit_record.py
+│   │   ├── tools_record_template.py
+│   │   └── tools_form.py
 │   ├── tool_utils.py          # Common tool utilities
 │   ├── models.py              # Data models and schemas
 │   ├── requests_.py           # HTTP request utilities
+│   ├── requests_models.py     # Request models and schemas
 │   ├── file_utils.py          # File handling utilities
 │   └── pdf_utils.py           # PDF processing utilities
+├── cmw_open_api/             # CMW Platform API schemas
+│   ├── web_api_v1.json       # Web API v1 specification
+│   ├── system_core_api.json  # System core API specification
+│   └── solition_api.json     # Solition API specification
 └── docs/                      # Documentation and reports
+    ├── 20250118_GRADIO_PROGRESS_BAR_FEASIBILITY_REPORT.md
+    ├── 20250121_GRADIO_CONCURRENT_PROCESSING_COMPLETE_IMPLEMENTATION.md
+    ├── 20250920_GRADIO_DOWNLOAD_BUTTON_IMPLEMENTATION.md
+    ├── 20250920_PDF_IMPLEMENTATION_SUMMARY.md
+    ├── 20250920_PYDANTIC_INTEGRATION_REPORT.md
+    ├── 20250921_SESSION_ISOLATION_IMPLEMENTATION_REPORT.md
+    ├── 20250922_LANGSMITH_SETUP_COMPLETE.md
+    ├── 20250922_SESSION_FILE_ISOLATION_IMPLEMENTATION.md
+    ├── 20250923_LANGFUSE_INTEGRATION.md
+    ├── 20250923_RUFF_LINTER_IMPLEMENTATION_REPORT.md
+    ├── 20250923_USER_FRIENDLY_ERROR_MESSAGES_IMPLEMENTATION_REPORT.md
+    ├── 20251008_LANGUAGE_SWITCHING_REPORT.md
+    ├── 20251010_API_ENDPOINTS_DOCUMENTATION.md
+    ├── 20251010_API_ENDPOINTS_RU.md
+    ├── 20251011_LANGCHAIN_AGENT_DEAD_CODE_ANALYSIS.md
+    ├── AGENT_CONFIGURATION.md
+    ├── DEBUG_SYSTEM_README.md
+    ├── LANGUAGE_CONFIGURATION.md
+    ├── MISTRAL_TOOL_CALL_ID_FIX.md
+    ├── MODEL_SWITCHING_SOLUTION.md
+    └── OPENROUTER_CONTEXT_LENGTH_FIX.md
 ```
+
+## 📚 API Schemas & Documentation
+
+### CMW Platform API Schemas (`cmw_open_api/`)
+
+The project includes comprehensive OpenAPI specifications for CMW Platform integration:
+
+- **`web_api_v1.json`** (1.0MB) - Complete Web API v1 specification with all endpoints
+- **`system_core_api.json`** (595KB) - System core API specification with 24,032 lines
+- **`solition_api.json`** (1.9MB) - Solition API specification for advanced integrations
+
+These schemas provide complete documentation for all available CMW Platform APIs, enabling:
+- Automatic API endpoint discovery
+- Request/response validation
+- Code generation for API clients
+- Integration testing and validation
+
+### Documentation (`docs/`)
+
+Comprehensive implementation reports and configuration guides:
+
+- **Implementation Reports**: Detailed progress reports with timestamps (2025-01-18 to 2025-10-11)
+- **Configuration Guides**: Agent configuration, language settings, debug system setup
+- **Integration Reports**: LangSmith, Langfuse, and platform integration documentation
+- **Technical Analysis**: Dead code analysis, performance optimizations, error handling improvements
+- **API Documentation**: Complete API endpoints documentation in English and Russian
+
+Key documentation files:
+- `AGENT_CONFIGURATION.md` - Complete agent configuration guide
+- `DEBUG_SYSTEM_README.md` - Debug system setup and usage
+- `LANGUAGE_CONFIGURATION.md` - Internationalization setup
+- `20251010_API_ENDPOINTS_DOCUMENTATION.md` - Comprehensive API documentation
+- `20251011_LANGCHAIN_AGENT_DEAD_CODE_ANALYSIS.md` - Code analysis and optimization
 
 ## CMW Platform Integration
 
@@ -820,170 +964,36 @@ This is an experimental research project. Contributions are welcome in the form 
 - **Performance Improvements**: Optimizations for speed or accuracy
 - **Documentation**: Improvements to this README or code comments
 
-## Dataset Structure
+## 🔍 Debug & Monitoring
 
-The output trace facilitates:
+### Real-Time Debug System
 
-- **Debugging**: Complete visibility into execution flow
-- **Performance Analysis**: Detailed timing and token usage metrics
-- **Error Analysis**: Comprehensive error information with context
-- **Tool Usage Analysis**: Complete tool execution history
-- **LLM Comparison**: Detailed comparison of different LLM behaviors
-- **Cost Optimization**: Token usage analysis for cost management
+The agent provides comprehensive debugging and monitoring capabilities:
 
-Each request trace is uploaded to a HuggingFace dataset.
+- **Live Logs**: Real-time debug output with categorized logging (INIT, LLM, TOOL, ERROR, THINKING, STREAMING, SESSION)
+- **Performance Metrics**: Token usage tracking, response times, and success rates
+- **Error Analysis**: Detailed error classification with recovery suggestions
+- **Session Monitoring**: User activity tracking and session isolation
+- **Tool Execution**: Complete visibility into tool calls and results
 
-The dataset contains comprehensive execution traces with the following structure:
+### Statistics Dashboard
 
-### Root Level Fields
+The Stats tab provides real-time monitoring of:
 
-```python
-{
-    "question": str,                    # Original question text
-    "file_name": str,                   # Name of attached file (if any)
-    "file_size": int,                   # Length of base64 file data (if any)
-    "start_time": str,                  # ISO format timestamp when processing started
-    "end_time": str,                    # ISO format timestamp when processing ended
-    "total_execution_time": float,      # Total execution time in seconds
-    "tokens_total": int,                # Total tokens used across all LLM calls
-    "debug_output": str,                # Comprehensive debug output as text
-}
-```
+- **LLM Usage**: Success/failure rates across all providers
+- **Tool Performance**: Execution times and usage patterns
+- **Error Tracking**: Error rates and failure analysis
+- **Session Analytics**: User activity and conversation metrics
+- **Token Usage**: Cost analysis and optimization insights
 
-### LLM Traces
+### Debug Categories
 
-```python
-"llm_traces": {
-    "llm_type": [                      # e.g., "openrouter", "gemini", "groq", "huggingface"
-        {
-            "call_id": str,             # e.g., "openrouter_call_1"
-            "llm_name": str,            # e.g., "deepseek-chat-v3-0324" or "Google Gemini"
-            "timestamp": str,           # ISO format timestamp
-            
-            # === LLM CALL INPUT ===
-            "input": {
-                "messages": List,       # Input messages (trimmed for base64)
-                "use_tools": bool,      # Whether tools were used
-                "llm_type": str         # LLM type
-            },
-            
-            # === LLM CALL OUTPUT ===
-            "output": {
-                "content": str,         # Response content
-                "tool_calls": List,     # Tool calls from response
-                "response_metadata": dict,  # Response metadata
-                "raw_response": dict    # Full response object (trimmed for base64)
-            },
-            
-            # === TOOL EXECUTIONS ===
-            "tool_executions": [
-                {
-                    "tool_name": str,      # Name of the tool
-                    "args": dict,          # Tool arguments (trimmed for base64)
-                    "result": str,         # Tool result (trimmed for base64)
-                    "execution_time": float, # Time taken for tool execution
-                    "timestamp": str,      # ISO format timestamp
-                    "logs": List           # Optional: logs during tool execution
-                }
-            ],
-            
-            # === TOOL LOOP DATA ===
-            "tool_loop_data": [
-                {
-                    "step": int,           # Current step number
-                    "tool_calls_detected": int,  # Number of tool calls detected
-                    "consecutive_no_progress": int,  # Steps without progress
-                    "timestamp": str,      # ISO format timestamp
-                    "logs": List           # Optional: logs during this step
-                }
-            ],
-            
-            # === EXECUTION METRICS ===
-            "execution_time": float,       # Time taken for this LLM call
-            "total_tokens": int,           # Estimated token count (fallback)
-            
-            # === TOKEN USAGE TRACKING ===
-            "token_usage": {               # Detailed token usage data
-                "prompt_tokens": int,      # Total prompt tokens across all calls
-                "completion_tokens": int,  # Total completion tokens across all calls
-                "total_tokens": int,       # Total tokens across all calls
-                "call_count": int,         # Number of calls made
-                "calls": [                 # Individual call details
-                    {
-                        "call_id": str,   # Unique call identifier
-                        "timestamp": str,  # ISO format timestamp
-                        "prompt_tokens": int,     # This call's prompt tokens
-                        "completion_tokens": int, # This call's completion tokens
-                        "total_tokens": int,      # This call's total tokens
-                        "finish_reason": str,     # How the call finished (optional)
-                        "system_fingerprint": str, # System fingerprint (optional)
-                        "input_token_details": dict,  # Detailed input breakdown (optional)
-                        "output_token_details": dict  # Detailed output breakdown (optional)
-                    }
-                ]
-            },
-            
-            # === ERROR INFORMATION ===
-            "error": {                     # Only present if error occurred
-                "type": str,              # Exception type name
-                "message": str,           # Error message
-                "timestamp": str          # ISO format timestamp
-            },
-            
-            # === LLM-SPECIFIC LOGS ===
-            "logs": List,                 # Logs specific to this LLM call
-            
-            # === FINAL ANSWER ENFORCEMENT ===
-            "final_answer_enforcement": [  # Optional: logs from _force_final_answer for this LLM call
-                {
-                    "timestamp": str,     # ISO format timestamp
-                    "message": str,       # Log message
-                    "function": str       # Function that generated the log (always "_force_final_answer")
-                }
-            ]
-        }
-    ]
-}
-```
-
-### Per-LLM Stdout Capture
-
-```python
-"per_llm_stdout": [
-    {
-        "llm_type": str,            # LLM type
-        "llm_name": str,            # LLM name (model ID or provider name)
-        "call_id": str,             # Call ID
-        "timestamp": str,           # ISO format timestamp
-        "stdout": str               # Captured stdout content
-    }
-]
-```
-
-### Question-Level Logs
-
-```python
-"logs": [
-    {
-        "timestamp": str,           # ISO format timestamp
-        "message": str,             # Log message
-        "function": str             # Function that generated the log
-    }
-]
-```
-
-### Final Results
-
-```python
-"final_result": {
-    "submitted_answer": str,        # Final answer (consistent with code)
-    "similarity_score": float,      # Similarity score (0.0-1.0)
-    "llm_used": str,               # LLM that provided the answer
-    "reference": str,               # Reference answer used
-    "question": str,                # Original question
-    "file_name": str,               # File name (if any)
-    "error": str                    # Error message (if any)
-}
-```
+- **INIT**: Initialization events and startup processes
+- **LLM**: LLM operations and API calls
+- **TOOL**: Tool executions and results
+- **ERROR**: Error handling and recovery
+- **THINKING**: Agent reasoning and decision making
+- **STREAMING**: Real-time streaming events
+- **SESSION**: Session management and user activity
 
 ---
