@@ -1008,9 +1008,6 @@ class ChatTab(QuickActionsMixin):
                                 f"📁 Registered file: {original_filename} -> {agent.file_registry.get((session_id, original_filename), 'NOT_FOUND')}"
                             )
 
-                file_info += ", ".join(file_list) + "]"
-                message += file_info
-
                 # Store current files (deprecated - use session manager)
                 print(f"📁 Registered {len(current_files)} files: {current_files}")
 
@@ -1057,9 +1054,16 @@ class ChatTab(QuickActionsMixin):
                         history.append(rich_message)
                         # Clear the text message since we have rich content
                         message = ""
+                    else:
+                        # Fallback: if no rich components were created, add file info as text
+                        file_info += ", ".join(file_list) + "]"
+                        message += file_info
 
                 except Exception as e:
                     print(f"Error converting uploaded files to rich content: {e}")
+                    # Fallback: add file info as text if conversion fails
+                    file_info += ", ".join(file_list) + "]"
+                    message += file_info
             else:
                 # No files, just use the text message
                 pass
