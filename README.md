@@ -493,27 +493,46 @@ The codebase follows a clean modular design with clear separation of concerns:
 
 ### Tab Modules (`agent_ng/tabs/`)
 
-- **`chat_tab.py`**: Main chat interface tab with quick actions and i18n support
-- **`logs_tab.py`**: Logs and debugging tab with real-time updates
-- **`stats_tab.py`**: Statistics and monitoring tab with live metrics
+- **`chat_tab.py`**: Main chat interface tab with streaming responses, quick action buttons, file upload support, and full i18n support (English/Russian)
+- **`logs_tab.py`**: Real-time debugging and logs tab with live updates, categorized log streams, and session-specific debug output
+- **`stats_tab.py`**: Performance metrics and statistics dashboard with live monitoring, token usage tracking, and LLM provider analytics
+- **`config_tab.py`**: Configuration and settings tab for LLM provider selection, language settings, and system parameters
+- **`home_tab.py`**: Welcome and overview tab with quick start guides, feature highlights, and system status
+- **`sidebar.py`**: Navigation sidebar component with tab switching, user session info, and quick access controls
 
 ### Tool Modules (`tools/`)
 
-- **`tools.py`**: Core tool functions and consolidated tool definitions with 20+ tools
-- **`applications_tools/`**: Application and template management tools
-  - `tool_list_applications.py`: List platform applications
-  - `tool_list_templates.py`: List application templates
-  - `tool_platform_entity_url.py`: Generate platform entity URLs
-- **`attributes_tools/`**: Attribute management tools for all attribute types
-  - Text, Boolean, DateTime, Decimal, Document, Drawing, Duration, Image, Record, Role, Account, Enum attributes
-  - Delete, archive/unarchive, and retrieve attribute operations
-- **`templates_tools/`**: Template-related tools and operations
-  - `tool_list_attributes.py`: List template attributes
-- **`tool_utils.py`**: Common tool utilities and helpers
-- **`models.py`**: Data models and schemas for tools
-- **`requests_.py`**: HTTP request utilities and helpers
-- **`file_utils.py`**: File handling utilities with security
-- **`pdf_utils.py`**: PDF processing utilities with OCR support
+- **`tools.py`**: Core tool functions and consolidated tool definitions with 20+ specialized tools including:
+  - **Math Tools**: Basic arithmetic operations (add, subtract, multiply, divide, power, square root)
+  - **Web Search Tools**: Tavily web search, Wikipedia search, Arxiv academic papers, Exa AI deep research
+  - **File Analysis Tools**: Text file reading, CSV/Excel analysis with pandas, image analysis and OCR
+  - **Code Execution**: Multi-language code interpreter (Python, Bash, SQL, C, Java) with safety controls
+  - **Image Processing**: Image generation, transformation, drawing, and combination tools
+  - **Video/Audio Understanding**: Gemini-powered video and audio analysis with timestamp support
+  - **Data Processing**: Advanced pandas-based data analysis with query support and visualization
+
+- **`applications_tools/`**: CMW Platform application and template management
+  - `tool_list_applications.py`: List and manage platform applications
+  - `tool_list_templates.py`: List application templates and their configurations
+  - `tool_platform_entity_url.py`: Generate direct URLs to platform entities
+
+- **`attributes_tools/`**: Comprehensive attribute management for all CMW Platform attribute types
+  - **Core Attribute Types**: Text, Boolean, DateTime, Decimal/Numeric, Document, Drawing, Duration, Image, Record, Role, Account, Enum
+  - **Management Operations**: Create, edit, delete, archive/unarchive, and retrieve attributes
+  - **Specialized Tools**: Each attribute type has dedicated creation and management tools
+  - **Utility Functions**: Common attribute operations and validation helpers
+
+- **`templates_tools/`**: Template-related operations and management
+  - `tool_list_attributes.py`: List and analyze template attributes
+  - `tools_record_template.py`: Create and manage record templates
+  - Template configuration and relationship management
+
+- **Utility Modules**:
+  - **`tool_utils.py`**: Common tool utilities, validation, and helper functions
+  - **`models.py`**: Pydantic data models and schemas for tool operations
+  - **`requests_.py`**: HTTP request utilities with retry logic and error handling
+  - **`file_utils.py`**: Secure file handling utilities with session isolation and MIME detection
+  - **`pdf_utils.py`**: PDF processing utilities with OCR support and text extraction
 
 ### Key Benefits
 

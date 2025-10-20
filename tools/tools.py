@@ -898,6 +898,182 @@ def extract_text_from_image(file_reference: str, agent=None) -> str:
     except Exception as e:
         return FileUtils.create_tool_response("extract_text_from_image", error=f"Error extracting text from image: {str(e)}")
 
+# ========== PANDAS QUERY/PIPELINE HELPERS ==========
+def _safe_to_markdown(df: pd.DataFrame, max_rows: int = 10, max_cols: int = 20) -> str:
+    preview_df = df.head(max_rows)
+    if max_cols is not None:
+        preview_df = preview_df.iloc[:, :max_cols]
+    try:
+        return preview_df.to_markdown(index=False)
+    except Exception:
+        return preview_df.to_string(index=False)
+
+
+def _dataframe_schema(df: pd.DataFrame) -> Dict[str, str]:
+    return {str(col): str(dtype) for col, dtype in df.dtypes.items()}
+
+
+def _truncate_records(df: pd.DataFrame, max_rows: int = 100, max_cols: int = 50, max_cell_chars: int = 500) -> List[Dict[str, Any]]:
+    limited = df.head(max_rows)
+    if max_cols is not None:
+        limited = limited.iloc[:, :max_cols]
+    def _truncate_val(v: Any) -> Any:
+        try:
+            s = str(v)
+        except Exception:
+            return v
+        if len(s) > max_cell_chars:
+            return s[: max_cell_chars - 1] + "…"
+        return v
+    return [{k: _truncate_val(v) for k, v in row.items()} for row in limited.to_dict(orient="records")]
+
+
+_ALLOWED_OPS: Dict[str, Literal["df_method", "special"]] = {
+    "query": "df_method",
+    "assign": "df_method",
+    "rename": "df_method",
+    "drop": "df_method",
+    "dropna": "df_method",
+    "fillna": "df_method",
+    "astype": "df_method",
+    "sort_values": "df_method",
+    "head": "df_method",
+    "tail": "df_method",
+    "sample": "df_method",
+    "value_counts": "df_method",
+    "nlargest": "df_method",
+    "nsmallest": "df_method",
+    "reset_index": "df_method",
+    "set_index": "df_method",
+    "pivot_table": "df_method",
+    "melt": "df_method",
+    "stack": "df_method",
+    "unstack": "df_method",
+    "groupby": "special",
+}
+
+
+def _coerce_tabular(obj: Any, step_name: str) -> pd.DataFrame:
+    if isinstance(obj, pd.DataFrame):
+        return obj
+    if isinstance(obj, pd.Series):
+        return obj.to_frame(name=step_name or "value").reset_index()
+    return pd.DataFrame(obj)
+
+
+def _dispatch_pipeline(df: pd.DataFrame, steps: List[Dict[str, Any]]) -> pd.DataFrame:
+    current = df
+    for i, step in enumerate(steps):
+        if not isinstance(step, dict):
+            raise ValueError(f"Pipeline step {i} must be an object")
+        op = step.get("op")
+        if not isinstance(op, str) or op.startswith("__"):
+            raise ValueError(f"Invalid op at step {i}")
+        kind = _ALLOWED_OPS.get(op)
+        if kind is None:
+            raise ValueError(f"Op '{op}' not allowed")
+        if kind == "df_method":
+            method = getattr(current, op, None)
+            if method is None or not callable(method):
+                raise ValueError(f"Method '{op}' not available on DataFrame")
+            kwargs = {k: v for k, v in step.items() if k != "op"}
+            result = method(**kwargs) if kwargs else method()
+            current = _coerce_tabular(result, op)
+        else:
+            if op == "groupby":
+                by = step.get("by")
+                gb = current.groupby(by=by, dropna=False, observed=False)
+                if "agg" in step:
+                    result = gb.agg(step.get("agg"))
+                    current = _coerce_tabular(result, op)
+                elif step.get("size") is True:
+                    current = gb.size().reset_index(name="size")
+                else:
+                    raise ValueError("groupby requires 'agg' or size=true")
+            else:
+                raise ValueError(f"Unsupported special op: {op}")
+    return current
+
+
+def _apply_pandas_query(
+    df: pd.DataFrame,
+    query: Optional[str],
+    preview_opts: Optional[Dict[str, Any]] = None,
+    plot_opts: Optional[Dict[str, Any]] = None,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    preview = preview_opts or {"rows": 10, "cols": 20, "include_schema": True}
+    plots: List[str] = []
+    original_shape = tuple(df.shape)
+
+    transformed = df
+    if query and isinstance(query, str) and query.strip():
+        q = query.strip()
+        try:
+            if q.startswith("{") and q.endswith("}"):
+                cfg = json.loads(q)
+                if isinstance(cfg.get("pipeline"), list):
+                    transformed = _dispatch_pipeline(df, cfg["pipeline"])  # type: ignore[arg-type]
+                elif isinstance(cfg.get("expr"), str):
+                    transformed = df.query(cfg["expr"])  # type: ignore[arg-type]
+                plot_opts = cfg.get("plot") or plot_opts
+                preview = cfg.get("preview") or preview
+            elif q.startswith("[") and q.endswith("]"):
+                steps = json.loads(q)
+                transformed = _dispatch_pipeline(df, steps)
+            elif q.lower().startswith("expr:"):
+                expr = q.split(":", 1)[1].strip()
+                transformed = df.query(expr)
+            else:
+                transformed = df.query(q)
+        except Exception as e:
+            raise ValueError(f"Failed to apply query: {e}")
+
+    if plot_opts and MATPLOTLIB_AVAILABLE and plt is not None:
+        try:
+            kind = plot_opts.get("kind", "bar")
+            x = plot_opts.get("x")
+            y = plot_opts.get("y")
+            fig = plt.figure()
+            ax = fig.gca()
+            data = transformed
+            if x is None and y is None and kind in ("bar", "barh"):
+                non_numeric = [c for c in data.columns if not pd.api.types.is_numeric_dtype(data[c])]
+                target_col = non_numeric[0] if non_numeric else data.columns[0]
+                vc = data[target_col].value_counts().head(20)
+                vc.plot(kind=kind, ax=ax)
+            else:
+                data.plot(kind=kind, x=x, y=y, ax=ax)
+            plot_path = os.path.join(tempfile.gettempdir(), f"df_plot_{uuid.uuid4().hex}.png")
+            fig.savefig(plot_path, bbox_inches="tight")
+            plt.close(fig)
+            plots.append(encode_image(plot_path))
+        except Exception:
+            pass
+
+    rows = int(preview.get("rows", 10))
+    cols = int(preview.get("cols", 20))
+    include_schema = bool(preview.get("include_schema", True))
+
+    table_markdown = _safe_to_markdown(transformed, rows, cols)
+    table_records = _truncate_records(transformed, max_rows=min(rows, 1000), max_cols=min(cols, 100))
+    payload: Dict[str, Any] = {
+        "original_shape": original_shape,
+        "shape": tuple(transformed.shape),
+        "table_markdown": table_markdown,
+        "table_records": table_records,
+    }
+    if include_schema:
+        payload["schema"] = _dataframe_schema(transformed)
+    try:
+        if transformed.shape[0] <= 5000 and transformed.shape[1] <= 50:
+            payload["describe_summary"] = str(transformed.describe(include="all", datetime_is_numeric=True))
+    except Exception:
+        pass
+    if plots:
+        payload["plots"] = plots
+    return transformed, payload
+
+
 @tool
 def analyze_csv_file(file_reference: str, query: str, agent=None) -> str:
     """
@@ -930,12 +1106,28 @@ def analyze_csv_file(file_reference: str, query: str, agent=None) -> str:
         return FileUtils.create_tool_response("analyze_csv_file", error=file_info.error)
     try:
         df = pd.read_csv(file_path)
-        result = f"CSV file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
-        result += f"File: {file_info.name} ({FileUtils.format_file_size(file_info.size)})\n"
-        result += f"Columns: {', '.join(df.columns)}\n\n"
-        result += "Summary statistics:\n"
-        result += str(df.describe())
-        return FileUtils.create_tool_response("analyze_csv_file", result=result, file_info=file_info)
+        _, payload = _apply_pandas_query(
+            df,
+            query=query if isinstance(query, str) and query.strip() else None,
+            preview_opts=None,
+            plot_opts=None,
+        )
+        header = (
+            f"CSV file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
+            f"File: {file_info.name} ({FileUtils.format_file_size(file_info.size)})\n"
+        )
+        result_parts = [header]
+        if payload.get("table_markdown"):
+            result_parts.append("Preview:\n" + payload["table_markdown"])
+        if payload.get("describe_summary"):
+            result_parts.append("\n\nSummary statistics:\n" + str(payload["describe_summary"]))
+        result_text = "\n".join(result_parts)
+        return FileUtils.create_tool_response(
+            "analyze_csv_file",
+            result=result_text,
+            file_info=file_info,
+            extra=payload,
+        )
     except Exception as e:
         return FileUtils.create_tool_response("analyze_csv_file", error=f"Error analyzing CSV file: {str(e)}")
 
@@ -971,12 +1163,28 @@ def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
         return FileUtils.create_tool_response("analyze_excel_file", error=file_info.error)
     try:
         df = pd.read_excel(file_path)
-        result = f"Excel file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
-        result += f"File: {file_info.name} ({FileUtils.format_file_size(file_info.size)})\n"
-        result += f"Columns: {', '.join(df.columns)}\n\n"
-        result += "Summary statistics:\n"
-        result += str(df.describe())
-        return FileUtils.create_tool_response("analyze_excel_file", result=result, file_info=file_info)
+        _, payload = _apply_pandas_query(
+            df,
+            query=query if isinstance(query, str) and query.strip() else None,
+            preview_opts=None,
+            plot_opts=None,
+        )
+        header = (
+            f"Excel file loaded with {len(df)} rows and {len(df.columns)} columns.\n"
+            f"File: {file_info.name} ({FileUtils.format_file_size(file_info.size)})\n"
+        )
+        result_parts = [header]
+        if payload.get("table_markdown"):
+            result_parts.append("Preview:\n" + payload["table_markdown"])
+        if payload.get("describe_summary"):
+            result_parts.append("\n\nSummary statistics:\n" + str(payload["describe_summary"]))
+        result_text = "\n".join(result_parts)
+        return FileUtils.create_tool_response(
+            "analyze_excel_file",
+            result=result_text,
+            file_info=file_info,
+            extra=payload,
+        )
     except Exception as e:
         # Enhanced error reporting: print columns and head if possible
         try:
@@ -1038,7 +1246,7 @@ def analyze_image(file_reference: str, agent=None) -> str:
             "color_analysis": color_analysis,
             "thumbnail": thumbnail_base64,
         }
-        return FileUtils.create_tool_response("analyze_image", result=result)
+        return FileUtils.create_tool_response("analyze_image", result=json.dumps(result))
     except Exception as e:
         return FileUtils.create_tool_response("analyze_image", error=str(e))
 
@@ -1205,17 +1413,23 @@ def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParam
         }, indent=2)
 
 class GenerateSimpleImageParams(BaseModel):
+    image_type: str = Field(..., description="Type of image to generate: 'solid', 'gradient', 'checkerboard', 'noise'")
+    width: int = Field(500, description="Width of the generated image")
+    height: int = Field(500, description="Height of the generated image")
     color: Optional[str] = Field(None, description="Solid color for 'solid' type (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
     start_color: Optional[List[int]] = Field(None, description="Gradient start color [r, g, b]")
     end_color: Optional[List[int]] = Field(None, description="Gradient end color [r, g, b]")
-    direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Gradient direction")
+    direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Gradient direction ('horizontal' or 'vertical')")
     square_size: Optional[int] = Field(None, description="Square size for checkerboard")
     color1: Optional[str] = Field(None, description="First color for checkerboard")
     color2: Optional[str] = Field(None, description="Second color for checkerboard")
 
 @tool(args_schema=GenerateSimpleImageParams)
 def generate_simple_image(image_type: str, width: int = 500, height: int = 500, 
-                         params: Optional[Dict[str, Any]] = None) -> str:
+                         color: Optional[str] = None, start_color: Optional[List[int]] = None,
+                         end_color: Optional[List[int]] = None, direction: Optional[str] = None,
+                         square_size: Optional[int] = None, color1: Optional[str] = None,
+                         color2: Optional[str] = None) -> str:
     """
     Generate simple images like gradients, solid colors, checkerboard, or noise patterns.
 
@@ -1229,9 +1443,8 @@ def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
         str: JSON string with the generated image as base64 or error message.
     """
     try:
-        params = params or {}
         if image_type == "solid":
-            color_str = params.get("color", "255,255,255")
+            color_str = color or "255,255,255"
             # Parse color string to RGB tuple
             if "," in color_str and color_str.replace(",", "").replace(" ", "").isdigit():
                 try:
@@ -1250,9 +1463,9 @@ def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
                     color = (255, 255, 255)
             img = Image.new("RGB", (width, height), color)
         elif image_type == "gradient":
-            start_color = params.get("start_color", [255, 0, 0])
-            end_color = params.get("end_color", [0, 0, 255])
-            direction = params.get("direction", "horizontal")
+            start_color = start_color or [255, 0, 0]
+            end_color = end_color or [0, 0, 255]
+            direction = direction or "horizontal"
             img = Image.new("RGB", (width, height))
             draw = ImageDraw.Draw(img)
             if direction == "horizontal":
@@ -1271,9 +1484,9 @@ def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
             noise_array = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
             img = Image.fromarray(noise_array, "RGB")
         elif image_type == "checkerboard":
-            square_size = params.get("square_size", 50)
-            color1 = params.get("color1", "white")
-            color2 = params.get("color2", "black")
+            square_size = square_size or 50
+            color1 = color1 or "white"
+            color2 = color2 or "black"
             img = Image.new("RGB", (width, height))
             for y in range(0, height, square_size):
                 for x in range(0, width, square_size):

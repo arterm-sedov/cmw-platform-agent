@@ -324,9 +324,6 @@ class LangChainConversationChain:
             if not system_in_history:
                 # Store system message in memory only once
                 self.memory_manager.add_message(conversation_id, system_message)
-                print("🔍 DEBUG: Added system message to memory (first time)")
-            else:
-                print("🔍 DEBUG: System message already in memory, skipping storage")
             
             # Add conversation history (excluding system messages to avoid duplication)
             non_system_history = [msg for msg in chat_history if not isinstance(msg, SystemMessage)]
@@ -377,37 +374,25 @@ class LangChainConversationChain:
             if tool_key in duplicate_counts:
                 # Increment count for duplicate
                 duplicate_counts[tool_key] += 1
-                print(f"🔍 DEBUG: Found duplicate tool call {tool_name} (total count: {duplicate_counts[tool_key]})")
             else:
                 # First occurrence - add to unique list and initialize count
                 unique_tool_calls.append(tool_call)
                 duplicate_counts[tool_key] = 1
-                print(f"🔍 DEBUG: Added unique tool call {tool_name}")
         
         return unique_tool_calls, duplicate_counts
 
     def _track_token_usage(self, response, messages, conversation_id: str = "default"):
         """Track token usage for LLM response"""
         try:
-            print(f"🔍 DEBUG: _track_token_usage called with response type: {type(response)}")
-            print(f"🔍 DEBUG: Has agent: {hasattr(self, 'agent')}")
-            if hasattr(self, 'agent'):
-                print(f"🔍 DEBUG: Agent is not None: {self.agent is not None}")
-                if self.agent:
-                    print(f"🔍 DEBUG: Agent has token_tracker: {hasattr(self.agent, 'token_tracker')}")
-            
             # Get token tracker from the agent
             if hasattr(self, 'agent') and self.agent and hasattr(self.agent, 'token_tracker'):
-                print("🔍 DEBUG: Using agent's token tracker")
                 self.agent.token_tracker.track_llm_response(response, messages)
             else:
-                print("🔍 DEBUG: Creating new token tracker")
                 # Create a simple token tracker if none exists
                 from .token_counter import get_token_tracker
                 token_tracker = get_token_tracker(conversation_id)
                 token_tracker.track_llm_response(response, messages)
         except Exception as e:
-            print(f"🔍 DEBUG: Token tracking error: {e}")
             # Silently fail - token counting is not critical
             pass
     

@@ -628,11 +628,13 @@ class NextGenApp:
                 and user_agent.llm_instance
             ):
                 llm_info = user_agent.get_llm_info()
-                print(
-                    f"🔍 DEBUG: Using session agent with LLM: {llm_info.get('provider', 'unknown')}/{llm_info.get('model_name', 'unknown')}"
+                session_debug = get_debug_streamer(session_id)
+                session_debug.debug(
+                    f"Using session agent with LLM: {llm_info.get('provider', 'unknown')}/{llm_info.get('model_name', 'unknown')}"
                 )
             else:
-                print("❌ DEBUG: Session agent has no LLM instance!")
+                session_debug = get_debug_streamer(session_id)
+                session_debug.warning("Session agent has no LLM instance!")
 
             # Use session-specific debug streamer
             session_debug = get_debug_streamer(session_id)
