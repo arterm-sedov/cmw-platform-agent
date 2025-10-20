@@ -39,7 +39,7 @@ def get_tool_call_count(agent, session_id: str) -> int:
     """
     Get total tool call count from session-specific agent - shared implementation.
     
-    This function uses the sophisticated logic from conversation_summary.py that actually works.
+    This function uses direct access to memory manager to avoid circular dependencies.
     Used across:
     - Sidebar status display
     - Stats tab display  
@@ -55,16 +55,9 @@ def get_tool_call_count(agent, session_id: str) -> int:
         return 0
     
     try:
-        # Use the sophisticated logic from conversation_summary.py
-        stats = agent.get_stats()
         actual_tool_calls = {}
 
-        # First try to get from stats_manager_stats if available
-        tool_usage_data = stats.get("stats_manager_stats", {}).get("tool_calls", {})
-        if tool_usage_data:
-            actual_tool_calls.update(tool_usage_data)
-
-        # Get tools from memory manager directly
+        # Get tools from memory manager directly (avoid calling get_stats to prevent recursion)
         if hasattr(agent, "memory_manager") and agent.memory_manager:
             try:
                 tool_calls = agent.memory_manager.get_tool_calls(session_id)
