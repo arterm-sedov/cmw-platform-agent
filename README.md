@@ -18,6 +18,10 @@ title: CMW Copilot
 **GitHub:** [https://github.com/arterm-sedov/](https://github.com/arterm-sedov/)  
 **Repository:** [https://github.com/arterm-sedov/cmw-platform-agent](https://github.com/arterm-sedov/cmw-platform-agent)
 
+[Ask DeepWiki](https://deepwiki.com/arterm-sedov/cmw-platform-agent)
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/arterm-sedov/cmw-platform-agent)
+
 ## Overview
 
 The Comindware Analyst Copilot is a LangChain-native AI agent designed for creating and managing entities within the CMW Platform. It translates natural language requests into CMW Platform API calls, enabling users to create templates, attributes, workflows, and business processes through conversational AI.
