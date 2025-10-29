@@ -161,63 +161,62 @@ class UIManager:
         self._setup_auto_refresh_timers(demo, event_handlers)
 
     def _setup_auto_refresh_timers(self, demo: gr.Blocks, event_handlers: dict[str, Callable]):
-        """Setup auto-refresh timers for real-time updates"""
+        """Setup auto-refresh timers for real-time updates (single interval)"""
         logging.getLogger(__name__).info("🔄 Setting up auto-refresh timers...")
 
-        # Get refresh intervals from central configuration
-        intervals = get_refresh_intervals()
+        # Single interval from central configuration
+        refresh_interval = get_refresh_intervals().interval
 
         # Status updates
         if "status_display" in self.components and event_handlers.get("update_status"):
-            status_timer = gr.Timer(intervals.status, active=True)
+            status_timer = gr.Timer(refresh_interval, active=True)
             status_timer.tick(
                 fn=event_handlers["update_status"],
                 outputs=[self.components["status_display"]]
             )
-            logging.getLogger(__name__).debug(f"✅ Status auto-refresh timer set ({intervals.status}s)")
+            logging.getLogger(__name__).debug(f"✅ Status auto-refresh timer set ({refresh_interval}s)")
 
         # Token budget updates
         if "token_budget_display" in self.components and event_handlers.get("update_token_budget"):
-            token_budget_timer = gr.Timer(intervals.status, active=True)  # Use same interval as status
+            token_budget_timer = gr.Timer(refresh_interval, active=True)
             token_budget_timer.tick(
                 fn=event_handlers["update_token_budget"],
                 outputs=[self.components["token_budget_display"]]
             )
-            logging.getLogger(__name__).debug(f"✅ Token budget auto-refresh timer set ({intervals.status}s)")
+            logging.getLogger(__name__).debug(f"✅ Token budget auto-refresh timer set ({refresh_interval}s)")
 
-        # LLM selection updates - removed auto-refresh timer
-        # LLM selection components should only update when explicitly triggered,
-        # not on a timer, to avoid resetting user selections
+        # LLM selection updates - no auto-refresh (explicit only)
         logging.getLogger(__name__).debug("✅ LLM selection components will update only when explicitly triggered")
 
         # Logs updates
         if "logs_display" in self.components and event_handlers.get("refresh_logs"):
-            logs_timer = gr.Timer(intervals.logs, active=True)
+            logs_timer = gr.Timer(refresh_interval, active=True)
             logs_timer.tick(
                 fn=event_handlers["refresh_logs"],
                 outputs=[self.components["logs_display"]]
             )
-            logging.getLogger(__name__).debug(f"✅ Logs auto-refresh timer set ({intervals.logs}s)")
+            logging.getLogger(__name__).debug(f"✅ Logs auto-refresh timer set ({refresh_interval}s)")
 
         # Stats updates
         if "stats_display" in self.components and event_handlers.get("refresh_stats"):
-            stats_timer = gr.Timer(intervals.stats, active=True)
+            stats_timer = gr.Timer(refresh_interval, active=True)
             stats_timer.tick(
                 fn=event_handlers["refresh_stats"],
                 outputs=[self.components["stats_display"]]
             )
-            logging.getLogger(__name__).debug(f"✅ Stats auto-refresh timer set ({intervals.stats}s)")
+            logging.getLogger(__name__).debug(f"✅ Stats auto-refresh timer set ({refresh_interval}s)")
 
-        # Progress updates (for visual feedback) - now with timer
+        # Progress updates (visual feedback)
         if "progress_display" in self.components and event_handlers.get("update_progress_display"):
-            progress_timer = gr.Timer(intervals.progress, active=True)  # Use progress interval for faster updates
+            progress_timer = gr.Timer(refresh_interval, active=True)
             progress_timer.tick(
                 fn=event_handlers["update_progress_display"],
                 outputs=[self.components["progress_display"]]
             )
-            logging.getLogger(__name__).debug(f"✅ Progress auto-refresh timer set ({intervals.progress}s)")
+            logging.getLogger(__name__).debug(f"✅ Progress auto-refresh timer set ({refresh_interval}s)")
 
         logging.getLogger(__name__).info("🔄 Auto-refresh timers configured successfully")
+
 
     def get_components(self) -> dict[str, Any]:
         """Get all components created by the UI manager"""

@@ -12,11 +12,8 @@ import os
 
 @dataclass
 class RefreshIntervals:
-    """Auto-refresh intervals for different UI components"""
-    status: float = 2.0      # Status pane refresh interval (seconds)
-    logs: float = 3.0        # Logs pane refresh interval (seconds)
-    stats: float = 4.0       # Stats pane refresh interval (seconds)
-    progress: float = 3.0    # Progress pane refresh interval (seconds) - reduced to prevent UI blocking
+    """Auto-refresh interval for UI components"""
+    interval: float = 15.0    # UI refresh interval (seconds) - applies to all components
 
 @dataclass
 class AgentSettings:
@@ -91,11 +88,19 @@ class AgentConfig:
         self._load_refresh_intervals_from_env()
     
     def _load_refresh_intervals_from_env(self):
-        """Load refresh intervals from environment variables"""
-        # Note: All refresh intervals are internal application parameters
-        # They should be modified in the code, not via environment variables
-        # This method is kept for future extensibility but currently does nothing
-        pass
+        """Load refresh interval from environment variable, if provided.
+
+        Supported variable (seconds, float):
+          - UI_REFRESH_INTERVAL
+
+        Falls back to default when not set or invalid.
+        """
+        val = os.getenv('UI_REFRESH_INTERVAL')
+        if val is not None:
+            try:
+                self.settings.refresh_intervals.interval = float(val)
+            except ValueError:
+                pass
     
     def get_refresh_intervals(self) -> RefreshIntervals:
         """Get the current refresh intervals configuration"""
@@ -153,11 +158,7 @@ class AgentConfig:
         print(f"  Debug Mode: {self.settings.debug_mode}")
         print(f"  LangSmith Tracing: {self.settings.langsmith_tracing}")
         print(f"  LangSmith Project: {self.settings.langsmith_project}")
-        print(f"  Refresh Intervals:")
-        print(f"    Status: {self.settings.refresh_intervals.status}s")
-        print(f"    Logs: {self.settings.refresh_intervals.logs}s")
-        print(f"    Stats: {self.settings.refresh_intervals.stats}s")
-        print(f"    Progress: {self.settings.refresh_intervals.progress}s")
+        print(f"  Refresh Interval: {self.settings.refresh_intervals.interval}s")
 
 # Global configuration instance
 config = AgentConfig()
