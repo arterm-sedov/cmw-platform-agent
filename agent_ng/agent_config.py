@@ -12,8 +12,9 @@ import os
 
 @dataclass
 class RefreshIntervals:
-    """Auto-refresh interval for UI components"""
-    interval: float = 15.0    # UI refresh interval (seconds) - applies to all components
+    """Auto-refresh intervals for UI components"""
+    interval: float = 15.0     # General UI refresh interval (seconds)
+    iteration: float = 2.0     # Iteration/progress refresh interval (seconds)
 
 @dataclass
 class AgentSettings:
@@ -88,17 +89,25 @@ class AgentConfig:
         self._load_refresh_intervals_from_env()
     
     def _load_refresh_intervals_from_env(self):
-        """Load refresh interval from environment variable, if provided.
+        """Load refresh intervals from environment variables, if provided.
 
-        Supported variable (seconds, float):
-          - UI_REFRESH_INTERVAL
+        Supported variables (seconds, float):
+          - UI_REFRESH_INTERVAL          (general UI refresh)
+          - ITERATION_REFRESH_INTERVAL   (progress/iteration refresh)
 
-        Falls back to default when not set or invalid.
+        Falls back to defaults when not set or invalid.
         """
-        val = os.getenv('UI_REFRESH_INTERVAL')
-        if val is not None:
+        interval_val = os.getenv('UI_REFRESH_INTERVAL')
+        if interval_val is not None:
             try:
-                self.settings.refresh_intervals.interval = float(val)
+                self.settings.refresh_intervals.interval = float(interval_val)
+            except ValueError:
+                pass
+
+        iteration_val = os.getenv('ITERATION_REFRESH_INTERVAL')
+        if iteration_val is not None:
+            try:
+                self.settings.refresh_intervals.iteration = float(iteration_val)
             except ValueError:
                 pass
     
@@ -159,6 +168,7 @@ class AgentConfig:
         print(f"  LangSmith Tracing: {self.settings.langsmith_tracing}")
         print(f"  LangSmith Project: {self.settings.langsmith_project}")
         print(f"  Refresh Interval: {self.settings.refresh_intervals.interval}s")
+        print(f"  Iteration Interval: {self.settings.refresh_intervals.iteration}s")
 
 # Global configuration instance
 config = AgentConfig()

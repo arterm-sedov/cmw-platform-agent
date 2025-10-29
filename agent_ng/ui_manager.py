@@ -107,6 +107,35 @@ class UIManager:
                 sidebar_instance = self.components["sidebar_instance"]
                 sidebar_instance.connect_quick_action_dropdown()
 
+            # Wire end-of-turn event-driven refresh using existing chat events
+            try:
+                update_all_ui_handler = event_handlers.get("update_all_ui")
+                status_comp = self.components.get("status_display")
+                stats_comp = self.components.get("stats_display")
+                logs_comp = self.components.get("logs_display")
+
+                chat_tab_instance = self.components.get("chattab_tab")
+                if update_all_ui_handler and status_comp and stats_comp and logs_comp and chat_tab_instance:
+                    refresh_outputs = [status_comp, stats_comp, logs_comp]
+
+                    # After send (streaming) completes
+                    if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
+                        chat_tab_instance.streaming_event.then(
+                            fn=update_all_ui_handler,
+                            outputs=refresh_outputs
+                        )
+
+                    # After submit completes
+                    if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
+                        chat_tab_instance.submit_event.then(
+                            fn=update_all_ui_handler,
+                            outputs=refresh_outputs
+                        )
+
+                    logging.getLogger(__name__).debug("✅ Event-driven UI refresh wired for end-of-turn updates")
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"Could not wire event-driven refresh: {e}")
+
             # Setup auto-refresh timers
             self._setup_auto_refresh(demo, event_handlers)
 
@@ -206,14 +235,15 @@ class UIManager:
             )
             logging.getLogger(__name__).debug(f"✅ Stats auto-refresh timer set ({refresh_interval}s)")
 
-        # Progress updates (visual feedback)
+        # Progress/iteration updates (faster updates for turn progress)
         if "progress_display" in self.components and event_handlers.get("update_progress_display"):
-            progress_timer = gr.Timer(refresh_interval, active=True)
+            iteration_interval = get_refresh_intervals().iteration
+            progress_timer = gr.Timer(iteration_interval, active=True)
             progress_timer.tick(
                 fn=event_handlers["update_progress_display"],
                 outputs=[self.components["progress_display"]]
             )
-            logging.getLogger(__name__).debug(f"✅ Progress auto-refresh timer set ({refresh_interval}s)")
+            logging.getLogger(__name__).debug(f"✅ Progress auto-refresh timer set ({iteration_interval}s)")
 
         logging.getLogger(__name__).info("🔄 Auto-refresh timers configured successfully")
 
