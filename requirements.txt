@@ -24,7 +24,8 @@ openai>=1.0.0
 langchain-openai>=0.1.0
 
 # Google Gemini
-google-generativeai>=0.3.0
+google-genai>=1.49.0
+#google-generativeai>=0.8.5
 langchain-google-genai>=1.0.0
 
 # Groq
