@@ -10,6 +10,7 @@ hf_oauth: true
 hf_oauth_expiration_minutes: 480
 license: mit
 title: CMW Copilot
+python_version: 3.12
 ---
 
 # Comindware Analyst Copilot
