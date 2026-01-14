@@ -1,0 +1,128 @@
+# CMW Platform Agent - Requirements for Hugging Face Spaces
+# ======================================
+# Only libraries actually used in agent_ng/ and tools/ directories for Hugging Face Spaces
+
+# =============================================================================
+# CORE FRAMEWORK DEPENDENCIES
+# =============================================================================
+
+# Gradio - Modern web UI framework
+# Not needed in Huging Face, installed from README.md
+gradio==5.49.1
+
+# LangChain Ecosystem - Core AI framework
+langchain==0.3.27
+langchain-core==0.3.79
+langchain-community==0.3.31
+
+# =============================================================================
+# LLM PROVIDER INTEGRATIONS
+# =============================================================================
+
+# OpenAI
+openai==2.7.1
+langchain-openai==0.3.35
+
+# Google Gemini
+google-ai-generativelanguage==0.6.18
+google-api-core==2.25.1
+google-auth==2.40.3
+google-genai==1.36.0
+googleapis-common-protos==1.70.0
+langchain-google-genai==2.1.10
+
+# Groq
+groq==0.33.0
+langchain-groq==0.3.8
+
+# Mistral
+mistralai==1.9.11
+langchain-mistralai==0.2.12
+
+# HuggingFace
+huggingface-hub==1.1.2
+langchain-huggingface==0.3.1
+
+# GigaChat
+langchain-gigachat==0.3.12
+gigachat==0.1.42.post2
+
+# Search Tools
+langchain-tavily==0.2.13
+
+# =============================================================================
+# DATA PROCESSING & ANALYSIS
+# =============================================================================
+
+# Core Data Science
+numpy==2.3.4
+pandas==2.3.3
+scikit-learn==1.7.2
+
+# Image Processing
+pillow==12.0.0
+
+# Optional: Advanced Data Processing
+matplotlib==3.10.7
+pytesseract==0.3.13
+
+# =============================================================================
+# WEB & API INTEGRATIONS
+# =============================================================================
+
+# HTTP Requests
+requests==2.32.5
+
+# Configuration
+python-dotenv==1.2.1
+
+# =============================================================================
+# DOCUMENT PROCESSING
+# =============================================================================
+
+# PDF Processing - Best library for LLM processing
+pymupdf4llm==0.1.7
+
+
+# =============================================================================
+# TEXT PROCESSING (used in chat_tab.py)
+# =============================================================================
+
+# Markdown Processing
+Markdown==3.10
+
+# =============================================================================
+
+# Plotting
+matplotlib==3.10.7
+# OCR for image text extraction
+pytesseract==0.3.13
+
+# =============================================================================
+# OBSERVABILITY
+# =============================================================================
+
+# LangSmith - Primary observability
+langsmith==0.4.41
+
+# Langfuse - Alternative observability
+langfuse==3.9.0
+
+# =============================================================================
+# TOKEN COUNTING & UTILITIES
+# =============================================================================
+
+# Token Counting
+tiktoken==0.12.0
+
+# Data Validation
+pydantic==2.12.4
+# =============================================================================
+# SEARCH & RESEARCH TOOLS
+# =============================================================================
+
+# Wikipedia
+wikipedia==1.4.0
+
+# ArXiv
+arxiv==2.3.0
