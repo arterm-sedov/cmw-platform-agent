@@ -220,7 +220,21 @@ class LLMManager:
             models=[
                 # DeepSeek Models
                 {
+                    "model": "deepseek/deepseek-v3.1-terminus:exacto",
+                    "token_limit": 131000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
                     "model": "deepseek/deepseek-v3.1-terminus",
+                    "token_limit": 131000,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "deepseek/deepseek-v3.2-speciale",
                     "token_limit": 163840,
                     "max_tokens": 65536,
                     "temperature": 0,
@@ -228,15 +242,15 @@ class LLMManager:
                 },
                 {
                     "model": "deepseek/deepseek-chat-v3.1:free",
-                    "token_limit": 163840,
-                    "max_tokens": 4096,
+                    "token_limit": 131000,
+                    "max_tokens": 65536,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
                     "model": "deepseek/deepseek-r1-0528",
-                    "token_limit": 163840,
-                    "max_tokens": 4096,
+                    "token_limit": 131000,
+                    "max_tokens": 65536,
                     "temperature": 0,
                     "force_tools": True
                 },
@@ -291,6 +305,43 @@ class LLMManager:
                     "temperature": 0,
                     "force_tools": True
                 },
+                {
+                    "model": "qwen/qwen3-coder:exacto",
+                    "token_limit": 262144,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                # MoonshotAI (Kimi) Models
+                {
+                    "model": "moonshotai/kimi-k2-0905:exacto",
+                    "token_limit": 262144,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "moonshotai/kimi-k2-thinking",
+                    "token_limit": 262144,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                # Z.AI (GLM) Models
+                {
+                    "model": "z-ai/glm-4.6:exacto",
+                    "token_limit": 20000,
+                    "max_tokens": 128000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "z-ai/glm-4.7",
+                    "token_limit": 20000,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
                 # Other Models
                 {
                     "model": "anthropic/claude-sonnet-4.5",
@@ -300,7 +351,7 @@ class LLMManager:
                     "force_tools": True
                 },
                 {
-                    "model": "openai/gpt-oss-120b",
+                    "model": "openai/gpt-oss-120b:exacto",
                     "token_limit": 131072,
                     "max_tokens": 32768,
                     "temperature": 0,
