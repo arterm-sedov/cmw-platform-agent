@@ -377,6 +377,14 @@ class LLMManager:
                     "max_tokens": 4096,
                     "temperature": 0,
                     "force_tools": True
+                },
+                # MiniMax Models
+                {
+                    "model": "minimax/minimax-m2.1",
+                    "token_limit": 196608,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
                 }
             ],
             enable_chunking=False
