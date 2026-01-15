@@ -330,14 +330,14 @@ class LLMManager:
                 # Z.AI (GLM) Models
                 {
                     "model": "z-ai/glm-4.6:exacto",
-                    "token_limit": 20000,
+                    "token_limit": 200000,
                     "max_tokens": 128000,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
                     "model": "z-ai/glm-4.7",
-                    "token_limit": 20000,
+                    "token_limit": 200000,
                     "max_tokens": 65536,
                     "temperature": 0,
                     "force_tools": True
