@@ -14,7 +14,7 @@ RECORD_ENDPOINT = "webapi/Record"
 class UpsertRecordSchema(BaseModel):
     operation: str = Field(
         description=(
-            "Operation: 'create' or 'edit'. RU: Создать или Редактировать"
+            "Operation: 'create' or 'edit'."
         )
     )
     application_system_name: str = Field(
@@ -26,15 +26,15 @@ class UpsertRecordSchema(BaseModel):
     values: dict[str, Any] = Field(
         default_factory=dict,
         description=(
-            "Mapping of attribute system name to value. Unspecified attributes "
-            "will be sent as empty string ''."
+            "Array of attribute system name and value pairs. "
+            "Unspecified attributes will be set to an empty string ''."
         ),
     )
     record_id: str | None = Field(
         default=None,
         description=(
-            "Existing record identifier for edit operation. RU: Идентификатор "
-            "записи при редактировании"
+            "Existing record identifier for edit operation. "
+            "RU: Идентификатор записи при редактирования."
         ),
     )
 
