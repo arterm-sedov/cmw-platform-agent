@@ -112,11 +112,11 @@ class LLMInstance:
 class LLMManager:
     """
     Persistent LLM Manager that initializes and manages multiple LLM providers.
-    
+
     This class provides a centralized way to manage LLM instances across the
     application, ensuring they are initialized once and reused efficiently.
     """
-    
+
     # Single source of truth for LLM configuration
     LLM_CONFIGS = {
         LLMProvider.GEMINI: LLMConfig(
@@ -457,10 +457,10 @@ class LLMManager:
             enable_chunking=False
         ),
     }
-    
+
     # Single provider from environment variable
     # No more sequence - use AGENT_PROVIDER from dotenv
-    
+
     def __init__(self):
         """Initialize the LLM Manager"""
         self._instances: Dict[str, LLMInstance] = {}
@@ -477,8 +477,8 @@ class LLMManager:
         log_entry = f"[{timestamp}] [{level}] {message}"
         self._initialization_logs.append(log_entry)
         print(log_entry)  # Also print to console for real-time feedback
-    
-        
+
+
     def _get_api_key(self, config: LLMConfig) -> Optional[str]:
         """Get API key from environment variables"""
         api_key = os.getenv(config.api_key_env)
@@ -515,13 +515,13 @@ class LLMManager:
         if self._allowed_providers is None:
             return True
         return provider.value in self._allowed_providers
-        
+
     def _initialize_gemini_llm(self, config: LLMConfig, model_config: Dict[str, Any]) -> Optional[Any]:
         """Initialize Gemini LLM instance"""
         api_key = self._get_api_key(config)
         if not api_key:
             return None
-            
+
         try:
             llm = ChatGoogleGenerativeAI(
                 model=model_config["model"],
@@ -535,13 +535,13 @@ class LLMManager:
         except Exception as e:
             self._log_initialization(f"Failed to initialize {config.name}: {str(e)}", "ERROR")
             return None
-            
+
     def _initialize_groq_llm(self, config: LLMConfig, model_config: Dict[str, Any]) -> Optional[Any]:
         """Initialize Groq LLM instance"""
         api_key = self._get_api_key(config)
         if not api_key:
             return None
-            
+
         try:
             llm = ChatGroq(
                 model=model_config["model"],
@@ -555,18 +555,18 @@ class LLMManager:
         except Exception as e:
             self._log_initialization(f"Failed to initialize {config.name}: {str(e)}", "ERROR")
             return None
-            
+
     def _initialize_huggingface_llm(self, config: LLMConfig, model_config: Dict[str, Any]) -> Optional[Any]:
         """Initialize HuggingFace LLM instance"""
         api_key = self._get_api_key(config)
         if not api_key:
             return None
-            
+
         try:
             # Convert model to repo_id for HuggingFace
             repo_id = model_config["model"]
             task = model_config.get("task", "text-generation")
-            
+
             llm = ChatHuggingFace(
                 llm=HuggingFaceEndpoint(
                     repo_id=repo_id,
@@ -582,13 +582,13 @@ class LLMManager:
         except Exception as e:
             self._log_initialization(f"Failed to initialize {config.name}: {str(e)}", "ERROR")
             return None
-            
+
     def _initialize_openrouter_llm(self, config: LLMConfig, model_config: Dict[str, Any]) -> Optional[Any]:
         """Initialize OpenRouter LLM instance"""
         api_key = self._get_api_key(config)
         if not api_key:
             return None
-            
+
         try:
             base_url = os.getenv(config.api_base_env, "https://openrouter.ai/api/v1")
             llm = ChatOpenAI(
@@ -605,13 +605,13 @@ class LLMManager:
         except Exception as e:
             self._log_initialization(f"Failed to initialize {config.name}: {str(e)}", "ERROR")
             return None
-            
+
     def _initialize_mistral_llm(self, config: LLMConfig, model_config: Dict[str, Any]) -> Optional[Any]:
         """Initialize Mistral LLM instance"""
         api_key = self._get_api_key(config)
         if not api_key:
             return None
-            
+
         try:
             llm = ChatMistralAI(
                 model=model_config["model"],
@@ -626,7 +626,7 @@ class LLMManager:
         except Exception as e:
             self._log_initialization(f"Failed to initialize {config.name}: {str(e)}", "ERROR")
             return None
-            
+
     def _initialize_gigachat_llm(self, config: LLMConfig, model_config: Dict[str, Any]) -> Optional[Any]:
         """Initialize GigaChat LLM instance"""
         try:
@@ -642,29 +642,29 @@ class LLMManager:
                 self._log_initialization("Install with: pip install langchain-gigachat", "INFO")
                 self._log_initialization("Or: pip install langchain-community", "INFO")
                 return None
-        
+
         # Check for required environment variables
         api_key = self._get_api_key(config)
         if not api_key:
             self._log_initialization(f"{config.api_key_env} not found in environment variables. Skipping GigaChat...", "WARNING")
             self._log_initialization("To use GigaChat, set GIGACHAT_API_KEY in your environment variables.", "INFO")
             return None
-        
+
         scope = os.environ.get(config.scope_env, "GIGACHAT_SCOPE")
         if not scope:
             self._log_initialization("GIGACHAT_SCOPE not found in environment variables. Using default scope...", "WARNING")
             self._log_initialization("Available scopes: GIGACHAT_API_PERS, GIGACHAT_API_B2B, GIGACHAT_API_CORP", "INFO")
             scope = "GIGACHAT_API_PERS"  # Default scope
-        
+
         verify_ssl_env = os.environ.get(config.verify_ssl_env, "GIGACHAT_VERIFY_SSL")
         if verify_ssl_env is None:
             verify_ssl_env = "false"
         verify_ssl = str(verify_ssl_env).strip().lower() in ("1", "true", "yes", "y")
-        
+
         # Get additional optional parameters
         base_url = os.environ.get("GIGACHAT_BASE_URL", "https://gigachat.devices.sberbank.ru/api/v1")
         timeout = int(os.environ.get("GIGACHAT_TIMEOUT", "30"))
-        
+
         try:
             # Initialize LangChain GigaChat client with proper parameters
             giga_chat = LC_GigaChat(
@@ -680,27 +680,27 @@ class LLMManager:
                 repetition_penalty=model_config.get("repetition_penalty", 1.0),
                 streaming=True  # Enable streaming
             )
-            
+
             self._log_initialization(f"Successfully initialized {config.name} with model {model_config['model']}", "INFO")
             return giga_chat
-            
+
         except Exception as e:
             self._log_initialization(f"Failed to initialize {config.name}: {str(e)}", "ERROR")
             return None
-            
+
     def _initialize_llm_instance(self, provider: LLMProvider, model_index: int = 0) -> Optional[LLMInstance]:
         """Initialize a specific LLM instance"""
         config = self.LLM_CONFIGS.get(provider)
         if not config:
             self._log_initialization(f"Unknown provider: {provider}", "ERROR")
             return None
-            
+
         if model_index >= len(config.models):
             self._log_initialization(f"Model index {model_index} out of range for {provider}", "ERROR")
             return None
-            
+
         model_config = config.models[model_index]
-        
+
         # Initialize based on provider type
         llm = None
         if provider == LLMProvider.GEMINI:
@@ -715,15 +715,15 @@ class LLMManager:
             llm = self._initialize_mistral_llm(config, model_config)
         elif provider == LLMProvider.GIGACHAT:
             llm = self._initialize_gigachat_llm(config, model_config)
-            
+
         if llm is None:
             return None
-            
+
         # Apply Mistral wrapper if this is a Mistral model (regardless of provider)
         if MistralWrapper and is_mistral_model(model_config["model"]):
             llm = MistralWrapper(llm)
             self._log_initialization(f"Applied Mistral wrapper to {model_config['model']}", "INFO")
-        
+
         # Create LLM instance wrapper
         instance = LLMInstance(
             llm=llm,
@@ -735,22 +735,22 @@ class LLMManager:
             is_healthy=True,
             bound_tools=False
         )
-        
+
         return instance
-        
+
     def _get_instance_key(self, provider: LLMProvider, model_index: int = 0) -> str:
         """Generate a unique key for an LLM instance"""
         return f"{provider.value}_{model_index}"
-        
+
     def get_llm(self, provider: str, use_tools: bool = True, model_index: int = 0) -> Optional[LLMInstance]:
         """
         Get an LLM instance for the specified provider.
-        
+
         Args:
             provider: Provider name (e.g., "gemini", "groq")
             use_tools: Whether the LLM should support tools
             model_index: Index of the model to use (0 for first model)
-            
+
         Returns:
             LLMInstance or None if initialization failed
         """
@@ -763,9 +763,9 @@ class LLMManager:
         if not self._is_provider_allowed(provider_enum):
             self._log_initialization(f"Provider '{provider_enum.value}' is not allowed by CMW_ALLOWED_PROVIDERS", "ERROR")
             return None
-            
+
         instance_key = self._get_instance_key(provider_enum, model_index)
-        
+
         with self._lock:
             # Check if instance already exists and is healthy
             if instance_key in self._instances:
@@ -776,7 +776,7 @@ class LLMManager:
                 else:
                     # Remove unhealthy instance
                     del self._instances[instance_key]
-                    
+
             # Initialize new instance
             instance = self._initialize_llm_instance(provider_enum, model_index)
             if instance:
@@ -792,34 +792,34 @@ class LLMManager:
                             self._log_initialization(f"Failed to bind tools to {provider}: {e}", "WARNING")
                             # Don't fail the entire initialization if tool binding fails
                             instance.bound_tools = False
-                
+
                 self._instances[instance_key] = instance
                 return instance
-                
+
         return None
-    
+
     def get_llm_with_tools(self, provider: str, model_index: int = 0) -> Optional[LLMInstance]:
         """
         Get an LLM instance with tools bound for the specified provider.
-        
+
         Args:
             provider: Provider name (e.g., "gemini", "groq")
             model_index: Index of the model to use (0 for first model)
-            
+
         Returns:
             LLMInstance or None if initialization failed
         """
         return self.get_llm(provider, use_tools=True, model_index=model_index)
-    
+
     def create_new_llm_instance(self, provider: str, model_index: int = 0) -> Optional[LLMInstance]:
         """
         Create a NEW LLM instance for the specified provider (not cached).
         This is used for session isolation - each session gets its own instance.
-        
+
         Args:
             provider: Provider name (e.g., "gemini", "groq")
             model_index: Index of the model to use (0 for first model)
-            
+
         Returns:
             LLMInstance or None if initialization failed
         """
@@ -847,30 +847,70 @@ class LLMManager:
                     except Exception as e:
                         self._log_initialization(f"Failed to bind tools to NEW {provider}: {e}", "WARNING")
                         instance.bound_tools = False
-            
+
             return instance
         return None
-        
-    def get_agent_llm(self) -> Optional[LLMInstance]:
+
+    def _find_model_index(self, provider: LLMProvider, model_name: str) -> Optional[int]:
         """
-        Get the single LLM instance from AGENT_PROVIDER environment variable.
-        
+        Find the index of a model by name for a given provider.
+
+        Args:
+            provider: The LLM provider
+            model_name: The model name to find (exact match, case-sensitive)
+
         Returns:
-            Single LLM instance or None if not available
+            Model index if found, None otherwise
         """
-        import os
-        
-        # Get provider from environment variable
-        agent_provider = os.environ.get("AGENT_PROVIDER", "mistral")
-        
-        # Get the single instance
-        instance = self.get_llm(agent_provider)
-        if instance:
-            return instance
-        else:
-            print(f"Error: AGENT_PROVIDER '{agent_provider}' not available")
+        config = self.LLM_CONFIGS.get(provider)
+        if not config or not config.models:
             return None
-        
+
+        # Strip whitespace and do exact match
+        model_name = model_name.strip()
+        for index, model_config in enumerate(config.models):
+            config_model = model_config.get("model", "").strip()
+            if config_model == model_name:
+                return index
+
+        return None
+
+    def _get_configured_provider_and_model_index(self) -> Tuple[Optional[LLMProvider], int]:
+        """Get configured provider and model index from config/env"""
+        import os
+        try:
+            from agent_ng.agent_config import get_llm_settings
+            llm_settings = get_llm_settings()
+            provider = llm_settings.get('default_provider', 'openrouter')
+            default_model = llm_settings.get('default_model')
+        except ImportError:
+            provider = os.environ.get("AGENT_PROVIDER", "openrouter")
+            default_model = os.environ.get("AGENT_DEFAULT_MODEL")
+
+        try:
+            provider_enum = LLMProvider(provider.lower())
+        except ValueError:
+            return None, 0
+
+        model_index = 0
+        if default_model and default_model.strip():
+            found_index = self._find_model_index(provider_enum, default_model.strip())
+            if found_index is not None:
+                model_index = found_index
+
+        return provider_enum, model_index
+
+    def get_agent_llm(self) -> Optional[LLMInstance]:
+        """Get the single LLM instance from AGENT_PROVIDER and AGENT_DEFAULT_MODEL"""
+        provider_enum, model_index = self._get_configured_provider_and_model_index()
+        if not provider_enum:
+            return None
+
+        instance = self.get_llm(provider_enum.value, model_index=model_index)
+        if instance:
+            self._log_initialization(f"✅ Using {provider_enum.value}/{instance.model_name}", "INFO")
+        return instance
+
     def get_available_providers(self) -> List[str]:
         """Get list of available providers that can be initialized"""
         available = []
@@ -880,7 +920,7 @@ class LLMManager:
             if config and self._get_api_key(config) and self._is_provider_allowed(provider):
                 available.append(provider.value)
         return available
-        
+
     def get_provider_config(self, provider: str) -> Optional[LLMConfig]:
         """Get configuration for a specific provider"""
         try:
@@ -888,39 +928,39 @@ class LLMManager:
             return self.LLM_CONFIGS.get(provider_enum)
         except ValueError:
             return None
-            
+
     def health_check(self) -> Dict[str, Any]:
         """Perform health check on all instances"""
         current_time = time.time()
         if current_time - self._last_health_check < self._health_check_interval:
             return {"status": "skipped", "reason": "too_recent"}
-            
+
         self._last_health_check = current_time
-        
+
         with self._lock:
             healthy_count = 0
             total_count = len(self._instances)
-            
+
             for instance in self._instances.values():
                 # Simple health check - could be enhanced with actual API calls
                 if instance.is_healthy and (current_time - instance.last_used) < 3600:  # 1 hour
                     healthy_count += 1
-                    
+
         return {
             "status": "completed",
             "healthy_instances": healthy_count,
             "total_instances": total_count,
             "timestamp": current_time
         }
-        
+
     def get_initialization_logs(self) -> List[str]:
         """Get initialization logs"""
         return self._initialization_logs.copy()
-        
+
     def clear_logs(self):
         """Clear initialization logs"""
         self._initialization_logs.clear()
-        
+
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about managed LLM instances"""
         with self._lock:
@@ -929,7 +969,7 @@ class LLMManager:
                 "providers": {},
                 "initialization_logs_count": len(self._initialization_logs)
             }
-            
+
             for instance in self._instances.values():
                 provider = instance.provider.value
                 if provider not in stats["providers"]:
@@ -938,94 +978,94 @@ class LLMManager:
                         "healthy": 0,
                         "models": []
                     }
-                    
+
                 stats["providers"][provider]["count"] += 1
                 if instance.is_healthy:
                     stats["providers"][provider]["healthy"] += 1
                 stats["providers"][provider]["models"].append(instance.model_name)
-                
+
         return stats
-    
+
     def get_current_llm_context_window(self) -> int:
         """Get the context window size for the current LLM instance"""
         current_instance = self.get_agent_llm()
         if current_instance and current_instance.config:
             # Get token_limit from the current instance's config
             return current_instance.config.get("token_limit", 0)
-        
+
         # No fallback needed - if no current instance, return 0
         return 0
-    
+
     def get_tools(self) -> List[Any]:
         """Get all available tools from tools module (avoiding duplicates) - cached"""
         # Return cached tools if available
         if hasattr(self, '_cached_tools'):
             return self._cached_tools
-        
+
         tool_list = []
         tool_names = set()  # Track tool names to avoid duplicates
-        
+
         # Load tools from main tools module (primary source)
         try:
             import tools.tools as tools_module
             self._load_tools_from_module(tools_module, tool_list, "tools.tools", tool_names)
         except ImportError:
             self._log_initialization("Could not import tools.tools module", "WARNING")
-        
+
         # Load tools from attributes_tools submodule (only if not already loaded)
         try:
             import tools.attributes_tools as attributes_tools_module
             self._load_tools_from_module(attributes_tools_module, tool_list, "tools.attributes_tools", tool_names)
         except ImportError:
             self._log_initialization("Could not import tools.attributes_tools module", "WARNING")
-        
+
         # Load tools from applications_tools submodule (only if not already loaded)
         try:
             import tools.applications_tools as applications_tools_module
             self._load_tools_from_module(applications_tools_module, tool_list, "tools.applications_tools", tool_names)
         except ImportError:
             self._log_initialization("Could not import tools.applications_tools module", "WARNING")
-        
+
         # Load tools from templates_tools submodule (only if not already loaded)
         try:
             import tools.templates_tools as templates_tools_module
             self._load_tools_from_module(templates_tools_module, tool_list, "tools.templates_tools", tool_names)
         except ImportError:
             self._log_initialization("Could not import tools.templates_tools module", "WARNING")
-        
+
         # Cache the tools list
         self._cached_tools = tool_list
         return tool_list
-    
+
     def _load_tools_from_module(self, module, tool_list: List[Any], module_name: str, tool_names: set = None):
         """Load tools from a specific module (avoiding duplicates)"""
         if tool_names is None:
             tool_names = set()
-            
+
         for name, obj in module.__dict__.items():
             # Only include actual tool objects (decorated with @tool)
             # Check if it's a proper @tool decorated function
-            if (callable(obj) and 
-                not name.startswith("_") and 
+            if (callable(obj) and
+                not name.startswith("_") and
                 not isinstance(obj, type) and  # Exclude classes
                 hasattr(obj, '__module__') and  # Must have __module__ attribute
                 (obj.__module__ == module_name or obj.__module__ == 'langchain_core.tools.structured') and  # Include both tools module and LangChain tools
                 name not in ["CmwAgent", "CodeInterpreter", "submit_answer", "submit_intermediate_step", "web_search_deep_research_exa_ai"]):  # Exclude specific classes and internal tools
-                
+
                 # Check if it's a proper @tool decorated function
                 # @tool decorated functions have specific attributes that indicate they're LangChain tools
-                if (hasattr(obj, 'name') and 
-                    hasattr(obj, 'description') and 
+                if (hasattr(obj, 'name') and
+                    hasattr(obj, 'description') and
                     hasattr(obj, 'args_schema') and
                     hasattr(obj, 'func')):
                     # This is a proper @tool decorated function
                     tool_name = obj.name
-                    
+
                     # Skip if already loaded
                     if tool_name in tool_names:
                         self._log_initialization(f"Skipped duplicate tool: {tool_name} from {module_name}", "DEBUG")
                         continue
-                    
+
                     tool_list.append(obj)
                     tool_names.add(tool_name)
                     self._log_initialization(f"Loaded LangChain tool: {name} from {module_name}", "INFO")

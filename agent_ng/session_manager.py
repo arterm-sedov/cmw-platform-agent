@@ -230,14 +230,15 @@ class SessionData:
 
     def _initialize_session_agent(self) -> None:
         """Initialize the session agent with a unique LLM instance"""
-        try:
-            if hasattr(self.agent, "llm_manager") and self.agent.llm_manager:
-                # Create a unique LLM instance for this session
-                llm_instance = self.agent.llm_manager.create_new_llm_instance(self.llm_provider)
-                if llm_instance:
-                    self.agent.llm_instance = llm_instance
-                    logging.getLogger(__name__).info(f"✅ Initialized session {self.session_id} with {self.llm_provider}")
-                else:
-                    logging.getLogger(__name__).warning(f"⚠️ Failed to initialize LLM for session {self.session_id}")
-        except Exception as e:
-            logging.getLogger(__name__).exception(f"❌ Error initializing session agent: {e}")
+        if not (hasattr(self.agent, "llm_manager") and self.agent.llm_manager):
+            return
+
+        provider_enum, model_index = self.agent.llm_manager._get_configured_provider_and_model_index()
+        if not provider_enum:
+            return
+
+        llm_instance = self.agent.llm_manager.create_new_llm_instance(provider_enum.value, model_index)
+        if llm_instance:
+            self.agent.llm_instance = llm_instance
+            self.llm_provider = provider_enum.value
+            logging.getLogger(__name__).info(f"✅ Initialized session {self.session_id} with {provider_enum.value}/{llm_instance.model_name}")
