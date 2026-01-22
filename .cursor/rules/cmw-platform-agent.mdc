@@ -54,6 +54,8 @@ alwaysApply: true
 - Produce flawless code.
 - Reanalyze your changes twice for any issues you might have introduced.
 - Place imports always on top.
+- Use consistent formatting, e.g. the same type of quotes.
+- Do not add orphan spaces on empty lines.
 - Use environment variables for secrets.
 - Put reports to a relevant `docs/**/progress_reports/` folder under `/docs/` or its relevant `cwd/subfolder`
 - Put tests to `/agent_ng/_tests` preferably, or under a relevant `cwd/_tests` where the files are modified or created, otherwise to `@/.misc_files`
