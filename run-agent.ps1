@@ -136,18 +136,44 @@ function Start-Agent {
         }
     }
 
-    Activate-Venv -ActivatePath $VenvPath
+    # Resolve Python executable path
+    $pythonExe = $Python
+    if (-not $NoVenv -and (Test-Path -Path $VenvPath)) {
+        $venvDir = Split-Path -Path (Split-Path -Path $VenvPath -Parent) -Parent
+        $venvPython = Join-Path $venvDir "Scripts\python.exe"
+        if (Test-Path -Path $venvPython) {
+            $pythonExe = $venvPython
+            Write-Info "Using venv Python: $pythonExe"
+        }
+    }
 
-    Write-Info "Starting agent in background..."
-    # Let Python application handle its own logging via LOG_FILE environment variable
-    $arguments = "/c $Python `"$ScriptPath`""
-    $proc = Start-Process -FilePath cmd.exe -ArgumentList $arguments -WindowStyle Hidden -PassThru
+    # Resolve script path to absolute path
+    $scriptFullPath = Resolve-Path -Path $ScriptPath -ErrorAction Stop
+    $workingDir = Split-Path -Path $scriptFullPath -Parent
+
+    Write-Info "Starting agent in background (detached from terminal)..."
+    Write-Info "Working directory: $workingDir"
+    Write-Info "Script: $scriptFullPath"
+    
+    # Start Python directly (not through cmd.exe) to ensure complete detachment
+    # This ensures the process survives terminal closure
+    $proc = Start-Process -FilePath $pythonExe `
+        -ArgumentList "`"$scriptFullPath`"" `
+        -WorkingDirectory $workingDir `
+        -WindowStyle Hidden `
+        -PassThru `
+        -ErrorAction Stop
+    
     if (-not $proc) {
         Write-Err "Failed to start agent process"
         exit 1
     }
+    
+    # Store the Python process PID (not cmd.exe)
     Set-Content -NoNewline -Path $PidFilePath -Value $proc.Id
-    Write-Info "Agent started with PID $($proc.Id). Logging configured via LOG_FILE environment variable."
+    Write-Info "Agent started with PID $($proc.Id) (detached from terminal)."
+    Write-Info "Logging configured via LOG_FILE environment variable."
+    Write-Info "The agent will continue running even if this terminal is closed."
 }
 
 function Stop-Agent {
