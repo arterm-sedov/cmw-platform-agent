@@ -37,8 +37,8 @@ _ENCODING = tiktoken.get_encoding("cl100k_base")
 _OVERHEAD_CACHE: dict[tuple[int, tuple[str, ...], int], int] = {}
 
 # Token budget constants
-DEFAULT_TOOL_JSON_OVERHEAD_PCT = 0.10
-DEFAULT_SAFETY_MARGIN = 2000
+DEFAULT_TOOL_JSON_OVERHEAD_PCT = 0.0  # Reduced from 0.10 to avoid inflation
+DEFAULT_SAFETY_MARGIN = 0  # Reduced from 2000 as it was causing token inflation
 
 # Token budget status thresholds (percentage of context window used)
 TOKEN_STATUS_CRITICAL_THRESHOLD = 90.0

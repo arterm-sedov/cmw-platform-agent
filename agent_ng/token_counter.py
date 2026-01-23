@@ -776,13 +776,13 @@ class ConversationTokenTracker:
         messages_override: list[Any] | None = None,
     ) -> dict[str, Any]:
         """Compute and store a fresh budget snapshot."""
-        # Use more accurate estimation without overhead for display purposes
+        # Include only actual transmitted content (system prompt + tool schemas)
         snap = compute_token_budget_snapshot(
             agent=agent,
             conversation_id=conversation_id,
             messages_override=messages_override,
-            include_overhead=False,  # Don't add safety margin and tool schemas
-            add_json_overhead=False,  # Don't add JSON overhead to tool messages
+            include_overhead=True,   # Include system prompt + tool schemas
+            add_json_overhead=False, # No arbitrary JSON formatting overhead
         )
         self.set_budget_snapshot(snap)
         return snap
