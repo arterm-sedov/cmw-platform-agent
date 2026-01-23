@@ -188,11 +188,30 @@ class Sidebar(QuickActionsMixin):
             "provider_model_selector" in self.components
             and "status_display" in self.components
         ):
-            self.components["provider_model_selector"].change(
+            # Wire model switch to update status, then chain token budget update
+            # (token budget needs update because context window changes with model)
+            model_switch_event = self.components["provider_model_selector"].change(
                 fn=self._apply_llm_selection_combined,
                 inputs=[self.components["provider_model_selector"]],
                 outputs=[self.components["status_display"]],
             )
+            # Chain token budget update after model switch completes
+            # (token budget needs update because context window changes with model)
+            if (
+                "token_budget_display" in self.components
+                and hasattr(self, "event_handlers")
+            ):
+                update_token_budget_handler = self.event_handlers.get(
+                    "update_token_budget"
+                )
+                if update_token_budget_handler:
+                    model_switch_event.then(
+                        fn=update_token_budget_handler,
+                        outputs=[self.components["token_budget_display"]],
+                    )
+                    logging.getLogger(__name__).debug(
+                        "✅ Model switch wired to trigger token budget update"
+                    )
 
         # Token budget display change event for download button visibility
         if "token_budget_display" in self.components:
