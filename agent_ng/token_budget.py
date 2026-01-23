@@ -25,12 +25,10 @@ if TYPE_CHECKING:
 
 try:
     from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage
-    from langchain_core.utils.function_calling import convert_to_openai_tool
 except Exception:  # pragma: no cover
     BaseMessage = Any  # type: ignore[assignment]
     SystemMessage = Any  # type: ignore[assignment]
     ToolMessage = Any  # type: ignore[assignment]
-    convert_to_openai_tool = None  # type: ignore[assignment]
 
 
 _ENCODING = tiktoken.get_encoding("cl100k_base")
@@ -171,106 +169,28 @@ def compute_overhead_tokens(
     )
 
     for tool in tool_list:
-        tool_counted = False
-        tool_name = "?"
-
-        # Step 1: If tool is already a dict (OpenAI format from llm.kwargs["tools"]),
-        # serialize and count directly - this is the exact format sent to the LLM.
+        # Primary path: tool is already a dict (OpenAI format from llm.kwargs["tools"])
+        # This is the normal case after bind_tools() - serialize and count directly.
         if isinstance(tool, dict):
             try:
                 serialized = json.dumps(tool, separators=(",", ":"))
                 tokens = count_tokens(serialized)
                 total += tokens
-                tool_counted = True
                 tool_name = tool.get("function", {}).get("name", tool.get("name", "?"))
-                logger.debug(
-                    "Tool %s (dict format): %d tokens", tool_name, tokens
-                )
+                logger.debug("Tool %s: %d tokens", tool_name, tokens)
             except Exception as exc:
+                # Dict serialization failed (rare) - use fallback (~600 tokens avg)
+                total += 600
                 logger.debug(
-                    "Failed to serialize dict tool %s: %s", tool.get("name", "?"), exc
+                    "Tool dict serialization failed, using fallback: %s", exc
                 )
-
-        # Step 2: If tool is a LangChain BaseTool object, convert it to OpenAI format
-        # using LangChain's built-in converter, then serialize and count.
-        # This ensures we count the exact format that gets sent to the LLM.
-        if not tool_counted and convert_to_openai_tool is not None:
-            try:
-                # Convert BaseTool to OpenAI format
-                # (same as bind_tools() does internally)
-                openai_tool = convert_to_openai_tool(tool)
-                if isinstance(openai_tool, dict):
-                    serialized = json.dumps(openai_tool, separators=(",", ":"))
-                    tokens = count_tokens(serialized)
-                    total += tokens
-                    tool_counted = True
-                    tool_name = openai_tool.get("function", {}).get("name", "?")
-                    logger.debug(
-                        "Tool %s (converted from BaseTool): %d tokens",
-                        tool_name, tokens
-                    )
-            except Exception as exc:
-                tool_name = getattr(tool, "name", "?")
-                logger.debug(
-                    "Failed to convert BaseTool %s to OpenAI format: %s", tool_name, exc
-                )
-
-        # Step 3: Last resort fallback - try to extract schema manually
-        # (should rarely be needed if convert_to_openai_tool works)
-        if not tool_counted:
-            tool_name = getattr(tool, "name", "tool")
-            try:
-                # Try to get args_schema and serialize it
-                args_schema = getattr(tool, "args_schema", None)
-                if args_schema is not None:
-                    schema_str = ""
-                    if hasattr(args_schema, "model_json_schema"):
-                        schema_str = json.dumps(
-                            args_schema.model_json_schema(), separators=(",", ":")
-                        )
-                    elif hasattr(args_schema, "schema"):
-                        schema_str = json.dumps(
-                            args_schema.schema(), separators=(",", ":")
-                        )
-                    if schema_str:
-                        # Count schema + description (minimal but better than estimate)
-                        schema_tokens = count_tokens(schema_str)
-                        desc = getattr(tool, "description", "")
-                        desc_tokens = count_tokens(desc) if desc else 0
-                        # Add name tokens and basic structure overhead
-                        name_tokens = count_tokens(tool_name)
-                        structure_overhead = 30  # Basic JSON structure
-                        tokens = (
-                            schema_tokens + desc_tokens + name_tokens
-                            + structure_overhead
-                        )
-                        total += tokens
-                        tool_counted = True
-                        logger.debug(
-                            "Tool %s (schema extraction): %d tokens "
-                            "(schema:%d + desc:%d + name:%d + struct:%d)",
-                            tool_name, tokens, schema_tokens, desc_tokens,
-                            name_tokens, structure_overhead
-                        )
-            except Exception as exc:
-                logger.debug(
-                    "Failed to extract schema for tool %s: %s", tool_name, exc
-                )
-
-        # Step 4: Absolute last resort - estimation (should never happen in practice)
-        if not tool_counted:
-            tool_name = getattr(tool, "name", "tool")
-            tool_desc = getattr(tool, "description", "")
-            name_tokens = count_tokens(tool_name)
-            desc_tokens = count_tokens(tool_desc)
-            # Minimal estimate - this should rarely be used
-            estimated_tokens = max(50, name_tokens + desc_tokens) + 80
-            total += estimated_tokens
-            logger.warning(
-                "Tool %s: All serialization methods failed, using fallback estimate: "
-                "name(%d) + desc(%d) + overhead(80) = %d tokens",
-                tool_name, name_tokens, desc_tokens, estimated_tokens
-            )
+        else:
+            # Fallback: not a dict (e.g., raw BaseTool object)
+            # This shouldn't happen if llm.kwargs["tools"] is available
+            # Use ~600 tokens average based on empirical measurement
+            total += 600
+            tool_name = getattr(tool, "name", "?")
+            logger.debug("Tool %s is not a dict, using fallback: 600 tokens", tool_name)
 
     # Safety margin is hardcoded to 0, so no addition needed
 
