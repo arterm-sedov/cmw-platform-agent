@@ -440,9 +440,8 @@ class ConversationTokenTracker:
                 source="api",
             )
             self._last_api_tokens = token_count
-            self._last_turn_estimated_total_tokens = int(
-                self._turn_estimated_total_tokens or 0
-            )
+            # For normal completions with API values, don't contaminate with estimates
+            self._last_turn_estimated_total_tokens = 0
 
             # Commit to totals once per QA turn.
             self.conversation_tokens += token_count.total_tokens
