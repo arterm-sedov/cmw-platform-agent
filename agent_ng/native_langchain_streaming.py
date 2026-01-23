@@ -565,10 +565,10 @@ class NativeLangChainStreaming:
                         and agent.token_tracker
                     ):
                         usage_source = last_chunk if last_chunk is not None else accumulated_chunk
-                        ok = agent.token_tracker.accumulate_llm_call_usage(usage_source)
+                        ok = agent.token_tracker.update_turn_usage_from_api(usage_source)
                         if not ok and accumulated_chunk is not None and accumulated_chunk is not usage_source:
                             # Some providers attach usage only to the final aggregated chunk.
-                            agent.token_tracker.accumulate_llm_call_usage(accumulated_chunk)
+                            agent.token_tracker.update_turn_usage_from_api(accumulated_chunk)
                 except Exception as exc:
                     # Log directly - if logging fails, let it fail visibly for debugging
                     self._logger.debug("Failed to accumulate iteration usage: %s", exc)

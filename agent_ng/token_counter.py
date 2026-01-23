@@ -350,8 +350,8 @@ class ConversationTokenTracker:
             return
         self._turn_estimated_total_tokens = max(self._turn_estimated_total_tokens, val)
 
-    def accumulate_llm_call_usage(self, response: Any) -> bool:
-        """Accumulate provider-reported usage for one LLM call into the current turn."""
+    def update_turn_usage_from_api(self, response: Any) -> bool:
+        """Update turn usage with provider-reported accumulated usage."""
         if not self._turn_active:
             # Be resilient: allow accumulation even if begin_turn wasn't called.
             self.begin_turn()
@@ -362,16 +362,17 @@ class ConversationTokenTracker:
 
         input_tokens, output_tokens, total_tokens = api_tokens
         try:
-            self._turn_input_tokens += int(input_tokens or 0)
-            self._turn_output_tokens += int(output_tokens or 0)
-            self._turn_total_tokens += int(total_tokens or 0)
+            # API returns accumulated spending per turn - use replacement, not addition
+            self._turn_input_tokens = int(input_tokens or 0)
+            self._turn_output_tokens = int(output_tokens or 0)
+            self._turn_total_tokens = int(total_tokens or 0)
         except Exception as exc:
             logging.getLogger(__name__).debug(
                 "Failed to accumulate LLM call usage: %s", exc
             )
             return False
 
-        # Expose accumulated per-turn usage immediately for UI during iterations.
+        # Expose current per-turn accumulated usage for UI during iterations.
         self._last_api_tokens = TokenCount(
             self._turn_input_tokens,
             self._turn_output_tokens,
