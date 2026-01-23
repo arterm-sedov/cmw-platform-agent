@@ -31,6 +31,12 @@
 .PARAMETER Force
     Force stop all Python processes without confirmation when stopping the agent.
 
+.PARAMETER Port
+    Port to run the agent on (overrides GRADIO_DEFAULT_PORT from .env).
+
+.PARAMETER AutoPort
+    Automatically find an available port starting from the default port.
+
 .EXAMPLE
     .\run-agent.ps1
     Starts the agent in background, uses LOG_FILE from environment for logging, writes PID to cmw-agent.pid
@@ -55,6 +61,14 @@
     .\run-agent.ps1 -Action tail
     Follows the latest log file in real-time (respects Python log rotation).
 
+.EXAMPLE
+    .\run-agent.ps1 -Port 8080
+    Starts the agent on port 8080 (overrides GRADIO_DEFAULT_PORT from .env).
+
+.EXAMPLE
+    .\run-agent.ps1 -AutoPort
+    Starts the agent on an automatically detected available port.
+
 .NOTES
     Ensure PowerShell execution policy allows running local scripts, e.g.:
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
@@ -76,7 +90,11 @@ param (
 
     [switch]$NoVenv,
 
-    [switch]$Force
+    [switch]$Force,
+
+    [int]$Port,
+
+    [switch]$AutoPort
 )
 
 Set-StrictMode -Version Latest
@@ -155,10 +173,25 @@ function Start-Agent {
     Write-Info "Working directory: $workingDir"
     Write-Info "Script: $scriptFullPath"
     
+    # Build argument list for Python script
+    $scriptArgs = "`"$scriptFullPath`""
+    
+    # Add port override if specified
+    if ($Port) {
+        $scriptArgs += " -p $Port"
+        Write-Info "Port override: $Port"
+    }
+    
+    # Add auto-port flag if specified
+    if ($AutoPort) {
+        $scriptArgs += " --auto-port"
+        Write-Info "Auto-port mode enabled"
+    }
+    
     # Start Python directly (not through cmd.exe) to ensure complete detachment
     # This ensures the process survives terminal closure
     $proc = Start-Process -FilePath $pythonExe `
-        -ArgumentList "`"$scriptFullPath`"" `
+        -ArgumentList $scriptArgs `
         -WorkingDirectory $workingDir `
         -WindowStyle Hidden `
         -PassThru `
