@@ -42,8 +42,11 @@ def get_langfuse_config() -> LangfuseConfig:
         from dotenv import load_dotenv  # type: ignore
 
         load_dotenv()
-    except Exception:
-        pass
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).debug(
+            "Failed to load dotenv for Langfuse: %s", exc
+        )
     return LangfuseConfig()
 
 

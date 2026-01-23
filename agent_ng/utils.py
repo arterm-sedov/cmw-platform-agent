@@ -66,8 +66,11 @@ def get_tool_call_count(agent, session_id: str) -> int:
                     actual_tool_calls[tool_name] = (
                         actual_tool_calls.get(tool_name, 0) + 1
                     )
-            except:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug(
+                    "Failed to count tool calls from memory manager: %s", e
+                )
 
             # Also count ToolMessage objects in conversation history
             try:
@@ -81,8 +84,11 @@ def get_tool_call_count(agent, session_id: str) -> int:
                         actual_tool_calls[tool_name] = (
                             actual_tool_calls.get(tool_name, 0) + 1
                         )
-            except:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug(
+                    "Failed to count tool calls from conversation history: %s", e
+                )
 
         # Sum up all tool calls
         if actual_tool_calls:
@@ -92,7 +98,10 @@ def get_tool_call_count(agent, session_id: str) -> int:
                 total_tool_calls += call_count
             return total_tool_calls
 
-    except:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(
+            "Failed to count tool calls: %s", e
+        )
 
     return 0

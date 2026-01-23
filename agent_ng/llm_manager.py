@@ -18,6 +18,7 @@ Usage:
     llm = llm_manager.get_llm("gemini", use_tools=True)
 """
 
+import logging
 import os
 import threading
 import time
@@ -494,8 +495,11 @@ class LLMManager:
         """
         try:
             load_dotenv()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Non-critical: continue without dotenv if it fails to load
+            logging.getLogger(__name__).debug(
+                "Failed to load dotenv: %s", exc
+            )
         raw = (
             os.environ.get("LLM_ALLOWED_PROVIDERS")
             or ""
@@ -787,6 +791,21 @@ class LLMManager:
                         try:
                             instance.llm = instance.llm.bind_tools(tools_list)
                             instance.bound_tools = True
+                            # Calculate global average tool size (once ever)
+                            try:
+                                from agent_ng.token_budget import _calculate_avg_tool_size
+                                # Get bound tools as dicts from kwargs
+                                kwargs = getattr(instance.llm, "kwargs", None)
+                                if isinstance(kwargs, dict):
+                                    bound_tools = kwargs.get("tools")
+                                    if bound_tools:
+                                        _calculate_avg_tool_size(bound_tools)
+                            except Exception as exc:
+                                # Non-critical: continue if average calculation fails
+                                # Tools will still work, just with default 600 token estimate
+                                logging.getLogger(__name__).debug(
+                                    "Non-critical: failed to calculate tool averages: %s", exc
+                                )
                             self._log_initialization(f"Tools bound to {provider} instance ({len(tools_list)} tools)", "INFO")
                         except Exception as e:
                             self._log_initialization(f"Failed to bind tools to {provider}: {e}", "WARNING")
@@ -843,6 +862,20 @@ class LLMManager:
                     try:
                         instance.llm = instance.llm.bind_tools(tools_list)
                         instance.bound_tools = True
+                        # Calculate global average tool size (once ever)
+                        try:
+                            from agent_ng.token_budget import _calculate_avg_tool_size
+                            kwargs = getattr(instance.llm, "kwargs", None)
+                            if isinstance(kwargs, dict):
+                                bound_tools = kwargs.get("tools")
+                                if bound_tools:
+                                    _calculate_avg_tool_size(bound_tools)
+                        except Exception as exc:
+                            # Non-critical: continue if average calculation fails
+                            # Tools will still work, just with default 600 token estimate
+                            logging.getLogger(__name__).debug(
+                                "Non-critical: failed to calculate tool averages: %s", exc
+                            )
                         self._log_initialization(f"Tools bound to NEW {provider} instance ({len(tools_list)} tools)", "INFO")
                     except Exception as e:
                         self._log_initialization(f"Failed to bind tools to NEW {provider}: {e}", "WARNING")

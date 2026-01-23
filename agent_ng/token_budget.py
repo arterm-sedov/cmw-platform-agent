@@ -37,6 +37,9 @@ _ENCODING = tiktoken.get_encoding("cl100k_base")
 # Cleared cache to avoid using inflated values from failed serialization
 _OVERHEAD_CACHE: dict[tuple[int, tuple[str, ...], int], int] = {}
 
+# Global average tool size (calculated once at first tool binding)
+_GLOBAL_AVG_TOOL_SIZE: int | None = None
+
 # Token budget constants
 DEFAULT_TOOL_JSON_OVERHEAD_PCT = 0.0  # Reduced from 0.10 to avoid inflation
 DEFAULT_SAFETY_MARGIN = 0  # Reduced from 2000 as it was causing token inflation
@@ -129,6 +132,51 @@ def compute_context_tokens(
     return conversation_tokens, tool_tokens
 
 
+def _calculate_avg_tool_size(tools: Iterable[Any] | None) -> int:
+    """Calculate and set global average tool size from bound tools (dicts).
+
+    Called once at first tool binding to establish system-wide average.
+    Returns the calculated average (or 600 fallback).
+    """
+    global _GLOBAL_AVG_TOOL_SIZE
+
+    # Already calculated? Return existing value
+    if _GLOBAL_AVG_TOOL_SIZE is not None:
+        return _GLOBAL_AVG_TOOL_SIZE
+
+    tool_list = list(tools or [])
+    if not tool_list:
+        _GLOBAL_AVG_TOOL_SIZE = 600
+        return 600
+
+    serialized_tokens = []
+    for tool in tool_list:
+        if isinstance(tool, dict):
+            try:
+                serialized = json.dumps(tool, separators=(",", ":"))
+                tokens = count_tokens(serialized)
+                serialized_tokens.append(tokens)
+            except Exception as exc:
+                # Log failed serialization (non-critical for average calculation)
+                tool_name = tool.get("function", {}).get("name", tool.get("name", "?"))
+                logging.getLogger(__name__).warning(
+                    "Failed to serialize tool %s for avg calculation: %s",
+                    tool_name, exc
+                )
+
+    if serialized_tokens:
+        avg = sum(serialized_tokens) // len(serialized_tokens)
+        _GLOBAL_AVG_TOOL_SIZE = avg
+        logging.getLogger(__name__).info(
+            f"Calculated global tool average: {avg} tokens "
+            f"(from {len(serialized_tokens)} tools)"
+        )
+        return avg
+
+    _GLOBAL_AVG_TOOL_SIZE = 600
+    return 600
+
+
 def compute_overhead_tokens(
     *,
     tools: Iterable[Any] | None,
@@ -168,6 +216,9 @@ def compute_overhead_tokens(
         [type(t).__name__ for t in tool_list[:5]]  # Log first 5 types
     )
 
+    # Get global average tool size (calculated once at first tool binding)
+    avg_tokens = _GLOBAL_AVG_TOOL_SIZE if _GLOBAL_AVG_TOOL_SIZE is not None else 600
+
     for tool in tool_list:
         # Primary path: tool is already a dict (OpenAI format from llm.kwargs["tools"])
         # This is the normal case after bind_tools() - serialize and count directly.
@@ -179,18 +230,21 @@ def compute_overhead_tokens(
                 tool_name = tool.get("function", {}).get("name", tool.get("name", "?"))
                 logger.debug("Tool %s: %d tokens", tool_name, tokens)
             except Exception as exc:
-                # Dict serialization failed (rare) - use fallback (~600 tokens avg)
-                total += 600
+                # Use cached average for failed serialization
+                total += avg_tokens
                 logger.debug(
-                    "Tool dict serialization failed, using fallback: %s", exc
+                    "Tool dict serialization failed, using cached avg: %d tokens (%s)",
+                    avg_tokens, exc
                 )
         else:
             # Fallback: not a dict (e.g., raw BaseTool object)
-            # This shouldn't happen if llm.kwargs["tools"] is available
-            # Use ~600 tokens average based on empirical measurement
-            total += 600
+            # Use cached average calculated at binding time
+            total += avg_tokens
             tool_name = getattr(tool, "name", "?")
-            logger.debug("Tool %s is not a dict, using fallback: 600 tokens", tool_name)
+            logger.debug(
+                "Tool %s is not a dict, using cached avg: %d tokens",
+                tool_name, avg_tokens
+            )
 
     # Safety margin is hardcoded to 0, so no addition needed
 

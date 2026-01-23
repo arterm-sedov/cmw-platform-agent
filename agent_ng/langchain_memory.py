@@ -393,8 +393,11 @@ class LangChainConversationChain:
                 token_tracker = get_token_tracker(conversation_id)
                 token_tracker.track_llm_response(response, messages)
         except Exception as e:
-            # Silently fail - token counting is not critical
-            pass
+            # Token counting failure - non-critical, continue without tracking
+            import logging
+            logging.getLogger(__name__).debug(
+                "Non-critical token counting failed: %s", e
+            )
 
     def _execute_tool(self, tool_name: str, tool_args: dict) -> str:
         """Execute a tool and return the result"""
