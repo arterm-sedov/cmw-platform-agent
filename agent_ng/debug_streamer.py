@@ -81,7 +81,7 @@ class LogEntry:
 class DebugStreamer:
     """
     Lean, efficient debug streamer for real-time logging.
-    
+
     Features:
     - Thread-safe queue-based logging
     - Real-time streaming to Gradio interface
@@ -230,7 +230,7 @@ class DebugStreamer:
 class SessionAwareLogHandler(logging.Handler):
     """
     Session-aware log handler that routes logs to appropriate session handlers.
-    
+
     This handler determines the current session context and routes log records
     to the appropriate session-specific log handler.
     """
@@ -254,7 +254,7 @@ class SessionAwareLogHandler(logging.Handler):
         thread_local_id = getattr(self._session_context, 'session_id', None)
         if thread_local_id:
             return thread_local_id
-        
+
         # Fallback to global context
         with self._context_lock:
             return self._global_session_context.get(threading.get_ident(), None)
@@ -264,7 +264,7 @@ class SessionAwareLogHandler(logging.Handler):
         try:
             # Get current session ID
             session_id = self.get_current_session_id()
-            
+
             # Try to extract session ID from the log record if available
             if hasattr(record, 'session_id') and record.session_id:
                 session_id = record.session_id
@@ -278,12 +278,12 @@ class SessionAwareLogHandler(logging.Handler):
                         if session_match:
                             session_id = session_match.group(1)
                             break
-            
+
             # Try to extract session ID from the log message itself if not found in context
             if not session_id:
                 import re
                 message = record.getMessage()
-                
+
                 # Look for patterns like "gradio_abc123" or "session_123" in the message
                 # This is the most common pattern in our logs
                 session_match = re.search(r'(?:gradio[_\s]*|session[_\s]*)([a-zA-Z0-9_]+)', message, re.IGNORECASE)
@@ -304,7 +304,7 @@ class SessionAwareLogHandler(logging.Handler):
                             id_match = re.search(r'([a-zA-Z0-9_]+)$', session_match.group(1))
                             if id_match:
                                 session_id = id_match.group(1)
-            
+
             # Only route to session-specific handler if we found a valid session ID
             if session_id:
                 session_handler = get_log_handler(session_id)
@@ -320,7 +320,7 @@ class SessionAwareLogHandler(logging.Handler):
 class GradioLogHandler(logging.Handler):
     """
     Handler for streaming logs to Gradio interface.
-    
+
     This class handles the conversion of log entries to Gradio-compatible
     formats and manages the streaming to the Logs tab.
     """
@@ -419,7 +419,7 @@ class GradioLogHandler(logging.Handler):
 class ThinkingTransparency:
     """
     Handler for thinking transparency in Gradio ChatMessage.
-    
+
     This class manages the creation of thinking sections that can be
     displayed in collapsible accordions in the Gradio chat interface.
     """
@@ -498,7 +498,7 @@ def get_log_handler(session_id: str = "default") -> GradioLogHandler:
     if session_id not in _log_handlers:
         debug_streamer = get_debug_streamer(session_id)
         _log_handlers[session_id] = GradioLogHandler(debug_streamer)
-    
+
     # Set session context for this session to ensure proper routing
     try:
         session_aware_handler = get_session_aware_handler()
@@ -506,7 +506,7 @@ def get_log_handler(session_id: str = "default") -> GradioLogHandler:
     except Exception:
         # If setting context fails, continue anyway
         pass
-    
+
     return _log_handlers[session_id]
 
 

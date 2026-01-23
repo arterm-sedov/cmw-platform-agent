@@ -28,7 +28,7 @@ class EditOrCreateDocumentAttributeSchema(CommonAttributeFields):
     def non_empty_str(cls, v: Any) -> Any:
         """
         Validate that string fields are not empty.
-        
+
         This field validator is automatically applied to the name, system_name, 
         application_system_name, and template_system_name fields in all schemas
         that inherit from CommonAttributeFields, ensuring consistent validation.
@@ -68,9 +68,9 @@ def edit_or_create_document_attribute(
 ) -> Dict[str, Any]:
     """
     Edit or Create a document attribute (Документа).
-    
+
     Document attribute stores file attachments with configurable file format filters.
-    
+
     Can also store signed documents with digital signatures.
 
     Returns:

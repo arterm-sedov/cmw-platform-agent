@@ -61,3 +61,4 @@ alwaysApply: true
 - Put tests to `/agent_ng/_tests` preferably, or under a relevant `cwd/_tests` where the files are modified or created, otherwise to `@/.misc_files`
 - Do not add unnecessary useless try-catches unless they are helpful or add value.
 - Do not leave empty `except: pass` constructs, add logging via logging engine. Empty except:pass are not debuggable. Add logging or fail. DO NOT add silent exceptions!
+- Do not use nested exceptions they are ugly and non-debuggable.

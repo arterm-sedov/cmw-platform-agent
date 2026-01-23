@@ -214,7 +214,7 @@ def create_edit_record(
             meta = attr_meta_by_alias.get(key) or {}
             if meta.get("isSystem", False) and key != "_color":
                 continue
-                
+
             coerced = _coerce_value(
                 meta.get("type", ""), is_multi=bool(meta.get("isMultiValue")), value=val
             )
@@ -256,14 +256,14 @@ def _normalize_upsert_result(result: dict[str, Any], provided_record_id: str | N
     # Extract record_id from response
     record_id = None
     raw_response = result.get("raw_response")
-    
+
     if isinstance(raw_response, str):
         # Direct string response (record ID)
         record_id = raw_response
     elif isinstance(raw_response, dict):
         # WebApiResponse[System.String] - record ID is in the "response" field
         record_id = raw_response.get("response")
-    
+
     # For edit operations, if we can't extract from response, 
     # use the provided record_id that was used in the request
     if record_id is None and provided_record_id:

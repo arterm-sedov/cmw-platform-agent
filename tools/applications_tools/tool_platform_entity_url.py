@@ -28,7 +28,7 @@ def get_platform_entity_url(
     ) -> Dict[str, Any]:
     """
     Get the URL for an entity by its type and sytem name
-        
+
     Returns:
         dict: {
             "success": bool - True if the entity URL was generated successfully
@@ -42,7 +42,7 @@ def get_platform_entity_url(
         # Load server config to get base_url
         cfg = requests_._load_server_config()
         base_url = cfg.base_url.rstrip("/")
-        
+
         if not base_url:
             final_result = {
                 "success": False,
@@ -77,18 +77,18 @@ def get_platform_entity_url(
                 if alias.strip() == system_name.strip():
                     entity_id = item['id']
                     break
-   
+
         entity_url = f"{base_url}/#Resolver/{entity_id}"
-        
+
         final_result = {
             "success": True,
             "status_code": 200,
             "entity_url": entity_url,
             "error": None
         }
-        
+
         return final_result
-        
+
     except Exception as e:
         final_result = {
             "success": False,

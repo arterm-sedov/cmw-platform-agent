@@ -20,29 +20,29 @@ load_dotenv()
 
 class LangSmithConfig:
     """Lean LangSmith configuration manager"""
-    
+
     def __init__(self):
         # Get centralized configuration
         langsmith_settings = get_langsmith_settings()
         self.tracing_enabled = langsmith_settings['langsmith_tracing']
         self.project_name = langsmith_settings['langsmith_project']
-        
+
         # Get additional LangSmith-specific settings from environment
         self.api_key = self._get_api_key()
         self.workspace_id = self._get_workspace_id()
-        
+
     def _get_api_key(self) -> Optional[str]:
         """Get LangSmith API key"""
         return os.getenv("LANGSMITH_API_KEY")
-    
+
     def _get_workspace_id(self) -> Optional[str]:
         """Get LangSmith workspace ID"""
         return os.getenv("LANGSMITH_WORKSPACE_ID")
-    
+
     def is_configured(self) -> bool:
         """Check if LangSmith is properly configured"""
         return self.tracing_enabled and self.api_key is not None
-    
+
     def get_config_dict(self) -> dict:
         """Get configuration as dictionary"""
         return {
@@ -62,16 +62,16 @@ def get_langsmith_config() -> LangSmithConfig:
 def setup_langsmith_environment():
     """Setup LangSmith environment variables if not already set"""
     config = get_langsmith_config()
-    
+
     if config.tracing_enabled and config.api_key:
         # Set environment variables for LangSmith
         os.environ["LANGSMITH_TRACING"] = "true"
         os.environ["LANGSMITH_API_KEY"] = config.api_key
         os.environ["LANGSMITH_PROJECT"] = config.project_name
-        
+
         if config.workspace_id:
             os.environ["LANGSMITH_WORKSPACE_ID"] = config.workspace_id
-        
+
         print(f"✅ LangSmith tracing enabled for project: {config.project_name}")
         return True
     else:
@@ -86,7 +86,7 @@ def setup_langsmith_environment():
 def get_openai_wrapper():
     """Get OpenAI wrapper for tracing if LangSmith is configured (deprecated - use direct import)"""
     config = get_langsmith_config()
-    
+
     if config.is_configured():
         try:
             from langsmith.wrappers import wrap_openai

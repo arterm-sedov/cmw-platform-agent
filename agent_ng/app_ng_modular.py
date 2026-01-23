@@ -1328,11 +1328,11 @@ class NextGenApp:
         # This uses the same session isolation as the UI and returns only the last assistant text
         def _api_ask(question: str, username: str = None, password: str = None, base_url: str = None, session_id: str = None) -> str:
             _logger.info(f"🔗 API /ask called with question: {question[:50]}...")
-            
+
             # Use provided session_id or generate a new one
             if not session_id:
                 session_id = f"api_{uuid.uuid4().hex[:16]}_{int(time.time())}"
-                      
+
             # Set session context for logging and request config resolution
             self.set_session_context(session_id)
             set_current_session_id(session_id)
@@ -1346,21 +1346,21 @@ class NextGenApp:
                     config["password"] = password.strip()
                 if base_url is not None:
                     config["url"] = base_url.strip()
-                
+
                 if config:
                     set_session_config(session_id, config)
                     _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
 
             # Get user agent with session configuration
             user_agent = self.get_user_agent(session_id)
-            
+
             # Collect all streaming content into a single response
             response_content = ""
             try:
                 # Use asyncio to run the async stream_message method
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                
+
                 async def _collect_response():
                     nonlocal response_content
                     async for event in user_agent.stream_message(question, session_id):
@@ -1375,10 +1375,10 @@ class NextGenApp:
                             error = event.get("content", "Error")
                             response_content = f"❌ {error}"
                             return
-                
+
                 loop.run_until_complete(_collect_response())
                 loop.close()
-                
+
             except Exception as e:
                 _logger.error(f"API /ask error: {e}")
                 return f"❌ {e}"
@@ -1396,9 +1396,9 @@ class NextGenApp:
 
             self.set_session_context(session_id)
             set_current_session_id(session_id)
-            
+
             user_agent = self.get_user_agent(session_id)
-            
+
             # Set session configuration if provided
             if any([username, password, base_url]):
                 config = {}
@@ -1408,7 +1408,7 @@ class NextGenApp:
                     config["password"] = password.strip()
                 if base_url is not None:
                     config["url"] = base_url.strip()
-                
+
                 if config:
                     set_session_config(session_id, config)
                     _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
@@ -1439,20 +1439,20 @@ class NextGenApp:
                     yield f"❌ {e}"
 
             # Proper async-to-sync bridge using threading and queue
-            
+
             def run_async_generator():
                 async def _run():
                     async for item in _stream():
                         queue.put(item)
                     queue.put(None)  # Signal end
-                
+
                 # Run in a new event loop in a separate thread
                 asyncio.run(_run())
-            
+
             queue = Queue()
             thread = threading.Thread(target=run_async_generator)
             thread.start()
-            
+
             try:
                 while True:
                     try:

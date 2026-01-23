@@ -96,7 +96,7 @@ class FinalAnswer(BaseModel):
     confidence: float = Field(description="Confidence level from 0.0 to 1.0", ge=0.0, le=1.0)
     sources: List[str] = Field(description="List of sources or tools used to generate this answer", default_factory=list)
     reasoning: Optional[str] = Field(description="Brief explanation of the reasoning process", default=None)
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -116,15 +116,15 @@ def trace_prints_with_context(context_type: str):
         def wrapper(self, *args, **kwargs):
             # Store original print
             original_print = print
-            
+
             # Store current context
             old_context = getattr(self, '_current_trace_context', None)
             self._current_trace_context = context_type
-            
+
             def trace_print(*print_args, **print_kwargs):
                 # Original print functionality
                 original_print(*print_args, **print_kwargs)
-                
+
                 # Write to current LLM's stdout buffer if available
                 if hasattr(self, 'current_llm_stdout_buffer') and self.current_llm_stdout_buffer:
                     try:
@@ -133,7 +133,7 @@ def trace_prints_with_context(context_type: str):
                     except Exception as e:
                         # Fallback if buffer write fails
                         original_print(f"[Buffer Error] Failed to write to stdout buffer: {e}")
-                
+
                 # Add to appropriate context
                 if hasattr(self, 'question_trace') and self.question_trace is not None:
                     try:
@@ -141,10 +141,10 @@ def trace_prints_with_context(context_type: str):
                     except Exception as e:
                         # Fallback to basic logging if trace fails
                         original_print(f"[Trace Error] Failed to add log entry: {e}")
-            
+
             # Override print for this function call
             builtins.print = trace_print
-            
+
             try:
                 result = func(self, *args, **kwargs)
             finally:
@@ -152,7 +152,7 @@ def trace_prints_with_context(context_type: str):
                 builtins.print = original_print
                 # Restore previous context
                 self._current_trace_context = old_context
-            
+
             return result
         return wrapper
     return decorator
@@ -165,11 +165,11 @@ def trace_prints(func):
     def wrapper(self, *args, **kwargs):
         # Store original print
         original_print = print
-        
+
         def trace_print(*print_args, **print_kwargs):
             # Original print functionality
             original_print(*print_args, **print_kwargs)
-            
+
             # Write to current LLM's stdout buffer if available
             if hasattr(self, 'current_llm_stdout_buffer') and self.current_llm_stdout_buffer:
                 try:
@@ -178,7 +178,7 @@ def trace_prints(func):
                 except Exception as e:
                     # Fallback if buffer write fails
                     original_print(f"[Buffer Error] Failed to write to stdout buffer: {e}")
-            
+
             # Add to trace
             if hasattr(self, 'question_trace') and self.question_trace is not None:
                 try:
@@ -192,16 +192,16 @@ def trace_prints(func):
                 except Exception as e:
                     # Fallback to basic logging if trace fails
                     original_print(f"[Trace Error] Failed to add log entry: {e}")
-        
+
         # Override print for this function call
         builtins.print = trace_print
-        
+
         try:
             result = func(self, *args, **kwargs)
         finally:
             # Restore original print
             builtins.print = original_print
-        
+
         return result
     return wrapper
 
@@ -239,7 +239,7 @@ class StreamingCallbackHandler(BaseCallbackHandler):
         self.streaming_generator = streaming_generator
         self.current_tool_name = None
         self.tool_args = None
-        
+
     def on_llm_start(self, serialized, prompts, **kwargs):
         """Called when LLM starts generating"""
         if self.streaming_generator:
@@ -248,7 +248,7 @@ class StreamingCallbackHandler(BaseCallbackHandler):
                 "content": "🤖 **LLM is thinking...**\n",
                 "metadata": {"llm_type": serialized.get("name", "unknown")}
             })
-    
+
     def on_llm_stream(self, chunk, **kwargs):
         """Called for each streaming chunk from LLM"""
         if self.streaming_generator:
@@ -259,12 +259,12 @@ class StreamingCallbackHandler(BaseCallbackHandler):
                     "content": content,
                     "metadata": {"chunk_type": "llm_response"}
                 })
-    
+
     def on_tool_start(self, serialized, input_str, **kwargs):
         """Called when a tool starts executing"""
         self.current_tool_name = serialized.get("name", "unknown_tool")
         self.tool_args = input_str
-        
+
         if self.streaming_generator:
             self.streaming_generator.send({
                 "type": "tool_start",
@@ -274,7 +274,7 @@ class StreamingCallbackHandler(BaseCallbackHandler):
                     "tool_args": self.tool_args
                 }
             })
-    
+
     def on_tool_end(self, output, **kwargs):
         """Called when a tool finishes executing"""
         if self.streaming_generator:
@@ -288,7 +288,7 @@ class StreamingCallbackHandler(BaseCallbackHandler):
                     "tool_output": output
                 }
             })
-    
+
     def on_llm_end(self, response, **kwargs):
         """Called when LLM finishes generating"""
         if self.streaming_generator:
@@ -334,7 +334,7 @@ class CmwAgent:
         tool_calls_similarity_threshold: Silarity for tool deduplication
         max_summary_tokens: Global token limit for summaries
     """
-    
+
     # Single source of truth for LLM configuration
     LLM_CONFIG = {
         "default": {
@@ -536,7 +536,7 @@ class CmwAgent:
             "enable_chunking": False
         },
     }
-    
+
     # Default LLM sequence order - references LLM_CONFIG keys
     DEFAULT_LLM_SEQUENCE = [
         "openrouter",
@@ -548,7 +548,7 @@ class CmwAgent:
     ]
     # Print truncation length for debug output
     MAX_PRINT_LEN = 1000
-    
+
     def __init__(self, provider: str = None, log_sink=None, ENABLE_VECTOR_SIMILARITY: bool = True):
         """
         Initialize the agent, loading the system prompt, tools, retriever, and LLM.
@@ -590,10 +590,10 @@ class CmwAgent:
                     self.token_limits[provider_key] = [model.get("token_limit", self.LLM_CONFIG["default"]["token_limit"]) for model in models]
                 else:
                     self.token_limits[provider_key] = [self.LLM_CONFIG["default"]["token_limit"]]
-            
+
             # Initialize token usage tracking for rate limiting
             self._provider_token_usage = {}
-            
+
             # Enhanced conversation state management
             self.conversation_states = defaultdict(dict)  # conversation_id -> state
             self.conversation_histories = defaultdict(list)  # conversation_id -> chat_history
@@ -611,7 +611,7 @@ class CmwAgent:
                     "total_attempts": 0
                 }
             self.total_questions = 0
-            
+
             # Initialize tracing system
             self.question_trace = None
             self.current_llm_call_id = None
@@ -656,19 +656,19 @@ class CmwAgent:
             for idx, llm_type in enumerate(llm_types_to_init):
                 config = self.LLM_CONFIG[llm_type]
                 llm_name = config["name"]
-                
+
                 # Skip LLMs that don't support tools - we only want tool-capable LLMs
                 if not config.get("tool_support", False):
                     print(f"⏭️ Skipping {llm_name} - no tool support")
                     continue
-                
+
                 for model_config in config["models"]:
                     model_id = model_config.get("model", "")
                     print(f"🔄 Initializing LLM {llm_name} (model: {model_id}) ({idx+1} of {len(llm_types_to_init)})")
                     llm_instance = None
                     tools_ok = None
                     error_tools = None
-                    
+
                     try:
                         def get_llm_instance(llm_type, config, model_config):
                             if llm_type == "gemini":
@@ -685,15 +685,15 @@ class CmwAgent:
                                 return self._init_gigachat_llm(config, model_config)
                             else:
                                 return None
-                        
+
                         llm_instance = get_llm_instance(llm_type, config, model_config)
                         if llm_instance is None:
                             error_tools = "instantiation returned None"
                             continue
-                        
+
                         # Filter tools for provider-specific schema limitations
                         safe_tools = self._filter_tools_for_llm(self.tools, llm_type)
-                        
+
                         # Special handling for GigaChat - check if tool calling is supported
                         if llm_type == "gigachat":
                             try:
@@ -706,11 +706,11 @@ class CmwAgent:
                                 llm_with_tools = llm_instance  # Use without tools
                         else:
                             llm_with_tools = llm_instance.bind_tools(safe_tools)
-                        
+
                         # Test tool calling directly since our agent only works with tools
                         tools_ok, tools_error, test_answer = self._test_llm_tool_calling(f"{llm_name} (model: {model_id})", llm_type, llm_with_tools)
                         basic_ok = tools_ok  # If tools work, basic functionality works too
-                        
+
                         # Store result for summary
                         self.llm_init_results.append({
                             "provider": llm_name,
@@ -722,10 +722,10 @@ class CmwAgent:
                             "error_tools": tools_error,
                             "test_answer": test_answer
                         })
-                        
+
                         # Check force_tools flag - if True, use even if tools test failed (but only if basic works)
                         force_tools = config.get("force_tools", False) or model_config.get("force_tools", False)
-                        
+
                         if basic_ok and tools_ok:
                             # LLM passed both basic and tool tests - mark as fully functional
                             self.active_model_config[llm_type] = model_config
@@ -734,7 +734,7 @@ class CmwAgent:
                             self.llms.append(llm_instance)
                             self.llms_with_tools.append(llm_with_tools)
                             self.llm_provider_names.append(llm_type)
-                            
+
                             print(f"✅ LLM ({llm_name}) initialized successfully with model {model_id}")
                             break
                         elif basic_ok and force_tools:
@@ -745,7 +745,7 @@ class CmwAgent:
                             self.llms.append(llm_instance)
                             self.llms_with_tools.append(llm_with_tools)
                             self.llm_provider_names.append(llm_type)
-                            
+
                             print(f"⚠️ {llm_name} (model: {model_id}) tool test failed, but using anyway (force_tools=True)")
                             print(f"⚠️ WARNING: This LLM may not work properly for tool-calling tasks")
                             break
@@ -757,7 +757,7 @@ class CmwAgent:
                             print(f"❌ {llm_name} (model: {model_id}) failed tool test and force_tools=False - skipping")
                             if tools_error:
                                 print(f"   Error: {tools_error}")
-                            
+
                     except Exception as e:
                         print(f"⚠️ Failed to initialize {llm_name} (model: {model_id}): {e}")
                         # Interpret the actual error to get real details
@@ -792,7 +792,7 @@ class CmwAgent:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             summary_table = self._format_llm_init_summary(as_str=True)
             summary_json = self._get_llm_init_summary_json()
-            
+
             init_data = {
                 "timestamp": timestamp,
                 "init_summary": summary_table,
@@ -802,14 +802,14 @@ class CmwAgent:
                 "available_models": json.dumps(self._get_available_models(), ensure_ascii=False) if not isinstance(self._get_available_models(), str) else self._get_available_models(),
                 "tool_support": self._get_tool_support_status()
             }
-            
+
             # Upload to dataset
             success = dataset_manager.upload_init_summary(init_data)
             if success:
                 print(f"✅ LLM initialization summary uploaded to dataset")
             else:
                 print(f"⚠️ Failed to upload LLM initialization summary to dataset")
-                
+
         except Exception as e:
             print(f"⚠️ Failed to upload LLM initialization summary: {e}")
 
@@ -823,7 +823,7 @@ class CmwAgent:
             if not os.path.exists(prompt_path):
                 # Fallback to absolute path (when running from root directory)
                 prompt_path = os.path.join(os.path.dirname(__file__), "system_prompt.json")
-            
+
             with open(prompt_path, "r", encoding="utf-8") as f:
                 taxonomy = json.load(f)
                 return json.dumps(taxonomy, ensure_ascii=False)
@@ -832,30 +832,30 @@ class CmwAgent:
         except Exception as e:
             print(f"⚠️ Error reading system_prompt.json: {e}")
         return "You are a helpful assistant. Please provide clear and accurate responses."
-    
+
     def _handle_rate_limit_throttling(self, error, llm_name, llm_type, max_retries=3):
         """
         Handle rate limit errors by throttling and retrying instead of immediate fallback.
-        
+
         Args:
             error: The rate limit error
             llm_name: Name of the LLM
             llm_type: Type of the LLM
             max_retries: Maximum number of retry attempts
-            
+
         Returns:
             bool: True if retry should be attempted, False if max retries exceeded
         """
         # Extract retry-after from error if available
         retry_after = None
         error_str = str(error)
-        
+
         # Look for retry-after in error message or headers
         if "retry-after" in error_str.lower():
             match = re.search(r'retry-after[:\s]*(\d+)', error_str, re.IGNORECASE)
             if match:
                 retry_after = int(match.group(1))
-        
+
         # Default retry delays for different error types
         if "service_tier_capacity_exceeded" in error_str or "3505" in error_str:
             # Mistral capacity exceeded - wait longer
@@ -869,24 +869,24 @@ class CmwAgent:
         else:
             # Unknown rate limit - short wait
             retry_after = retry_after or 5
-            
+
         # Check if we've exceeded max retries
         retry_key = f"{llm_type}_{llm_name}"
         if not hasattr(self, '_rate_limit_retry_count'):
             self._rate_limit_retry_count = {}
-            
+
         current_retries = self._rate_limit_retry_count.get(retry_key, 0)
         if current_retries >= max_retries:
             print(f"⏰ Max retries ({max_retries}) exceeded for {llm_name} rate limiting. Falling back to next LLM.")
             self._rate_limit_retry_count[retry_key] = 0  # Reset for future use
             return False
-            
+
         # Increment retry count
         self._rate_limit_retry_count[retry_key] = current_retries + 1
-        
+
         print(f"⏰ Rate limit hit for {llm_name}. Waiting {retry_after}s before retry ({current_retries + 1}/{max_retries})...")
         time.sleep(retry_after)
-        
+
         return True
 
     def _rate_limit(self):
@@ -904,7 +904,7 @@ class CmwAgent:
             time.sleep(sleep_time)
         llm_type = self.current_llm_type
         config = self.LLM_CONFIG.get(llm_type, {})
-        
+
         # Check for model-specific rate limit first, then provider-level limit
         tpm_limit = None
         if hasattr(self, 'current_model_name') and self.current_model_name:
@@ -914,11 +914,11 @@ class CmwAgent:
                 if model_config.get("model") == self.current_model_name:
                     tpm_limit = model_config.get("token_per_minute_limit")
                     break
-        
+
         # Fall back to provider-level rate limit if no model-specific limit found
         if tpm_limit is None:
             tpm_limit = config.get("token_per_minute_limit")
-            
+
         if tpm_limit:
             # Initialize token usage tracker for this provider
             if llm_type not in self._provider_token_usage:
@@ -966,7 +966,7 @@ class CmwAgent:
         Ensures conversation order is preserved and that any 'tool' message
         retains its preceding assistant tool-call message to satisfy providers
         that require function-call continuity (e.g., GigaChat/OpenAI-style).
-        
+
         Args:
             messages: List of messages to truncate
             llm_type: Type of LLM for context-aware truncation
@@ -1046,29 +1046,29 @@ class CmwAgent:
     def _execute_tool(self, tool_name: str, tool_args: dict, tool_registry: dict, call_id: str = None) -> str:
         """
         Execute a tool with the given name and arguments.
-        
+
         Args:
             tool_name: Name of the tool to execute
             tool_args: Arguments for the tool
             tool_registry: Registry of available tools
-            
+
         Returns:
             str: Result of tool execution
         """
         # Inject file data if available and needed
         if isinstance(tool_args, dict):
             tool_args = self._inject_file_data_to_tool_args(tool_name, tool_args)
-        
+
         # Create truncated copy for logging only
         truncated_args = self._deep_trim_dict_max_length(tool_args)
         print(f"[Tool Loop] Running tool: {tool_name} with args: {truncated_args}")
         print(f"[Tool Loop] Tool args type: {type(tool_args)}, Tool args value: {tool_args}")
-        
+
         # Start timing for trace
         start_time = time.time()
-        
+
         tool_func = tool_registry.get(tool_name)
-        
+
         if not tool_func:
             tool_result = f"Tool '{tool_name}' not found."
             print(f"[Tool Loop] Tool '{tool_name}' not found.")
@@ -1097,13 +1097,13 @@ class CmwAgent:
             except Exception as e:
                 tool_result = f"Error running tool '{tool_name}': {e}"
                 print(f"[Tool Loop] Error running tool '{tool_name}': {e}")
-        
+
         # Add tool execution to trace if call_id is provided
         if call_id and self.question_trace:
             execution_time = time.time() - start_time
             llm_type = self.current_llm_type
             self._add_tool_execution_trace(llm_type, call_id, tool_name, tool_args, tool_result, execution_time)
-        
+
         # Convert tool result to string for message history, handling structured results properly
         if isinstance(tool_result, dict):
             return self._extract_main_text_from_tool_result(tool_result)
@@ -1115,7 +1115,7 @@ class CmwAgent:
         """
         Force the LLM to provide a final answer by adding a reminder prompt.
         Tool results are already available in the message history as ToolMessage objects.
-        
+
         Args:
             messages: Current message list (contains tool results as ToolMessage objects)
             tool_results_history: History of tool results (for reference, not used in prompt)
@@ -1123,10 +1123,10 @@ class CmwAgent:
         Returns:
             Response from LLM with structured answer via submit_answer tool
         """
-        
+
         # Extract llm_type from llm
         llm_type = getattr(llm, 'llm_type', None) or getattr(llm, 'type_str', None) or ''
-        
+
         # Create a more explicit reminder to provide final answer
         reminder = self._get_reminder_prompt(
             reminder_type="final_answer_prompt",
@@ -1136,10 +1136,10 @@ class CmwAgent:
         )
         # Tool results are already in message history as ToolMessage objects
         # No need to duplicate them in the reminder
-        
+
         # Add the reminder to the existing message history
         messages.append(HumanMessage(content=reminder))
-        
+
         try:
             print(f"[Tool Loop] Trying to force the final answer with {len(tool_results_history)} tool results.")
             final_response = self._invoke_llm_provider(llm, messages)
@@ -1161,13 +1161,13 @@ class CmwAgent:
         """
         Run a tool-calling loop: repeatedly invoke the LLM, detect tool calls, execute tools, and feed results back until a final answer is produced.
         Supports both streaming and non-streaming modes for lean implementation.
-        
+
         - Uses adaptive step limits based on LLM type (Gemini: 25, Groq: 15, HuggingFace: 20, unknown: 20).
         - Tracks called tools to prevent duplicate calls and tool results history for fallback handling.
         - Monitors progress by tracking consecutive steps without meaningful changes in response content.
         - Handles LLM invocation failures gracefully with error messages.
         - Detects when responses are truncated due to token limits and adjusts accordingly.
-        
+
         Args:
             llm: The LLM instance (with or without tools bound)
             messages: The message history (list)
@@ -1176,7 +1176,7 @@ class CmwAgent:
             model_index: Index of the model to use for token limits
             call_id: Call ID for tracing
             streaming_generator: If provided, yields streaming events for real-time visibility
-            
+
         Returns:
             The final LLM response (with content)
         Yields:
@@ -1191,7 +1191,7 @@ class CmwAgent:
             "unknown": 20
         }
         max_steps = base_max_steps.get(llm_type, 8)
-        
+
         # Tool calling configuration       
         called_tools = []  # Track which tools have been called to prevent duplicates (stores dictionaries with name, embedding, args)
         tool_results_history = []  # Track tool results for better fallback handling
@@ -1203,7 +1203,7 @@ class CmwAgent:
         total_tool_calls = 2  # Track total tool calls to prevent infinite loops
         consecutive_identical_tool_calls = 0  # Track consecutive identical tool calls
         last_tool_call_signature = None  # Track the signature of the last tool call
-        
+
         # Simplified tool usage tracking - no special handling for search tools
         tool_usage_limits = {
             'default': 3,
@@ -1219,24 +1219,24 @@ class CmwAgent:
             'submit_intermediate_step': 10  # Limit intermediate steps to prevent excessive reasoning loops
         }
         tool_usage_count = {tool_name: 0 for tool_name in tool_usage_limits}
-        
+
         # Unified streaming function - yields immediately, no buffering
         def stream_now(content: str, event_type: str = "content", metadata: dict = None):
             """Immediately yield content for real-time streaming without duplication"""
             if streaming_generator:
                 # Update trace first
                 self._update_trace_during_streaming(event_type, content, metadata)
-                
+
                 # Don't call streaming_generator directly - let the caller handle yielding
                 # This prevents duplication since the content will be yielded by the caller
                 return content  # Return content for yielding
             return None
-        
+
         # Stream loop start if in streaming mode
         content = stream_now(f"🔄 **Starting tool loop with {llm_type}** (max {max_steps} steps)\n", 
                             "loop_start", {"llm_type": llm_type, "max_steps": max_steps})
         # If we have a streaming generator, this method should yield content
-        
+
         # Detect if the question is text-only (file_name is empty/None)
         is_text_only_question = False
         original_question = ""
@@ -1248,28 +1248,28 @@ class CmwAgent:
         file_name = getattr(self, 'current_file_name', "")
         if not file_name:
             is_text_only_question = True
-        
+
         for step in range(max_steps):
             response = None
             print(f"\n[Tool Loop] Step {step+1}/{max_steps} - Using LLM: {llm_type}")
             current_step_tool_results = []  # Reset for this step
-            
+
             # Stream step start immediately
             step_content = stream_now(f"\n\n📍 **Step {step+1}/{max_steps}**\n", 
                       "step_start", {"step": step + 1, "max_steps": max_steps})
             if step_content and streaming_generator:
                 yield step_content
-            
+
             # Reset Mistral conversion flag for each step
             self._mistral_converted_this_step = False
-            
+
             # ... existing code ...
             # Check if we've exceeded the maximum total tool calls
             if total_tool_calls >= max_total_tool_calls:
                 print(f"[Tool Loop] Maximum total tool calls ({max_total_tool_calls}) reached. Calling _force_final_answer ().")
                 # Let the LLM generate the final answer from tool results (or lack thereof)
                 return self._force_final_answer(messages, tool_results_history, llm)
-            
+
             # Check for excessive tool usage
             for tool_name, count in tool_usage_count.items():
                 if count >= tool_usage_limits.get(tool_name, tool_usage_limits['default']):  # Use default limit for unknown tools
@@ -1282,28 +1282,28 @@ class CmwAgent:
                             count=count
                         )
                         messages.append(HumanMessage(content=reminder))
-            
+
             # Truncate messages to prevent token overflow
             messages = self._truncate_messages(messages, llm_type)
-            
+
             # Check token limits and summarize if needed
             total_text = "".join(str(getattr(msg, 'content', '')) for msg in messages)
             estimated_tokens = self._estimate_tokens(total_text)
             token_limit = self._get_token_limit(llm_type)
-            
+
             # Stream LLM thinking immediately  
             thinking_content = stream_now("\n🤖 **LLM is analyzing and planning...**\n", 
                       "llm_thinking", {"llm_type": llm_type})
             if thinking_content and streaming_generator:
                 yield thinking_content
-            
+
             try:
                 # Use streaming if supported - unified approach for LLM tokens
                 if streaming_generator and hasattr(llm, "stream") and callable(getattr(llm, "stream")):
                     response_start = stream_now("\n💭 **LLM response:**\n", "llm_stream_start", {"streaming": True})
                     if response_start and streaming_generator:
                         yield response_start
-                    
+
                     llm_response_content = ""
                     for chunk in llm.stream(messages):
                         try:
@@ -1316,7 +1316,7 @@ class CmwAgent:
                                     yield chunk_content
                         except Exception:
                             continue
-                    
+
                     # Reconstruct response object
                     response = AIMessage(content=llm_response_content)
                     if hasattr(chunk, 'tool_calls'):
@@ -1334,7 +1334,7 @@ class CmwAgent:
                 if ("429" in error_str or "rate limit" in error_str.lower() or 
                     "service_tier_capacity_exceeded" in error_str or "3505" in error_str or
                     "invalid_request_message_order" in error_str or "3230" in error_str):
-                    
+
                     # Try throttling and retrying instead of immediate fallback
                     if self._handle_rate_limit_throttling(e, llm_type, llm_type):
                         print(f"🔄 [Tool Loop] Retrying {llm_type} after rate limit throttling...")
@@ -1345,7 +1345,7 @@ class CmwAgent:
                         self._handle_provider_failure(llm_type, "rate_limit")
                         # Re-raise the exception so it can be caught by _unified_process for fallback
                         raise
-                
+
                 # Check for Mistral AI specific message ordering error
                 if llm_type == "mistral" and ("invalid_request_message_order" in error_str or "3230" in error_str):
                     return self._handle_mistral_message_ordering_error_in_tool_loop(e, llm_type, messages, llm, tool_results_history)
@@ -1366,7 +1366,7 @@ class CmwAgent:
                     # Check if chunking is enabled for this provider
                     config = self.LLM_CONFIG.get(llm_type, {})
                     enable_chunking = config.get("enable_chunking", True)  # Default to True for backward compatibility
-                    
+
                     if enable_chunking:
                         # Handle response truncation using generic token limit error handler
                         print(f"[Tool Loop] Applying chunking mechanism for {llm_type} response truncation")
@@ -1404,33 +1404,33 @@ class CmwAgent:
             # Check for progress (new content or tool calls)
             current_content = getattr(response, 'content', '') or ''
             current_tool_calls = getattr(response, 'tool_calls', []) or []
-            
+
             # Check if we have new tool calls that are different from the last ones
             has_new_tool_calls = len(current_tool_calls) > 0
             has_different_tool_calls = False
             has_intermediate_step = False
             has_final_answer_tool = False
-            
+
             if has_new_tool_calls:
                 # Check if any of the current tool calls are different from the last one
                 for tool_call in current_tool_calls:
                     tool_name = tool_call.get('name')
                     tool_args = tool_call.get('args', {})
                     current_signature = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
-                    
+
                     # Check for intermediate step tool calls
                     if tool_name == 'submit_intermediate_step':
                         has_intermediate_step = True
-                    
+
                     # Check for final answer tool calls
                     if tool_name == 'submit_answer':
                         has_final_answer_tool = True
-                    
+
                     # Check if tool call is different from last one
                     if last_tool_call_signature and current_signature != last_tool_call_signature:
                         has_different_tool_calls = True
                         break
-            
+
             # Progress detection logic:
             # - New content is always progress
             # - Different tool calls are progress
@@ -1439,12 +1439,12 @@ class CmwAgent:
             has_progress = (current_content != last_response_content or 
                           (has_new_tool_calls and has_different_tool_calls) or
                           has_intermediate_step or has_final_answer_tool)
-            
+
             # Check if we have tool results but no final answer yet
             has_tool_results = len(tool_results_history) > 0
             has_final_answer = (hasattr(response, 'content') and response.content and 
                               not getattr(response, 'tool_calls', None))
-            
+
             if has_tool_results and not has_final_answer and step >= 2:  # Increased from 1 to 2 to give more time
                 # We have information but no answer - provide explicit reminder to analyze tool results
                 reminder = self._get_reminder_prompt(
@@ -1454,11 +1454,11 @@ class CmwAgent:
                     tool_results_history=tool_results_history
                 )
                 messages.append(HumanMessage(content=reminder))
-            
+
             if not has_progress:
                 consecutive_no_progress += 1
                 print(f"[Tool Loop] No progress detected. Consecutive no-progress steps: {consecutive_no_progress}")
-                
+
                 # Exit early if no progress for too many consecutive steps
                 if consecutive_no_progress >= 3:  # Increased from 2 to 3
                     print(f"[Tool Loop] Exiting due to {consecutive_no_progress} consecutive steps without progress")
@@ -1476,7 +1476,7 @@ class CmwAgent:
                     messages.append(HumanMessage(content=reminder))
             else:
                 consecutive_no_progress = 0  # Reset counter on progress
-                
+
             # Additional check: if we have too many consecutive identical tool calls, force exit
             if consecutive_identical_tool_calls >= 2:
                 print(f"[Tool Loop] Detected {consecutive_identical_tool_calls} consecutive identical tool calls. Forcing exit.")
@@ -1484,79 +1484,79 @@ class CmwAgent:
                     return self._force_final_answer(messages, tool_results_history, llm)
                 else:
                     return AIMessage(content="Error: LLM is stuck making identical tool calls. Cannot complete reasoning.")
-                
+
             last_response_content = current_content
 
         # Check for submit_answer and submit_intermediate_step tool calls (modern structured approach)
         if hasattr(response, 'tool_calls') and response.tool_calls:
             for tool_call in response.tool_calls:
                 tool_name = tool_call.get('name')
-                
+
                 if tool_name == 'submit_answer':
                     print(f"[Tool Loop] Structured answer detected via submit_answer tool")
                     # Track successful provider requests
                     self._handle_provider_success(llm_type)
-                    
+
                     # Execute the tool to get structured result and add to chat history
                     tool_args = tool_call.get('args', {})
-                    
+
                     # Execute the tool using helper method with call_id for tracing
                     tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
-                    
+
                     # Store the raw result for this step
                     current_step_tool_results.append(tool_result)
                     tool_results_history.append(tool_result)
                     total_tool_calls += 1  # Increment total tool call counter
-                    
+
                     # Report tool result
                     self._print_tool_result(tool_name, tool_result)
-                    
+
                     # Add tool result to messages for chat history continuity
                     messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
-                    
+
                     # Update the stored conversation history
                     self._update_conversation_history(messages)
-                    
+
                     # Extract the answer for immediate display
                     answer = self._extract_main_text_from_tool_result(tool_result)
                     if streaming_generator:
                         # Use the streaming generator instead of direct yield
                         streaming_generator(answer)
                     return response
-                
+
                 elif tool_name == 'submit_intermediate_step':
                     print(f"[Tool Loop] Intermediate step detected via submit_intermediate_step tool")
-                    
+
                     # Execute the tool to get structured result and add to chat history
                     tool_args = tool_call.get('args', {})
-                    
+
                     # Execute the tool using helper method with call_id for tracing
                     tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
-                    
+
                     # Store the raw result for this step
                     current_step_tool_results.append(tool_result)
                     tool_results_history.append(tool_result)
                     total_tool_calls += 1  # Increment total tool call counter
-                    
+
                     # Report tool result
                     self._print_tool_result(tool_name, tool_result)
-                    
+
                     # Add tool result to messages for chat history continuity
                     messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
-                    
+
                     # Update the stored conversation history
                     self._update_conversation_history(messages)
-                    
+
                     # Extract the step description for display
                     step_description = self._extract_main_text_from_tool_result(tool_result)
                     if streaming_generator:
                         # Use the streaming generator instead of direct yield
                         streaming_generator(step_description)
-                    
+
                     # IMPORTANT: Don't return here - continue the loop for intermediate steps
                     # Only return for submit_answer which indicates completion
                     continue
-            
+
             # If response has content and no tool calls, return (legacy approach)
             if hasattr(response, 'content') and response.content and not getattr(response, 'tool_calls', None):
                 print(f"[Tool Loop] Final answer detected: {response.content}")
@@ -1569,17 +1569,17 @@ class CmwAgent:
             tool_calls = getattr(response, 'tool_calls', None)
             if tool_calls:
                 print(f"[Tool Loop] Detected {len(tool_calls)} tool call(s)")
-                
+
                 # Stream tool calls detected immediately
                 tool_calls_content = stream_now(f"\n🔧 **Detected {len(tool_calls)} tool call(s)**\n", 
                           "tool_calls_detected", {"tool_count": len(tool_calls)})
                 if tool_calls_content and streaming_generator:
                     yield tool_calls_content
-                
+
                 # Add tool loop data to trace
                 if call_id and self.question_trace:
                     self._add_tool_loop_data(llm_type, call_id, step + 1, tool_calls, consecutive_no_progress)
-                
+
                 # IMPORTANT: Preserve the assistant function call in history for providers
                 # like GigaChat/OpenAI that require pairing before tool results.
                 messages.append(response)
@@ -1588,20 +1588,20 @@ class CmwAgent:
                 if len(tool_calls) > max_tool_calls_per_step:
                     print(f"[Tool Loop] Too many tool calls on a single step ({len(tool_calls)}). Limiting to first {max_tool_calls_per_step}.")
                     tool_calls = tool_calls[:max_tool_calls_per_step]
-                
+
                 # Simplified duplicate detection using new centralized methods
                 new_tool_calls = []
                 duplicate_count = 0
                 for tool_call in tool_calls:
                     tool_name = tool_call.get('name')
                     tool_args = tool_call.get('args', {})
-                    
+
                     # submit_answer and submit_intermediate_step are now handled earlier in the flow, but if they somehow get here, process them normally
                     if tool_name == 'submit_answer':
                         print(f"[Tool Loop] submit_answer detected in regular flow - processing normally")
                     elif tool_name == 'submit_intermediate_step':
                         print(f"[Tool Loop] submit_intermediate_step detected in regular flow - processing normally")
-                    
+
                     # Check if tool usage limit exceeded FIRST (most restrictive check)
                     if tool_name in tool_usage_count and tool_usage_count[tool_name] >= tool_usage_limits.get(tool_name, tool_usage_limits['default']):
                         print(f"[Tool Loop] ⚠️ {tool_name} usage limit reached ({tool_usage_count[tool_name]}/{tool_usage_limits.get(tool_name, tool_usage_limits['default'])}). Skipping.")
@@ -1609,7 +1609,7 @@ class CmwAgent:
                                    "tool_limit", {"tool_name": tool_name, "usage_count": tool_usage_count[tool_name]})
                         duplicate_count += 1
                         continue
-                    
+
                     # Check if this is a duplicate tool call (SECOND)
                     if self._is_duplicate_tool_call(tool_name, tool_args, called_tools):
                         duplicate_count += 1
@@ -1623,17 +1623,17 @@ class CmwAgent:
                         )
                         messages.append(HumanMessage(content=reminder))
                         return response
-                    
+
                     # New tool call - add it (LAST)
                     print(f"[Tool Loop] New tool call: {tool_name} with args: {tool_args}")
                     new_tool_calls.append(tool_call)
                     self._add_tool_call_to_history(tool_name, tool_args, called_tools)
-                    
+
                     # Track tool usage
                     if tool_name in tool_usage_count:
                         tool_usage_count[tool_name] += 1
                         print(f"[Tool Loop] {tool_name} usage: {tool_usage_count[tool_name]}/{tool_usage_limits.get(tool_name, tool_usage_limits['default'])}")
-                
+
                 # Only force final answer if ALL tool calls were duplicates AND we have tool results
                 if not new_tool_calls and tool_results_history:
                     print(f"[Tool Loop] All {len(tool_calls)} tool calls were duplicates and we have {len(tool_results_history)} tool results. Forcing final answer.")
@@ -1646,18 +1646,18 @@ class CmwAgent:
                     reminder = self._get_reminder_prompt(reminder_type="tool_usage_issue", tool_name=tool_name)
                     messages.append(HumanMessage(content=reminder))
                     return response
-                
+
                 # Execute only new tool calls
                 for tool_call in new_tool_calls:
                     tool_name = tool_call.get('name')
                     tool_args = tool_call.get('args', {})
-                    
+
                     # Check for consecutive identical tool calls
                     current_tool_signature = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
                     if current_tool_signature == last_tool_call_signature:
                         consecutive_identical_tool_calls += 1
                         print(f"[Tool Loop] Consecutive identical tool call detected: {tool_name} (count: {consecutive_identical_tool_calls})")
-                        
+
                         # If we have too many consecutive identical tool calls, force exit
                         if consecutive_identical_tool_calls >= 2:
                             print(f"[Tool Loop] Too many consecutive identical tool calls ({consecutive_identical_tool_calls}). Forcing final answer.")
@@ -1668,28 +1668,28 @@ class CmwAgent:
                     else:
                         consecutive_identical_tool_calls = 0
                         last_tool_call_signature = current_tool_signature
-                    
+
                     # submit_answer is now handled earlier, but if it reaches here, process it normally
                     if tool_name == 'submit_answer':
                         print(f"[Tool Loop] submit_answer reached execution - processing normally")
-                    
+
                     # Stream tool start immediately
                     tool_start_content = stream_now(f"\n🔧 **Executing {tool_name}**\n", 
                               "tool_start", {"tool_name": tool_name, "tool_args": tool_args})
                     if tool_start_content and streaming_generator:
                         yield tool_start_content
-                    
+
                     # Execute tool using helper method with call_id for tracing
                     tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
-                    
+
                     # Store the raw result for this step
                     current_step_tool_results.append(tool_result)
                     tool_results_history.append(tool_result)
                     total_tool_calls += 1  # Increment total tool call counter
-                    
+
                     # Report tool result
                     self._print_tool_result(tool_name, tool_result)
-                    
+
                     # Stream tool completion immediately
                     if isinstance(tool_result, str):
                         display_result = tool_result[:300] + "..." if len(tool_result) > 300 else tool_result
@@ -1701,18 +1701,18 @@ class CmwAgent:
                               "tool_end", {"tool_name": tool_name, "tool_result": tool_result})
                     if tool_end_content and streaming_generator:
                         yield tool_end_content
-                    
+
                     # Add tool result to messages - let LangChain handle the formatting
                     messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_call.get('id', tool_name)))
-                    
+
                     # Update the stored conversation history
                     self._update_conversation_history(messages)
-                
+
                 # Convert messages for Mistral AI if needed (before next LLM call)
                 if llm_type == "mistral" and not self._mistral_converted_this_step:
                     messages = self._convert_messages_for_mistral(messages)
                     self._mistral_converted_this_step = True
-                
+
                 # Make new LLM call with tool results instead of returning old response
                 # This will be handled by the next iteration of the loop
                 pass
@@ -1721,10 +1721,10 @@ class CmwAgent:
             if function_call:
                 tool_name = function_call.get('name')
                 tool_args = function_call.get('arguments', {})
-                
+
                 # Preserve assistant function call message in history
                 messages.append(response)
-                
+
                 # Check if this is a duplicate function call
                 if self._is_duplicate_tool_call(tool_name, tool_args, called_tools):
                     print(f"[Tool Loop] Duplicate function_call detected: {tool_name} with args: {tool_args}")
@@ -1734,7 +1734,7 @@ class CmwAgent:
                         tool_args=tool_args
                     )
                     messages.append(HumanMessage(content=reminder))
-                    
+
                     # Only force final answer if we have tool results
                     if tool_results_history:
                         print(f"[Tool Loop] Duplicate function_call with {len(tool_results_history)} tool results. Forcing final answer.")
@@ -1746,7 +1746,7 @@ class CmwAgent:
                         reminder = self._get_reminder_prompt(reminder_type="tool_usage_issue", tool_name=tool_name)
                         messages.append(HumanMessage(content=reminder))
                     return response
-                
+
                 # Check if tool usage limit exceeded
                 if tool_name in tool_usage_count and tool_usage_count[tool_name] >= tool_usage_limits.get(tool_name, tool_usage_limits['default']):
                     print(f"[Tool Loop] ⚠️ {tool_name} usage limit reached ({tool_usage_count[tool_name]}/{tool_usage_limits.get(tool_name, tool_usage_limits['default'])}). Skipping.")
@@ -1757,48 +1757,48 @@ class CmwAgent:
                     )
                     messages.append(HumanMessage(content=reminder))
                     return response
-                
+
                 # Add to history and track usage
                 self._add_tool_call_to_history(tool_name, tool_args, called_tools)
                 if tool_name in tool_usage_count:
                     tool_usage_count[tool_name] += 1
-                
+
                 # Execute tool using helper method with call_id for tracing
                 tool_result = self._execute_tool(tool_name, tool_args, tool_registry, call_id)
-                
+
                 # Store the raw result for this step
                 current_step_tool_results.append(tool_result)
                 tool_results_history.append(tool_result)
                 total_tool_calls += 1  # Increment total tool call counter
-                
+
                 # Report tool result (for function_call branch)
                 self._print_tool_result(tool_name, tool_result)
                 messages.append(ToolMessage(content=tool_result, name=tool_name, tool_call_id=tool_name))
-                
+
                 # Update the stored conversation history
                 self._update_conversation_history(messages)
-                
+
                 # Convert messages for Mistral AI if needed (after tool results are added)
                 if llm_type == "mistral" and not self._mistral_converted_this_step:
                     messages = self._convert_messages_for_mistral(messages)
                     self._mistral_converted_this_step = True
-                
+
                 # Make new LLM call with tool results instead of returning old response
                 # This will be handled by the next iteration of the loop
                 pass
             if hasattr(response, 'content') and response.content:
                 return response
             print(f"[Tool Loop] No tool calls or final answer detected. Exiting loop.")
-            
+
             # If we get here, the LLM didn't make tool calls or provide content
             # Add a reminder to use tools or provide an answer
             reminder = self._get_reminder_prompt(reminder_type="final_answer_prompt", tools=self.tools)
             messages.append(HumanMessage(content=reminder))
             return response
-        
+
         # If we reach here, we've exhausted all steps or hit progress limits
         print(f"[Tool Loop] Exiting after {step+1} steps. Last response: {response}")
-        
+
         # If we have tool results but no final answer, force one
         if tool_results_history and (not hasattr(response, 'content') or not response.content):
             print(f"[Tool Loop] Forcing final answer with {len(tool_results_history)} tool results at loop exit")
@@ -1807,7 +1807,7 @@ class CmwAgent:
                 # Yield the forced response content
                 yield forced_response.content
             return forced_response
-        
+
         # If streaming, yield final response content
         if streaming_generator:
             final_content = getattr(response, 'content', str(response)) if response else ""
@@ -1815,7 +1815,7 @@ class CmwAgent:
                 final_answer_content = stream_now(f"\n\n🏁 **Final answer:**\n{final_content}\n", "final_answer")
                 if final_answer_content:
                     yield final_answer_content
-                    
+
         # Return the last response as-is, no partial answer extraction
         return response
 
@@ -1831,7 +1831,7 @@ class CmwAgent:
         llm = self.llms_with_tools[idx] if use_tools else self.llms[idx]
         llm_name = self.LLM_CONFIG[llm_type]["name"]
         llm_type_str = self.LLM_CONFIG[llm_type]["type_str"]
-        
+
         # Get the actual model name for rate limiting
         model_name = None
         if hasattr(llm, 'model_name'):
@@ -1843,10 +1843,10 @@ class CmwAgent:
             models = self.active_model_config[llm_type].get("models", [])
             if models:
                 model_name = models[0].get("model")
-        
+
         # Set current model name for rate limiting
         self.current_model_name = model_name
-        
+
         return llm, llm_name, llm_type_str
 
     @trace_prints_with_context("llm_call")
@@ -1878,20 +1878,20 @@ class CmwAgent:
         # Start LLM trace
         call_id = self._trace_start_llm(llm_type)
         start_time = time.time()
-        
+
         # Set the current LLM type for rate limiting
         self.current_llm_type = llm_type
         # ENFORCE: Never use tools for providers that do not support them
         if not self._provider_supports_tools(llm_type):
             use_tools = False
-        
+
         # Add input to trace
         self._trace_add_llm_call_input(llm_type, call_id, messages, use_tools)
-        
+
         llm, llm_name, llm_type_str = self._select_llm(llm_type, use_tools)
         if llm is None:
             raise Exception(f"{llm_name} LLM not available")
-        
+
         try:
             self._rate_limit()
             print(f"🤖 Using {llm_name}")
@@ -1904,7 +1904,7 @@ class CmwAgent:
                 def silent_stream_handler(event_type, content, metadata=None):
                     # Silent streaming - no output but still populates trace
                     return {"type": event_type, "content": content, "metadata": metadata or {}}
-                
+
                 response = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type_str, 0, call_id, silent_stream_handler)
                 if not hasattr(response, 'content') or not response.content:
                     print(f"⚠️ {llm_name} tool calling returned empty content, trying with enhanced context...")
@@ -1913,7 +1913,7 @@ class CmwAgent:
                     for msg in messages:
                         if hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'content'):
                             tool_results_history.append(msg.content)
-                    
+
                     if tool_results_history:
                         print(f"📝 Tool results included: {len(tool_results_history)} tools")
                         reminder = self._get_reminder_prompt(
@@ -1927,33 +1927,33 @@ class CmwAgent:
                     else:
                         print(f"⚠️ No tool results found, retrying with original context")
                         response = self._invoke_llm_provider(llm, messages)
-                    
+
                     if not hasattr(response, 'content') or not response.content:
                         print(f"⚠️ {llm_name} still returning empty content. This may be a token limit issue.")
                         return AIMessage(content=f"Error: {llm_name} failed due to token limits. Cannot complete reasoning.")
             else:
                 response = self._invoke_llm_provider(llm, messages)
             print(f"--- Raw response from {llm_name} ---")
-            
+
             # Add output to trace
             execution_time = time.time() - start_time
             self._trace_add_llm_call_output(llm_type, call_id, response, execution_time)
-            
+
             # Track successful provider requests
             self._handle_provider_success(llm_type)
-            
+
             return response
         except Exception as e:
             # Add error to trace
             execution_time = time.time() - start_time
             self._trace_add_llm_error(llm_type, call_id, e)
-            
+
             # Check if this is a rate limit error that should be throttled
             error_str = str(e)
             if ("429" in error_str or "rate limit" in error_str.lower() or 
                 "service_tier_capacity_exceeded" in error_str or "3505" in error_str or
                 "invalid_request_message_order" in error_str or "3230" in error_str):
-                
+
                 # Try throttling and retrying instead of immediate fallback
                 if self._handle_rate_limit_throttling(e, llm_name, llm_type):
                     print(f"🔄 Retrying {llm_name} after rate limit throttling...")
@@ -1962,7 +1962,7 @@ class CmwAgent:
                 else:
                     print(f"⏰ Rate limit retries exhausted for {llm_name}, falling back to error handler...")
                     self._handle_provider_failure(llm_type, "rate_limit")
-            
+
             # Check for Mistral AI specific message ordering error
             if llm_type == "mistral" and ("invalid_request_message_order" in error_str or "3230" in error_str):
                 return self._handle_mistral_message_ordering_error(e, llm_name, llm_type, messages, llm)
@@ -1974,7 +1974,7 @@ class CmwAgent:
                 else:
                     raise Exception(f"{llm_name} failed: {e}")
 
-    
+
 
     def _handle_groq_token_limit_error(self, messages, llm, llm_name, original_error):
         """
@@ -1987,22 +1987,22 @@ class CmwAgent:
         Generic token limit error handling that can be used for any LLM.
         """
         print(f"🔄 Handling token limit error for {llm_name} ({llm_type})")
-        
+
         # Check if chunking is enabled for this provider
         config = self.LLM_CONFIG.get(llm_type, {})
         enable_chunking = config.get("enable_chunking", True)  # Default to True for backward compatibility
-        
+
         if not enable_chunking:
             print(f"⚠️ Chunking disabled for {llm_type}. Cannot handle token limit error.")
             # Return a simple error message instead of chunking
             return AIMessage(content=f"Error: Token limit exceeded for {llm_name} and chunking is disabled. Please try with a shorter input or enable chunking for this provider.")
-        
+
         # Extract tool results from messages
         tool_results = []
         for msg in messages:
             if hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'content'):
                 tool_results.append(msg.content)
-        
+
         # If no tool results, try to chunk the entire message content
         if not tool_results:
             print(f"📊 No tool results found, attempting to chunk entire message content")
@@ -2011,10 +2011,10 @@ class CmwAgent:
             for msg in messages:
                 if hasattr(msg, 'content') and msg.content:
                     all_content.append(str(msg.content))
-            
+
             if not all_content:
                 return AIMessage(content=f"Error: {llm_name} token limit exceeded but no content available to process.")
-            
+
             # Create chunks from all content (use LLM-specific limits)
             token_limit = self._get_token_limit(llm_type)
             # Handle None token limits (like Gemini) by using a reasonable default
@@ -2046,10 +2046,10 @@ class CmwAgent:
         llm_final = self._select_llm(llm_type, use_tools=True)[0]
         all_responses = []
         wait_time = 60
-        
+
         for i, chunk in enumerate(chunks):
             print(f"🔄 Processing chunk {i+1}/{len(chunks)}")
-            
+
             # Wait between chunks (except first)
             if i > 0:
                 print(f"⏳ Waiting {wait_time} seconds...")
@@ -2066,7 +2066,7 @@ class CmwAgent:
             except Exception as e:
                 print(f"❌ Chunk {i+1} failed: {e}")
                 continue
-        
+
         if not all_responses:
             return AIMessage(content=f"Error: Failed to process any chunks for {llm_name}")
         # Final synthesis step, now with original question and tools enabled
@@ -2090,7 +2090,7 @@ class CmwAgent:
         chunks = []
         current_chunk = []
         current_tokens = 0
-        
+
         for result in tool_results:
             # Use tiktoken for accurate token counting
             result_tokens = self._estimate_tokens(result)
@@ -2101,10 +2101,10 @@ class CmwAgent:
             else:
                 current_chunk.append(result)
                 current_tokens += result_tokens
-        
+
         if current_chunk:
             chunks.append(current_chunk)
-        
+
         return chunks
 
     def _try_llm_sequence(self, messages, use_tools=True, reference=None, llm_sequence=None):
@@ -2164,17 +2164,17 @@ class CmwAgent:
             if self._should_skip_provider_temporarily(llm_type):
                 print(f"⏸️ Skipping {llm_name} - temporarily disabled due to recent failures")
                 continue
-            
+
             try:
                 response = self._make_llm_request(messages, use_tools=llm_use_tools, llm_type=llm_type)
                 answer = self._extract_final_answer(response)
                 print(f"✅ {llm_name} answered: {answer}")
                 print(f"✅ Reference: {reference}")
-                
+
                 # Capture stdout for this LLM attempt
                 if hasattr(self, 'current_llm_call_id'):
                     self._trace_capture_llm_stdout(llm_type, self.current_llm_call_id)
-                
+
                 if reference is None:
                     print(f"✅ {llm_name} succeeded (no reference to compare)")
                     self._update_llm_tracking(llm_type, "success")
@@ -2197,11 +2197,11 @@ class CmwAgent:
                     print(f"🔄 All LLMs tried, all failed")
             except Exception as e:
                 print(f"❌ {llm_name} failed: {e}")
-                
+
                 # Capture stdout for this failed LLM attempt
                 if hasattr(self, 'current_llm_call_id'):
                     self._trace_capture_llm_stdout(llm_type, self.current_llm_call_id)
-                
+
                 self._update_llm_tracking(llm_type, "failure")
                 if llm_type == available_llms[-1][0]:
                     raise Exception(f"All available LLMs failed. Last error from {llm_name}: {e}")
@@ -2233,7 +2233,7 @@ class CmwAgent:
         """
         if not self.ENABLE_VECTOR_SIMILARITY or self.vector_store_manager is None:
             return None
-        
+
         from vector_store import get_reference_answer
         return get_reference_answer(question)
 
@@ -2251,7 +2251,7 @@ class CmwAgent:
             list: List of message objects for the LLM.
         """
         messages = [self.sys_msg]
-        
+
         # Append prior chat history with full tool execution context
         if chat_history and isinstance(chat_history, list):
             for turn in chat_history:
@@ -2263,10 +2263,10 @@ class CmwAgent:
                     name = turn.get("name")
                 except Exception:
                     continue
-                
+
                 if not content and not tool_calls:
                     continue
-                
+
                 if role in ("user", "human"):
                     messages.append(HumanMessage(content=str(content)))
                 elif role in ("assistant", "ai"):
@@ -2291,7 +2291,7 @@ class CmwAgent:
                     else:
                         # Fallback for tool messages without proper metadata
                         messages.append(ToolMessage(content=str(content), name=name or "unknown", tool_call_id=tool_call_id or "unknown"))
-        
+
         # Current question last - ensure it's clearly separated
         messages.append(HumanMessage(content=f"Current question: {question}"))
         if reference:
@@ -2311,17 +2311,17 @@ class CmwAgent:
         """
         Update the conversation history with new messages, ensuring no duplicates.
         This method maintains a clean, deduplicated conversation history.
-        
+
         Args:
             messages: List of message objects to add to history
         """
         if not hasattr(self, '_current_conversation_history'):
             self._current_conversation_history = []
-        
+
         # Create a set to track unique tool results to prevent duplicates
         if not hasattr(self, '_seen_tool_results'):
             self._seen_tool_results = set()
-        
+
         # Process each message and add only if not duplicate
         for msg in messages:
             if hasattr(msg, 'type') and msg.type == 'tool':
@@ -2338,13 +2338,13 @@ class CmwAgent:
         """
         Get the complete conversation history including tool execution results.
         This can be used to maintain context across multiple conversation turns.
-        
+
         Returns:
             List[Dict]: Complete conversation history with role, content, tool_calls, etc.
         """
         if not hasattr(self, '_current_conversation_history'):
             return []
-        
+
         # Convert the internal message objects to a serializable format
         history = []
         for msg in self._current_conversation_history:
@@ -2378,56 +2378,56 @@ class CmwAgent:
                         "tool_call_id": getattr(msg, 'tool_call_id', 'unknown')
                     })
         return history
-    
+
     def get_conversation_history_by_id(self, conversation_id: str = "default") -> List[Dict[str, Any]]:
         """
         Get the conversation history for a specific conversation ID.
-        
+
         Args:
             conversation_id (str): The conversation ID to get history for
-            
+
         Returns:
             List[Dict[str, Any]]: List of conversation turns with 'role' and 'content' keys
         """
         return self.conversation_histories[conversation_id].copy()
-    
+
     def clear_conversation(self, conversation_id: str = "default") -> None:
         """
         Clear the conversation history for a specific conversation.
-        
+
         Args:
             conversation_id (str): The conversation ID to clear
         """
         self.conversation_histories[conversation_id] = []
         self.conversation_states[conversation_id] = {}
         self.conversation_metadata[conversation_id] = {}
-    
+
     def get_conversation_metadata(self, conversation_id: str = "default") -> Dict[str, Any]:
         """
         Get metadata for a specific conversation.
-        
+
         Args:
             conversation_id (str): The conversation ID to get metadata for
-            
+
         Returns:
             Dict[str, Any]: Conversation metadata
         """
         return self.conversation_metadata[conversation_id].copy()
-    
+
     def set_conversation_metadata(self, conversation_id: str, metadata: Dict[str, Any]) -> None:
         """
         Set metadata for a specific conversation.
-        
+
         Args:
             conversation_id (str): The conversation ID to set metadata for
             metadata (Dict[str, Any]): Metadata to set
         """
         self.conversation_metadata[conversation_id].update(metadata)
-    
+
     def get_all_conversation_ids(self) -> List[str]:
         """
         Get all active conversation IDs.
-        
+
         Returns:
             List[str]: List of all conversation IDs
         """
@@ -2439,20 +2439,20 @@ class CmwAgent:
         Mistral AI requires specific message formatting for tool calls.
         The key issue is that tool messages must immediately follow the assistant message
         that made the tool calls, not after user messages.
-        
+
         Args:
             messages: List of LangChain message objects
-            
+
         Returns:
             List of messages in Mistral AI compatible format
         """
         converted_messages = []
         i = 0
         orphaned_count = 0
-        
+
         while i < len(messages):
             msg = messages[i]
-            
+
             if hasattr(msg, 'type'):
                 if msg.type == 'system':
                     converted_messages.append({
@@ -2473,7 +2473,7 @@ class CmwAgent:
                             "content": msg.content or "",
                             "tool_calls": msg.tool_calls
                         })
-                        
+
                         # Look ahead for tool messages that should immediately follow
                         j = i + 1
                         while j < len(messages) and hasattr(messages[j], 'type') and messages[j].type == 'tool':
@@ -2497,7 +2497,7 @@ class CmwAgent:
                                 "role": "assistant",
                                 "content": "[continue]"
                             })
-                        
+
                         # Skip the tool messages we've already processed
                         i = j - 1
                     else:
@@ -2516,9 +2516,9 @@ class CmwAgent:
             else:
                 # Handle raw message objects (fallback)
                 converted_messages.append(msg)
-            
+
             i += 1
-        
+
         return converted_messages
 
     def _invoke_llm_provider(self, llm, messages, llm_type=None):
@@ -2527,42 +2527,42 @@ class CmwAgent:
         This centralizes the repetitive Mistral conversion logic and makes the code cleaner.
         Note: This function assumes messages are already in the correct format for Mistral AI.
         For tool loops where tool results are added after conversion, use manual conversion.
-        
+
         Args:
             llm: The LLM instance to invoke
             messages: List of messages to send to the LLM
             llm_type: Type of LLM (if None, will be auto-detected)
-            
+
         Returns:
             The LLM response
         """
         # Auto-detect LLM type if not provided
         if llm_type is None:
             llm_type = getattr(llm, 'llm_type', None) or getattr(llm, 'type_str', None) or ''
-        
+
         # Convert messages for providers that require strict tool-call ordering (e.g., Mistral, GigaChat)
         if llm_type in ("mistral", "gigachat"):
             messages = self._convert_messages_for_mistral(messages)
-        
+
         # Invoke the LLM
         return llm.invoke(messages)
 
-        
+
     def _calculate_cosine_similarity(self, embedding1, embedding2) -> float:
         """
         Calculate cosine similarity between two embeddings.
         If vector similarity is disabled, returns 1.0 to indicate perfect match.
-        
+
         Args:
             embedding1: First embedding vector
             embedding2: Second embedding vector
-            
+
         Returns:
             float: Cosine similarity score (0.0 to 1.0)
         """
         if not self.ENABLE_VECTOR_SIMILARITY or self.vector_store_manager is None:
             return 1.0
-        
+
         from similarity_manager import calculate_cosine_similarity
         return calculate_cosine_similarity(embedding1, embedding2)
 
@@ -2573,7 +2573,7 @@ class CmwAgent:
         """
         if not self.ENABLE_VECTOR_SIMILARITY or self.vector_store_manager is None:
             return True, 1.0
-        
+
         from similarity_manager import vector_answers_match
         return vector_answers_match(answer, reference, self.similarity_threshold)
 
@@ -2687,14 +2687,14 @@ class CmwAgent:
                     error_tools = '400'
                 else:
                     error_tools = r['error_tools'][:18]
-            
+
             # Format test answer - truncate if too long
             test_answer = r.get('test_answer', '')
             if test_answer:
                 test_answer_display = test_answer[:30] + "..." if len(test_answer) > 30 else test_answer
             else:
                 test_answer_display = "N/A"
-            
+
             lines.append(f"{r['provider']:<{provider_w}}| {r['model']:<{model_w}}| {plain:<{plain_w}}| {tools:<{tools_w}}| {test_answer_display:<{answer_w}}| {error_tools:<{error_w}}")
         lines.append("=" * len(header))
         return "\n".join(lines) if as_str else lines
@@ -2705,11 +2705,11 @@ class CmwAgent:
         """
         if not hasattr(self, 'llm_init_results') or not self.llm_init_results:
             return {}
-        
+
         summary_data = {
             "results": []
         }
-        
+
         for r in self.llm_init_results:
             config = self.LLM_CONFIG.get(r['llm_type'], {})
             model_force_tools = False
@@ -2717,7 +2717,7 @@ class CmwAgent:
                 if m.get('model', '') == r['model']:
                     model_force_tools = config.get('force_tools', False) or m.get('force_tools', False)
                     break
-            
+
             result_entry = {
                 "provider": r['provider'],
                 "model": r['model'],
@@ -2730,7 +2730,7 @@ class CmwAgent:
                 "test_answer": r.get('test_answer', '')
             }
             summary_data["results"].append(result_entry)
-        
+
         return summary_data
 
     def _format_llm_stats_table(self, as_str=True):
@@ -2783,11 +2783,11 @@ class CmwAgent:
         Return the LLM statistics as structured JSON data for dataset upload.
         """
         stats = self.get_llm_stats()
-        
+
         stats_data = {
             "llm_stats": {}
         }
-        
+
         for name, data in stats["llm_stats"].items():
             # Include all LLMs that have any activity
             if (data["runs"] > 0 or data["submitted"] > 0 or data["low_submit"] > 0 or 
@@ -2807,7 +2807,7 @@ class CmwAgent:
                     "total_attempts": data.get("total_attempts", 0),
                     "threshold_passes": data.get("threshold_passes", 0)
                 }
-        
+
         return stats_data
 
     def _print_llm_init_summary(self):
@@ -2823,7 +2823,7 @@ class CmwAgent:
     def _update_llm_tracking(self, llm_type: str, event_type: str, increment: int = 1):
         """
         Helper method to update LLM tracking statistics.
-        
+
         Args:
             llm_type (str): The LLM type (e.g., 'gemini', 'groq')
             event_type (str): The type of event ('success', 'failure', 'threshold_pass', 'submitted', 'low_submit')
@@ -2873,7 +2873,7 @@ class CmwAgent:
         """
         Unified processing method that always uses streaming internally but can return either format.
         This is the single source of truth for all LLM calling logic.
-        
+
         Args:
             question (str): The question to answer
             file_data (str, optional): Base64 encoded file data if a file is attached
@@ -2881,56 +2881,56 @@ class CmwAgent:
             llm_sequence (list, optional): List of LLM provider keys to use
             chat_history (list, optional): Prior conversation to maintain continuity
             streaming (bool): Whether to return generator (True) or dict (False)
-            
+
         Returns:
             If streaming=True: generator yielding text chunks
             If streaming=False: dict with full trace (collected from streaming)
         """
         # Initialize trace for this question
         self._trace_init_question(question, file_data, file_name)
-        
+
         print(f"\n🔎 {'(stream)' if streaming else ''} Processing question: {question}\n")
-        
+
         # Increment total questions counter
         self.total_questions += 1
-        
+
         # Store the original question for reuse throughout the process
         self.original_question = question
-        
+
         # Store file data for use by tools
         self.current_file_data = file_data
         self.current_file_name = file_name
-        
+
         if file_data and file_name:
             print(f"📁 File attached: {file_name} ({len(file_data)} chars base64)")
-        
+
         # Retrieve reference answer
         reference = self._get_reference_answer(question)
-        
+
         # Format messages
         messages = self._format_messages(question, reference=reference, chat_history=chat_history)
-        
+
         # Initialize the complete conversation history for later retrieval
         self._update_conversation_history(messages)
-        
+
         # Build a default llm_sequence if not provided
         if not llm_sequence:
             try:
                 llm_sequence = self.DEFAULT_LLM_SEQUENCE.copy()
             except Exception:
                 llm_sequence = []
-        
+
         # Always use streaming internally, but collect data for dictionary output
         accumulated_response = ""
         final_llm_name = "unknown"
         similarity_score = 0.0
-        
+
         # Collect all successful responses to choose the best one
         successful_responses = []
-        
+
         # Track failed LLMs for dynamic error reporting
         failed_llms = []
-        
+
         # Try providers in order with unified logic
         for llm_type in llm_sequence:
             try:
@@ -2943,7 +2943,7 @@ class CmwAgent:
                         'status': 'Not initialized'
                     })
                     continue
-                
+
                 # Always use tools when available - this ensures consistent behavior
                 use_tools = self._provider_supports_tools(llm_type)
                 llm, llm_name, _ = self._select_llm(llm_type, use_tools)
@@ -2955,16 +2955,16 @@ class CmwAgent:
                         'status': 'Not available'
                     })
                     continue
-                
+
                 print(f"🤖 Using {llm_name} (tools: {use_tools})")
                 final_llm_name = llm_name
-                
+
                 # Always use streaming internally
                 if use_tools:
                     # For tool-calling, use the new streaming loop for real-time visibility
                     tool_registry = {self._get_tool_name(tool): tool for tool in self.tools}
                     call_id = self._trace_start_llm(llm_type)
-                    
+
                     if streaming:
                         # Create a streaming generator that yields content immediately
                         def streaming_yielder(content):
@@ -2974,10 +2974,10 @@ class CmwAgent:
                                 # Don't return content here - let the calling loop handle yielding
                                 # This prevents duplication
                             return None
-                        
+
                         # Execute tool loop with streaming
                         result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, streaming_yielder)
-                        
+
                         # Handle the result - it should be a generator for streaming
                         if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
                             # It's a generator, consume it and yield content
@@ -2995,7 +2995,7 @@ class CmwAgent:
                     else:
                         # Non-streaming: execute tool loop silently
                         result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, None)
-                        
+
                         # Handle the result
                         if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
                             # It's a generator, consume it silently
@@ -3034,16 +3034,16 @@ class CmwAgent:
                             accumulated_response += char
                             if streaming:
                                 yield char
-                
+
                 # If we get here, we have a successful response
                 print(f"🎯 Answer from {llm_name}: {accumulated_response[:100]}...")
-                
+
                 # Calculate similarity score if reference exists
                 if reference:
                     is_match, similarity_score = self._vector_answers_match(accumulated_response, reference)
                 else:
                     similarity_score = 1.0
-                
+
                 # Store this successful response
                 successful_responses.append({
                     "response": accumulated_response,
@@ -3051,18 +3051,18 @@ class CmwAgent:
                     "llm_type": llm_type,
                     "similarity_score": similarity_score
                 })
-                
+
                 print(f"✅ {llm_name} succeeded (similarity: {similarity_score:.3f})")
-                
+
                 # For streaming, yield the first successful response immediately
                 # For non-streaming, continue trying other LLMs to find the best one
                 if streaming:
                     # Yield the first successful response immediately for better UX
                     print(f"🎯 Final answer from {llm_name}")
-                    
+
                     # Display comprehensive stats
                     self.print_llm_stats_table()
-                    
+
                     # Finalize trace and yield the response
                     self._finalize_trace_for_streaming(question, accumulated_response, llm_name, reference)
                     for char in accumulated_response:
@@ -3071,7 +3071,7 @@ class CmwAgent:
                 else:
                     # For non-streaming, continue trying other LLMs to find the best one
                     continue
-                    
+
             except Exception as e:
                 print(f"❌ {llm_name} failed: {e}")
                 # Interpret the actual error to get real details
@@ -3087,10 +3087,10 @@ class CmwAgent:
                         "question": question,
                         "error": str(e)
                     }
-                    
+
                     # Finalize trace with error result
                     self._trace_finalize_question(error_result)
-                    
+
                     if streaming:
                         error_msg = self._generate_llm_failure_summary(failed_llms)
                         for char in error_msg:
@@ -3106,21 +3106,21 @@ class CmwAgent:
                         for char in fallback_msg:
                             yield char
                     continue
-        
+
         # After trying all LLMs, select the best response
         if successful_responses:
             # Sort by similarity score (highest first), then by order in sequence
             best_response = max(successful_responses, key=lambda x: (x["similarity_score"], -llm_sequence.index(x["llm_type"])))
-            
+
             accumulated_response = best_response["response"]
             final_llm_name = best_response["llm_name"]
             similarity_score = best_response["similarity_score"]
-            
+
             print(f"🏆 Best response from {final_llm_name} (similarity: {similarity_score:.3f})")
-            
+
             # Display comprehensive stats
             self.print_llm_stats_table()
-            
+
             # If streaming, finalize trace and yield the response
             if streaming:
                 self._finalize_trace_for_streaming(question, accumulated_response, final_llm_name, reference)
@@ -3137,16 +3137,16 @@ class CmwAgent:
                     "reference": reference if reference else "Reference answer not found",
                     "question": question
                 }
-                
+
                 # Finalize trace with success result
                 self._trace_finalize_question(final_answer)
-                
+
                 result = self._trace_get_full()
                 return result
         else:
             # No successful responses
             print("❌ All LLMs failed")
-        
+
         # If we get here, all LLMs failed
         if streaming:
             error_msg = self._generate_llm_failure_summary(failed_llms)
@@ -3197,17 +3197,17 @@ class CmwAgent:
     def _extract_text_from_response(self, response: Any) -> str:
         """
         Helper method to extract text content from various response object types.
-        
+
         Args:
             response (Any): The response object (could be LLM response, dict, or string)
-            
+
         Returns:
             str: The text content from the response
         """
         # Handle None responses gracefully
         if not response:
             return ""
-            
+
         if hasattr(response, 'content'):
             return response.content
         elif isinstance(response, dict) and 'content' in response:
@@ -3231,19 +3231,19 @@ class CmwAgent:
         structured_answer = self._extract_structured_final_answer(response)
         if structured_answer:
             return structured_answer
-        
+
         # If no structured answer found, this is an error condition for a tool-only agent
         print(f"[Response Extractor] No structured answer found - agent requires submit_answer tool usage")
         return "Error: Agent requires submit_answer tool usage. No structured answer found."
-    
+
     def _extract_structured_final_answer(self, response: Any) -> Optional[str]:
         """
         Extract final answer using structured output (tool calls or JSON mode).
         This is the modern SOTA approach.
-        
+
         Args:
             response (Any): The LLM response object.
-            
+
         Returns:
             Optional[str]: Extracted answer if found, None otherwise.
         """
@@ -3254,7 +3254,7 @@ class CmwAgent:
                     args = tool_call.get('args', {})
                     if 'answer' in args:
                         return args['answer']
-        
+
         # Check for structured content in response metadata
         if hasattr(response, 'response_metadata') and response.response_metadata:
             metadata = response.response_metadata
@@ -3262,7 +3262,7 @@ class CmwAgent:
                 structured_data = metadata['structured_output']
                 if isinstance(structured_data, dict) and 'answer' in structured_data:
                     return structured_data['answer']
-        
+
         # Check for JSON content in response
         text = self._extract_text_from_response(response)
         if text:
@@ -3273,9 +3273,9 @@ class CmwAgent:
                     return json_data['answer']
             except (json.JSONDecodeError, TypeError):
                 pass
-        
+
         return None
-    
+
 
     def _llm_answers_match(self, answer: str, reference: str) -> bool:
         """
@@ -3312,7 +3312,7 @@ class CmwAgent:
         Returns:
             list: List of tool functions.
         """
-       
+
         # Get all attributes from the tools module
         tool_list = []
         for name, obj in tools.__dict__.items():
@@ -3324,7 +3324,7 @@ class CmwAgent:
                 hasattr(obj, '__module__') and  # Must have __module__ attribute
                 obj.__module__ == 'tools.tools' and  # Must be from tools module
                 name not in ["CmwAgent", "CodeInterpreter"]):  # Exclude specific classes
-                
+
                 # Check if it's a proper tool object (has the tool attributes)
                 if hasattr(obj, 'name') and hasattr(obj, 'description'):
                     # This is a proper @tool decorated function
@@ -3336,7 +3336,7 @@ class CmwAgent:
                         # chess internals removed
                     ]:
                         tool_list.append(obj)
-        
+
         # Add specific tools that might be missed
         specific_tools = [
             # List of specific tool names to ensure inclusion (grouped by category for clarity)
@@ -3390,10 +3390,10 @@ class CmwAgent:
                 # Comindware Platform tools - Attributes (Utility)
                 'delete_attribute', 'archive_or_unarchive_attribute', 'get_attribute'
         ]
-        
+
         # Build a set of tool names for deduplication (handle both __name__ and .name attributes)
         tool_names = set(self._get_tool_name(tool) for tool in tool_list)
-        
+
         # Ensure all specific tools are included
         for tool_name in specific_tools:
             if hasattr(tools, tool_name):
@@ -3402,7 +3402,7 @@ class CmwAgent:
                 if name_val not in tool_names:
                     tool_list.append(tool_obj)
                     tool_names.add(name_val)
-        
+
         # Add retriever tool from vector store if available
         if self.ENABLE_VECTOR_SIMILARITY and self.vector_store_manager is not None:
             from vector_store import get_retriever_tool
@@ -3414,7 +3414,7 @@ class CmwAgent:
                 print("ℹ️ No retriever tool available (vector store disabled)")
         else:
             print("ℹ️ No retriever tool available (vector similarity disabled)")
-        
+
         # Filter out any tools that don't have proper tool attributes
         final_tool_list = []
         for tool in tool_list:
@@ -3424,7 +3424,7 @@ class CmwAgent:
             elif callable(tool) and not self._get_tool_name(tool).startswith("_"):
                 # This is a callable function that should be a tool
                 final_tool_list.append(tool)
-        
+
         print(f"✅ Gathered {len(final_tool_list)} tools: {[self._get_tool_name(tool) for tool in final_tool_list]}")
         return final_tool_list
 
@@ -3493,11 +3493,11 @@ class CmwAgent:
     def _inject_file_data_to_tool_args(self, tool_name: str, tool_args: dict) -> dict:
         """
         Automatically inject file data and system prompt into tool arguments if needed.
-        
+
         Args:
             tool_name (str): Name of the tool being called
             tool_args (dict): Original tool arguments
-            
+
         Returns:
             dict: Modified tool arguments with file data and system prompt if needed
         """
@@ -3514,18 +3514,18 @@ class CmwAgent:
             # chess tools removed
             'execute_code_multilang': 'code'  # Add support for code injection
         }
-        
+
         # Tools that need system prompt for better formatting
         system_prompt_tools = ['understand_video', 'understand_audio']
-        
+
         # Inject system prompt for video and audio understanding tools
         if tool_name in system_prompt_tools and 'system_prompt' not in tool_args:
             tool_args['system_prompt'] = self.system_prompt
             print(f"[Tool Loop] Injected system prompt for {tool_name}")
-        
+
         if tool_name in file_tools and self.current_file_data and self.current_file_name:
             param_name = file_tools[tool_name]
-            
+
             # For image tools, use base64 directly
             if 'image' in param_name:
                 tool_args[param_name] = self.current_file_data
@@ -3566,7 +3566,7 @@ class CmwAgent:
                         print(f"[Tool Loop] Patched code to use temp file path for {tool_name}")
                 except Exception as e:
                     print(f"[Tool Loop] Failed to patch code for code injection: {e}")
-        
+
         return tool_args
 
     def _init_gemini_llm(self, config, model_config):
@@ -3592,7 +3592,7 @@ class CmwAgent:
         model_config_with_repo = model_config.copy()
         model_config_with_repo['repo_id'] = model_config['model']
         del model_config_with_repo['model']
-        
+
         allowed_fields = {'repo_id', 'task', 'max_new_tokens', 'do_sample', 'temperature'}
         filtered_config = {k: v for k, v in model_config_with_repo.items() if k in allowed_fields}
         try:
@@ -3647,27 +3647,27 @@ class CmwAgent:
                 print(f"   Install with: pip install langchain-gigachat")
                 print(f"   Or: pip install langchain-community")
                 return None
-        
+
         # Check for required environment variables
         api_key = os.environ.get(config["api_key_env"]) or os.environ.get("GIGACHAT_API_KEY")
         if not api_key:
             print(f"⚠️ {config['api_key_env']} not found in environment variables. Skipping GigaChat...")
             print(f"   To use GigaChat, set GIGACHAT_API_KEY in your environment variables.")
             return None
-        
+
         scope = os.environ.get(config.get("scope_env", "GIGACHAT_SCOPE"))
         if not scope:
             print(f"⚠️ GIGACHAT_SCOPE not found in environment variables. Using default scope...")
             print(f"   Available scopes: GIGACHAT_API_PERS, GIGACHAT_API_B2B, GIGACHAT_API_CORP")
             scope = "GIGACHAT_API_PERS"  # Default scope
-        
+
         verify_ssl_env = os.environ.get(config.get("verify_ssl_env", "GIGACHAT_VERIFY_SSL"), "false")
         verify_ssl = str(verify_ssl_env).strip().lower() in ("1", "true", "yes", "y")
-        
+
         # Get additional optional parameters
         base_url = os.environ.get("GIGACHAT_BASE_URL", "https://gigachat.devices.sberbank.ru/api/v1")
         timeout = int(os.environ.get("GIGACHAT_TIMEOUT", "30"))
-        
+
         try:
             # Initialize LangChain GigaChat client with proper parameters
             giga_chat = LC_GigaChat(
@@ -3682,7 +3682,7 @@ class CmwAgent:
                 top_p=model_config.get("top_p", 0.9),
                 repetition_penalty=model_config.get("repetition_penalty", 1.0)
             )
-            
+
             return giga_chat
         except Exception as e:
             print(f"⚠️ Failed to initialize GigaChat: {e}")
@@ -3693,13 +3693,13 @@ class CmwAgent:
     def _interpret_llm_response(self, response: Any, llm_name: str, llm_type: str, test_type: str) -> dict:
         """
         Interpret actual LLM API responses to determine real capabilities.
-        
+
         Args:
             response: The actual response from the LLM API
             llm_name: Name of the LLM provider
             llm_type: Type of the LLM
             test_type: Type of test being performed
-            
+
         Returns:
             dict: Interpreted response information
         """
@@ -3714,7 +3714,7 @@ class CmwAgent:
             'capabilities': [],
             'limitations': []
         }
-        
+
         # Check if response is None
         if response is None:
             response_info.update({
@@ -3723,7 +3723,7 @@ class CmwAgent:
                 'limitations': ['null_responses']
             })
             return response_info
-        
+
         # Check for tool calls first (valid even without content)
         if hasattr(response, 'tool_calls') and response.tool_calls:
             response_info.update({
@@ -3731,12 +3731,12 @@ class CmwAgent:
                 'capabilities': ['tool_calling']
             })
             response_info['is_successful'] = True
-        
+
         # Check if response has content
         if hasattr(response, 'content') and response.content:
             content = str(response.content).strip()
             response_info['content'] = content
-            
+
             # Check for empty content
             if not content:
                 response_info.update({
@@ -3745,7 +3745,7 @@ class CmwAgent:
                     'limitations': ['empty_responses']
                 })
                 return response_info
-            
+
             # Check for error messages in content
             if any(term in content.lower() for term in ['error', 'failed', 'unavailable', 'not supported']):
                 response_info.update({
@@ -3754,18 +3754,18 @@ class CmwAgent:
                     'limitations': ['error_responses']
                 })
                 return response_info
-            
+
             # Check for streaming response
             if hasattr(response, 'response_metadata') and response.response_metadata:
                 response_info['capabilities'].append('streaming')
-            
+
             # Successful response with content
             response_info.update({
                 'is_successful': True,
                 'response_type': 'successful',
                 'capabilities': response_info['capabilities'] + ['text_generation', 'api_communication']
             })
-            
+
         elif hasattr(response, 'tool_calls') and response.tool_calls:
             # Tool calls without content - this is valid for tool-calling scenarios
             response_info.update({
@@ -3773,7 +3773,7 @@ class CmwAgent:
                 'response_type': 'tool_calls_only',
                 'capabilities': response_info['capabilities'] + ['api_communication']
             })
-            
+
         else:
             # No content attribute and no tool calls
             response_info.update({
@@ -3781,19 +3781,19 @@ class CmwAgent:
                 'error_description': 'Response has no content attribute',
                 'limitations': ['no_content_support']
             })
-        
+
         return response_info
 
     def _test_llm_tool_calling(self, llm_name: str, llm_type: str, llm_instance) -> tuple[bool, str, str]:
         """
         Test LLM tool calling capabilities by interpreting actual API responses.
         This is the primary test since our agent only works with tools.
-        
+
         Args:
             llm_name: Name of the LLM for logging purposes
             llm_type: The LLM type string (e.g., 'gemini', 'groq', etc.)
             llm_instance: The LLM instance with tools bound
-            
+
         Returns:
             tuple: (success: bool, error_message: str, test_answer: str)
         """
@@ -3809,13 +3809,13 @@ class CmwAgent:
             start_time = time.time()
             test_response = self._invoke_llm_provider(llm_instance, test_message, llm_type)
             end_time = time.time()
-            
+
             # Interpret the actual response
             response_info = self._interpret_llm_response(test_response, llm_name, llm_type, "tool_calling")
-            
+
             print(f"   Response time: {end_time - start_time:.2f}s")
             print(f"   Response type: {response_info['response_type']}")
-            
+
             # Debug: Show response structure
             if hasattr(test_response, 'tool_calls') and test_response.tool_calls:
                 print(f"   Tool calls detected: {len(test_response.tool_calls)}")
@@ -3827,27 +3827,27 @@ class CmwAgent:
                     print(f"   Content length: {len(str(test_response.content))}")
             else:
                 print(f"   No content attribute found")
-            
+
             if not response_info['is_successful']:
                 error_msg = f"{llm_name} tool test failed: {response_info['error_description']}"
                 print(f"❌ {error_msg}")
-                
+
                 # Special handling for GigaChat 500 errors - check configuration
                 if llm_type == "gigachat" and "Internal Server Error" in error_msg:
                     print(f"   ℹ️ GigaChat Internal Server Error - check your API configuration")
                     print(f"   ℹ️ Verify GIGACHAT_API_KEY, GIGACHAT_SCOPE, and base URL settings")
                     return False, error_msg, ""  # Don't accept as text-only mode
-                
+
                 return False, error_msg, ""
-            
+
             # Check for tool calling capabilities
             has_tool_calls = 'tool_calling' in response_info['capabilities']
             has_content = bool(response_info['content'])
-            
+
             if has_content:
                 content_preview = response_info['content'][:100] + "..." if len(response_info['content']) > 100 else response_info['content']
                 print(f"   Content preview: {content_preview}")
-            
+
             # Success cases for tool calling
             if has_tool_calls:
                 print(f"✅ {llm_name} tool calling successful!")
@@ -3855,13 +3855,13 @@ class CmwAgent:
                 if not has_content:
                     print(f"   Note: LLM made tool calls but returned empty content (this is acceptable)")
                 return True, None, response_info['content']
-            
+
             # Fallback: Check if LLM calculated correctly without tools
             elif has_content and ("352" in response_info['content'] or "15 * 23 + 7" in response_info['content']):
                 print(f"⚠️ {llm_name} calculated correctly without tools")
                 print(f"   Note: LLM may not support tool calling but can perform calculations")
                 return True, None, response_info['content']
-            
+
             # Failure cases
             elif has_content:
                 error_msg = f"{llm_name} returned content but wrong answer (expected: 352, got: {response_info['content'][:50]}...)"
@@ -3872,30 +3872,30 @@ class CmwAgent:
                 error_msg = f"{llm_name} returned no tool calls and no content"
                 print(f"❌ {error_msg}")
                 return False, error_msg, ""
-                
+
         except Exception as e:
             # Interpret the actual error
             error_info = self._interpret_llm_error(e, llm_name, llm_type)
             error_msg = f"{llm_name} tool test failed: {error_info['description']}"
             print(f"❌ {error_msg}")
-            
+
             # Special handling for GigaChat 500 errors - check configuration
             if llm_type == "gigachat" and "Internal Server Error" in error_msg:
                 print(f"   ℹ️ GigaChat Internal Server Error - check your API configuration")
                 print(f"   ℹ️ Verify GIGACHAT_API_KEY, GIGACHAT_SCOPE, and base URL settings")
                 return False, error_msg, ""  # Don't accept as text-only mode
-            
+
             return False, error_msg, ""
 
     def _interpret_llm_error(self, error: Exception, llm_name: str, llm_type: str) -> dict:
         """
         Interpret actual LLM API error responses using official API error structures.
-        
+
         Args:
             error: The actual exception/error from the LLM API
             llm_name: Name of the LLM provider
             llm_type: Type of the LLM
-            
+
         Returns:
             dict: Interpreted error information with real details
         """
@@ -3910,37 +3910,37 @@ class CmwAgent:
             'is_temporary': False,
             'requires_config_change': False
         }
-        
+
         # Try to extract HTTP status code from the error
         status_code = self._extract_http_status_code(error)
-        
+
         if status_code:
             # Use official HTTP status codes for error classification
             error_info.update(self._classify_error_by_status_code(status_code, error, llm_name))
         else:
             # Fallback to analyzing error message for known patterns
             error_info.update(self._classify_error_by_message(str(error), llm_name))
-        
+
         return error_info
 
     def _extract_http_status_code(self, error: Exception) -> int:
         """Extract HTTP status code from various error types."""
         error_str = str(error)
-        
+
         # Look for HTTP status codes in the error message
         import re
         import json
-        
+
         # Pattern 1: "HTTP 429" or "429 error"
         status_match = re.search(r'HTTP\s+(\d{3})|(\d{3})\s+error', error_str, re.IGNORECASE)
         if status_match:
             return int(status_match.group(1) or status_match.group(2))
-        
+
         # Pattern 2: "status: 429" or "code: 429"
         status_match = re.search(r'(?:status|code):\s*(\d{3})', error_str, re.IGNORECASE)
         if status_match:
             return int(status_match.group(1))
-        
+
         # Pattern 3: Try to parse JSON error responses
         try:
             # Look for JSON error structures in the error message
@@ -3953,18 +3953,18 @@ class CmwAgent:
                     return int(error_data['code'])
         except (json.JSONDecodeError, ValueError, KeyError):
             pass
-        
+
         # Pattern 4: Look for common HTTP status codes in the message
         for status in [400, 401, 402, 403, 404, 408, 413, 422, 429, 500, 502, 503]:
             if str(status) in error_str:
                 return status
-        
+
         return None
 
     def _extract_retry_after_timing(self, error_str: str) -> int:
         """Extract retry-after timing from error messages."""
         import re
-        
+
         # Look for retry-after in various formats
         patterns = [
             r'retry-after[:\s]*(\d+)',
@@ -3972,18 +3972,18 @@ class CmwAgent:
             r'wait[:\s]*(\d+)[:\s]*seconds?',
             r'(\d+)[:\s]*seconds?[:\s]*before[:\s]*retry'
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, error_str, re.IGNORECASE)
             if match:
                 return int(match.group(1))
-        
+
         return None
 
     def _classify_gemini_error(self, status_code: int, error_str: str) -> dict:
         """Classify Gemini-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         if status_code == 400:
             if 'invalid_argument' in error_str_lower:
                 return {
@@ -4001,7 +4001,7 @@ class CmwAgent:
                     'is_temporary': False,
                     'requires_config_change': True
                 }
-        
+
         elif status_code == 403:
             if 'permission_denied' in error_str_lower:
                 return {
@@ -4011,7 +4011,7 @@ class CmwAgent:
                     'is_temporary': False,
                     'requires_config_change': True
                 }
-        
+
         elif status_code == 404:
             if 'not_found' in error_str_lower:
                 return {
@@ -4021,7 +4021,7 @@ class CmwAgent:
                     'is_temporary': False,
                     'requires_config_change': True
                 }
-        
+
         elif status_code == 429:
             if 'resource_exhausted' in error_str_lower:
                 retry_after = self._extract_retry_after_timing(error_str)
@@ -4033,7 +4033,7 @@ class CmwAgent:
                     'requires_config_change': False,
                     'retry_after': retry_after
                 }
-        
+
         elif status_code == 500:
             if 'internal' in error_str_lower or 'context' in error_str_lower:
                 return {
@@ -4043,7 +4043,7 @@ class CmwAgent:
                     'is_temporary': False,
                     'requires_config_change': True
                 }
-        
+
         elif status_code == 503:
             if 'unavailable' in error_str_lower:
                 return {
@@ -4053,7 +4053,7 @@ class CmwAgent:
                     'is_temporary': True,
                     'requires_config_change': False
                 }
-        
+
         elif status_code == 504:
             if 'deadline_exceeded' in error_str_lower:
                 return {
@@ -4063,13 +4063,13 @@ class CmwAgent:
                     'is_temporary': False,
                     'requires_config_change': True
                 }
-        
+
         return None
 
     def _classify_groq_error(self, status_code: int, error_str: str) -> dict:
         """Classify Groq-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         if status_code == 400:
             return {
                 'error_type': 'bad_request',
@@ -4078,7 +4078,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 401:
             return {
                 'error_type': 'unauthorized',
@@ -4087,7 +4087,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 404:
             return {
                 'error_type': 'not_found',
@@ -4096,7 +4096,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 413:
             return {
                 'error_type': 'request_too_large',
@@ -4105,7 +4105,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 422:
             return {
                 'error_type': 'unprocessable_entity',
@@ -4114,7 +4114,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 429:
             retry_after = self._extract_retry_after_timing(error_str)
             return {
@@ -4125,7 +4125,7 @@ class CmwAgent:
                 'requires_config_change': False,
                 'retry_after': retry_after
             }
-        
+
         elif status_code == 498:
             return {
                 'error_type': 'flex_tier_capacity_exceeded',
@@ -4134,7 +4134,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 499:
             return {
                 'error_type': 'request_cancelled',
@@ -4143,7 +4143,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 500:
             return {
                 'error_type': 'internal_server_error',
@@ -4152,7 +4152,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 502:
             return {
                 'error_type': 'bad_gateway',
@@ -4161,7 +4161,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 503:
             return {
                 'error_type': 'service_unavailable',
@@ -4170,13 +4170,13 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         return None
 
     def _classify_mistral_error(self, status_code: int, error_str: str) -> dict:
         """Classify Mistral-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         # Check for Mistral-specific error codes first
         if 'invalid_request_message_order' in error_str_lower or '3230' in error_str:
             return {
@@ -4186,7 +4186,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         # Standard HTTP status codes for Mistral
         if status_code == 400:
             return {
@@ -4196,7 +4196,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 401:
             return {
                 'error_type': 'unauthorized',
@@ -4205,7 +4205,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 403:
             return {
                 'error_type': 'forbidden',
@@ -4214,7 +4214,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 404:
             return {
                 'error_type': 'not_found',
@@ -4223,7 +4223,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 422:
             return {
                 'error_type': 'validation_error',
@@ -4232,7 +4232,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 429:
             retry_after = self._extract_retry_after_timing(error_str)
             return {
@@ -4243,7 +4243,7 @@ class CmwAgent:
                 'requires_config_change': False,
                 'retry_after': retry_after
             }
-        
+
         elif status_code == 500:
             return {
                 'error_type': 'internal_server_error',
@@ -4252,7 +4252,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 503:
             return {
                 'error_type': 'service_unavailable',
@@ -4261,13 +4261,13 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         return None
 
     def _classify_gigachat_error(self, status_code: int, error_str: str) -> dict:
         """Classify GigaChat-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         if status_code == 400:
             # Check for specific GigaChat 400 error patterns
             if 'rquid' in error_str_lower or 'uuid4' in error_str_lower:
@@ -4310,7 +4310,7 @@ class CmwAgent:
                     'is_temporary': False,
                     'requires_config_change': True
                 }
-        
+
         elif status_code == 401:
             if 'can\'t decode \'authorization\' header' in error_str_lower or 'code": 4' in error_str:
                 return {
@@ -4344,7 +4344,7 @@ class CmwAgent:
                     'is_temporary': False,
                     'requires_config_change': True
                 }
-        
+
         elif status_code == 402:
             return {
                 'error_type': 'payment_required',
@@ -4353,7 +4353,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 403:
             return {
                 'error_type': 'permission_denied',
@@ -4362,7 +4362,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 413:
             return {
                 'error_type': 'payload_too_large',
@@ -4371,7 +4371,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 422:
             if 'requested model does not support functions' in error_str_lower:
                 return {
@@ -4405,7 +4405,7 @@ class CmwAgent:
                     'is_temporary': False,
                     'requires_config_change': True
                 }
-        
+
         elif status_code == 429:
             return {
                 'error_type': 'rate_limit_exceeded',
@@ -4414,7 +4414,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 500:
             return {
                 'error_type': 'internal_server_error',
@@ -4423,13 +4423,13 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         return None
 
     def _classify_openrouter_error(self, status_code: int, error_str: str) -> dict:
         """Classify OpenRouter-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         if status_code == 400:
             return {
                 'error_type': 'bad_request',
@@ -4438,7 +4438,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 401:
             if 'oauth' in error_str_lower or 'session expired' in error_str_lower:
                 return {
@@ -4464,7 +4464,7 @@ class CmwAgent:
                     'is_temporary': False,
                     'requires_config_change': True
                 }
-        
+
         elif status_code == 402:
             return {
                 'error_type': 'insufficient_credits',
@@ -4473,7 +4473,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 403:
             # Check for moderation error metadata
             if 'moderation' in error_str_lower or 'flagged' in error_str_lower:
@@ -4493,7 +4493,7 @@ class CmwAgent:
                     'is_temporary': False,
                     'requires_config_change': False
                 }
-        
+
         elif status_code == 408:
             return {
                 'error_type': 'request_timeout',
@@ -4502,7 +4502,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 429:
             return {
                 'error_type': 'rate_limited',
@@ -4511,7 +4511,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 502:
             # Check for provider error metadata
             if 'provider' in error_str_lower or 'model' in error_str_lower:
@@ -4531,7 +4531,7 @@ class CmwAgent:
                     'is_temporary': True,
                     'requires_config_change': False
                 }
-        
+
         elif status_code == 503:
             return {
                 'error_type': 'no_available_provider',
@@ -4540,7 +4540,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         return None
 
     def _extract_openrouter_moderation_metadata(self, error_str: str) -> dict:
@@ -4565,7 +4565,7 @@ class CmwAgent:
                                 return json.loads(metadata_str)
         except (json.JSONDecodeError, ValueError, AttributeError):
             pass
-        
+
         return {
             'reasons': ['Content flagged by moderation'],
             'flagged_input': 'Unable to extract',
@@ -4595,7 +4595,7 @@ class CmwAgent:
                                 return json.loads(metadata_str)
         except (json.JSONDecodeError, ValueError, AttributeError):
             pass
-        
+
         return {
             'provider_name': 'Unknown',
             'raw': 'Unable to extract raw error'
@@ -4604,7 +4604,7 @@ class CmwAgent:
     def _classify_huggingface_error(self, status_code: int, error_str: str) -> dict:
         """Classify HuggingFace-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         if status_code == 400:
             return {
                 'error_type': 'bad_request',
@@ -4613,7 +4613,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 402:
             return {
                 'error_type': 'payment_required',
@@ -4622,7 +4622,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 404:
             if 'model' in error_str_lower or 'not found' in error_str_lower:
                 return {
@@ -4640,7 +4640,7 @@ class CmwAgent:
                     'is_temporary': False,
                     'requires_config_change': True
                 }
-        
+
         elif status_code == 503:
             if 'router.huggingface.co' in error_str:
                 return {
@@ -4658,7 +4658,7 @@ class CmwAgent:
                     'is_temporary': True,
                     'requires_config_change': False
                 }
-        
+
         elif status_code == 504:
             return {
                 'error_type': 'gateway_timeout',
@@ -4667,13 +4667,13 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         return None
 
     def _classify_error_by_status_code(self, status_code: int, error: Exception, llm_name: str) -> dict:
         """Classify error based on official HTTP status codes."""
         error_str = str(error)
-        
+
         # Check for provider-specific error status codes first
         if 'gemini' in llm_name.lower():
             gemini_error = self._classify_gemini_error(status_code, error_str)
@@ -4699,7 +4699,7 @@ class CmwAgent:
             huggingface_error = self._classify_huggingface_error(status_code, error_str)
             if huggingface_error:
                 return huggingface_error
-        
+
         if status_code == 400:
             return {
                 'error_type': 'bad_request',
@@ -4708,7 +4708,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 401:
             return {
                 'error_type': 'authentication',
@@ -4717,7 +4717,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 402:
             return {
                 'error_type': 'payment_required',
@@ -4726,7 +4726,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 403:
             return {
                 'error_type': 'forbidden',
@@ -4735,7 +4735,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 404:
             return {
                 'error_type': 'not_found',
@@ -4744,7 +4744,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 408:
             return {
                 'error_type': 'timeout',
@@ -4753,7 +4753,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 413:
             return {
                 'error_type': 'payload_too_large',
@@ -4762,7 +4762,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 422:
             return {
                 'error_type': 'unprocessable_entity',
@@ -4771,7 +4771,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif status_code == 429:
             # Extract retry-after timing if available
             retry_after = self._extract_retry_after_timing(error_str)
@@ -4783,7 +4783,7 @@ class CmwAgent:
                 'requires_config_change': False,
                 'retry_after': retry_after
             }
-        
+
         elif status_code == 500:
             return {
                 'error_type': 'internal_server_error',
@@ -4792,7 +4792,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 502:
             return {
                 'error_type': 'bad_gateway',
@@ -4801,7 +4801,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         elif status_code == 503:
             return {
                 'error_type': 'service_unavailable',
@@ -4810,7 +4810,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         else:
             return {
                 'error_type': 'unknown_http_error',
@@ -4823,7 +4823,7 @@ class CmwAgent:
     def _classify_error_by_message(self, error_message: str, llm_name: str) -> dict:
         """Fallback classification based on error message content."""
         error_lower = error_message.lower()
-        
+
         # Only use this for very specific, well-known error patterns
         if 'location is not supported' in error_lower:
             return {
@@ -4833,7 +4833,7 @@ class CmwAgent:
                 'is_temporary': False,
                 'requires_config_change': True
             }
-        
+
         elif 'rate limit' in error_lower or 'too many requests' in error_lower:
             return {
                 'error_type': 'rate_limit',
@@ -4842,7 +4842,7 @@ class CmwAgent:
                 'is_temporary': True,
                 'requires_config_change': False
             }
-        
+
         else:
             return {
                 'error_type': 'unknown',
@@ -4855,18 +4855,18 @@ class CmwAgent:
     def _generate_llm_failure_summary(self, failed_llms: list) -> str:
         """
         Generate a dynamic error message based on actual LLM failure reasons.
-        
+
         Args:
             failed_llms: List of dicts with 'provider', 'error', 'status' keys
-            
+
         Returns:
             str: Formatted error message with actual failure details
         """
         if not failed_llms:
             return "❌ **All LLM providers are currently unavailable**\n\nNo specific error details available."
-        
+
         error_msg = "❌ **All LLM providers are currently unavailable**\n\n**Details:**\n"
-        
+
         # Group errors by type for better organization
         error_groups = {}
         for llm_info in failed_llms:
@@ -4874,7 +4874,7 @@ class CmwAgent:
             if error_type not in error_groups:
                 error_groups[error_type] = []
             error_groups[error_type].append(llm_info)
-        
+
         # Display errors grouped by type
         for error_type, errors in error_groups.items():
             if error_type == 'location_restriction':
@@ -4882,31 +4882,31 @@ class CmwAgent:
                 for error in errors:
                     error_msg += f"- {error['provider']}: {error['description']}\n"
                 error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
-            
+
             elif error_type == 'rate_limit':
                 error_msg += f"\n**⏱️ Rate Limits:**\n"
                 for error in errors:
                     retry_info = f" (retry after {error['retry_after']}s)" if error.get('retry_after') else ""
                     error_msg += f"- {error['provider']}: {error['description']}{retry_info}\n"
                 error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
-            
+
             elif error_type == 'authentication':
                 error_msg += f"\n**🔑 Authentication Issues:**\n"
                 for error in errors:
                     error_msg += f"- {error['provider']}: {error['description']}\n"
                 error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
-            
+
             elif error_type == 'service_unavailable':
                 error_msg += f"\n**🔧 Service Issues:**\n"
                 for error in errors:
                     error_msg += f"- {error['provider']}: {error['description']}\n"
                 error_msg += f"   *Suggested action: {errors[0]['suggested_action']}*\n"
-            
+
             else:
                 error_msg += f"\n**❓ Other Issues:**\n"
                 for error in errors:
                     error_msg += f"- {error['provider']}: {error['description']}\n"
-        
+
         error_msg += "\n**Fallback system:** The agent tried all available LLM providers but none could generate a response.\n\n"
         error_msg += "**Next steps:**\n"
         error_msg += "- Check the specific error types above for targeted solutions\n"
@@ -4914,7 +4914,7 @@ class CmwAgent:
         error_msg += "- Wait for rate limits to reset if applicable\n"
         error_msg += "- Try again later for temporary service issues\n\n"
         error_msg += "Please check the Init logs for more details."
-        
+
         return error_msg
 
     def _ping_llm(self, llm_name: str, llm_type: str, use_tools: bool = False, llm_instance=None) -> bool:
@@ -4958,7 +4958,7 @@ class CmwAgent:
             max_len = self.MAX_PRINT_LEN
         s = str(obj)
         orig_len = len(s)
-        
+
         if orig_len > max_len:
             return f"Truncated. Original length: {orig_len}\n{s[:max_len]}"
         return s
@@ -4986,7 +4986,7 @@ class CmwAgent:
     def _print_meaningful_attributes(self, msg, attributes, separator, printed_attrs=None):
         """
         Generic helper to check and print meaningful attributes from a message object.
-        
+
         Args:
             msg: The message object to inspect
             attributes: List of attribute names to check
@@ -4995,7 +4995,7 @@ class CmwAgent:
         """
         if printed_attrs is None:
             printed_attrs = set()
-            
+
         for attr in attributes:
             if hasattr(msg, attr):
                 value = getattr(msg, attr)
@@ -5003,7 +5003,7 @@ class CmwAgent:
                     print(separator)
                     print(f"  {attr}: {self._format_value_for_print(value)}")
                     printed_attrs.add(attr)
-        
+
         return printed_attrs
 
     def _print_message_components(self, msg, msg_index):
@@ -5014,26 +5014,26 @@ class CmwAgent:
         separator = "------------------------------------------------\n"
         print(separator) 
         print(f"Message {msg_index}:")
-        
+
         # Get message type dynamically
         msg_type = getattr(msg, 'type', 'unknown')
         print(f"  type: {msg_type}")
-        
+
         # Define priority attributes to check first (most important)
         priority_attrs = ['content', 'tool_calls', 'function_call', 'name', 'tool_call_id']
-        
+
         # Define secondary attributes to check if they exist and have meaningful values
         secondary_attrs = ['additional_kwargs', 'response_metadata', 'id', 'timestamp', 'metadata']
-        
+
         # Smart attribute discovery and printing
         printed_attrs = set()
-        
+
         # Check priority attributes first
         printed_attrs = self._print_meaningful_attributes(msg, priority_attrs, separator, printed_attrs)
-        
+
         # Check secondary attributes if they exist and haven't been printed
         self._print_meaningful_attributes(msg, secondary_attrs, separator, printed_attrs)
-        
+
         # Dynamic discovery: check for any other non-private attributes we might have missed
         dynamic_attrs = []
         for attr_name in dir(msg):
@@ -5043,10 +5043,10 @@ class CmwAgent:
                 attr_name not in ['type'] and  # Already printed
                 not callable(getattr(msg, attr_name))):  # Skip methods
                 dynamic_attrs.append(attr_name)
-        
+
         # Print any dynamically discovered meaningful attributes
         self._print_meaningful_attributes(msg, dynamic_attrs, separator, printed_attrs)
-        
+
         print(separator)
 
     def _is_base64_data(self, data: str) -> bool:
@@ -5073,7 +5073,7 @@ class CmwAgent:
         """
         if max_len is None:
             max_len = 100  # Shorter for base64 placeholders
-        
+
         if isinstance(obj, dict):
             return {k: self._deep_trim_dict_base64(v, max_len) for k, v in obj.items()}
         elif isinstance(obj, list):
@@ -5093,10 +5093,10 @@ class CmwAgent:
         """
         if max_len is None:
             max_len = self.MAX_PRINT_LEN
-        
+
         # Step 1: Handle base64 first
         obj = self._deep_trim_dict_base64(obj)
-        
+
         # Step 2: Now check remaining text for max length
         if isinstance(obj, dict):
             return {k: self._deep_trim_dict_max_length(v, max_len) for k, v in obj.items()}
@@ -5139,16 +5139,16 @@ class CmwAgent:
                     return raw_response["description"]
                 # Fallback: convert raw_response to readable string
                 return str(raw_response)
-            
+
             # Handle error cases in structured results
             if "error" in tool_result and tool_result["error"]:
                 return f"Error: {tool_result['error']}"
-            
+
             # Handle legacy tool results
             for key in ("wiki_results", "web_results", "arxiv_results", "result", "text", "content"):
                 if key in tool_result and isinstance(tool_result[key], str):
                     return tool_result[key]
-            
+
             # Fallback: join all string values
             return " ".join(str(v) for v in tool_result.values() if isinstance(v, str))
         return str(tool_result)
@@ -5164,7 +5164,7 @@ class CmwAgent:
             if hasattr(msg, 'type') and msg.type == 'human':
                 original_question = msg.content
                 break
-        
+
         # Build the prompt message (slim, direct)
         prompt = (
             "TASK: Extract the answer from the given LLM response. "
@@ -5177,10 +5177,10 @@ class CmwAgent:
         if original_question:
             prompt += f"QUESTION: {original_question}\n\n"
         prompt += "RESPONSE TO ANALYZE:\nAnalyze the previous response and provide your answer."
-        
+
         # Inject the message into the queue
         messages.append(HumanMessage(content=prompt))
-        
+
         # Make the LLM call and extract the answer
         response = self._make_llm_request(messages, use_tools=use_tools, llm_type=llm_type)
         answer = self._extract_final_answer(response)
@@ -5199,7 +5199,7 @@ class CmwAgent:
     ) -> str:
         """
         Get standardized reminder prompts based on type. Extracts tool_names, tool_count, and original_question as needed.
-        
+
         Args:
             reminder_type: Type of reminder needed
             messages: Message history (for extracting question)
@@ -5209,7 +5209,7 @@ class CmwAgent:
             count: Usage count (for tool-specific reminders)
             tool_args: Arguments for the tool (for duplicate reminders)
             question: Optional question override
-            
+
         Returns:
             str: The reminder prompt
         """
@@ -5217,12 +5217,12 @@ class CmwAgent:
         tool_names = None
         if tools is not None:
             tool_names = ', '.join([self._get_tool_name(tool) for tool in tools])
-            
+
         # Extract tool_count if needed
         tool_count = None
         if tool_results_history is not None:
             tool_count = len(tool_results_history)
-            
+
         # Extract original_question if needed
         original_question = None
         if messages is not None:
@@ -5232,7 +5232,7 @@ class CmwAgent:
                     break
         if not original_question:
             original_question = question or '[Original question not found]'
-            
+
         reminders = {
             "final_answer_prompt": (
                     "Analyse existing tool results, then use the submit_answer tool.\n"
@@ -5278,10 +5278,10 @@ class CmwAgent:
             if hasattr(msg, 'type') and msg.type == 'human':
                 original_question = msg.content
                 break
-        
+
         # Determine if this is tool results or general content
         is_tool_results = any('tool' in str(result).lower() or 'result' in str(result).lower() for result in chunk_results)
-        
+
         if is_tool_results:
             prompt = f"Question: {original_question}\n\nTool Results (Part {chunk_num}/{total_chunks}):\n"
             for i, result in enumerate(chunk_results, 1):
@@ -5290,43 +5290,43 @@ class CmwAgent:
             prompt = f"Question: {original_question}\n\nContent Analysis (Part {chunk_num}/{total_chunks}):\n"
             for i, result in enumerate(chunk_results, 1):
                 prompt += f"{i}. {result}\n\n"
-        
+
         if chunk_num < total_chunks:
             prompt += "Analyze these results and provide key findings."
         else:
             prompt += "Use the submit_answer tool based on all content, when you receive it, following the system prompt format."
-        
+
         return prompt
 
     def _is_token_limit_error(self, error, llm_type="unknown") -> bool:
         """
         Check if the error is a token limit error or router error using vector similarity.
-        
+
         Args:
             error: The exception object
             llm_type: Type of LLM for specific error patterns
-            
+
         Returns:
             bool: True if it's a token limit error or router error
         """
         error_str = str(error).lower()
-        
+
         # Token limit and router error patterns for vector similarity
         error_patterns = [
             "Error code: 413 - {'error': {'message': 'Request too large for model `qwen-qwq-32b` in organization `org_01jyfgv54ge5ste08j9248st66` service tier `on_demand` on tokens per minute (TPM): Limit 6000, Requested 9681, please reduce your message size and try again. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}",
             "500 Server Error: Internal Server Error for url: https://router.huggingface.co/hyperbolic/v1/chat/completions (Request ID: Root=1-6861ed33-7dd4232d49939c6f65f6e83d;164205eb-e591-4b20-8b35-5745a13f05aa)",
             "Error code: 429 - {'error': {'message': 'Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day', 'code': 429, 'metadata': {'headers': {'X-RateLimit-Limit': '50', 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1756771200000'}, 'provider_name': None}}, 'user_id': 'user_2zGr0yIHMzRxIJYcW8N0my40LIs'}"
         ]
-        
+
         # Direct substring checks for efficiency
         if any(term in error_str for term in ["413", "429", "token", "limit", "tokens per minute", "truncated", "tpm", "router.huggingface.co", "402", "payment required", "rate limit", "rate_limit"]):
             return True
-        
+
         # Check if error matches any pattern using vector similarity
         for pattern in error_patterns:
             if self._vector_answers_match(error_str, pattern):
                 return True
-        
+
         return False
 
     def _get_token_limit(self, provider: str) -> int:
@@ -5371,7 +5371,7 @@ class CmwAgent:
             # Check if chunking is enabled for HuggingFace
             config = self.LLM_CONFIG.get(llm_type, {})
             enable_chunking = config.get("enable_chunking", True)
-            
+
             if enable_chunking:
                 print(f"⚠️ HuggingFace router error detected, applying chunking: {e}")
                 return True, self._handle_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e, llm_type)
@@ -5399,7 +5399,7 @@ class CmwAgent:
             # Check if chunking is enabled for this provider
             config = self.LLM_CONFIG.get(llm_type, {})
             enable_chunking = config.get("enable_chunking", True)
-            
+
             if enable_chunking:
                 print(f"[Tool Loop] Token limit error detected for {llm_type} in tool calling loop")
                 _, llm_name, _ = self._select_llm(llm_type, True)
@@ -5412,7 +5412,7 @@ class CmwAgent:
             # Check if chunking is enabled for HuggingFace
             config = self.LLM_CONFIG.get(llm_type, {})
             enable_chunking = config.get("enable_chunking", True)
-            
+
             if enable_chunking:
                 print(f"⚠️ HuggingFace router error detected, applying chunking: {e}")
                 return True, self._handle_token_limit_error(kwargs.get('messages'), kwargs.get('llm'), llm_name, e, llm_type)
@@ -5436,7 +5436,7 @@ class CmwAgent:
     def _get_available_models(self) -> Dict:
         """
         Get list of available models and their status.
-        
+
         Returns:
             Dict: Available models with their status
         """
@@ -5455,7 +5455,7 @@ class CmwAgent:
     def _get_tool_support_status(self) -> Dict:
         """
         Get tool support status for each LLM type.
-        
+
         Returns:
             Dict: Tool support status for each LLM
         """
@@ -5470,11 +5470,11 @@ class CmwAgent:
         return tool_status
 
     # ===== TRACING SYSTEM METHODS =====
-    
+
     def _trace_init_question(self, question: str, file_data: str = None, file_name: str = None):
         """
         Initialize trace for a new question.
-        
+
         Args:
             question: The question being processed
             file_data: Base64 file data if attached
@@ -5501,42 +5501,42 @@ class CmwAgent:
     def _get_llm_name(self, llm_type: str) -> str:
         """
         Get the LLM name for a given LLM type.
-        
+
         Args:
             llm_type: Type of LLM
-            
+
         Returns:
             str: LLM name (model ID if available, otherwise provider name)
         """
         model_id = ""
         if llm_type in self.active_model_config:
             model_id = self.active_model_config[llm_type].get("model", "")
-        
+
         return f"{model_id}" if model_id else self.LLM_CONFIG[llm_type]["name"]
 
     def _trace_start_llm(self, llm_type: str) -> str:
         """
         Start a new LLM call trace and return call_id.
-        
+
         Args:
             llm_type: Type of LLM being called
-            
+
         Returns:
             str: Unique call ID for this LLM call
         """
         if not self.question_trace:
             return None
-            
+
         call_id = f"{llm_type}_call_{len(self.question_trace['llm_traces'].get(llm_type, [])) + 1}"
         self.current_llm_call_id = call_id
-        
+
         # Initialize LLM trace if not exists
         if llm_type not in self.question_trace["llm_traces"]:
             self.question_trace["llm_traces"][llm_type] = []
-        
+
         # Create descriptive LLM name with model info
         llm_name = self._get_llm_name(llm_type)
-        
+
         # Create new call trace
         call_trace = {
             "call_id": call_id,
@@ -5550,12 +5550,12 @@ class CmwAgent:
             "total_tokens": None,
             "error": None
         }
-        
+
         self.question_trace["llm_traces"][llm_type].append(call_trace)
-        
+
         # Start new stdout buffer for this LLM attempt
         self.current_llm_stdout_buffer = StringIO()
-        
+
         print(f"🤖 Started LLM trace: {call_id} ({llm_type})")
         return call_id
 
@@ -5563,20 +5563,20 @@ class CmwAgent:
         """
         Capture stdout for the current LLM attempt and add it to the trace.
         This should be called when an LLM attempt is complete.
-        
+
         Args:
             llm_type: Type of LLM that just completed
             call_id: Call ID of the completed LLM attempt
         """
         if not self.question_trace or not self.current_llm_stdout_buffer:
             return
-            
+
         # Get the captured stdout
         stdout_content = self.current_llm_stdout_buffer.getvalue()
-        
+
         # Create descriptive LLM name with model info
         llm_name = self._get_llm_name(llm_type)
-        
+
         # Add to per-LLM stdout array
         llm_stdout_entry = {
             "llm_type": llm_type,
@@ -5585,18 +5585,18 @@ class CmwAgent:
             "timestamp": datetime.datetime.now().isoformat(),
             "stdout": stdout_content
         }
-        
+
         self.question_trace["per_llm_stdout"].append(llm_stdout_entry)
-        
+
         # Clear the buffer for next LLM
         self.current_llm_stdout_buffer = None
-        
+
         print(f"📝 Captured stdout for {llm_type} ({call_id}): {len(stdout_content)} chars")
 
     def _update_trace_during_streaming(self, event_type: str, content: str, metadata: dict = None):
         """
         Update trace object in real-time during streaming.
-        
+
         Args:
             event_type: Type of streaming event (llm_chunk, tool_start, tool_end, etc.)
             content: Content to add to trace
@@ -5604,7 +5604,7 @@ class CmwAgent:
         """
         if not self.question_trace:
             return
-            
+
         streaming_event = {
             "timestamp": datetime.datetime.now().isoformat(),
             "event_type": event_type,
@@ -5613,9 +5613,9 @@ class CmwAgent:
             "llm_call_id": self.current_llm_call_id,
             "llm_type": getattr(self, 'current_llm_type', 'unknown')
         }
-        
+
         self.question_trace["streaming_events"].append(streaming_event)
-        
+
         # Update current LLM call trace if available
         if self.current_llm_call_id and self.current_llm_type:
             for call_trace in self.question_trace["llm_traces"].get(self.current_llm_type, []):
@@ -5623,7 +5623,7 @@ class CmwAgent:
                     if "streaming_events" not in call_trace:
                         call_trace["streaming_events"] = []
                     call_trace["streaming_events"].append(streaming_event)
-                    
+
                     # Update output content incrementally for LLM chunks
                     if event_type == "llm_chunk":
                         if "content" not in call_trace["output"]:
@@ -5641,7 +5641,7 @@ class CmwAgent:
                 # Only stream new content since last call
                 if not hasattr(self, '_last_streamed_stdout'):
                     self._last_streamed_stdout = ""
-                
+
                 new_content = content[len(self._last_streamed_stdout):]
                 if new_content:
                     self._last_streamed_stdout = content
@@ -5651,7 +5651,7 @@ class CmwAgent:
     def _trace_add_llm_call_input(self, llm_type: str, call_id: str, messages: List, use_tools: bool):
         """
         Add input data to current LLM call trace.
-        
+
         Args:
             llm_type: Type of LLM
             call_id: Call ID
@@ -5660,7 +5660,7 @@ class CmwAgent:
         """
         if not self.question_trace or not call_id:
             return
-            
+
         # Find the call trace
         for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
             if call_trace["call_id"] == call_id:
@@ -5676,7 +5676,7 @@ class CmwAgent:
     def _trace_add_llm_call_output(self, llm_type: str, call_id: str, response: Any, execution_time: float):
         """
         Add output data to current LLM call trace.
-        
+
         Args:
             llm_type: Type of LLM
             call_id: Call ID
@@ -5685,7 +5685,7 @@ class CmwAgent:
         """
         if not self.question_trace or not call_id:
             return
-            
+
         # Find the call trace
         for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
             if call_trace["call_id"] == call_id:
@@ -5698,7 +5698,7 @@ class CmwAgent:
                     "raw_response": trimmed_response
                 }
                 call_trace["execution_time"] = execution_time
-                
+
                 # Extract and accumulate token usage
                 token_data = self._extract_token_usage(response, llm_type)
                 if token_data:
@@ -5711,7 +5711,7 @@ class CmwAgent:
                             "call_count": 0,
                             "calls": []
                         }
-                    
+
                     # Add current call data
                     call_data = {
                         "call_id": call_id,
@@ -5719,23 +5719,23 @@ class CmwAgent:
                         **token_data
                     }
                     call_trace["token_usage"]["calls"].append(call_data)
-                    
+
                     # Accumulate totals
                     call_trace["token_usage"]["prompt_tokens"] += token_data.get("prompt_tokens", 0)
                     call_trace["token_usage"]["completion_tokens"] += token_data.get("completion_tokens", 0)
                     call_trace["token_usage"]["total_tokens"] += token_data.get("total_tokens", 0)
                     call_trace["token_usage"]["call_count"] += 1
-                
+
                 # Fallback to estimated tokens if no token data available
                 if not token_data or not any([token_data.get("prompt_tokens"), token_data.get("completion_tokens"), token_data.get("total_tokens")]):
                     call_trace["total_tokens"] = self._estimate_tokens(str(response)) if response else None
-                
+
                 break
 
     def _add_tool_execution_trace(self, llm_type: str, call_id: str, tool_name: str, tool_args: dict, tool_result: str, execution_time: float):
         """
         Add tool execution trace to current LLM call.
-        
+
         Args:
             llm_type: Type of LLM
             call_id: Call ID
@@ -5746,14 +5746,14 @@ class CmwAgent:
         """
         if not self.question_trace or not call_id:
             return
-            
+
         # Find the call trace
         for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
             if call_trace["call_id"] == call_id:
                 # Use _deep_trim_dict_base64 to preserve all text data in trace JSON
                 trimmed_args = self._deep_trim_dict_base64(tool_args)
                 trimmed_result = self._deep_trim_dict_base64(tool_result)
-                
+
                 tool_execution = {
                     "tool_name": tool_name,
                     "args": trimmed_args,
@@ -5767,7 +5767,7 @@ class CmwAgent:
     def _add_tool_loop_data(self, llm_type: str, call_id: str, step: int, tool_calls: List, consecutive_no_progress: int):
         """
         Add tool loop data to current LLM call trace.
-        
+
         Args:
             llm_type: Type of LLM
             call_id: Call ID
@@ -5777,7 +5777,7 @@ class CmwAgent:
         """
         if not self.question_trace or not call_id:
             return
-            
+
         # Find the call trace
         for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
             if call_trace["call_id"] == call_id:
@@ -5793,7 +5793,7 @@ class CmwAgent:
     def _trace_add_llm_error(self, llm_type: str, call_id: str, error: Exception):
         """
         Add error information to current LLM call trace.
-        
+
         Args:
             llm_type: Type of LLM
             call_id: Call ID
@@ -5801,7 +5801,7 @@ class CmwAgent:
         """
         if not self.question_trace or not call_id:
             return
-            
+
         # Find the call trace
         for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
             if call_trace["call_id"] == call_id:
@@ -5815,46 +5815,46 @@ class CmwAgent:
     def _trace_finalize_question(self, final_result: dict):
         """
         Finalize the question trace with final results.
-        
+
         Args:
             final_result: Final result dictionary
         """
         if not self.question_trace:
             return
-            
+
         self.question_trace["final_result"] = final_result
         self.question_trace["end_time"] = datetime.datetime.now().isoformat()
-        
+
         # Calculate total execution time
         start_time = datetime.datetime.fromisoformat(self.question_trace["start_time"])
         end_time = datetime.datetime.fromisoformat(self.question_trace["end_time"])
         total_time = (end_time - start_time).total_seconds()
         self.question_trace["total_execution_time"] = total_time
-        
+
         # Calculate total tokens across all LLM calls
         total_tokens = 0
         for llm_type, calls in self.question_trace["llm_traces"].items():
             for call in calls:
                 if "token_usage" in call:
                     total_tokens += call["token_usage"].get("total_tokens", 0)
-        
+
         self.question_trace["tokens_total"] = total_tokens
-        
+
         # Calculate streaming duration
         if hasattr(self, 'streaming_start_time'):
             streaming_duration = time.time() - self.streaming_start_time
             self.question_trace["streaming_duration"] = streaming_duration
-        
+
         # Capture any remaining stdout from current LLM attempt
         if hasattr(self, 'current_llm_stdout_buffer') and self.current_llm_stdout_buffer:
             self._trace_capture_llm_stdout(self.current_llm_type, self.current_llm_call_id)
-        
+
         # Capture all debug output as comprehensive text
         debug_output = self._capture_all_debug_output()
         self.question_trace["debug_output"] = debug_output
-        
+
         streaming_events_count = len(self.question_trace.get("streaming_events", []))
-        
+
         print(f"📊 Question trace finalized. Total execution time: {total_time:.2f}s")
         print(f"📝 Captured stdout for {len(self.question_trace.get('per_llm_stdout', []))} LLM attempts")
         print(f"🔢 Total tokens used: {total_tokens}")
@@ -5872,18 +5872,18 @@ class CmwAgent:
         - All stdout captures
         - Error information
         - Performance metrics
-        
+
         Returns:
             str: Comprehensive debug output as text
         """
         if not self.question_trace:
             return "No trace available"
-        
+
         debug_lines = []
         debug_lines.append("=" * 80)
         debug_lines.append("COMPREHENSIVE DEBUG OUTPUT")
         debug_lines.append("=" * 80)
-        
+
         # Question metadata
         debug_lines.append(f"Question: {self.question_trace.get('question', 'N/A')}")
         debug_lines.append(f"File: {self.question_trace.get('file_name', 'N/A')}")
@@ -5893,7 +5893,7 @@ class CmwAgent:
         debug_lines.append(f"Total Execution Time: {self.question_trace.get('total_execution_time', 0):.2f}s")
         debug_lines.append(f"Total Tokens: {self.question_trace.get('tokens_total', 0)}")
         debug_lines.append("")
-        
+
         # Final result
         debug_lines.append("-" * 40)
         final_result = self.question_trace.get('final_result', {})
@@ -5903,8 +5903,8 @@ class CmwAgent:
             for key, value in final_result.items():
                 debug_lines.append(f"{key}: {value}")
             debug_lines.append("")
-        
-        
+
+
         # Per-LLM stdout captures
         debug_lines.append("-" * 40)
         per_llm_stdout = self.question_trace.get('per_llm_stdout', [])
@@ -5924,7 +5924,7 @@ class CmwAgent:
                     debug_lines.append(f"  Stdout: {stdout_content}")
                     # CAN BE SHORTENED debug_lines.append(f"  Stdout Preview: {stdout_content[:self.MAX_PRINT_LEN]}...")
                 debug_lines.append("")
-        
+
         # All logs
         debug_lines.append("-" * 40)
         logs = self.question_trace.get('logs', [])
@@ -5937,7 +5937,7 @@ class CmwAgent:
                 function = log.get('function', 'N/A')
                 debug_lines.append(f"[{timestamp}] [{function}] {message}")
             debug_lines.append("")
-        
+
         # LLM traces
         debug_lines.append("-" * 40)
         llm_traces = self.question_trace.get('llm_traces', {})
@@ -5952,13 +5952,13 @@ class CmwAgent:
                     debug_lines.append(f"    LLM Name: {call.get('llm_name', 'N/A')}")
                     debug_lines.append(f"    Timestamp: {call.get('timestamp', 'N/A')}")
                     debug_lines.append(f"    Execution Time: {call.get('execution_time', 'N/A')}")
-                    
+
                     # Input details
                     input_data = call.get('input', {})
                     if input_data:
                         debug_lines.append(f"    Input Messages: {len(input_data.get('messages', []))}")
                         debug_lines.append(f"    Use Tools: {input_data.get('use_tools', False)}")
-                    
+
                     # Output details
                     output_data = call.get('output', {})
                     if output_data:
@@ -5968,12 +5968,12 @@ class CmwAgent:
                         tool_calls = output_data.get('tool_calls', [])
                         if tool_calls:
                             debug_lines.append(f"    Tool Calls: {len(tool_calls)}")
-                    
+
                     # Token usage
                     token_usage = call.get('token_usage', {})
                     if token_usage:
                         debug_lines.append(f"    Tokens: {token_usage.get('total_tokens', 0)}")
-                    
+
                     # Tool executions
                     tool_executions = call.get('tool_executions', [])
                     if tool_executions:
@@ -5982,41 +5982,41 @@ class CmwAgent:
                             tool_name = tool_exec.get('tool_name', 'N/A')
                             exec_time = tool_exec.get('execution_time', 0)
                             debug_lines.append(f"      Tool {j}: {tool_name} ({exec_time:.2f}s)")
-                    
+
                     # Tool loop data
                     tool_loop_data = call.get('tool_loop_data', [])
                     if tool_loop_data:
                         debug_lines.append(f"    Tool Loop Steps: {len(tool_loop_data)}")
-                    
+
                     # Error information
                     error = call.get('error', {})
                     if error:
                         debug_lines.append(f"    Error: {error.get('type', 'N/A')} - {error.get('message', 'N/A')}")
-                    
+
                     # Call-specific logs
                     call_logs = call.get('logs', [])
                     if call_logs:
                         debug_lines.append(f"    Logs: {len(call_logs)} entries")
-                    
+
                     debug_lines.append("")
                 debug_lines.append("")
-        
+
         debug_lines.append("=" * 80)
         debug_lines.append("END DEBUG OUTPUT")
         debug_lines.append("=" * 80)
-        
+
         return "\n".join(debug_lines)
 
     def _trace_get_full(self) -> dict:
         """
         Get the complete trace for the current question.
-        
+
         Returns:
             dict: Complete trace data or None if no trace exists
         """
         if not self.question_trace:
             return None
-            
+
         # Serialize the trace data to ensure it's JSON-serializable
         return self._serialize_trace_data(self.question_trace)
 
@@ -6024,10 +6024,10 @@ class CmwAgent:
         """
         Recursively serialize trace data, converting LangChain message objects and other
         non-JSON-serializable objects to dictionaries.
-        
+
         Args:
             obj: Object to serialize
-            
+
         Returns:
             Serialized object that can be JSON serialized
         """
@@ -6072,7 +6072,7 @@ class CmwAgent:
     def _add_log_to_context(self, message: str, function: str):
         """
         Add log to the appropriate context based on current execution.
-        
+
         Args:
             message: The log message
             function: The function name that generated the log
@@ -6082,12 +6082,12 @@ class CmwAgent:
             "message": message,
             "function": function
         }
-        
+
         if not self.question_trace:
             return
-        
+
         context = getattr(self, '_current_trace_context', None)
-        
+
         if context == "llm_call" and self.current_llm_call_id:
             # Add to current LLM call
             self._add_log_to_llm_call(log_entry)
@@ -6107,16 +6107,16 @@ class CmwAgent:
     def _add_log_to_llm_call(self, log_entry: dict):
         """
         Add log entry to the current LLM call.
-        
+
         Args:
             log_entry: The log entry to add
         """
         if not self.question_trace or not self.current_llm_call_id:
             return
-            
+
         llm_type = self.current_llm_type
         call_id = self.current_llm_call_id
-        
+
         # Find the call trace
         for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
             if call_trace["call_id"] == call_id:
@@ -6130,16 +6130,16 @@ class CmwAgent:
     def _add_log_to_tool_execution(self, log_entry: dict):
         """
         Add log entry to the current tool execution.
-        
+
         Args:
             log_entry: The log entry to add
         """
         if not self.question_trace or not self.current_llm_call_id:
             return
-            
+
         llm_type = self.current_llm_type
         call_id = self.current_llm_call_id
-        
+
         # Find the call trace and add to the last tool execution
         for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
             if call_trace["call_id"] == call_id:
@@ -6151,16 +6151,16 @@ class CmwAgent:
     def _add_log_to_tool_loop(self, log_entry: dict):
         """
         Add log entry to the current tool loop step.
-        
+
         Args:
             log_entry: The log entry to add
         """
         if not self.question_trace or not self.current_llm_call_id:
             return
-            
+
         llm_type = self.current_llm_type
         call_id = self.current_llm_call_id
-        
+
         # Find the call trace and add to the last tool loop step
         for call_trace in self.question_trace["llm_traces"].get(llm_type, []):
             if call_trace["call_id"] == call_id:
@@ -6172,11 +6172,11 @@ class CmwAgent:
     def _extract_token_usage(self, response, llm_type: str) -> dict:
         """
         Extract token usage data from LLM response.
-        
+
         Args:
             response: The LLM response object
             llm_type: Type of LLM provider
-            
+
         Returns:
             dict: Token usage data with available fields
         """
@@ -6189,7 +6189,7 @@ class CmwAgent:
             "input_token_details": {},
             "output_token_details": {}
         }
-        
+
         try:
             # Extract from response_metadata (OpenRouter, HuggingFace)
             if hasattr(response, 'response_metadata') and response.response_metadata:
@@ -6201,10 +6201,10 @@ class CmwAgent:
                         "completion_tokens": usage.get('completion_tokens'),
                         "total_tokens": usage.get('total_tokens')
                     })
-                
+
                 token_data["finish_reason"] = metadata.get('finish_reason')
                 token_data["system_fingerprint"] = metadata.get('system_fingerprint')
-            
+
             # Extract from usage_metadata (Groq, some others)
             if hasattr(response, 'usage_metadata') and response.usage_metadata:
                 usage = response.usage_metadata
@@ -6213,17 +6213,17 @@ class CmwAgent:
                     "completion_tokens": usage.get('output_tokens'),
                     "total_tokens": usage.get('total_tokens')
                 })
-                
+
                 # Extract detailed token breakdowns
                 token_data["input_token_details"] = usage.get('input_token_details', {})
                 token_data["output_token_details"] = usage.get('output_token_details', {})
-            
+
             # Clean up None values
             token_data = {k: v for k, v in token_data.items() if v is not None}
-            
+
         except Exception as e:
             self._add_log_to_context(f"Error extracting token usage: {str(e)}", "_extract_token_usage")
-        
+
         return token_data
 
     def get_available_model_choices(self):
@@ -6240,7 +6240,7 @@ class CmwAgent:
     def _handle_provider_failure(self, provider_type: str, error_type: str = "general"):
         """
         Track provider failures with simple retry limits without disabling tools.
-        
+
         Args:
             provider_type: Provider name (e.g., "mistral", "gemini", "groq")
             error_type: Type of error ("rate_limit", "message_ordering", "timeout", "general")
@@ -6248,7 +6248,7 @@ class CmwAgent:
         # Initialize provider tracking if not exists
         if not hasattr(self, '_provider_failure_tracker'):
             self._provider_failure_tracker = {}
-        
+
         if provider_type not in self._provider_failure_tracker:
             self._provider_failure_tracker[provider_type] = {
                 'consecutive_failures': 0,
@@ -6259,35 +6259,35 @@ class CmwAgent:
                 'should_skip_temporarily': False,
                 'skip_until': None
             }
-        
+
         tracker = self._provider_failure_tracker[provider_type]
-        
+
         # Update failure stats
         tracker['consecutive_failures'] += 1
         tracker['total_failures'] += 1
         tracker['last_failure_time'] = time.time()
         tracker['error_types'][error_type] = tracker['error_types'].get(error_type, 0) + 1
-        
+
         # Simple temporary skip logic to prevent infinite loops
         if tracker['consecutive_failures'] >= 3:
             # Skip this provider for 5 minutes after 3 consecutive failures
             tracker['should_skip_temporarily'] = True
             tracker['skip_until'] = time.time() + 300  # 5 minutes
             print(f"⚠️ {provider_type.title()} temporarily skipped for 5 minutes after {tracker['consecutive_failures']} consecutive failures")
-        
+
         print(f"❌ {provider_type.title()} failure ({error_type}): {tracker['consecutive_failures']} consecutive, {tracker['total_failures']} total")
 
     def _handle_provider_success(self, provider_type: str):
         """
         Track successful provider requests and reset failure counters.
-        
+
         Args:
             provider_type: Provider name (e.g., "mistral", "gemini", "groq")
         """
         # Initialize if not exists
         if not hasattr(self, '_provider_failure_tracker'):
             self._provider_failure_tracker = {}
-        
+
         if provider_type not in self._provider_failure_tracker:
             self._provider_failure_tracker[provider_type] = {
                 'consecutive_failures': 0,
@@ -6298,53 +6298,53 @@ class CmwAgent:
                 'should_skip_temporarily': False,
                 'skip_until': None
             }
-        
+
         tracker = self._provider_failure_tracker[provider_type]
-        
+
         # Reset failure counters on success
         tracker['consecutive_failures'] = 0
         tracker['last_success_time'] = time.time()
         tracker['should_skip_temporarily'] = False
         tracker['skip_until'] = None
-        
+
         print(f"✅ {provider_type.title()} success - failure counters reset")
 
     def _should_skip_provider_temporarily(self, provider_type: str) -> bool:
         """
         Check if provider should be temporarily skipped due to recent failures.
-        
+
         Args:
             provider_type: Provider name
-            
+
         Returns:
             bool: True if provider should be skipped
         """
         if not hasattr(self, '_provider_failure_tracker'):
             return False
-        
+
         tracker = self._provider_failure_tracker.get(provider_type)
         if not tracker:
             return False
-        
+
         # Check if skip period has expired
         if tracker.get('skip_until') and time.time() > tracker['skip_until']:
             tracker['should_skip_temporarily'] = False
             tracker['skip_until'] = None
             print(f"🔄 {provider_type.title()} skip period expired - re-enabling")
-        
+
         return tracker.get('should_skip_temporarily', False)
 
     def _handle_mistral_message_ordering_error(self, error, llm_name, llm_type, messages, llm):
         """
         Handle Mistral AI message ordering errors by reconstructing the conversation.
-        
+
         Args:
             error: The original error
             llm_name: Name of the LLM for logging
             llm_type: Type of LLM
             messages: Original message history
             llm: LLM instance
-            
+
         Returns:
             Response from the retry attempt or raises exception
         """
@@ -6352,13 +6352,13 @@ class CmwAgent:
         print(f"❌ Mistral AI message ordering error detected: {error_str}")
         self._handle_provider_failure("mistral", "message_ordering")
         print(f"🔄 Attempting to fix message ordering and retry...")
-        
+
         # Try to fix the message ordering by reconstructing the conversation
         try:
             # Extract the original question and tool results
             original_question = None
             tool_results = []
-            
+
             for msg in messages:
                 if hasattr(msg, 'type'):
                     if msg.type == 'human' and not any('reminder' in str(msg.content).lower() for reminder in ['use tools', 'final answer', 'analyze']):
@@ -6369,32 +6369,32 @@ class CmwAgent:
                             'content': msg.content,
                             'tool_call_id': getattr(msg, 'tool_call_id', getattr(msg, 'name', 'unknown'))
                         })
-            
+
             if original_question and tool_results:
                 # Reconstruct a clean conversation for Mistral
                 clean_messages = []
-                
+
                 # Add system message if present
                 for msg in messages:
                     if hasattr(msg, 'type') and msg.type == 'system':
                         clean_messages.append(msg)
                         break
-                
+
                 # Add the original question
                 clean_messages.append(HumanMessage(content=original_question))
-                
+
                 # Add tool results as a single user message
                 if tool_results:
                     tool_summary = "Tool results:\n" + "\n".join([f"{result['name']}: {result['content']}" for result in tool_results])
                     clean_messages.append(HumanMessage(content=f"Please analyze these results and provide the final answer:\n{tool_summary}"))
-                
+
                 # Try the clean conversation
                 response = self._invoke_llm_provider(llm, clean_messages)
                 print(f"✅ Successfully retried with clean message ordering")
                 return response
             else:
                 raise Exception("Could not reconstruct clean conversation for Mistral AI")
-                
+
         except Exception as retry_error:
             print(f"❌ Failed to fix Mistral AI message ordering: {retry_error}")
             # Fall back to error handler
@@ -6407,14 +6407,14 @@ class CmwAgent:
     def _handle_mistral_message_ordering_error_in_tool_loop(self, error, llm_type, messages, llm, tool_results_history):
         """
         Handle Mistral AI message ordering errors specifically in the tool loop context.
-        
+
         Args:
             error: The original error
             llm_type: Type of LLM
             messages: Original message history
             llm: LLM instance
             tool_results_history: History of tool results
-            
+
         Returns:
             Response from the retry attempt or raises exception
         """
@@ -6438,50 +6438,50 @@ class CmwAgent:
         """
         Unified streaming interface for all scenarios.
         Provides real-time visibility into LLM thinking, tool execution, and results.
-        
+
         Args:
             question: The question to process
             chat_history: Optional chat history for context
             llm_sequence: Optional sequence of LLM providers to try
-            
+
         Yields:
             str: Text content for streaming display
         """
         # Use the unified processing method with streaming
         for chunk in self._unified_process_with_streaming(question, chat_history, llm_sequence):
             yield chunk
-    
+
     def stream_events(self, question: str, chat_history: Optional[List[Dict[str, Any]]] = None, llm_sequence: Optional[List[str]] = None):
         """
         Stream structured events for detailed monitoring of LLM and tool execution.
-        
+
         Args:
             question: The question to process
             chat_history: Optional chat history for context
             llm_sequence: Optional sequence of LLM providers to try
-            
+
         Yields:
             dict: Structured events with type, content, and metadata
         """
         # Initialize trace for this question
         self._trace_init_question(question, None, None)
-        
+
         # Increment total questions counter
         self.total_questions += 1
-        
+
         # Store the original question for reuse throughout the process
         self.original_question = question
-        
+
         # Retrieve reference answer
         reference = self._get_reference_answer(question)
-        
+
         # Format messages
         messages = self._format_messages(question, reference=reference, chat_history=chat_history)
-        
+
         # Build a default llm_sequence if not provided
         if not llm_sequence:
             llm_sequence = self.DEFAULT_LLM_SEQUENCE.copy()
-        
+
         # Try providers in order
         for llm_type in llm_sequence:
             try:
@@ -6493,7 +6493,7 @@ class CmwAgent:
                         "metadata": {"llm_type": llm_type, "reason": "not_initialized"}
                     }
                     continue
-                
+
                 # Always use tools when available
                 use_tools = self._provider_supports_tools(llm_type)
                 llm, llm_name, _ = self._select_llm(llm_type, use_tools)
@@ -6504,18 +6504,18 @@ class CmwAgent:
                         "metadata": {"llm_type": llm_type, "reason": "instance_none"}
                     }
                     continue
-                
+
                 yield {
                     "type": "llm_selected",
                     "content": f"🤖 Using {llm_name} (tools: {use_tools})\n",
                     "metadata": {"llm_type": llm_type, "llm_name": llm_name, "use_tools": use_tools}
                 }
-                
+
                 if use_tools:
                     # Use streaming tool calling loop
                     tool_registry = {self._get_tool_name(tool): tool for tool in self.tools}
                     call_id = self._trace_start_llm(llm_type)
-                    
+
                     # Create an event capturing function for streaming
                     def event_yielder(event_type, content, metadata=None):
                         event = {
@@ -6524,20 +6524,20 @@ class CmwAgent:
                             "metadata": metadata or {}
                         }
                         return event
-                    
+
                     # Run tool calling loop with event capture
                     result = self._run_tool_calling_loop(llm, messages, tool_registry, llm_type, 0, call_id, event_yielder)
-                    
+
                     # Since we can't yield during the loop execution, we'll yield the final result
                     if result:
                         answer = self._extract_final_answer(result)
-                        
+
                         # Calculate similarity score if reference exists
                         if reference:
                             _, similarity_score = self._vector_answers_match(answer, reference)
                         else:
                             similarity_score = 1.0
-                        
+
                         # Finalize trace
                         final_answer = {
                             "submitted_answer": ensure_valid_answer(answer),
@@ -6547,7 +6547,7 @@ class CmwAgent:
                             "question": question,
                         }
                         self._trace_finalize_question(final_answer)
-                        
+
                         yield {
                             "type": "completion",
                             "content": f"🎯 **Task completed with {llm_name}**\n",
@@ -6565,7 +6565,7 @@ class CmwAgent:
                         "content": "🤖 **LLM is generating response...**\n",
                         "metadata": {"llm_type": llm_type, "streaming": True}
                     }
-                    
+
                     if hasattr(llm, "stream") and callable(getattr(llm, "stream")):
                         accumulated_response = ""
                         for chunk in llm.stream(messages):
@@ -6580,13 +6580,13 @@ class CmwAgent:
                                     }
                             except Exception:
                                 continue
-                        
+
                         # Finalize for non-tool scenario
                         if reference:
                             _, similarity_score = self._vector_answers_match(accumulated_response, reference)
                         else:
                             similarity_score = 1.0
-                        
+
                         final_answer = {
                             "submitted_answer": ensure_valid_answer(accumulated_response),
                             "similarity_score": similarity_score,
@@ -6595,7 +6595,7 @@ class CmwAgent:
                             "question": question,
                         }
                         self._trace_finalize_question(final_answer)
-                        
+
                         yield {
                             "type": "completion",
                             "content": f"🎯 **Task completed with {llm_name}**\n",
@@ -6606,14 +6606,14 @@ class CmwAgent:
                             }
                         }
                         return
-                
+
             except Exception as e:
                 yield {
                     "type": "error",
                     "content": f"❌ {llm_name} failed: {e}\n",
                     "metadata": {"llm_type": llm_type, "error": str(e)}
                 }
-                
+
                 if llm_type == llm_sequence[-1]:  # Last provider
                     yield {
                         "type": "final_error",
@@ -6628,34 +6628,34 @@ class CmwAgent:
                         "metadata": {"next_llm": "unknown"}
                     }
                     continue
-        
+
         # If we get here, all LLMs failed
         yield {
             "type": "no_llms",
             "content": "⚠️ **No LLM providers are currently available.**\n",
             "metadata": {"available_llms": self.llm_provider_names}
         }
-    
+
     def get_trace_data(self):
         """
         Get the complete trace data for the last processed question.
         This should be called after consuming the generator from __call__ or stream.
-        
+
         Returns:
             dict: Complete trace data or None if no trace exists
         """
         return self._trace_get_full()
-    
+
     # ========== LANGCHAIN-COMPATIBLE METHODS ==========
-    
+
     def invoke(self, input_data: dict, config: dict = None) -> dict:
         """
         LangChain-compatible invoke method with enhanced thread safety and conversation management.
-        
+
         Args:
             input_data (dict): Input data containing 'input' or 'messages'
             config (dict, optional): Configuration parameters
-            
+
         Returns:
             dict: Response with 'output' key containing the agent's response
         """
@@ -6673,23 +6673,23 @@ class CmwAgent:
                 question = str(last_message)
         else:
             question = str(input_data)
-        
+
         # Extract additional parameters
         file_data = input_data.get("file_data")
         file_name = input_data.get("file_name")
         llm_sequence = input_data.get("llm_sequence")
         chat_history = input_data.get("chat_history")
         conversation_id = input_data.get("conversation_id", "default")
-        
+
         # Thread-safe execution
         if not self.agent_lock.acquire(blocking=False):
             return {"output": "⚠️ Another request is being processed. Please wait...", "error": "concurrent_request"}
-        
+
         try:
             # Update conversation history if provided
             if chat_history:
                 self.conversation_histories[conversation_id] = chat_history.copy()
-            
+
             # Use streaming mode and consume the generator to get final result
             accumulated_response = ""
             for chunk in self._unified_process(
@@ -6702,23 +6702,23 @@ class CmwAgent:
             ):
                 if isinstance(chunk, str):
                     accumulated_response += chunk
-            
+
             # Update conversation history with the new exchange
             self.conversation_histories[conversation_id].extend([
                 {"role": "user", "content": question},
                 {"role": "assistant", "content": accumulated_response}
             ])
-            
+
             # Update conversation metadata
             self.conversation_metadata[conversation_id].update({
                 "last_updated": datetime.now().isoformat(),
                 "message_count": len(self.conversation_histories[conversation_id]),
                 "last_question": question
             })
-            
+
             # Return the accumulated response
             return {"output": accumulated_response}
-            
+
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             # Update conversation history with error
@@ -6729,15 +6729,15 @@ class CmwAgent:
             return {"output": error_msg, "error": str(e)}
         finally:
             self.agent_lock.release()
-    
+
     def astream(self, input_data: dict, config: dict = None):
         """
         LangChain-compatible async streaming method with enhanced conversation management.
-        
+
         Args:
             input_data (dict): Input data containing 'input' or 'messages'
             config (dict, optional): Configuration parameters
-            
+
         Yields:
             dict: Streaming chunks with 'chunk' key and metadata
         """
@@ -6755,27 +6755,27 @@ class CmwAgent:
                 question = str(last_message)
         else:
             question = str(input_data)
-        
+
         # Extract additional parameters
         file_data = input_data.get("file_data")
         file_name = input_data.get("file_name")
         llm_sequence = input_data.get("llm_sequence")
         chat_history = input_data.get("chat_history")
         conversation_id = input_data.get("conversation_id", "default")
-        
+
         # Thread-safe execution
         if not self.agent_lock.acquire(blocking=False):
             yield {"chunk": "⚠️ Another request is being processed. Please wait...", "type": "error"}
             return
-        
+
         try:
             # Update conversation history if provided
             if chat_history:
                 self.conversation_histories[conversation_id] = chat_history.copy()
-            
+
             # Track accumulated response for conversation history
             accumulated_response = ""
-            
+
             # Use streaming mode with enhanced chunk handling
             for chunk in self._unified_process(
                 question=question,
@@ -6796,20 +6796,20 @@ class CmwAgent:
                             "timestamp": datetime.now().isoformat()
                         }
                     }
-            
+
             # Update conversation history with the new exchange
             self.conversation_histories[conversation_id].extend([
                 {"role": "user", "content": question},
                 {"role": "assistant", "content": accumulated_response}
             ])
-            
+
             # Update conversation metadata
             self.conversation_metadata[conversation_id].update({
                 "last_updated": datetime.now().isoformat(),
                 "message_count": len(self.conversation_histories[conversation_id]),
                 "last_question": question
             })
-            
+
             # Yield final chunk with completion metadata
             yield {
                 "chunk": "",
@@ -6820,7 +6820,7 @@ class CmwAgent:
                     "message_count": len(self.conversation_histories[conversation_id])
                 }
             }
-            
+
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             # Update conversation history with error
@@ -6836,12 +6836,12 @@ class CmwAgent:
             }
         finally:
             self.agent_lock.release()
-    
+
     def get_graph(self):
         """
         Return a simple LangGraph representation for compatibility.
         This creates a basic state graph that delegates to your existing logic.
-        
+
         Returns:
             Compiled LangGraph: A simple graph that uses your existing agent logic
         """
@@ -6849,7 +6849,7 @@ class CmwAgent:
             from langgraph.graph import StateGraph, END
             from typing import TypedDict, Annotated
             from langchain_core.messages import BaseMessage
-            
+
             class AgentState(TypedDict):
                 messages: Annotated[List[BaseMessage], "The messages in the conversation"]
                 current_question: str
@@ -6857,7 +6857,7 @@ class CmwAgent:
                 file_name: Optional[str]
                 llm_sequence: Optional[List[str]]
                 chat_history: Optional[List[Dict[str, Any]]]
-            
+
             def agent_node(state: AgentState):
                 """Agent node that delegates to your existing sophisticated logic"""
                 # Extract the latest question from messages
@@ -6869,7 +6869,7 @@ class CmwAgent:
                         question = str(last_message)
                 else:
                     question = state.get("current_question", "")
-                
+
                 # Convert messages to chat_history format for your agent
                 chat_history = []
                 for msg in state["messages"][:-1]:  # Exclude the latest message
@@ -6885,7 +6885,7 @@ class CmwAgent:
                                 "name": getattr(msg, 'name', 'unknown'),
                                 "tool_call_id": getattr(msg, 'tool_call_id', 'unknown')
                             })
-                
+
                 # Use your existing agent logic
                 result = self._unified_process(
                     question=question,
@@ -6895,17 +6895,17 @@ class CmwAgent:
                     chat_history=chat_history,
                     streaming=False
                 )
-                
+
                 # Extract the final answer
                 if isinstance(result, dict) and "final_answer" in result:
                     response_content = result["final_answer"]
                 else:
                     response_content = str(result)
-                
+
                 # Create AI message response
                 from langchain_core.messages import AIMessage
                 response_message = AIMessage(content=response_content)
-                
+
                 return {
                     "messages": state["messages"] + [response_message],
                     "current_question": question,
@@ -6914,29 +6914,29 @@ class CmwAgent:
                     "llm_sequence": state.get("llm_sequence"),
                     "chat_history": chat_history
                 }
-            
+
             # Build the graph
             graph = StateGraph(AgentState)
             graph.add_node("agent", agent_node)
             graph.set_entry_point("agent")
             graph.add_edge("agent", END)
-            
+
             return graph.compile()
-            
+
         except ImportError as e:
             print(f"Warning: LangGraph not available. Install with: pip install langgraph. Error: {e}")
             return None
-    
+
     def get_langchain_tools(self):
         """
         Get all tools in LangChain format for compatibility.
-        
+
         Returns:
             List[Tool]: List of LangChain tool objects
         """
         try:
             from langchain_core.tools import Tool
-            
+
             # Get your existing tools using the method from the agent
             if hasattr(self, '_gather_tools'):
                 tools_list = self._gather_tools()
@@ -6948,55 +6948,55 @@ class CmwAgent:
                 except ImportError:
                     # If _gather_tools doesn't exist, try to get tools from the agent's tools attribute
                     tools_list = getattr(self, 'tools', [])
-            
+
             # Convert to LangChain Tool format
             langchain_tools = []
             for tool in tools_list:
                 if hasattr(tool, 'name') and hasattr(tool, 'description'):
                     langchain_tools.append(tool)
-            
+
             return langchain_tools
-            
+
         except Exception as e:
             print(f"Warning: Could not get LangChain tools: {e}")
             return []
-    
+
     def bind_tools(self, tools=None):
         """
         Bind tools to the agent for LangChain compatibility.
-        
+
         Args:
             tools (list, optional): List of tools to bind. If None, uses all available tools.
-            
+
         Returns:
             CmwAgent: Self for method chaining
         """
         if tools is None:
             tools = self.get_langchain_tools()
-        
+
         # Your existing tool binding logic is already in place
         # This method is mainly for LangChain compatibility
         self.tools = tools
         return self
-    
+
     # ========== ENHANCED DEBUGGING AND MONITORING ==========
-    
+
     def get_conversation_stats(self, conversation_id: str = "default") -> Dict[str, Any]:
         """
         Get comprehensive statistics for a conversation.
-        
+
         Args:
             conversation_id (str): The conversation ID to get stats for
-            
+
         Returns:
             Dict[str, Any]: Conversation statistics
         """
         history = self.conversation_histories[conversation_id]
         metadata = self.conversation_metadata[conversation_id]
-        
+
         user_messages = [msg for msg in history if msg.get("role") == "user"]
         assistant_messages = [msg for msg in history if msg.get("role") == "assistant"]
-        
+
         return {
             "conversation_id": conversation_id,
             "total_messages": len(history),
@@ -7008,11 +7008,11 @@ class CmwAgent:
             "average_user_message_length": sum(len(msg.get("content", "")) for msg in user_messages) / max(len(user_messages), 1),
             "average_assistant_message_length": sum(len(msg.get("content", "")) for msg in assistant_messages) / max(len(assistant_messages), 1)
         }
-    
+
     def get_agent_health_status(self) -> Dict[str, Any]:
         """
         Get comprehensive health status of the agent.
-        
+
         Returns:
             Dict[str, Any]: Agent health information
         """
@@ -7030,21 +7030,21 @@ class CmwAgent:
                 "conversation_metadata": len(self.conversation_metadata)
             }
         }
-    
+
     def export_conversation(self, conversation_id: str = "default", format: str = "json") -> str:
         """
         Export a conversation in various formats.
-        
+
         Args:
             conversation_id (str): The conversation ID to export
             format (str): Export format ("json", "txt", "markdown")
-            
+
         Returns:
             str: Exported conversation data
         """
         history = self.conversation_histories[conversation_id]
         metadata = self.conversation_metadata[conversation_id]
-        
+
         if format == "json":
             return json.dumps({
                 "conversation_id": conversation_id,
@@ -7076,25 +7076,25 @@ class CmwAgent:
             return "\n".join(lines)
         else:
             raise ValueError(f"Unsupported format: {format}")
-    
+
     def cleanup_old_conversations(self, max_age_hours: int = 24) -> int:
         """
         Clean up old conversations to free memory.
-        
+
         Args:
             max_age_hours (int): Maximum age in hours before cleanup
-            
+
         Returns:
             int: Number of conversations cleaned up
         """
         current_time = datetime.now()
         cutoff_time = current_time - datetime.timedelta(hours=max_age_hours)
         cleaned_count = 0
-        
+
         for conv_id in list(self.conversation_histories.keys()):
             metadata = self.conversation_metadata[conv_id]
             last_updated = metadata.get("last_updated")
-            
+
             if last_updated:
                 try:
                     last_updated_dt = datetime.fromisoformat(last_updated)
@@ -7104,5 +7104,5 @@ class CmwAgent:
                 except ValueError:
                     # If we can't parse the date, skip this conversation
                     continue
-        
+
         return cleaned_count

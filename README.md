@@ -303,6 +303,7 @@ Check logs in the Logs tab or console output for detailed error traces and execu
 - Follow LangChain patterns and conventions
 - Use Pydantic for data validation
 - Run linter: `ruff check agent_ng/ tools/`
+- Fix all linting issues: `ruff check --fix --unsafe-fixes agent_ng/ tools/`
 
 ## Documentation
 

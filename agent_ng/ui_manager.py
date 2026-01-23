@@ -56,11 +56,11 @@ class UIManager:
     def create_interface(self, tab_modules: list[Any], event_handlers: dict[str, Callable], main_app=None) -> gr.Blocks:
         """
         Create the main Gradio interface using tab modules with i18n support.
-        
+
         Args:
             tab_modules: List of tab module instances
             event_handlers: Dictionary of event handlers
-            
+
         Returns:
             Gradio Blocks interface
         """
@@ -86,7 +86,7 @@ class UIManager:
             # Create common sidebar using dedicated sidebar module
             sidebar_instance = Sidebar(event_handlers, language=self.language, i18n_instance=self.i18n)
             sidebar_instance.set_main_app(main_app)  # Pass main app reference
-            
+
             sidebar, sidebar_components = sidebar_instance.create_sidebar()
             # Consolidate sidebar components
             self.components.update(sidebar_components)
@@ -289,11 +289,11 @@ _ui_manager_ru = None
 def get_ui_manager(language: str = "en", i18n_instance: gr.I18n | None = None) -> UIManager:
     """
     Get the global UI manager instance for the specified language.
-    
+
     Args:
         language: Language code ('en' or 'ru')
         i18n_instance: Optional Gradio I18n instance
-        
+
     Returns:
         UIManager instance
     """

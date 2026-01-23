@@ -552,7 +552,7 @@ class CmwAgent:
                     )
                 # Get tool call count using the shared utility function
                 tool_call_count = get_tool_call_count(self, self.session_id)
-                
+
                 return {
                     "message_count": total_messages,
                     "user_messages": user_messages,

@@ -50,6 +50,10 @@ ignore = [
     "T201",    # Print statements (Langfuse/Langsmith debugging)
     "BLE001",  # Blind except clauses (Langfuse/Langsmith error handling)
     "UP032",   # Do not suggest {e!s} over {str(e)} in f-strings
+    "TRY300",  # Consider moving statement to else block (preferential style)
+    "TRY401",  # Redundant exception object in logging.exception (preferential style)
+    "PTH",     # Path-related suggestions (os.path vs Path - both are valid)
+    "DTZ005",  # datetime.now() without tz (intentionally using local timezone is okay)
 ]
 
 # Rules that should not be automatically fixed to prevent deletion of useful code
@@ -80,6 +84,7 @@ unfixable = [
 "**/*langsmith*" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Langsmith files
 "**/agent_ng/*.py" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Agent files need debugging
 "**/tools/*.py" = ["PLR0913", "ANN401", "BLE001"]  # Tool files
+"**/i18n_translations.py" = ["E501"]  # Translation dictionaries contain long strings
 
 # Import sorting - conservative configuration to preserve imports
 [tool.ruff.lint.isort]

@@ -219,7 +219,7 @@ class SessionData:
             from .langchain_agent import CmwAgent
         except ImportError:
             from agent_ng.langchain_agent import CmwAgent
-        
+
         self.session_id = session_id
         self.language = language
         self.agent = CmwAgent(session_id=session_id, language=language)  # Pass session ID and language to agent

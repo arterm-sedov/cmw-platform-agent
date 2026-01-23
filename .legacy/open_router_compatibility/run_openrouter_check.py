@@ -14,7 +14,7 @@ def main():
     """Run the OpenRouter compatibility check"""
     print("OpenRouter API Compatibility Checker")
     print("=" * 40)
-    
+
     # Check if API key is set
     if not os.getenv("OPENROUTER_API_KEY"):
         print("❌ Error: OPENROUTER_API_KEY environment variable not set")
@@ -27,7 +27,7 @@ def main():
         print("   - Linux/Mac: export OPENROUTER_API_KEY=your_key_here")
         print("4. Run this script again")
         return 1
-    
+
     # Import and run the checker
     try:
         from openrouter_compatibility_check import main as run_checker

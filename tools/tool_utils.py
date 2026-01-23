@@ -155,11 +155,11 @@ def remove_values(
 ) -> Any:
     """
     Recursively remove specified values from dicts/lists.
-    
+
     Args:
         obj: The object to clean (dict, list, or any other type)
         exclude_values: Set of values to remove (default: {None, ""})
-        
+
     Returns:
         Cleaned object
     """

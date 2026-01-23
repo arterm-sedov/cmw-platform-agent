@@ -15,7 +15,7 @@ class EditOrCreateRecordAttributeSchema(CommonAttributeFields):
     def non_empty_str(cls, v: Any) -> Any:
         """
         Validate that string fields are not empty.
-        
+
         This field validator is automatically applied to the name, system_name, 
         application_system_name, and template_system_name fields in all schemas
         that inherit from CommonAttributeFields, ensuring consistent validation.

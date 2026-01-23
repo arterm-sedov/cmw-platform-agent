@@ -8,7 +8,7 @@ def get_attribute(
     ) -> Dict[str, Any]:
     """
     Get a attribute in a given template and application.
-    
+
     Returns:
         dict: {
             "success": bool - True if the attribute was fetched successfully
@@ -21,7 +21,7 @@ def get_attribute(
         }
     """
 
-    
+
 
     attribute_global_alias = f"Attribute@{template_system_name}.{system_name}"
     endpoint = f"{ATTRIBUTE_ENDPOINT}/{application_system_name}/{attribute_global_alias}"

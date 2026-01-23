@@ -41,11 +41,11 @@ class LangChainStreamingEvent:
 class LangChainNativeCallbackHandler(BaseCallbackHandler):
     """
     Custom callback handler for LangChain native streaming events.
-    
+
     This handler captures all streaming events and provides them
     in a structured format for real-time display.
     """
-    
+
     def __init__(self, event_handler: Callable[[LangChainStreamingEvent], None] = None):
         self.event_handler = event_handler
         self.events = []
@@ -53,12 +53,12 @@ class LangChainNativeCallbackHandler(BaseCallbackHandler):
         self.current_tool_name = None
         self.accumulated_content = ""
         self.tool_calls = []
-    
+
     def on_llm_start(self, serialized: Dict[str, Any], prompts: List[str], **kwargs) -> None:
         """Called when LLM starts generating"""
         self.current_run_id = kwargs.get("run_id")
         self.accumulated_content = ""
-        
+
         event = LangChainStreamingEvent(
             event_type="llm_start",
             content="🤖 **Thinking...**",
@@ -69,15 +69,15 @@ class LangChainNativeCallbackHandler(BaseCallbackHandler):
             },
             run_id=self.current_run_id
         )
-        
+
         self._emit_event(event)
-    
+
     def on_llm_stream(self, chunk: Any, **kwargs) -> None:
         """Called for each streaming chunk from LLM"""
         content = getattr(chunk, 'content', '') or str(chunk)
         if content:
             self.accumulated_content += content
-            
+
             event = LangChainStreamingEvent(
                 event_type="llm_chunk",
                 content=content,
@@ -88,13 +88,13 @@ class LangChainNativeCallbackHandler(BaseCallbackHandler):
                 },
                 run_id=self.current_run_id
             )
-            
+
             self._emit_event(event)
-    
+
     def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs) -> None:
         """Called when a tool starts executing"""
         self.current_tool_name = serialized.get("name", "unknown_tool")
-        
+
         # Filter out schema tools from display
         schema_tools = {'submit_answer', 'submit_intermediate_step'}
         if self.current_tool_name not in schema_tools:
@@ -108,9 +108,9 @@ class LangChainNativeCallbackHandler(BaseCallbackHandler):
                 },
                 run_id=self.current_run_id
             )
-            
+
             self._emit_event(event)
-    
+
     def on_tool_end(self, output: str, **kwargs) -> None:
         """Called when a tool finishes executing"""
         # Filter out schema tools from display
@@ -118,7 +118,7 @@ class LangChainNativeCallbackHandler(BaseCallbackHandler):
         if self.current_tool_name not in schema_tools:
             # Truncate long outputs for display
             display_output = output[:500] + "..." if len(output) > 500 else output
-            
+
             event = LangChainStreamingEvent(
                 event_type="tool_end",
                 content=f"✅ **{self.current_tool_name} completed**",
@@ -129,9 +129,9 @@ class LangChainNativeCallbackHandler(BaseCallbackHandler):
                 },
                 run_id=self.current_run_id
             )
-            
+
             self._emit_event(event)
-    
+
     def on_llm_end(self, response: Any, **kwargs) -> None:
         """Called when LLM finishes generating"""
         event = LangChainStreamingEvent(
@@ -144,9 +144,9 @@ class LangChainNativeCallbackHandler(BaseCallbackHandler):
             },
             run_id=self.current_run_id
         )
-        
+
         self._emit_event(event)
-    
+
     def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs) -> None:
         """Called when a chain starts"""
         event = LangChainStreamingEvent(
@@ -159,9 +159,9 @@ class LangChainNativeCallbackHandler(BaseCallbackHandler):
             },
             run_id=kwargs.get("run_id")
         )
-        
+
         self._emit_event(event)
-    
+
     def on_chain_end(self, outputs: Dict[str, Any], **kwargs) -> None:
         """Called when a chain ends"""
         event = LangChainStreamingEvent(
@@ -173,9 +173,9 @@ class LangChainNativeCallbackHandler(BaseCallbackHandler):
             },
             run_id=kwargs.get("run_id")
         )
-        
+
         self._emit_event(event)
-    
+
     def on_chain_error(self, error: Exception, **kwargs) -> None:
         """Called when a chain encounters an error"""
         event = LangChainStreamingEvent(
@@ -188,13 +188,13 @@ class LangChainNativeCallbackHandler(BaseCallbackHandler):
             },
             run_id=kwargs.get("run_id")
         )
-        
+
         self._emit_event(event)
-    
+
     def _emit_event(self, event: LangChainStreamingEvent) -> None:
         """Emit an event to the handler and store it"""
         self.events.append(event)
-        
+
         if self.event_handler:
             try:
                 self.event_handler(event)
@@ -205,24 +205,24 @@ class LangChainNativeCallbackHandler(BaseCallbackHandler):
 class LangChainNativeStreamingManager:
     """
     Manages LangChain native streaming with real-time event handling.
-    
+
     This class implements the streaming patterns from the LangChain documentation
     for real-time streaming of chat model responses with tool calls.
     """
-    
+
     def __init__(self):
         self.active_streams = {}
         self.event_handlers = []
-    
+
     def add_event_handler(self, handler: Callable[[LangChainStreamingEvent], None]) -> None:
         """Add an event handler for streaming events"""
         self.event_handlers.append(handler)
-    
+
     def remove_event_handler(self, handler: Callable[[LangChainStreamingEvent], None]) -> None:
         """Remove an event handler"""
         if handler in self.event_handlers:
             self.event_handlers.remove(handler)
-    
+
     async def stream_llm_response(
         self, 
         llm, 
@@ -232,31 +232,31 @@ class LangChainNativeStreamingManager:
     ) -> AsyncGenerator[LangChainStreamingEvent, None]:
         """
         Stream LLM response using LangChain's native streaming.
-        
+
         Args:
             llm: LangChain LLM instance
             messages: List of messages
             tools: Optional list of tools
             config: Optional runnable config
-            
+
         Yields:
             LangChainStreamingEvent objects
         """
         try:
             # Create callback handler
             events = []
-            
+
             def event_handler(event: LangChainStreamingEvent):
                 events.append(event)
-            
+
             callback_handler = LangChainNativeCallbackHandler(event_handler)
-            
+
             # Prepare LLM with tools if provided
             if tools:
                 llm_with_tools = llm.bind_tools(tools)
             else:
                 llm_with_tools = llm
-            
+
             # Create runnable config with callbacks
             if config is None:
                 config = RunnableConfig(callbacks=[callback_handler])
@@ -265,7 +265,7 @@ class LangChainNativeStreamingManager:
                     config["callbacks"].append(callback_handler)
                 else:
                     config["callbacks"] = [callback_handler]
-            
+
             # Stream the response using astream_events
             async for event in llm_with_tools.astream_events(
                 messages, 
@@ -276,11 +276,11 @@ class LangChainNativeStreamingManager:
                 streaming_event = self._convert_langchain_event(event)
                 if streaming_event:
                     yield streaming_event
-            
+
             # Yield any events from the callback handler
             for event in events:
                 yield event
-                
+
         except Exception as e:
             error_event = LangChainStreamingEvent(
                 event_type="error",
@@ -289,7 +289,7 @@ class LangChainNativeStreamingManager:
                 metadata={"error": str(e)}
             )
             yield error_event
-    
+
     async def stream_agent_response(
         self,
         agent,
@@ -298,30 +298,30 @@ class LangChainNativeStreamingManager:
     ) -> AsyncGenerator[LangChainStreamingEvent, None]:
         """
         Stream agent response using LangChain's native streaming.
-        
+
         This method implements real-time streaming for the entire agent workflow
         including tool calls and responses.
-        
+
         Args:
             agent: The LangChain agent instance
             message: User message
             conversation_id: Conversation identifier
-            
+
         Yields:
             LangChainStreamingEvent objects
         """
         try:
             # Get conversation chain
             chain = agent._get_conversation_chain(conversation_id)
-            
+
             # Get conversation history
             chat_history = agent.memory_manager.get_conversation_history(conversation_id)
-            
+
             # Create messages list
             messages = [SystemMessage(content=agent.system_prompt)]
             messages.extend(chat_history)
             messages.append(HumanMessage(content=message))
-            
+
             # Stream the tool calling loop using astream_events
             async for event in self._stream_tool_calling_loop(
                 agent.llm_instance.llm,
@@ -331,7 +331,7 @@ class LangChainNativeStreamingManager:
                 agent.memory_manager
             ):
                 yield event
-                
+
         except Exception as e:
             error_event = LangChainStreamingEvent(
                 event_type="error",
@@ -340,7 +340,7 @@ class LangChainNativeStreamingManager:
                 metadata={"error": str(e)}
             )
             yield error_event
-    
+
     async def _stream_tool_calling_loop(
         self,
         llm,
@@ -351,19 +351,19 @@ class LangChainNativeStreamingManager:
     ) -> AsyncGenerator[LangChainStreamingEvent, None]:
         """
         Stream the tool calling loop using LangChain's native streaming.
-        
+
         This implements real-time streaming for the entire tool calling workflow.
         """
         tool_calls = []
         max_iterations = 10
         iteration = 0
-        
+
         # Create tool registry
         tool_registry = {tool.name: tool for tool in tools}
-        
+
         while iteration < max_iterations:
             iteration += 1
-            
+
             # Stream LLM response
             async for event in self.stream_llm_response(llm, messages, tools):
                 # Filter and transform events for agent workflow
@@ -383,7 +383,7 @@ class LangChainNativeStreamingManager:
                 elif event.event_type == "llm_end":
                     # Check if we need to continue with tool calls
                     break
-            
+
             # Get the final response to check for tool calls
             try:
                 response = llm.invoke(messages)
@@ -395,18 +395,18 @@ class LangChainNativeStreamingManager:
                     metadata={"error": str(e)}
                 )
                 return
-            
+
             # Check for tool calls
             if hasattr(response, 'tool_calls') and response.tool_calls:
                 # Add the AI response with tool calls to messages
                 messages.append(response)
-                
+
                 # Process tool calls
                 for tool_call in response.tool_calls:
                     tool_name = tool_call.get('name', 'unknown')
                     tool_args = tool_call.get('args', {})
                     tool_call_id = tool_call.get('id', f"call_{len(tool_calls)}")
-                    
+
                     # Stream tool execution
                     if tool_name in tool_registry:
                         yield LangChainStreamingEvent(
@@ -418,11 +418,11 @@ class LangChainNativeStreamingManager:
                                 "tool_args": tool_args
                             }
                         )
-                        
+
                         # Execute tool
                         try:
                             tool_result = tool_registry[tool_name].invoke(tool_args)
-                            
+
                             yield LangChainStreamingEvent(
                                 event_type="tool_end",
                                 content=f"✅ **{tool_name} completed**",
@@ -432,7 +432,7 @@ class LangChainNativeStreamingManager:
                                     "tool_output": str(tool_result)
                                 }
                             )
-                            
+
                             # Store tool call
                             tool_calls.append({
                                 'name': tool_name,
@@ -440,14 +440,14 @@ class LangChainNativeStreamingManager:
                                 'result': tool_result,
                                 'id': tool_call_id
                             })
-                            
+
                             # Add tool message to conversation
                             tool_message = ToolMessage(
                                 content=str(tool_result),
                                 tool_call_id=tool_call_id
                             )
                             messages.append(tool_message)
-                            
+
                             # Add to memory
                             memory_manager.add_tool_call(conversation_id, {
                                 'name': tool_name,
@@ -455,10 +455,10 @@ class LangChainNativeStreamingManager:
                                 'result': tool_result,
                                 'id': tool_call_id
                             })
-                            
+
                             # Add tool message to memory manager
                             memory_manager.add_message(conversation_id, tool_message)
-                            
+
                         except Exception as e:
                             yield LangChainStreamingEvent(
                                 event_type="error",
@@ -479,7 +479,7 @@ class LangChainNativeStreamingManager:
             else:
                 # No tool calls, we have the final response
                 final_response = response.content if hasattr(response, 'content') else str(response)
-                
+
                 if final_response and final_response.strip():
                     # Stream the final response
                     yield LangChainStreamingEvent(
@@ -491,7 +491,7 @@ class LangChainNativeStreamingManager:
                             "tool_calls": tool_calls
                         }
                     )
-                    
+
                     # Add AI response to messages
                     messages.append(response)
                     break
@@ -500,7 +500,7 @@ class LangChainNativeStreamingManager:
                     reminder_msg = HumanMessage(content="Please provide a meaningful response. You should answer the user's question or use available tools to help.")
                     messages.append(reminder_msg)
                     continue
-        
+
         # Final completion event
         yield LangChainStreamingEvent(
             event_type="completion",
@@ -511,7 +511,7 @@ class LangChainNativeStreamingManager:
                 "iterations": iteration
             }
         )
-    
+
     def _convert_langchain_event(self, event: Dict[str, Any]) -> Optional[LangChainStreamingEvent]:
         """Convert LangChain event to our LangChainStreamingEvent format"""
         try:
@@ -520,7 +520,7 @@ class LangChainNativeStreamingManager:
             name = event.get("name", "unknown")
             run_id = event.get("run_id")
             parent_ids = event.get("parent_ids", [])
-            
+
             # Extract content based on event type
             content = ""
             metadata = {
@@ -528,7 +528,7 @@ class LangChainNativeStreamingManager:
                 "run_id": run_id,
                 "parent_ids": parent_ids
             }
-            
+
             if event_type == "on_llm_start":
                 content = "🤖 **Thinking...**"
                 metadata.update({
@@ -581,7 +581,7 @@ class LangChainNativeStreamingManager:
             else:
                 # Skip unknown event types
                 return None
-            
+
             return LangChainStreamingEvent(
                 event_type=event_type,
                 content=content,
@@ -590,15 +590,15 @@ class LangChainNativeStreamingManager:
                 run_id=run_id,
                 parent_ids=parent_ids
             )
-            
+
         except Exception as e:
             print(f"[LangChainNativeStreamingManager] Error converting event: {e}")
             return None
-    
+
     def get_active_streams(self) -> List[str]:
         """Get list of active stream IDs"""
         return list(self.active_streams.keys())
-    
+
     def close_stream(self, stream_id: str) -> None:
         """Close a specific stream"""
         if stream_id in self.active_streams:

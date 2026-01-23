@@ -41,40 +41,40 @@ __all__ = [
     'delete_attribute',
     'archive_or_unarchive_attribute',
     'get_attribute',
-    
+
     # Text attributes
     'edit_or_create_text_attribute',
-    
+
     # Boolean attributes
     'edit_or_create_boolean_attribute',
-    
+
     # DateTime attributes
     'edit_or_create_date_time_attribute',
-    
+
     # Decimal/Numeric attributes
     'edit_or_create_numeric_attribute',
-    
+
     # Document attributes
     'edit_or_create_document_attribute',
-    
+
     # Drawing attributes
     'edit_or_create_drawing_attribute',
-    
+
     # Duration attributes
     'edit_or_create_duration_attribute',
-    
+
     # Image attributes
     'edit_or_create_image_attribute',
-    
+
     # Record attributes
     'edit_or_create_record_attribute',
-    
+
     # Role attributes
     'edit_or_create_role_attribute',
-    
+
     # Account attributes
     'edit_or_create_account_attribute',
-    
+
     # Enum attributes
     'edit_or_create_enum_attribute'
 ]

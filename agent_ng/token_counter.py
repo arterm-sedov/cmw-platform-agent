@@ -91,10 +91,13 @@ class TiktokenCounter(TokenCounter):
         """Initialize tiktoken encoding with fallback"""
         try:
             return tiktoken.encoding_for_model(model)
-        except Exception:
+        except Exception as exc:
+            logger = logging.getLogger(__name__)
+            logger.debug("Failed to get encoding from cache: %s", exc)
             try:
                 return tiktoken.get_encoding("cl100k_base")  # GPT-4 encoding
-            except Exception:
+            except Exception as fallback_exc:
+                logger.debug("Failed to get encoding fallback: %s", fallback_exc)
                 return None
 
     def count_tokens(
@@ -238,17 +241,39 @@ class ConversationTokenTracker:
     def __init__(self):
         self.tiktoken_counter = TiktokenCounter()
         self.api_counter = ApiTokenCounter(self.tiktoken_counter)
-        self.conversation_tokens = 0  # Total across all conversations
-        # Session-bound tokens (what UI calls "Диалог")
+        # API-only totals (for "Vsego" (Total) and "Dialog" (Conversation)
+        # display - only API counts, with estimates only for interrupted turns
+        # without API).
+        self.conversation_tokens = 0  # Total across all conversations (API-only)
+        # Session-bound tokens (what UI calls "Диалог") (API-only)
         self.session_tokens = 0
         # Backward-compatible alias for older naming
         self.last_conversation_tokens = self.session_tokens
         self.message_count = 0
+        # API-only totals for accurate average calculation (excludes estimates except
+        # for interrupted turns without API counts).
+        self._api_only_tokens = 0
+        self._api_only_message_count = 0
+        # Track if the last finalized turn used an estimate (interrupted without API).
+        self._last_turn_used_estimate = False
         self._last_prompt_tokens: TokenCount | None = None
         self._last_api_tokens: TokenCount | None = None
         self._session_start_time = time.time()
         self._latest_budget_snapshot: dict[str, Any] | None = None
         self._latest_budget_snapshot_ts: float = 0.0
+        # Per-QA-turn accumulated usage across multiple LLM calls (iterations).
+        # This must not affect avg-per-message until the turn is finalized.
+        self._turn_active: bool = False
+        self._turn_input_tokens: int = 0
+        self._turn_output_tokens: int = 0
+        self._turn_total_tokens: int = 0
+        # Per-QA-turn monotonic estimate (used only when API usage isn't available and
+        # turn was interrupted/failed).
+        self._turn_estimated_total_tokens: int = 0
+        # Last finalized turn estimate (for display after turn completes).
+        self._last_turn_estimated_total_tokens: int = 0
+        # Track if the turn was interrupted/failed (so we know to use estimates).
+        self._turn_interrupted: bool = False
 
     def count_prompt_tokens(self, messages: list[BaseMessage]) -> TokenCount:
         """Count tokens in user prompt context"""
@@ -308,6 +333,169 @@ class ConversationTokenTracker:
 
         return token_count
 
+    def begin_turn(self) -> None:
+        """Begin a new QA turn usage accumulation (may include multiple LLM calls)."""
+        self._turn_active = True
+        self._turn_input_tokens = 0
+        self._turn_output_tokens = 0
+        self._turn_total_tokens = 0
+        self._turn_estimated_total_tokens = 0
+        self._turn_interrupted = False
+
+    def _update_turn_estimate(self, estimated_total_tokens: int) -> None:
+        """Update monotonic per-turn estimate (best-effort)."""
+        try:
+            val = int(estimated_total_tokens or 0)
+        except Exception:
+            return
+        self._turn_estimated_total_tokens = max(self._turn_estimated_total_tokens, val)
+
+    def accumulate_llm_call_usage(self, response: Any) -> bool:
+        """Accumulate provider-reported usage for one LLM call into the current turn."""
+        if not self._turn_active:
+            # Be resilient: allow accumulation even if begin_turn wasn't called.
+            self.begin_turn()
+
+        api_tokens = self._extract_api_tokens(response)
+        if not api_tokens:
+            return False
+
+        input_tokens, output_tokens, total_tokens = api_tokens
+        try:
+            self._turn_input_tokens += int(input_tokens or 0)
+            self._turn_output_tokens += int(output_tokens or 0)
+            self._turn_total_tokens += int(total_tokens or 0)
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to accumulate LLM call usage: %s", exc
+            )
+            return False
+
+        # Expose accumulated per-turn usage immediately for UI during iterations.
+        self._last_api_tokens = TokenCount(
+            self._turn_input_tokens,
+            self._turn_output_tokens,
+            self._turn_total_tokens,
+            is_estimated=False,
+            source="api",
+        )
+        return True
+
+    def get_turn_estimated_total_tokens(self) -> int:
+        """Get the current per-turn monotonic estimate."""
+        return int(self._turn_estimated_total_tokens or 0)
+
+    def get_message_display_total_tokens(self) -> int:
+        """Tokens to display in 'Сообщение' right now.
+
+        Shows only API-provided true counts, falling back to estimates only when
+        the turn was interrupted/failed before API counts were received.
+
+        Priority:
+        - If we have accumulated API usage for this turn: use it (always preferred).
+        - Else if turn is active: return 0 (wait for API counts, don't show estimates).
+        - Else if turn was interrupted/failed: use estimate as fallback.
+        - Else (turn completed successfully): return 0 (should have API counts).
+        """
+        # Always prefer accumulated API usage if available.
+        if int(self._turn_total_tokens or 0) > 0:
+            return int(self._turn_total_tokens)
+
+        # During active turn: don't show estimates, wait for API counts.
+        if self._turn_active:
+            return 0
+
+        # Turn is not active: only use estimate if it was interrupted/failed.
+        if self._turn_interrupted and int(self._turn_estimated_total_tokens or 0) > 0:
+            return int(self._turn_estimated_total_tokens)
+
+        # Turn completed successfully but no API counts? This shouldn't happen,
+        # but return 0 to avoid showing stale estimates.
+        return 0
+
+    def finalize_turn_usage(
+        self, response: Any | None, messages: list[BaseMessage] | None = None
+    ) -> TokenCount | None:
+        """Finalize the current QA turn.
+
+        - If we successfully accumulated per-iteration API usage, commit it once to
+          totals and increment message_count once (preserves avg-per-message).
+        - If response is None, mark turn as interrupted and use estimate if no API
+          counts.
+        - Otherwise, fall back to the legacy `track_llm_response` behavior.
+        """
+        # Mark as interrupted if response is None (user stopped the turn).
+        if response is None:
+            self._turn_interrupted = True
+
+        if self._turn_total_tokens > 0:
+            # We have API counts: use them (successful completion or interrupted
+            # with API).
+            token_count = TokenCount(
+                self._turn_input_tokens,
+                self._turn_output_tokens,
+                self._turn_total_tokens,
+                is_estimated=False,
+                source="api",
+            )
+            self._last_api_tokens = token_count
+            self._last_turn_estimated_total_tokens = int(
+                self._turn_estimated_total_tokens or 0
+            )
+
+            # Commit to totals once per QA turn.
+            self.conversation_tokens += token_count.total_tokens
+            self.session_tokens += token_count.total_tokens
+            self.last_conversation_tokens = self.session_tokens
+            self.message_count += 1
+
+            # Track API-only totals for accurate average calculation.
+            self._api_only_tokens += token_count.total_tokens
+            self._api_only_message_count += 1
+            self._last_turn_used_estimate = False
+
+            self._turn_active = False
+            return token_count
+
+        # No API totals: only commit estimate if turn was interrupted/failed.
+        if (
+            self._turn_interrupted
+            and int(self._turn_estimated_total_tokens or 0) > 0
+        ):
+            est = int(self._turn_estimated_total_tokens)
+            token_count = TokenCount(
+                est,
+                0,
+                est,
+                is_estimated=True,
+                source="estimate",
+            )
+            self._last_api_tokens = token_count
+            self._last_turn_estimated_total_tokens = est
+
+            # Commit to overall totals (for "Vsego" and "Dialog" display).
+            self.conversation_tokens += token_count.total_tokens
+            self.session_tokens += token_count.total_tokens
+            self.last_conversation_tokens = self.session_tokens
+            self.message_count += 1
+
+            # For average calculation: include estimate only for interrupted turn
+            # (this is the exception case where we use estimate in average).
+            self._api_only_tokens += token_count.total_tokens
+            self._api_only_message_count += 1
+            self._last_turn_used_estimate = True
+
+            self._turn_active = False
+            return token_count
+
+        # Fallback: preserve legacy behavior (includes message_count increment).
+        # This handles cases where finalize_turn_usage is called with a response
+        # but we haven't accumulated API counts (shouldn't happen normally).
+        self._turn_active = False
+        if response is None or not messages:
+            return None
+        return self.track_llm_response(response, messages)
+
     def _extract_current_request(
         self, messages: list[BaseMessage]
     ) -> list[BaseMessage]:
@@ -337,15 +525,11 @@ class ConversationTokenTracker:
     def _extract_api_tokens(self, response: Any) -> tuple[int, int, int] | None:
         """Extract token usage from API response"""
         try:
-            print(f"🔍 DEBUG: Response attributes: {dir(response)}")
-            print(
-                "🔍 DEBUG: Response has usage_metadata:",
-                hasattr(response, "usage_metadata"),
-            )
+            logger = logging.getLogger(__name__)
+            logger.debug("Extracting API tokens from response type=%s", type(response))
             if hasattr(response, "usage_metadata"):
                 usage = response.usage_metadata
-                print(f"🔍 DEBUG: Usage metadata: {usage}")
-                print(f"🔍 DEBUG: Usage metadata type: {type(usage)}")
+                logger.debug("Found usage_metadata type=%s", type(usage))
 
                 # Handle both dict and object formats
                 if isinstance(usage, dict):
@@ -361,42 +545,125 @@ class ConversationTokenTracker:
                         usage, "total_tokens", input_tokens + output_tokens
                     )
 
-                print(
-                    "🔍 DEBUG: Extracted tokens: input=%s, output=%s, total=%s",
+                logger.debug(
+                    "Extracted tokens from usage_metadata: input=%s output=%s total=%s",
                     input_tokens,
                     output_tokens,
                     total_tokens,
                 )
                 return (input_tokens, output_tokens, total_tokens)
-            print(
-                "🔍 DEBUG: No usage_metadata found, checking for other token fields"
-            )
-            # Check for other common token usage fields
-            if hasattr(response, "usage"):
-                usage = response.usage
-                print(f"🔍 DEBUG: Found usage field: {usage}")
-            if hasattr(response, "token_usage"):
-                usage = response.token_usage
-                print(f"🔍 DEBUG: Found token_usage field: {usage}")
+
+            # Provider/model wrappers often attach usage to response_metadata or
+            # additional_kwargs.
+            candidate_dicts: list[dict[str, Any]] = []
+            response_meta = getattr(response, "response_metadata", None)
+            if isinstance(response_meta, dict):
+                candidate_dicts.append(response_meta)
+            additional = getattr(response, "additional_kwargs", None)
+            if isinstance(additional, dict):
+                candidate_dicts.append(additional)
+
+            # Also consider direct `usage` / `token_usage` fields when they are dicts.
+            usage_field = getattr(response, "usage", None)
+            if isinstance(usage_field, dict):
+                candidate_dicts.append({"usage": usage_field})
+            token_usage_field = getattr(response, "token_usage", None)
+            if isinstance(token_usage_field, dict):
+                candidate_dicts.append({"usage": token_usage_field})
+
+            for d in candidate_dicts:
+                usage = (
+                    d.get("usage_metadata")
+                    or d.get("usage")
+                    or d.get("token_usage")
+                    or d.get("usage_details")
+                )
+                if not isinstance(usage, dict):
+                    continue
+
+                # Normalize common shapes:
+                # OpenAI/OpenRouter {prompt_tokens, completion_tokens, total_tokens} and
+                # LangChain usage_metadata {input_tokens, output_tokens, total_tokens}.
+                if "input_tokens" in usage:
+                    input_tokens = usage.get("input_tokens", 0)
+                else:
+                    input_tokens = usage.get("prompt_tokens", 0)
+
+                if "output_tokens" in usage:
+                    output_tokens = usage.get("output_tokens", 0)
+                else:
+                    output_tokens = usage.get("completion_tokens", 0)
+                total_tokens = usage.get("total_tokens", None)
+                if total_tokens is None:
+                    try:
+                        total_tokens = int(input_tokens or 0) + int(output_tokens or 0)
+                    except Exception as calc_exc:
+                        logging.getLogger(__name__).debug(
+                            "Failed to calculate total tokens: %s", calc_exc
+                        )
+                        total_tokens = 0
+
+                if int(total_tokens or 0) > 0:
+                    logger.debug(
+                        "Extracted tokens from metadata dict: input=%s output=%s total=%s",  # noqa: E501
+                        input_tokens,
+                        output_tokens,
+                        total_tokens,
+                    )
+                    return (
+                        int(input_tokens or 0),
+                        int(output_tokens or 0),
+                        int(total_tokens or 0),
+                    )
+
         except Exception as e:
-            print(f"🔍 DEBUG: Error extracting API tokens: {e}")
+            logging.getLogger(__name__).debug("Error extracting API tokens: %s", e)
         return None
 
     def _update_cumulative_tokens(self, token_count: TokenCount) -> None:
-        """Update cumulative token tracking"""
-        self.conversation_tokens += token_count.total_tokens
-        self.session_tokens += token_count.total_tokens
-        self.last_conversation_tokens = self.session_tokens
-        self.message_count += 1
+        """Update cumulative token tracking.
+
+        Only updates totals with API counts. Estimates are excluded (legacy path
+        doesn't know if turn was interrupted, so we exclude to avoid doubling).
+        """
+        # Legacy method: only update totals with API counts to avoid doubling.
+        # Estimates are excluded unless we know the turn was interrupted (which
+        # is handled in finalize_turn_usage).
+        if not token_count.is_estimated:
+            self.conversation_tokens += token_count.total_tokens
+            self.session_tokens += token_count.total_tokens
+            self.last_conversation_tokens = self.session_tokens
+            self.message_count += 1
+
+            # Track API-only totals for accurate average calculation.
+            self._api_only_tokens += token_count.total_tokens
+            self._api_only_message_count += 1
+            self._last_turn_used_estimate = False
+        # else: Legacy estimate excluded to avoid doubling (new path handles
+        # interrupted turns correctly via finalize_turn_usage).
 
     def get_cumulative_stats(self) -> dict[str, Any]:
-        """Get cumulative conversation statistics"""
+        """Get cumulative conversation statistics.
+
+        All metrics are API-based:
+        - conversation_tokens (Total): API counts only, with estimates
+          only for interrupted turns without API counts.
+        - session_tokens (Conversation): API counts only, with
+          estimates only for interrupted turns without API counts.
+        - avg_tokens_per_message (Average per
+          message): API counts only, with estimates only for interrupted turns
+          without API counts.
+        """
+        # Calculate average using API-only totals (which includes estimates only
+        # for interrupted turns without API counts).
         avg_tokens = (
-            (self.conversation_tokens / self.message_count)
-            if self.message_count > 0
+            (self._api_only_tokens / self._api_only_message_count)
+            if self._api_only_message_count > 0
             else 0
         )
 
+        # conversation_tokens and session_tokens are already API-only (only updated
+        # with API counts or interrupted-turn estimates in finalize_turn_usage).
         return {
             "conversation_tokens": self.conversation_tokens,
             "session_tokens": self.last_conversation_tokens,
@@ -408,11 +675,17 @@ class ConversationTokenTracker:
         """Reset session tokens while keeping conversation total"""
         self.session_tokens = 0
         self.last_conversation_tokens = 0
+        # Reset API-only tracking for session (but keep conversation total).
+        # Note: We keep _api_only_tokens and _api_only_message_count for
+        # accurate average across all conversations.
 
     def start_new_conversation(self) -> None:
         """Start tracking a new conversation"""
         self.session_tokens = 0
         self.last_conversation_tokens = 0
+        # Reset API-only tracking for new conversation (but keep conversation total).
+        # Note: We keep _api_only_tokens and _api_only_message_count for
+        # accurate average across all conversations.
 
     def reset_current_conversation_budget(self) -> None:
         """Reset current conversation token budget for model switching"""
@@ -449,40 +722,11 @@ class ConversationTokenTracker:
                 "status": TOKEN_STATUS_UNKNOWN,
             }
 
-        # Prefer provider-reported token usage when available (ground truth),
-        # fall back to the latest computed budget snapshot (budget moments),
-        # then to any last-known API tokens.
-        current_tokens = 0
-        if self._last_api_tokens:
-            try:
-                # If provider returned a real usage figure, honor it.
-                if (
-                    not bool(getattr(self._last_api_tokens, "is_estimated", False))
-                    and getattr(self._last_api_tokens, "source", "") == "api"
-                ):
-                    current_tokens = int(
-                        getattr(self._last_api_tokens, "total_tokens", 0) or 0
-                    )
-            except Exception as exc:
-                logging.getLogger(__name__).debug(
-                    "Failed provider-usage preference in token budget: %s", exc
-                )
-        if (
-            current_tokens <= 0
-            and self._latest_budget_snapshot
-            and isinstance(self._latest_budget_snapshot, dict)
-        ):
-            try:
-                current_tokens = int(
-                    self._latest_budget_snapshot.get("total_tokens", 0) or 0
-                )
-            except Exception as exc:
-                logging.getLogger(__name__).debug(
-                    "Failed to read total_tokens from budget snapshot: %s", exc
-                )
-                current_tokens = 0
-        if current_tokens <= 0 and self._last_api_tokens:
-            current_tokens = int(getattr(self._last_api_tokens, "total_tokens", 0) or 0)
+        # For the UI "Сообщение" metric we want a monotonic, per-turn total:
+        # - sum of API usage across iterations when available
+        # - otherwise, a monotonic estimate (snapshot-based) suitable for interruption
+        #   fallback
+        current_tokens = self.get_message_display_total_tokens()
 
         percentage = (current_tokens / context_window) * 100.0
         remaining_tokens = max(0, context_window - current_tokens)
@@ -511,6 +755,14 @@ class ConversationTokenTracker:
             return
         self._latest_budget_snapshot = snapshot
         self._latest_budget_snapshot_ts = float(snapshot.get("ts", time.time()))
+        # Feed per-turn estimate from snapshot totals during iterations (monotonic).
+        if self._turn_active:
+            try:
+                self._update_turn_estimate(int(snapshot.get("total_tokens", 0) or 0))
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to update per-turn estimate from snapshot: %s", exc
+                )
 
     def get_budget_snapshot(self) -> dict[str, Any] | None:
         """Get the last stored budget snapshot (if any)."""

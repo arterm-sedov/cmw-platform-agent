@@ -18,6 +18,7 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 import json
 import logging
+import sys
 from typing import Any
 
 # LangChain imports
@@ -373,6 +374,14 @@ class NativeLangChainStreaming:
             # Multi-turn conversation loop for proper tool calling
             iteration = 0
 
+            # Begin per-QA-turn usage accumulation (iterations will add to this).
+            try:
+                if hasattr(agent, "token_tracker") and agent.token_tracker:
+                    agent.token_tracker.begin_turn()
+            except Exception as exc:
+                # Log directly - if logging fails, let it fail visibly for debugging
+                self._logger.debug("Failed to begin turn usage accumulation: %s", exc)
+
             while iteration < self.max_iterations:
                 iteration += 1
                 print(f"🔍 DEBUG: Starting iteration {iteration}")
@@ -389,12 +398,8 @@ class NativeLangChainStreaming:
                 except Exception as exc:
                     # Keep this low-noise: budget snapshots are best-effort and must not
                     # impact the streaming loop.
-                    try:
-                        self._logger.debug(
-                            "Budget snapshot pre-iteration failed: %s", exc
-                        )
-                    except Exception:
-                        pass
+                    # Log directly - if logging fails, let it fail visibly for debugging
+                    self._logger.debug("Budget snapshot pre-iteration failed: %s", exc)
 
                 # Stream iteration progress as separate message (no icon - UI will add rotating clock)
 
@@ -411,6 +416,7 @@ class NativeLangChainStreaming:
 
                 # Use proper LangChain streaming with tool call handling
                 accumulated_chunk = None
+                last_chunk = None
                 tool_calls_in_progress = {}
                 processed_tools = {}  # Track processed tools to avoid duplicates in same response
                 has_tool_calls = False
@@ -435,7 +441,10 @@ class NativeLangChainStreaming:
                                 "callbacks": [handler],
                                 "metadata": metadata,
                             }
-                    except Exception:
+                    except Exception as exc:
+                        self._logger.debug(
+                            "Failed to get runnable config: %s", exc
+                        )
                         runnable_config = None
 
                 async for chunk in llm_with_tools.astream(
@@ -444,6 +453,7 @@ class NativeLangChainStreaming:
                     # Essential safety check for None chunk
                     if chunk is None:
                         continue
+                    last_chunk = chunk
 
                     # Accumulate chunks for proper tool call parsing
                     if accumulated_chunk is None:
@@ -483,12 +493,8 @@ class NativeLangChainStreaming:
                                 },
                             )
                     except Exception as exc:
-                        try:
-                            self._logger.debug(
-                                "Failed to emit early-finish hint: %s", exc
-                            )
-                        except Exception:
-                            pass
+                        # Log directly - if logging fails, let it fail visibly for debugging
+                        self._logger.debug("Failed to emit early-finish hint: %s", exc)
 
                     # Stream content as it arrives
                     if hasattr(chunk, "content") and chunk.content:
@@ -549,6 +555,23 @@ class NativeLangChainStreaming:
                                 tool_calls_in_progress[tool_call_id]["args"] += (
                                     safe_tool_args
                                 )
+
+                # Accumulate provider usage for this iteration call (when available).
+                # This is per-LLM-call usage and will be committed once per QA turn at finalization.
+                try:
+                    if (
+                        (last_chunk is not None or accumulated_chunk is not None)
+                        and hasattr(agent, "token_tracker")
+                        and agent.token_tracker
+                    ):
+                        usage_source = last_chunk if last_chunk is not None else accumulated_chunk
+                        ok = agent.token_tracker.accumulate_llm_call_usage(usage_source)
+                        if not ok and accumulated_chunk is not None and accumulated_chunk is not usage_source:
+                            # Some providers attach usage only to the final aggregated chunk.
+                            agent.token_tracker.accumulate_llm_call_usage(accumulated_chunk)
+                except Exception as exc:
+                    # Log directly - if logging fails, let it fail visibly for debugging
+                    self._logger.debug("Failed to accumulate iteration usage: %s", exc)
 
                 # Process completed tool calls
                 if (
@@ -614,12 +637,10 @@ class NativeLangChainStreaming:
                                             from .session_manager import set_current_session_id
                                             set_current_session_id(agent.session_id)
                                     except Exception as exc:
-                                        try:
-                                            self._logger.debug(
-                                                "Failed to set current session ID: %s", exc
-                                            )
-                                        except Exception:
-                                            pass
+                                        # Log directly - if logging fails, let it fail visibly for debugging
+                                        self._logger.debug(
+                                            "Failed to set current session ID: %s", exc
+                                        )
                                     tool_result = tool_obj.invoke(tool_args_with_agent)
 
                                     # Safety check for None tool_result
@@ -698,8 +719,11 @@ class NativeLangChainStreaming:
                                             category="tool_execution",
                                             metadata={"tool_name": tool_name},
                                         )
-                                    except Exception:
-                                        pass
+                                    except Exception as exc:
+                                        # Log directly - if logging fails, let it fail visibly
+                                        self._logger.debug(
+                                            "Failed to stream tool start debug: %s", exc
+                                        )
 
                                     # Remove from in-progress
                                     del tool_calls_in_progress[tool_call_id]
@@ -736,8 +760,11 @@ class NativeLangChainStreaming:
                                         category="tool_execution",
                                         metadata={"tool_name": tool_name, "error": str(e)},
                                     )
-                                except Exception:
-                                    pass
+                                except Exception as exc:
+                                    # Log directly - if logging fails, let it fail visibly
+                                    self._logger.debug(
+                                        "Failed to stream tool error debug: %s", exc
+                                    )
 
                                 # Remove from in-progress
                                 tool_calls_in_progress.pop(tool_call_id, None)
@@ -934,12 +961,10 @@ class NativeLangChainStreaming:
                                     }
                                 )
                             except Exception as exc:
-                                try:
-                                    self._logger.debug(
-                                        "Failed to snapshot message for turn_complete: %s", exc
-                                    )
-                                except Exception:
-                                    pass
+                                # Log directly - if logging fails, let it fail visibly
+                                self._logger.debug(
+                                    "Failed to snapshot message for turn_complete: %s", exc
+                                )
                                 continue
 
                         yield StreamingEvent(
@@ -951,13 +976,10 @@ class NativeLangChainStreaming:
                             },
                         )
                     except Exception as exc:
-                        # Non-fatal if snapshot fails
-                        try:
-                            self._logger.debug(
-                                "Failed to create ordered messages snapshot: %s", exc
-                            )
-                        except Exception:
-                            pass
+                        # Non-fatal if snapshot fails - log directly
+                        self._logger.debug(
+                            "Failed to create ordered messages snapshot: %s", exc
+                        )
 
                     break
 
@@ -1003,13 +1025,17 @@ class NativeLangChainStreaming:
 
             # Use the last accumulated chunk for token tracking
             final_chunk = accumulated_chunk
+            if "last_chunk" in locals() and last_chunk is not None:
+                # Prefer last raw chunk for message content, but keep accumulated as fallback.
+                final_chunk = last_chunk or accumulated_chunk
 
-            # Track API tokens at finalization (native or fallback estimation handled by tracker)
-            if final_chunk and hasattr(agent, "token_tracker"):
+            # Finalize per-turn usage: commit accumulated per-iteration usage once per QA turn
+            # (preserves avg-per-message semantics).
+            if hasattr(agent, "token_tracker") and agent.token_tracker:
                 try:
-                    agent.token_tracker.track_llm_response(final_chunk, messages)
+                    agent.token_tracker.finalize_turn_usage(final_chunk, messages)
                 except Exception as e:
-                    print(f"🔍 DEBUG: Error tracking API tokens: {e}")
+                    print(f"🔍 DEBUG: Error finalizing turn usage: {e}")
 
             # Budget moment: after finalization, store a final budget snapshot for UI.
             try:
@@ -1020,12 +1046,8 @@ class NativeLangChainStreaming:
                         messages_override=messages,
                     )
             except Exception as exc:
-                try:
-                    self._logger.debug(
-                        "Budget snapshot post-finalization failed: %s", exc
-                    )
-                except Exception:
-                    pass
+                # Log directly - if logging fails, let it fail visibly for debugging
+                self._logger.debug("Failed to persist/stream error: %s", exc)
 
             # Extract normalized/native finish_reason if present (provider-agnostic; OpenRouter supplies both)
             def _extract_finish_reason(chunk) -> tuple[str | None, str | None]:
@@ -1046,7 +1068,10 @@ class NativeLangChainStreaming:
                         native = additional.get("native_finish_reason")
                         if normalized or native:
                             return normalized, native
-                except Exception:
+                except Exception as exc:
+                    self._logger.debug(
+                        "Failed to extract finish reason: %s", exc
+                    )
                     return None, None
                 return None, None
 
@@ -1124,12 +1149,8 @@ class NativeLangChainStreaming:
                             }
                         )
                     except Exception as exc:
-                        try:
-                            self._logger.debug(
-                                "Failed to snapshot message metadata: %s", exc
-                            )
-                        except Exception:
-                            pass
+                        # Log directly - if logging fails, let it fail visibly for debugging
+                        self._logger.debug("Failed to snapshot message metadata: %s", exc)
                         continue
 
                 yield StreamingEvent(
@@ -1143,13 +1164,8 @@ class NativeLangChainStreaming:
                     },
                 )
             except Exception as exc:
-                # Non-fatal if snapshot fails
-                try:
-                    self._logger.debug(
-                        "Failed to create turn_complete snapshot: %s", exc
-                    )
-                except Exception:
-                    pass
+                # Non-fatal if snapshot fails - log directly
+                self._logger.debug("Failed to create turn_complete snapshot: %s", exc)
 
             # Final completion event
 
@@ -1195,12 +1211,10 @@ class NativeLangChainStreaming:
                             if key not in memory_content:
                                 partial_messages_to_add.append(m)
                 except Exception as exc:
-                    try:
-                        self._logger.debug(
-                            "Failed to collect partial messages for persistence: %s", exc
-                        )
-                    except Exception:
-                        pass
+                    # Log directly - if logging fails, let it fail visibly for debugging
+                    self._logger.debug(
+                        "Failed to collect partial messages for persistence: %s", exc
+                    )
 
                 # Add a lean truncated AIMessage if we have partial content
                 try:
@@ -1217,23 +1231,17 @@ class NativeLangChainStreaming:
                         if key not in memory_content:
                             partial_messages_to_add.append(truncated_msg)
                 except Exception as exc:
-                    try:
-                        self._logger.debug(
-                            "Failed to create truncated message for persistence: %s", exc
-                        )
-                    except Exception:
-                        pass
+                    # Log directly - if logging fails, let it fail visibly for debugging
+                    self._logger.debug(
+                        "Failed to create truncated message for persistence: %s", exc
+                    )
 
                 for m in partial_messages_to_add:
                     try:
                         agent.memory_manager.add_message(conversation_id, m)
                     except Exception as exc:
-                        try:
-                            self._logger.debug(
-                                "Failed to persist partial message: %s", exc
-                            )
-                        except Exception:
-                            pass
+                        # Log directly - if logging fails, let it fail visibly for debugging
+                        self._logger.debug("Failed to emit early-finish hint: %s", exc)
                         continue
             except Exception as persist_err:
                 self._logger.debug("Failed partial-turn persistence: %s", persist_err)
@@ -1251,12 +1259,8 @@ class NativeLangChainStreaming:
                     AIMessage(content=self._get_error_message(str(e), language)),
                 )
             except Exception as exc:
-                try:
-                    self._logger.debug(
-                        "Failed to persist error message to memory: %s", exc
-                    )
-                except Exception:
-                    pass
+                # Log directly - if logging fails, let it fail visibly for debugging
+                self._logger.debug("Failed to persist error message to memory: %s", exc)
 
             # Stream top-level error to debug logs
             try:
@@ -1267,12 +1271,19 @@ class NativeLangChainStreaming:
                     metadata={"error": str(e)},
                 )
             except Exception as exc:
+                # Log directly - if logging fails, let it fail visibly for debugging
+                self._logger.debug("Failed to persist/stream error: %s", exc)
+
+            # Finalize turn usage on error: mark as interrupted so estimates can be used
+            # if no API counts were accumulated.
+            if hasattr(agent, "token_tracker") and agent.token_tracker:
                 try:
+                    agent.token_tracker.finalize_turn_usage(None, messages)
+                except Exception as finalize_exc:
+                    # Log directly - if logging fails, let it fail visibly for debugging
                     self._logger.debug(
-                        "Failed to stream error to debug logs: %s", exc
+                        "Failed to finalize turn usage on error: %s", finalize_exc
                     )
-                except Exception:
-                    pass
 
             # Error completion for progress display
             yield StreamingEvent(

@@ -40,12 +40,12 @@ def edit_or_create_numeric_attribute(
 ) -> Dict[str, Any]:
     """
     Edit or Create a numeric attribute (Числовой атрибут).
-    
+
     Numeric attribute stores decimal numbers with configurable decimal places:
         - 0: 123
         - 1: 123.4
         - 2: 123.45
-    
+
     Returns:
         dict: {
             "success": bool - True if the attribute was created or edited successfully

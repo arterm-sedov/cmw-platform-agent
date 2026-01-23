@@ -9,7 +9,7 @@ def delete_attribute(
     ) -> Dict[str, Any]:
     """
     Delete a text attribute by from the given template and application.
-    
+
     Returns:
         dict: {
             "success": bool - True if the attribute was deleted successfully

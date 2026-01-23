@@ -182,24 +182,24 @@ def setup_logging(force: bool | None = None) -> Logger:
     # Console handler with truncation
     console = logging.StreamHandler()
     console.setLevel(level)
-    
+
     # Create a custom formatter that truncates long messages
     class TruncatingFormatter(logging.Formatter):
         def __init__(self, fmt=None, datefmt=None, max_length=400):
             super().__init__(fmt, datefmt)
             self.max_length = max_length
-        
+
         def format(self, record):
             # Get the original formatted message
             formatted = super().format(record)
-            
+
             # Truncate if too long
             if len(formatted) > self.max_length:
                 truncated = formatted[:self.max_length-3] + "..."
                 return truncated
-            
+
             return formatted
-    
+
     # Use the truncating formatter for console
     console_max_length = int(os.getenv("LOG_CONSOLE_MAX_LENGTH", "400"))
     console_formatter = TruncatingFormatter(
@@ -246,7 +246,7 @@ def setup_logging(force: bool | None = None) -> Logger:
         session_aware_handler = SessionAwareLogHandler()
         session_aware_handler.setLevel(level)
         root.addHandler(session_aware_handler)
-        
+
         # Session-aware handler will create session handlers on-demand
         # No need to pre-create handlers for non-existent sessions
     except Exception as e:

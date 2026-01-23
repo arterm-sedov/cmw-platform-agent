@@ -76,36 +76,36 @@ class ErrorInfo:
 class ErrorHandler:
     """
     Comprehensive error handler for LLM API calls.
-    
+
     This class provides centralized error handling across different LLM providers,
     with specific classification and recovery suggestions for each provider.
     """
-    
+
     def __init__(self):
         """Initialize the error handler"""
         self.provider_failure_counts = {}  # Will be session-specific: {session_id: {provider: count}}
         self.max_failures_per_provider = 3
         self.failure_reset_time = 3600  # 1 hour
-        
+
         # Initialize vector similarity components
         self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
         self.error_patterns = self._initialize_error_patterns()
         self.similarity_threshold = 0.7
-        
+
     def extract_http_status_code(self, error: Exception) -> Optional[int]:
         """Extract HTTP status code from various error types with enhanced patterns."""
         error_str = str(error)
-        
+
         # Pattern 1: "HTTP 429" or "429 error" or "Error code: 429"
         status_match = re.search(r'(?:HTTP\s+(\d{3})|(\d{3})\s+error|Error\s+code:\s*(\d{3}))', error_str, re.IGNORECASE)
         if status_match:
             return int(status_match.group(1) or status_match.group(2) or status_match.group(3))
-        
+
         # Pattern 2: "status: 429" or "code: 429" or "status_code: 429"
         status_match = re.search(r'(?:status|code|status_code)[:\s]*(\d{3})', error_str, re.IGNORECASE)
         if status_match:
             return int(status_match.group(1))
-        
+
         # Pattern 3: Try to parse JSON error responses with more flexible patterns
         try:
             # Look for JSON structures with status/code fields
@@ -115,12 +115,12 @@ class ErrorHandler:
                 r'\{[^}]*"error"[^}]*"code"[^}]*(\d{3})[^}]*\}',
                 r'\{[^}]*"error"[^}]*"status"[^}]*(\d{3})[^}]*\}'
             ]
-            
+
             for pattern in json_patterns:
                 json_match = re.search(pattern, error_str)
                 if json_match:
                     return int(json_match.group(1))
-            
+
             # Try to parse complete JSON error structures
             json_match = re.search(r'\{[^}]*"status"[^}]*\d{3}[^}]*\}|\{[^}]*"code"[^}]*\d{3}[^}]*\}', error_str)
             if json_match:
@@ -131,21 +131,21 @@ class ErrorHandler:
                     return int(error_data['code'])
         except (json.JSONDecodeError, ValueError, KeyError):
             pass
-        
+
         # Pattern 4: Look for HTTP status codes in URLs and error messages
         url_status_match = re.search(r'/(\d{3})/', error_str)
         if url_status_match:
             status = int(url_status_match.group(1))
             if 400 <= status <= 599:  # Valid HTTP error range
                 return status
-        
+
         # Pattern 5: Look for common HTTP status codes in the message (more comprehensive)
         for status in [400, 401, 402, 403, 404, 408, 413, 422, 429, 498, 499, 500, 502, 503, 504]:
             if str(status) in error_str:
                 return status
-        
+
         return None
-    
+
     def extract_retry_after_timing(self, error_str: str) -> Optional[int]:
         """Extract retry-after timing from error messages."""
         patterns = [
@@ -154,14 +154,14 @@ class ErrorHandler:
             r'wait[:\s]*(\d+)[:\s]*seconds?',
             r'(\d+)[:\s]*seconds?[:\s]*before[:\s]*retry'
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, error_str, re.IGNORECASE)
             if match:
                 return int(match.group(1))
-        
+
         return None
-    
+
     def _initialize_error_patterns(self) -> Dict[str, List[str]]:
         """Initialize error patterns for vector similarity matching."""
         return {
@@ -201,7 +201,7 @@ class ErrorHandler:
                 "access denied"
             ]
         }
-    
+
     def _calculate_cosine_similarity(self, text1: str, text2: str) -> float:
         """Calculate cosine similarity between two texts."""
         try:
@@ -212,11 +212,11 @@ class ErrorHandler:
             return similarity
         except Exception:
             return 0.0
-    
+
     def _is_token_limit_error(self, error: Exception, llm_type: str = "unknown") -> bool:
         """Check if the error is a token limit error using multiple detection methods."""
         error_str = str(error).lower()
-        
+
         # Direct substring checks for efficiency
         token_indicators = [
             "413", "429", "token", "limit", "tokens per minute", 
@@ -224,56 +224,56 @@ class ErrorHandler:
             "payment required", "rate limit", "rate_limit", "context too long",
             "input too long", "message too large"
         ]
-        
+
         if any(term in error_str for term in token_indicators):
             return True
-        
+
         # Vector similarity check for complex patterns
         for pattern in self.error_patterns["token_limit"]:
             if self._calculate_cosine_similarity(error_str, pattern) > self.similarity_threshold:
                 return True
-        
+
         return False
-    
+
     def _is_network_error(self, error: Exception) -> bool:
         """Check if the error is a network connectivity error."""
         error_str = str(error).lower()
-        
+
         # Direct checks
         network_indicators = [
             "no healthy upstream", "network", "connection", "timeout",
             "connection refused", "dns", "resolve", "unreachable"
         ]
-        
+
         if any(term in error_str for term in network_indicators):
             return True
-        
+
         # Vector similarity check
         for pattern in self.error_patterns["network_error"]:
             if self._calculate_cosine_similarity(error_str, pattern) > self.similarity_threshold:
                 return True
-        
+
         return False
-    
+
     def _is_router_error(self, error: Exception) -> bool:
         """Check if the error is a HuggingFace router error."""
         error_str = str(error).lower()
-        
+
         # Direct checks
         if "router.huggingface.co" in error_str or "500 server error" in error_str:
             return True
-        
+
         # Vector similarity check
         for pattern in self.error_patterns["router_error"]:
             if self._calculate_cosine_similarity(error_str, pattern) > self.similarity_threshold:
                 return True
-        
+
         return False
-    
+
     def classify_gemini_error(self, status_code: int, error_str: str) -> Optional[ErrorInfo]:
         """Classify Gemini-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         # 400 Bad Request - Focus on error codes first
         if status_code == 400:
             if 'invalid_argument' in error_str_lower:
@@ -307,7 +307,7 @@ class ErrorHandler:
                     status_code=status_code,
                     provider='gemini'
                 )
-        
+
         # 401 Unauthorized
         elif status_code == 401:
             return ErrorInfo(
@@ -319,7 +319,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gemini'
             )
-        
+
         # 402 Payment Required
         elif status_code == 402:
             return ErrorInfo(
@@ -331,7 +331,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gemini'
             )
-        
+
         # 403 Forbidden
         elif status_code == 403:
             if 'permission_denied' in error_str_lower:
@@ -354,7 +354,7 @@ class ErrorHandler:
                     status_code=status_code,
                     provider='gemini'
                 )
-        
+
         # 404 Not Found
         elif status_code == 404:
             return ErrorInfo(
@@ -366,7 +366,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gemini'
             )
-        
+
         # 413 Request Entity Too Large
         elif status_code == 413:
             return ErrorInfo(
@@ -378,7 +378,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gemini'
             )
-        
+
         # 422 Unprocessable Entity
         elif status_code == 422:
             return ErrorInfo(
@@ -390,7 +390,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gemini'
             )
-        
+
         # 429 Too Many Requests
         elif status_code == 429:
             retry_after = self.extract_retry_after_timing(error_str)
@@ -416,7 +416,7 @@ class ErrorHandler:
                     status_code=status_code,
                     provider='gemini'
                 )
-        
+
         # 500 Internal Server Error
         elif status_code == 500:
             if 'internal' in error_str_lower or 'context' in error_str_lower:
@@ -439,7 +439,7 @@ class ErrorHandler:
                     status_code=status_code,
                     provider='gemini'
                 )
-        
+
         # 502 Bad Gateway
         elif status_code == 502:
             return ErrorInfo(
@@ -451,7 +451,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gemini'
             )
-        
+
         # 503 Service Unavailable
         elif status_code == 503:
             return ErrorInfo(
@@ -463,7 +463,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gemini'
             )
-        
+
         # 504 Gateway Timeout
         elif status_code == 504:
             return ErrorInfo(
@@ -475,13 +475,13 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gemini'
             )
-        
+
         return None
-    
+
     def classify_groq_error(self, status_code: int, error_str: str) -> Optional[ErrorInfo]:
         """Classify Groq-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         if status_code == 400:
             return ErrorInfo(
                 error_type=ErrorType.BAD_REQUEST,
@@ -492,7 +492,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='groq'
             )
-        
+
         elif status_code == 401:
             return ErrorInfo(
                 error_type=ErrorType.UNAUTHORIZED,
@@ -503,7 +503,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='groq'
             )
-        
+
         elif status_code == 404:
             return ErrorInfo(
                 error_type=ErrorType.NOT_FOUND,
@@ -514,7 +514,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='groq'
             )
-        
+
         elif status_code == 413:
             return ErrorInfo(
                 error_type=ErrorType.REQUEST_TOO_LARGE,
@@ -525,7 +525,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='groq'
             )
-        
+
         elif status_code == 422:
             return ErrorInfo(
                 error_type=ErrorType.UNPROCESSABLE_ENTITY,
@@ -536,7 +536,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='groq'
             )
-        
+
         elif status_code == 429:
             retry_after = self.extract_retry_after_timing(error_str)
             return ErrorInfo(
@@ -549,7 +549,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='groq'
             )
-        
+
         elif status_code == 498:
             return ErrorInfo(
                 error_type=ErrorType.FLEX_TIER_CAPACITY_EXCEEDED,
@@ -560,7 +560,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='groq'
             )
-        
+
         elif status_code == 499:
             return ErrorInfo(
                 error_type=ErrorType.REQUEST_CANCELLED,
@@ -571,7 +571,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='groq'
             )
-        
+
         elif status_code == 500:
             return ErrorInfo(
                 error_type=ErrorType.INTERNAL_ERROR,
@@ -582,7 +582,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='groq'
             )
-        
+
         elif status_code == 502:
             return ErrorInfo(
                 error_type=ErrorType.BAD_GATEWAY,
@@ -593,7 +593,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='groq'
             )
-        
+
         elif status_code == 503:
             return ErrorInfo(
                 error_type=ErrorType.SERVICE_UNAVAILABLE,
@@ -604,13 +604,13 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='groq'
             )
-        
+
         return None
-    
+
     def classify_mistral_error(self, status_code: int, error_str: str) -> Optional[ErrorInfo]:
         """Classify Mistral-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         # Check for Mistral-specific error codes first
         if 'invalid_request_message_order' in error_str_lower or '3230' in error_str:
             return ErrorInfo(
@@ -622,7 +622,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='mistral'
             )
-        
+
         # Standard HTTP status codes for Mistral
         if status_code == 400:
             return ErrorInfo(
@@ -634,7 +634,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='mistral'
             )
-        
+
         elif status_code == 401:
             return ErrorInfo(
                 error_type=ErrorType.UNAUTHORIZED,
@@ -645,7 +645,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='mistral'
             )
-        
+
         elif status_code == 403:
             return ErrorInfo(
                 error_type=ErrorType.FORBIDDEN,
@@ -656,7 +656,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='mistral'
             )
-        
+
         elif status_code == 404:
             return ErrorInfo(
                 error_type=ErrorType.NOT_FOUND,
@@ -667,7 +667,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='mistral'
             )
-        
+
         elif status_code == 413:
             return ErrorInfo(
                 error_type=ErrorType.REQUEST_TOO_LARGE,
@@ -678,7 +678,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='mistral'
             )
-        
+
         elif status_code == 422:
             return ErrorInfo(
                 error_type=ErrorType.UNPROCESSABLE_ENTITY,
@@ -689,7 +689,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='mistral'
             )
-        
+
         elif status_code == 429:
             retry_after = self.extract_retry_after_timing(error_str)
             return ErrorInfo(
@@ -702,7 +702,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='mistral'
             )
-        
+
         elif status_code == 500:
             return ErrorInfo(
                 error_type=ErrorType.INTERNAL_ERROR,
@@ -713,7 +713,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='mistral'
             )
-        
+
         elif status_code == 502:
             return ErrorInfo(
                 error_type=ErrorType.BAD_GATEWAY,
@@ -724,7 +724,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='mistral'
             )
-        
+
         elif status_code == 503:
             return ErrorInfo(
                 error_type=ErrorType.SERVICE_UNAVAILABLE,
@@ -735,13 +735,13 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='mistral'
             )
-        
+
         return None
-    
+
     def classify_openrouter_error(self, status_code: int, error_str: str) -> Optional[ErrorInfo]:
         """Classify OpenRouter-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         if status_code == 400:
             return ErrorInfo(
                 error_type=ErrorType.BAD_REQUEST,
@@ -752,7 +752,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='openrouter'
             )
-        
+
         elif status_code == 401:
             return ErrorInfo(
                 error_type=ErrorType.UNAUTHORIZED,
@@ -763,7 +763,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='openrouter'
             )
-        
+
         elif status_code == 403:
             return ErrorInfo(
                 error_type=ErrorType.FORBIDDEN,
@@ -774,7 +774,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='openrouter'
             )
-        
+
         elif status_code == 404:
             return ErrorInfo(
                 error_type=ErrorType.NOT_FOUND,
@@ -785,7 +785,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='openrouter'
             )
-        
+
         elif status_code == 413:
             return ErrorInfo(
                 error_type=ErrorType.REQUEST_TOO_LARGE,
@@ -796,7 +796,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='openrouter'
             )
-        
+
         elif status_code == 422:
             return ErrorInfo(
                 error_type=ErrorType.UNPROCESSABLE_ENTITY,
@@ -807,7 +807,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='openrouter'
             )
-        
+
         elif status_code == 429:
             retry_after = self.extract_retry_after_timing(error_str)
             return ErrorInfo(
@@ -820,7 +820,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='openrouter'
             )
-        
+
         elif status_code == 500:
             return ErrorInfo(
                 error_type=ErrorType.INTERNAL_ERROR,
@@ -831,7 +831,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='openrouter'
             )
-        
+
         elif status_code == 502:
             return ErrorInfo(
                 error_type=ErrorType.BAD_GATEWAY,
@@ -842,7 +842,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='openrouter'
             )
-        
+
         elif status_code == 503:
             return ErrorInfo(
                 error_type=ErrorType.SERVICE_UNAVAILABLE,
@@ -853,13 +853,13 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='openrouter'
             )
-        
+
         return None
-    
+
     def classify_huggingface_error(self, status_code: int, error_str: str) -> Optional[ErrorInfo]:
         """Classify HuggingFace-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         if status_code == 400:
             return ErrorInfo(
                 error_type=ErrorType.BAD_REQUEST,
@@ -870,7 +870,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='huggingface'
             )
-        
+
         elif status_code == 401:
             return ErrorInfo(
                 error_type=ErrorType.UNAUTHORIZED,
@@ -881,7 +881,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='huggingface'
             )
-        
+
         elif status_code == 403:
             return ErrorInfo(
                 error_type=ErrorType.FORBIDDEN,
@@ -892,7 +892,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='huggingface'
             )
-        
+
         elif status_code == 404:
             return ErrorInfo(
                 error_type=ErrorType.NOT_FOUND,
@@ -903,7 +903,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='huggingface'
             )
-        
+
         elif status_code == 413:
             return ErrorInfo(
                 error_type=ErrorType.REQUEST_TOO_LARGE,
@@ -914,7 +914,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='huggingface'
             )
-        
+
         elif status_code == 422:
             return ErrorInfo(
                 error_type=ErrorType.UNPROCESSABLE_ENTITY,
@@ -925,7 +925,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='huggingface'
             )
-        
+
         elif status_code == 429:
             retry_after = self.extract_retry_after_timing(error_str)
             return ErrorInfo(
@@ -938,7 +938,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='huggingface'
             )
-        
+
         elif status_code == 500:
             return ErrorInfo(
                 error_type=ErrorType.INTERNAL_ERROR,
@@ -949,7 +949,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='huggingface'
             )
-        
+
         elif status_code == 502:
             return ErrorInfo(
                 error_type=ErrorType.BAD_GATEWAY,
@@ -960,7 +960,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='huggingface'
             )
-        
+
         elif status_code == 503:
             return ErrorInfo(
                 error_type=ErrorType.SERVICE_UNAVAILABLE,
@@ -971,13 +971,13 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='huggingface'
             )
-        
+
         return None
-    
+
     def classify_gigachat_error(self, status_code: int, error_str: str) -> Optional[ErrorInfo]:
         """Classify GigaChat-specific error codes based on official documentation."""
         error_str_lower = error_str.lower()
-        
+
         if status_code == 400:
             return ErrorInfo(
                 error_type=ErrorType.BAD_REQUEST,
@@ -988,7 +988,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gigachat'
             )
-        
+
         elif status_code == 401:
             return ErrorInfo(
                 error_type=ErrorType.UNAUTHORIZED,
@@ -999,7 +999,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gigachat'
             )
-        
+
         elif status_code == 403:
             return ErrorInfo(
                 error_type=ErrorType.FORBIDDEN,
@@ -1010,7 +1010,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gigachat'
             )
-        
+
         elif status_code == 404:
             return ErrorInfo(
                 error_type=ErrorType.NOT_FOUND,
@@ -1021,7 +1021,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gigachat'
             )
-        
+
         elif status_code == 413:
             return ErrorInfo(
                 error_type=ErrorType.REQUEST_TOO_LARGE,
@@ -1032,7 +1032,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gigachat'
             )
-        
+
         elif status_code == 422:
             return ErrorInfo(
                 error_type=ErrorType.UNPROCESSABLE_ENTITY,
@@ -1043,7 +1043,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gigachat'
             )
-        
+
         elif status_code == 429:
             retry_after = self.extract_retry_after_timing(error_str)
             return ErrorInfo(
@@ -1056,7 +1056,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gigachat'
             )
-        
+
         elif status_code == 500:
             return ErrorInfo(
                 error_type=ErrorType.INTERNAL_ERROR,
@@ -1067,7 +1067,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gigachat'
             )
-        
+
         elif status_code == 502:
             return ErrorInfo(
                 error_type=ErrorType.BAD_GATEWAY,
@@ -1078,7 +1078,7 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gigachat'
             )
-        
+
         elif status_code == 503:
             return ErrorInfo(
                 error_type=ErrorType.SERVICE_UNAVAILABLE,
@@ -1089,13 +1089,13 @@ class ErrorHandler:
                 status_code=status_code,
                 provider='gigachat'
             )
-        
+
         return None
-    
+
     def classify_error_by_status_code(self, status_code: int, error: Exception, llm_name: str) -> Optional[ErrorInfo]:
         """Classify error based on official HTTP status codes."""
         error_str = str(error)
-        
+
         # Check for provider-specific error status codes first
         if 'gemini' in llm_name.lower():
             return self.classify_gemini_error(status_code, error_str)
@@ -1109,7 +1109,7 @@ class ErrorHandler:
             return self.classify_huggingface_error(status_code, error_str)
         elif 'gigachat' in llm_name.lower():
             return self.classify_gigachat_error(status_code, error_str)
-        
+
         # Generic HTTP status code handling
         if status_code == 400:
             return ErrorInfo(
@@ -1193,13 +1193,13 @@ class ErrorHandler:
                 status_code=status_code,
                 provider=llm_name.lower()
             )
-        
+
         return None
-    
+
     def classify_error_by_message(self, error_message: str, llm_name: str) -> Optional[ErrorInfo]:
         """Fallback classification based on error message content."""
         error_lower = error_message.lower()
-        
+
         # Only use this for very specific, well-known error patterns
         if 'location is not supported' in error_lower:
             return ErrorInfo(
@@ -1228,32 +1228,32 @@ class ErrorHandler:
                 requires_config_change=False,
                 provider=llm_name.lower()
             )
-        
+
         return None
-    
+
     def classify_error(self, error: Exception, llm_name: str) -> ErrorInfo:
         """
         Main error classification method that tries all classification strategies.
         Prioritizes error codes over keyword parsing for reliability.
-        
+
         Args:
             error: The exception that occurred
             llm_name: Name of the LLM provider
-            
+
         Returns:
             ErrorInfo object with classification results
         """
         error_str = str(error)
         error_lower = error_str.lower()
-        
+
         # 1. PRIORITY: Try to extract HTTP status code first (most reliable)
         status_code = self.extract_http_status_code(error)
-        
+
         if status_code:
             error_info = self.classify_error_by_status_code(status_code, error, llm_name)
             if error_info:
                 return error_info
-        
+
         # 2. Check for specific error patterns using vector similarity (from agent.py)
         if self._is_token_limit_error(error, llm_name):
             return ErrorInfo(
@@ -1264,7 +1264,7 @@ class ErrorHandler:
                 requires_config_change=True,
                 provider=llm_name.lower()
             )
-        
+
         if self._is_network_error(error):
             return ErrorInfo(
                 error_type=ErrorType.NETWORK_ERROR,
@@ -1274,7 +1274,7 @@ class ErrorHandler:
                 requires_config_change=False,
                 provider=llm_name.lower()
             )
-        
+
         if self._is_router_error(error):
             return ErrorInfo(
                 error_type=ErrorType.ROUTER_ERROR,
@@ -1284,7 +1284,7 @@ class ErrorHandler:
                 requires_config_change=False,
                 provider=llm_name.lower()
             )
-        
+
         # 3. Check for Mistral-specific message ordering errors
         if 'mistral' in llm_name.lower() and ('invalid_request_message_order' in error_lower or '3230' in error_str):
             return ErrorInfo(
@@ -1295,12 +1295,12 @@ class ErrorHandler:
                 requires_config_change=True,
                 provider=llm_name.lower()
             )
-        
+
         # 4. Fallback to message-based classification for edge cases
         error_info = self.classify_error_by_message(error_str, llm_name)
         if error_info:
             return error_info
-        
+
         # 5. Last resort: Check for specific error patterns that might indicate status codes
         if 'invalid_argument' in error_lower or 'malformed' in error_lower:
             return ErrorInfo(
@@ -1329,7 +1329,7 @@ class ErrorHandler:
                 requires_config_change=True,
                 provider=llm_name.lower()
             )
-        
+
         # 6. Default unknown error
         return ErrorInfo(
             error_type=ErrorType.UNKNOWN,
@@ -1339,60 +1339,60 @@ class ErrorHandler:
             requires_config_change=False,
             provider=llm_name.lower()
         )
-    
+
     def handle_provider_failure(self, provider_type: str, error_type: str = "general", session_id: str = "default") -> bool:
         """
         Track provider failures with simple retry limits.
-        
+
         Args:
             provider_type: Provider name (e.g., "mistral", "gemini", "groq")
             error_type: Type of error that occurred
             session_id: Session ID for isolation
-            
+
         Returns:
             True if provider should be temporarily skipped, False otherwise
         """
         current_time = time.time()
         key = f"{session_id}_{provider_type}_{error_type}"
-        
+
         if key not in self.provider_failure_counts:
             self.provider_failure_counts[key] = {
                 'count': 0,
                 'first_failure': current_time,
                 'last_failure': current_time
             }
-        
+
         failure_info = self.provider_failure_counts[key]
-        
+
         # Reset if enough time has passed
         if current_time - failure_info['first_failure'] > self.failure_reset_time:
             failure_info['count'] = 0
             failure_info['first_failure'] = current_time
-        
+
         failure_info['count'] += 1
         failure_info['last_failure'] = current_time
-        
+
         # Skip provider if too many failures
         return failure_info['count'] >= self.max_failures_per_provider
-    
+
     def should_skip_provider_temporarily(self, provider_type: str, session_id: str = "default") -> bool:
         """Check if a provider should be temporarily skipped due to failures."""
         current_time = time.time()
         session_prefix = f"{session_id}_{provider_type}"
-        
+
         for key, failure_info in self.provider_failure_counts.items():
             if key.startswith(session_prefix):
                 # Reset if enough time has passed
                 if current_time - failure_info['first_failure'] > self.failure_reset_time:
                     failure_info['count'] = 0
                     failure_info['first_failure'] = current_time
-                
+
                 # Skip if too many failures
                 if failure_info['count'] >= self.max_failures_per_provider:
                     return True
-        
+
         return False
-    
+
     def reset_provider_failures(self, provider_type: str = None, session_id: str = "default"):
         """Reset failure counts for a provider or all providers."""
         if provider_type:
@@ -1405,13 +1405,13 @@ class ErrorHandler:
             session_keys = [k for k in self.provider_failure_counts.keys() if k.startswith(f"{session_id}_")]
             for key in session_keys:
                 del self.provider_failure_counts[key]
-    
+
     def get_provider_failure_stats(self, session_id: str = "default") -> Dict[str, Any]:
         """Get statistics about provider failures for a specific session."""
         current_time = time.time()
         stats = {}
         session_prefix = f"{session_id}_"
-        
+
         for key, failure_info in self.provider_failure_counts.items():
             if key.startswith(session_prefix):
                 # Remove session prefix to get provider and error type
@@ -1421,10 +1421,10 @@ class ErrorHandler:
                     provider, error_type = parts[0], parts[1]
                 else:
                     provider, error_type = remaining_key, "general"
-                
+
                 if provider not in stats:
                     stats[provider] = {}
-                
+
                 stats[provider][error_type] = {
                     'count': failure_info['count'],
                     'first_failure': failure_info['first_failure'],
@@ -1432,7 +1432,7 @@ class ErrorHandler:
                     'time_since_last': current_time - failure_info['last_failure'],
                     'should_skip': failure_info['count'] >= self.max_failures_per_provider
                 }
-        
+
         return stats
 
 

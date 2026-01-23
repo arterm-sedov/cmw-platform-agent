@@ -81,11 +81,11 @@ def edit_or_create_image_attribute(
 ) -> Dict[str, Any]:
     """
     Edit or Create an image attribute (Изображение).
-    
+
     Image attribute stores image files with configurable color modes and dimensions.
-    
+
     The image will be converted and stored in the specified color mode and dimensions.
-    
+
     Returns:
         dict: {
             "success": bool - True if the attribute was created or edited successfully

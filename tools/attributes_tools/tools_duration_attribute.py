@@ -23,7 +23,7 @@ class EditOrCreateDurationAttributeSchema(CommonAttributeFields):
     def non_empty_str(cls, v: Any) -> Any:
         """
         Validate that string fields are not empty.
-        
+
         This field validator is automatically applied to the name, system_name, 
         application_system_name, and template_system_name fields in all schemas
         that inherit from CommonAttributeFields, ensuring consistent validation.
@@ -48,9 +48,9 @@ def edit_or_create_duration_attribute(
 ) -> Dict[str, Any]:
     """
     Edit or Create a duration attribute (Длительность).
-    
+
     Supports various duration display formats.
-    
+
     - Strictly follow argument schema and its built-in descriptions.
     - Refer to these examples when choosing display_format:
         - DurationHMS: 2 ч 55 м 59 с

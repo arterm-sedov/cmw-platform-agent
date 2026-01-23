@@ -24,7 +24,7 @@ class AttributeResult(BaseModel):
 class CommonAttributeFields(BaseModel):
     """
     Common field definitions for attribute schemas across all tool modules.
-    
+
     This mixin class provides standardized field definitions to reduce code duplication
     and ensure consistency across all attribute-related schemas.
     """
@@ -79,19 +79,19 @@ class CommonAttributeFields(BaseModel):
     def normalize_operation_create_edit(cls, v: str) -> str:
         """
         Normalize Create/Edit operation field values by converting them to lowercase and applying a mapping.
-        
+
         This field validator is automatically applied to the operation field in all schemas
         that inherit from CommonAttributeFields, ensuring consistent operation normalization.
         """
         if v is None:
             return v
-        
+
         # Default mapping used by most attribute tools
         mapping = {
             "создать": "create",
             "редактировать": "edit",
         }
-        
+
         normalized_value = str(v).strip().lower()
         return mapping.get(normalized_value, normalized_value)
 
@@ -99,7 +99,7 @@ class CommonAttributeFields(BaseModel):
     def non_empty_str(cls, v: Any) -> Any:
         """
         Validate that string fields are not empty.
-        
+
         This field validator is automatically applied to the name, system_name, 
         application_system_name, and template_system_name fields in all schemas
         that inherit from CommonAttributeFields, ensuring consistent validation.
@@ -112,7 +112,7 @@ class CommonAttributeFields(BaseModel):
 class CommonGetAttributeFields(BaseModel):
     """
     Common field definitions for get attribute schemas across all tool modules.
-    
+
     This mixin class provides standardized field definitions for schemas that need
     to fetch/retrieve attributes, reducing code duplication and ensuring consistency.
     """
@@ -133,7 +133,7 @@ class CommonGetAttributeFields(BaseModel):
     def non_empty_str(cls, v: Any) -> Any:
         """
         Validate that string fields are not empty.
-        
+
         This field validator is automatically applied to the application_system_name, 
         template_system_name, and system_name fields in all get attribute schemas
         that inherit from CommonGetAttributeFields, ensuring consistent validation.
@@ -173,23 +173,23 @@ class CommonFormFields(BaseModel):
 def normalize_operation_archive_unarchive(value: str) -> str:
     """
     Normalize operation values for archive/unarchive operations.
-    
+
     This utility function handles the specific mapping for archive/unarchive operations,
     converting Russian terms to English equivalents.
-    
+
     Args:
         value: The operation value to normalize
-        
+
     Returns:
         Normalized operation value
     """
     if value is None:
         return value
-    
+
     mapping = {
         "архивировать": "archive",
         "разархивировать": "unarchive"
     }
-    
+
     normalized_value = str(value).strip().lower()
     return mapping.get(normalized_value, normalized_value)

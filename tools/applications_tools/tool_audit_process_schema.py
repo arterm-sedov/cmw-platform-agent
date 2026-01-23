@@ -19,7 +19,7 @@ def get_element_subtype(data: Dict[str, Any], element_type: str) -> str:
             return "ИЛИ"
         else:
             return "неизвестный"
-    
+
     elif element_type == "sequence_flow":
         # Определяем подтипы потоков
         flow_types = data.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", [])
@@ -29,14 +29,14 @@ def get_element_subtype(data: Dict[str, Any], element_type: str) -> str:
             return "sequence"
         else:
             return "неизвестный"
-    
+
     elif element_type in ["start_event", "end_event", "intermediate_event"]:
         event_kinds = data.get("cmw.process.diagram.activity.event.kind", [])
         if not event_kinds:
             return "Обычное"
-        
+
         event_kind = event_kinds[0] if event_kinds else ""
-        
+
         # Определяем подтипы событий
         if "None" in event_kind:
             return "Обычное"
@@ -50,7 +50,7 @@ def get_element_subtype(data: Dict[str, Any], element_type: str) -> str:
             return "Терминатор"
         else:
             return "неизвестный"
-    
+
     elif element_type == "task":
         task_kinds = data.get("cmw.process.diagram.activity.task.kind", [])
         if "User" in task_kinds:
@@ -63,7 +63,7 @@ def get_element_subtype(data: Dict[str, Any], element_type: str) -> str:
             return "Вызов подпроцесса"
         else:
             return "неизвестный"
-    
+
     return ""
 
 def get_element_type(rdf_types: List[str]) -> str:
@@ -101,37 +101,37 @@ def get_event_definitions(data: Dict[str, Any]) -> Dict[str, Any]:
     Извлекает определения событий (таймер, сообщение и т.д.)
     """
     definitions = {}
-    
+
     # Таймер
     timer_def = data.get("cmw.process.diagram.activity.event.timerDefinition", [])
     if timer_def:
         definitions["timer_definition"] = timer_def[0]
-    
+
     # Сообщение
     message_def = data.get("cmw.process.diagram.activity.event.messageDefinition", [])
     if message_def:
         definitions["message_definition"] = message_def[0]
-    
+
     # Форма (для задач)
     form_def = data.get("cmw.process.diagram.activity.task.form", [])
     if form_def:
         definitions["form_definition"] = form_def[0]
-    
+
     # Скрипт (для задач)
     script_def = data.get("cmw.process.diagram.activity.task.scriptDefinition", [])
     if script_def:
         definitions["script_definition"] = script_def[0]
-    
+
     # Пользовательская задача
     user_def = data.get("cmw.process.diagram.activity.task.userDefinition", [])
     if user_def:
         definitions["user_definition"] = user_def[0]
-    
+
     # Поток последовательности
     flow_def = data.get("cmw.process.diagram.activity.flow.sequenceFlowDefinition", [])
     if flow_def:
         definitions["flow_definition"] = flow_def[0]
-    
+
     return definitions
 
 def fetch_trigger_name(tid: str) -> str:
@@ -157,10 +157,10 @@ def get_process_schema(process_template_system_name: str) -> List[Dict[str, Any]
     Получает BPMN-диаграмму процесса по имени шаблона процесса. 
     Возвращает структурированный список элементов BPMN диаграммы с их свойствами, 
     включая пулы, дорожки, шлюзы, события, задачи и потоки управления.
-    
+
     Параметры:
     - process_template_system_name: системное имя шаблона процесса для аудита
-    
+
     Возвращаемые данные:
     - id: идентификатор элемента
     - type: тип элемента (start_event, end_event, gateway, task, sequence_flow, pool, lane и др.)

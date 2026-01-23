@@ -13,10 +13,10 @@ def ensure_valid_answer(answer: Any) -> str:
     """
     Ensure the answer is a valid string. Only returns "No answer provided" 
     when there is literally no answer at all.
-    
+
     Args:
         answer (Any): The answer to validate
-        
+
     Returns:
         str: A valid string answer, preserving all error information
     """
@@ -38,22 +38,22 @@ def safe_string(value: Any, default: str = "") -> str:
 def get_tool_call_count(agent, session_id: str) -> int:
     """
     Get total tool call count from session-specific agent - shared implementation.
-    
+
     This function uses direct access to memory manager to avoid circular dependencies.
     Used across:
     - Sidebar status display
     - Stats tab display  
-    
+
     Args:
         agent: The session-specific agent instance
         session_id: The session ID to get tool calls for (required, no default)
-        
+
     Returns:
         int: Total number of tool calls made in this session
     """
     if not agent or not session_id:
         return 0
-    
+
     try:
         actual_tool_calls = {}
 
@@ -91,8 +91,8 @@ def get_tool_call_count(agent, session_id: str) -> int:
                 call_count = int(calls)
                 total_tool_calls += call_count
             return total_tool_calls
-        
+
     except:
         pass
-        
+
     return 0

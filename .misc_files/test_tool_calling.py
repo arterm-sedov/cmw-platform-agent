@@ -12,11 +12,11 @@ from langchain_wrapper import get_langchain_wrapper, reset_langchain_wrapper
 def test_tool_calling():
     """Test tool calling functionality specifically"""
     print("Testing Tool Calling Functionality...")
-    
+
     # Reset wrapper for clean test
     reset_langchain_wrapper()
     wrapper = get_langchain_wrapper()
-    
+
     # Test 1: Simple math that should trigger tools
     print("\n1. Testing simple math (should use multiply tool)...")
     try:
@@ -29,7 +29,7 @@ def test_tool_calling():
                 print(f"    Tool {i+1}: {tool_call['name']} with args {tool_call['args']}")
     except Exception as e:
         print(f"  Error: {e}")
-    
+
     # Test 2: Addition that should trigger tools
     print("\n2. Testing addition (should use add tool)...")
     try:
@@ -41,7 +41,7 @@ def test_tool_calling():
                 print(f"    Tool {i+1}: {tool_call['name']} with args {tool_call['args']}")
     except Exception as e:
         print(f"  Error: {e}")
-    
+
     # Test 3: Complex calculation that should use multiple tools
     print("\n3. Testing complex calculation (should use multiple tools)...")
     try:
@@ -53,7 +53,7 @@ def test_tool_calling():
                 print(f"    Tool {i+1}: {tool_call['name']} with args {tool_call['args']}")
     except Exception as e:
         print(f"  Error: {e}")
-    
+
     # Test 4: Check available tools
     print("\n4. Checking available tools...")
     try:
@@ -65,14 +65,14 @@ def test_tool_calling():
             print(f"    Tool {i+1}: {getattr(tool, 'name', 'Unknown')} - {getattr(tool, 'description', 'No description')}")
     except Exception as e:
         print(f"  Error: {e}")
-    
+
     # Test 5: Test with specific provider that supports tools
     print("\n5. Testing with specific tool-supporting provider...")
     try:
         available_providers = wrapper.get_available_providers()
         tool_providers = [p for p in available_providers if wrapper.get_provider_info(p).get('supports_tools', False)]
         print(f"  Tool-supporting providers: {tool_providers}")
-        
+
         if tool_providers:
             provider = tool_providers[0]
             response = wrapper.invoke("What is 8 * 9?", provider=provider, use_tools=True)
@@ -86,7 +86,7 @@ def test_tool_calling():
             print("  No tool-supporting providers available")
     except Exception as e:
         print(f"  Error: {e}")
-    
+
     print("\n✓ Tool calling test completed!")
 
 

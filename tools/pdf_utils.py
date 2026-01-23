@@ -28,7 +28,7 @@ def _get_pymupdf4llm():
 
 class PDFUtils:
     """Minimal PDF processing utilities with graceful fallbacks"""
-    
+
     @staticmethod
     def is_pdf_file(file_path: str) -> bool:
         """Check if file is a valid PDF by examining header"""
@@ -38,20 +38,20 @@ class PDFUtils:
                    open(file_path, 'rb').read(8).startswith(b'%PDF'))
         except Exception:
             return False
-    
+
     @staticmethod
     def extract_text_from_pdf(file_path: str, use_markdown: bool = True) -> PDFTextResult:
         """Extract text from PDF using PyMuPDF4LLM - the best library for LLM processing"""
         if not PDFUtils.is_pdf_file(file_path):
             return PDFTextResult(success=False, error_message="File is not a valid PDF")
-        
+
         pymupdf4llm = _get_pymupdf4llm()
         if not pymupdf4llm:
             return PDFTextResult(
                 success=False,
                 error_message="PyMuPDF4LLM not available. Install with: pip install pymupdf4llm"
             )
-        
+
         try:
             # Use optimal parameters for LLM processing
             markdown_text = pymupdf4llm.to_markdown(
@@ -73,12 +73,12 @@ class PDFUtils:
                 success=False,
                 error_message=f"Error processing PDF: {str(e)}"
             )
-    
+
     @staticmethod
     def is_available() -> bool:
         """Check if PyMuPDF4LLM is available"""
         return _get_pymupdf4llm() is not None
-    
+
     @staticmethod
     def get_markdown_text(file_path: str) -> str:
         """Get PDF content as Markdown using PyMuPDF4LLM"""
@@ -96,7 +96,7 @@ class PDFUtils:
             )
         except Exception:
             return ""
-    
+
     @staticmethod
     def get_page_chunks(file_path: str) -> List[dict]:
         """Get PDF content as page chunks using PyMuPDF4LLM"""

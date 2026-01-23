@@ -53,7 +53,7 @@ class EditOrCreateEnumAttributeSchema(CommonAttributeFields):
     def non_empty_str(cls, v: Any) -> Any:
         """
         Validate that string fields are not empty.
-        
+
         This field validator is automatically applied to the name, system_name, 
         application_system_name, and template_system_name fields in all schemas
         that inherit from CommonAttributeFields, ensuring consistent validation.
@@ -94,7 +94,7 @@ def edit_or_create_enum_attribute(
 ) -> Dict[str, Any]:
     r"""
     Edit or Create a enum attribute (Список значений).
-    
+
     IMPORTANT: When providing `enum_values`, you MUST follow this exact structure (see schema description for example):
 
     Example `enum_values`:

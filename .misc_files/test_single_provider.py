@@ -19,14 +19,14 @@ def test_single_provider():
     """Test the single provider system"""
     print("🧪 Testing Single Provider System")
     print("=" * 50)
-    
+
     # Set test provider
     os.environ["AGENT_PROVIDER"] = "mistral"
-    
+
     # Test LLM Manager
     print("\n1. Testing LLMManager...")
     llm_manager = LLMManager()
-    
+
     # Test get_agent_llm method
     llm_instance = llm_manager.get_agent_llm()
     if llm_instance:
@@ -34,11 +34,11 @@ def test_single_provider():
     else:
         print("❌ LLM Manager: No LLM instance available")
         return False
-    
+
     # Test LangChain Wrapper
     print("\n2. Testing LangChainWrapper...")
     wrapper = LangChainWrapper()
-    
+
     # Test simple invoke
     try:
         response = wrapper.invoke("Hello, how are you?")
@@ -58,11 +58,11 @@ def test_single_provider():
     except Exception as e:
         print(f"❌ LangChain Wrapper: Error - {e}")
         return False
-    
+
     # Test Core Agent
     print("\n3. Testing CoreAgent...")
     agent = CoreAgent()
-    
+
     try:
         # Test simple question
         response = agent.process_question("What is 2+2?", "test_conversation")
@@ -74,7 +74,7 @@ def test_single_provider():
     except Exception as e:
         print(f"❌ Core Agent: Error - {e}")
         return False
-    
+
     print("\n🎉 All tests passed! Single provider system is working correctly.")
     return True
 
@@ -82,14 +82,14 @@ def test_different_providers():
     """Test different providers work individually"""
     print("\n🔄 Testing Different Providers")
     print("=" * 50)
-    
+
     providers = ["mistral", "openrouter", "gemini", "groq"]
     llm_manager = LLMManager()
-    
+
     for provider in providers:
         print(f"\nTesting {provider}...")
         os.environ["AGENT_PROVIDER"] = provider
-        
+
         llm_instance = llm_manager.get_agent_llm()
         if llm_instance:
             print(f"✅ {provider}: Available ({llm_instance.model_name})")
@@ -98,10 +98,10 @@ def test_different_providers():
 
 if __name__ == "__main__":
     print("🚀 Starting Single Provider System Tests")
-    
+
     # Test main functionality
     success = test_single_provider()
-    
+
     if success:
         # Test different providers
         test_different_providers()

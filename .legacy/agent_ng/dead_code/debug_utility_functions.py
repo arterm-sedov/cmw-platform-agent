@@ -16,7 +16,7 @@ Extracted from:
 def print_message_components(self, msg: Any, msg_index: int = 0):
     """Print detailed message components for debugging"""
     print(f"\\n=== Message {msg_index} Components ===")
-    
+
     if hasattr(msg, '__dict__'):
         for attr, value in msg.__dict__.items():
             if not attr.startswith('_'):
@@ -25,7 +25,7 @@ def print_message_components(self, msg: Any, msg_index: int = 0):
         # For non-object types, print basic info
         print(f"Type: {type(msg)}")
         print(f"Value: {msg}")
-    
+
     # Check for common LangChain message attributes
     common_attrs = ['content', 'type', 'additional_kwargs', 'response_metadata', 'id', 'name', 'tool_calls']
     for attr in common_attrs:
@@ -56,7 +56,7 @@ def _print_attribute(self, attr_name: str, value: Any):
 def print_message_components(self, msg: Any, msg_index: int = 0):
     """Print detailed message components for debugging"""
     print(f"\\n=== Message {msg_index} Components ===")
-    
+
     if hasattr(msg, '__dict__'):
         for attr, value in msg.__dict__.items():
             if not attr.startswith('_'):
@@ -65,7 +65,7 @@ def print_message_components(self, msg: Any, msg_index: int = 0):
         # For non-object types, print basic info
         print(f"Type: {type(msg)}")
         print(f"Value: {msg}")
-    
+
     # Check for common LangChain message attributes
     common_attrs = ['content', 'type', 'additional_kwargs', 'response_metadata', 'id', 'name', 'tool_calls']
     for attr in common_attrs:
@@ -105,26 +105,26 @@ def trace_prints_with_context(context_type: str):
         def wrapper(self, *args, **kwargs):
             # Store original print
             original_print = print
-            
+
             def trace_print(*print_args, **print_kwargs):
                 # Original print functionality
                 original_print(*print_args, **print_kwargs)
-                
+
                 # Add to trace
                 if hasattr(self, 'trace_manager'):
                     message = ' '.join(str(arg) for arg in print_args)
                     self.trace_manager.add_debug_output(f"[{context_type}] {message}", context_type)
-            
+
             # Replace print temporarily
             import builtins
             builtins.print = trace_print
-            
+
             try:
                 result = func(self, *args, **kwargs)
             finally:
                 # Restore original print
                 builtins.print = original_print
-            
+
             return result
         return wrapper
     return decorator
@@ -134,26 +134,26 @@ def trace_prints(func):
     def wrapper(self, *args, **kwargs):
         # Store original print
         original_print = print
-        
+
         def trace_print(*print_args, **print_kwargs):
             # Original print functionality
             original_print(*print_args, **print_kwargs)
-            
+
             # Add to trace
             if hasattr(self, 'trace_manager'):
                 message = ' '.join(str(arg) for arg in print_args)
                 self.trace_manager.add_debug_output(message, "general")
-        
+
         # Replace print temporarily
         import builtins
         builtins.print = trace_print
-        
+
         try:
             result = func(self, *args, **kwargs)
         finally:
             # Restore original print
             builtins.print = original_print
-        
+
         return result
     return wrapper
 
@@ -163,11 +163,11 @@ class Tee:
     """
     def __init__(self, *streams):
         self.streams = streams
-    
+
     def write(self, data):
         for s in self.streams:
             s.write(data)
-    
+
     def flush(self):
         for s in self.streams:
             s.flush()
@@ -176,10 +176,10 @@ class _SinkWriter:
     """Writer that sends data to a sink function"""
     def __init__(self, sink):
         self.sink = sink
-    
+
     def write(self, data):
         self.sink(data)
-    
+
     def flush(self):
         pass
 

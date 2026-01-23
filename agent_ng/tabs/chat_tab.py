@@ -8,18 +8,21 @@ Supports internationalization (i18n) with Russian and English translations.
 """
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
 from datetime import datetime
 import logging
 import os
+from pathlib import Path
 import tempfile
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 import uuid
 
 import gradio as gr
 import markdown
 
+from agent_ng.debug_streamer import get_debug_streamer
+from agent_ng.i18n_translations import get_translation_key
 from agent_ng.queue_manager import (
     apply_concurrency_to_click_event,
     apply_concurrency_to_submit_event,
@@ -31,8 +34,6 @@ from agent_ng.token_budget import (
 )
 from tools.file_utils import FileUtils
 
-from ..debug_streamer import get_debug_streamer
-from ..i18n_translations import get_translation_key
 from .sidebar import QuickActionsMixin
 
 
@@ -44,7 +45,7 @@ class ChatTab(QuickActionsMixin):
         event_handlers: dict[str, Callable],
         language: str = "en",
         i18n_instance: gr.I18n | None = None,
-    ):
+    ) -> None:
         self.event_handlers = event_handlers
         self.components = {}
         self.main_app = None  # Reference to main app for progress status
@@ -159,10 +160,12 @@ class ChatTab(QuickActionsMixin):
         clear_handler = self.event_handlers.get("clear_chat")
 
         # Validate critical handlers
+        stream_handler_msg = "stream_message handler not found in event_handlers"
+        clear_handler_msg = "clear_chat handler not found in event_handlers"
         if not stream_handler:
-            raise ValueError("stream_message handler not found in event_handlers")
+            raise ValueError(stream_handler_msg)
         if not clear_handler:
-            raise ValueError("clear_chat handler not found in event_handlers")
+            raise ValueError(clear_handler_msg)
 
         logging.getLogger(__name__).debug(
             "✅ ChatTab: Critical event handlers validated"
@@ -172,9 +175,14 @@ class ChatTab(QuickActionsMixin):
         queue_manager = None
         if hasattr(self, "main_app") and self.main_app:
             queue_manager = getattr(self.main_app, "queue_manager", None)
-            logging.getLogger(__name__).debug(f"ChatTab: Queue manager found: {queue_manager is not None}")
+            logging.getLogger(__name__).debug(
+                "ChatTab: Queue manager found: %s", queue_manager is not None
+            )
             if queue_manager:
-                logging.getLogger(__name__).debug(f"ChatTab: Queue manager has config: {hasattr(queue_manager, 'config')}")
+                logging.getLogger(__name__).debug(
+                    "ChatTab: Queue manager has config: %s",
+                    hasattr(queue_manager, "config"),
+                )
 
         # Main chat events with concurrency control and queue status
         if queue_manager:
@@ -359,16 +367,22 @@ class ChatTab(QuickActionsMixin):
     def _get_quick_actions_dropdown(self) -> gr.Dropdown:
         """Get the quick actions dropdown from the sidebar"""
         # The dropdown is now in the sidebar, so we need to get it from the main app
-        if hasattr(self, "main_app") and self.main_app:
+        if (
+            hasattr(self, "main_app")
+            and self.main_app
+            and hasattr(self.main_app, "ui_manager")
+            and self.main_app.ui_manager
+        ):
             # Try to get from UI Manager components
-            if hasattr(self.main_app, "ui_manager") and self.main_app.ui_manager:
                 components = self.main_app.ui_manager.get_components()
                 return components.get("quick_actions_dropdown")
 
         # Fallback - return a dummy component that won't cause errors
         return gr.Dropdown(visible=False)
 
-    def _handle_stop_click(self, history, request: gr.Request = None):
+    def _handle_stop_click(
+        self, history: list[list[str | None]], request: gr.Request | None = None
+    ) -> tuple[list[list[str | None]], gr.Button]:
         """Handle stop button click: finalize token tracking, append stats, update UI."""
         try:
             # Attempt to finalize token accounting for this turn even if stream was interrupted
@@ -399,12 +413,25 @@ class ChatTab(QuickActionsMixin):
                             "Failed to count prompt tokens on stop: %s", exc
                         )
 
-                    # Finalize turn token usage using fallback estimation (no API usage needed)
+                    # Finalize turn token usage using monotonic estimate (no API usage needed).
+                    # IMPORTANT: Do NOT call track_llm_response(None, ...) as it can overwrite
+                    # per-turn totals with a smaller "current request only" estimate.
                     try:
-                        agent.token_tracker.track_llm_response(None, messages)
+                        # Refresh snapshot to feed the per-turn estimate (best-effort).
+                        try:
+                            agent.token_tracker.refresh_budget_snapshot(
+                                agent=agent,
+                                conversation_id=session_id,
+                                messages_override=messages,
+                            )
+                        except Exception as snap_exc:
+                            logging.getLogger(__name__).debug(
+                                "Failed to refresh snapshot on stop: %s", snap_exc
+                            )
+                        agent.token_tracker.finalize_turn_usage(None, messages)
                     except Exception as exc:
                         logging.getLogger(__name__).debug(
-                            "Failed to track LLM response on stop: %s", exc
+                            "Failed to finalize turn usage on stop: %s", exc
                         )
 
                     # Build a stats block and append as assistant meta message
@@ -487,6 +514,122 @@ class ChatTab(QuickActionsMixin):
         download_btns = self._update_download_button_visibility(history)
         return history, gr.Button(visible=False), download_btns[0], download_btns[1]
 
+    def _finalize_tokens_on_stop(self, request: gr.Request, history: list[list[str | None]]) -> list[list[str | None]]:
+        """Finalize token tracking and append stats when streaming is stopped"""
+        if not (
+            hasattr(self, "main_app")
+            and self.main_app
+            and hasattr(self.main_app, "session_manager")
+        ):
+            return history
+
+        session_id = (
+            self.main_app.session_manager.get_session_id(request)
+            if request
+            else "default"
+        )
+        agent = self.main_app.session_manager.get_session_agent(session_id)
+        if not agent or not hasattr(agent, "token_tracker"):
+            return history
+
+        # Get current request messages for estimation fallback
+        messages = []
+        try:
+            messages = agent.get_conversation_history(session_id)
+        except Exception:
+            messages = []
+
+        # Update prompt tokens explicitly
+        try:
+            if messages:
+                agent.token_tracker.count_prompt_tokens(messages)
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to count prompt tokens on stop: %s", exc
+            )
+
+        # Finalize turn token usage using monotonic estimate
+        try:
+            # Refresh snapshot to feed the per-turn estimate (best-effort)
+            try:
+                agent.token_tracker.refresh_budget_snapshot(
+                    agent=agent,
+                    conversation_id=session_id,
+                    messages_override=messages,
+                )
+            except Exception as snap_exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to refresh snapshot on stop: %s", snap_exc
+                )
+            agent.token_tracker.finalize_turn_usage(None, messages)
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to finalize turn usage on stop: %s", exc
+            )
+
+        # Build a stats block and append as assistant meta message
+        try:
+            stats_history = self._build_token_stats_message(agent, messages)
+            if stats_history:
+                return stats_history
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Stats block construction failed: %s", exc
+            )
+
+        return history
+
+    def _build_token_stats_message(self, agent, messages: list) -> list[list[str | None]] | None:
+        """Build and return token statistics message for history"""
+        prompt_tokens = agent.token_tracker.get_last_prompt_tokens()
+        api_tokens = agent.token_tracker.get_last_api_tokens()
+
+        stats_lines = []
+        if prompt_tokens:
+            stats_lines.append(
+                self._get_translation("prompt_tokens").format(
+                    tokens=prompt_tokens.formatted
+                )
+            )
+        if api_tokens:
+            stats_lines.append(
+                self._get_translation("api_tokens").format(
+                    tokens=api_tokens.formatted
+                )
+            )
+
+        # Provider/model info
+        provider = "unknown"
+        model = "unknown"
+        try:
+            if getattr(agent, "llm_instance", None):
+                provider = agent.llm_instance.provider.value
+                model = agent.llm_instance.model_name
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to read provider/model for stats: %s", exc
+            )
+        stats_lines.append(
+            self._get_translation("provider_model").format(
+                provider=provider, model=model
+            )
+        )
+
+        if not stats_lines:
+            return None
+
+        token_display = "\n".join(stats_lines)
+        token_metadata_message = {
+            "role": "assistant",
+            "content": token_display,
+            "metadata": {
+                "title": self._get_translation("token_statistics_title")
+            },
+        }
+
+        # Return updated history with stats message appended
+        return [token_metadata_message]
+
     def format_token_budget_display(self, request: gr.Request = None) -> str:
         """Format and return the token budget display - now session-aware"""
         if not hasattr(self, "main_app") or not self.main_app:
@@ -512,27 +655,21 @@ class ChatTab(QuickActionsMixin):
             # Get cumulative stats for detailed display
             cumulative_stats = agent.token_tracker.get_cumulative_stats()
 
-            # Token usage: prefer provider-reported per-turn usage when available (ground truth).
-            # For "Сообщение" display, always use API tokens when available (actual LLM call).
-            used_tokens = budget_info.get("used_tokens", 0)
-            percentage_for_display = budget_info.get("percentage", 0.0)
+            # "Сообщение" is per-turn and must be monotonic:
+            # - sums API usage across iterations when available
+            # - otherwise uses a monotonic estimate (snapshot-fed), esp. for interruptions
             try:
-                last_api = agent.get_last_api_tokens()
-                if (
-                    last_api
-                    and hasattr(last_api, "total_tokens")
-                    and not bool(getattr(last_api, "is_estimated", False))
-                    and getattr(last_api, "source", "") == "api"
-                ):
-                    used_tokens = last_api.total_tokens
-                    # Recalculate percentage based on actual API tokens (more accurate)
-                    if budget_info["context_window"] > 0:
-                        percentage_for_display = round(
-                            (used_tokens / budget_info["context_window"]) * 100.0, 1
-                        )
+                used_tokens = int(agent.token_tracker.get_message_display_total_tokens() or 0)
             except Exception as exc:
                 logging.getLogger(__name__).debug(
-                    "Failed to read last API tokens for budget display: %s", exc
+                    "Failed to compute message display tokens: %s", exc
+                )
+                used_tokens = int(budget_info.get("used_tokens", 0) or 0)
+
+            percentage_for_display = budget_info.get("percentage", 0.0)
+            if budget_info["context_window"] > 0 and used_tokens > 0:
+                percentage_for_display = round(
+                    (used_tokens / budget_info["context_window"]) * 100.0, 1
                 )
 
             # Determine status icon using localized translations
@@ -559,6 +696,25 @@ class ChatTab(QuickActionsMixin):
             conversation = self._get_translation("token_usage_conversation").format(
                 conversation_tokens=cumulative_stats["session_tokens"]
             )
+            estimated_total = 0
+            try:
+                # Prefer monotonic per-turn estimate; fall back to latest snapshot total.
+                estimated_total = int(
+                    agent.token_tracker.get_turn_estimated_total_tokens() or 0
+                )
+                if estimated_total <= 0:
+                    snap = agent.token_tracker.get_budget_snapshot()
+                    if isinstance(snap, dict):
+                        estimated_total = int(snap.get("total_tokens", 0) or 0)
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to compute estimated usage for display: %s", exc
+                )
+                estimated_total = 0
+
+            estimate_line = self._get_translation("token_usage_estimate").format(
+                estimated_tokens=estimated_total
+            )
             last_message = self._get_translation("token_usage_last_message").format(
                 percentage=percentage_for_display,
                 used=used_tokens,
@@ -569,10 +725,14 @@ class ChatTab(QuickActionsMixin):
                 avg_tokens=cumulative_stats["avg_tokens_per_message"]
             )
 
-            return f"- {total}\n- {conversation}\n- {last_message}\n- {average}"
         except Exception as e:
             print(f"Error formatting token budget: {e}")
             return self._get_translation("token_budget_unknown")
+        else:
+            return (
+                f"- {total}\n- {conversation}\n- {estimate_line}\n"
+                f"- {last_message}\n- {average}"
+            )
 
     def _get_available_providers(self) -> list[str]:
         """Get list of available LLM providers from session manager"""
@@ -614,8 +774,7 @@ class ChatTab(QuickActionsMixin):
                         if models
                         else [self._get_translation("no_models_available")]
                     )
-                else:
-                    return [self._get_translation("no_models_available")]
+                return [self._get_translation("no_models_available")]
         except Exception as e:
             print(f"Error getting available models: {e}")
             return [self._get_translation("error_loading_providers")]
@@ -767,10 +926,9 @@ class ChatTab(QuickActionsMixin):
                     )
                     # Apply the LLM selection and clear chat immediately (same as clear button)
                     return self._apply_mistral_with_clear(provider, model, request)
-                else:
-                    # Switching from Mistral to Mistral - no need to clear chat
-                    status = self._apply_llm_directly(provider, model, request)
-                    return status, gr.update(), ""
+                # Switching from Mistral to Mistral - no need to clear chat
+                status = self._apply_llm_directly(provider, model, request)
+                return status, gr.update(), ""
 
             # For non-Mistral models, apply directly and preserve current chat state
             status = self._apply_llm_directly(provider, model, request)
@@ -813,8 +971,7 @@ class ChatTab(QuickActionsMixin):
                     return self._get_translation("llm_apply_success").format(
                         provider=provider.title(), model=model
                     )
-                else:
-                    return self._get_translation("llm_apply_error")
+                return self._get_translation("llm_apply_error")
 
             # No fallback to global agent - use session-specific agents only
             return self._get_translation("llm_apply_error")
@@ -860,12 +1017,11 @@ class ChatTab(QuickActionsMixin):
                             )()
 
                     request = MockRequest()
-                    chatbot, msg = clear_handler(request)
-                    return status, chatbot, msg
+                    chatbot, _msg = clear_handler(request)
                 else:
                     # Fallback clear
                     return status, [], ""
-
+                return status, chatbot, _msg
             return status, "", ""
 
         except Exception as e:
@@ -886,14 +1042,13 @@ class ChatTab(QuickActionsMixin):
                 clear_handler = self.event_handlers.get("clear_chat")
                 if clear_handler:
                     # Clear the chat and get the updated state
-                    chatbot, msg = clear_handler(request)
+                    chatbot, _msg = clear_handler(request)
                     status += f" {self._get_translation('mistral_chat_cleared')}"
-                    return status, chatbot, msg
                 else:
                     # Fallback clear - return empty chat
                     status += f" {self._get_translation('mistral_chat_cleared')}"
                     return status, [], ""
-
+                return status, chatbot, _msg
             return status, "", ""
 
         except Exception as e:
@@ -914,8 +1069,17 @@ class ChatTab(QuickActionsMixin):
         return None
 
     def _stream_message_wrapper(
-        self, multimodal_value, history, request: gr.Request = None
-    ):
+        self,
+        multimodal_value: dict[str, Any] | None,
+        history: list[list[str | None]],
+        request: gr.Request | None = None,
+    ) -> tuple[
+        list[list[str | None]],
+        gr.Button,
+        gr.DownloadButton,
+        gr.DownloadButton,
+        None,
+    ]:
         """Wrapper for concurrent processing with Gradio's native queue feedback
 
         Handles MultimodalValue format and extracts text for processing with proper session awareness.
@@ -944,7 +1108,11 @@ class ChatTab(QuickActionsMixin):
             try:
                 if hasattr(self, "main_app") and self.main_app is not None:
                     stop_visible = bool(self.main_app.is_processing)
-            except Exception:
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to check processing state, defaulting stop visible: %s",
+                    exc,
+                )
                 stop_visible = True
 
             download_btns = (
@@ -985,8 +1153,11 @@ class ChatTab(QuickActionsMixin):
             )  # Reset dropdown
 
     def _stream_message_wrapper_internal(
-        self, multimodal_value, history, request: gr.Request = None
-    ):
+        self,
+        multimodal_value: dict[str, Any] | None,
+        history: list[list[str | None]],
+        request: gr.Request | None = None,
+    ) -> AsyncGenerator[tuple[list[list[str | None]], str], None]:
         """Internal wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
         # Extract text from MultimodalValue format
         if isinstance(multimodal_value, dict):
@@ -1069,10 +1240,16 @@ class ChatTab(QuickActionsMixin):
 
         # Call the original stream handler with enhanced message (text + file analysis)
         # Now properly session-aware with real Gradio request
-        for result in stream_handler(message, history, request):
-            yield result
+        yield from stream_handler(message, history, request)
 
-    def _clear_chat_with_download_reset(self, request: gr.Request = None):
+    def _clear_chat_with_download_reset(
+        self, request: gr.Request | None = None
+    ) -> tuple[
+        list[list[str | None]],
+        dict[str, Any],
+        gr.DownloadButton,
+        gr.DownloadButton,
+    ]:
         """Clear chat and reset download state - now properly session-aware"""
         # Clear download button cache
         if hasattr(self, "_last_history_str"):
@@ -1084,14 +1261,13 @@ class ChatTab(QuickActionsMixin):
         clear_handler = self.event_handlers.get("clear_chat")
         if clear_handler:
             # Call the original clear handler with real Gradio request
-            chatbot, msg = clear_handler(request)
+            chatbot, _msg = clear_handler(request)
             # Reset download button (hide it) and return empty MultimodalValue
             empty_multimodal = {"text": "", "files": []}
             return chatbot, empty_multimodal, gr.DownloadButton(visible=False), gr.DownloadButton(visible=False)
-        else:
-            # Fallback if clear handler not available
-            empty_multimodal = {"text": "", "files": []}
-            return [], empty_multimodal, gr.DownloadButton(visible=False), gr.DownloadButton(visible=False)
+        # Fallback if clear handler not available
+        empty_multimodal = {"text": "", "files": []}
+        return [], empty_multimodal, gr.DownloadButton(visible=False), gr.DownloadButton(visible=False)
 
     def _update_download_button_visibility(self, history):
         """Update download button visibility and file based on conversation history"""
@@ -1132,20 +1308,20 @@ class ChatTab(QuickActionsMixin):
                         visible=True,
                     ),
                 )
-            else:
-                # Show buttons without files if generation fails
-                return (
+            # Show buttons without files if generation fails
+            return (
                     gr.DownloadButton(visible=False),
                     gr.DownloadButton(visible=False),
                 )
-        else:
-            # Hide download buttons when there's no conversation history
-            return (
+        # Hide download buttons when there's no conversation history
+        return (
                 gr.DownloadButton(visible=False),
                 gr.DownloadButton(visible=False),
             )
 
-    def _download_conversation_as_markdown(self, history) -> str:
+    def _download_conversation_as_markdown(
+        self, history: list[list[str | None]]
+    ) -> str:
         """
         Download the conversation history as a markdown file.
 
@@ -1156,8 +1332,8 @@ class ChatTab(QuickActionsMixin):
             File path if successful, None if failed
         """
         logger = logging.getLogger(__name__)
-        logger.debug(f"Download function called with history type: {type(history)}")
-        logger.debug(f"History content: {str(history)[:50]}")
+        logger.debug("Download function called with history type: %s", type(history))
+        logger.debug("History content: %s", str(history)[:50])
 
         if not history:
             logger.warning("No history provided")
@@ -1181,8 +1357,11 @@ class ChatTab(QuickActionsMixin):
                 try:
                     debug_streamer = get_debug_streamer()
                     session_id = debug_streamer.get_current_session_id()
-                except Exception:
+                except Exception as debug_exc:
                     # Fallback to default if debug streamer not available
+                    logging.getLogger(__name__).debug(
+                        "Debug streamer not available: %s", debug_exc
+                    )
                     session_id = "default"
 
                 # Use existing agent stats instead of complex turn_complete event
@@ -1242,45 +1421,45 @@ class ChatTab(QuickActionsMixin):
             with open(clean_file_path, "w", encoding="utf-8") as file:
                 file.write(markdown_content)
 
-            logger.debug(f"Created markdown file: {clean_file_path}")
-            
+            logger.debug("Created markdown file: %s", clean_file_path)
+
             # Also generate HTML version and store the path
-            html_file_path = self._generate_conversation_html(markdown_content, filename.replace('.md', '.html'))
+            html_file_path = self._generate_conversation_html(markdown_content, filename.replace(".md", ".html"))
             if html_file_path:
-                logger.debug(f"Also created HTML file: {html_file_path}")
+                logger.debug("Also created HTML file: %s", html_file_path)
                 # Store the HTML file path for the HTML download button
                 self._last_html_file_path = html_file_path
             else:
                 self._last_html_file_path = None
-            
+
             # Return the markdown file path for Gradio to handle the download
             return clean_file_path
         except Exception as e:
-            logger.error(f"Error creating markdown file: {e}")
+            logger.exception("Error creating markdown file: %s", e)
             return None
 
 
     def _generate_conversation_html(self, markdown_content: str, filename: str) -> str:
         """
         Generate HTML file from markdown content.
-        
+
         Args:
             markdown_content: Markdown content as string
             filename: HTML filename
-            
+
         Returns:
             HTML file path if successful, None if failed
         """
-        
+
         logger = logging.getLogger(__name__)
-        
+
         try:
             # Convert Markdown to HTML
-            html_body = markdown.markdown(markdown_content, extensions=['tables', 'fenced_code'])
+            html_body = markdown.markdown(markdown_content, extensions=["tables", "fenced_code"])
 
             # Load CSS from external file
             css_content = self._load_export_css()
-            
+
             # Create HTML with CSS styling and Mermaid support
             html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1333,24 +1512,22 @@ class ChatTab(QuickActionsMixin):
             with open(clean_file_path, "w", encoding="utf-8") as file:
                 file.write(html_content)
 
-            logger.debug(f"Generated HTML file: {clean_file_path}")
+            logger.debug("Generated HTML file: %s", clean_file_path)
             return clean_file_path
         except Exception as e:
-            logger.error(f"Error generating HTML file: {e}")
+            logger.exception("Error generating HTML file: %s", e)
             return None
 
     def _load_export_css(self) -> str:
         """
         Load CSS content from the external CSS file.
-        
+
         Returns:
             CSS content as string
         """
-        logger = logging.getLogger(__name__)
-        
         # Get the path to the CSS file relative to the project root
-        css_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
+        css_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
                                "resources", "css", "html_export_theme.css")
-        
-        with open(css_path, "r", encoding="utf-8") as css_file:
+
+        with open(css_path, encoding="utf-8") as css_file:
             return css_file.read()

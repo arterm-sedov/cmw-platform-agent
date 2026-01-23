@@ -53,7 +53,7 @@ def save_df_to_csv(df, path):
     try:
         # Convert DataFrame to CSV string
         csv_content = df.to_csv(index=False, encoding="utf-8")
-        
+
         # Upload via API
         success = file_manager.save_and_commit_file(
             file_path=path,
@@ -70,7 +70,7 @@ def save_df_to_csv(df, path):
         print(f"⚠️ Results CSV upload error: {e}, saving locally only")
         # Fallback to local save
         df.to_csv(path, index=False, encoding="utf-8")
-    
+
     return path
 
 # --- Provide init log for download on app load ---
@@ -102,7 +102,7 @@ def generate_run_id(timestamp: str, idx: int) -> str:
 def upload_questions_with_results(results_log: list, timestamp: str, username: str, total_score: str, success_type: str = "final"):
     """
     Upload all questions with their results to the runs_new dataset.
-    
+
     Args:
         results_log: List of question results
         timestamp: Timestamp for run IDs
@@ -114,10 +114,10 @@ def upload_questions_with_results(results_log: list, timestamp: str, username: s
     for idx, result in enumerate(results_log):
         try:
             run_id = generate_run_id(timestamp, idx)
-            
+
             # Get LLM stats JSON for this run
             llm_stats_json = agent._get_llm_stats_json()
-            
+
             # Create updated run data for this question
             run_data = create_run_data_for_runs_new(
                 run_id,
@@ -128,17 +128,17 @@ def upload_questions_with_results(results_log: list, timestamp: str, username: s
                 username,
                 total_score
             )
-            
+
             success = dataset_manager.upload_run_data(run_data, split="runs_new")
             if success:
                 print(f"✅ Uploaded question {idx+1} with {success_type}. Run ID: {run_id}")
                 successful_uploads += 1
             else:
                 print(f"⚠️ Failed to upload question {idx+1} with {success_type}")
-                
+
         except Exception as e:
             print(f"⚠️ Failed to upload question {idx+1}. Error: {e}")
-    
+
     return successful_uploads
 
 def create_run_data_for_runs_new(
@@ -152,7 +152,7 @@ def create_run_data_for_runs_new(
 ) -> dict:
     """
     Create run data for the runs_new split.
-    
+
     Args:
         run_id: Unique identifier for the run
         idx: Index of the question in the batch (0-based)
@@ -161,20 +161,20 @@ def create_run_data_for_runs_new(
         llm_stats_json: LLM statistics JSON
         username: Username of the person running the agent
         total_score: Overall score for the complete evaluation run
-        
+
     Returns:
         dict: Run data for upload to runs_new split
     """
     # Extract trace data from result
     trace = result.get("trace", {})
-    
+
     # Extract final_result from trace
     final_result = trace.get("final_result", {})
-    
+
     file_name = trace.get("file_name", "")
-    
+
     question = trace.get("question", "")
-    
+
     return {
         "run_id": run_id,
         "questions_count": f"{idx+1}/{total_questions}",
@@ -210,7 +210,7 @@ def run_and_submit_all(profile: gr.OAuthProfile | None):
     and displays the results.
     """
     space_id = os.getenv("SPACE_ID")
-    
+
     # Use login manager to validate login
     is_valid, username, error_message = login_manager.validate_login_for_operation(profile, "evaluation")
     if not is_valid:
@@ -257,16 +257,16 @@ def run_and_submit_all(profile: gr.OAuthProfile | None):
     # DEBUG: Select one random task instead of all
     # questions_data = random.sample(questions_data, 1)
     #questions_data = [questions_data[0]]
-    
+
     for item in questions_data:
         task_id = item.get("task_id")
         question_text = item.get("question")
         file_name = item.get("file_name", "")  # Extract file_name from question data
-        
+
         if not task_id or question_text is None:
             print(f"Skipping item with missing task_id or question: {item}")
             continue
-        
+
         # Download file if one is referenced
         file_data = None
         if file_name and file_name.strip():
@@ -275,14 +275,14 @@ def run_and_submit_all(profile: gr.OAuthProfile | None):
                 file_url = f"{api_url}/files/{task_id}"
                 file_response = requests.get(file_url, timeout=30)
                 file_response.raise_for_status()
-                
+
                 # Convert file to base64
                 file_data = base64.b64encode(file_response.content).decode('utf-8')
                 print(f"✅ Downloaded and encoded file: {file_name} ({len(file_data)} chars)")
             except Exception as e:
                 print(f"⚠️ Failed to download file {file_name} for task {task_id}: {e}")
                 file_data = None
-        
+
         try:
             # Pass both question text and file data to agent
             if file_data:
@@ -291,23 +291,23 @@ def run_and_submit_all(profile: gr.OAuthProfile | None):
                 agent_result = agent(enhanced_question, file_data=file_data, file_name=file_name)
             else:
                 agent_result = agent(question_text)
-            
+
             # Extract answer and additional info from agent result
             # Extract data from the trace structure
             trace = agent_result  # The entire trace is now the result
             final_result = trace.get("final_result", {})
             submitted_answer = final_result.get("submitted_answer", "N/A")
-            
+
             # Use helper function to ensure valid answer
             submitted_answer = ensure_valid_answer(submitted_answer)
-            
+
             reference_similarity = final_result.get("similarity_score", 0.0)
             llm_used = final_result.get("llm_used", "unknown")
             reference_answer = final_result.get("reference", "N/A")
             question_text = trace.get("question", "")
             file_name = trace.get("file_name", "")
-        
-            
+
+
             answers_payload.append({"task_id": task_id, "submitted_answer": submitted_answer})
             results_log.append({
                 "task_id": task_id, 
@@ -350,13 +350,13 @@ def run_and_submit_all(profile: gr.OAuthProfile | None):
 
     # --- Convert results to dataframe ---
     results_df = pd.DataFrame(results_log_df)
-    
+
     if not answers_payload:
         print("Agent did not produce any answers to submit.")
         return "Agent did not produce any answers to submit.", results_df
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    
+
     # Note: Questions will be uploaded after evaluator response with final scores
     print(f"📊 Prepared {len(results_log)} questions for evaluation")
 
@@ -383,21 +383,21 @@ def run_and_submit_all(profile: gr.OAuthProfile | None):
         print("Submission successful.")
         # Extract just the score percentage from the result data
         total_score = f"{result_data.get('score', 'N/A')}% ({result_data.get('correct_count', '?')}/{result_data.get('total_attempted', '?')} correct)"
-            
+
     except Exception as e:
         status_message = f"Submission Failed: {e}"
         print(status_message)
         # Set error score result
         total_score = "N/A (Submission Failed)"
-        
+
         print(f"⚠️ Submission failed: {e}")
-            
+
     # Upload questions once after submission attempt (success or failure)
     try:
         if len(results_log) > 0:
             print(f"✅ Uploading all questions with results: {timestamp}")
             successful_uploads = upload_questions_with_results(results_log, timestamp, username, total_score, "final")
-            
+
             # Log complete evaluation run status
             if successful_uploads == len(results_log):
                 print(f"✅ All evaluation runs uploaded with results: {timestamp}")
@@ -405,7 +405,7 @@ def run_and_submit_all(profile: gr.OAuthProfile | None):
                 print(f"⚠️ Failed to upload some evaluation runs: {successful_uploads}/{len(results_log)} questions uploaded")
     except Exception as e:
         print(f"⚠️ Upload failed: {e}")
-        
+
     return status_message, results_df
 
 def get_dataset_stats_html():
@@ -414,27 +414,27 @@ def get_dataset_stats_html():
     """
     try:
         from datasets import load_dataset
-        
+
         # Load each config separately
         configs = ['init', 'runs_new']
         stats_html = "<div style='margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;'>"
         stats_html += "<h3>📊 Dataset Statistics</h3>"
-        
+
         for config_name in configs:
             try:
                 # Load specific config
                 config_data = load_dataset("arterm-sedov/agent-course-final-assignment", config_name)
-                
+
                 stats_html += f"<div style='margin: 15px 0; padding: 10px; background: #e9ecef; border-radius: 5px;'>"
                 stats_html += f"<h4>🔧 Config: {config_name.upper()}</h4>"
-                
+
                 # Get statistics for each split in this config
                 for split_name in config_data.keys():
                     split_data = config_data[split_name]
                     stats_html += f"<div style='margin: 8px 0;'>"
                     stats_html += f"<strong>{split_name.upper()} Split:</strong> {len(split_data)} records"
                     stats_html += "</div>"
-                
+
                 # Add latest run info for runs_new config
                 if config_name == "runs_new" and "default" in config_data:
                     runs_new_data = config_data["default"]
@@ -445,18 +445,18 @@ def get_dataset_stats_html():
                         stats_html += f"<br><strong>Total Score:</strong> {latest_run.get('total_score', 'N/A')}"
                         stats_html += f"<br><strong>Username:</strong> {latest_run.get('username', 'N/A')}"
                         stats_html += "</div>"
-                
+
                 stats_html += "</div>"
-                
+
             except Exception as config_error:
                 stats_html += f"<div style='margin: 15px 0; padding: 10px; background: #f8d7da; border-radius: 5px;'>"
                 stats_html += f"<h4>❌ Config: {config_name.upper()}</h4>"
                 stats_html += f"<div style='margin: 8px 0; color: #721c24;'>Error loading config: {config_error}</div>"
                 stats_html += "</div>"
-        
+
         stats_html += "</div>"
         return stats_html
-        
+
     except Exception as e:
         return f"<div style='margin: 20px 0; padding: 15px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;'>⚠️ Could not load dataset statistics: {e}</div>"
 
@@ -464,11 +464,11 @@ def get_logs_html():
     logs_dir = "logs"
     rows = []
     files = []
-    
+
     # Get space ID for repository links
     space_id = os.getenv("SPACE_ID", "arterm-sedov/agent-course-final-assignment")
     repo_base_url = f"https://huggingface.co/spaces/{space_id}/resolve/main"
-    
+
     if os.path.exists(logs_dir):
         for fname in os.listdir(logs_dir):
             fpath = os.path.join(logs_dir, fname)
@@ -487,7 +487,7 @@ def get_logs_html():
             download_link = f'<a href="{repo_download_url}" target="_blank" rel="noopener noreferrer">Download from Repo</a>'
             date_str = dt.strftime('%Y-%m-%d %H:%M:%S')
             rows.append(f"<tr><td>{fname}</td><td>{date_str}</td><td>{download_link}</td></tr>")
-    
+
     table_html = (
         "<table border='1' style='width:100%;border-collapse:collapse;'>"
         "<thead><tr><th>File Name</th><th>Date/Time</th><th>Download</th></tr></thead>"
@@ -501,12 +501,12 @@ def extract_timestamp_from_filename(filename):
     Returns (timestamp_str, datetime_obj) or (None, None) if no timestamp found.
     """
     import re
-    
+
     # Handle multiple extensions by removing all extensions
     name = filename
     while '.' in name:
         name = os.path.splitext(name)[0]
-    
+
     # 1. 14-digit datetime: YYYYMMDDHHMMSS (must be exact 14 digits)
     m = re.match(r'^(\d{14})$', name)
     if m:
@@ -516,7 +516,7 @@ def extract_timestamp_from_filename(filename):
             return timestamp_str, dt
         except ValueError:
             pass
-    
+
     # 2. Leaderboard format: 2025-07-02 090007
     m = re.search(r'(\d{4})-(\d{2})-(\d{2})[ _]+(\d{2})(\d{2})(\d{2})', name)
     if m:
@@ -526,7 +526,7 @@ def extract_timestamp_from_filename(filename):
             return f"{y}-{mo}-{d} {h}:{mi}:{s}", dt
         except ValueError:
             pass
-    
+
     # 3. LOG prefix with 12-digit timestamp: LOG202506281412
     m = re.match(r'^LOG(\d{12})$', name)
     if m:
@@ -536,7 +536,7 @@ def extract_timestamp_from_filename(filename):
             return f"LOG{timestamp_str}", dt
         except ValueError:
             pass
-    
+
     # 4. LOG prefix with 8-digit date and optional suffix: LOG20250628_2, LOG20250629_1
     m = re.match(r'^LOG(\d{8})(?:_(\d+))?$', name)
     if m:
@@ -549,7 +549,7 @@ def extract_timestamp_from_filename(filename):
             return timestamp_str, dt
         except ValueError:
             pass
-    
+
     # 5. INIT prefix with date and time: INIT_20250704_000343
     m = re.match(r'^INIT_(\d{8})_(\d{6})$', name)
     if m:
@@ -559,7 +559,7 @@ def extract_timestamp_from_filename(filename):
             return f"INIT_{date_str}_{time_str}", dt
         except ValueError:
             pass
-    
+
     # 6. Date with underscore and time: 20250702_202757, 20250703_135654
     m = re.match(r'^(\d{8})_(\d{6})$', name)
     if m:
@@ -569,7 +569,7 @@ def extract_timestamp_from_filename(filename):
             return f"{date_str}_{time_str}", dt
         except ValueError:
             pass
-    
+
     # 7. Date only (8 digits): 20250628
     m = re.match(r'^(\d{8})$', name)
     if m:
@@ -579,35 +579,35 @@ def extract_timestamp_from_filename(filename):
             return date_str, dt
         except ValueError:
             pass
-    
+
     # 8. Files with no timestamp pattern (like "Score 60.log")
     # These will return None and fall back to modification time
-    
+
     return None, None
 
 def save_results_log(results_log: list) -> str:
     """
     Save the complete results log to a file and upload via API.
-    
+
     Args:
         results_log (list): List of dictionaries containing task results
-        
+
     Returns:
         str: Path to the saved log file, or None if failed
     """
     try:
         # Create traces directory if it doesn't exist
         os.makedirs(TRACES_DIR, exist_ok=True)
-        
+
         # Generate timestamp
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+
         # Prepare log content
         log_content = json.dumps(results_log, indent=2, ensure_ascii=False)
         log_path = f"{TRACES_DIR}/{timestamp}_llm_trace.log"
-        
+
         return log_path
-        
+
     except Exception as e:
         print(f"⚠️ Failed to save results log: {e}")
         return None
@@ -643,7 +643,7 @@ def chat_with_agent_stream(message, history):
 			tool_calls = turn.get("tool_calls", [])
 			tool_call_id = turn.get("tool_call_id")
 			name = turn.get("name")
-			
+
 			# Include all message types for complete context
 			if content or tool_calls:
 				turn_dict = {"role": role, "content": content}
@@ -698,12 +698,12 @@ def chat_with_agent_stream(message, history):
 		current_thinking = ""
 		current_step = ""
 		last_yielded_length = 0
-		
+
 		if agent is not None:
 			# Try to use the agent's call method which should return a generator
 			try:
 				result = agent(message, chat_history=chat_history)
-				
+
 				# Check if result is a generator and consume it properly
 				if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
 					print("chat_with_agent_stream: Consuming generator...")
@@ -713,16 +713,16 @@ def chat_with_agent_stream(message, history):
 							chunk_count += 1
 							accum += delta
 							has_content = True
-							
+
 							# Use the accumulated content as-is for better display
 							display_content = accum
-							
+
 							if hasattr(agent, '_stream_terminal_output'):
 								terminal_chunk = agent._stream_terminal_output()
 								if terminal_chunk:
 									terminal_output += terminal_chunk
 									display_content += f"\n\n**Terminal Output:**\n{terminal_output}"
-							
+
 							# Yield immediately for real-time display
 							yield working_history + [{"role": "assistant", "content": display_content}], ""
 						elif isinstance(delta, dict):
@@ -741,7 +741,7 @@ def chat_with_agent_stream(message, history):
 										display_content += f"\n\n**Terminal Output:**\n{terminal_output}"
 								# Yield immediately for real-time display
 								yield working_history + [{"role": "assistant", "content": display_content}], ""
-					
+
 					# If no meaningful content was yielded, provide fallback message
 					if not has_content or chunk_count == 0:
 						print("chat_with_agent_stream: WARNING - Generator yielded no meaningful content")
@@ -760,20 +760,20 @@ def chat_with_agent_stream(message, history):
 					chunk_count = 1
 					accum = str(result)
 					print(f"chat_with_agent_stream: Non-generator result: {accum}")
-					
+
 					# Check for and stream terminal output if available
 					if hasattr(agent, '_stream_terminal_output'):
 						terminal_chunk = agent._stream_terminal_output()
 						if terminal_chunk:
 							terminal_output += terminal_chunk
-					
+
 					# Combine main response with terminal output if present
 					display_content = accum
 					if terminal_output:
 						display_content += f"\n\n**Terminal Output:**\n{terminal_output}"
-					
+
 					yield working_history + [{"role": "assistant", "content": display_content}], ""
-				
+
 				# If no chunks were yielded, handle empty generator
 				if chunk_count == 0:
 					print("chat_with_agent_stream: WARNING - Generator yielded no content")
@@ -810,12 +810,12 @@ def chat_with_agent_stream(message, history):
 				trace = {"final_result": {"submitted_answer": accum, "llm_used": "unknown"}}
 		else:
 			trace = {"final_result": {"submitted_answer": accum, "llm_used": "unknown"}}
-		
+
 		# Extract tools, model, and execution time information
 		tools_list = []
 		llm_used = "unknown"
 		exec_time = None
-		
+
 		try:
 			# Extract tools
 			if 'llm_traces' in trace:
@@ -824,7 +824,7 @@ def chat_with_agent_stream(message, history):
 						tool_name = tool_call.get('name', 'unknown')
 						if tool_name:
 							tools_list.append(f"• {tool_name}")
-			
+
 			# Extract model and execution time
 			if 'final_result' in trace:
 				final_result = trace['final_result']
@@ -832,27 +832,27 @@ def chat_with_agent_stream(message, history):
 				exec_time = final_result.get('execution_time', None)
 		except Exception as _e:
 			pass
-		
+
 		# Combined metadata message with both tools and stats (no duplication)
 		combined_sections = []
-		
+
 		# Add tools section if tools were used
 		if tools_list:
 			unique_tools = sorted(set(tools_list))
 			tools_text = "\n".join(unique_tools)
 			combined_sections.append(f"**🛠️ Tools Used:**\n{tools_text}")
-		
+
 		# Add stats section (model and execution time)
 		stats_lines = []
 		if llm_used and llm_used != "unknown":
 			stats_lines.append(f"Model: {llm_used}")
 		if isinstance(exec_time, (int, float)):
 			stats_lines.append(f"Execution Time: {exec_time:.2f} s")
-		
+
 		if stats_lines:
 			stats_text = "\n".join(stats_lines)
 			combined_sections.append(f"**ℹ️ Details:**\n{stats_text}")
-		
+
 		# Get complete conversation history from agent (including tool results)
 		complete_history = []
 		if agent and hasattr(agent, 'get_conversation_history'):
@@ -864,7 +864,7 @@ def chat_with_agent_stream(message, history):
 				complete_history = working_history
 		else:
 			complete_history = working_history
-		
+
 		# Show combined information in one collapsible section
 		if combined_sections:
 			combined_text = "\n\n".join(combined_sections)
@@ -884,24 +884,24 @@ def get_available_models():
     if agent is None:
         status = "🟡 Initializing agent..." if '_agent_init_started' in globals() and _agent_init_started else "❌ Agent not initialized"
         return status
-    
+
     models_info = []
-    
+
     # Check only initialized models
     for provider_key, llm_instance in agent.llm_instances.items():
         if llm_instance is None:
             continue
-        
+
         config = agent.LLM_CONFIG.get(provider_key, {})
         provider_name = config.get("name", provider_key.title())
-        
+
         # Get the active model configuration for this provider
         active_model_config = agent.active_model_config.get(provider_key, {})
         model_name = active_model_config.get("model", "Unknown")
         token_limit = active_model_config.get("token_limit", "Unknown")
-        
+
         models_info.append(f"**{provider_name}:**\n• {model_name} (max {token_limit} tokens)\n")
-    
+
     return "\n".join(models_info)
 
 # Timer poller to update status text and stop timer when ready
@@ -1047,18 +1047,18 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
     # Start agent initialization when the app loads
 
     with gr.Tabs():
-        
-        
+
+
         with gr.TabItem("Chat with Agent"): 
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("""
                     ## 💬 Chat with the Comindware Analyst Copilot
-                    
+
                     **Welcome!** This agent focuses on the **Comindware Platform** entity operations (applications, templates, attributes) and uses deterministic tools to execute precise changes.
-                    
+
                     ### 🎯 **How it works:**
-                    
+
                     - **Platform Operations First**: Validates your intent and executes tools for entity changes (e.g., create/edit attributes)
                     - **Multi-Model Orchestration**: Tries multiple LLM providers with intelligent fallback
                     - **Compact Structured Output**: Intent → Plan → Validate → Execute → Result
@@ -1066,7 +1066,7 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                 with gr.Column():
                     gr.Markdown("""
                     ### 💡 **Try asking:**
-                    
+
                     - List all applications in the Platform
                     - List all record templates in app 'ERP'
                     - List all attributes in template 'Counterparties', app 'ERP'
@@ -1076,7 +1076,7 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     - Fetch attribute: system name 'Comment', app 'HR', template 'Candidates'
                     - Archive/unarchive attribute, system name 'Comment', app 'HR', template 'Candidates'
                     """, elem_classes=["chat-hints"]) 
-            
+
             with gr.Row():
                 with gr.Column(scale=3):
                     # Chat interface
@@ -1087,7 +1087,7 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                         container=True,
                         type="messages"
                     )
-                    
+
                     with gr.Row():
                         msg = gr.Textbox(
                             label="Your Message",
@@ -1096,10 +1096,10 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                             scale=4
                         )
                         send_btn = gr.Button("Send", variant="primary", scale=1, elem_classes=["cmw-button"])
-                    
+
                     # Clear button
                     clear_btn = gr.Button("Clear Chat", variant="secondary", elem_classes=["cmw-button"])
-                
+
                 with gr.Column(scale=1, elem_classes=["sidebar-card"]):
                     # Model information panel (single block)
                     with gr.Column(elem_classes=["model-card"]):
@@ -1122,12 +1122,12 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                         qa_math_btn = gr.Button("15 * 23 + 7 = ?", elem_classes=["cmw-button"]) 
                         qa_code_btn = gr.Button("Python prime check function", elem_classes=["cmw-button"]) 
                         qa_explain_btn = gr.Button("Explain ML vs DL briefly", elem_classes=["cmw-button"]) 
-            
+
             # Event handlers
-            
+
             def clear_chat():
                 return [], ""
-            
+
             def quick_math():
                 return (
                     "Draft a plan to CREATE a text attribute 'Customer ID' in application 'ERP', template 'Counterparties' "
@@ -1135,56 +1135,56 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                     "Provide Intent, Plan, Validate, and a DRY-RUN payload preview (compact JSON) for the tool call, "
                     "but DO NOT execute any changes yet. Wait for my confirmation."
                 )
-            
+
             def quick_code():
                 return (
                     "Prepare a safe EDIT plan for attribute 'Contact Phone' (system_name=ContactPhone) in application 'CRM', template 'Leads' "
                     "to change display_format to PhoneRuMask. Provide Intent, Plan, Validate checklist (risk notes), and a DRY-RUN payload preview. "
                     "Do NOT execute changes yet—await my approval."
                 )
-            
+
             def quick_list_apps():
                 return (
                     "List all applications in the Platform. "
                     "Format nicely using Markdown. "
                     "Show system names and descriptions if any."
                 )
-            
+
             def qa_capital_example():
                 return "Capital of France?"
-            
+
             def qa_arith_example():
                 return "15 * 23 + 7 = ?"
-            
+
             def qa_prime_example():
                 return "Write a Python function to check if a number is prime."
-            
+
             def qa_explain_example():
                 return "Explain ML vs DL briefly"
-            
+
             # Connect event handlers
             send_btn.click(
                 fn=chat_with_agent_stream,  # Use the streaming version
                 inputs=[msg, chatbot],
                 outputs=[chatbot, msg]
             )
-            
+
             msg.submit(
                 fn=chat_with_agent_stream,  # Use the streaming version
                 inputs=[msg, chatbot],
                 outputs=[chatbot, msg]
             )
-            
+
             clear_btn.click(
                 fn=clear_chat,
                 outputs=[chatbot, msg]
             )
-            
+
             refresh_models_btn.click(
                 fn=poll_models,
                 outputs=[models_info, status_timer, open_logs_btn]
             )
-            
+
             open_logs_btn.click(
                 fn=None,
                 inputs=None,
@@ -1192,22 +1192,22 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
                 js="() => { const t=[...document.querySelectorAll('button[role=tab]')].find(b=>b.textContent.trim()==='Init logs'); if(t) t.click(); }"
             )
 
-            
+
             quick_math_btn.click(
                 fn=quick_math,
                 outputs=[msg]
             )
-            
+
             quick_code_btn.click(
                 fn=quick_code,
                 outputs=[msg]
             )
-            
+
             quick_list_apps_btn.click(
                 fn=quick_list_apps,
                 outputs=[msg]
             )
-            
+
             qa_capital_btn.click(
                 fn=qa_capital_example,
                 outputs=[msg]
@@ -1235,22 +1235,22 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             ## 🕵🏻‍♂️ Comindware Analyst Copilot - Entity Creation System
 
             **Welcome to the Comindware Analyst Copilot - an AI-powered system for creating entities in the Comindware Platform!**
-            
+
             ### 🚀 **What is this project**:
-            
+
             - **Input**: Users provide natural language requests to create entities in the CMW Platform
             - **Challenge**: Translate natural language into CMW Platform API calls for entity creation
             - **Solution**: The agent uses multiple LLMs and specialized tools to create templates, attributes, workflows, and other platform entities
             - **Results**: The agent can successfully create entities with 50-65% success rate, up to 80% with all LLMs available
-            
+
             **Dataset Results**: [View live results](https://huggingface.co/datasets/arterm-sedov/agent-course-final-assignment/viewer/runs_new)
-            
+
             **For more project details**, see the [README.md](https://huggingface.co/spaces/arterm-sedov/agent-course-final-assignment/blob/main/README.md)
-            
+
             This is an experimental multi-LLM agent system that demonstrates advanced AI agent capabilities for business process automation. The project showcases:
 
             ### 🎯 **Project Goals**
-            
+
             - **Entity Creation**: Create templates, attributes, workflows, and other CMW Platform entities
             - **Multi-LLM Orchestration**: Dynamically switches between Google Gemini, Groq, OpenRouter, and HuggingFace models
             - **Comprehensive Tool Suite**: CMW Platform API integration, web search, code execution, file analysis, and more
@@ -1259,7 +1259,7 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             - **Real-world Reliability**: Battle-tested for CMW Platform entity creation
 
             ### 🔬 **Why This Project?**
-            
+
             This project represents advanced AI agent development for business process management. The experimental nature comes from:
 
             - **Multi-Provider Testing**: Exploring different LLM providers and their capabilities for entity creation tasks
@@ -1269,7 +1269,7 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             - **CMW Platform Integration**: Bridging natural language requests with platform API capabilities
 
             ### 📊 **What You'll Find Here**
-            
+
             - **Live Entity Creation**: Test the agent for creating CMW Platform entities. See the **Evaluation** tab. 
                 - When starting, the agent initializes LLMs and outputs debugging logs. Select **Logs** at the top to view the init log.
                 - NOTE: LLM availability is subject to inference limits with each provider
@@ -1278,14 +1278,14 @@ with gr.Blocks(css_paths=[Path(__file__).parent / "resources" / "css" / "gradio_
             - **Complete Traces**: See exactly how the agent thinks and uses tools for entity creation. See the **Log files** tab
 
             ### 🏢 **CMW Platform Integration**
-            
+
             This agent is designed to work with the Comindware Platform, a business process management and workflow automation platform. The agent can:
-            
+
             - **Create Templates**: Define data structures with custom attributes
             - **Configure Workflows**: Set up business processes and automation rules
             - **Manage Entities**: Create, update, and configure platform objects
             - **API Integration**: Interact with CMW Platform APIs for entity management
-            
+
             For more information about the Comindware Platform, see the [CMW Platform Documentation](https://github.com/arterm-sedov/cbap-mkdocs-ru).
 
             This project demonstrates what's possible when you combine multiple AI models with intelligent tool orchestration for business process automation.

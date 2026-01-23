@@ -27,7 +27,7 @@ def test_tab_creation():
     """Test that tab instances can be created"""
     try:
         from agent_ng.tabs import ChatTab, LogsTab, StatsTab
-        
+
         # Create mock event handlers
         event_handlers = {
             "stream_message": lambda x, y: (y, ""),
@@ -43,19 +43,19 @@ def test_tab_creation():
             "quick_edit_mask": lambda: "Test edit mask",
             "quick_list_apps": lambda: "Test list apps",
         }
-        
+
         # Test ChatTab
         chat_tab = ChatTab(event_handlers)
         print("✅ ChatTab creation successful")
-        
+
         # Test LogsTab
         logs_tab = LogsTab(event_handlers)
         print("✅ LogsTab creation successful")
-        
+
         # Test StatsTab
         stats_tab = StatsTab(event_handlers)
         print("✅ StatsTab creation successful")
-        
+
         return True
     except Exception as e:
         print(f"❌ Tab creation failed: {e}")
@@ -75,24 +75,24 @@ def main():
     """Run all tests"""
     print("🧪 Testing Modular Tabs Implementation")
     print("=" * 50)
-    
+
     tests = [
         test_tab_imports,
         test_tab_creation,
         test_modular_app_import,
     ]
-    
+
     passed = 0
     total = len(tests)
-    
+
     for test in tests:
         if test():
             passed += 1
         print()
-    
+
     print("=" * 50)
     print(f"Tests passed: {passed}/{total}")
-    
+
     if passed == total:
         print("🎉 All tests passed! Modular tabs implementation is working correctly.")
         return True

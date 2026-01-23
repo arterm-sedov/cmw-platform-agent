@@ -15,9 +15,9 @@ def export_stats(self, filename: str = None) -> str:
     if filename is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"agent_stats_{timestamp}.json"
-    
+
     stats_data = self.get_comprehensive_stats()
-    
+
     try:
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(stats_data, f, indent=2, default=str)
@@ -28,7 +28,7 @@ def export_stats(self, filename: str = None) -> str:
 def get_stats_summary(self) -> str:
     """Get a human-readable summary of statistics"""
     stats = self.get_comprehensive_stats()
-    
+
     summary = []
     summary.append("=== Agent Statistics Summary ===")
     summary.append(f"Uptime: {stats['system_stats']['uptime']:.2f} seconds")
@@ -36,7 +36,7 @@ def get_stats_summary(self) -> str:
     summary.append(f"Successful Requests: {stats['system_stats']['successful_requests']}")
     summary.append(f"Failed Requests: {stats['system_stats']['failed_requests']}")
     summary.append(f"Error Rate: {stats['system_stats']['error_rate']:.2%}")
-    
+
     # LLM Stats
     summary.append("\\n=== LLM Usage ===")
     for llm_name, llm_stats in stats['llm_stats'].items():
@@ -45,7 +45,7 @@ def get_stats_summary(self) -> str:
         summary.append(f"  Successful: {llm_stats['successful_calls']}")
         summary.append(f"  Failed: {llm_stats['failed_calls']}")
         summary.append(f"  Avg Response Time: {llm_stats['avg_response_time']:.2f}s")
-    
+
     # Conversation Stats
     summary.append("\\n=== Conversation Stats ===")
     conv_stats = stats['conversation_stats']
@@ -54,7 +54,7 @@ def get_stats_summary(self) -> str:
     summary.append(f"Avg Questions per Conversation: {conv_stats['avg_questions_per_conversation']:.2f}")
     summary.append(f"Total Tool Calls: {conv_stats['total_tool_calls']}")
     summary.append(f"Avg Tool Calls per Question: {conv_stats['avg_tool_calls_per_question']:.2f}")
-    
+
     return "\\n".join(summary)
 
 def get_performance_metrics(self, limit: int = 100) -> List[Dict[str, Any]]:
@@ -68,7 +68,7 @@ def get_error_summary(self) -> Dict[str, Any]:
         if 'error_type' in metric:
             error_type = metric['error_type']
             error_counts[error_type] = error_counts.get(error_type, 0) + 1
-    
+
     return {
         'total_errors': sum(error_counts.values()),
         'error_breakdown': error_counts,

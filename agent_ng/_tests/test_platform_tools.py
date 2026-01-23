@@ -16,10 +16,10 @@ def test_tool(tool_name, tool_func, test_args=None):
     try:
         if test_args is None:
             test_args = {}
-        
+
         print(f"🧪 Testing {tool_name}...")
         result = tool_func.invoke(test_args)
-        
+
         if isinstance(result, dict) and result.get('success', False):
             print(f"✅ {tool_name}: SUCCESS")
             return True
@@ -36,14 +36,14 @@ def test_tool(tool_name, tool_func, test_args=None):
 def main():
     """Test all available tools"""
     print("🔧 Testing all tools...\n")
-    
+
     # Test applications tools
     try:
         from tools.applications_tools.tool_list_applications import list_applications
         test_tool("list_applications", list_applications)
     except Exception as e:
         print(f"❌ Failed to import list_applications: {e}")
-    
+
     try:
         from tools.applications_tools.tool_list_templates import list_templates
         test_tool("list_templates", list_templates, {
@@ -52,7 +52,7 @@ def main():
         })
     except Exception as e:
         print(f"❌ Failed to import list_templates: {e}")
-    
+
     # Test templates tools
     try:
         from tools.templates_tools.tool_list_attributes import list_attributes
@@ -62,7 +62,7 @@ def main():
         })
     except Exception as e:
         print(f"❌ Failed to import list_attributes: {e}")
-    
+
     # Test some attribute tools
     try:
         from tools.attributes_tools.tools_text_attribute import edit_or_create_text_attribute
@@ -77,7 +77,7 @@ def main():
         })
     except Exception as e:
         print(f"❌ Failed to import edit_or_create_text_attribute: {e}")
-    
+
     print("\n🎉 Tool testing completed!")
 
 if __name__ == "__main__":

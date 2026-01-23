@@ -27,7 +27,7 @@ def create_app(
 ) -> Dict[str, Any]:
     """
     Create a new application by system name.
-    
+
     Creating the app takes time. So if the result is "timeout",
     list the apps to verify the app was created.
 

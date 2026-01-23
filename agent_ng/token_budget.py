@@ -46,11 +46,11 @@ TOKEN_STATUS_WARNING_THRESHOLD = 75.0
 TOKEN_STATUS_MODERATE_THRESHOLD = 50.0
 
 # Token budget status strings
-TOKEN_STATUS_CRITICAL = "critical"
-TOKEN_STATUS_WARNING = "warning"
-TOKEN_STATUS_MODERATE = "moderate"
-TOKEN_STATUS_GOOD = "good"
-TOKEN_STATUS_UNKNOWN = "unknown"
+TOKEN_STATUS_CRITICAL = "critical"  # noqa: S105
+TOKEN_STATUS_WARNING = "warning"  # noqa: S105
+TOKEN_STATUS_MODERATE = "moderate"  # noqa: S105
+TOKEN_STATUS_GOOD = "good"  # noqa: S105
+TOKEN_STATUS_UNKNOWN = "unknown"  # noqa: S105
 
 
 def count_tokens(content: str | Any) -> int:
@@ -69,7 +69,10 @@ def _message_content(msg: Any) -> str:
     if hasattr(msg, "content"):
         try:
             return str(msg.content or "")
-        except Exception:
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to extract message content: %s", exc
+            )
             return ""
     if isinstance(msg, dict):
         return str(msg.get("content", "") or "")
@@ -115,7 +118,10 @@ def compute_context_tokens(
     if add_json_overhead and tool_tokens > 0:
         try:
             pct = float(json_overhead_pct)
-        except Exception:
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to parse json_overhead_pct, using default: %s", exc
+            )
             pct = DEFAULT_TOOL_JSON_OVERHEAD_PCT
         tool_tokens = int(tool_tokens * (1.0 + max(0.0, pct)))
 
@@ -135,7 +141,13 @@ def compute_overhead_tokens(
     prompt = str(system_prompt or "")
     tool_list = list(tools or [])
     tool_names = tuple(
-        str(getattr(t, "name", None) or getattr(t, "__name__", None) or "tool")
+        str(
+            (t.get("name") if isinstance(t, dict) else None)
+            or ((t.get("function") or {}).get("name") if isinstance(t, dict) else None)
+            or getattr(t, "name", None)
+            or getattr(t, "__name__", None)
+            or "tool"
+        )
         for t in tool_list
     )
     key = (hash(prompt), tool_names, int(safety_margin))
@@ -146,6 +158,38 @@ def compute_overhead_tokens(
     total = count_tokens(prompt)
 
     for tool in tool_list:
+        # If the tool payload is already a dict (e.g., OpenAI/OpenRouter tool spec),
+        # count the actual serialized payload. This is closer to what the provider
+        # receives than a full pydantic JSON schema dump.
+        if isinstance(tool, dict):
+            try:
+                total += count_tokens(json.dumps(tool, separators=(",", ":")))
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to serialize bound tool payload for overhead: %s", exc
+                )
+            continue
+
+        # If tool spec is a pydantic model-like object, try to serialize it.
+        if hasattr(tool, "model_dump"):
+            try:
+                total += count_tokens(
+                    json.dumps(tool.model_dump(), separators=(",", ":"))
+                )
+                continue
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to serialize tool model_dump for overhead: %s", exc
+                )
+        if hasattr(tool, "dict"):
+            try:
+                total += count_tokens(json.dumps(tool.dict(), separators=(",", ":")))
+                continue
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to serialize tool dict() for overhead: %s", exc
+                )
+
         # Count tool schema (prefer pydantic v2, fallback to v1)
         schema_str = ""
         args_schema = getattr(tool, "args_schema", None)
@@ -205,13 +249,14 @@ def compute_token_budget_snapshot(
     Note: This is an ESTIMATE. During iterations, it shows the estimated context size
     (conversation + tools + overhead). At final answer, API tokens (from LLM provider)
     are the ground truth and should be preferred for "Сообщение" display.
-    
+
     The snapshot total may be higher than API tokens because:
     - It includes overhead (tool schemas + safety margin)
     - It includes JSON overhead for tool results
     - API tokens reflect actual provider counting/optimization
     """
     msgs: list[Any] = []
+    has_system = False
 
     if messages_override is not None:
         msgs = list(messages_override)
@@ -229,7 +274,6 @@ def compute_token_budget_snapshot(
             msgs = []
 
         # Ensure system prompt is represented (memory may already contain it).
-        has_system = False
         try:
             has_system = any(
                 (getattr(m, "type", None) == "system")
@@ -243,6 +287,19 @@ def compute_token_budget_snapshot(
         if not has_system and getattr(agent, "system_prompt", None):
             msgs = [SystemMessage(content=str(agent.system_prompt)), *msgs]
 
+    # Detect system message presence for both memory-based and override-based snapshots.
+    try:
+        has_system = any(
+            (getattr(m, "type", None) == "system")
+            or (SystemMessage is not Any and isinstance(m, SystemMessage))
+            for m in msgs
+        )
+    except Exception as exc:
+        logging.getLogger(__name__).debug(
+            "Failed system message detection for budget snapshot: %s", exc
+        )
+        has_system = False
+
     conversation_tokens, tool_tokens = compute_context_tokens(
         msgs,
         add_json_overhead=add_json_overhead,
@@ -254,18 +311,31 @@ def compute_token_budget_snapshot(
         # Compute overhead, but exclude system prompt if it's already in messages
         # to avoid double-counting
         system_prompt_str = str(getattr(agent, "system_prompt", "") or "")
-        system_prompt_in_messages = has_system or any(
-            (getattr(m, "type", None) == "system")
-            or (SystemMessage is not Any and isinstance(m, SystemMessage))
-            for m in msgs
-        )
-        
+        system_prompt_in_messages = has_system
+
         # Only include system prompt in overhead if it's NOT already in messages
         overhead_system_prompt = "" if system_prompt_in_messages else system_prompt_str
-        
+
+        # Prefer tool payload actually bound to the underlying LLM, fall back to
+        # agent.tools.
+        tools_payload = None
+        try:
+            llm_instance = getattr(agent, "llm_instance", None)
+            llm = getattr(llm_instance, "llm", None) if llm_instance else None
+            tools_payload = getattr(llm, "tools", None) if llm is not None else None
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to read bound tool payload from LLM: %s", exc
+            )
+            tools_payload = None
+
         overhead_tokens = compute_overhead_tokens(
             system_prompt=overhead_system_prompt,
-            tools=getattr(agent, "tools", None),
+            tools=(
+                tools_payload
+                if tools_payload is not None
+                else getattr(agent, "tools", None)
+            ),
             safety_margin=safety_margin,
         )
 

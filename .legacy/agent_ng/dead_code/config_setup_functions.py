@@ -32,16 +32,16 @@ def get_openai_wrapper():
     try:
         from langsmith import Client
         from langsmith.wrappers import wrap_openai
-        
+
         config = get_langsmith_config()
         if not config.is_configured():
             return None
-        
+
         client = Client(
             api_key=config.api_key,
             api_url=config.api_url
         )
-        
+
         return wrap_openai(client)
     except ImportError:
         return None
@@ -56,16 +56,16 @@ def get_langfuse_callback_handler():
         config = get_langfuse_config()
         if not config.is_configured():
             return None
-        
+
         from langfuse import Langfuse
         from langfuse.callback import CallbackHandler
-        
+
         langfuse = Langfuse(
             public_key=config.public_key,
             secret_key=config.secret_key,
             host=config.host
         )
-        
+
         return CallbackHandler(
             public_key=config.public_key,
             secret_key=config.secret_key,

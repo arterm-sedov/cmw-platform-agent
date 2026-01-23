@@ -7,7 +7,7 @@ def list_applications() -> Dict[str, Any]:
     """
     List all applications, configured in the Platform.
     The resulting list depends on the user's access rights.
-    
+
     Returns:
         dict: {
             "success": bool - True if application list was fetched successfully

@@ -26,7 +26,7 @@ def list_attributes(
     ) -> Dict[str, Any]:
     """
     List all attributes in the given template and application.
-    
+
     Returns:
         dict: {
             "success": bool - True if attribute list was fetched successfully

@@ -12,9 +12,9 @@ def edit_or_create_drawing_attribute(
 ) -> Dict[str, Any]:
     """
     Edit or Create a drawing attribute (Чертеж).
-    
+
     Drawing attribute stores floor plans based on CAD files.
-    
+
     Returns:
         dict: {
             "success": bool - True if the attribute was created or edited successfully

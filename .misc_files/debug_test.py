@@ -14,18 +14,18 @@ def debug_test():
     """Debug the LLM response issue"""
     print("🔍 Debug Test")
     print("=" * 30)
-    
+
     # Set test provider
     os.environ["AGENT_PROVIDER"] = "mistral"
-    
+
     # Test LLM Manager directly
     print("\n1. Testing LLMManager directly...")
     llm_manager = LLMManager()
     llm_instance = llm_manager.get_agent_llm()
-    
+
     if llm_instance:
         print(f"✅ Got LLM instance: {llm_instance.provider} ({llm_instance.model_name})")
-        
+
         # Test direct LLM call
         print("\n2. Testing direct LLM call...")
         try:
@@ -40,11 +40,11 @@ def debug_test():
     else:
         print("❌ No LLM instance available")
         return
-    
+
     # Test LangChain Wrapper
     print("\n3. Testing LangChainWrapper...")
     wrapper = LangChainWrapper()
-    
+
     try:
         response = wrapper.invoke("Hello, how are you?")
         print(f"Wrapper response type: {type(response)}")

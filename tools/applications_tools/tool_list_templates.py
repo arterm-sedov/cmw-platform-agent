@@ -18,13 +18,13 @@ class ListTemplates(BaseModel):
     def normalize_operation(cls, v: str) -> str:
         if v is None:
             return v
-        
+
         mapping = {
             "запись": "record",
             "процесс": "process",
             "аккаунт": "account"
         }
-        
+
         normalized_value = str(v).strip().lower()
         return mapping.get(normalized_value, normalized_value)
 
@@ -42,9 +42,9 @@ def list_templates(
 ) -> Dict[str, Any]:
     """
     List all templates of a given type in an application.
-    
+
     Default template type is "record".
-    
+
     Returns:
         dict: {
             "success": bool - True if operation completed successfully

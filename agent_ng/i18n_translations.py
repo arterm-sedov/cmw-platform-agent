@@ -113,6 +113,7 @@ RUSSIAN_TRANSLATIONS = {
     "token_usage_header": "**Расход токенов:**",
     "token_usage_total": "Всего: {total_tokens:,}",
     "token_usage_conversation": "Диалог: {conversation_tokens:,}",
+    "token_usage_estimate": "Оценка расхода: {estimated_tokens:,}",
     "token_usage_last_message": "Сообщение: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
     "token_usage_average": "Средний на сообщение: {avg_tokens:,}",
     # Status icons for token usage
@@ -418,6 +419,7 @@ ENGLISH_TRANSLATIONS = {
     "token_usage_header": "**Token usage:**",
     "token_usage_total": "Total: {total_tokens:,}",
     "token_usage_conversation": "Conversation: {conversation_tokens:,}",
+    "token_usage_estimate": "Estimated usage: {estimated_tokens:,}",
     "token_usage_last_message": "Message: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
     "token_usage_average": "Average per message: {avg_tokens:,}",
     # Status icons for token usage

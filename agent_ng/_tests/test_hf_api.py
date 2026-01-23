@@ -13,12 +13,12 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 
 def test_hf_api_endpoints():
     """Test API endpoints on Hugging Face Spaces"""
-    
+
     # Get HF Space URL from environment or use default
     hf_space_url = os.getenv("HF_SPACE_URL", "https://arterm-sedov-cmw-agent.hf.space")
-    
+
     print(f"Testing Hugging Face Space: {hf_space_url}")
-    
+
     # Test 1: Check if the space is accessible
     try:
         response = requests.get(hf_space_url, timeout=10)
@@ -26,7 +26,7 @@ def test_hf_api_endpoints():
     except Exception as e:
         print(f"❌ Space not accessible: {e}")
         return
-    
+
     # Test 2: Check API documentation
     try:
         api_url = f"{hf_space_url}/?view=api"
@@ -38,14 +38,14 @@ def test_hf_api_endpoints():
             print("✅ API routes found")
     except Exception as e:
         print(f"❌ API docs not accessible: {e}")
-    
+
     # Test 3: Test /ask endpoint with different URL formats
     test_urls = [
         f"{hf_space_url}/ask",  # New gr.api() format
         f"{hf_space_url}/call/ask",  # Original format
         f"{hf_space_url}/api/predict",  # Alternative format
     ]
-    
+
     for i, ask_url in enumerate(test_urls):
         try:
             # Try GET request with query parameters (gr.api() uses GET by default)
@@ -67,7 +67,7 @@ def test_hf_api_endpoints():
                 print(f"   Error: {response.text}")
         except Exception as e:
             print(f"❌ /ask endpoint GET error (format {i+1}): {e}")
-        
+
         try:
             # Try POST request as fallback
             payload = {
@@ -84,14 +84,14 @@ def test_hf_api_endpoints():
                 print(f"   Error: {response.text}")
         except Exception as e:
             print(f"❌ /ask endpoint POST error (format {i+1}): {e}")
-    
+
     # Test 4: Test /ask_stream endpoint with different URL formats
     stream_urls = [
         f"{hf_space_url}/ask_stream",  # New gr.api() format
         f"{hf_space_url}/call/ask_stream",  # Original format
         f"{hf_space_url}/api/predict",  # Alternative format
     ]
-    
+
     for i, stream_url in enumerate(stream_urls):
         try:
             # Try GET request with query parameters (gr.api() uses GET by default)
@@ -109,7 +109,7 @@ def test_hf_api_endpoints():
                 print(f"   Error: {response.text}")
         except Exception as e:
             print(f"❌ /ask_stream endpoint GET error (format {i+1}): {e}")
-        
+
         try:
             # Try POST request as fallback
             payload = {

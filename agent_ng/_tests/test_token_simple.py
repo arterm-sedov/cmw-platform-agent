@@ -33,11 +33,11 @@ def test_token_counting():
     try:
         from agent_ng.token_counter import get_token_tracker
         tracker = get_token_tracker()
-        
+
         # Test counting a simple message
         from langchain_core.messages import HumanMessage
         messages = [HumanMessage(content="Hello world")]
-        
+
         token_count = tracker.count_prompt_tokens(messages)
         print(f"✅ Token counting works: {token_count.total_tokens} tokens")
         print(f"   - Source: {token_count.source}")
@@ -50,7 +50,7 @@ def test_token_counting():
 if __name__ == "__main__":
     print("Testing token counting integration...")
     print()
-    
+
     success = True
     success &= test_token_counter_import()
     print()
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     print()
     success &= test_token_counting()
     print()
-    
+
     if success:
         print("🎉 All tests passed! Token counting is working.")
     else:

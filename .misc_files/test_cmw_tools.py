@@ -14,11 +14,11 @@ from agent_ng.core_agent import CoreAgent
 def test_cmw_tools():
     """Test that CMW tools are accessible"""
     print("🧪 Testing CMW tools accessibility...")
-    
+
     try:
         # Initialize the core agent
         agent = CoreAgent()
-        
+
         # Check for specific CMW tools
         cmw_tool_names = [
             'list_applications', 'list_templates', 'list_attributes',
@@ -36,11 +36,11 @@ def test_cmw_tools():
             'edit_or_create_role_attribute',
             'delete_attribute', 'archive_or_unarchive_attribute', 'get_attribute'
         ]
-        
+
         print(f"\n🔍 Checking for CMW tools...")
         found_tools = []
         missing_tools = []
-        
+
         for tool_name in cmw_tool_names:
             # Check if tool exists in the tools list
             tool_found = False
@@ -53,19 +53,19 @@ def test_cmw_tools():
                     found_tools.append(tool_name)
                     tool_found = True
                     break
-            
+
             if not tool_found:
                 missing_tools.append(tool_name)
-        
+
         print(f"\n✅ Found CMW tools ({len(found_tools)}):")
         for tool in sorted(found_tools):
             print(f"  - {tool}")
-        
+
         if missing_tools:
             print(f"\n❌ Missing CMW tools ({len(missing_tools)}):")
             for tool in sorted(missing_tools):
                 print(f"  - {tool}")
-        
+
         # Test a simple CMW tool call
         print(f"\n🧪 Testing tool call...")
         try:
@@ -75,19 +75,19 @@ def test_cmw_tools():
                 if hasattr(tool, 'name') and tool.name == 'list_applications':
                     list_apps_tool = tool
                     break
-            
+
             if list_apps_tool:
                 print(f"✅ Found list_applications tool: {list_apps_tool.name}")
                 print(f"   Description: {list_apps_tool.description}")
                 print(f"   Args schema: {list_apps_tool.args_schema}")
             else:
                 print("❌ list_applications tool not found")
-                
+
         except Exception as e:
             print(f"❌ Error testing tool call: {e}")
-        
+
         return len(missing_tools) == 0
-        
+
     except Exception as e:
         print(f"❌ Error testing CMW tools: {e}")
         import traceback

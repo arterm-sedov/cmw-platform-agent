@@ -15,11 +15,11 @@ def edit_or_create_role_attribute(
 ) -> Dict[str, Any]:
     """
     Edit or Create a role attribute (Роль).
-    
+
     Role attribute is linked to roles in the system.
-    
+
     Role attribute stores one or several linked role IDs.
-    
+
     Returns:
         dict: {
             "success": bool - True if the attribute was created or edited successfully

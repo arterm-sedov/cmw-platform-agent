@@ -22,7 +22,7 @@ def archive_or_unarchive_attribute(
     ) -> Dict[str, Any]:
     """
     Archive or unarchive an attribute in the given template and application.
-    
+
     Returns:
         dict: {
             "success": bool - True if the attribute was archived or unarchived successfully
@@ -59,7 +59,7 @@ def archive_or_unarchive_attribute(
             "error": f"Unexpected result type: {type(result)}",
             "status_code": 500
         }
-    
+
     # Add additional error information if the API call failed
     if not result.get("success", False) and result.get("error"):
         error_info = result.get("error", "")

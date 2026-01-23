@@ -35,23 +35,23 @@ from .error_handler import ErrorHandler, ErrorInfo, ErrorType, get_error_handler
 # Use SessionManager.get_session_agent(session_id) to get agent instances
 
 __all__ = [
-   
+
     # LangChain agent
     'NextGenAgent',
     'ChatMessage',
-    
+
     # App interface - commented out to avoid circular imports
     # 'NextGenApp',
     # 'get_demo',
     # 'main',
-    
+
     # LLM management
     'LLMManager',
     'LLMProvider', 
     'LLMConfig',
     'LLMInstance',
     'get_llm_manager',
-    
+
     # Error handling
     'ErrorHandler',
     'ErrorInfo',

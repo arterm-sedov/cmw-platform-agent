@@ -262,7 +262,7 @@ class FileUtils:
             headers = {
                 'User-Agent': 'CMW-Platform-Agent/1.0 (+https://github.com/arterm-sedov/cmw-platform-agent) Mozilla/5.0'
             }
-            
+
             # First make a HEAD request to get Content-Type
             logger.info(f"Attempting to download from URL: {url}")
             head_response = requests.head(url, headers=headers, timeout=30, allow_redirects=True)

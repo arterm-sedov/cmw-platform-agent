@@ -14,7 +14,7 @@ def test_simple_imports():
     """Test basic imports"""
     print("🧪 Testing Simple Imports After Reorganization")
     print("=" * 50)
-    
+
     try:
         # Test agent_ng module
         import agent_ng.agent_ng
@@ -22,7 +22,7 @@ def test_simple_imports():
     except Exception as e:
         print(f"❌ agent_ng.agent_ng failed: {e}")
         return False
-    
+
     try:
         # Test agent_old module
         import agent_old.agent
@@ -30,7 +30,7 @@ def test_simple_imports():
     except Exception as e:
         print(f"❌ agent_old.agent failed: {e}")
         return False
-    
+
     try:
         # Test tools module
         import tools.tool_utils
@@ -38,7 +38,7 @@ def test_simple_imports():
     except Exception as e:
         print(f"❌ tools.tool_utils failed: {e}")
         return False
-    
+
     print("\n🎉 All basic imports successful!")
     return True
 

@@ -30,7 +30,7 @@ def print_status(message, status="INFO"):
         "ERROR": "\033[91m",   # Red
         "RESET": "\033[0m"     # Reset
     }
-    
+
     if platform.system() == "Windows" and not os.environ.get("TERM"):
         # Windows without color support
         print(f"[{status}] {message}")
@@ -43,20 +43,20 @@ def print_status(message, status="INFO"):
 def run_command(command, check=True, capture_output=True, shell=False):
     """
     Run a command and return the result.
-    
+
     Args:
         command: Command to run (list or string)
         check: Whether to raise exception on non-zero exit code
         capture_output: Whether to capture stdout/stderr
         shell: Whether to run in shell mode
-    
+
     Returns:
         subprocess.CompletedProcess object
     """
     try:
         if isinstance(command, str) and not shell:
             command = command.split()
-        
+
         result = subprocess.run(
             command,
             check=check,
@@ -88,13 +88,13 @@ def check_python_version():
         print_status("Python 3.8+ is required", "ERROR")
         print_status(f"Current version: {version.major}.{version.minor}.{version.micro}", "ERROR")
         return False
-    
+
     print_status(f"Python version: {version.major}.{version.minor}.{version.micro}", "SUCCESS")
     return True
 
 def create_virtual_environment(venv_path: Path):
     """Create a virtual environment at the provided path."""
-    
+
     if venv_path.exists():
         print_status("Virtual environment already exists", "WARNING")
         response = input("Do you want to recreate it? (y/N): ").strip().lower()
@@ -104,10 +104,10 @@ def create_virtual_environment(venv_path: Path):
         else:
             print_status("Removing existing virtual environment...", "INFO")
             shutil.rmtree(venv_path)
-    
+
     print_status("Creating virtual environment...", "INFO")
     python_cmd = get_python_command()
-    
+
     try:
         run_command([python_cmd, "-m", "venv", str(venv_path)])
         print_status("Virtual environment created successfully", "SUCCESS")
@@ -156,14 +156,14 @@ def install_dependencies(venv_path: Path):
     pip_cmd = get_pip_path(venv_path)
     python_cmd = get_python_path(venv_path)
     requirements_file = get_requirements_file()
-    
+
     print_status("Installing dependencies...", "INFO")
-    
+
     # Check if requirements file exists
     if not Path(requirements_file).exists():
         print_status(f"Requirements file {requirements_file} not found", "ERROR")
         return False
-    
+
     # Step 1: Upgrade pip using python -m pip
     print_status("Upgrading pip...", "INFO")
     try:
@@ -171,24 +171,24 @@ def install_dependencies(venv_path: Path):
         print_status("Pip upgraded successfully", "SUCCESS")
     except subprocess.CalledProcessError:
         print_status("Failed to upgrade pip, continuing...", "WARNING")
-    
+
     # Step 2: Install build tools
     print_status("Installing build tools...", "INFO")
     try:
         run_command([pip_cmd, "install", "wheel", "setuptools"])
     except subprocess.CalledProcessError:
         print_status("Failed to install build tools, continuing...", "WARNING")
-    
+
     # Step 3: Install dependencies from requirements file
     print_status(f"Installing dependencies from {requirements_file}...", "INFO")
     try:
         run_command([pip_cmd, "install", "-r", requirements_file])
         print_status("All dependencies installed successfully", "SUCCESS")
         return True
-        
+
     except subprocess.CalledProcessError as e:
         print_status(f"Failed to install dependencies from {requirements_file}", "ERROR")
-        
+
         # If Windows requirements failed, try main requirements as fallback
         if platform.system() == "Windows" and requirements_file == "requirements.win.txt":
             print_status("Trying main requirements_complete.txt as fallback...", "WARNING")
@@ -204,15 +204,15 @@ def install_dependencies(venv_path: Path):
             except subprocess.CalledProcessError:
                 print_status("Both requirements files failed", "ERROR")
                 return False
-        
+
         return False
 
 def verify_installation(venv_path: Path):
     """Verify that the installation was successful."""
     print_status("Verifying installation...", "INFO")
-    
+
     python_cmd = get_python_path(venv_path)
-    
+
     # Test imports
     test_imports = [
         "numpy",
@@ -223,9 +223,9 @@ def verify_installation(venv_path: Path):
         "supabase",
         "gradio"
     ]
-    
+
     failed_imports = []
-    
+
     for module in test_imports:
         try:
             run_command([python_cmd, "-c", f"import {module}"], capture_output=True)
@@ -233,18 +233,18 @@ def verify_installation(venv_path: Path):
         except subprocess.CalledProcessError:
             print_status(f"✗ {module}", "ERROR")
             failed_imports.append(module)
-    
+
     if failed_imports:
         print_status(f"Failed to import: {', '.join(failed_imports)}", "ERROR")
         return False
-    
+
     # Test version info
     try:
         result = run_command([python_cmd, "-c", "import pandas as pd; print(f'Pandas version: {pd.__version__}')"], capture_output=True)
         print_status(result.stdout.strip(), "INFO")
     except subprocess.CalledProcessError:
         print_status("Could not get pandas version", "WARNING")
-    
+
     print_status("Installation verification completed", "SUCCESS")
     return True
 
@@ -255,20 +255,20 @@ def main():
     parser.add_argument("--skip-deps", action="store_true", help="Skip dependency installation")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     parser.add_argument("--venv-path", default=".venv", help="Path for the virtual environment (default: .venv)")
-    
+
     args = parser.parse_args()
-    
+
     print_status("=" * 60, "INFO")
     print_status("arterm-sedov Setup Script", "INFO")
     print_status("=" * 60, "INFO")
     print_status(f"Platform: {platform.system()} {platform.release()}", "INFO")
     print_status(f"Python: {sys.executable}", "INFO")
     print_status("=" * 60, "INFO")
-    
+
     # Check Python version
     if not check_python_version():
         sys.exit(1)
-    
+
     # Resolve venv path
     venv_path = Path(args.venv_path)
 
@@ -278,20 +278,20 @@ def main():
             sys.exit(1)
     else:
         print_status("Skipping virtual environment creation", "INFO")
-    
+
     # Install dependencies
     if not args.skip_deps:
         if not install_dependencies(venv_path):
             sys.exit(1)
     else:
         print_status("Skipping dependency installation", "INFO")
-    
+
     # Verify installation
     if not args.skip_deps:
         if not verify_installation(venv_path):
             print_status("Installation verification failed", "ERROR")
             sys.exit(1)
-    
+
     # Print next steps
     print_status("=" * 60, "INFO")
     print_status("Setup completed successfully!", "SUCCESS")

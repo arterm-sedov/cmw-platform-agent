@@ -17,51 +17,51 @@ Once the MCP server is properly connected, you'll have access to these tools:
 def test_gradio_app_with_playwright():
     """
     Example of how to test your Gradio CMW Platform Agent using Playwright MCP tools.
-    
+
     This function demonstrates the workflow you'll be able to use once the
     MCP tools are available in your environment.
     """
-    
+
     print("🚀 Starting Playwright MCP Browser Automation Test")
     print("=" * 60)
-    
+
     # Step 1: Navigate to your Gradio app
     print("📍 Step 1: Navigate to Gradio app")
     print("   URL: http://127.0.0.1:7860/")
     print("   Tool: mcp_Playwright_browser_navigate")
     print("   Parameters: {'url': 'http://127.0.0.1:7860/'}")
-    
+
     # Step 2: Take initial screenshot
     print("\n📸 Step 2: Take initial screenshot")
     print("   Tool: mcp_Playwright_browser_screenshot")
     print("   Purpose: Capture initial state of the application")
-    
+
     # Step 3: Get page snapshot for element identification
     print("\n🔍 Step 3: Get page snapshot")
     print("   Tool: mcp_Playwright_browser_snapshot")
     print("   Purpose: Identify interactive elements on the page")
-    
+
     # Step 4: Type test message in chat input
     print("\n⌨️  Step 4: Type test message")
     print("   Tool: mcp_Playwright_browser_type")
     print("   Element: Chat input textbox")
     print("   Message: 'List all applications in the Platform'")
-    
+
     # Step 5: Click Send button
     print("\n👆 Step 5: Click Send button")
     print("   Tool: mcp_Playwright_browser_click")
     print("   Element: Send button")
-    
+
     # Step 6: Wait for response
     print("\n⏳ Step 6: Wait for agent response")
     print("   Tool: mcp_Playwright_browser_wait_for")
     print("   Condition: Response appears in chat")
-    
+
     # Step 7: Take final screenshot
     print("\n📸 Step 7: Take final screenshot")
     print("   Tool: mcp_Playwright_browser_screenshot")
     print("   Purpose: Capture agent response")
-    
+
     print("\n✅ Test workflow complete!")
     print("\n" + "=" * 60)
     print("💡 To use these tools in Cursor:")
@@ -73,10 +73,10 @@ def demonstrate_cmw_platform_automation():
     """
     Example of automating CMW Platform interactions with Playwright MCP tools.
     """
-    
+
     print("\n🏢 CMW Platform Automation Examples")
     print("=" * 50)
-    
+
     examples = [
         {
             "task": "Test CMW Platform Login",
@@ -106,7 +106,7 @@ def demonstrate_cmw_platform_automation():
             ]
         }
     ]
-    
+
     for i, example in enumerate(examples, 1):
         print(f"\n{i}. {example['task']}:")
         for step in example['steps']:
@@ -116,10 +116,10 @@ def available_playwright_mcp_tools():
     """
     List all available Playwright MCP tools and their purposes.
     """
-    
+
     print("\n🛠️  Available Playwright MCP Tools")
     print("=" * 45)
-    
+
     tools = [
         ("mcp_Playwright_browser_navigate", "Navigate to URLs"),
         ("mcp_Playwright_browser_click", "Click elements on page"),
@@ -134,7 +134,7 @@ def available_playwright_mcp_tools():
         ("mcp_Playwright_browser_upload", "Upload files"),
         ("mcp_Playwright_browser_download", "Handle downloads")
     ]
-    
+
     for tool, description in tools:
         print(f"   {tool:35} - {description}")
 
@@ -144,11 +144,11 @@ if __name__ == "__main__":
     print("✅ @playwright/mcp package installed")
     print("✅ Cursor IDE configured")
     print("\n" + "🔄 Next: Restart Cursor IDE to activate MCP tools" + "\n")
-    
+
     test_gradio_app_with_playwright()
     demonstrate_cmw_platform_automation()
     available_playwright_mcp_tools()
-    
+
     print("\n" + "=" * 60)
     print("🎉 Setup Complete! Your Playwright MCP tools are ready to use.")
     print("📝 Remember to restart Cursor IDE to load the new configuration.")

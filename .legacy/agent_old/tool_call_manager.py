@@ -78,7 +78,7 @@ class ToolCallManager:
                 self.similarity_manager = get_similarity_manager()
             except ImportError:
                 self.similarity_manager = None
-        
+
         if self.similarity_manager is not None and self.similarity_manager.is_enabled():
             try:
                 # Convert current args to text for similarity comparison
