@@ -71,7 +71,7 @@ ATTRIBUTE_MODEL_DESCRIPTIONS = {
         - DurationHMTime: 2:55 (макс. 23:59)""",
     "Enum": "Stores a list of values with multiple language support and color coding.",
     "Image": "Stores image files with configurable color modes and dimensions.",
-    "Instance": "Stores one or several IDs of the linked records in the related template. "
+    "Record": "Stores one or several IDs of the linked records in the related template. "
         "Record attribute can be mutually linked with the attribute in the related template. "
         "Mutually linked attributes are automatically cross-linked whenever the values of one of the attributes change.",
     "Role": "Stores one or several linked role IDs.",

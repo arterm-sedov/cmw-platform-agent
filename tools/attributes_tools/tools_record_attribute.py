@@ -41,17 +41,17 @@ def edit_or_create_record_attribute(
 ) -> Dict[str, Any]:
     """
     Edit or Create a record attribute (Запись, коллекция).
-    
+
     Record attribute is is linked to records in a related template.
-    
+
     Record attribute stores one or several IDs of the lined records in the related template.
-    
+
     Record attribute can be mutually linked with the attribute in the related template. Mutually linked attributes are automatically cross-linked whenever the values of one of the attributes change.
-    
+
     Returns:
         dict: {
             "success": bool - True if the attribute was created or edited successfully
-            "status_code": int - HTTP response status code  
+            "status_code": int - HTTP response status code
             "raw_response": dict|str|None - Raw response for auditing or payload body (sanitized)
             "error": str|None - Error message if operation failed
         }
@@ -72,7 +72,7 @@ def edit_or_create_record_attribute(
         "expression": expression_for_calculation,
         "instanceGlobalAlias": {
             "type": "Attribute" if related_attribute_system_name != None else "RecordTemplate",
-            "owner": related_attribute_system_name,
+            "owner": related_template_system_name if related_attribute_system_name !=None else None,
             "alias": related_attribute_system_name if related_attribute_system_name != None else related_template_system_name
         }
     }
