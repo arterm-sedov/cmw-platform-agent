@@ -8,3 +8,4 @@ server_config.yml
 *.log
 *.log.*
 cmw-agent.pid
+.reference_repos/**

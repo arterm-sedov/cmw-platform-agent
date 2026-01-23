@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from .i18n_translations import get_translation_key
+from .tabs.sidebar import Sidebar
 import gradio as gr
 
 # Import configuration with fallback for direct execution
@@ -83,7 +84,6 @@ class UIManager:
                 gr.Markdown(f"# {hero_title}", elem_classes=["hero-title"])
 
             # Create common sidebar using dedicated sidebar module
-            from .tabs.sidebar import Sidebar
             sidebar_instance = Sidebar(event_handlers, language=self.language, i18n_instance=self.i18n)
             sidebar_instance.set_main_app(main_app)  # Pass main app reference
             
@@ -113,6 +113,8 @@ class UIManager:
                 status_comp = self.components.get("status_display")
                 stats_comp = self.components.get("stats_display")
                 logs_comp = self.components.get("logs_display")
+                token_budget_comp = self.components.get("token_budget_display")
+                update_token_budget_handler = event_handlers.get("update_token_budget")
 
                 chat_tab_instance = self.components.get("chattab_tab")
                 if update_all_ui_handler and status_comp and stats_comp and logs_comp and chat_tab_instance:
@@ -133,6 +135,24 @@ class UIManager:
                         )
 
                     logging.getLogger(__name__).debug("✅ Event-driven UI refresh wired for end-of-turn updates")
+
+                # Token budget refresh: wire separately to avoid changing update_all_ui signature
+                if (
+                    update_token_budget_handler
+                    and token_budget_comp
+                    and chat_tab_instance
+                ):
+                    if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
+                        chat_tab_instance.streaming_event.then(
+                            fn=update_token_budget_handler,
+                            outputs=[token_budget_comp],
+                        )
+                    if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
+                        chat_tab_instance.submit_event.then(
+                            fn=update_token_budget_handler,
+                            outputs=[token_budget_comp],
+                        )
+                    logging.getLogger(__name__).debug("✅ Token budget event-driven refresh wired for end-of-turn updates")
             except Exception as e:
                 logging.getLogger(__name__).warning(f"Could not wire event-driven refresh: {e}")
 

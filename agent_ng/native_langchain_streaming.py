@@ -25,7 +25,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from .debug_streamer import get_debug_streamer
 from .i18n_translations import get_translation_key
-from .session_manager import set_current_session_id
+from .streaming_config import get_streaming_config
+from .tool_deduplicator import get_deduplicator
 
 # LangSmith tracing
 try:
@@ -81,8 +82,6 @@ class NativeLangChainStreaming:
         # Module logger
         self._logger = logging.getLogger(__name__)
         # Get configuration from centralized config
-        from .streaming_config import get_streaming_config
-
         self.config = get_streaming_config()
         self.max_iterations = self.config.get_max_tool_call_iterations()
 
@@ -378,6 +377,25 @@ class NativeLangChainStreaming:
                 iteration += 1
                 print(f"🔍 DEBUG: Starting iteration {iteration}")
 
+                # Budget moment: before each LLM call, compute an exact token budget snapshot
+                # from the *actual* messages list used for the next model call.
+                try:
+                    if hasattr(agent, "token_tracker") and agent.token_tracker:
+                        agent.token_tracker.refresh_budget_snapshot(
+                            agent=agent,
+                            conversation_id=conversation_id,
+                            messages_override=messages,
+                        )
+                except Exception as exc:
+                    # Keep this low-noise: budget snapshots are best-effort and must not
+                    # impact the streaming loop.
+                    try:
+                        self._logger.debug(
+                            "Budget snapshot pre-iteration failed: %s", exc
+                        )
+                    except Exception:
+                        pass
+
                 # Stream iteration progress as separate message (no icon - UI will add rotating clock)
 
                 yield StreamingEvent(
@@ -464,8 +482,13 @@ class NativeLangChainStreaming:
                                     "native_finish_reason": native_finish,
                                 },
                             )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        try:
+                            self._logger.debug(
+                                "Failed to emit early-finish hint: %s", exc
+                            )
+                        except Exception:
+                            pass
 
                     # Stream content as it arrives
                     if hasattr(chunk, "content") and chunk.content:
@@ -587,9 +610,16 @@ class NativeLangChainStreaming:
                                             hasattr(agent, "session_id")
                                             and agent.session_id
                                         ):
+                                            # Lazy import to avoid circular dependency
+                                            from .session_manager import set_current_session_id
                                             set_current_session_id(agent.session_id)
-                                    except Exception:
-                                        pass
+                                    except Exception as exc:
+                                        try:
+                                            self._logger.debug(
+                                                "Failed to set current session ID: %s", exc
+                                            )
+                                        except Exception:
+                                            pass
                                     tool_result = tool_obj.invoke(tool_args_with_agent)
 
                                     # Safety check for None tool_result
@@ -600,8 +630,6 @@ class NativeLangChainStreaming:
                                         tool_result = "Tool execution completed but returned no result"
 
                                     # Store the tool call result for future deduplication
-                                    from .tool_deduplicator import get_deduplicator
-
                                     deduplicator = get_deduplicator()
                                     deduplicator.store_tool_call(
                                         tool_name,
@@ -905,7 +933,13 @@ class NativeLangChainStreaming:
                                         "name": getattr(m, "name", None),
                                     }
                                 )
-                            except Exception:
+                            except Exception as exc:
+                                try:
+                                    self._logger.debug(
+                                        "Failed to snapshot message for turn_complete: %s", exc
+                                    )
+                                except Exception:
+                                    pass
                                 continue
 
                         yield StreamingEvent(
@@ -916,9 +950,14 @@ class NativeLangChainStreaming:
                                 "conversation_id": conversation_id,
                             },
                         )
-                    except Exception:
+                    except Exception as exc:
                         # Non-fatal if snapshot fails
-                        pass
+                        try:
+                            self._logger.debug(
+                                "Failed to create ordered messages snapshot: %s", exc
+                            )
+                        except Exception:
+                            pass
 
                     break
 
@@ -971,6 +1010,22 @@ class NativeLangChainStreaming:
                     agent.token_tracker.track_llm_response(final_chunk, messages)
                 except Exception as e:
                     print(f"🔍 DEBUG: Error tracking API tokens: {e}")
+
+            # Budget moment: after finalization, store a final budget snapshot for UI.
+            try:
+                if hasattr(agent, "token_tracker") and agent.token_tracker:
+                    agent.token_tracker.refresh_budget_snapshot(
+                        agent=agent,
+                        conversation_id=conversation_id,
+                        messages_override=messages,
+                    )
+            except Exception as exc:
+                try:
+                    self._logger.debug(
+                        "Budget snapshot post-finalization failed: %s", exc
+                    )
+                except Exception:
+                    pass
 
             # Extract normalized/native finish_reason if present (provider-agnostic; OpenRouter supplies both)
             def _extract_finish_reason(chunk) -> tuple[str | None, str | None]:
@@ -1068,7 +1123,13 @@ class NativeLangChainStreaming:
                                 "name": getattr(m, "name", None),
                             }
                         )
-                    except Exception:
+                    except Exception as exc:
+                        try:
+                            self._logger.debug(
+                                "Failed to snapshot message metadata: %s", exc
+                            )
+                        except Exception:
+                            pass
                         continue
 
                 yield StreamingEvent(
@@ -1081,9 +1142,14 @@ class NativeLangChainStreaming:
                         "native_finish_reason": native_finish,
                     },
                 )
-            except Exception:
+            except Exception as exc:
                 # Non-fatal if snapshot fails
-                pass
+                try:
+                    self._logger.debug(
+                        "Failed to create turn_complete snapshot: %s", exc
+                    )
+                except Exception:
+                    pass
 
             # Final completion event
 
@@ -1128,8 +1194,13 @@ class NativeLangChainStreaming:
                             key = (type(m).__name__, getattr(m, "content", ""))
                             if key not in memory_content:
                                 partial_messages_to_add.append(m)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    try:
+                        self._logger.debug(
+                            "Failed to collect partial messages for persistence: %s", exc
+                        )
+                    except Exception:
+                        pass
 
                 # Add a lean truncated AIMessage if we have partial content
                 try:
@@ -1145,13 +1216,24 @@ class NativeLangChainStreaming:
                         key = ("AIMessage", truncated_msg.content)
                         if key not in memory_content:
                             partial_messages_to_add.append(truncated_msg)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    try:
+                        self._logger.debug(
+                            "Failed to create truncated message for persistence: %s", exc
+                        )
+                    except Exception:
+                        pass
 
                 for m in partial_messages_to_add:
                     try:
                         agent.memory_manager.add_message(conversation_id, m)
-                    except Exception:
+                    except Exception as exc:
+                        try:
+                            self._logger.debug(
+                                "Failed to persist partial message: %s", exc
+                            )
+                        except Exception:
+                            pass
                         continue
             except Exception as persist_err:
                 self._logger.debug("Failed partial-turn persistence: %s", persist_err)
@@ -1168,8 +1250,13 @@ class NativeLangChainStreaming:
                     conversation_id,
                     AIMessage(content=self._get_error_message(str(e), language)),
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                try:
+                    self._logger.debug(
+                        "Failed to persist error message to memory: %s", exc
+                    )
+                except Exception:
+                    pass
 
             # Stream top-level error to debug logs
             try:
@@ -1179,8 +1266,13 @@ class NativeLangChainStreaming:
                     category="streaming",
                     metadata={"error": str(e)},
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                try:
+                    self._logger.debug(
+                        "Failed to stream error to debug logs: %s", exc
+                    )
+                except Exception:
+                    pass
 
             # Error completion for progress display
             yield StreamingEvent(

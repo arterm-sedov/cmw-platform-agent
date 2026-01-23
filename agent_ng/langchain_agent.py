@@ -18,19 +18,26 @@ Based on LangChain's official documentation and best practices.
 
 import asyncio
 import json
+import shutil
+import threading
 import time
+import traceback
 import os
 import uuid
 from typing import Dict, List, Optional, Any, AsyncGenerator, Tuple
 from dataclasses import dataclass
-from .token_counter import TokenCount
 from pathlib import Path
 
+from .token_counter import TokenCount, get_token_tracker, convert_chat_history_to_messages
+from .token_budget import TOKEN_STATUS_UNKNOWN
+from .native_langchain_streaming import get_native_streaming
+from tools.file_utils import FileUtils
+
 try:
-    from ..utils import get_tool_call_count
+    from .utils import get_tool_call_count
 except ImportError:
     # Fallback for when running as script
-    from utils import get_tool_call_count
+    from agent_ng.utils import get_tool_call_count
 
 # LangChain imports
 from langchain_core.messages import (
@@ -159,8 +166,6 @@ class CmwAgent:
         self.stats_manager = get_stats_manager()
 
         # Initialize token tracker
-        from .token_counter import get_token_tracker
-
         self.token_tracker = get_token_tracker(self.session_id)
 
         # Load system prompt
@@ -186,8 +191,6 @@ class CmwAgent:
             loop.create_task(self._initialize_async())
         except RuntimeError:
             # No event loop running, initialize synchronously
-            import threading
-
             def run_async_init():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -266,8 +269,6 @@ class CmwAgent:
 
         try:
             # Use native LangChain streaming
-            from .native_langchain_streaming import get_native_streaming
-
             # Get native streaming manager
             streaming_manager = get_native_streaming()
 
@@ -346,9 +347,6 @@ class CmwAgent:
             original_filename (str): Original filename from user upload
             file_path (str): Full path to the original file
         """
-        import shutil
-        from tools.file_utils import FileUtils
-
         # Generate unique filename with timestamp and hash
         unique_filename = FileUtils.generate_unique_filename(
             original_filename, self.session_id
@@ -568,8 +566,6 @@ class CmwAgent:
                 return {"message_count": 0, "user_messages": 0, "assistant_messages": 0, "system_prompt_count": 0, "total_tool_calls": 0}
         except Exception as e:
             print(f"🔍 DEBUG: Error getting conversation stats: {e}")
-            import traceback
-
             traceback.print_exc()
             return {"message_count": 0, "user_messages": 0, "assistant_messages": 0}
 
@@ -590,8 +586,6 @@ class CmwAgent:
     ) -> Optional[TokenCount]:
         """Count prompt tokens for chat history and current message"""
         if hasattr(self, "token_tracker"):
-            from .token_counter import convert_chat_history_to_messages
-
             messages = convert_chat_history_to_messages(history, current_message)
             return self.token_tracker.count_prompt_tokens(messages)
         return None
@@ -610,7 +604,7 @@ class CmwAgent:
                 "context_window": 0,
                 "percentage": 0.0,
                 "remaining_tokens": 0,
-                "status": "unknown",
+                "status": TOKEN_STATUS_UNKNOWN,
             }
 
         # Get context window from the agent's own LLM instance (session-specific)

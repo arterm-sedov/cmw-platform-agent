@@ -17,10 +17,13 @@ Key Features:
 from contextvars import ContextVar
 import logging
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 import uuid
 
 import gradio as gr
+
+if TYPE_CHECKING:
+    from .langchain_agent import CmwAgent
 
 # Module-level ContextVar holding the current session id
 _current_session_id: ContextVar[str | None] = ContextVar(
@@ -56,11 +59,9 @@ def get_session_config(session_id: str | None) -> dict[str, str] | None:
 # Handle both relative and absolute imports
 try:
     from .i18n_translations import get_translation_key
-    from .langchain_agent import CmwAgent
 except ImportError:
     # Fallback for when running as script
     from agent_ng.i18n_translations import get_translation_key
-    from agent_ng.langchain_agent import CmwAgent
 
 
 class SessionManager:
@@ -101,7 +102,7 @@ class SessionManager:
             self.sessions[session_id] = SessionData(session_id, self.language)
         return self.sessions[session_id]
 
-    def get_agent(self, session_id: str) -> CmwAgent:
+    def get_agent(self, session_id: str) -> "CmwAgent":
         """Get or create agent instance for the session"""
         session_data = self.get_session_data(session_id)
         return session_data.agent
@@ -194,7 +195,7 @@ class SessionManager:
             logging.getLogger(__name__).exception(f"❌ Error updating session LLM provider: {e}")
             return False
 
-    def get_session_agent(self, session_id: str) -> CmwAgent:
+    def get_session_agent(self, session_id: str) -> "CmwAgent":
         """Get the agent for a specific session - for UI modules to use"""
         session_data = self.get_session_data(session_id)
         return session_data.agent
@@ -213,6 +214,12 @@ class SessionData:
     """Data container for individual session state"""
 
     def __init__(self, session_id: str, language: str = "en"):
+        # Lazy import to avoid circular dependency
+        try:
+            from .langchain_agent import CmwAgent
+        except ImportError:
+            from agent_ng.langchain_agent import CmwAgent
+        
         self.session_id = session_id
         self.language = language
         self.agent = CmwAgent(session_id=session_id, language=language)  # Pass session ID and language to agent

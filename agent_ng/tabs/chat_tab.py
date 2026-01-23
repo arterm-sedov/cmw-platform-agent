@@ -9,14 +9,30 @@ Supports internationalization (i18n) with Russian and English translations.
 
 import asyncio
 from collections.abc import Callable
+from datetime import datetime
 import logging
 import os
 import tempfile
-import markdown
+import time
 from typing import Any, Dict, List, Optional, Tuple
+import uuid
 
 import gradio as gr
+import markdown
 
+from agent_ng.queue_manager import (
+    apply_concurrency_to_click_event,
+    apply_concurrency_to_submit_event,
+)
+from agent_ng.token_budget import (
+    TOKEN_STATUS_CRITICAL_THRESHOLD,
+    TOKEN_STATUS_MODERATE_THRESHOLD,
+    TOKEN_STATUS_WARNING_THRESHOLD,
+)
+from tools.file_utils import FileUtils
+
+from ..debug_streamer import get_debug_streamer
+from ..i18n_translations import get_translation_key
 from .sidebar import QuickActionsMixin
 
 
@@ -163,10 +179,6 @@ class ChatTab(QuickActionsMixin):
         # Main chat events with concurrency control and queue status
         if queue_manager:
             # Apply concurrency settings to chat events
-            from agent_ng.queue_manager import (
-                apply_concurrency_to_click_event,
-                apply_concurrency_to_submit_event,
-            )
 
             # Send button click with concurrency and queue status
             send_config = apply_concurrency_to_click_event(
@@ -382,14 +394,18 @@ class ChatTab(QuickActionsMixin):
                     try:
                         if messages:
                             agent.token_tracker.count_prompt_tokens(messages)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logging.getLogger(__name__).debug(
+                            "Failed to count prompt tokens on stop: %s", exc
+                        )
 
                     # Finalize turn token usage using fallback estimation (no API usage needed)
                     try:
                         agent.token_tracker.track_llm_response(None, messages)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logging.getLogger(__name__).debug(
+                            "Failed to track LLM response on stop: %s", exc
+                        )
 
                     # Build a stats block and append as assistant meta message
                     try:
@@ -416,8 +432,10 @@ class ChatTab(QuickActionsMixin):
                             if getattr(agent, "llm_instance", None):
                                 provider = agent.llm_instance.provider.value
                                 model = agent.llm_instance.model_name
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logging.getLogger(__name__).debug(
+                                "Failed to read provider/model for stats: %s", exc
+                            )
                         stats_lines.append(
                             self._get_translation("provider_model").format(
                                 provider=provider, model=model
@@ -441,21 +459,29 @@ class ChatTab(QuickActionsMixin):
                                 updated_history = list(history) if history else []
                                 updated_history.append(token_metadata_message)
                                 history = updated_history
-                            except Exception:
-                                pass
-                    except Exception:
+                            except Exception as exc:
+                                logging.getLogger(__name__).debug(
+                                    "Failed to append token stats to history: %s", exc
+                                )
+                    except Exception as exc:
                         # Non-fatal: stats block construction may fail silently
-                        pass
+                        logging.getLogger(__name__).debug(
+                            "Stats block construction failed: %s", exc
+                        )
 
                 # Ask app to refresh sidebar/status if available
                 try:
                     if hasattr(self.main_app, "trigger_ui_update"):
                         self.main_app.trigger_ui_update()
-                except Exception:
-                    pass
-        except Exception:
+                except Exception as exc:
+                    logging.getLogger(__name__).debug(
+                        "Failed to trigger UI update: %s", exc
+                    )
+        except Exception as exc:
             # Non-fatal: UI state update should still proceed
-            pass
+            logging.getLogger(__name__).debug(
+                "UI state update failed: %s", exc
+            )
 
         # Hide stop button and show download button with current conversation
         download_btns = self._update_download_button_visibility(history)
@@ -486,17 +512,45 @@ class ChatTab(QuickActionsMixin):
             # Get cumulative stats for detailed display
             cumulative_stats = agent.token_tracker.get_cumulative_stats()
 
-            # Ensure last-message tokens reflect the most recent turn only (session-specific)
+            # Token usage: prefer provider-reported per-turn usage when available (ground truth).
+            # For "Сообщение" display, always use API tokens when available (actual LLM call).
             used_tokens = budget_info.get("used_tokens", 0)
+            percentage_for_display = budget_info.get("percentage", 0.0)
             try:
                 last_api = agent.get_last_api_tokens()
-                if last_api and hasattr(last_api, "total_tokens"):
+                if (
+                    last_api
+                    and hasattr(last_api, "total_tokens")
+                    and not bool(getattr(last_api, "is_estimated", False))
+                    and getattr(last_api, "source", "") == "api"
+                ):
                     used_tokens = last_api.total_tokens
-            except Exception:
-                pass
+                    # Recalculate percentage based on actual API tokens (more accurate)
+                    if budget_info["context_window"] > 0:
+                        percentage_for_display = round(
+                            (used_tokens / budget_info["context_window"]) * 100.0, 1
+                        )
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to read last API tokens for budget display: %s", exc
+                )
 
             # Determine status icon using localized translations
-            status_icon = self._get_translation(f"token_status_{budget_info['status']}")
+            # Recalculate status based on API token percentage if available
+            if budget_info["context_window"] > 0 and used_tokens > 0:
+                api_percentage = (used_tokens / budget_info["context_window"]) * 100.0
+                if api_percentage >= TOKEN_STATUS_CRITICAL_THRESHOLD:
+                    status_icon = self._get_translation("token_status_critical")
+                elif api_percentage >= TOKEN_STATUS_WARNING_THRESHOLD:
+                    status_icon = self._get_translation("token_status_warning")
+                elif api_percentage >= TOKEN_STATUS_MODERATE_THRESHOLD:
+                    status_icon = self._get_translation("token_status_moderate")
+                else:
+                    status_icon = self._get_translation("token_status_good")
+            else:
+                status_icon = self._get_translation(
+                    f"token_status_{budget_info['status']}"
+                )
 
             # Build token usage display using separated components for better flexibility
             total = self._get_translation("token_usage_total").format(
@@ -506,7 +560,7 @@ class ChatTab(QuickActionsMixin):
                 conversation_tokens=cumulative_stats["session_tokens"]
             )
             last_message = self._get_translation("token_usage_last_message").format(
-                percentage=budget_info["percentage"],
+                percentage=percentage_for_display,
                 used=used_tokens,
                 context_window=budget_info["context_window"],
                 status_icon=status_icon,
@@ -542,8 +596,6 @@ class ChatTab(QuickActionsMixin):
 
     def _get_current_provider(self) -> str:
         """Get current LLM provider"""
-        import os
-
         return os.environ.get("AGENT_PROVIDER", "openrouter")
 
     def _get_available_models(self) -> list[str]:
@@ -631,8 +683,6 @@ class ChatTab(QuickActionsMixin):
         """Get current provider/model combination in format 'Provider / Model'"""
         if not hasattr(self, "main_app") or not self.main_app:
             # Return fallback value when main app is not available
-            import os
-
             provider = os.environ.get("AGENT_PROVIDER", "openrouter")
             return f"{provider.title()} / {provider}/default-model"
 
@@ -654,8 +704,6 @@ class ChatTab(QuickActionsMixin):
             print(f"Error getting current provider/model combination: {e}")
 
         # Return fallback value on error
-        import os
-
         provider = os.environ.get("AGENT_PROVIDER", "openrouter")
         return f"{provider.title()} / {provider}/default-model"
 
@@ -802,9 +850,6 @@ class ChatTab(QuickActionsMixin):
                 clear_handler = self.event_handlers.get("clear_chat")
                 if clear_handler:
                     # Create a mock request for session isolation
-                    import time
-                    import uuid
-
                     class MockRequest:
                         def __init__(self):
                             self.session_hash = f"mock_session_{uuid.uuid4().hex[:8]}_{int(time.time())}"
@@ -862,8 +907,6 @@ class ChatTab(QuickActionsMixin):
     def _get_translation(self, key: str) -> str:
         """Get a translation for a specific key"""
         # Always use direct translation for now to avoid i18n metadata issues
-        from ..i18n_translations import get_translation_key
-
         return get_translation_key(key, self.language)
 
     def _reset_quick_actions_dropdown(self) -> str:
@@ -952,8 +995,6 @@ class ChatTab(QuickActionsMixin):
 
             # If there are files, process them with the new lean system
             if files:
-                from tools.file_utils import FileUtils
-
                 # Session cache paths are now managed by the session manager
 
                 # Process files with new system
@@ -1114,11 +1155,6 @@ class ChatTab(QuickActionsMixin):
         Returns:
             File path if successful, None if failed
         """
-        from datetime import datetime
-        import os
-        import tempfile
-        import logging
-
         logger = logging.getLogger(__name__)
         logger.debug(f"Download function called with history type: {type(history)}")
         logger.debug(f"History content: {str(history)[:50]}")
@@ -1143,8 +1179,6 @@ class ChatTab(QuickActionsMixin):
             if main_app and hasattr(main_app, "session_manager"):
                 # Get current session ID to maintain session isolation
                 try:
-                    from ..debug_streamer import get_debug_streamer
-
                     debug_streamer = get_debug_streamer()
                     session_id = debug_streamer.get_current_session_id()
                 except Exception:
@@ -1172,8 +1206,10 @@ class ChatTab(QuickActionsMixin):
                         markdown_content += (
                             f"**Провайдер / модель:** {provider} / {model}\n\n"
                         )
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to add conversation summary to markdown: %s", exc
+            )
         markdown_content += "---\n\n"
 
         # Add conversation messages
@@ -1310,8 +1346,6 @@ class ChatTab(QuickActionsMixin):
         Returns:
             CSS content as string
         """
-        import logging
-        
         logger = logging.getLogger(__name__)
         
         # Get the path to the CSS file relative to the project root
