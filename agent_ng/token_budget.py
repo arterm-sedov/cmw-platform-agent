@@ -25,15 +25,18 @@ if TYPE_CHECKING:
 
 try:
     from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage
+    from langchain_core.utils.function_calling import convert_to_openai_tool
 except Exception:  # pragma: no cover
     BaseMessage = Any  # type: ignore[assignment]
     SystemMessage = Any  # type: ignore[assignment]
     ToolMessage = Any  # type: ignore[assignment]
+    convert_to_openai_tool = None  # type: ignore[assignment]
 
 
 _ENCODING = tiktoken.get_encoding("cl100k_base")
 
 # Very small cache keyed by system prompt + tool names + safety margin.
+# Cleared cache to avoid using inflated values from failed serialization
 _OVERHEAD_CACHE: dict[tuple[int, tuple[str, ...], int], int] = {}
 
 # Token budget constants
@@ -160,67 +163,120 @@ def compute_overhead_tokens(
 
     total = count_tokens(prompt)  # Always 0 since prompt is ""
 
+    logger = logging.getLogger(__name__)
+    logger.debug(
+        "compute_overhead_tokens: processing %d tools, types: %s",
+        len(tool_list),
+        [type(t).__name__ for t in tool_list[:5]]  # Log first 5 types
+    )
+
     for tool in tool_list:
-        # If the tool payload is already a dict (e.g., OpenAI/OpenRouter tool spec),
-        # count the actual serialized payload. This is closer to what the provider
-        # receives than a full pydantic JSON schema dump.
+        tool_counted = False
+        tool_name = "?"
+
+        # Step 1: If tool is already a dict (OpenAI format from llm.kwargs["tools"]),
+        # serialize and count directly - this is the exact format sent to the LLM.
         if isinstance(tool, dict):
             try:
-                total += count_tokens(json.dumps(tool, separators=(",", ":")))
-            except Exception as exc:
-                logging.getLogger(__name__).debug(
-                    "Failed to serialize bound tool payload for overhead: %s", exc
+                serialized = json.dumps(tool, separators=(",", ":"))
+                tokens = count_tokens(serialized)
+                total += tokens
+                tool_counted = True
+                tool_name = tool.get("function", {}).get("name", tool.get("name", "?"))
+                logger.debug(
+                    "Tool %s (dict format): %d tokens", tool_name, tokens
                 )
-            continue
-
-        # If tool spec is a pydantic model-like object, try to serialize it.
-        if hasattr(tool, "model_dump"):
-            try:
-                total += count_tokens(
-                    json.dumps(tool.model_dump(), separators=(",", ":"))
-                )
-                continue
             except Exception as exc:
-                logging.getLogger(__name__).debug(
-                    "Failed to serialize tool model_dump for overhead: %s", exc
-                )
-        if hasattr(tool, "dict"):
-            try:
-                total += count_tokens(json.dumps(tool.dict(), separators=(",", ":")))
-                continue
-            except Exception as exc:
-                logging.getLogger(__name__).debug(
-                    "Failed to serialize tool dict() for overhead: %s", exc
+                logger.debug(
+                    "Failed to serialize dict tool %s: %s", tool.get("name", "?"), exc
                 )
 
-        # Count tool schema (prefer pydantic v2, fallback to v1)
-        schema_str = ""
-        args_schema = getattr(tool, "args_schema", None)
-        if args_schema is not None:
+        # Step 2: If tool is a LangChain BaseTool object, convert it to OpenAI format
+        # using LangChain's built-in converter, then serialize and count.
+        # This ensures we count the exact format that gets sent to the LLM.
+        if not tool_counted and convert_to_openai_tool is not None:
             try:
-                if hasattr(args_schema, "model_json_schema"):
-                    schema_str = json.dumps(
-                        args_schema.model_json_schema(), separators=(",", ":")
-                    )
-                elif hasattr(args_schema, "schema"):
-                    schema_str = json.dumps(
-                        args_schema.schema(), separators=(",", ":")
+                # Convert BaseTool to OpenAI format
+                # (same as bind_tools() does internally)
+                openai_tool = convert_to_openai_tool(tool)
+                if isinstance(openai_tool, dict):
+                    serialized = json.dumps(openai_tool, separators=(",", ":"))
+                    tokens = count_tokens(serialized)
+                    total += tokens
+                    tool_counted = True
+                    tool_name = openai_tool.get("function", {}).get("name", "?")
+                    logger.debug(
+                        "Tool %s (converted from BaseTool): %d tokens",
+                        tool_name, tokens
                     )
             except Exception as exc:
-                logging.getLogger(__name__).debug(
-                    "Failed to serialize tool schema for overhead: %s", exc
+                tool_name = getattr(tool, "name", "?")
+                logger.debug(
+                    "Failed to convert BaseTool %s to OpenAI format: %s", tool_name, exc
                 )
-                schema_str = ""
-        if schema_str:
-            total += count_tokens(schema_str)
 
-        # Count tool description when present
-        desc = getattr(tool, "description", None)
-        if desc:
-            total += count_tokens(desc)
+        # Step 3: Last resort fallback - try to extract schema manually
+        # (should rarely be needed if convert_to_openai_tool works)
+        if not tool_counted:
+            tool_name = getattr(tool, "name", "tool")
+            try:
+                # Try to get args_schema and serialize it
+                args_schema = getattr(tool, "args_schema", None)
+                if args_schema is not None:
+                    schema_str = ""
+                    if hasattr(args_schema, "model_json_schema"):
+                        schema_str = json.dumps(
+                            args_schema.model_json_schema(), separators=(",", ":")
+                        )
+                    elif hasattr(args_schema, "schema"):
+                        schema_str = json.dumps(
+                            args_schema.schema(), separators=(",", ":")
+                        )
+                    if schema_str:
+                        # Count schema + description (minimal but better than estimate)
+                        schema_tokens = count_tokens(schema_str)
+                        desc = getattr(tool, "description", "")
+                        desc_tokens = count_tokens(desc) if desc else 0
+                        # Add name tokens and basic structure overhead
+                        name_tokens = count_tokens(tool_name)
+                        structure_overhead = 30  # Basic JSON structure
+                        tokens = (
+                            schema_tokens + desc_tokens + name_tokens
+                            + structure_overhead
+                        )
+                        total += tokens
+                        tool_counted = True
+                        logger.debug(
+                            "Tool %s (schema extraction): %d tokens "
+                            "(schema:%d + desc:%d + name:%d + struct:%d)",
+                            tool_name, tokens, schema_tokens, desc_tokens,
+                            name_tokens, structure_overhead
+                        )
+            except Exception as exc:
+                logger.debug(
+                    "Failed to extract schema for tool %s: %s", tool_name, exc
+                )
+
+        # Step 4: Absolute last resort - estimation (should never happen in practice)
+        if not tool_counted:
+            tool_name = getattr(tool, "name", "tool")
+            tool_desc = getattr(tool, "description", "")
+            name_tokens = count_tokens(tool_name)
+            desc_tokens = count_tokens(tool_desc)
+            # Minimal estimate - this should rarely be used
+            estimated_tokens = max(50, name_tokens + desc_tokens) + 80
+            total += estimated_tokens
+            logger.warning(
+                "Tool %s: All serialization methods failed, using fallback estimate: "
+                "name(%d) + desc(%d) + overhead(80) = %d tokens",
+                tool_name, name_tokens, desc_tokens, estimated_tokens
+            )
 
     # Safety margin is hardcoded to 0, so no addition needed
-    # total += safety_margin  # Always 0
+
+    logger.debug(
+        "compute_overhead_tokens: total=%d for %d tools", total, len(tool_list)
+    )
 
     _OVERHEAD_CACHE[key] = total
     return total
@@ -234,7 +290,6 @@ def compute_token_budget_snapshot(
     include_overhead: bool = True,
     add_json_overhead: bool = True,
     json_overhead_pct: float = DEFAULT_TOOL_JSON_OVERHEAD_PCT,
-    safety_margin: int = DEFAULT_SAFETY_MARGIN,
 ) -> dict[str, Any]:
     """Return a budget snapshot dict for UI/stats at a budget moment.
 
@@ -306,22 +361,45 @@ def compute_token_budget_snapshot(
     # Always include tool schemas since they're sent to the LLM and counted by API
     tool_schema_tokens = 0
     if include_overhead:
-        # Prefer tool payload actually bound to the underlying LLM, fall back to
-        # agent.tools.
+        # Extract bound tool schemas from LLM.
+        # After bind_tools(), LangChain stores tools in RunnableBinding.kwargs["tools"]
+        # as OpenAI-format dicts (already serializable).
         tools_payload = None
         try:
             llm_instance = getattr(agent, "llm_instance", None)
             llm = getattr(llm_instance, "llm", None) if llm_instance else None
-            tools_payload = getattr(llm, "tools", None) if llm is not None else None
+            if llm is not None:
+                # Primary: RunnableBinding stores bound tools in kwargs
+                kwargs = getattr(llm, "kwargs", None)
+                if isinstance(kwargs, dict):
+                    tools_payload = kwargs.get("tools")
+                # Fallback: some LLMs might store directly
+                if tools_payload is None:
+                    tools_payload = getattr(llm, "tools", None)
         except Exception as exc:
             logging.getLogger(__name__).debug(
                 "Failed to read bound tool payload from LLM: %s", exc
             )
             tools_payload = None
 
+        # Log which tool source we're using
+        if tools_payload is not None:
+            logging.getLogger(__name__).debug(
+                "Using bound tools from LLM.kwargs: %d tools, type=%s",
+                len(tools_payload) if hasattr(tools_payload, "__len__") else "?",
+                type(tools_payload).__name__
+            )
+        else:
+            agent_tools = getattr(agent, "tools", None)
+            logging.getLogger(__name__).debug(
+                "Falling back to agent.tools: %s tools",
+                len(agent_tools) if agent_tools else 0
+            )
+
         # Count only tool schemas (since they're always sent to LLM)
         tool_schema_tokens = compute_overhead_tokens(
-            tools=tools_payload if tools_payload is not None else getattr(agent, "tools", None),
+            tools=tools_payload if tools_payload is not None
+                   else getattr(agent, "tools", None),
         )
 
     overhead_tokens = tool_schema_tokens
