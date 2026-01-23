@@ -152,9 +152,9 @@ if hasattr(chat_tab_instance, "submit_event"):
 ### Token Budget Constants (`agent_ng/token_budget.py`)
 
 ```python
-# Token budget constants
-DEFAULT_TOOL_JSON_OVERHEAD_PCT = 0.10
-DEFAULT_SAFETY_MARGIN = 2000
+# Token budget constants (optimized for accuracy)
+DEFAULT_TOOL_JSON_OVERHEAD_PCT = 0.0  # No JSON overhead inflation
+DEFAULT_SAFETY_MARGIN = 0  # No arbitrary safety margin
 
 # Token budget status thresholds (percentage of context window used)
 TOKEN_STATUS_CRITICAL_THRESHOLD = 90.0
@@ -167,6 +167,9 @@ TOKEN_STATUS_WARNING = "warning"
 TOKEN_STATUS_MODERATE = "moderate"
 TOKEN_STATUS_GOOD = "good"
 TOKEN_STATUS_UNKNOWN = "unknown"
+
+# Global average tool size (calculated once at first tool binding)
+_GLOBAL_AVG_TOOL_SIZE: int | None = None
 ```
 
 **Benefits:**
@@ -331,6 +334,69 @@ elif percentage >= TOKEN_STATUS_WARNING_THRESHOLD:
 3. **Thread-Local Context**: Use Pydantic model for agent context (like reference)
 4. **Performance Monitoring**: Track budget computation performance
 
+## Token Counting Accuracy Improvements (2026-01-23)
+
+### Problem Identified
+
+Initial implementation had inflated token estimates (~2x API-reported values) due to:
+1. **Double-counting API tokens**: Using `+=` instead of `=` when updating turn tokens
+2. **Estimate contamination**: Estimated tokens contaminating API-reported totals
+3. **Failed tool serialization**: Tool schema counting failing, returning cached inflated values
+4. **Unnecessary overhead**: Safety margins and JSON overhead percentages inflating estimates
+
+### Solutions Implemented
+
+1. **Fixed API Token Accumulation** (`token_counter.py`):
+   - Changed `accumulate_llm_call_usage()` → `update_turn_usage_from_api()`
+   - Changed `+=` to `=` for turn tokens (API returns cumulative values)
+   - Reset estimated tokens to 0 for successful API completions
+
+2. **Fixed Tool Schema Counting** (`token_budget.py`):
+   - Access bound tools from `llm.kwargs["tools"]` (OpenAI-format dicts)
+   - Direct serialization of dict tools with `json.dumps()`
+   - Global average tool size calculated once at first binding
+   - Fallback to global average (not hardcoded 600) for edge cases
+
+3. **Removed Inflation Sources**:
+   - `DEFAULT_TOOL_JSON_OVERHEAD_PCT = 0.0` (was 0.10)
+   - `DEFAULT_SAFETY_MARGIN = 0` (was 2000)
+   - System prompt not double-counted (excluded from overhead)
+
+4. **Simplified Architecture**:
+   - Removed complex multi-level caching
+   - Single global variable `_GLOBAL_AVG_TOOL_SIZE` set once
+   - Pure calculation function (no side effects)
+
+### Token Breakdown Clarification
+
+The UI displays three components of the token estimate:
+
+- **Контекст (Context)**: `conversation_tokens` - System, user, and assistant messages (excluding tool results)
+- **Инструменты (Tools)**: `tool_tokens` - Tool result messages (ToolMessage content) returned by tools
+- **Накладные (Overhead)**: `overhead_tokens` - Tool schemas sent with every LLM call (constant per tool set)
+
+**Example:**
+```
+Всего: 26,284        # Actual API-reported tokens
+Диалог: 26,284      # Same as Всего (conversation + tool results)
+Прогноз: 36,719     # Estimated: Context + Tools + Overhead
+  - Контекст: 5,153      # Conversation messages
+  - Инструменты: 2,366   # Tool result messages
+  - Накладные: 29,200    # Tool schemas (49 tools × ~600 avg)
+```
+
+**Why Прогноз > Всего?**
+- Прогноз includes tool schemas (overhead) that are sent with every LLM call
+- API tokens reflect actual provider counting/optimization
+- Estimates use `tiktoken` which may differ from provider tokenization
+
+### Code Quality Improvements
+
+- ✅ Removed all silent `except: pass` blocks
+- ✅ Added proper logging to all exception handlers
+- ✅ Pure functions (no hidden side effects)
+- ✅ Simplified caching (global constant vs. complex cache)
+
 ## Conclusion
 
 The event-driven UI refresh implementation successfully achieves:
@@ -340,5 +406,6 @@ The event-driven UI refresh implementation successfully achieves:
 - ✅ Better user experience (responsive UI)
 - ✅ Leaner codebase (functional approach)
 - ✅ Maintainable code (centralized constants, proper logging)
+- ✅ Accurate token counting (aligned with API-reported values)
 
 The hybrid approach (event-driven + timer fallback) provides the best balance of responsiveness and reliability.
