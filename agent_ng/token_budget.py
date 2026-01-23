@@ -33,16 +33,17 @@ except Exception:  # pragma: no cover
 
 _ENCODING = tiktoken.get_encoding("cl100k_base")
 
-# Very small cache keyed by system prompt + tool names + safety margin.
-# Cleared cache to avoid using inflated values from failed serialization
-_OVERHEAD_CACHE: dict[tuple[int, tuple[str, ...], int], int] = {}
-
 # Global average tool size (calculated once at first tool binding)
 _GLOBAL_AVG_TOOL_SIZE: int | None = None
 
 # Token budget constants
 DEFAULT_TOOL_JSON_OVERHEAD_PCT = 0.0  # Reduced from 0.10 to avoid inflation
 DEFAULT_SAFETY_MARGIN = 0  # Reduced from 2000 as it was causing token inflation
+
+# Overhead adjustment factor: heuristic to match API-reported tokens
+# Calculated from API data: inferred_actual_overhead / estimated_overhead ≈ 0.8
+# Set to 1.0 to disable adjustment (use raw estimates)
+OVERHEAD_ADJUSTMENT_FACTOR = 0.8
 
 # Token budget status thresholds (percentage of context window used)
 TOKEN_STATUS_CRITICAL_THRESHOLD = 90.0
@@ -160,8 +161,8 @@ def _calculate_avg_tool_size(tools: Iterable[Any] | None) -> int:
     if serialized_tokens:
         avg = sum(serialized_tokens) // len(serialized_tokens)
         logging.getLogger(__name__).info(
-            f"Calculated tool average: {avg} tokens "
-            f"(from {len(serialized_tokens)} tools)"
+            "Calculated tool average: %d tokens (from %d tools)",
+            avg, len(serialized_tokens)
         )
         return avg
 
@@ -174,31 +175,11 @@ def compute_overhead_tokens(
 ) -> int:
     """Compute overhead tokens from tool schemas only.
 
-    Uses a tiny cache to avoid recounting stable overhead repeatedly.
     Note: system_prompt and safety_margin are hardcoded to "" and 0 respectively
     since they're always constants in our usage.
     """
-    # Hardcoded constants since we never vary them
-    prompt = ""  # Always empty to avoid double-counting system prompts
-    safety_margin = 0  # Always 0 for accurate estimates
-
     tool_list = list(tools or [])
-    tool_names = tuple(
-        str(
-            (t.get("name") if isinstance(t, dict) else None)
-            or ((t.get("function") or {}).get("name") if isinstance(t, dict) else None)
-            or getattr(t, "name", None)
-            or getattr(t, "__name__", None)
-            or "tool"
-        )
-        for t in tool_list
-    )
-    key = (hash(prompt), tool_names, int(safety_margin))
-    cached = _OVERHEAD_CACHE.get(key)
-    if cached is not None:
-        return cached
-
-    total = count_tokens(prompt)  # Always 0 since prompt is ""
+    total = 0
 
     logger = logging.getLogger(__name__)
     logger.debug(
@@ -239,12 +220,16 @@ def compute_overhead_tokens(
 
     # Safety margin is hardcoded to 0, so no addition needed
 
+    # Apply heuristic adjustment factor to match API-reported tokens
+    # This compensates for differences between tiktoken and provider tokenization
+    adjusted_total = int(total * OVERHEAD_ADJUSTMENT_FACTOR)
+
     logger.debug(
-        "compute_overhead_tokens: total=%d for %d tools", total, len(tool_list)
+        "compute_overhead_tokens: raw=%d, adjusted=%d (factor=%.3f) for %d tools",
+        total, adjusted_total, OVERHEAD_ADJUSTMENT_FACTOR, len(tool_list)
     )
 
-    _OVERHEAD_CACHE[key] = total
-    return total
+    return adjusted_total
 
 
 def compute_token_budget_snapshot(

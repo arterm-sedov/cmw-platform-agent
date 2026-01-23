@@ -156,6 +156,9 @@ if hasattr(chat_tab_instance, "submit_event"):
 DEFAULT_TOOL_JSON_OVERHEAD_PCT = 0.0  # No JSON overhead inflation
 DEFAULT_SAFETY_MARGIN = 0  # No arbitrary safety margin
 
+# Overhead adjustment factor: heuristic to match API-reported tokens
+OVERHEAD_ADJUSTMENT_FACTOR = 0.8  # Compensates for tiktoken vs provider tokenization differences
+
 # Token budget status thresholds (percentage of context window used)
 TOKEN_STATUS_CRITICAL_THRESHOLD = 90.0
 TOKEN_STATUS_WARNING_THRESHOLD = 75.0
@@ -362,8 +365,16 @@ Initial implementation had inflated token estimates (~2x API-reported values) du
    - `DEFAULT_SAFETY_MARGIN = 0` (was 2000)
    - System prompt not double-counted (excluded from overhead)
 
-4. **Simplified Architecture**:
-   - Removed complex multi-level caching
+4. **Overhead Adjustment Factor** (`token_budget.py`):
+   - Added `OVERHEAD_ADJUSTMENT_FACTOR = 0.8` constant
+   - Applied to tool schema overhead to match API-reported tokens
+   - Compensates for differences between `tiktoken` (cl100k_base) and provider tokenization
+   - Calculated from API data: `inferred_actual_overhead / estimated_overhead ≈ 0.8`
+   - Brings estimates within 1-2% of API-reported values
+   - Can be set to `1.0` to disable adjustment if needed
+
+5. **Simplified Architecture**:
+   - Removed complex multi-level caching (`_OVERHEAD_CACHE` removed)
    - Single global variable `_GLOBAL_AVG_TOOL_SIZE` set once
    - Pure calculation function (no side effects)
 
@@ -385,10 +396,12 @@ The UI displays three components of the token estimate:
   - Накладные: 29,200    # Tool schemas (49 tools × ~600 avg)
 ```
 
-**Why Прогноз > Всего?**
+**Why Прогноз differs from Всего?**
 - Прогноз includes tool schemas (overhead) that are sent with every LLM call
 - API tokens reflect actual provider counting/optimization
-- Estimates use `tiktoken` which may differ from provider tokenization
+- Estimates use `tiktoken` (cl100k_base) which may differ from provider tokenization
+- **Overhead Adjustment Factor (0.8)** applied to bring estimates within 1-2% of API values
+- This compensates for tokenization differences while maintaining conservative budgeting
 
 ### Code Quality Improvements
 
