@@ -130,15 +130,18 @@ def compute_context_tokens(
 
 def compute_overhead_tokens(
     *,
-    system_prompt: str | None,
     tools: Iterable[Any] | None,
-    safety_margin: int = DEFAULT_SAFETY_MARGIN,
 ) -> int:
-    """Compute overhead tokens from system prompt + tool schemas + safety margin.
+    """Compute overhead tokens from tool schemas only.
 
     Uses a tiny cache to avoid recounting stable overhead repeatedly.
+    Note: system_prompt and safety_margin are hardcoded to "" and 0 respectively
+    since they're always constants in our usage.
     """
-    prompt = str(system_prompt or "")
+    # Hardcoded constants since we never vary them
+    prompt = ""  # Always empty to avoid double-counting system prompts
+    safety_margin = 0  # Always 0 for accurate estimates
+
     tool_list = list(tools or [])
     tool_names = tuple(
         str(
@@ -155,7 +158,7 @@ def compute_overhead_tokens(
     if cached is not None:
         return cached
 
-    total = count_tokens(prompt)
+    total = count_tokens(prompt)  # Always 0 since prompt is ""
 
     for tool in tool_list:
         # If the tool payload is already a dict (e.g., OpenAI/OpenRouter tool spec),
@@ -216,15 +219,8 @@ def compute_overhead_tokens(
         if desc:
             total += count_tokens(desc)
 
-    try:
-        total += int(safety_margin)
-    except Exception as exc:
-        logging.getLogger(__name__).debug(
-            "Failed to add safety margin, using default %d: %s",
-            DEFAULT_SAFETY_MARGIN,
-            exc,
-        )
-        total += DEFAULT_SAFETY_MARGIN
+    # Safety margin is hardcoded to 0, so no addition needed
+    # total += safety_margin  # Always 0
 
     _OVERHEAD_CACHE[key] = total
     return total
@@ -325,9 +321,7 @@ def compute_token_budget_snapshot(
 
         # Count only tool schemas (since they're always sent to LLM)
         tool_schema_tokens = compute_overhead_tokens(
-            system_prompt="",  # Don't count system prompt separately
             tools=tools_payload if tools_payload is not None else getattr(agent, "tools", None),
-            safety_margin=0,  # No safety margin
         )
 
     overhead_tokens = tool_schema_tokens
