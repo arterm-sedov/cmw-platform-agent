@@ -18,6 +18,7 @@ Based on LangChain's official documentation and best practices.
 
 import asyncio
 import json
+import logging
 import shutil
 import threading
 import time
@@ -444,16 +445,17 @@ class CmwAgent:
         """
         try:
             if debug:
-                print(f"🔍 DEBUG: Getting conversation stats from memory manager")
+                self._logger.debug("Getting conversation stats from memory manager")
 
             if self.memory_manager:
                 if debug:
-                    print(f"🔍 DEBUG: Memory manager type: {type(self.memory_manager)}")
-                    print(
-                        f"🔍 DEBUG: Memory manager has {len(self.memory_manager.memories)} conversations"
+                    self._logger.debug("Memory manager type: %s", type(self.memory_manager))
+                    self._logger.debug(
+                        "Memory manager has %d conversations",
+                        len(self.memory_manager.memories),
                     )
-                    print(
-                        f"🔍 DEBUG: Memory manager memories: {self.memory_manager.memories}"
+                    self._logger.debug(
+                        "Memory manager memories: %s", self.memory_manager.memories
                     )
 
                 # Get all conversations and count messages for this session
@@ -482,14 +484,20 @@ class CmwAgent:
                         # ToolAwareMemory with chat_memory.chat_memory
                         messages = conversation.chat_memory.chat_memory
                         if debug:
-                            print(
-                                f"🔍 DEBUG: Conversation {conversation_id} has {len(messages)} messages (from chat_memory.chat_memory)"
+                            self._logger.debug(
+                                "Conversation %s has %d messages (from chat_memory.chat_memory)",
+                                conversation_id,
+                                len(messages),
                             )
                         for i, message in enumerate(messages):
                             total_messages += 1
                             if debug:
-                                print(
-                                    f"🔍 DEBUG: Message {i}: type={type(message)}, role={getattr(message, 'role', 'No role')}, content={getattr(message, 'content', 'No content')[:50]}..."
+                                self._logger.debug(
+                                    "Message %d: type=%s, role=%s, content=%s...",
+                                    i,
+                                    type(message),
+                                    getattr(message, "role", "No role"),
+                                    getattr(message, "content", "No content")[:50],
                                 )
                             if hasattr(message, "role"):
                                 if message.role == "user":
@@ -540,18 +548,31 @@ class CmwAgent:
                             # Also check for SystemMessage instances
                             elif hasattr(message, "__class__") and "System" in message.__class__.__name__:
                                 system_prompt_count += 1
-                    else:
-                        if debug:
-                            print(
-                                f"🔍 DEBUG: Unknown conversation type: {type(conversation)}"
-                            )
+                    elif debug:
+                        self._logger.debug(
+                            "Unknown conversation type: %s", type(conversation)
+                        )
 
                 if debug:
-                    print(
-                        f"🔍 DEBUG: Total stats: {total_messages} total, {user_messages} user, {assistant_messages} assistant"
+                    self._logger.debug(
+                        "Total stats: %d total, %d user, %d assistant",
+                        total_messages,
+                        user_messages,
+                        assistant_messages,
                     )
                 # Get tool call count using the shared utility function
                 tool_call_count = get_tool_call_count(self, self.session_id)
+
+                # Get compression stats
+                try:
+                    from agent_ng.history_compression import get_compression_stats
+
+                    compression_count, total_tokens_saved = get_compression_stats(
+                        self.session_id
+                    )
+                except Exception:
+                    compression_count = 0
+                    total_tokens_saved = 0
 
                 return {
                     "message_count": total_messages,
@@ -559,15 +580,22 @@ class CmwAgent:
                     "assistant_messages": assistant_messages,
                     "system_prompt_count": system_prompt_count,
                     "total_tool_calls": tool_call_count,
+                    "compression_count": compression_count,
+                    "compression_tokens_saved": total_tokens_saved,
                 }
-            else:
-                if debug:
-                    print("🔍 DEBUG: No memory manager available")
-                return {"message_count": 0, "user_messages": 0, "assistant_messages": 0, "system_prompt_count": 0, "total_tool_calls": 0}
+
+            if debug:
+                self._logger.debug("No memory manager available")
+            return {"message_count": 0, "user_messages": 0, "assistant_messages": 0, "system_prompt_count": 0, "total_tool_calls": 0}
         except Exception as e:
-            print(f"🔍 DEBUG: Error getting conversation stats: {e}")
-            traceback.print_exc()
-            return {"message_count": 0, "user_messages": 0, "assistant_messages": 0}
+            self._logger.exception("Error getting conversation stats: %s", e)
+            return {
+                "message_count": 0,
+                "user_messages": 0,
+                "assistant_messages": 0,
+                "compression_count": 0,
+                "compression_tokens_saved": 0,
+            }
 
     def get_token_counts(self, messages: List[Any]) -> Dict[str, Any]:
         """Get token counts for display"""

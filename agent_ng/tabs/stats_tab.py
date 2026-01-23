@@ -214,6 +214,11 @@ class StatsTab:
     - {self._get_translation("user_messages_label")}: {stats["conversation_stats"]["user_messages"]}
     - {self._get_translation("assistant_messages_label")}: {stats["conversation_stats"]["assistant_messages"]}
     - {self._get_translation("total_calls_label")}: {stats["conversation_stats"]["total_tool_calls"]}
+{f"""
+{self._get_translation("compression_stats_label")}
+- {self._get_translation("compression_count_label").format(count=stats["conversation_stats"].get("compression_count", 0))}
+- {self._get_translation("compression_tokens_saved_label").format(tokens=stats["conversation_stats"].get("compression_tokens_saved", 0))}
+""" if stats["conversation_stats"].get("compression_count", 0) > 0 else ""}
             """
         except Exception as e:
             return f"{self._get_translation('error_loading_stats')}: {e!s}"

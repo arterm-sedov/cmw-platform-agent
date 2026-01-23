@@ -285,10 +285,10 @@ class ConversationTokenTracker:
         self, response: Any, messages: list[BaseMessage]
     ) -> TokenCount:
         """Track LLM response tokens with API fallback"""
-        print("🔍 DEBUG: track_llm_response response type:", type(response))
+        logger.debug("track_llm_response response type: %s", type(response))
         # Try to extract API tokens from response
         api_tokens = self._extract_api_tokens(response)
-        print(f"🔍 DEBUG: Extracted API tokens: {api_tokens}")
+        logger.debug("Extracted API tokens: %s", api_tokens)
 
         # Get token count (API or estimated)
         if api_tokens:
@@ -300,16 +300,16 @@ class ConversationTokenTracker:
                 is_estimated=False,  # Not estimated
                 source="api",
             )
-            print(f"🔍 DEBUG: Using API tokens: {token_count}")
+            logger.debug("Using API tokens: %d", token_count)
         else:
             # Fallback to tiktoken estimation - count only the current request
-            print("🔍 DEBUG: No API tokens, using tiktoken fallback")
-            print("🔍 DEBUG: Counting tokens for current request only")
+            logger.debug("No API tokens, using tiktoken fallback")
+            logger.debug("Counting tokens for current request only")
 
             # Extract only the current request to avoid counting duplicated context
             current_request = self._extract_current_request(messages)
-            print(
-                "🔍 DEBUG: Current request has %d messages (vs %d total)",
+            logger.debug(
+                "Current request has %d messages (vs %d total)",
                 len(current_request),
                 len(messages),
             )
@@ -324,12 +324,12 @@ class ConversationTokenTracker:
                 source="tiktoken_estimation",
             )
 
-        print(f"🔍 DEBUG: Token count result: {token_count}")
+        logger.debug("Token count result: %d", token_count)
         self._last_api_tokens = token_count
 
         # Update cumulative tracking
         self._update_cumulative_tokens(token_count)
-        print(f"🔍 DEBUG: Updated cumulative stats: {self.get_cumulative_stats()}")
+        logger.debug("Updated cumulative stats: %s", self.get_cumulative_stats())
 
         return token_count
 

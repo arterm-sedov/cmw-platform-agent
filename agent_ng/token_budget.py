@@ -57,6 +57,12 @@ TOKEN_STATUS_MODERATE = "moderate"  # noqa: S105
 TOKEN_STATUS_GOOD = "good"  # noqa: S105
 TOKEN_STATUS_UNKNOWN = "unknown"  # noqa: S105
 
+# History compression configuration
+HISTORY_COMPRESSION_TARGET_TOKENS_PCT = 0.10  # 10% of context window for compressed summary
+HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN = 1  # Keep N recent turns when compressing mid-turn or after interrupted turn
+HISTORY_COMPRESSION_KEEP_RECENT_TURNS_SUCCESS = 0  # Keep N recent turns when compressing after successful completion
+HISTORY_COMPRESSION_MID_TURN_THRESHOLD = TOKEN_STATUS_CRITICAL_THRESHOLD  # Trigger proactive compression at this %
+
 
 def count_tokens(content: str | Any) -> int:
     """Count tokens in a string using exact cl100k_base encoding."""

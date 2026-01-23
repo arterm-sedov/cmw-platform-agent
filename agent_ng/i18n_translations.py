@@ -300,6 +300,16 @@ RUSSIAN_TRANSLATIONS = {
     "no_providers_available": "❌ Нет доступных провайдеров",
     "no_models_available": "❌ Нет доступных моделей",
     "error_loading_providers": "❌ Ошибка загрузки провайдеров",
+    # History compression
+    "history_compression_title": "📦 История диалога сжата",
+    "history_compression_info": "Сохранено ~{tokens_saved:,} токенов. Использование: {previous_pct:.1f}% → {current_pct:.1f}%. Сжатий: {compression_count}.",
+    "history_compression_info_before": "Сжимаю диалог... ({previous_pct:.1f}% использовано)",
+    "history_compression_reason_critical": "Критическое использование токенов (≥90%)",
+    "history_compression_reason_proactive": "Сжимаю диалог для предотвращения переполнения",
+    "history_compression_reason_interrupted": "Оборванный ход с критическим статусом",
+    "compression_stats_label": "Статистика сжатия",
+    "compression_count_label": "Сжатий: {count}",
+    "compression_tokens_saved_label": "Токенов сохранено: {tokens:,}",
     # UI Icons
     "clock_icons": [
         "🕐",
@@ -606,6 +616,16 @@ ENGLISH_TRANSLATIONS = {
     "no_providers_available": "❌ No providers available",
     "no_models_available": "❌ No models available",
     "error_loading_providers": "❌ Error loading providers",
+    # History compression
+    "history_compression_title": "📦 Conversation History Compressed",
+    "history_compression_info": "Saved ~{tokens_saved:,} tokens. Usage: {previous_pct:.1f}% → {current_pct:.1f}%. Compressions: {compression_count}.",
+    "history_compression_info_before": "Compressing conversation... ({previous_pct:.1f}% used)",
+    "history_compression_reason_critical": "Critical token usage (≥{threshold}%)",
+    "history_compression_reason_proactive": "Compressing conversation to prevent overflow",
+    "history_compression_reason_interrupted": "Turn interrupted with critical status",
+    "compression_stats_label": "Compression Stats",
+    "compression_count_label": "Compressions: {count}",
+    "compression_tokens_saved_label": "Tokens saved: {tokens:,}",
     # UI Icons
     "clock_icons": [
         "🕐",

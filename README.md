@@ -92,6 +92,7 @@ graph TD
 - **Error Handler** (`error_handler.py`) - Vector similarity error classification
 - **Memory Management** (`langchain_memory.py`) - LangChain-native conversation memory
 - **Streaming System** (`native_langchain_streaming.py`) - Token-by-token streaming
+- **History Compression** (`history_compression.py`) - Semantic compression to prevent context overflow
 
 ### Key Design Decisions
 
@@ -232,6 +233,16 @@ Set up your CMW Platform connection in the Config tab:
 - Event-driven UI updates for immediate budget visibility
 
 **Note**: The estimate may differ from actual API tokens due to provider-specific tokenization. The overhead adjustment factor (0.8) brings estimates within 1-2% of API-reported values by accounting for these differences.
+
+### History Compression
+
+- **Semantic Compression**: Automatically compresses conversation history when token usage approaches critical thresholds (≥90%)
+- **Proactive Compression**: Mid-turn compression prevents context overflow before it occurs
+- **UI Safety**: Compression only affects agent memory (for LLM context), not UI display or downloaded history files
+- **Smart Preservation**: Keeps recent conversation turns uncompressed to maintain context
+- **User Notifications**: Gradio popups show compression status and token savings
+- **Compression Stats**: Track compression count and total tokens saved per conversation
+- **Error Handling**: Graceful degradation - continues with uncompressed history on failure
 
 ### Debug System
 

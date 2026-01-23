@@ -27,7 +27,13 @@ from agent_ng.queue_manager import (
     apply_concurrency_to_click_event,
     apply_concurrency_to_submit_event,
 )
+from agent_ng.history_compression import (
+    perform_compression_with_notifications,
+    should_compress_on_completion,
+)
 from agent_ng.token_budget import (
+    HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
+    TOKEN_STATUS_CRITICAL,
     TOKEN_STATUS_CRITICAL_THRESHOLD,
     TOKEN_STATUS_MODERATE_THRESHOLD,
     TOKEN_STATUS_WARNING_THRESHOLD,
@@ -565,6 +571,36 @@ class ChatTab(QuickActionsMixin):
         except Exception as exc:
             logging.getLogger(__name__).debug(
                 "Failed to finalize turn usage on stop: %s", exc
+            )
+
+        # Check for compression after stop (if critical status)
+        try:
+            if hasattr(agent, "token_tracker") and agent.token_tracker:
+                budget_snapshot = agent.token_tracker.get_budget_snapshot()
+                if (
+                    budget_snapshot
+                    and budget_snapshot.get("status") == TOKEN_STATUS_CRITICAL
+                    and should_compress_on_completion(
+                        agent, session_id, budget_snapshot.get("status")
+                    )
+                ):
+                    language = getattr(self, "language", "en")
+                    # Use asyncio.run() since this is a sync method
+                    asyncio.run(
+                        perform_compression_with_notifications(
+                            agent=agent,
+                            conversation_id=session_id,
+                            language=language,
+                            keep_recent_turns=HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
+                            reason="interrupted",
+                            budget_snapshot=budget_snapshot,
+                            rebuild_messages=False,
+                        )
+                    )
+        except Exception as comp_exc:
+            # Non-fatal: log and continue
+            logging.getLogger(__name__).debug(
+                "Failed to check/perform compression on stop: %s", comp_exc
             )
 
         # Build a stats block and append as assistant meta message

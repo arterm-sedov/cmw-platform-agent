@@ -22,12 +22,31 @@ import sys
 from typing import Any
 
 # LangChain imports
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 
 from .debug_streamer import get_debug_streamer
+from .history_compression import (
+    compress_conversation_history,
+    emit_compression_notification,
+    get_compression_stats,
+    perform_compression_with_notifications,
+    should_compress_mid_turn,
+    should_compress_on_completion,
+)
 from .i18n_translations import get_translation_key
 from .streaming_config import get_streaming_config
 from .tool_deduplicator import get_deduplicator
+from .token_budget import (
+    HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
+    HISTORY_COMPRESSION_KEEP_RECENT_TURNS_SUCCESS,
+    HISTORY_COMPRESSION_TARGET_TOKENS_PCT,
+)
 
 # LangSmith tracing
 try:
@@ -215,7 +234,7 @@ class NativeLangChainStreaming:
                 # First occurrence - add to unique list and initialize count
                 unique_tool_calls.append(tool_call)
                 duplicate_counts[tool_key] = 1
-                print(f"🔍 DEBUG: Added unique tool call {tool_name}")
+                self._logger.debug("Added unique tool call %s", tool_name)
 
         return unique_tool_calls, duplicate_counts
 
@@ -300,9 +319,9 @@ class NativeLangChainStreaming:
             if not system_in_history:
                 # Store system message in memory only once
                 agent.memory_manager.add_message(conversation_id, system_message)
-                print("🔍 DEBUG: Added system message to memory (first time)")
+                self._logger.debug("Added system message to memory (first time)")
             else:
-                print("🔍 DEBUG: System message already in memory, skipping storage")
+                self._logger.debug("System message already in memory, skipping storage")
 
             # Add conversation history (excluding system messages to avoid duplication)
             # Filter out orphaned tool messages to prevent message order issues
@@ -311,7 +330,7 @@ class NativeLangChainStreaming:
                 for i, msg in enumerate(chat_history):
                     # Safety check for None message
                     if msg is None:
-                        print(f"🔍 DEBUG: Skipping None message at index {i}")
+                        self._logger.debug("Skipping None message at index %d", i)
                         continue
 
                     if isinstance(msg, SystemMessage):
@@ -384,7 +403,7 @@ class NativeLangChainStreaming:
 
             while iteration < self.max_iterations:
                 iteration += 1
-                print(f"🔍 DEBUG: Starting iteration {iteration}")
+                self._logger.debug("Starting iteration %d", iteration)
 
                 # Budget moment: before each LLM call, compute an exact token budget snapshot
                 # from the *actual* messages list used for the next model call.
@@ -400,6 +419,25 @@ class NativeLangChainStreaming:
                     # impact the streaming loop.
                     # Log directly - if logging fails, let it fail visibly for debugging
                     self._logger.debug("Budget snapshot pre-iteration failed: %s", exc)
+
+                # Check for mid-turn proactive compression
+                try:
+                    if should_compress_mid_turn(agent, conversation_id, messages_override=messages):
+                        budget_snapshot = agent.token_tracker.get_budget_snapshot()
+                        success, updated_messages = await perform_compression_with_notifications(
+                            agent=agent,
+                            conversation_id=conversation_id,
+                            language=language,
+                            keep_recent_turns=HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
+                            reason="proactive",
+                            budget_snapshot=budget_snapshot,
+                            rebuild_messages=True,
+                        )
+                        if success and updated_messages is not None:
+                            messages = updated_messages
+                except Exception as comp_exc:
+                    # Non-fatal: log and continue
+                    self._logger.debug("Failed to check/perform mid-turn compression: %s", comp_exc)
 
                 # Stream iteration progress as separate message (no icon - UI will add rotating clock)
 
@@ -420,7 +458,7 @@ class NativeLangChainStreaming:
                 tool_calls_in_progress = {}
                 processed_tools = {}  # Track processed tools to avoid duplicates in same response
                 has_tool_calls = False
-                print(f"🔍 DEBUG: Starting streaming loop for iteration {iteration}")
+                self._logger.debug("Starting streaming loop for iteration %d", iteration)
 
                 # Stream LLM response - tracing handled by @traceable on stream_agent_response
                 # Attach optional Langfuse callback handler when available
@@ -853,12 +891,12 @@ class NativeLangChainStreaming:
                     # Regular AI message without tool calls
                     ai_message = AIMessage(content=accumulated_chunk.content)
                     messages.append(ai_message)
-                    print("🔍 DEBUG: Added regular AIMessage to working messages")
+                    self._logger.debug("Added regular AIMessage to working messages")
 
                 # If no tool calls, we're done
                 if not has_tool_calls:
-                    print(
-                        f"🔍 DEBUG: No tool calls in iteration {iteration}, conversation complete"
+                    self._logger.debug(
+                        "No tool calls in iteration %d, conversation complete", iteration
                     )
 
                     # Stream conversation completion
@@ -983,7 +1021,7 @@ class NativeLangChainStreaming:
 
                     break
 
-                print(f"🔍 DEBUG: Completed iteration {iteration}, continuing...")
+                self._logger.debug("Completed iteration %d, continuing...", iteration)
 
                 # Stream iteration completion as separate message
                 yield StreamingEvent(
@@ -1035,7 +1073,7 @@ class NativeLangChainStreaming:
                 try:
                     agent.token_tracker.finalize_turn_usage(final_chunk, messages)
                 except Exception as e:
-                    print(f"🔍 DEBUG: Error finalizing turn usage: {e}")
+                    self._logger.exception("Error finalizing turn usage: %s", e)
 
             # Budget moment: after finalization, store a final budget snapshot for UI.
             try:
@@ -1048,6 +1086,26 @@ class NativeLangChainStreaming:
             except Exception as exc:
                 # Log directly - if logging fails, let it fail visibly for debugging
                 self._logger.debug("Failed to persist/stream error: %s", exc)
+
+            # Check for compression after successful turn completion
+            try:
+                if hasattr(agent, "token_tracker") and agent.token_tracker:
+                    budget_snapshot = agent.token_tracker.get_budget_snapshot()
+                    if should_compress_on_completion(
+                        agent, conversation_id, budget_snapshot.get("status")
+                    ):
+                        await perform_compression_with_notifications(
+                            agent=agent,
+                            conversation_id=conversation_id,
+                            language=language,
+                            keep_recent_turns=HISTORY_COMPRESSION_KEEP_RECENT_TURNS_SUCCESS,
+                            reason="critical",
+                            budget_snapshot=budget_snapshot,
+                            rebuild_messages=False,
+                        )
+            except Exception as comp_exc:
+                # Non-fatal: log and continue
+                self._logger.debug("Failed to check/perform compression: %s", comp_exc)
 
             # Extract normalized/native finish_reason if present (provider-agnostic; OpenRouter supplies both)
             def _extract_finish_reason(chunk) -> tuple[str | None, str | None]:
@@ -1094,7 +1152,7 @@ class NativeLangChainStreaming:
             for message in messages:
                 # Skip system messages - they're handled separately above
                 if isinstance(message, SystemMessage):
-                    print("🔍 DEBUG: Skipped system message (handled separately)")
+                    self._logger.debug("Skipped system message (handled separately)")
                     continue
 
                 # Skip empty AIMessages - they cause message order issues
@@ -1118,9 +1176,9 @@ class NativeLangChainStreaming:
                 if message_key not in memory_content:
                     agent.memory_manager.add_message(conversation_id, message)
                     new_messages_added += 1
-                    print(f"🔍 DEBUG: Added new {type(message).__name__} to memory")
+                    self._logger.debug("Added new %s to memory", type(message).__name__)
                 else:
-                    print(f"🔍 DEBUG: Skipped duplicate {type(message).__name__}")
+                    self._logger.debug("Skipped duplicate %s", type(message).__name__)
 
             self._logger.debug("Added %s new messages to memory", new_messages_added)
 
@@ -1284,6 +1342,30 @@ class NativeLangChainStreaming:
                     self._logger.debug(
                         "Failed to finalize turn usage on error: %s", finalize_exc
                     )
+
+            # Check for compression after interrupted turn (if critical status)
+            try:
+                if hasattr(agent, "token_tracker") and agent.token_tracker:
+                    budget_snapshot = agent.token_tracker.get_budget_snapshot()
+                    if (
+                        budget_snapshot
+                        and budget_snapshot.get("status") == "critical"
+                        and should_compress_on_completion(
+                            agent, conversation_id, budget_snapshot.get("status")
+                        )
+                    ):
+                        await perform_compression_with_notifications(
+                            agent=agent,
+                            conversation_id=conversation_id,
+                            language=language,
+                            keep_recent_turns=HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
+                            reason="interrupted",
+                            budget_snapshot=budget_snapshot,
+                            rebuild_messages=False,
+                        )
+            except Exception as comp_exc:
+                # Non-fatal: log and continue
+                self._logger.debug("Failed to check/perform compression on error: %s", comp_exc)
 
             # Error completion for progress display
             yield StreamingEvent(
