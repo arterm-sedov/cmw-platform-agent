@@ -341,6 +341,13 @@ def compute_token_budget_snapshot(
 
     total_tokens = conversation_tokens + tool_tokens + overhead_tokens
 
+    # Debug logging to understand token breakdown
+    logger = logging.getLogger(__name__)
+    logger.debug(
+        "Token breakdown - conv:%s, tool:%s, overhead:%s, total:%s",
+        conversation_tokens, tool_tokens, overhead_tokens, total_tokens
+    )
+
     context_window = 0
     try:
         llm_instance = getattr(agent, "llm_instance", None)

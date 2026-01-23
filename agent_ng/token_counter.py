@@ -785,6 +785,9 @@ class ConversationTokenTracker:
             add_json_overhead=False, # No arbitrary JSON formatting overhead
         )
         self.set_budget_snapshot(snap)
+        # Debug logging for estimated vs API comparison
+        logger = logging.getLogger(__name__)
+        logger.debug("Budget snapshot computed: %s total tokens", snap["total_tokens"])
         return snap
 
 
