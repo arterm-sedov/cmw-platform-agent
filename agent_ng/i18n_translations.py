@@ -116,6 +116,9 @@ RUSSIAN_TRANSLATIONS = {
     "token_usage_estimate": "Прогноз: {estimated_tokens:,}",
     "token_usage_last_message": "Сообщение: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
     "token_usage_average": "Средний на сообщение: {avg_tokens:,}",
+    "token_breakdown_context": "   - Контекст: {conv_tokens:,}",
+    "token_breakdown_tools": "   - Инструменты: {tool_tokens:,}",
+    "token_breakdown_overhead": "   - Накладные: {overhead_tokens:,}",
     # Status icons for token usage
     "token_status_good": "🟢",
     "token_status_moderate": "🟡",
@@ -422,6 +425,9 @@ ENGLISH_TRANSLATIONS = {
     "token_usage_estimate": "Forecast: {estimated_tokens:,}",
     "token_usage_last_message": "Message: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
     "token_usage_average": "Average per message: {avg_tokens:,}",
+    "token_breakdown_context": "   - Context: {conv_tokens:,}",
+    "token_breakdown_tools": "   - Tools: {tool_tokens:,}",
+    "token_breakdown_overhead": "   - Overhead: {overhead_tokens:,}",
     # Status icons for token usage
     "token_status_good": "🟢",
     "token_status_moderate": "🟡",

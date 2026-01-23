@@ -725,12 +725,30 @@ class ChatTab(QuickActionsMixin):
                 avg_tokens=cumulative_stats["avg_tokens_per_message"]
             )
 
+            # Add token breakdown from latest budget snapshot
+            breakdown_info = ""
+            try:
+                snap = agent.token_tracker.get_budget_snapshot()
+                if isinstance(snap, dict):
+                    conv_tokens = snap.get("conversation_tokens", 0)
+                    tool_tokens = snap.get("tool_tokens", 0)
+                    overhead_tokens = snap.get("overhead_tokens", 0)
+                    breakdown_info = (
+                        "\n" + self._get_translation("token_breakdown_context").format(conv_tokens=conv_tokens) +
+                        "\n" + self._get_translation("token_breakdown_tools").format(tool_tokens=tool_tokens) +
+                        "\n" + self._get_translation("token_breakdown_overhead").format(overhead_tokens=overhead_tokens)
+                    )
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to get token breakdown: %s", exc
+                )
+
         except Exception as e:
             print(f"Error formatting token budget: {e}")
             return self._get_translation("token_budget_unknown")
         else:
             return (
-                f"- {total}\n- {conversation}\n- {estimate_line}\n"
+                f"- {total}\n- {conversation}\n- {estimate_line}{breakdown_info}\n"
                 f"- {last_message}\n- {average}"
             )
 
