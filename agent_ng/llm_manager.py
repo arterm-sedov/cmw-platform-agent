@@ -791,15 +791,15 @@ class LLMManager:
                         try:
                             instance.llm = instance.llm.bind_tools(tools_list)
                             instance.bound_tools = True
-                            # Calculate global average tool size (once ever)
+                            # Calculate and set global average tool size (once ever)
                             try:
-                                from agent_ng.token_budget import _calculate_avg_tool_size
+                                from agent_ng.token_budget import _calculate_avg_tool_size, _GLOBAL_AVG_TOOL_SIZE
                                 # Get bound tools as dicts from kwargs
                                 kwargs = getattr(instance.llm, "kwargs", None)
                                 if isinstance(kwargs, dict):
                                     bound_tools = kwargs.get("tools")
-                                    if bound_tools:
-                                        _calculate_avg_tool_size(bound_tools)
+                                    if bound_tools and _GLOBAL_AVG_TOOL_SIZE is None:
+                                        _GLOBAL_AVG_TOOL_SIZE = _calculate_avg_tool_size(bound_tools)
                             except Exception as exc:
                                 # Non-critical: continue if average calculation fails
                                 # Tools will still work, just with default 600 token estimate
@@ -862,14 +862,14 @@ class LLMManager:
                     try:
                         instance.llm = instance.llm.bind_tools(tools_list)
                         instance.bound_tools = True
-                        # Calculate global average tool size (once ever)
+                        # Calculate and set global average tool size (once ever)
                         try:
-                            from agent_ng.token_budget import _calculate_avg_tool_size
+                            from agent_ng.token_budget import _calculate_avg_tool_size, _GLOBAL_AVG_TOOL_SIZE
                             kwargs = getattr(instance.llm, "kwargs", None)
                             if isinstance(kwargs, dict):
                                 bound_tools = kwargs.get("tools")
-                                if bound_tools:
-                                    _calculate_avg_tool_size(bound_tools)
+                                if bound_tools and _GLOBAL_AVG_TOOL_SIZE is None:
+                                    _GLOBAL_AVG_TOOL_SIZE = _calculate_avg_tool_size(bound_tools)
                         except Exception as exc:
                             # Non-critical: continue if average calculation fails
                             # Tools will still work, just with default 600 token estimate

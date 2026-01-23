@@ -133,20 +133,13 @@ def compute_context_tokens(
 
 
 def _calculate_avg_tool_size(tools: Iterable[Any] | None) -> int:
-    """Calculate and set global average tool size from bound tools (dicts).
+    """Calculate average tool size from bound tools (dicts).
 
-    Called once at first tool binding to establish system-wide average.
-    Returns the calculated average (or 600 fallback).
+    Pure function: only calculates and returns value, no side effects.
+    Returns 600 as fallback if calculation fails.
     """
-    global _GLOBAL_AVG_TOOL_SIZE
-
-    # Already calculated? Return existing value
-    if _GLOBAL_AVG_TOOL_SIZE is not None:
-        return _GLOBAL_AVG_TOOL_SIZE
-
     tool_list = list(tools or [])
     if not tool_list:
-        _GLOBAL_AVG_TOOL_SIZE = 600
         return 600
 
     serialized_tokens = []
@@ -166,14 +159,12 @@ def _calculate_avg_tool_size(tools: Iterable[Any] | None) -> int:
 
     if serialized_tokens:
         avg = sum(serialized_tokens) // len(serialized_tokens)
-        _GLOBAL_AVG_TOOL_SIZE = avg
         logging.getLogger(__name__).info(
-            f"Calculated global tool average: {avg} tokens "
+            f"Calculated tool average: {avg} tokens "
             f"(from {len(serialized_tokens)} tools)"
         )
         return avg
 
-    _GLOBAL_AVG_TOOL_SIZE = 600
     return 600
 
 
