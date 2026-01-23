@@ -307,15 +307,9 @@ def compute_token_budget_snapshot(
     )
 
     overhead_tokens = 0
+    # Always include tool schemas since they're sent to the LLM and counted by API
+    tool_schema_tokens = 0
     if include_overhead:
-        # Compute overhead, but exclude system prompt if it's already in messages
-        # to avoid double-counting
-        system_prompt_str = str(getattr(agent, "system_prompt", "") or "")
-        system_prompt_in_messages = has_system
-
-        # Only include system prompt in overhead if it's NOT already in messages
-        overhead_system_prompt = "" if system_prompt_in_messages else system_prompt_str
-
         # Prefer tool payload actually bound to the underlying LLM, fall back to
         # agent.tools.
         tools_payload = None
@@ -329,15 +323,14 @@ def compute_token_budget_snapshot(
             )
             tools_payload = None
 
-        overhead_tokens = compute_overhead_tokens(
-            system_prompt=overhead_system_prompt,
-            tools=(
-                tools_payload
-                if tools_payload is not None
-                else getattr(agent, "tools", None)
-            ),
-            safety_margin=safety_margin,
+        # Count only tool schemas (since they're always sent to LLM)
+        tool_schema_tokens = compute_overhead_tokens(
+            system_prompt="",  # Don't count system prompt separately
+            tools=tools_payload if tools_payload is not None else getattr(agent, "tools", None),
+            safety_margin=0,  # No safety margin
         )
+
+    overhead_tokens = tool_schema_tokens
 
     total_tokens = conversation_tokens + tool_tokens + overhead_tokens
 

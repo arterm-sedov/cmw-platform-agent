@@ -778,13 +778,13 @@ class ConversationTokenTracker:
         messages_override: list[Any] | None = None,
     ) -> dict[str, Any]:
         """Compute and store a fresh budget snapshot."""
-        # Include only actual transmitted content (system prompt + tool schemas)
+        # Include tool schemas (actually sent to LLM) but no other overhead
         snap = compute_token_budget_snapshot(
             agent=agent,
             conversation_id=conversation_id,
             messages_override=messages_override,
-            include_overhead=True,   # Include system prompt + tool schemas
-            add_json_overhead=False, # No arbitrary JSON formatting overhead
+            include_overhead=True,   # Include tool schemas only
+            add_json_overhead=False, # No JSON overhead inflation
         )
         self.set_budget_snapshot(snap)
         # Debug logging for estimated vs API comparison
