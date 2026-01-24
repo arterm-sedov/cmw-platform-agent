@@ -243,6 +243,7 @@ Set up your CMW Platform connection in the Config tab:
 - **User Notifications**: Gradio popups show compression status and token savings
 - **Compression Stats**: Track compression count and total tokens saved per conversation
 - **Error Handling**: Graceful degradation - continues with uncompressed history on failure
+ - **Configurable**: History compression can be toggled per-session in the sidebar and globally via `HISTORY_COMPRESSION_ENABLED` env flag (see `.env.example`)
 
 ### Debug System
 

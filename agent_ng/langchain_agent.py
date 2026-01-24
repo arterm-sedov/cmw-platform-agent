@@ -170,6 +170,9 @@ class CmwAgent:
         # Initialize token tracker
         self.token_tracker = get_token_tracker(self.session_id)
 
+        # History compression toggle (per-agent, default from environment/UI)
+        self.compression_enabled = self._get_default_compression_enabled()
+
         # Load system prompt
         self.system_prompt = system_prompt or self._load_system_prompt()
 
@@ -205,6 +208,14 @@ class CmwAgent:
             thread.start()
             # Wait for initialization to complete
             thread.join(timeout=60)  # Wait up to 60 seconds for initialization
+
+    def _get_default_compression_enabled(self) -> bool:
+        """Get default history compression flag from environment.
+
+        This is the initial per-agent value; UI can override per session.
+        """
+        env_val = os.getenv("HISTORY_COMPRESSION_ENABLED", "").strip().lower()
+        return env_val in ("1", "true", "yes", "on")
 
     async def _initialize_async(self):
         """Initialize the agent asynchronously"""

@@ -124,6 +124,13 @@ class Sidebar(QuickActionsMixin):
                     elem_classes=["provider-model-selector"],
                 )
 
+                # History compression toggle - per-session, initialized from env/defaults
+                self.components["compression_enabled"] = gr.Checkbox(
+                    label=self._get_translation("compression_enabled_label"),
+                    value=self._get_default_compression_enabled(),
+                    interactive=True,
+                )
+
             # Quick actions section - styled like LLM selection
             with gr.Column(elem_classes=["model-card"]):
                 gr.Markdown(
@@ -213,6 +220,14 @@ class Sidebar(QuickActionsMixin):
                         "✅ Model switch wired to trigger token budget update"
                     )
 
+        # Compression toggle events - per-session setting propagated to agent
+        if "compression_enabled" in self.components:
+            self.components["compression_enabled"].change(
+                fn=self._apply_compression_toggle,
+                inputs=[self.components["compression_enabled"]],
+                outputs=[],
+            )
+
         # Token budget display change event for download button visibility
         if "token_budget_display" in self.components:
             self.components["token_budget_display"].change(
@@ -255,6 +270,45 @@ class Sidebar(QuickActionsMixin):
     def _get_translation(self, key: str) -> str:
         """Get a translation for a specific key"""
         return get_translation_key(key, self.language)
+
+    def _get_default_compression_enabled(self) -> bool:
+        """Get default compression enabled flag from environment.
+
+        This is a UI default; per-session value is stored on the agent.
+        """
+        env_val = os.getenv("HISTORY_COMPRESSION_ENABLED", "").strip().lower()
+        return env_val in ("1", "true", "yes", "on")
+
+    def _apply_compression_toggle(
+        self, enabled: bool, request: gr.Request | None = None
+    ) -> None:
+        """Apply history compression toggle for the current session agent."""
+        try:
+            if not hasattr(self, "main_app") or not self.main_app:
+                return
+            if not hasattr(self.main_app, "session_manager"):
+                return
+
+            session_id = (
+                self.main_app.session_manager.get_session_id(request)
+                if request
+                else "default"
+            )
+            session_agent = self.main_app.session_manager.get_session_agent(session_id)
+            if not session_agent:
+                return
+
+            # Store per-session compression flag on the agent
+            setattr(session_agent, "compression_enabled", bool(enabled))
+            logging.getLogger(__name__).debug(
+                "✅ Compression toggle set to %s for session %s",
+                enabled,
+                session_id,
+            )
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Failed to apply compression toggle: %s", exc
+            )
 
     def _get_available_provider_model_combinations(self) -> list[str]:
         """Get list of available provider/model combinations in format 'Provider / Model'"""

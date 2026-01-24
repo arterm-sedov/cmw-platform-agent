@@ -155,6 +155,17 @@ async def compress_history_to_tokens(
         return None
 
 
+def _is_compression_enabled(agent: Any) -> bool:
+    """Check if history compression is enabled for the given agent.
+
+    Defaults to True if the flag is missing to preserve existing behavior.
+    """
+    try:
+        return bool(agent.compression_enabled)
+    except AttributeError:
+        return True
+
+
 def should_compress_on_completion(
     agent: Any, conversation_id: str, status: str | None
 ) -> bool:
@@ -170,6 +181,9 @@ def should_compress_on_completion(
         True if compression should be triggered
     """
     try:
+        # Allow per-agent toggle to disable compression
+        if not _is_compression_enabled(agent):
+            return False
         # Check if status is Critical
         if status != TOKEN_STATUS_CRITICAL:
             return False
@@ -209,6 +223,9 @@ def should_compress_mid_turn(
         True if compression should be triggered
     """
     try:
+        # Allow per-agent toggle to disable compression
+        if not _is_compression_enabled(agent):
+            return False
         if not hasattr(agent, "token_tracker") or not agent.token_tracker:
             return False
 
