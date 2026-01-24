@@ -43,6 +43,9 @@ from tools.file_utils import FileUtils
 from .sidebar import QuickActionsMixin
 
 
+CHAT_DOWNLOADS_ENABLED = False  # Temporary kill switch for chat export/download
+
+
 class ChatTab(QuickActionsMixin):
     """Chat tab component with interface and quick actions"""
 
@@ -1327,6 +1330,12 @@ class ChatTab(QuickActionsMixin):
 
     def _update_download_button_visibility(self, history):
         """Update download button visibility and file based on conversation history"""
+        if not CHAT_DOWNLOADS_ENABLED:
+            # Downloads are globally disabled via feature flag
+            return (
+                gr.DownloadButton(visible=False),
+                gr.DownloadButton(visible=False),
+            )
         if history and len(history) > 0:
             # Check if conversation has changed since last generation
             history_str = str(history)
