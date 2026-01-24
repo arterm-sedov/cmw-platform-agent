@@ -73,11 +73,9 @@ class UIManager:
         app_title = self._get_translation("app_title")
         hero_title = self._get_translation("hero_title")
 
-        with gr.Blocks(
-            css_paths=[self.css_file_path],
-            title=app_title,
-            theme=gr.themes.Soft()
-        ) as demo:
+        # In Gradio 6, app-level theme and CSS are configured on launch(),
+        # so Blocks only receives structural arguments like title.
+        with gr.Blocks(title=app_title) as demo:
 
             # Header
             with gr.Row(), gr.Column():

@@ -88,7 +88,9 @@ def get_tool_call_count(agent, session_id: str) -> int:
 
             # Also count ToolMessage objects in conversation history
             try:
-                conversation_history = agent.memory_manager.get_conversation_history(session_id)
+                conversation_history = agent.memory_manager.get_conversation_history(
+                    session_id
+                )
                 for message in conversation_history:
                     if (
                         hasattr(message, "__class__")

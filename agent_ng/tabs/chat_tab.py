@@ -82,13 +82,13 @@ class ChatTab(QuickActionsMixin):
     def _create_chat_interface(self):
         """Create the main chat interface with proper layout"""
         # Chat interface with metadata support for thinking transparency
+        # In Gradio 6, Chatbot uses messages format by default, so no type parameter is needed
         self.components["chatbot"] = gr.Chatbot(
             label=self._get_translation("chat_label"),
             height=500,
             show_label=True,
             container=True,
-            show_copy_button=True,
-            type="messages",
+            buttons=["copy", "copy_all"],
             elem_id="chatbot-main",
             elem_classes=["chatbot-card"],
         )
@@ -389,8 +389,8 @@ class ChatTab(QuickActionsMixin):
         return gr.Dropdown(visible=False)
 
     def _handle_stop_click(
-        self, history: list[list[str | None]], request: gr.Request | None = None
-    ) -> tuple[list[list[str | None]], gr.Button]:
+        self, history: list[dict[str, str]], request: gr.Request | None = None
+    ) -> tuple[list[dict[str, str]], gr.Button]:
         """Handle stop button click: finalize token tracking, append stats, update UI."""
         try:
             # Attempt to finalize token accounting for this turn even if stream was interrupted
@@ -522,7 +522,7 @@ class ChatTab(QuickActionsMixin):
         download_btns = self._update_download_button_visibility(history)
         return history, gr.Button(visible=False), download_btns[0], download_btns[1]
 
-    def _finalize_tokens_on_stop(self, request: gr.Request, history: list[list[str | None]]) -> list[list[str | None]]:
+    def _finalize_tokens_on_stop(self, request: gr.Request, history: list[dict[str, str]]) -> list[dict[str, str]]:
         """Finalize token tracking and append stats when streaming is stopped"""
         if not (
             hasattr(self, "main_app")
@@ -617,7 +617,7 @@ class ChatTab(QuickActionsMixin):
 
         return history
 
-    def _build_token_stats_message(self, agent, messages: list) -> list[list[str | None]] | None:
+    def _build_token_stats_message(self, agent, messages: list) -> list[dict[str, str]] | None:
         """Build and return token statistics message for history"""
         prompt_tokens = agent.token_tracker.get_last_prompt_tokens()
         api_tokens = agent.token_tracker.get_last_api_tokens()
@@ -1127,10 +1127,10 @@ class ChatTab(QuickActionsMixin):
     def _stream_message_wrapper(
         self,
         multimodal_value: dict[str, Any] | None,
-        history: list[list[str | None]],
+        history: list[dict[str, str]],
         request: gr.Request | None = None,
     ) -> tuple[
-        list[list[str | None]],
+        list[dict[str, str]],
         gr.Button,
         gr.DownloadButton,
         gr.DownloadButton,
@@ -1211,9 +1211,9 @@ class ChatTab(QuickActionsMixin):
     def _stream_message_wrapper_internal(
         self,
         multimodal_value: dict[str, Any] | None,
-        history: list[list[str | None]],
+        history: list[dict[str, str]],
         request: gr.Request | None = None,
-    ) -> AsyncGenerator[tuple[list[list[str | None]], str], None]:
+    ) -> AsyncGenerator[tuple[list[dict[str, str]], str], None]:
         """Internal wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
         # Extract text from MultimodalValue format
         if isinstance(multimodal_value, dict):
@@ -1301,7 +1301,7 @@ class ChatTab(QuickActionsMixin):
     def _clear_chat_with_download_reset(
         self, request: gr.Request | None = None
     ) -> tuple[
-        list[list[str | None]],
+        list[dict[str, str]],
         dict[str, Any],
         gr.DownloadButton,
         gr.DownloadButton,
@@ -1376,7 +1376,7 @@ class ChatTab(QuickActionsMixin):
             )
 
     def _download_conversation_as_markdown(
-        self, history: list[list[str | None]]
+        self, history: list[dict[str, str]]
     ) -> str:
         """
         Download the conversation history as a markdown file.
@@ -1452,7 +1452,7 @@ class ChatTab(QuickActionsMixin):
         for i, message in enumerate(history, 1):
             if isinstance(message, dict):
                 role = message.get("role", "unknown")
-                content = message.get("content", "")
+                content = message.get("content", "") or ""
 
                 if role == "user":
                     markdown_content += f"## User Message {i}\n\n"

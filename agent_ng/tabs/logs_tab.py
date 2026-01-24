@@ -60,7 +60,7 @@ class LogsTab:
                 lines=20,
                 max_lines=30,
                 interactive=False,
-                show_copy_button=True,
+                buttons=["copy", "copy_all"],
                 container=True,
                 elem_id="logs-display",
             )

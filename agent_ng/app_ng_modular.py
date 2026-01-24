@@ -651,6 +651,7 @@ class NextGenApp:
             ]
 
             # Get prompt token count for user message (will be displayed below assistant response)
+            # History is already in Gradio 6 messages format: list[dict[str, str]]
             prompt_tokens = None
             if user_agent:
                 try:
@@ -1725,13 +1726,17 @@ def main():
     _logger.info(
         "Launching Gradio interface on port %s with language switching...", port
     )
+    # Configure app-level theme and CSS at launch per Gradio 6 migration guide
+    css_path = Path(__file__).parent.parent / "resources" / "css" / "cmw_copilot_theme.css"
     demo.launch(
         debug=True,
         share=False,
         server_name="0.0.0.0",
         server_port=port,
         show_error=True,
-        show_api=True,  # Enable API documentation for Hugging Face Spaces
+        footer_links=["api", "gradio", "settings"],
+        theme=gr.themes.Soft(),
+        css_paths=[css_path] if css_path.exists() else None,
     )
 
 

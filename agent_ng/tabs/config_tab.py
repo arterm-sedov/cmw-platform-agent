@@ -108,7 +108,6 @@ class ConfigTab:
                 value=url_init,
                 lines=1,
                 max_lines=1,
-                show_copy_button=False,
             )
 
             # Username
@@ -117,7 +116,6 @@ class ConfigTab:
                 value=login_init,
                 lines=1,
                 max_lines=1,
-                show_copy_button=False,
             )
 
             self.components["password"] = gr.Textbox(
@@ -126,7 +124,6 @@ class ConfigTab:
                 value=password_init,
                 lines=1,
                 max_lines=1,
-                show_copy_button=False,
             )
 
             with gr.Row(equal_height=True):
