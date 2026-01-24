@@ -313,6 +313,13 @@ class LLMManager:
                     "temperature": 0,
                     "force_tools": True
                 },
+                {
+                    "model": "qwen/qwen-plus-2025-07-28",
+                    "token_limit": 1000000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
                 # MoonshotAI (Kimi) Models
                 {
                     "model": "moonshotai/kimi-k2-0905:exacto",
@@ -344,6 +351,20 @@ class LLMManager:
                     "force_tools": True
                 },
                 # Other Models
+                {
+                    "model": "google/gemini-3-flash-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "google/gemini-3-pro-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
                 {
                     "model": "anthropic/claude-sonnet-4.5",
                     "token_limit": 1000000,
@@ -952,7 +973,8 @@ class LLMManager:
             config = self.LLM_CONFIGS.get(provider)
             if config and self._get_api_key(config) and self._is_provider_allowed(provider):
                 available.append(provider.value)
-        return available
+        # Sort provider identifiers alphabetically for stable UI ordering
+        return sorted(available)
 
     def get_provider_config(self, provider: str) -> Optional[LLMConfig]:
         """Get configuration for a specific provider"""

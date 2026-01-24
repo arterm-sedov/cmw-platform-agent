@@ -198,28 +198,33 @@ class StatsTab:
 
         try:
             # Get basic agent statistics
-            stats = agent.get_stats()        
+            stats = agent.get_stats()
+
+            # Optional compression stats block (only when at least one compression happened)
+            compression_block = ""
+            compression_count = stats["conversation_stats"].get("compression_count", 0)
+            if compression_count > 0:
+                compression_block = (
+                    f"\n{self._get_translation('compression_stats_label')}\n"
+                    f"- {self._get_translation('compression_count_label').format(count=compression_count)}\n"
+                    f"- {self._get_translation('compression_tokens_saved_label').format(tokens=stats['conversation_stats'].get('compression_tokens_saved', 0))}"
+                )
 
             # Format complete display using existing translation resources exactly as they are
-            return f"""
-{self._get_translation("agent_status_section")}
-- {self._get_translation("status_ready_true" if stats["agent_status"]["is_ready"] else "status_ready_false")}
-- {self._get_translation("current_model").format(model=stats["llm_info"].get("model_name", "Unknown"))}
-- {self._get_translation("provider_info").format(provider=stats["llm_info"].get("provider", "Unknown"))}
-- {self._get_translation("tools_label")}: {stats["agent_status"]["tools_count"]}
-
-{self._get_translation("conversation_section")}
-- {self._get_translation("total_messages_label")}: {stats["conversation_stats"]["message_count"]}
-    - {self._get_translation("system_prompt_label")}: {stats["conversation_stats"]["system_prompt_count"]}
-    - {self._get_translation("user_messages_label")}: {stats["conversation_stats"]["user_messages"]}
-    - {self._get_translation("assistant_messages_label")}: {stats["conversation_stats"]["assistant_messages"]}
-    - {self._get_translation("total_calls_label")}: {stats["conversation_stats"]["total_tool_calls"]}
-{f"""
-{self._get_translation("compression_stats_label")}
-- {self._get_translation("compression_count_label").format(count=stats["conversation_stats"].get("compression_count", 0))}
-- {self._get_translation("compression_tokens_saved_label").format(tokens=stats["conversation_stats"].get("compression_tokens_saved", 0))}
-""" if stats["conversation_stats"].get("compression_count", 0) > 0 else ""}
-            """
+            return (
+                f"{self._get_translation('agent_status_section')}\n"
+                f"- {self._get_translation('status_ready_true' if stats['agent_status']['is_ready'] else 'status_ready_false')}\n"
+                f"- {self._get_translation('current_model').format(model=stats['llm_info'].get('model_name', 'Unknown'))}\n"
+                f"- {self._get_translation('provider_info').format(provider=stats['llm_info'].get('provider', 'Unknown'))}\n"
+                f"- {self._get_translation('tools_label')}: {stats['agent_status']['tools_count']}\n\n"
+                f"{self._get_translation('conversation_section')}\n"
+                f"- {self._get_translation('total_messages_label')}: {stats['conversation_stats']['message_count']}\n"
+                f"    - {self._get_translation('system_prompt_label')}: {stats['conversation_stats']['system_prompt_count']}\n"
+                f"    - {self._get_translation('user_messages_label')}: {stats['conversation_stats']['user_messages']}\n"
+                f"    - {self._get_translation('assistant_messages_label')}: {stats['conversation_stats']['assistant_messages']}\n"
+                f"    - {self._get_translation('total_calls_label')}: {stats['conversation_stats']['total_tool_calls']}"
+                f"{compression_block}"
+            )
         except Exception as e:
             return f"{self._get_translation('error_loading_stats')}: {e!s}"
 

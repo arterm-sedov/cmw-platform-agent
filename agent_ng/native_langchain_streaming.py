@@ -18,6 +18,7 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 import json
 import logging
+import os
 import sys
 from typing import Any
 
@@ -45,6 +46,7 @@ from .tool_deduplicator import get_deduplicator
 from .token_budget import (
     HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
     HISTORY_COMPRESSION_KEEP_RECENT_TURNS_SUCCESS,
+    HISTORY_COMPRESSION_MID_TURN_THRESHOLD,
     HISTORY_COMPRESSION_TARGET_TOKENS_PCT,
     MAX_TOOL_RESULT_TOKENS_PCT,
     count_tokens,
@@ -262,6 +264,135 @@ class NativeLangChainStreaming:
             return "en"
         return getattr(agent, "language", "en")
 
+    def _select_fallback_model_for_agent(self, agent) -> tuple[str | None, int | None]:
+        """Select a fallback model for the current agent provider.
+
+        Preference order:
+        1) Agent's explicit fallback_model_name (if valid and larger context)
+        2) FALLBACK_MODEL_DEFAULT from environment (if valid and larger context)
+        3) Largest context window model for the current provider.
+        """
+        if not hasattr(agent, "llm_manager") or not agent.llm_manager:
+            return None, None
+        if not hasattr(agent, "llm_instance") or not agent.llm_instance:
+            return None, None
+
+        provider_enum = agent.llm_instance.provider
+        provider = provider_enum.value
+        config = agent.llm_manager.get_provider_config(provider)
+        if not config or not config.models:
+            return None, None
+
+        current_model = agent.llm_instance.model_name
+        current_limit = 0
+        for model_cfg in config.models:
+            if model_cfg.get("model") == current_model:
+                current_limit = int(model_cfg.get("token_limit", 0))
+                break
+
+        current_limit = max(current_limit, 0)
+
+        candidates: list[tuple[str, int, int]] = []
+        for idx, model_cfg in enumerate(config.models):
+            model_name = model_cfg.get("model")
+            token_limit = int(model_cfg.get("token_limit", 0))
+            if not model_name:
+                continue
+            if token_limit > current_limit:
+                candidates.append((model_name, token_limit, idx))
+
+        # If no strictly larger models, fall back to the largest available model
+        if not candidates:
+            for idx, model_cfg in enumerate(config.models):
+                model_name = model_cfg.get("model")
+                token_limit = int(model_cfg.get("token_limit", 0))
+                if not model_name:
+                    continue
+                candidates.append((model_name, token_limit, idx))
+
+        if not candidates:
+            return None, None
+
+        # Sort by context window descending
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        available_names = {name for name, _limit, _idx in candidates}
+
+        agent_pref = getattr(agent, "fallback_model_name", None)
+        env_pref = os.getenv("FALLBACK_MODEL_DEFAULT", "").strip() or None
+
+        def _resolve_preferred(name: str | None) -> tuple[str | None, int | None]:
+            if not name or name not in available_names:
+                return None, None
+            for model_name, _limit, idx in candidates:
+                if model_name == name:
+                    return model_name, idx
+            return None, None
+
+        selected_name, selected_index = _resolve_preferred(agent_pref)
+        if selected_name is None:
+            selected_name, selected_index = _resolve_preferred(env_pref)
+        if selected_name is None:
+            selected_name, _limit, selected_index = candidates[0]
+
+        # Avoid "fallback" to the same model
+        if selected_name == current_model:
+            return None, None
+
+        return selected_name, selected_index
+
+    def _try_switch_to_fallback_model(
+        self,
+        agent,
+        conversation_id: str,
+        trigger: str,
+    ) -> bool:
+        """Try to switch the agent to a larger-context fallback model.
+
+        Returns True if a switch was performed.
+        """
+        try:
+            if not getattr(agent, "use_fallback_model", False):
+                return False
+
+            selected_name, selected_index = self._select_fallback_model_for_agent(agent)
+            if selected_name is None or selected_index is None:
+                return False
+
+            provider_enum = agent.llm_instance.provider
+            provider = provider_enum.value
+
+            new_instance = agent.llm_manager.create_new_llm_instance(
+                provider, selected_index
+            )
+            if not new_instance:
+                return False
+
+            agent.llm_instance = new_instance
+
+            # Reset token budget so future snapshots use the new context window
+            if hasattr(agent, "token_tracker") and agent.token_tracker:
+                try:
+                    agent.token_tracker.reset_current_conversation_budget()
+                except Exception as exc:
+                    self._logger.debug(
+                        "Failed to reset token budget after fallback switch: %s", exc
+                    )
+
+            # Persist chosen fallback model on the agent
+            setattr(agent, "fallback_model_name", selected_name)
+
+            self._logger.info(
+                "Switched to fallback model %s/%s for conversation %s (trigger=%s)",
+                provider,
+                selected_name,
+                conversation_id,
+                trigger,
+            )
+            return True
+        except Exception as exc:
+            self._logger.debug("Failed to switch to fallback model: %s", exc)
+            return False
+
     @traceable
     async def stream_agent_response(
         self, agent, message: str, conversation_id: str = "default"
@@ -379,19 +510,6 @@ class NativeLangChainStreaming:
             messages.append(user_message)
             agent.memory_manager.add_message(conversation_id, user_message)
 
-            # Get LLM with tools (tools are already bound in the LLM instance)
-            llm_with_tools = agent.llm_instance.llm
-            print(
-                f"🔍 DEBUG: Using LLM instance with pre-bound tools - type: {type(llm_with_tools)}"
-            )
-            print(
-                f"🔍 DEBUG: LLM instance has tools: {hasattr(llm_with_tools, 'tools')}"
-            )
-            if hasattr(llm_with_tools, "tools"):
-                print(
-                    f"🔍 DEBUG: Number of tools: {len(llm_with_tools.tools) if llm_with_tools.tools else 0}"
-                )
-
             # Multi-turn conversation loop for proper tool calling
             iteration = 0
 
@@ -403,17 +521,36 @@ class NativeLangChainStreaming:
                 # Log directly - if logging fails, let it fail visibly for debugging
                 self._logger.debug("Failed to begin turn usage accumulation: %s", exc)
 
-            # Check for compression need at the start of the turn (before first LLM call)
-            # This prevents context overflow errors when history is already too large
+            # Check for overflow protection at the start of the turn (before first LLM call)
+            # This prevents context overflow errors when history is already too large.
             try:
                 if hasattr(agent, "token_tracker") and agent.token_tracker:
-                    # Refresh budget snapshot with current messages to check if compression is needed
+                    # Refresh budget snapshot with current messages
                     agent.token_tracker.refresh_budget_snapshot(
                         agent=agent,
                         conversation_id=conversation_id,
                         messages_override=messages,
                     )
-                    if should_compress_mid_turn(agent, conversation_id, messages_override=messages):
+                    snapshot = agent.token_tracker.get_budget_snapshot() or {}
+                    percentage_used = snapshot.get("percentage_used", 0.0)
+                    # Fallback first: switch to a larger model when enabled and threshold reached
+                    if (
+                        getattr(agent, "use_fallback_model", False)
+                        and percentage_used >= HISTORY_COMPRESSION_MID_TURN_THRESHOLD
+                    ):
+                        switched = self._try_switch_to_fallback_model(
+                            agent, conversation_id, trigger="start_of_turn"
+                        )
+                        if switched and hasattr(agent, "token_tracker") and agent.token_tracker:
+                            agent.token_tracker.refresh_budget_snapshot(
+                                agent=agent,
+                                conversation_id=conversation_id,
+                                messages_override=messages,
+                            )
+                    # After fallback (if any), decide whether compression is still needed
+                    if should_compress_mid_turn(
+                        agent, conversation_id, messages_override=messages
+                    ):
                         budget_snapshot = agent.token_tracker.get_budget_snapshot()
                         success, updated_messages = await perform_compression_with_notifications(
                             agent=agent,
@@ -429,7 +566,8 @@ class NativeLangChainStreaming:
                             # Ensure user message is present after compression
                             # (it should be preserved as part of recent turns, but verify)
                             user_message_present = any(
-                                isinstance(msg, HumanMessage) and msg.content == user_message.content
+                                isinstance(msg, HumanMessage)
+                                and msg.content == user_message.content
                                 for msg in messages
                             )
                             if not user_message_present:
@@ -437,7 +575,10 @@ class NativeLangChainStreaming:
                                 self._logger.debug("Re-added user message after compression")
             except Exception as comp_exc:
                 # Non-fatal: log and continue
-                self._logger.debug("Failed to check/perform start-of-turn compression: %s", comp_exc)
+                self._logger.debug(
+                    "Failed to check/perform start-of-turn overflow protection: %s",
+                    comp_exc,
+                )
 
             while iteration < self.max_iterations:
                 iteration += 1
@@ -458,9 +599,30 @@ class NativeLangChainStreaming:
                     # Log directly - if logging fails, let it fail visibly for debugging
                     self._logger.debug("Budget snapshot pre-iteration failed: %s", exc)
 
-                # Check for mid-turn proactive compression
+                # Mid-turn overflow protection: fallback first, then compression if still needed
                 try:
-                    if should_compress_mid_turn(agent, conversation_id, messages_override=messages):
+                    snapshot = None
+                    if hasattr(agent, "token_tracker") and agent.token_tracker:
+                        snapshot = agent.token_tracker.get_budget_snapshot()
+                    percentage_used = (
+                        snapshot.get("percentage_used", 0.0) if snapshot else 0.0
+                    )
+                    if (
+                        getattr(agent, "use_fallback_model", False)
+                        and percentage_used >= HISTORY_COMPRESSION_MID_TURN_THRESHOLD
+                    ):
+                        switched = self._try_switch_to_fallback_model(
+                            agent, conversation_id, trigger="mid_turn"
+                        )
+                        if switched and hasattr(agent, "token_tracker") and agent.token_tracker:
+                            agent.token_tracker.refresh_budget_snapshot(
+                                agent=agent,
+                                conversation_id=conversation_id,
+                                messages_override=messages,
+                            )
+                    if should_compress_mid_turn(
+                        agent, conversation_id, messages_override=messages
+                    ):
                         budget_snapshot = agent.token_tracker.get_budget_snapshot()
                         success, updated_messages = await perform_compression_with_notifications(
                             agent=agent,
@@ -475,7 +637,10 @@ class NativeLangChainStreaming:
                             messages = updated_messages
                 except Exception as comp_exc:
                     # Non-fatal: log and continue
-                    self._logger.debug("Failed to check/perform mid-turn compression: %s", comp_exc)
+                    self._logger.debug(
+                        "Failed to check/perform mid-turn overflow protection: %s",
+                        comp_exc,
+                    )
 
                 # Stream iteration progress as separate message (no icon - UI will add rotating clock)
 
@@ -522,6 +687,9 @@ class NativeLangChainStreaming:
                             "Failed to get runnable config: %s", exc
                         )
                         runnable_config = None
+
+                # Get LLM with tools fresh for this iteration to reflect any fallback switch
+                llm_with_tools = agent.llm_instance.llm
 
                 async for chunk in llm_with_tools.astream(
                     messages, config=runnable_config
@@ -972,8 +1140,8 @@ class NativeLangChainStreaming:
                             "Added %d ToolMessages to working messages", len(tool_messages)
                         )
 
-                        # Check for compression need AFTER tool results are added
-                        # This prevents overflow when large tool results push context over limit
+                        # Check for overflow protection AFTER tool results are added
+                        # This prevents overflow when large tool results push context over limit.
                         try:
                             if hasattr(agent, "token_tracker") and agent.token_tracker:
                                 # Refresh budget snapshot with messages including tool results
@@ -982,7 +1150,29 @@ class NativeLangChainStreaming:
                                     conversation_id=conversation_id,
                                     messages_override=messages,
                                 )
-                                if should_compress_mid_turn(agent, conversation_id, messages_override=messages):
+                                snapshot = agent.token_tracker.get_budget_snapshot() or {}
+                                percentage_used = snapshot.get("percentage_used", 0.0)
+                                # Fallback first when enabled and threshold reached
+                                if (
+                                    getattr(agent, "use_fallback_model", False)
+                                    and percentage_used >= HISTORY_COMPRESSION_MID_TURN_THRESHOLD
+                                ):
+                                    switched = self._try_switch_to_fallback_model(
+                                        agent, conversation_id, trigger="post_tool"
+                                    )
+                                    if (
+                                        switched
+                                        and hasattr(agent, "token_tracker")
+                                        and agent.token_tracker
+                                    ):
+                                        agent.token_tracker.refresh_budget_snapshot(
+                                            agent=agent,
+                                            conversation_id=conversation_id,
+                                            messages_override=messages,
+                                        )
+                                if should_compress_mid_turn(
+                                    agent, conversation_id, messages_override=messages
+                                ):
                                     budget_snapshot = agent.token_tracker.get_budget_snapshot()
                                     success, updated_messages = await perform_compression_with_notifications(
                                         agent=agent,
@@ -1015,7 +1205,8 @@ class NativeLangChainStreaming:
                         except Exception as comp_exc:
                             # Non-fatal: log and continue
                             self._logger.debug(
-                                "Failed to check/perform post-tool compression: %s", comp_exc
+                                "Failed to check/perform post-tool overflow protection: %s",
+                                comp_exc,
                             )
 
                     # CRITICAL: Continue to next iteration to get final response

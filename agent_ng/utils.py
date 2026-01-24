@@ -35,6 +35,20 @@ def safe_string(value: Any, default: str = "") -> str:
     return default if value is None else str(value)
 
 
+def parse_env_bool(env_name: str) -> bool:
+    """Parse a boolean feature flag from environment variables in a single place.
+
+    Accepted truthy values (case-insensitive, trimmed):
+    - "1", "true", "yes", "on"
+    """
+    import os
+
+    env_val = os.getenv(env_name, "")
+    if not env_val:
+        return False
+    return env_val.strip().lower() in ("1", "true", "yes", "on")
+
+
 def get_tool_call_count(agent, session_id: str) -> int:
     """
     Get total tool call count from session-specific agent - shared implementation.

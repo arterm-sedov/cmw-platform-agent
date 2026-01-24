@@ -92,7 +92,7 @@ try:
     from .message_processor import get_message_processor
     from .response_processor import get_response_processor
     from .stats_manager import get_stats_manager
-    from .utils import ensure_valid_answer
+    from .utils import ensure_valid_answer, parse_env_bool
 
     # LangSmith tracing is now handled via direct imports and environment variables
     print("✅ Successfully imported all modules using relative imports")
@@ -108,7 +108,7 @@ except ImportError as e1:
         from agent_ng.message_processor import get_message_processor
         from agent_ng.response_processor import get_response_processor
         from agent_ng.stats_manager import get_stats_manager
-        from agent_ng.utils import ensure_valid_answer
+        from agent_ng.utils import ensure_valid_answer, parse_env_bool
 
         # LangSmith tracing is now handled via direct imports and environment variables
         print("✅ Successfully imported all modules using absolute imports")
@@ -173,6 +173,10 @@ class CmwAgent:
         # History compression toggle (per-agent, default from environment/UI)
         self.compression_enabled = self._get_default_compression_enabled()
 
+        # Fallback model configuration (per-agent, default from environment/UI)
+        self.use_fallback_model = self._get_default_fallback_enabled()
+        self.fallback_model_name = os.getenv("FALLBACK_MODEL_DEFAULT", "").strip() or None
+
         # Load system prompt
         self.system_prompt = system_prompt or self._load_system_prompt()
 
@@ -214,8 +218,14 @@ class CmwAgent:
 
         This is the initial per-agent value; UI can override per session.
         """
-        env_val = os.getenv("HISTORY_COMPRESSION_ENABLED", "").strip().lower()
-        return env_val in ("1", "true", "yes", "on")
+        return parse_env_bool("HISTORY_COMPRESSION_ENABLED")
+
+    def _get_default_fallback_enabled(self) -> bool:
+        """Get default fallback model flag from environment.
+
+        This is the initial per-agent value; UI can override per session.
+        """
+        return parse_env_bool("ENABLE_FALLBACK_MODEL")
 
     async def _initialize_async(self):
         """Initialize the agent asynchronously"""

@@ -64,7 +64,7 @@ RUSSIAN_TRANSLATIONS = {
     "quick_actions_dropdown_placeholder": "Выберите быструю команду...",
     "quick_actions_dropdown_label": "Быстрые команды",
     # History compression
-    "compression_enabled_label": "Сжимать диалог при переполнении",
+    "compression_enabled_label": "При переполнении сжимать диалог",
     "quick_list_apps": "🔎 Список всех приложений",
     "quick_create_attr": "🧩 Создать текстовый атрибут",
     "quick_edit_mask": "🛠️ Редактировать маску телефона",
@@ -312,6 +312,7 @@ RUSSIAN_TRANSLATIONS = {
     "compression_stats_label": "Статистика сжатия",
     "compression_count_label": "Сжатий: {count}",
     "compression_tokens_saved_label": "Токенов сохранено: {tokens:,}",
+    "use_fallback_model_label": "При переполнении сменить модель",
     # UI Icons
     "clock_icons": [
         "🕐",
@@ -385,7 +386,8 @@ ENGLISH_TRANSLATIONS = {
     "quick_actions_dropdown_placeholder": "Select a quick command...",
     "quick_actions_dropdown_label": "Quick Commands",
     # History compression
-    "compression_enabled_label": "Compress conversation on overflow",
+    "compression_enabled_label": "Щn overflow сompress conversation",
+    "use_fallback_model_label": "On overflow use larger model",
     "quick_list_apps": "🔎 List all apps",
     "quick_create_attr": "🧩 Create text attribute",
     "quick_edit_mask": "🛠️ Edit phone mask",
