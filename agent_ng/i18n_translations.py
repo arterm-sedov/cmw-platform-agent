@@ -26,6 +26,8 @@ RUSSIAN_TRANSLATIONS = {
     "tab_logs": "📜 Журналы",
     "tab_stats": "📊 Статистика",
     "tab_config": "⚙️ Настройки",
+    "tab_sidebar": "⚙️ Настройки и управление",
+    "tab_downloads": "📥 Загрузки",
     # Home tab content
     "welcome_title": "Добро пожаловать!",
     "welcome_description": """
@@ -348,6 +350,8 @@ ENGLISH_TRANSLATIONS = {
     "tab_logs": "📜 Logs",
     "tab_stats": "📊 Statistics",
     "tab_config": "⚙️ Config",
+    "tab_sidebar": "⚙️ Settings & Control",
+    "tab_downloads": "📥 Downloads",
     # Home tab content
     "welcome_title": "Welcome!",
     "welcome_description": """

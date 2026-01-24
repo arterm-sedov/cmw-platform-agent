@@ -106,7 +106,7 @@ try:
     from agent_ng.llm_manager import get_llm_manager
 
     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
-    from agent_ng.tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
+    from agent_ng.tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab, DownloadsTab
     from agent_ng.ui_manager import get_ui_manager
     from agent_ng.utils import safe_string
 
@@ -133,7 +133,7 @@ except ImportError as e1:
         from .llm_manager import get_llm_manager
 
         # from .streaming_chat import get_chat_interface  # Module moved to .unused
-        from .tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
+        from .tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab, DownloadsTab
         from .ui_manager import get_ui_manager
 
         _logger.info("Successfully imported all modules using relative imports")
@@ -1298,6 +1298,17 @@ class NextGenApp:
                 _logger.info(
                     "ConfigTab not shown (CMW_USE_DOTENV is true or tab unavailable)"
                 )
+
+            # Downloads tab
+            if DownloadsTab:
+                downloads_tab = DownloadsTab(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
+                )
+                downloads_tab.set_main_app(self)
+                tab_modules.append(downloads_tab)
+                self.tab_instances["downloads"] = downloads_tab
+            else:
+                _logger.warning("DownloadsTab not available")
         except Exception as e:
             _logger.exception("Error creating tab modules: %s", e)
             raise
@@ -1487,7 +1498,16 @@ class NextGenApp:
             #gr.api(_api_ask_stream, api_name="ask_stream")
 
         # Configure concurrency and queuing AFTER registering named endpoints
+        # Always initialize queue (even with minimal settings) to prevent AttributeError
+        # This follows the pattern from working reference repo (rag_engine)
         self.queue_manager.configure_queue(demo)
+
+        # Ensure queue is initialized even if configure_queue didn't call demo.queue()
+        # This prevents AttributeError: 'NoneType' object has no attribute 'max_thread_count'
+        if demo._queue is None:
+            # Initialize with minimal default settings
+            demo.queue(default_concurrency_limit=1, status_update_rate="auto")
+            _logger.info("Queue initialized with minimal default settings")
 
         # Consolidate all components from UI Manager (single source of truth)
         self.components = self.ui_manager.get_components()
@@ -1546,13 +1566,38 @@ def get_demo_with_language_detection():
 
     if demo is None:
         try:
+            # #region agent log
+            import json, time
+            try:
+                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"J","location":"app_ng_modular.py:1558","message":"Starting demo creation","data":{},"timestamp":int(time.time()*1000)}) + '\n')
+            except: pass
+            # #endregion
             # First, detect the language using the elegant i18n system
             temp_app = NextGenAppWithLanguageDetection()
             detected_language = temp_app.get_current_language()
+            # #region agent log
+            try:
+                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"K","location":"app_ng_modular.py:1562","message":"Language detected","data":{"language":detected_language},"timestamp":int(time.time()*1000)}) + '\n')
+            except: pass
+            # #endregion
 
             # Create app with the detected language
             app = NextGenAppWithLanguageDetection(language=detected_language)
+            # #region agent log
+            try:
+                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"L","location":"app_ng_modular.py:1566","message":"Calling create_interface","data":{},"timestamp":int(time.time()*1000)}) + '\n')
+            except: pass
+            # #endregion
             demo = app.create_interface()
+            # #region agent log
+            try:
+                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"M","location":"app_ng_modular.py:1567","message":"Interface created successfully","data":{},"timestamp":int(time.time()*1000)}) + '\n')
+            except: pass
+            # #endregion
 
             # Ensure the demo has the required attributes for Gradio reloading
             if not hasattr(demo, "_queue"):
@@ -1560,6 +1605,13 @@ def get_demo_with_language_detection():
 
             _logger.info(f"🌐 Demo created with detected language: {detected_language}")
         except Exception as e:
+            # #region agent log
+            import json, time
+            try:
+                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"N","location":"app_ng_modular.py:1574","message":"Error creating demo","data":{"error":str(e),"error_type":type(e).__name__},"timestamp":int(time.time()*1000)}) + '\n')
+            except: pass
+            # #endregion
             _logger.exception("Error creating demo: %s", e)
             # Create a minimal working demo with required attributes
             with gr.Blocks() as fallback_demo:

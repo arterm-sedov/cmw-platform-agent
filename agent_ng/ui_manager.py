@@ -81,29 +81,127 @@ class UIManager:
             with gr.Row(), gr.Column():
                 gr.Markdown(f"# {hero_title}", elem_classes=["hero-title"])
 
-            # Create common sidebar using dedicated sidebar module
+            # Create sidebar as a tab (converted from sidebar component)
             sidebar_instance = Sidebar(event_handlers, language=self.language, i18n_instance=self.i18n)
             sidebar_instance.set_main_app(main_app)  # Pass main app reference
-
-            sidebar, sidebar_components = sidebar_instance.create_sidebar()
-            # Consolidate sidebar components
-            self.components.update(sidebar_components)
-            self.components["sidebar_instance"] = sidebar_instance
 
             with gr.Tabs():
                 # Create tabs using provided tab modules
                 for tab_module in tab_modules:
                     if tab_module:
-                        tab_item, tab_components = tab_module.create_tab()
-                        # Consolidate all components in one place
-                        self.components.update(tab_components)
-                        # Store tab reference for later use
-                        self.components[f"{tab_module.__class__.__name__.lower()}_tab"] = tab_module
+                        try:
+                            tab_item, tab_components = tab_module.create_tab()
+                            # Skip if tab_item is None (e.g., ConfigTab when CMW_USE_DOTENV=true)
+                            if tab_item is None:
+                                logging.getLogger(__name__).info(
+                                    f"⚠️ Skipping tab {tab_module.__class__.__name__} (create_tab returned None)"
+                                )
+                                continue
+                            # Consolidate all components in one place
+                            self.components.update(tab_components)
+                            # Store tab reference for later use
+                            self.components[f"{tab_module.__class__.__name__.lower()}_tab"] = tab_module
+                            logging.getLogger(__name__).debug(
+                                f"✅ Successfully created tab: {tab_module.__class__.__name__}"
+                            )
+                        except Exception as e:
+                            logging.getLogger(__name__).error(
+                                f"❌ Error creating tab {tab_module.__class__.__name__}: {e}",
+                                exc_info=True
+                            )
+                            raise
+
+                # Create sidebar as a tab (after other tabs)
+                try:
+                    sidebar_tab, sidebar_components = sidebar_instance.create_tab()
+                    # Skip if sidebar_tab is None
+                    if sidebar_tab is None:
+                        logging.getLogger(__name__).warning(
+                            "⚠️ Sidebar create_tab returned None, skipping"
+                        )
+                    else:
+                        # Consolidate sidebar components
+                        self.components.update(sidebar_components)
+                        self.components["sidebar_instance"] = sidebar_instance
+                        logging.getLogger(__name__).debug("✅ Successfully created sidebar tab")
+                except Exception as e:
+                    logging.getLogger(__name__).error(
+                        f"❌ Error creating sidebar tab: {e}",
+                        exc_info=True
+                    )
+                    raise
 
             # Connect quick action dropdown after all components are available
             if "sidebar_instance" in self.components:
                 sidebar_instance = self.components["sidebar_instance"]
                 sidebar_instance.connect_quick_action_dropdown()
+
+            # Connect DownloadsTab to update from chat streaming events
+            # #region agent log
+            import json, time
+            try:
+                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"E","location":"ui_manager.py:110","message":"Looking for tab instances","data":{"component_keys":list(self.components.keys())},"timestamp":int(time.time()*1000)}) + '\n')
+            except: pass
+            # #endregion
+            chat_tab_instance = self.components.get("chattab_tab")
+            downloads_tab_instance = self.components.get("downloadstab_tab")
+            # #region agent log
+            try:
+                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"F","location":"ui_manager.py:112","message":"Tab instances found","data":{"has_chat":chat_tab_instance is not None,"has_downloads":downloads_tab_instance is not None},"timestamp":int(time.time()*1000)}) + '\n')
+            except: pass
+            # #endregion
+            if chat_tab_instance and downloads_tab_instance:
+                download_btn = downloads_tab_instance.components.get("download_btn")
+                download_html_btn = downloads_tab_instance.components.get("download_html_btn")
+                # #region agent log
+                try:
+                    with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"G","location":"ui_manager.py:115","message":"Download buttons found","data":{"has_download_btn":download_btn is not None,"has_download_html_btn":download_html_btn is not None},"timestamp":int(time.time()*1000)}) + '\n')
+                except: pass
+                # #endregion
+                if download_btn and download_html_btn:
+                    # Wire download buttons to update after streaming completes
+                    def _update_downloads_from_chat(history):
+                        """Update download buttons from chat tab"""
+                        return chat_tab_instance.get_download_button_updates(history)
+
+                    # #region agent log
+                    try:
+                        with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"H","location":"ui_manager.py:122","message":"Wiring download events","data":{"has_streaming_event":hasattr(chat_tab_instance, "streaming_event"),"has_submit_event":hasattr(chat_tab_instance, "submit_event")},"timestamp":int(time.time()*1000)}) + '\n')
+                    except: pass
+                    # #endregion
+                    if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
+                        chat_tab_instance.streaming_event.then(
+                            fn=_update_downloads_from_chat,
+                            inputs=[chat_tab_instance.components.get("chatbot")],
+                            outputs=[download_btn, download_html_btn],
+                        )
+                    if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
+                        chat_tab_instance.submit_event.then(
+                            fn=_update_downloads_from_chat,
+                            inputs=[chat_tab_instance.components.get("chatbot")],
+                            outputs=[download_btn, download_html_btn],
+                            queue=False,  # Don't queue file generation to prevent blocking
+                        )
+                    # Also wire clear event to hide download buttons
+                    if hasattr(chat_tab_instance, "clear_event") and chat_tab_instance.clear_event:
+                        def _hide_downloads_on_clear():
+                            """Hide download buttons when chat is cleared"""
+                            return gr.update(visible=False), gr.update(visible=False)
+                        chat_tab_instance.clear_event.then(
+                            fn=_hide_downloads_on_clear,
+                            outputs=[download_btn, download_html_btn],
+                        )
+                    # #region agent log
+                    try:
+                        with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"I","location":"ui_manager.py:142","message":"Download events wired successfully","data":{},"timestamp":int(time.time()*1000)}) + '\n')
+                    except: pass
+                    # #endregion
+                    logging.getLogger(__name__).info("✅ Connected DownloadsTab to chat streaming events")
 
             # Wire end-of-turn event-driven refresh using existing chat events
             try:
@@ -237,14 +335,15 @@ class UIManager:
             )
             logging.getLogger(__name__).debug(f"✅ Status auto-refresh timer set ({refresh_interval}s)")
 
-        # Token budget updates
-        if "token_budget_display" in self.components and event_handlers.get("update_token_budget"):
-            token_budget_timer = gr.Timer(refresh_interval, active=True)
-            token_budget_timer.tick(
-                fn=event_handlers["update_token_budget"],
-                outputs=[self.components["token_budget_display"]]
-            )
-            logging.getLogger(__name__).debug(f"✅ Token budget auto-refresh timer set ({refresh_interval}s)")
+        # Token budget updates - REMOVED timer-based refresh
+        # Token budget is now updated through events only (preferred approach):
+        # - After streaming completes (streaming_event.then())
+        # - After submit (submit_event.then())
+        # - After clear (clear_event.then())
+        # - After stop (stop_event.then())
+        # - After model switch (model_switch_event.then())
+        # This ensures updates happen at appropriate budget events, not on a fixed timer
+        logging.getLogger(__name__).debug("✅ Token budget uses event-driven updates only (no timer)")
 
         # LLM selection updates - no auto-refresh (explicit only)
         logging.getLogger(__name__).debug("✅ LLM selection components will update only when explicitly triggered")

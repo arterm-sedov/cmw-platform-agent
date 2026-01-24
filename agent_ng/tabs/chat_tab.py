@@ -43,7 +43,7 @@ from tools.file_utils import FileUtils
 from .sidebar import QuickActionsMixin
 
 
-CHAT_DOWNLOADS_ENABLED = False  # Temporary kill switch for chat export/download
+CHAT_DOWNLOADS_ENABLED = True  # Enable chat export/download functionality
 
 
 class ChatTab(QuickActionsMixin):
@@ -70,12 +70,23 @@ class ChatTab(QuickActionsMixin):
         """
         logging.getLogger(__name__).info("✅ ChatTab: Creating chat interface...")
 
-        with gr.TabItem(self._get_translation("tab_chat"), id="chat") as tab:
-            # Create main chat interface (includes sidebar)
-            self._create_chat_interface()
+        try:
+            with gr.TabItem(self._get_translation("tab_chat"), id="chat") as tab:
+                # Create main chat interface (includes sidebar)
+                self._create_chat_interface()
 
-            # Connect event handlers
-            self._connect_events()
+                # Connect event handlers
+                self._connect_events()
+
+                # Verify tab was created successfully
+                if tab is None:
+                    raise ValueError("gr.TabItem context manager returned None - this should not happen")
+        except Exception as e:
+            logging.getLogger(__name__).error(
+                f"❌ ChatTab: Error in create_tab: {e}",
+                exc_info=True
+            )
+            raise
 
         logging.getLogger(__name__).info(
             "✅ ChatTab: Successfully created with all components and event handlers"
@@ -97,6 +108,9 @@ class ChatTab(QuickActionsMixin):
         )
 
         with gr.Row():
+            # Use built-in interchanging buttons in MultimodalTextbox (Gradio 6 pattern from reference repo)
+            # Following reference repo: submit_btn and stop_btn interchange with nice icons
+            # Start with submit_btn=True, stop_btn=False - submit button shows, stop button hidden
             self.components["msg"] = gr.MultimodalTextbox(
                 label=self._get_translation("message_label"),
                 placeholder=self._get_translation("message_placeholder"),
@@ -105,6 +119,8 @@ class ChatTab(QuickActionsMixin):
                 max_lines=4,
                 elem_id="message-input",
                 elem_classes=["message-card"],
+                submit_btn=True,  # Show submit button with icon (interchanges with stop)
+                stop_btn=False,  # Start hidden, will be shown when streaming starts (interchanges with submit)
                 file_types=[
                     ".pdf", ".csv", ".tsv", ".xlsx", ".xls",  # Documents and data
                     ".docx", ".pptx", ".vsdx", ".msg", ".eml",  # Office documents
@@ -121,35 +137,12 @@ class ChatTab(QuickActionsMixin):
                 file_count="multiple",
             )
             with gr.Column():
-                self.components["send_btn"] = gr.Button(
-                    self._get_translation("send_button"),
-                    variant="primary",
-                    scale=1,
-                    elem_classes=["cmw-button"],
-                )
-                self.components["stop_btn"] = gr.Button(
-                    self._get_translation("stop_button"),
-                    variant="stop",
-                    scale=1,
-                    elem_classes=["cmw-button"],
-                    visible=False,
-                )
+                # REMOVED: Separate send button - now using built-in submit button in MultimodalTextbox
+                # The built-in submit button interchanges with stop button (following reference repo pattern)
                 self.components["clear_btn"] = gr.Button(
                     self._get_translation("clear_button"),
                     variant="secondary",
                     elem_classes=["cmw-button"],
-                )
-                self.components["download_btn"] = gr.DownloadButton(
-                    label=self._get_translation("download_button"),
-                    variant="secondary",
-                    elem_classes=["cmw-button"],
-                    visible=False,
-                )
-                self.components["download_html_btn"] = gr.DownloadButton(
-                    label=self._get_translation("download_html_button"),
-                    variant="secondary",
-                    elem_classes=["cmw-button"],
-                    visible=False,
                 )
 
         # Welcome block moved to dedicated Home tab
@@ -193,96 +186,215 @@ class ChatTab(QuickActionsMixin):
                     hasattr(queue_manager, "config"),
                 )
 
-        # Main chat events with concurrency control and queue status
+        # Store original stop_btn value (True, but we start with False)
+        # Following reference repo pattern: buttons interchange - submit hides when stop shows
+        original_stop_btn = True
+
+        # Following reference repo pattern: two-step process
+        # Step 1: Simple function to clear textbox and save message (triggers .success())
+        # Step 2: Chain streaming handler with .then()
+        def clear_and_save_multimodal_textbox(multimodal_value: dict[str, Any] | None) -> tuple[gr.MultimodalTextbox, dict[str, Any] | None]:
+            """Clear MultimodalTextbox and save message to state (pattern from reference repo)."""
+            logging.getLogger(__name__).debug("clear_and_save_multimodal_textbox called")
+            # Extract text from MultimodalValue format
+            if isinstance(multimodal_value, dict):
+                text = multimodal_value.get("text", "")
+                files = multimodal_value.get("files", [])
+                saved_value = {"text": text, "files": files}
+            else:
+                saved_value = {"text": str(multimodal_value) if multimodal_value else "", "files": []}
+
+            logging.getLogger(__name__).debug(f"Saved value: text={saved_value.get('text', '')[:50]}..., files={len(saved_value.get('files', []))}")
+            return (
+                gr.MultimodalTextbox(value="", interactive=False, placeholder=""),
+                saved_value,
+            )
+
+        # State to store saved message (pattern from reference repo)
+        saved_input = gr.State()
+        self.components["saved_input"] = saved_input  # Store for potential future use
+
+        # Cancellation state - mutable dict so changes propagate to running generator
+        # Following reference repo pattern: used for cooperative cancellation
+        cancellation_state = gr.State(value={"cancelled": False})
+        self.components["cancellation_state"] = cancellation_state
+
+        # Step 1: Submit event - simple function that clears textbox
+        # Following reference repo pattern: this triggers .success() which shows stop button
+        user_submit = self.components["msg"].submit(
+            fn=clear_and_save_multimodal_textbox,
+            inputs=[self.components["msg"]],
+            outputs=[self.components["msg"], saved_input],  # Clear textbox and save message to state
+            queue=False,
+        )
+
+        # Show stop button when submit succeeds (before streaming starts)
+        # Interchange: submit_btn=False, stop_btn=True (submit hides, stop shows)
+        # Following reference repo pattern exactly
+        def show_stop_button():
+            """Show stop button and hide submit button (interchanging buttons)."""
+            logging.getLogger(__name__).debug("show_stop_button: Interchanging buttons - showing stop, hiding submit")
+            return gr.MultimodalTextbox(submit_btn=False, stop_btn=original_stop_btn)
+
+        user_submit.success(
+            fn=show_stop_button,
+            outputs=[self.components["msg"]],
+            queue=False,
+        )
+
+        # Reset cancellation state at start of new submission (following reference repo pattern)
+        def reset_cancellation_state(cancel_state: dict | None) -> dict:
+            """Reset cancellation state at start of new submission."""
+            if cancel_state is None or not isinstance(cancel_state, dict):
+                cancel_state = {"cancelled": False}
+            else:
+                cancel_state["cancelled"] = False
+            return cancel_state
+
+        # Step 2: Chain streaming handler from user_submit
+        # Following reference repo pattern: reset cancellation state first, then chain streaming handler
         if queue_manager:
-            # Apply concurrency settings to chat events
-
-            # Send button click with concurrency and queue status
-            send_config = apply_concurrency_to_click_event(
+            # Apply concurrency settings to the chained streaming event
+            streaming_config = apply_concurrency_to_click_event(
                 queue_manager,
                 "chat",
                 self._stream_message_wrapper,
-                [self.components["msg"], self.components["chatbot"]],
+                [saved_input, self.components["chatbot"], cancellation_state],  # Add cancellation_state
                 [
                     self.components["chatbot"],
                     self.components["msg"],
-                    self.components["stop_btn"],
-                    self.components["download_btn"],
-                    self.components["download_html_btn"],
                     self._get_quick_actions_dropdown(),
                 ],
             )
-            self.streaming_event = self.components["send_btn"].click(**send_config)
+            # Remove 'fn' from config since we'll use it directly in .then()
+            streaming_fn = streaming_config.pop("fn")
+            streaming_inputs = streaming_config.pop("inputs")
+            streaming_outputs = streaming_config.pop("outputs")
 
-            # Message submit with concurrency and queue status
-            submit_config = apply_concurrency_to_submit_event(
-                queue_manager,
-                "chat",
-                self._stream_message_wrapper,
-                [self.components["msg"], self.components["chatbot"]],
-                [
-                    self.components["chatbot"],
-                    self.components["msg"],
-                    self.components["stop_btn"],
-                    self.components["download_btn"],
-                    self.components["download_html_btn"],
-                    self._get_quick_actions_dropdown(),
-                ],
+            # Chain streaming handler from user_submit
+            # Following reference repo pattern: reset cancellation state first, then stream
+            self.submit_event = user_submit.then(
+                fn=reset_cancellation_state,
+                inputs=[cancellation_state],
+                outputs=[cancellation_state],
+                queue=False,
+            ).then(
+                fn=streaming_fn,
+                inputs=streaming_inputs,
+                outputs=streaming_outputs,
+                **streaming_config,
             )
-            self.submit_event = self.components["msg"].submit(**submit_config)
         else:
             # Fallback to default behavior if queue manager not available
             logging.getLogger(__name__).warning(
                 "⚠️ Queue manager not available - using default event configuration"
             )
-            self.streaming_event = self.components["send_btn"].click(
+            # Chain streaming handler from user_submit
+            # Following reference repo pattern: reset cancellation state first, then stream
+            self.submit_event = user_submit.then(
+                fn=reset_cancellation_state,
+                inputs=[cancellation_state],
+                outputs=[cancellation_state],
+                queue=False,
+            ).then(
                 fn=self._stream_message_wrapper,
-                inputs=[self.components["msg"], self.components["chatbot"]],
+                inputs=[saved_input, self.components["chatbot"], cancellation_state],  # Add cancellation_state
                 outputs=[
                     self.components["chatbot"],
                     self.components["msg"],
-                    self.components["stop_btn"],
-                    self.components["download_btn"],
-                    self.components["download_html_btn"],
                     self._get_quick_actions_dropdown(),
                 ],
             )
 
-            self.submit_event = self.components["msg"].submit(
-                fn=self._stream_message_wrapper,
-                inputs=[self.components["msg"], self.components["chatbot"]],
+        # Built-in stop button automatically cancels submit_event when stop_btn=True
+        # Wire up the stop event to handle cancellation and update history
+        # Following reference repo pattern: use msg.stop() instead of separate button
+        # #region agent log
+        import json
+        try:
+            with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "C", "location": "chat_tab.py:288", "message": "Wiring stop event", "data": {"has_submit_event": hasattr(self, "submit_event") and self.submit_event is not None}, "timestamp": __import__("time").time() * 1000}) + "\n")
+        except: pass
+        # #endregion
+        try:
+            self.stop_event = self.components["msg"].stop(
+                fn=self._handle_stop_click,
+                inputs=[self.components["chatbot"]],
                 outputs=[
-                    self.components["chatbot"],
-                    self.components["msg"],
-                    self.components["stop_btn"],
-                    self.components["download_btn"],
-                    self.components["download_html_btn"],
-                    self._get_quick_actions_dropdown(),
+                    self.components["chatbot"],  # Only return chatbot, not msg
                 ],
+                cancels=[self.submit_event],  # Cancel submit event (following reference repo pattern)
+            ).then(
+                lambda: gr.MultimodalTextbox(submit_btn=True, stop_btn=False),  # Hide stop button after cancellation
+                outputs=[self.components["msg"]],
+                queue=False,
             )
+            # #region agent log
+            import json
+            try:
+                with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "C", "location": "chat_tab.py:300", "message": "Stop event wired successfully", "data": {}, "timestamp": __import__("time").time() * 1000}) + "\n")
+            except: pass
+            # #endregion
+        except Exception as exc:
+            # #region agent log
+            import json
+            try:
+                with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "D", "location": "chat_tab.py:302", "message": "Stop event wiring failed", "data": {"error": str(exc), "error_type": type(exc).__name__}, "timestamp": __import__("time").time() * 1000}) + "\n")
+            except: pass
+            # #endregion
+            logging.getLogger(__name__).error(f"Failed to wire stop event: {exc}", exc_info=True)
+            raise
 
-        # Stop button - cancel both send and submit events; hide itself, show download, append stats to chat
-        # Store stop button click event for chaining token budget updates
-        self.stop_event = self.components["stop_btn"].click(
-            fn=self._handle_stop_click,
-            inputs=[self.components["chatbot"]],
-            outputs=[
-                self.components["chatbot"],
-                self.components["stop_btn"],
-                self.components["download_btn"],
-                self.components["download_html_btn"],
-            ],
-            cancels=[self.streaming_event, self.submit_event],
+        # Wire UI update trigger to stop event (for token budget/status refresh)
+        trigger_ui_update = self.event_handlers.get("trigger_ui_update")
+        if trigger_ui_update:
+            self.stop_event.then(fn=trigger_ui_update, outputs=[], queue=False)
+
+        # Re-enable textbox and hide stop button after streaming completes
+        # Following reference repo pattern: chain after handler completion
+        def re_enable_textbox_and_hide_stop():
+            """Re-enable textbox and hide stop button after handler completion."""
+            logging.getLogger(__name__).debug("Re-enabling textbox and hiding stop button after handler completion")
+            return gr.MultimodalTextbox(value="", interactive=True, submit_btn=True, stop_btn=False)
+
+        # Chain re-enable to submit event after it completes
+        # .then() fires after generator completes and all yields are processed
+        # Following reference repo pattern: only chain to submit_event (no separate send button)
+        self.submit_event = self.submit_event.then(
+            fn=re_enable_textbox_and_hide_stop,
+            outputs=[self.components["msg"]],
+            queue=False,
+        )
+
+        # Handle chatbot clear event - also clear memory when chat is cleared
+        # Following reference repo pattern: wire chatbot.clear() similar to regular clear button
+        def handle_chatbot_clear(request: gr.Request | None = None) -> None:
+            """Handle chatbot clear event - also clear memory when chat is cleared."""
+            logging.getLogger(__name__).info("Chatbot clear event - clearing memory")
+            # Use the same clear handler as the regular clear button
+            clear_handler = self.event_handlers.get("clear_chat")
+            if clear_handler:
+                clear_handler(request)
+            return None
+
+        # Bind to the built-in clear button's clear event
+        # Also clear memory when chat is cleared
+        # Following reference repo pattern: wire chatbot.clear() similar to regular clear button
+        self.components["chatbot"].clear(
+            fn=handle_chatbot_clear,
+            inputs=[],  # Request is automatically passed to functions that accept it
+            outputs=[],  # No outputs needed
         )
 
         # Store clear button click event for chaining token budget updates
+        # This is in addition to chatbot.clear() - both can work together
         self.clear_event = self.components["clear_btn"].click(
             fn=self._clear_chat_with_download_reset,
             outputs=[
                 self.components["chatbot"],
                 self.components["msg"],
-                self.components["download_btn"],
-                self.components["download_html_btn"],
             ],
         )
 
@@ -308,9 +420,6 @@ class ChatTab(QuickActionsMixin):
         return (
             ui_history,
             "",
-            gr.Button(visible=True),
-            gr.DownloadButton(visible=False),
-            gr.DownloadButton(visible=False),
             None,
         )
 
@@ -320,20 +429,16 @@ class ChatTab(QuickActionsMixin):
         trigger_ui_update = self.event_handlers.get("trigger_ui_update")
 
         if trigger_ui_update:
-            # Trigger UI update after send button click
-            self.components["send_btn"].click(
-                fn=trigger_ui_update,
-                outputs=[],  # No specific outputs, just triggers the update
-            )
-
-            # Trigger UI update after message submit
+            # Trigger UI update after message submit (built-in submit button)
             self.components["msg"].submit(fn=trigger_ui_update, outputs=[])
 
             # Trigger UI update after clear button click
             self.components["clear_btn"].click(fn=trigger_ui_update, outputs=[])
 
-            # Trigger UI update after stop button click (to refresh token budget/status)
-            self.components["stop_btn"].click(fn=trigger_ui_update, outputs=[])
+            # Trigger UI update after built-in stop button click (to refresh token budget/status)
+            # Use msg.stop() to wire to built-in stop button
+            if hasattr(self, "stop_event") and self.stop_event:
+                self.stop_event.then(fn=trigger_ui_update, outputs=[], queue=False)
 
             logging.getLogger(__name__).debug(
                 "✅ ChatTab: UI update triggers connected"
@@ -371,9 +476,10 @@ class ChatTab(QuickActionsMixin):
         # These components are now in the UI Manager sidebar
         return {}
 
-    def get_stop_button(self) -> gr.Button:
-        """Get the stop button component for visibility control"""
-        return self.components["stop_btn"]
+    def get_stop_button(self) -> gr.MultimodalTextbox:
+        """Get the message input component (stop button is now built-in)"""
+        # Stop button is now built-in to MultimodalTextbox, return the textbox component
+        return self.components["msg"]
 
     def _get_quick_actions_dropdown(self) -> gr.Dropdown:
         """Get the quick actions dropdown from the sidebar"""
@@ -385,16 +491,38 @@ class ChatTab(QuickActionsMixin):
             and self.main_app.ui_manager
         ):
             # Try to get from UI Manager components
-                components = self.main_app.ui_manager.get_components()
-                return components.get("quick_actions_dropdown")
+            components = self.main_app.ui_manager.get_components()
+            dropdown = components.get("quick_actions_dropdown")
+            # Ensure we always return a valid component, never None
+            if dropdown is not None:
+                return dropdown
 
         # Fallback - return a dummy component that won't cause errors
+        # This ensures we never return None, which would cause '_id' attribute errors
         return gr.Dropdown(visible=False)
 
     def _handle_stop_click(
-        self, history: list[dict[str, str]], request: gr.Request | None = None
-    ) -> tuple[list[dict[str, str]], gr.Button]:
-        """Handle stop button click: finalize token tracking, append stats, update UI."""
+        self, history: list[dict[str, str]], cancel_state: dict | None = None, request: gr.Request | None = None
+    ) -> tuple[list[dict[str, str]], dict]:
+        """Handle built-in stop button click: set cancellation flag, finalize token tracking, append stats, update UI.
+
+        Following reference repo pattern: uses msg.stop() with built-in stop button.
+        Sets cancellation flag in shared state so the running generator can check it.
+        Returns history and cancellation_state - MultimodalTextbox update is handled in .then() chain.
+        """
+        # Set cancellation flag (following reference repo pattern)
+        if cancel_state is None or not isinstance(cancel_state, dict):
+            cancel_state = {"cancelled": True}
+        else:
+            cancel_state["cancelled"] = True
+        logging.getLogger(__name__).info("Stop button clicked - setting cancellation flag")
+        # #region agent log
+        import json
+        try:
+            with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "A", "location": "chat_tab.py:455", "message": "_handle_stop_click called", "data": {"history_len": len(history) if history else 0, "has_request": request is not None}, "timestamp": __import__("time").time() * 1000}) + "\n")
+        except: pass
+        # #endregion
         try:
             # Attempt to finalize token accounting for this turn even if stream was interrupted
             if (
@@ -521,9 +649,16 @@ class ChatTab(QuickActionsMixin):
                 "UI state update failed: %s", exc
             )
 
-        # Hide stop button and show download button with current conversation
-        download_btns = self._update_download_button_visibility(history)
-        return history, gr.Button(visible=False), download_btns[0], download_btns[1]
+        # Return only history - MultimodalTextbox update is handled in .then() chain
+        # Following reference repo pattern: return only history
+        # #region agent log
+        import json
+        try:
+            with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "A", "location": "chat_tab.py:590", "message": "_handle_stop_click returning", "data": {"return_type": "list", "history_len": len(history) if history else 0}, "timestamp": __import__("time").time() * 1000}) + "\n")
+        except: pass
+        # #endregion
+        return history
 
     def _finalize_tokens_on_stop(self, request: gr.Request, history: list[dict[str, str]]) -> list[dict[str, str]]:
         """Finalize token tracking and append stats when streaming is stopped"""
@@ -1131,85 +1266,66 @@ class ChatTab(QuickActionsMixin):
         self,
         multimodal_value: dict[str, Any] | None,
         history: list[dict[str, str]],
+        cancel_state: dict | None = None,
         request: gr.Request | None = None,
     ) -> tuple[
         list[dict[str, str]],
-        gr.Button,
-        gr.DownloadButton,
-        gr.DownloadButton,
+        str,
         None,
     ]:
         """Wrapper for concurrent processing with Gradio's native queue feedback
 
         Handles MultimodalValue format and extracts text for processing with proper session awareness.
         With status_update_rate="auto", Gradio will show native queue status - no need for custom warnings.
+
+        Note: Stop button visibility is now handled by built-in stop button in MultimodalTextbox,
+        shown/hidden via .success() events on streaming/submit events (following reference repo pattern).
         """
 
-        # Show stop button at start of processing
-        yield (
-            history,
-            "",
-            gr.Button(visible=True),
-            gr.DownloadButton(visible=False),  # Don't update download during streaming
-            gr.DownloadButton(visible=False),  # Don't update HTML download during streaming
-            None,
-        )  # Show stop button, don't update download, reset dropdown
+        # Helper to check if cancellation was requested (following reference repo pattern)
+        def is_cancelled() -> bool:
+            return cancel_state is not None and cancel_state.get("cancelled", False)
+
+        # Process message with original wrapper
+        # Stop button is shown via .success() on submit_event (interchanging buttons)
         yield self._yield_ui_newline(history)
+
+        # Check for cancellation before starting
+        if is_cancelled():
+            logging.getLogger(__name__).info("Streaming cancelled before start")
+            yield (history, "", None)
+            return
 
         # Process message with original wrapper
         last_result = None
         for result in self._stream_message_wrapper_internal(
             multimodal_value, history, request
         ):
+            # Check for cancellation during streaming (following reference repo pattern)
+            if is_cancelled():
+                logging.getLogger(__name__).info("Streaming cancelled during execution")
+                break
             last_result = result
-            # Toggle buttons based on processing state (supports early-finish unlock)
-            stop_visible = True
-            try:
-                if hasattr(self, "main_app") and self.main_app is not None:
-                    stop_visible = bool(self.main_app.is_processing)
-            except Exception as exc:
-                logging.getLogger(__name__).debug(
-                    "Failed to check processing state, defaulting stop visible: %s",
-                    exc,
-                )
-                stop_visible = True
-
-            download_btns = (
-                self._update_download_button_visibility(result[0])
-                if not stop_visible
-                else (gr.DownloadButton(visible=False), gr.DownloadButton(visible=False))
-            )
-
             yield (
                 result[0],
                 result[1],
-                gr.Button(visible=stop_visible),
-                download_btns[0],
-                download_btns[1],
                 None,
             )
 
-        # Hide stop button at end of processing and update download button
+        # Hide stop button at end of processing (via .then() on submit_event)
+        # This is handled by re_enable_textbox_and_hide_stop function chained to submit completion
         if last_result and len(last_result) >= 2:
-            final_download_btns = self._update_download_button_visibility(last_result[0])
             yield (
                 last_result[0],
                 last_result[1],
-                gr.Button(visible=False),
-                final_download_btns[0],
-                final_download_btns[1],
                 None,
-            )  # Reset dropdown
+            )
         else:
-            final_download_btns = self._update_download_button_visibility(history)
             yield (
                 history,
                 "",
-                gr.Button(visible=False),
-                final_download_btns[0],
-                final_download_btns[1],
                 None,
-            )  # Reset dropdown
+            )
 
     def _stream_message_wrapper_internal(
         self,
@@ -1306,8 +1422,6 @@ class ChatTab(QuickActionsMixin):
     ) -> tuple[
         list[dict[str, str]],
         dict[str, Any],
-        gr.DownloadButton,
-        gr.DownloadButton,
     ]:
         """Clear chat and reset download state - now properly session-aware"""
         # Clear download button cache
@@ -1321,20 +1435,33 @@ class ChatTab(QuickActionsMixin):
         if clear_handler:
             # Call the original clear handler with real Gradio request
             chatbot, _msg = clear_handler(request)
-            # Reset download button (hide it) and return empty MultimodalValue
+            # Return empty MultimodalValue
             empty_multimodal = {"text": "", "files": []}
-            return chatbot, empty_multimodal, gr.DownloadButton(visible=False), gr.DownloadButton(visible=False)
+            return chatbot, empty_multimodal
         # Fallback if clear handler not available
         empty_multimodal = {"text": "", "files": []}
-        return [], empty_multimodal, gr.DownloadButton(visible=False), gr.DownloadButton(visible=False)
+        return [], empty_multimodal
+
+    def get_download_button_updates(self, history):
+        """
+        Get download button updates for DownloadsTab.
+        This method can be called from DownloadsTab to update buttons.
+
+        Args:
+            history: Conversation history
+
+        Returns:
+            Tuple of (markdown_button_update, html_button_update)
+        """
+        return self._update_download_button_visibility(history)
 
     def _update_download_button_visibility(self, history):
         """Update download button visibility and file based on conversation history"""
         if not CHAT_DOWNLOADS_ENABLED:
             # Downloads are globally disabled via feature flag
             return (
-                gr.DownloadButton(visible=False),
-                gr.DownloadButton(visible=False),
+                gr.update(visible=False),
+                gr.update(visible=False),
             )
         if history and len(history) > 0:
             # Check if conversation has changed since last generation
@@ -1344,12 +1471,20 @@ class ChatTab(QuickActionsMixin):
                 or self._last_history_str != history_str
             ):
                 # Generate files with fresh timestamp when conversation changes
-                markdown_file_path = self._download_conversation_as_markdown(history)
-                # HTML file path is now stored in _last_html_file_path by _download_conversation_as_markdown
-                html_file_path = getattr(self, "_last_html_file_path", None)
-                self._last_history_str = history_str
-                self._last_download_file = markdown_file_path
-                self._last_download_html_file = html_file_path
+                # Use try/except to prevent blocking on file generation errors
+                try:
+                    markdown_file_path = self._download_conversation_as_markdown(history)
+                    # HTML file path is now stored in _last_html_file_path by _download_conversation_as_markdown
+                    html_file_path = getattr(self, "_last_html_file_path", None)
+                    self._last_history_str = history_str
+                    self._last_download_file = markdown_file_path
+                    self._last_download_html_file = html_file_path
+                except Exception as exc:
+                    logging.getLogger(__name__).warning(
+                        f"Failed to generate download files: {exc}", exc_info=True
+                    )
+                    markdown_file_path = None
+                    html_file_path = None
             else:
                 # Use cached files if conversation hasn't changed
                 markdown_file_path = getattr(self, "_last_download_file", None)
@@ -1357,32 +1492,21 @@ class ChatTab(QuickActionsMixin):
 
             if markdown_file_path and html_file_path:
                 # Show both download buttons with pre-generated files
+                # Use gr.update() instead of creating new components (Gradio 6 pattern)
                 return (
-                    gr.DownloadButton(
-                        label=self._get_translation("download_button"),
-                        value=markdown_file_path,
-                        variant="secondary",
-                        elem_classes=["cmw-button"],
-                        visible=True,
-                    ),
-                    gr.DownloadButton(
-                        label=self._get_translation("download_html_button"),
-                        value=html_file_path,
-                        variant="secondary",
-                        elem_classes=["cmw-button"],
-                        visible=True,
-                    ),
+                    gr.update(value=markdown_file_path, visible=True),
+                    gr.update(value=html_file_path, visible=True),
                 )
-            # Show buttons without files if generation fails
+            # Hide buttons if generation fails
             return (
-                    gr.DownloadButton(visible=False),
-                    gr.DownloadButton(visible=False),
-                )
+                gr.update(visible=False),
+                gr.update(visible=False),
+            )
         # Hide download buttons when there's no conversation history
         return (
-                gr.DownloadButton(visible=False),
-                gr.DownloadButton(visible=False),
-            )
+            gr.update(visible=False),
+            gr.update(visible=False),
+        )
 
     def _download_conversation_as_markdown(
         self, history: list[dict[str, str]]
@@ -1457,11 +1581,39 @@ class ChatTab(QuickActionsMixin):
         markdown_content += "---\n\n"
 
         # Add conversation messages
-        # Handle the actual format from the debug output
+        # Handle Gradio 6 format: content can be a list of dicts [{'text': '...', 'type': 'text'}]
+        # or a plain string (Gradio 5 format)
+        def extract_text_content(content):
+            """Extract plain text from content, handling both Gradio 5 and 6 formats."""
+            if content is None:
+                return ""
+
+            # If content is a string, return it directly (Gradio 5 format)
+            if isinstance(content, str):
+                return content
+
+            # If content is a list (Gradio 6 format), extract text from each item
+            if isinstance(content, list):
+                text_parts = []
+                for item in content:
+                    if isinstance(item, dict):
+                        # Extract text from dict items (e.g., {'text': '...', 'type': 'text'})
+                        text = item.get("text", "")
+                        if text:
+                            text_parts.append(str(text))
+                    elif isinstance(item, str):
+                        # Direct string in list
+                        text_parts.append(item)
+                return "\n".join(text_parts)
+
+            # Fallback: convert to string
+            return str(content)
+
         for i, message in enumerate(history, 1):
             if isinstance(message, dict):
                 role = message.get("role", "unknown")
-                content = message.get("content", "") or ""
+                raw_content = message.get("content", "") or ""
+                content = extract_text_content(raw_content)
 
                 if role == "user":
                     markdown_content += f"## User Message {i}\n\n"

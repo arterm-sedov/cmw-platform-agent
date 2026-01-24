@@ -96,18 +96,18 @@ class Sidebar(QuickActionsMixin):
         self.language = language
         self.i18n = i18n_instance
 
-    def create_sidebar(self) -> tuple[gr.Sidebar, dict[str, Any]]:
+    def create_tab(self) -> tuple[gr.TabItem, dict[str, Any]]:
         """
-        Create the common sidebar with all its components.
+        Create the sidebar as a tab component with all its components.
 
         Returns:
-            Tuple of (Sidebar, components_dict)
+            Tuple of (TabItem, components_dict)
         """
         logging.getLogger(__name__).info(
-            "✅ Sidebar: Creating common sidebar interface..."
+            "✅ Sidebar: Creating sidebar as tab interface..."
         )
 
-        with gr.Sidebar(open=True, width=420) as sidebar:
+        with gr.TabItem(self._get_translation("tab_sidebar"), id="sidebar") as tab:
             # LLM Selection section
             with gr.Column(elem_classes=["model-card"]):
                 gr.Markdown(
@@ -225,9 +225,9 @@ class Sidebar(QuickActionsMixin):
         self._connect_sidebar_events()
 
         logging.getLogger(__name__).info(
-            "✅ Sidebar: Successfully created with all components and event handlers"
+            "✅ Sidebar: Successfully created as tab with all components and event handlers"
         )
-        return sidebar, self.components
+        return tab, self.components
 
     def _connect_sidebar_events(self):
         """Connect all event handlers for the sidebar components"""
@@ -290,13 +290,12 @@ class Sidebar(QuickActionsMixin):
                 outputs=[],
             )
 
-        # Token budget display change event for download button visibility
-        if "token_budget_display" in self.components:
-            self.components["token_budget_display"].change(
-                fn=self._update_download_button_visibility,
-                inputs=[],
-                outputs=[],  # Output will be handled by the main app
-            )
+        # REMOVED: Token budget display change event
+        # This was causing infinite loops in Gradio 6 because:
+        # 1. token_budget_display is a gr.Markdown that gets updated programmatically
+        # 2. Every update triggers the .change() event
+        # 3. This can cause excessive event firing and errors
+        # Download button visibility is now handled through chat streaming events instead
 
         logging.getLogger(__name__).debug(
             "✅ Sidebar: All event handlers connected successfully"
