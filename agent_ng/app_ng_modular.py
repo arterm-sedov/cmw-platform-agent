@@ -827,13 +827,11 @@ class NextGenApp:
                             for i in range(
                                 max(0, len(working_history) - 3), len(working_history)
                             ):
-                                if (
-                                    i >= 0
-                                    and working_history[i]
-                                    and working_history[i]
-                                    .get("metadata", {})
-                                    .get("title")
-                                ):
+                                msg = working_history[i]
+                                if not isinstance(msg, dict):
+                                    continue
+                                metadata = msg.get("metadata") or {}
+                                if isinstance(metadata, dict) and metadata.get("title"):
                                     has_recent_tool_messages = True
                                     break
 
