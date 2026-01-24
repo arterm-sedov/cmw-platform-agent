@@ -333,6 +333,23 @@ class Sidebar(QuickActionsMixin):
         """Get a translation for a specific key"""
         return get_translation_key(key, self.language)
 
+    def _format_context_window(self, tokens: int) -> str:
+        """Format context window size like 1M / 200K for display."""
+        if tokens <= 0:
+            return "?"
+        if tokens >= 1_000_000:
+            return f"{tokens // 1_000_000}M"
+        if tokens >= 1_000:
+            return f"{tokens // 1_000}K"
+        return str(tokens)
+
+    def _format_model_with_ctx(self, model_name: str, token_limit: int) -> str:
+        """Format model name plus context window, e.g. 'deepseek/... / 160K'."""
+        if token_limit <= 0:
+            return model_name
+        ctx = self._format_context_window(token_limit)
+        return f"{model_name} / {ctx}"
+
     def _get_default_compression_enabled(self) -> bool:
         """Get default compression enabled flag from environment.
 
@@ -384,9 +401,9 @@ class Sidebar(QuickActionsMixin):
 
     def _build_fallback_defaults_for_agent(
         self, session_agent: Any
-    ) -> tuple[list[str], str | None]:
+    ) -> tuple[list[tuple[str, str]], str | None]:
         """Build fallback dropdown choices and default value for a given agent."""
-        choices: list[str] = []
+        choices: list[tuple[str, str]] = []
         value: str | None = None
 
         if not session_agent:
@@ -434,18 +451,24 @@ class Sidebar(QuickActionsMixin):
 
         # Sort candidates by context window descending
         candidates.sort(key=lambda x: x[1], reverse=True)
-        choices = [name for name, _ in candidates if name]
+        for name, token_limit in candidates:
+            if not name:
+                continue
+            label = self._format_model_with_ctx(name, token_limit)
+            choices.append((label, name))
 
         # Determine default selection: agent setting, then env, then largest
         agent_pref = getattr(session_agent, "fallback_model_name", None)
         env_pref = os.getenv("FALLBACK_MODEL_DEFAULT", "").strip() or None
+        available_values = {v for _label, v in choices}
 
-        if agent_pref and agent_pref in choices:
+        if agent_pref and agent_pref in available_values:
             value = agent_pref
-        elif env_pref and env_pref in choices:
+        elif env_pref and env_pref in available_values:
             value = env_pref
         elif choices:
-            value = choices[0]
+            # fall back to first choice value
+            value = choices[0][1]
 
         # Persist chosen default back to agent
         if value:
@@ -540,20 +563,25 @@ class Sidebar(QuickActionsMixin):
                 "Failed to apply fallback selection: %s", exc
             )
 
-    def _get_available_provider_model_combinations(self) -> list[str]:
-        """Get list of available provider/model combinations in format 'Provider / Model'"""
+    def _get_available_provider_model_combinations(self) -> list[tuple[str, str]]:
+        """Get list of available provider/model combinations.
+
+        Returns (label, value) pairs where:
+        - label: human-friendly, e.g. "Openrouter / deepseek/deepseek-v3.2-speciale / 160K"
+        - value: internal value, e.g. "Openrouter / deepseek/deepseek-v3.2-speciale"
+        """
         if not hasattr(self, "main_app") or not self.main_app:
-            return [self._get_translation("no_providers_available")]
+            return [(self._get_translation("no_providers_available"), "")]
 
         try:
             if hasattr(self.main_app, "llm_manager") and self.main_app.llm_manager:
-                combinations = []
+                combinations: list[tuple[str, str]] = []
                 available_providers = (
                     self.main_app.llm_manager.get_available_providers()
                 )
 
                 if not available_providers:
-                    return [self._get_translation("no_providers_available")]
+                    return [(self._get_translation("no_providers_available"), "")]
 
                 for provider in available_providers:
                     config = self.main_app.llm_manager.get_provider_config(provider)
@@ -575,20 +603,24 @@ class Sidebar(QuickActionsMixin):
                         model_name = model.get("model")
                         if not model_name:
                             continue
-                        # Format as "Provider / Model"
-                        combination = f"{provider.title()} / {model_name}"
-                        combinations.append(combination)
+                        token_limit = int(model.get("token_limit", 0))
+                        base_value = f"{provider.title()} / {model_name}"
+                        # Reuse shared formatter for model+ctx
+                        label_suffix = self._format_model_with_ctx(model_name, token_limit)
+                        # Replace bare model_name with formatted label_suffix for display
+                        label = f"{provider.title()} / {label_suffix}"
+                        combinations.append((label, base_value))
 
                 if not combinations:
-                    return [self._get_translation("no_models_available")]
+                    return [(self._get_translation("no_models_available"), "")]
 
                 return combinations
         except Exception as e:
             print(f"Error getting provider/model combinations: {e}")
-            return [self._get_translation("error_loading_providers")]
+            return [(self._get_translation("error_loading_providers"), "")]
 
         # No fallback - return error message
-        return [self._get_translation("no_providers_available")]
+        return [(self._get_translation("no_providers_available"), "")]
 
     def _get_current_provider_model_combination(self) -> str:
         """Get current provider/model combination in format 'Provider / Model'"""
