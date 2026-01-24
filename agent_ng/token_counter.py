@@ -653,14 +653,13 @@ class ConversationTokenTracker:
         - session_tokens (Conversation): API counts only, with
           estimates only for interrupted turns without API counts.
         - avg_tokens_per_message (Average per
-          message): API counts only, with estimates only for interrupted turns
-          without API counts.
+          message): Per-conversation average (session_tokens / message_count).
         """
-        # Calculate average using API-only totals (which includes estimates only
-        # for interrupted turns without API counts).
+        # Calculate average per message for current conversation only
+        # Use session_tokens (per-conversation) divided by message_count (per-conversation)
         avg_tokens = (
-            (self._api_only_tokens / self._api_only_message_count)
-            if self._api_only_message_count > 0
+            (self.last_conversation_tokens / self.message_count)
+            if self.message_count > 0
             else 0
         )
 
@@ -688,6 +687,21 @@ class ConversationTokenTracker:
         # Reset API-only tracking for new conversation (but keep conversation total).
         # Note: We keep _api_only_tokens and _api_only_message_count for
         # accurate average across all conversations.
+        # Reset per-conversation display stats
+        self._latest_budget_snapshot = None
+        self._latest_budget_snapshot_ts = 0.0
+        self._turn_estimated_total_tokens = 0
+        self._turn_total_tokens = 0
+        self._turn_input_tokens = 0
+        self._turn_output_tokens = 0
+        self._turn_active = False
+        self._turn_interrupted = False
+        self._last_api_tokens = None
+        self._last_turn_estimated_total_tokens = 0
+        self._last_turn_used_estimate = False
+        # Reset per-conversation message count for average calculation
+        # (but keep cumulative _api_only_message_count for cross-conversation average)
+        self.message_count = 0
 
     def reset_current_conversation_budget(self) -> None:
         """Reset current conversation token budget for model switching"""
