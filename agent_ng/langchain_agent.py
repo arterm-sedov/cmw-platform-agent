@@ -32,6 +32,7 @@ from pathlib import Path
 from .token_counter import TokenCount, get_token_tracker, convert_chat_history_to_messages
 from .token_budget import TOKEN_STATUS_UNKNOWN
 from .native_langchain_streaming import get_native_streaming
+from .history_compression import clear_compression_stats, get_compression_stats
 from tools.file_utils import FileUtils
 
 try:
@@ -314,6 +315,8 @@ class CmwAgent:
         chain.clear_conversation(conversation_id)
         # Clear file registry when clearing conversation
         self.file_registry = {}
+        # Clear compression stats for this conversation
+        clear_compression_stats(conversation_id)
 
     def is_ready(self) -> bool:
         """Check if the agent is ready to process requests"""
@@ -564,15 +567,9 @@ class CmwAgent:
                 tool_call_count = get_tool_call_count(self, self.session_id)
 
                 # Get compression stats
-                try:
-                    from agent_ng.history_compression import get_compression_stats
-
-                    compression_count, total_tokens_saved = get_compression_stats(
-                        self.session_id
-                    )
-                except Exception:
-                    compression_count = 0
-                    total_tokens_saved = 0
+                compression_count, total_tokens_saved = get_compression_stats(
+                    self.session_id
+                )
 
                 return {
                     "message_count": total_messages,

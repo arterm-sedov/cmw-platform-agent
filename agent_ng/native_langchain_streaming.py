@@ -46,6 +46,8 @@ from .token_budget import (
     HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
     HISTORY_COMPRESSION_KEEP_RECENT_TURNS_SUCCESS,
     HISTORY_COMPRESSION_TARGET_TOKENS_PCT,
+    MAX_TOOL_RESULT_TOKENS_PCT,
+    count_tokens,
 )
 
 # LangSmith tracing
@@ -400,6 +402,42 @@ class NativeLangChainStreaming:
             except Exception as exc:
                 # Log directly - if logging fails, let it fail visibly for debugging
                 self._logger.debug("Failed to begin turn usage accumulation: %s", exc)
+
+            # Check for compression need at the start of the turn (before first LLM call)
+            # This prevents context overflow errors when history is already too large
+            try:
+                if hasattr(agent, "token_tracker") and agent.token_tracker:
+                    # Refresh budget snapshot with current messages to check if compression is needed
+                    agent.token_tracker.refresh_budget_snapshot(
+                        agent=agent,
+                        conversation_id=conversation_id,
+                        messages_override=messages,
+                    )
+                    if should_compress_mid_turn(agent, conversation_id, messages_override=messages):
+                        budget_snapshot = agent.token_tracker.get_budget_snapshot()
+                        success, updated_messages = await perform_compression_with_notifications(
+                            agent=agent,
+                            conversation_id=conversation_id,
+                            language=language,
+                            keep_recent_turns=HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
+                            reason="proactive",
+                            budget_snapshot=budget_snapshot,
+                            rebuild_messages=True,
+                        )
+                        if success and updated_messages is not None:
+                            messages = updated_messages
+                            # Ensure user message is present after compression
+                            # (it should be preserved as part of recent turns, but verify)
+                            user_message_present = any(
+                                isinstance(msg, HumanMessage) and msg.content == user_message.content
+                                for msg in messages
+                            )
+                            if not user_message_present:
+                                messages.append(user_message)
+                                self._logger.debug("Re-added user message after compression")
+            except Exception as comp_exc:
+                # Non-fatal: log and continue
+                self._logger.debug("Failed to check/perform start-of-turn compression: %s", comp_exc)
 
             while iteration < self.max_iterations:
                 iteration += 1
@@ -863,23 +901,122 @@ class NativeLangChainStreaming:
                                     tool_key, "Tool execution failed"
                                 )
 
+                                # Truncate tool result if it exceeds maximum size
+                                # This prevents huge tool results (like 141MB PDFs) from overflowing context
+                                tool_result_str = str(tool_result)
+                                tool_result_tokens = count_tokens(tool_result_str)
+
+                                # Get context window from agent's LLM instance
+                                context_window = 0
+                                if (
+                                    hasattr(agent, "llm_instance")
+                                    and agent.llm_instance
+                                    and hasattr(agent.llm_instance, "config")
+                                ):
+                                    context_window = agent.llm_instance.config.get("token_limit", 0)
+
+                                # Only truncate if context window is available (relational threshold)
+                                if context_window > 0:
+                                    max_tool_result_tokens = int(
+                                        context_window * MAX_TOOL_RESULT_TOKENS_PCT
+                                    )
+
+                                    if tool_result_tokens > max_tool_result_tokens:
+                                        # Truncate to approximately max_tool_result_tokens
+                                        # Use character-based truncation as approximation (~3 chars per token)
+                                        max_chars = max_tool_result_tokens * 3
+                                        truncated_result = tool_result_str[:max_chars]
+                                        tool_result_str = (
+                                            f"{truncated_result}\n\n"
+                                            f"[Tool result truncated: {tool_result_tokens:,} tokens → "
+                                            f"{count_tokens(truncated_result):,} tokens "
+                                            f"(max: {max_tool_result_tokens:,} tokens, "
+                                            f"{MAX_TOOL_RESULT_TOKENS_PCT*100:.0f}% of "
+                                            f"{context_window:,} token context window)]"
+                                        )
+                                        self._logger.warning(
+                                            "Tool result for %s exceeded max size (%d tokens), "
+                                            "truncated to %d tokens (max: %d tokens, %.0f%% of "
+                                            "%d token context window)",
+                                            tool_name,
+                                            tool_result_tokens,
+                                            count_tokens(tool_result_str),
+                                            max_tool_result_tokens,
+                                            MAX_TOOL_RESULT_TOKENS_PCT * 100,
+                                            context_window,
+                                        )
+                                elif tool_result_tokens > 100000:
+                                    # Safety check: warn if extremely large even without context window
+                                    self._logger.warning(
+                                        "Tool result for %s is extremely large (%d tokens) but "
+                                        "context window unavailable, proceeding without truncation",
+                                        tool_name,
+                                        tool_result_tokens,
+                                    )
+
                                 # Create ToolMessage with original tool_call_id
                                 tool_message = ToolMessage(
-                                    content=str(tool_result),
+                                    content=tool_result_str,
                                     tool_call_id=tool_call_id,
                                     name=tool_name,
                                 )
                                 tool_messages.append(tool_message)
-                                print(
-                                    f"🔍 DEBUG: Created ToolMessage for {tool_name} with ID {tool_call_id}"
+                                self._logger.debug(
+                                    "Created ToolMessage for %s with ID %s", tool_name, tool_call_id
                                 )
 
                         # CRITICAL: Add ToolMessages to working messages for next LLM call
                         # This ensures proper sequence: AIMessage(with tool_calls) → ToolMessages
                         messages.extend(tool_messages)
-                        print(
-                            f"🔍 DEBUG: Added {len(tool_messages)} ToolMessages to working messages"
+                        self._logger.debug(
+                            "Added %d ToolMessages to working messages", len(tool_messages)
                         )
+
+                        # Check for compression need AFTER tool results are added
+                        # This prevents overflow when large tool results push context over limit
+                        try:
+                            if hasattr(agent, "token_tracker") and agent.token_tracker:
+                                # Refresh budget snapshot with messages including tool results
+                                agent.token_tracker.refresh_budget_snapshot(
+                                    agent=agent,
+                                    conversation_id=conversation_id,
+                                    messages_override=messages,
+                                )
+                                if should_compress_mid_turn(agent, conversation_id, messages_override=messages):
+                                    budget_snapshot = agent.token_tracker.get_budget_snapshot()
+                                    success, updated_messages = await perform_compression_with_notifications(
+                                        agent=agent,
+                                        conversation_id=conversation_id,
+                                        language=language,
+                                        keep_recent_turns=HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
+                                        reason="proactive",
+                                        budget_snapshot=budget_snapshot,
+                                        rebuild_messages=True,
+                                    )
+                                    if success and updated_messages is not None:
+                                        messages = updated_messages
+                                        # Re-add tool messages after compression (they're recent)
+                                        # Filter to only add tool messages that aren't already present
+                                        existing_tool_call_ids = {
+                                            getattr(msg, "tool_call_id", None)
+                                            for msg in messages
+                                            if isinstance(msg, ToolMessage)
+                                        }
+                                        for tool_msg in tool_messages:
+                                            if (
+                                                isinstance(tool_msg, ToolMessage)
+                                                and getattr(tool_msg, "tool_call_id", None)
+                                                not in existing_tool_call_ids
+                                            ):
+                                                messages.append(tool_msg)
+                                                existing_tool_call_ids.add(
+                                                    getattr(tool_msg, "tool_call_id", None)
+                                                )
+                        except Exception as comp_exc:
+                            # Non-fatal: log and continue
+                            self._logger.debug(
+                                "Failed to check/perform post-tool compression: %s", comp_exc
+                            )
 
                     # CRITICAL: Continue to next iteration to get final response
                     # Don't break here - we need the final AI response after tool calls

@@ -63,6 +63,11 @@ HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN = 1  # Keep N recent turns when c
 HISTORY_COMPRESSION_KEEP_RECENT_TURNS_SUCCESS = 0  # Keep N recent turns when compressing after successful completion
 HISTORY_COMPRESSION_MID_TURN_THRESHOLD = TOKEN_STATUS_CRITICAL_THRESHOLD  # Trigger proactive compression at this %
 
+# Tool result size limits (to prevent context overflow from huge tool results)
+# Maximum tokens for a single tool result as percentage of context window
+# 50% leaves room for system prompt, conversation history, overhead, and LLM response
+MAX_TOOL_RESULT_TOKENS_PCT = 0.50  # 50% of context window per tool result
+
 
 def count_tokens(content: str | Any) -> int:
     """Count tokens in a string using exact cl100k_base encoding."""
@@ -370,20 +375,27 @@ def compute_token_budget_snapshot(
     )
 
     context_window = 0
+    max_output_tokens = 0
     try:
         llm_instance = getattr(agent, "llm_instance", None)
         config = getattr(llm_instance, "config", None) if llm_instance else None
         if isinstance(config, dict):
             context_window = int(config.get("token_limit", 0) or 0)
+            # Get max_output_tokens (max_tokens) from config - API counts input + output together
+            max_output_tokens = int(config.get("max_tokens", 0) or 0)
     except Exception as exc:
         logging.getLogger(__name__).debug(
             "Failed to read context window from LLM config: %s", exc
         )
         context_window = 0
+        max_output_tokens = 0
 
     if context_window > 0:
-        percentage_used = round((total_tokens / context_window) * 100.0, 1)
-        remaining_tokens = max(0, context_window - total_tokens)
+        # Account for output tokens in total - API counts input + output together
+        # This ensures compression triggers before hitting the combined limit
+        total_with_output = total_tokens + max_output_tokens
+        percentage_used = round((total_with_output / context_window) * 100.0, 1)
+        remaining_tokens = max(0, context_window - total_with_output)
         if percentage_used >= TOKEN_STATUS_CRITICAL_THRESHOLD:
             status = TOKEN_STATUS_CRITICAL
         elif percentage_used >= TOKEN_STATUS_WARNING_THRESHOLD:
@@ -402,6 +414,8 @@ def compute_token_budget_snapshot(
         "tool_tokens": tool_tokens,
         "overhead_tokens": overhead_tokens,
         "total_tokens": total_tokens,
+        "max_output_tokens": max_output_tokens,
+        "total_with_output": total_tokens + max_output_tokens if context_window > 0 else total_tokens,
         "context_window": context_window,
         "percentage_used": percentage_used,
         "remaining_tokens": remaining_tokens,

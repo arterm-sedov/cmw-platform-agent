@@ -277,6 +277,19 @@ def get_compression_stats(conversation_id: str) -> tuple[int, int]:
         return (stats["count"], stats["total_saved"])
 
 
+def clear_compression_stats(conversation_id: str) -> None:
+    """
+    Clear compression statistics for a conversation.
+
+    Args:
+        conversation_id: Conversation ID
+    """
+    with _stats_lock:
+        if conversation_id in _compression_stats:
+            del _compression_stats[conversation_id]
+            logger.debug("Cleared compression stats for conversation %s", conversation_id)
+
+
 async def compress_conversation_history(
     agent: Any,
     conversation_id: str,
