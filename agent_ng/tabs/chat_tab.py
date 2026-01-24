@@ -136,14 +136,8 @@ class ChatTab(QuickActionsMixin):
                 ],
                 file_count="multiple",
             )
-            with gr.Column():
-                # REMOVED: Separate send button - now using built-in submit button in MultimodalTextbox
-                # The built-in submit button interchanges with stop button (following reference repo pattern)
-                self.components["clear_btn"] = gr.Button(
-                    self._get_translation("clear_button"),
-                    variant="secondary",
-                    elem_classes=["cmw-button"],
-                )
+            # REMOVED: Separate clear button - now using Gradio's native chatbot.clear() button
+            # The built-in clear button in the chatbot component handles clearing
 
         # Welcome block moved to dedicated Home tab
 
@@ -293,7 +287,7 @@ class ChatTab(QuickActionsMixin):
             # Following reference repo pattern: reset cancellation state first, then stream
             self.submit_event = user_submit.then(
                 fn=reset_cancellation_state,
-                inputs=[cancellation_state],
+                inputs=[cancellation_state],  # Request is automatically passed to functions that accept it
                 outputs=[cancellation_state],
                 queue=False,
             ).then(
@@ -319,13 +313,14 @@ class ChatTab(QuickActionsMixin):
         try:
             self.stop_event = self.components["msg"].stop(
                 fn=self._handle_stop_click,
-                inputs=[self.components["chatbot"]],
+                inputs=[self.components["chatbot"], cancellation_state],  # Add cancellation_state (following reference repo pattern)
                 outputs=[
-                    self.components["chatbot"],  # Only return chatbot, not msg
+                    self.components["chatbot"],  # Return chatbot
+                    cancellation_state,  # Return updated cancellation_state
                 ],
                 cancels=[self.submit_event],  # Cancel submit event (following reference repo pattern)
             ).then(
-                lambda: gr.MultimodalTextbox(submit_btn=True, stop_btn=False),  # Hide stop button after cancellation
+                lambda: gr.MultimodalTextbox(value="", interactive=True, submit_btn=True, stop_btn=False),  # Re-enable textbox and hide stop button after cancellation
                 outputs=[self.components["msg"]],
                 queue=False,
             )
@@ -368,30 +363,19 @@ class ChatTab(QuickActionsMixin):
             queue=False,
         )
 
-        # Handle chatbot clear event - also clear memory when chat is cleared
-        # Following reference repo pattern: wire chatbot.clear() similar to regular clear button
-        def handle_chatbot_clear(request: gr.Request | None = None) -> None:
-            """Handle chatbot clear event - also clear memory when chat is cleared."""
-            logging.getLogger(__name__).info("Chatbot clear event - clearing memory")
-            # Use the same clear handler as the regular clear button
-            clear_handler = self.event_handlers.get("clear_chat")
-            if clear_handler:
-                clear_handler(request)
-            return None
+        # Handle chatbot clear event - clear memory and reset downloads
+        # Following reference repo pattern: wire chatbot.clear() to handle everything
+        def handle_chatbot_clear(request: gr.Request | None = None) -> tuple[list[dict[str, str]], dict[str, Any]]:
+            """Handle chatbot clear event - clear memory, reset downloads, and clear UI."""
+            logging.getLogger(__name__).info("Chatbot clear event - clearing memory and resetting downloads")
+            # Use the same clear handler that was used for the separate clear button
+            return self._clear_chat_with_download_reset(request)
 
         # Bind to the built-in clear button's clear event
-        # Also clear memory when chat is cleared
-        # Following reference repo pattern: wire chatbot.clear() similar to regular clear button
-        self.components["chatbot"].clear(
+        # This replaces the separate clear button - Gradio's native clear button handles everything
+        self.clear_event = self.components["chatbot"].clear(
             fn=handle_chatbot_clear,
             inputs=[],  # Request is automatically passed to functions that accept it
-            outputs=[],  # No outputs needed
-        )
-
-        # Store clear button click event for chaining token budget updates
-        # This is in addition to chatbot.clear() - both can work together
-        self.clear_event = self.components["clear_btn"].click(
-            fn=self._clear_chat_with_download_reset,
             outputs=[
                 self.components["chatbot"],
                 self.components["msg"],
@@ -432,8 +416,9 @@ class ChatTab(QuickActionsMixin):
             # Trigger UI update after message submit (built-in submit button)
             self.components["msg"].submit(fn=trigger_ui_update, outputs=[])
 
-            # Trigger UI update after clear button click
-            self.components["clear_btn"].click(fn=trigger_ui_update, outputs=[])
+            # Trigger UI update after chatbot clear (built-in clear button)
+            if hasattr(self, "clear_event") and self.clear_event:
+                self.clear_event.then(fn=trigger_ui_update, outputs=[], queue=False)
 
             # Trigger UI update after built-in stop button click (to refresh token budget/status)
             # Use msg.stop() to wire to built-in stop button
@@ -515,6 +500,21 @@ class ChatTab(QuickActionsMixin):
             cancel_state = {"cancelled": True}
         else:
             cancel_state["cancelled"] = True
+
+        # Also update cancellation state in session manager for async streaming to access
+        if (
+            hasattr(self, "main_app")
+            and self.main_app
+            and hasattr(self.main_app, "session_manager")
+            and request
+        ):
+            try:
+                session_id = self.main_app.session_manager.get_session_id(request)
+                self.main_app.session_manager.set_cancellation_state(session_id, True)
+                logging.getLogger(__name__).debug(f"Updated session cancellation state for {session_id[:8]}...")
+            except Exception as exc:
+                logging.getLogger(__name__).debug(f"Failed to update session cancellation state: {exc}")
+
         logging.getLogger(__name__).info("Stop button clicked - setting cancellation flag")
         # #region agent log
         import json
@@ -649,16 +649,16 @@ class ChatTab(QuickActionsMixin):
                 "UI state update failed: %s", exc
             )
 
-        # Return only history - MultimodalTextbox update is handled in .then() chain
-        # Following reference repo pattern: return only history
+        # Return history and cancellation_state - MultimodalTextbox update is handled in .then() chain
+        # Following reference repo pattern: return history and cancellation_state
         # #region agent log
         import json
         try:
             with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "A", "location": "chat_tab.py:590", "message": "_handle_stop_click returning", "data": {"return_type": "list", "history_len": len(history) if history else 0}, "timestamp": __import__("time").time() * 1000}) + "\n")
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "A", "location": "chat_tab.py:640", "message": "_handle_stop_click returning", "data": {"return_type": "tuple", "history_len": len(history) if history else 0, "cancelled": cancel_state.get("cancelled", False) if cancel_state else False}, "timestamp": __import__("time").time() * 1000}) + "\n")
         except: pass
         # #endregion
-        return history
+        return history, cancel_state
 
     def _finalize_tokens_on_stop(self, request: gr.Request, history: list[dict[str, str]]) -> list[dict[str, str]]:
         """Finalize token tracking and append stats when streaming is stopped"""
@@ -1298,10 +1298,12 @@ class ChatTab(QuickActionsMixin):
 
         # Process message with original wrapper
         last_result = None
+        # Pass cancel_state to internal wrapper so it can check cancellation during streaming
         for result in self._stream_message_wrapper_internal(
-            multimodal_value, history, request
+            multimodal_value, history, cancel_state, request
         ):
             # Check for cancellation during streaming (following reference repo pattern)
+            # This check happens between yields, so cancellation is detected promptly
             if is_cancelled():
                 logging.getLogger(__name__).info("Streaming cancelled during execution")
                 break
@@ -1331,9 +1333,14 @@ class ChatTab(QuickActionsMixin):
         self,
         multimodal_value: dict[str, Any] | None,
         history: list[dict[str, str]],
+        cancel_state: dict | None = None,
         request: gr.Request | None = None,
     ) -> AsyncGenerator[tuple[list[dict[str, str]], str], None]:
-        """Internal wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
+        """Internal wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware
+
+        Args:
+            cancel_state: Cancellation state dict to check for stop button clicks during streaming
+        """
         # Extract text from MultimodalValue format
         if isinstance(multimodal_value, dict):
             message = multimodal_value.get("text", "")
@@ -1413,9 +1420,21 @@ class ChatTab(QuickActionsMixin):
             yield history, ""
             return
 
+        # Helper to check if cancellation was requested (following reference repo pattern)
+        def is_cancelled() -> bool:
+            return cancel_state is not None and cancel_state.get("cancelled", False)
+
         # Call the original stream handler with enhanced message (text + file analysis)
         # Now properly session-aware with real Gradio request
-        yield from stream_handler(message, history, request)
+        # Check for cancellation between yields from stream_handler
+        # Note: This check happens between yields, so cancellation is detected as soon as the generator yields
+        for result in stream_handler(message, history, request):
+            # Check for cancellation during streaming (following reference repo pattern)
+            # This check happens between yields, so if the generator is yielding frequently, cancellation is detected promptly
+            if is_cancelled():
+                logging.getLogger(__name__).info("Streaming cancelled during execution (in internal wrapper)")
+                break
+            yield result
 
     def _clear_chat_with_download_reset(
         self, request: gr.Request | None = None

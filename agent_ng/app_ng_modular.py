@@ -685,8 +685,21 @@ class NextGenApp:
             # print(f"🔍 DEBUG: Starting streaming for session {session_id}")
             # print(f"🔍 DEBUG: Working history length before streaming: {len(working_history)}")
 
+            # Helper to check if cancellation was requested (following reference repo pattern)
+            def is_cancelled() -> bool:
+                try:
+                    cancel_state = self.session_manager.get_cancellation_state(session_id)
+                    return cancel_state is not None and cancel_state.get("cancelled", False)
+                except Exception:
+                    return False
+
             try:
                 async for event in user_agent.stream_message(message, session_id):
+                    # Check for cancellation at each iteration (following reference repo pattern)
+                    if is_cancelled():
+                        logging.getLogger(__name__).info("Streaming cancelled during execution - stopping")
+                        break
+
                     # Safety check for None event
                     if event is None:
                         # print("🔍 DEBUG: Received None event, skipping...")

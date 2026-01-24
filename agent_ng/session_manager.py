@@ -227,6 +227,16 @@ class SessionManager:
         session_data = self.get_session_data(session_id)
         return session_data.agent
 
+    def get_cancellation_state(self, session_id: str) -> dict[str, bool]:
+        """Get cancellation state for the session (for stop button)"""
+        session_data = self.get_session_data(session_id)
+        return session_data.cancellation_state
+
+    def set_cancellation_state(self, session_id: str, cancelled: bool) -> None:
+        """Set cancellation state for the session (for stop button)"""
+        session_data = self.get_session_data(session_id)
+        session_data.cancellation_state["cancelled"] = cancelled
+
     def get_session_count(self) -> int:
         """Get total number of active sessions"""
         return len(self.sessions)
@@ -254,6 +264,8 @@ class SessionData:
         self.llm_provider = "openrouter"  # Default provider
         self.created_at = time.time()
         self.last_activity = time.time()
+        # Cancellation state for stop button (following reference repo pattern)
+        self.cancellation_state: dict[str, bool] = {"cancelled": False}
 
         # Initialize the agent with a default LLM instance for this session
         self._initialize_session_agent()

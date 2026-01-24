@@ -230,7 +230,23 @@ class UIManager:
                             outputs=refresh_outputs
                         )
 
-                    logging.getLogger(__name__).debug("✅ Event-driven UI refresh wired for end-of-turn updates")
+                    # Wire clear event to update stats/progress
+                    if hasattr(chat_tab_instance, "clear_event") and chat_tab_instance.clear_event:
+                        chat_tab_instance.clear_event.then(
+                            fn=update_all_ui_handler,
+                            outputs=refresh_outputs,
+                            queue=False,  # Don't queue UI updates
+                        )
+
+                    # Wire stop event to update stats/progress
+                    if hasattr(chat_tab_instance, "stop_event") and chat_tab_instance.stop_event:
+                        chat_tab_instance.stop_event.then(
+                            fn=update_all_ui_handler,
+                            outputs=refresh_outputs,
+                            queue=False,  # Don't queue UI updates
+                        )
+
+                    logging.getLogger(__name__).debug("✅ Event-driven UI refresh wired for end-of-turn updates, clear, and stop")
 
                 # Token budget refresh: wire separately to avoid changing update_all_ui signature
                 if (
@@ -303,11 +319,16 @@ class UIManager:
                 outputs=[self.components["logs_display"]]
             )
 
-        if "progress_display" in self.components and update_progress_handler:
+        # Progress display - wire to chat events for event-driven updates
+        progress_comp = self.components.get("progress_display")
+        if progress_comp and update_progress_handler:
+            # Load initial state
             demo.load(
                 fn=update_progress_handler,
-                outputs=[self.components["progress_display"]]
+                outputs=[progress_comp]
             )
+            # Note: Progress updates are wired to chat events in the main event wiring section
+            # (see submit_event, clear_event, stop_event wiring above)
 
         refresh_stats_handler = event_handlers.get("refresh_stats")
         if "stats_display" in self.components and refresh_stats_handler:
@@ -357,24 +378,24 @@ class UIManager:
             )
             logging.getLogger(__name__).debug(f"✅ Logs auto-refresh timer set ({refresh_interval}s)")
 
-        # Stats updates
-        if "stats_display" in self.components and event_handlers.get("refresh_stats"):
-            stats_timer = gr.Timer(refresh_interval, active=True)
-            stats_timer.tick(
-                fn=event_handlers["refresh_stats"],
-                outputs=[self.components["stats_display"]]
-            )
-            logging.getLogger(__name__).debug(f"✅ Stats auto-refresh timer set ({refresh_interval}s)")
+        # Stats updates - REMOVED timer-based refresh
+        # Stats is now updated through events only (preferred approach):
+        # - After streaming completes (submit_event.then())
+        # - After clear (clear_event.then())
+        # - After stop (stop_event.then())
+        # - On initial load (demo.load())
+        # This ensures updates happen at appropriate events, not on a fixed timer
+        logging.getLogger(__name__).debug("✅ Stats uses event-driven updates only (no timer)")
 
-        # Progress/iteration updates (faster updates for turn progress)
-        if "progress_display" in self.components and event_handlers.get("update_progress_display"):
-            iteration_interval = get_refresh_intervals().iteration
-            progress_timer = gr.Timer(iteration_interval, active=True)
-            progress_timer.tick(
-                fn=event_handlers["update_progress_display"],
-                outputs=[self.components["progress_display"]]
-            )
-            logging.getLogger(__name__).debug(f"✅ Progress auto-refresh timer set ({iteration_interval}s)")
+        # Progress/iteration updates - REMOVED timer-based refresh
+        # Progress is now updated through events only (preferred approach):
+        # - During streaming (via streaming events)
+        # - After streaming completes (submit_event.then())
+        # - After clear (clear_event.then())
+        # - After stop (stop_event.then())
+        # - On initial load (demo.load())
+        # This ensures updates happen at appropriate events, not on a fixed timer
+        logging.getLogger(__name__).debug("✅ Progress uses event-driven updates only (no timer)")
 
         logging.getLogger(__name__).info("🔄 Auto-refresh timers configured successfully")
 
