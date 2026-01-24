@@ -395,7 +395,7 @@ class NativeLangChainStreaming:
 
     @traceable
     async def stream_agent_response(
-        self, agent, message: str, conversation_id: str = "default"
+        self, agent, message: str, conversation_id: str = "default", language: str | None = None
     ) -> AsyncGenerator[StreamingEvent, None]:
         """
         Stream a complete QA turn using native LangChain streaming.
@@ -412,6 +412,7 @@ class NativeLangChainStreaming:
             agent: The LangChain agent instance
             message: User message
             conversation_id: Conversation identifier
+            language: Optional language code for i18n (if not provided, uses agent.language)
 
         Yields:
             StreamingEvent objects with real-time content
@@ -427,8 +428,9 @@ class NativeLangChainStreaming:
             if not hasattr(agent, "memory_manager") or not agent.memory_manager:
                 raise ValueError("Agent has no memory manager")
 
-            # Get language from agent once at the beginning
-            language = self._get_agent_language(agent)
+            # Get language - prefer provided language (from app) over agent's language for i18n
+            if language is None:
+                language = self._get_agent_language(agent)
 
             # Get conversation history
             chat_history = agent.memory_manager.get_conversation_history(
@@ -1151,6 +1153,12 @@ class NativeLangChainStreaming:
                                     messages_override=messages,
                                 )
                                 snapshot = agent.token_tracker.get_budget_snapshot() or {}
+                                # Emit budget update event for mid-turn UI refresh (as in Gradio 5)
+                                yield StreamingEvent(
+                                    event_type="budget_update",
+                                    content="",
+                                    metadata={"iteration": iteration, "trigger": "post_tool"},
+                                )
                                 percentage_used = snapshot.get("percentage_used", 0.0)
                                 # Fallback first when enabled and threshold reached
                                 if (

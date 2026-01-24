@@ -35,6 +35,7 @@ class UIManager:
         self.i18n = i18n_instance
         self._setup_gradio_paths()
         self.components = {}
+        self._main_app = None  # Will be set by create_interface if main_app is provided
 
     def _get_translation(self, key: str) -> str:
         """Get translation for a specific key"""
@@ -54,6 +55,8 @@ class UIManager:
             logging.getLogger(__name__).warning(f"Could not set GRADIO_ALLOWED_PATHS: {e}")
 
     def create_interface(self, tab_modules: list[Any], event_handlers: dict[str, Callable], main_app=None) -> gr.Blocks:
+        # Store main_app reference for initialization completion checks
+        self._main_app = main_app
         """
         Create the main Gradio interface using tab modules with i18n support.
 
@@ -337,6 +340,10 @@ class UIManager:
                 outputs=[self.components["stats_display"]]
             )
 
+        # Wire initialization completion to update UI components
+        # This is lean and timely - updates happen exactly when initialization completes
+        self._wire_initialization_completion_updates(demo, event_handlers)
+
         # Setup auto-refresh timers for real-time updates
         self._setup_auto_refresh_timers(demo, event_handlers)
 
@@ -356,15 +363,22 @@ class UIManager:
             )
             logging.getLogger(__name__).debug(f"✅ Status auto-refresh timer set ({refresh_interval}s)")
 
-        # Token budget updates - REMOVED timer-based refresh
-        # Token budget is now updated through events only (preferred approach):
-        # - After streaming completes (streaming_event.then())
-        # - After submit (submit_event.then())
-        # - After clear (clear_event.then())
-        # - After stop (stop_event.then())
-        # - After model switch (model_switch_event.then())
-        # This ensures updates happen at appropriate budget events, not on a fixed timer
-        logging.getLogger(__name__).debug("✅ Token budget uses event-driven updates only (no timer)")
+        # Token budget updates - hybrid approach (immediate events + timer fallback)
+        # Token budget is updated through:
+        # - Immediate updates when budget_update events are emitted during streaming (pre-iteration, post-tool)
+        # - End-of-turn events (streaming_event.then(), submit_event.then(), clear_event.then(), stop_event.then(), model_switch_event.then())
+        # - Timer fallback (for edge cases where events might be missed)
+        # This matches Gradio 5 behavior where token budget updates immediately when budget snapshots are computed
+        # Budget snapshots are computed at "budget moments" (pre-iteration, post-tool), not on every chunk,
+        # so immediate updates are efficient and provide real-time feedback
+        if "token_budget_display" in self.components and event_handlers.get("update_token_budget"):
+            # Timer serves as fallback for edge cases, but primary updates happen immediately via budget_update events
+            token_budget_timer = gr.Timer(refresh_interval, active=True)
+            token_budget_timer.tick(
+                fn=event_handlers["update_token_budget"],
+                outputs=[self.components["token_budget_display"]]
+            )
+            logging.getLogger(__name__).debug(f"✅ Token budget timer set ({refresh_interval}s) - fallback for edge cases, primary updates via budget_update events")
 
         # LLM selection updates - no auto-refresh (explicit only)
         logging.getLogger(__name__).debug("✅ LLM selection components will update only when explicitly triggered")
@@ -387,17 +401,94 @@ class UIManager:
         # This ensures updates happen at appropriate events, not on a fixed timer
         logging.getLogger(__name__).debug("✅ Stats uses event-driven updates only (no timer)")
 
-        # Progress/iteration updates - REMOVED timer-based refresh
-        # Progress is now updated through events only (preferred approach):
-        # - During streaming (via streaming events)
-        # - After streaming completes (submit_event.then())
-        # - After clear (clear_event.then())
-        # - After stop (stop_event.then())
-        # - On initial load (demo.load())
-        # This ensures updates happen at appropriate events, not on a fixed timer
-        logging.getLogger(__name__).debug("✅ Progress uses event-driven updates only (no timer)")
+        # Progress/iteration updates - use timer for ticking clock and iteration display
+        # Iterations are useful and informative, so we keep timer-based refresh for progress
+        # Timer uses ITERATION_REFRESH_INTERVAL from .env (default 2.0s) for iteration display
+        progress_comp = self.components.get("progress_display")
+        update_progress_handler = event_handlers.get("update_progress_display")
+        if progress_comp and update_progress_handler:
+            # Use iteration interval from config (from .env ITERATION_REFRESH_INTERVAL)
+            iteration_interval = get_refresh_intervals().iteration
+            progress_timer = gr.Timer(iteration_interval, active=True)
+            progress_timer.tick(
+                fn=update_progress_handler,
+                outputs=[progress_comp]
+            )
+            logging.getLogger(__name__).debug(f"✅ Progress/iteration timer set ({iteration_interval}s) - shows ticking clock and iterations")
 
         logging.getLogger(__name__).info("🔄 Auto-refresh timers configured successfully")
+
+    def _wire_initialization_completion_updates(self, demo: gr.Blocks, event_handlers: dict[str, Callable]):
+        """Wire initialization completion to trigger UI updates - lean and timely"""
+        update_all_ui_handler = event_handlers.get("update_all_ui")
+        status_comp = self.components.get("status_display")
+        stats_comp = self.components.get("stats_display")
+        logs_comp = self.components.get("logs_display")
+        token_budget_comp = self.components.get("token_budget_display")
+        update_token_budget_handler = event_handlers.get("update_token_budget")
+        update_progress_handler = event_handlers.get("update_progress_display")
+        progress_comp = self.components.get("progress_display")
+
+        # Create a hidden state to track initialization status
+        # When initialization completes, we'll update this state which triggers UI updates
+        init_state = gr.State(value=False)  # False = not ready, True = ready
+        self.components["_init_state"] = init_state
+
+        # Function to check initialization and update UI when ready
+        def check_initialization_and_update(init_ready: bool, request: gr.Request = None) -> tuple[bool, str, str, str, str, str]:
+            """Check if initialization is complete and update UI components - session-aware"""
+            main_app = getattr(self, "_main_app", None)
+            is_ready = main_app.is_ready() if main_app and hasattr(main_app, "is_ready") else False
+
+            # If initialization just completed, update all UI components
+            # Pass request for session isolation
+            if is_ready and not init_ready:
+                if update_all_ui_handler and status_comp and stats_comp and logs_comp:
+                    # update_all_ui_components() now accepts request for session isolation
+                    status, stats, logs = update_all_ui_handler(request)
+                    # Other handlers also accept request for session isolation
+                    token_budget = update_token_budget_handler(request) if (update_token_budget_handler and token_budget_comp) else ""
+                    progress = update_progress_handler(request) if (update_progress_handler and progress_comp) else ""
+                    return True, status, stats, logs, token_budget, progress
+
+            # Return current values if not ready yet
+            return (
+                is_ready,
+                status_comp.value if status_comp else "",
+                stats_comp.value if stats_comp else "",
+                logs_comp.value if logs_comp else "",
+                token_budget_comp.value if token_budget_comp else "",
+                progress_comp.value if progress_comp else ""
+            )
+
+        # Use a short-lived timer that checks initialization status
+        # Timer stops automatically once initialization completes (no permanent timer)
+        init_check_timer = gr.Timer(0.5, active=True)
+
+        outputs = [init_state]
+        if status_comp and stats_comp and logs_comp:
+            outputs.extend([status_comp, stats_comp, logs_comp])
+        if token_budget_comp:
+            outputs.append(token_budget_comp)
+        if progress_comp:
+            outputs.append(progress_comp)
+
+        def timer_check(init_ready: bool, request: gr.Request = None) -> tuple:
+            """Timer function that checks initialization and stops when ready - session-aware"""
+            # Pass request for session isolation
+            result = check_initialization_and_update(init_ready, request)
+            is_ready = result[0]
+            # Stop timer when ready (return active=False)
+            timer_update = gr.Timer(active=not is_ready)
+            return (is_ready,) + result[1:] + (timer_update,)
+
+        init_check_timer.tick(
+            fn=timer_check,
+            inputs=[init_state],
+            outputs=outputs + [init_check_timer]
+        )
+
+        logging.getLogger(__name__).debug("✅ Initialization completion wired to update UI (timer stops when ready)")
 
 
     def get_components(self) -> dict[str, Any]:

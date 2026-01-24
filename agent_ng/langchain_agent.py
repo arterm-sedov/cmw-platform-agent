@@ -267,7 +267,7 @@ class CmwAgent:
         return self.conversation_chains[conversation_id]
 
     async def stream_message(
-        self, message: str, conversation_id: str = "default"
+        self, message: str, conversation_id: str = "default", language: str | None = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Stream a message response using proper LangChain streaming.
@@ -278,6 +278,7 @@ class CmwAgent:
         Args:
             message: User message
             conversation_id: Conversation identifier
+            language: Optional language code for i18n (if not provided, uses self.language)
 
         Yields:
             Dict with event type, content, and metadata
@@ -295,9 +296,13 @@ class CmwAgent:
             # Get native streaming manager
             streaming_manager = get_native_streaming()
 
+            # Use provided language or fall back to agent's language for i18n
+            if language is None:
+                language = getattr(self, "language", "en")
+
             # Stream agent response using native LangChain streaming
             async for event in streaming_manager.stream_agent_response(
-                self, message, conversation_id
+                self, message, conversation_id, language=language
             ):
                 # Safety check for None event
                 if event is None:

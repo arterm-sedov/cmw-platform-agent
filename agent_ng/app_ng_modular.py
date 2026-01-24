@@ -694,7 +694,8 @@ class NextGenApp:
                     return False
 
             try:
-                async for event in user_agent.stream_message(message, session_id):
+                # Pass app's language for proper i18n (iteration messages should match UI language)
+                async for event in user_agent.stream_message(message, session_id, language=self.language):
                     # Check for cancellation at each iteration (following reference repo pattern)
                     if is_cancelled():
                         logging.getLogger(__name__).info("Streaming cancelled during execution - stopping")
@@ -758,6 +759,20 @@ class NextGenApp:
                         # Final completion message - update progress display
                         self.session_manager.set_status(session_id, content)
                         yield working_history, ""
+
+                    elif event_type == "budget_update":
+                        # Budget snapshot was refreshed - token budget display will update via timer
+                        # Why timer instead of immediate update?
+                        # - Budget snapshots are computed at specific "budget moments" (pre-iteration, post-tool),
+                        #   not on every streaming chunk, so updates are infrequent enough that timer is efficient
+                        # - Timer interval (UI_REFRESH_INTERVAL, typically 2-5s) ensures prompt updates
+                        #   without overwhelming the UI with too frequent updates
+                        # - To update immediately, we'd need to add token_budget_display as an output to the
+                        #   streaming generator, which would require significant refactoring of the generator signature
+                        # - Timer approach matches Gradio 5 behavior and provides good UX with minimal complexity
+                        # Continue streaming - timer will pick up the updated snapshot within 2-5 seconds
+                        yield working_history, ""
+                        continue
 
                     elif event_type == "turn_complete":
                         # Store session-aware turn snapshot for analytics/logs (non-persistent)
@@ -1208,11 +1223,11 @@ class NextGenApp:
             return True
         return False
 
-    def update_all_ui_components(self) -> tuple[str, str, str]:
-        """Update all UI components and return their values"""
-        status = self._update_status()
-        stats = self._refresh_stats()
-        logs = self._refresh_logs()
+    def update_all_ui_components(self, request: gr.Request = None) -> tuple[str, str, str]:
+        """Update all UI components and return their values - session-aware"""
+        status = self._update_status(request)
+        stats = self._refresh_stats(request)
+        logs = self._refresh_logs(request)
         return status, stats, logs
 
     def trigger_ui_update(self):
@@ -1445,7 +1460,8 @@ class NextGenApp:
             async def _stream():
                 nonlocal cumulative
                 try:
-                    async for event in user_agent.stream_message(question, session_id):
+                    # Pass app's language for proper i18n
+                    async for event in user_agent.stream_message(question, session_id, language=self.language):
                         if not event:
                             continue
                         et = event.get("type")
