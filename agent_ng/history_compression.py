@@ -337,7 +337,8 @@ async def compress_conversation_history(
         try:
             from .token_budget import compute_context_tokens
 
-            tokens_before = compute_context_tokens(non_system_history)
+            conv_tokens_before, tool_tokens_before = compute_context_tokens(non_system_history)
+            tokens_before = conv_tokens_before + tool_tokens_before
         except Exception as e:
             logger.warning("Failed to calculate tokens before compression: %s", e)
             tokens_before = 0
@@ -389,7 +390,8 @@ async def compress_conversation_history(
         # Calculate tokens after compression
         try:
             compressed_messages = [compressed_message] + recent_turns
-            tokens_after = compute_context_tokens(compressed_messages)
+            conv_tokens_after, tool_tokens_after = compute_context_tokens(compressed_messages)
+            tokens_after = conv_tokens_after + tool_tokens_after
             tokens_saved = max(0, tokens_before - tokens_after)
         except Exception as e:
             logger.warning("Failed to calculate tokens after compression: %s", e)
