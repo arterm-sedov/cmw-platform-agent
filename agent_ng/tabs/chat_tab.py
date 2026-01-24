@@ -259,7 +259,8 @@ class ChatTab(QuickActionsMixin):
             )
 
         # Stop button - cancel both send and submit events; hide itself, show download, append stats to chat
-        self.components["stop_btn"].click(
+        # Store stop button click event for chaining token budget updates
+        self.stop_event = self.components["stop_btn"].click(
             fn=self._handle_stop_click,
             inputs=[self.components["chatbot"]],
             outputs=[
@@ -271,7 +272,8 @@ class ChatTab(QuickActionsMixin):
             cancels=[self.streaming_event, self.submit_event],
         )
 
-        self.components["clear_btn"].click(
+        # Store clear button click event for chaining token budget updates
+        self.clear_event = self.components["clear_btn"].click(
             fn=self._clear_chat_with_download_reset,
             outputs=[
                 self.components["chatbot"],

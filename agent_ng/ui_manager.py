@@ -152,7 +152,21 @@ class UIManager:
                             fn=update_token_budget_handler,
                             outputs=[token_budget_comp],
                         )
-                    logging.getLogger(__name__).debug("✅ Token budget event-driven refresh wired for end-of-turn updates")
+                    # Wire clear button to update token budget immediately (event-driven)
+                    # Chain to the existing clear button click event
+                    if hasattr(chat_tab_instance, "clear_event") and chat_tab_instance.clear_event:
+                        chat_tab_instance.clear_event.then(
+                            fn=update_token_budget_handler,
+                            outputs=[token_budget_comp],
+                        )
+                    # Wire stop button to update token budget immediately (event-driven)
+                    # Chain to the existing stop button click event
+                    if hasattr(chat_tab_instance, "stop_event") and chat_tab_instance.stop_event:
+                        chat_tab_instance.stop_event.then(
+                            fn=update_token_budget_handler,
+                            outputs=[token_budget_comp],
+                        )
+                    logging.getLogger(__name__).debug("✅ Token budget event-driven refresh wired for end-of-turn updates, clear button, and stop button")
             except Exception as e:
                 logging.getLogger(__name__).warning(f"Could not wire event-driven refresh: {e}")
 
