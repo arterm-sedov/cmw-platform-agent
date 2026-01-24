@@ -16,6 +16,7 @@ Key Features:
 
 from contextvars import ContextVar
 import logging
+import threading
 import time
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 import uuid
@@ -64,12 +65,35 @@ except ImportError:
     from agent_ng.i18n_translations import get_translation_key
 
 
+_SESSION_MANAGER_INSTANCE: "SessionManager | None" = None
+
+
+def get_session_manager(language: str = "en") -> "SessionManager":
+    """
+    Return a process-wide singleton SessionManager.
+
+    Gradio can construct multiple app instances (for language detection,
+    reloads, or different entrypoints). Using a shared SessionManager
+    ensures that each logical Gradio session ID (gradio_<hash>) maps to
+    exactly one SessionData (and thus a single CmwAgent/LLM initialization)
+    per process.
+    """
+    global _SESSION_MANAGER_INSTANCE
+
+    if _SESSION_MANAGER_INSTANCE is None:
+        _SESSION_MANAGER_INSTANCE = SessionManager(language)
+    return _SESSION_MANAGER_INSTANCE
+
+
 class SessionManager:
     """Clean, modular session manager for user isolation"""
 
     def __init__(self, language: str = "en"):
         self.language = language
         self.sessions: dict[str, SessionData] = {}
+        # Protect session creation in concurrent Gradio callbacks so that
+        # each logical session ID is initialized exactly once per process.
+        self._lock = threading.Lock()
         # Initialize module-level context variable through wrappers if needed
 
     def get_session_id(self, request: gr.Request = None) -> str:
@@ -98,9 +122,12 @@ class SessionManager:
 
     def get_session_data(self, session_id: str) -> "SessionData":
         """Get or create session data for the given session ID"""
-        if session_id not in self.sessions:
-            self.sessions[session_id] = SessionData(session_id, self.language)
-        return self.sessions[session_id]
+        with self._lock:
+            session_data = self.sessions.get(session_id)
+            if session_data is None:
+                session_data = SessionData(session_id, self.language)
+                self.sessions[session_id] = session_data
+            return session_data
 
     def get_agent(self, session_id: str) -> "CmwAgent":
         """Get or create agent instance for the session"""

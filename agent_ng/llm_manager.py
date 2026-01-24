@@ -814,13 +814,23 @@ class LLMManager:
                             instance.bound_tools = True
                             # Calculate and set global average tool size (once ever)
                             try:
-                                from agent_ng.token_budget import _calculate_avg_tool_size, _GLOBAL_AVG_TOOL_SIZE
+                                # Lazily import token budget module so we can update
+                                # its true module-level global, not just a local copy.
+                                import agent_ng.token_budget as token_budget
+
                                 # Get bound tools as dicts from kwargs
                                 kwargs = getattr(instance.llm, "kwargs", None)
                                 if isinstance(kwargs, dict):
                                     bound_tools = kwargs.get("tools")
-                                    if bound_tools and _GLOBAL_AVG_TOOL_SIZE is None:
-                                        _GLOBAL_AVG_TOOL_SIZE = _calculate_avg_tool_size(bound_tools)
+                                    if (
+                                        bound_tools
+                                        and token_budget._GLOBAL_AVG_TOOL_SIZE is None
+                                    ):
+                                        token_budget._GLOBAL_AVG_TOOL_SIZE = (
+                                            token_budget._calculate_avg_tool_size(
+                                                bound_tools
+                                            )
+                                        )
                             except Exception as exc:
                                 # Non-critical: continue if average calculation fails
                                 # Tools will still work, just with default 600 token estimate
@@ -885,12 +895,20 @@ class LLMManager:
                         instance.bound_tools = True
                         # Calculate and set global average tool size (once ever)
                         try:
-                            from agent_ng.token_budget import _calculate_avg_tool_size, _GLOBAL_AVG_TOOL_SIZE
+                            import agent_ng.token_budget as token_budget
+
                             kwargs = getattr(instance.llm, "kwargs", None)
                             if isinstance(kwargs, dict):
                                 bound_tools = kwargs.get("tools")
-                                if bound_tools and _GLOBAL_AVG_TOOL_SIZE is None:
-                                    _GLOBAL_AVG_TOOL_SIZE = _calculate_avg_tool_size(bound_tools)
+                                if (
+                                    bound_tools
+                                    and token_budget._GLOBAL_AVG_TOOL_SIZE is None
+                                ):
+                                    token_budget._GLOBAL_AVG_TOOL_SIZE = (
+                                        token_budget._calculate_avg_tool_size(
+                                            bound_tools
+                                        )
+                                    )
                         except Exception as exc:
                             # Non-critical: continue if average calculation fails
                             # Tools will still work, just with default 600 token estimate

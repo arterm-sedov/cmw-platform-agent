@@ -187,12 +187,16 @@ class NextGenApp:
             _logger.debug(f"Queue manager has config: {hasattr(self.queue_manager, 'config') if self.queue_manager else False}")
 
         # Session Management - Clean modular approach
+        # Use the process-wide SessionManager singleton to avoid
+        # duplicate per-session initializations when multiple app
+        # instances are constructed (e.g. for language detection).
         try:
-            from .session_manager import SessionManager
+            from .session_manager import get_session_manager
         except ImportError:
             # Fallback for when running as script
-            from session_manager import SessionManager
-        self.session_manager = SessionManager(language)
+            from session_manager import get_session_manager
+
+        self.session_manager = get_session_manager(language)
 
         # Create i18n instance for the specified language
         self.i18n = create_i18n_instance()
