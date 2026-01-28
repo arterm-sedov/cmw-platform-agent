@@ -44,6 +44,87 @@ from .token_budget import (
 )
 
 
+def _usage_to_dict(usage_obj: Any) -> dict[str, Any] | None:
+    """Best-effort conversion of usage objects to dict.
+
+    OpenRouter extends OpenAI usage with `cost` and `prompt_tokens_details`, but some
+    client SDKs represent `usage` as a typed object; extra fields may live in
+    pydantic "extra" containers.
+    """
+    if usage_obj is None:
+        return None
+    if isinstance(usage_obj, dict):
+        return usage_obj
+
+    logger = logging.getLogger(__name__)
+
+    # pydantic v2
+    if hasattr(usage_obj, "model_dump"):
+        try:
+            dumped = usage_obj.model_dump()
+            if isinstance(dumped, dict):
+                return dumped
+        except Exception as exc:
+            logger.debug("usage.model_dump() failed: %s", exc)
+
+    # pydantic v1
+    if hasattr(usage_obj, "dict"):
+        try:
+            dumped = usage_obj.dict()
+            if isinstance(dumped, dict):
+                return dumped
+        except Exception as exc:
+            logger.debug("usage.dict() failed: %s", exc)
+
+    d: dict[str, Any] = {}
+    # Common token keys (OpenAI/OpenRouter + LangChain)
+    for k in (
+        "prompt_tokens",
+        "prompt_tokens_details",
+        "completion_tokens",
+        "total_tokens",
+        "input_tokens",
+        "output_tokens",
+        "cost",
+        "cost_details",
+    ):
+        try:
+            if hasattr(usage_obj, k):
+                d[k] = getattr(usage_obj, k)
+        except Exception as exc:
+            logger.debug("Failed reading usage attribute %s: %s", k, exc)
+            continue
+
+    # Try to capture unknown extra keys (common in OpenAI/OpenRouter SDK models)
+    for extra_attr in ("model_extra", "__pydantic_extra__"):
+        extra = getattr(usage_obj, extra_attr, None)
+        if isinstance(extra, dict):
+            d.update(extra)
+
+    # Final fallback: instance dict
+    inst_dict = getattr(usage_obj, "__dict__", None)
+    if isinstance(inst_dict, dict):
+        d.update(inst_dict)
+
+    return d or None
+
+
+def _extract_cache_details(
+    usage_dict: dict[str, Any] | None,
+) -> tuple[int | None, int | None]:
+    """Extract OpenRouter prompt cache details from a usage dict."""
+    if not isinstance(usage_dict, dict):
+        return (None, None)
+    ptd = usage_dict.get("prompt_tokens_details")
+    if not isinstance(ptd, dict):
+        return (None, None)
+    cached = int(ptd.get("cached_tokens", 0)) if "cached_tokens" in ptd else None
+    cache_write = (
+        int(ptd.get("cache_write_tokens", 0)) if "cache_write_tokens" in ptd else None
+    )
+    return (cached, cache_write)
+
+
 @dataclass
 class TokenCount:
     """Immutable token count data structure"""
@@ -53,6 +134,8 @@ class TokenCount:
     is_estimated: bool = False
     source: str = "unknown"
     cost: float = 0.0  # Cost in USD credits
+    cached_tokens: int | None = None  # OpenRouter prompt_tokens_details.cached_tokens
+    cache_write_tokens: int | None = None  # OpenRouter prompt_tokens_details.cache_write_tokens
 
     @property
     def formatted(self) -> str:
@@ -294,6 +377,7 @@ class ConversationTokenTracker:
         self, response: Any, messages: list[BaseMessage]
     ) -> TokenCount:
         """Track LLM response tokens with API fallback"""
+        logger = logging.getLogger(__name__)
         logger.debug("track_llm_response response type: %s", type(response))
         # Try to extract API tokens from response
         api_tokens = self._extract_api_tokens(response)
@@ -302,16 +386,25 @@ class ConversationTokenTracker:
         # Get token count (API or estimated)
         if api_tokens:
             # Use API tokens directly
-            cost = api_tokens[3] if len(api_tokens) >= 4 else 0.0
+            (
+                input_tokens,
+                output_tokens,
+                total_tokens,
+                cost,
+                cached_tokens,
+                cache_write_tokens,
+            ) = self._unpack_api_tokens(api_tokens)
             token_count = TokenCount(
-                api_tokens[0],  # input_tokens
-                api_tokens[1],  # output_tokens
-                api_tokens[2],  # total_tokens
+                input_tokens,
+                output_tokens,
+                total_tokens,
                 is_estimated=False,  # Not estimated
                 source="api",
                 cost=cost,
+                cached_tokens=cached_tokens,
+                cache_write_tokens=cache_write_tokens,
             )
-            logger.debug("Using API tokens: %d", token_count)
+            logger.debug("Using API tokens: %s", token_count)
         else:
             # Fallback to tiktoken estimation - count only the current request
             logger.debug("No API tokens, using tiktoken fallback")
@@ -335,7 +428,7 @@ class ConversationTokenTracker:
                 source="tiktoken_estimation",
             )
 
-        logger.debug("Token count result: %d", token_count)
+        logger.debug("Token count result: %s", token_count)
         self._last_api_tokens = token_count
 
         # Update cumulative tracking
@@ -372,8 +465,14 @@ class ConversationTokenTracker:
         if not api_tokens:
             return False
 
-        input_tokens, output_tokens, total_tokens = api_tokens[0], api_tokens[1], api_tokens[2]
-        cost = api_tokens[3] if len(api_tokens) >= 4 else 0.0
+        (
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            cost,
+            cached_tokens,
+            cache_write_tokens,
+        ) = self._unpack_api_tokens(api_tokens)
         try:
             # API returns accumulated spending per turn - use replacement, not addition
             self._turn_input_tokens = int(input_tokens or 0)
@@ -394,8 +493,25 @@ class ConversationTokenTracker:
             is_estimated=False,
             source="api",
             cost=self._turn_cost,
+            cached_tokens=cached_tokens,
+            cache_write_tokens=cache_write_tokens,
         )
         return True
+
+    @staticmethod
+    def _unpack_api_tokens(
+        api_tokens: tuple[int, int, int, float, int | None, int | None],
+    ) -> tuple[int, int, int, float, int | None, int | None]:
+        """Unpack `_extract_api_tokens()` output into named fields."""
+        input_tokens, output_tokens, total_tokens, cost, cached, cache_write = api_tokens
+        return (
+            int(input_tokens or 0),
+            int(output_tokens or 0),
+            int(total_tokens or 0),
+            float(cost or 0.0),
+            cached,
+            cache_write,
+        )
 
     def get_turn_estimated_total_tokens(self) -> int:
         """Get the current per-turn monotonic estimate."""
@@ -447,6 +563,13 @@ class ConversationTokenTracker:
         if self._turn_total_tokens > 0:
             # We have API counts: use them (successful completion or interrupted
             # with API).
+            # Preserve cached/cache-write details if present on last API tokens.
+            last_cached = (
+                self._last_api_tokens.cached_tokens if self._last_api_tokens else None
+            )
+            last_cache_write = (
+                self._last_api_tokens.cache_write_tokens if self._last_api_tokens else None
+            )
             token_count = TokenCount(
                 self._turn_input_tokens,
                 self._turn_output_tokens,
@@ -454,6 +577,8 @@ class ConversationTokenTracker:
                 is_estimated=False,
                 source="api",
                 cost=self._turn_cost,
+                cached_tokens=last_cached,
+                cache_write_tokens=last_cache_write,
             )
             self._last_api_tokens = token_count
             self._last_turn_cost = self._turn_cost
@@ -544,11 +669,13 @@ class ConversationTokenTracker:
 
         return current_request
 
-    def _extract_api_tokens(self, response: Any) -> tuple[int, int, int, float] | None:
+    def _extract_api_tokens(
+        self, response: Any
+    ) -> tuple[int, int, int, float, int | None, int | None] | None:
         """Extract token usage and cost from API response
 
         Returns:
-            Tuple of (input_tokens, output_tokens, total_tokens, cost) or None
+            Tuple of (input_tokens, output_tokens, total_tokens, cost, cached_tokens, cache_write_tokens) or None
         """
         try:
             logger = logging.getLogger(__name__)
@@ -568,6 +695,7 @@ class ConversationTokenTracker:
                     )
                     # Extract cost if available (OpenRouter uses "cost" field)
                     cost = float(usage.get("cost", 0.0) or 0.0)
+                    cached_tokens, cache_write_tokens = _extract_cache_details(usage)
                 else:
                     input_tokens = getattr(usage, "input_tokens", 0)
                     output_tokens = getattr(usage, "output_tokens", 0)
@@ -576,6 +704,9 @@ class ConversationTokenTracker:
                     )
                     # Extract cost if available (OpenRouter uses "cost" field)
                     cost = float(getattr(usage, "cost", 0.0) or 0.0)
+                    cached_tokens, cache_write_tokens = _extract_cache_details(
+                        _usage_to_dict(getattr(usage, "prompt_tokens_details", None))
+                    )
 
                 logger.debug(
                     "Extracted tokens from usage_metadata: input=%s output=%s total=%s cost=%s",
@@ -584,7 +715,40 @@ class ConversationTokenTracker:
                     total_tokens,
                     cost,
                 )
-                return (input_tokens, output_tokens, total_tokens, cost)
+                return (
+                    int(input_tokens or 0),
+                    int(output_tokens or 0),
+                    int(total_tokens or 0),
+                    float(cost or 0.0),
+                    cached_tokens,
+                    cache_write_tokens,
+                )
+
+            # Direct `usage` attribute (OpenAI/OpenRouter clients; streaming final chunk)
+            usage_attr = getattr(response, "usage", None)
+            usage_attr_dict = _usage_to_dict(usage_attr)
+            if isinstance(usage_attr_dict, dict):
+                # Normalize OpenAI/OpenRouter {prompt_tokens, completion_tokens, total_tokens, cost}
+                input_tokens = usage_attr_dict.get("input_tokens", usage_attr_dict.get("prompt_tokens", 0))
+                output_tokens = usage_attr_dict.get("output_tokens", usage_attr_dict.get("completion_tokens", 0))
+                total_tokens = usage_attr_dict.get("total_tokens", None)
+                if total_tokens is None:
+                    try:
+                        total_tokens = int(input_tokens or 0) + int(output_tokens or 0)
+                    except Exception:
+                        total_tokens = 0
+                # OpenRouter: `usage.cost` (see docs)
+                cost = float(usage_attr_dict.get("cost", 0.0) or 0.0)
+                cached_tokens, cache_write_tokens = _extract_cache_details(usage_attr_dict)
+                if int(total_tokens or 0) > 0:
+                    return (
+                        int(input_tokens or 0),
+                        int(output_tokens or 0),
+                        int(total_tokens or 0),
+                        cost,
+                        cached_tokens,
+                        cache_write_tokens,
+                    )
 
             # Provider/model wrappers often attach usage to response_metadata or
             # additional_kwargs.
@@ -592,17 +756,24 @@ class ConversationTokenTracker:
             response_meta = getattr(response, "response_metadata", None)
             if isinstance(response_meta, dict):
                 candidate_dicts.append(response_meta)
+            else:
+                # Some providers attach response_metadata as a typed object
+                meta_dict = _usage_to_dict(response_meta)
+                if isinstance(meta_dict, dict):
+                    candidate_dicts.append(meta_dict)
             additional = getattr(response, "additional_kwargs", None)
             if isinstance(additional, dict):
                 candidate_dicts.append(additional)
 
             # Also consider direct `usage` / `token_usage` fields when they are dicts.
             usage_field = getattr(response, "usage", None)
-            if isinstance(usage_field, dict):
-                candidate_dicts.append({"usage": usage_field})
+            usage_field_dict = _usage_to_dict(usage_field)
+            if isinstance(usage_field_dict, dict):
+                candidate_dicts.append({"usage": usage_field_dict})
             token_usage_field = getattr(response, "token_usage", None)
-            if isinstance(token_usage_field, dict):
-                candidate_dicts.append({"usage": token_usage_field})
+            token_usage_field_dict = _usage_to_dict(token_usage_field)
+            if isinstance(token_usage_field_dict, dict):
+                candidate_dicts.append({"usage": token_usage_field_dict})
 
             for d in candidate_dicts:
                 usage = (
@@ -611,22 +782,23 @@ class ConversationTokenTracker:
                     or d.get("token_usage")
                     or d.get("usage_details")
                 )
-                if not isinstance(usage, dict):
+                usage_dict = _usage_to_dict(usage)
+                if not isinstance(usage_dict, dict):
                     continue
 
                 # Normalize common shapes:
                 # OpenAI/OpenRouter {prompt_tokens, completion_tokens, total_tokens} and
                 # LangChain usage_metadata {input_tokens, output_tokens, total_tokens}.
-                if "input_tokens" in usage:
-                    input_tokens = usage.get("input_tokens", 0)
+                if "input_tokens" in usage_dict:
+                    input_tokens = usage_dict.get("input_tokens", 0)
                 else:
-                    input_tokens = usage.get("prompt_tokens", 0)
+                    input_tokens = usage_dict.get("prompt_tokens", 0)
 
-                if "output_tokens" in usage:
-                    output_tokens = usage.get("output_tokens", 0)
+                if "output_tokens" in usage_dict:
+                    output_tokens = usage_dict.get("output_tokens", 0)
                 else:
-                    output_tokens = usage.get("completion_tokens", 0)
-                total_tokens = usage.get("total_tokens", None)
+                    output_tokens = usage_dict.get("completion_tokens", 0)
+                total_tokens = usage_dict.get("total_tokens", None)
                 if total_tokens is None:
                     try:
                         total_tokens = int(input_tokens or 0) + int(output_tokens or 0)
@@ -637,7 +809,8 @@ class ConversationTokenTracker:
                         total_tokens = 0
 
                 # Extract cost if available (OpenRouter uses "cost" field)
-                cost = float(usage.get("cost", 0.0) or 0.0)
+                cost = float(usage_dict.get("cost", 0.0) or 0.0)
+                cached_tokens, cache_write_tokens = _extract_cache_details(usage_dict)
 
                 if int(total_tokens or 0) > 0:
                     logger.debug(
@@ -652,6 +825,8 @@ class ConversationTokenTracker:
                         int(output_tokens or 0),
                         int(total_tokens or 0),
                         cost,
+                        cached_tokens,
+                        cache_write_tokens,
                     )
 
         except Exception as e:
@@ -705,6 +880,8 @@ class ConversationTokenTracker:
         """
         # Calculate average per message for current conversation only
         # Use session_tokens (per-conversation) divided by message_count (per-conversation)
+        # Keep legacy alias in sync (tests and occasional direct mutation rely on it).
+        self.last_conversation_tokens = self.session_tokens
         avg_tokens = (
             (self.last_conversation_tokens / self.message_count)
             if self.message_count > 0
@@ -714,9 +891,13 @@ class ConversationTokenTracker:
         # Get last turn token counts if available
         last_input_tokens = 0
         last_output_tokens = 0
+        last_cached_tokens: int | None = None
+        last_cache_write_tokens: int | None = None
         if self._last_api_tokens:
             last_input_tokens = self._last_api_tokens.input_tokens
             last_output_tokens = self._last_api_tokens.output_tokens
+            last_cached_tokens = self._last_api_tokens.cached_tokens
+            last_cache_write_tokens = self._last_api_tokens.cache_write_tokens
 
         # Get cumulative input/output token counts
         # For now, we track per-turn but need to accumulate for totals
@@ -737,6 +918,8 @@ class ConversationTokenTracker:
             # Token breakdowns
             "last_input_tokens": last_input_tokens,
             "last_output_tokens": last_output_tokens,
+            "last_cached_tokens": last_cached_tokens,
+            "last_cache_write_tokens": last_cache_write_tokens,
             # Per-turn breakdown (for current/last turn)
             "turn_input_tokens": self._turn_input_tokens if not self._turn_active else 0,
             "turn_output_tokens": self._turn_output_tokens if not self._turn_active else 0,

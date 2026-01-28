@@ -637,12 +637,26 @@ class ChatTab(QuickActionsMixin):
             )
             stats_lines.append(token_line)
 
-            # Show turn cost (including zero cost)
+            # Show turn cost (avoid misleading $0.0000 when cost is unknown)
             stats_lines.append(
                 self._get_translation("turn_cost").format(
-                    cost=f"${api_tokens.cost:.4f}"
+                    cost=self._format_cost_display(agent, api_tokens.cost)
                 )
             )
+
+            # Cache details (OpenRouter prompt_tokens_details)
+            if api_tokens.cached_tokens is not None:
+                stats_lines.append(
+                    self._get_translation("token_message_cached_tokens").format(
+                        tokens=int(api_tokens.cached_tokens or 0)
+                    )
+                )
+            if api_tokens.cache_write_tokens is not None:
+                stats_lines.append(
+                    self._get_translation("token_message_cache_write_tokens").format(
+                        tokens=int(api_tokens.cache_write_tokens or 0)
+                    )
+                )
 
         # Provider/model info
         provider = "unknown"
@@ -675,6 +689,27 @@ class ChatTab(QuickActionsMixin):
 
         # Return updated history with stats message appended
         return [token_metadata_message]
+
+    def _is_free_model(self, agent) -> bool:
+        """Heuristic: OpenRouter uses ':free' suffix for free-tier models."""
+        try:
+            llm_instance = getattr(agent, "llm_instance", None)
+            model = (getattr(llm_instance, "model_name", "") or "").lower()
+            return ":free" in model
+        except Exception:
+            return False
+
+    def _format_cost_display(self, agent, cost: float | None) -> str:
+        """Format cost for UI: show $0.0000 only for free models, else '—' if unknown."""
+        try:
+            val = float(cost or 0.0)
+        except Exception:
+            val = 0.0
+        if val > 0.0:
+            return f"${val:.4f}"
+        if self._is_free_model(agent):
+            return "$0.0000"
+        return "—"
 
     def format_token_budget_display(self, request: gr.Request = None) -> str:
         """Format and return the token budget display - now session-aware"""
@@ -750,8 +785,9 @@ class ChatTab(QuickActionsMixin):
             # Format total with cost (precision .4f)
             total_tokens = cumulative_stats.get("conversation_tokens", 0)
             cost_str = ""
-            if total_cost is not None:
-                cost_str = f" / ${total_cost:.4f}"
+            total_cost_display = self._format_cost_display(agent, total_cost)
+            if total_cost_display != "—":
+                cost_str = f" / {total_cost_display}"
             total = self._get_translation("token_usage_total").format(
                 total_tokens=total_tokens
             ) + cost_str
@@ -759,8 +795,9 @@ class ChatTab(QuickActionsMixin):
             # Format conversation with cost (precision .4f)
             conv_tokens = cumulative_stats.get("session_tokens", 0)
             conv_cost_str = ""
-            if conv_cost is not None:
-                conv_cost_str = f" / ${conv_cost:.4f}"
+            conv_cost_display = self._format_cost_display(agent, conv_cost)
+            if conv_cost_display != "—":
+                conv_cost_str = f" / {conv_cost_display}"
             conversation = self._get_translation("token_usage_conversation").format(
                 conversation_tokens=conv_tokens
             ) + conv_cost_str
@@ -799,16 +836,16 @@ class ChatTab(QuickActionsMixin):
                 logging.getLogger(__name__).debug(
                     "Failed to get token breakdown: %s", exc
                 )
-            
+
             estimate_line = "- " + self._get_translation("token_usage_estimate").format(
                 estimated_tokens=estimated_total
             ) + breakdown_info
-            
+
             # Message section with context, input/output, and cost (indented sub-items)
             message_section = "- " + self._get_translation("token_usage_last_message")
             input_tokens = cumulative_stats.get("last_input_tokens", 0)
             output_tokens = cumulative_stats.get("last_output_tokens", 0)
-            
+
             # Message context (percentage)
             message_context_line = self._get_translation("token_message_context").format(
                 percentage=percentage_for_display,
@@ -816,28 +853,46 @@ class ChatTab(QuickActionsMixin):
                 context_window=budget_info["context_window"],
                 status_icon=status_icon,
             )
-            
+
             # Input/output tokens
             input_line = self._get_translation("token_message_input").format(tokens=input_tokens)
             output_line = self._get_translation("token_message_output").format(tokens=output_tokens)
-            
+
+            # Cache details (OpenRouter prompt_tokens_details)
+            cached_tokens = cumulative_stats.get("last_cached_tokens")
+            cache_write_tokens = cumulative_stats.get("last_cache_write_tokens")
+            cache_lines = ""
+            if cached_tokens is not None:
+                cache_lines += (
+                    "\n    - "
+                    + self._get_translation("token_message_cached_tokens").format(
+                        tokens=int(cached_tokens or 0)
+                    )
+                )
+            if cache_write_tokens is not None:
+                cache_lines += (
+                    "\n    - "
+                    + self._get_translation("token_message_cache_write_tokens").format(
+                        tokens=int(cache_write_tokens or 0)
+                    )
+                )
+
             # Cost for current message/turn
-            message_cost_str = "$0.0000"
-            if turn_cost is not None:
-                message_cost_str = f"${turn_cost:.4f}"
-            elif conv_cost is not None:
-                message_cost_str = f"${conv_cost:.4f}"
+            base_cost = turn_cost if (turn_cost is not None) else conv_cost
+            message_cost_str = self._format_cost_display(agent, base_cost)
             cost_line = self._get_translation("token_message_cost").format(cost=message_cost_str)
-            
-            message_details = f"\n    - {message_context_line}\n    - {input_line}\n    - {output_line}\n    - {cost_line}"
+
+            message_details = f"\n    - {message_context_line}\n    - {input_line}\n    - {output_line}{cache_lines}\n    - {cost_line}"
 
             # Average with cost (precision .4f)
             avg_tokens = cumulative_stats.get("avg_tokens_per_message", 0)
-            avg_cost_str = ""
             message_count = cumulative_stats.get("message_count", 0)
-            if conv_cost is not None and message_count > 0:
-                avg_cost = conv_cost / message_count
-                avg_cost_str = f" / ${avg_cost:.4f}"
+            avg_cost_str = ""
+            if message_count > 0:
+                # Treat 0-cost as "unknown" unless we know we're on a free model.
+                avg_cost = (conv_cost / message_count) if (conv_cost and conv_cost > 0) else 0.0
+                avg_cost_display = self._format_cost_display(agent, avg_cost)
+                avg_cost_str = f" / {avg_cost_display}"
             average = self._get_translation("token_usage_average").format(
                 avg_tokens=avg_tokens
             ) + avg_cost_str

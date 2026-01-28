@@ -35,7 +35,7 @@ class TestTokenCount:
         # Actual tokens with cost
         actual_with_cost = TokenCount(100, 50, 150, False, "api", 0.0015)
         assert "150 total (100 input + 50 output)" in actual_with_cost.formatted
-        assert "$0.001500" in actual_with_cost.formatted
+        assert "$0.0015" in actual_with_cost.formatted
 
         # Estimated tokens
         estimated = TokenCount(100, 50, 150, True, "tiktoken", 0.0)
@@ -185,6 +185,40 @@ class TestConversationTokenTracker:
         assert tracker.conversation_cost == 0.0025
         assert tracker.session_cost == 0.0025
 
+    def test_track_llm_response_with_prompt_cache_details(self):
+        """Parse OpenRouter prompt_tokens_details.{cached_tokens,cache_write_tokens}."""
+        tracker = ConversationTokenTracker()
+        messages = [HumanMessage(content="Test message")]
+
+        class MockResponse:
+            def __init__(self):
+                self.response_metadata = {
+                    "usage": {
+                        "prompt_tokens": 20,
+                        "completion_tokens": 10,
+                        "total_tokens": 30,
+                        "cost": 0.0,
+                        "prompt_tokens_details": {
+                            "cached_tokens": 7,
+                            "cache_write_tokens": 11,
+                        },
+                    }
+                }
+
+        response = MockResponse()
+        result = tracker.track_llm_response(response, messages)
+
+        assert isinstance(result, TokenCount)
+        assert result.input_tokens == 20
+        assert result.output_tokens == 10
+        assert result.total_tokens == 30
+        assert result.cached_tokens == 7
+        assert result.cache_write_tokens == 11
+
+        stats = tracker.get_cumulative_stats()
+        assert stats["last_cached_tokens"] == 7
+        assert stats["last_cache_write_tokens"] == 11
+
     def test_cumulative_stats(self):
         """Test cumulative statistics including cost"""
         tracker = ConversationTokenTracker()
@@ -202,7 +236,8 @@ class TestConversationTokenTracker:
         assert stats['conversation_tokens'] == 1000
         assert stats['session_tokens'] == 500
         assert stats['message_count'] == 10
-        assert stats['avg_tokens_per_message'] == 100.0
+        # Average is per-conversation (session_tokens / message_count)
+        assert stats['avg_tokens_per_message'] == 50
         assert stats['turn_cost'] == 0.0025
         assert stats['conversation_cost'] == 0.025
         assert stats['total_cost'] == 0.05
@@ -263,6 +298,33 @@ class TestConversationTokenTracker:
         assert tracker.session_cost == 0.0015
         assert tracker._last_turn_cost == 0.0015
         assert not tracker._turn_active
+
+    def test_update_turn_usage_parses_prompt_cache_details(self):
+        """Ensure per-turn accumulation captures prompt cache details when present."""
+        tracker = ConversationTokenTracker()
+        tracker.begin_turn()
+
+        class MockResponse:
+            def __init__(self):
+                self.response_metadata = {
+                    "usage": {
+                        "prompt_tokens": 50,
+                        "completion_tokens": 25,
+                        "total_tokens": 75,
+                        "cost": 0.0,
+                        "prompt_tokens_details": {
+                            "cached_tokens": 3,
+                            "cache_write_tokens": 5,
+                        },
+                    }
+                }
+
+        response = MockResponse()
+        assert tracker.update_turn_usage_from_api(response) is True
+        last = tracker.get_last_api_tokens()
+        assert last is not None
+        assert last.cached_tokens == 3
+        assert last.cache_write_tokens == 5
 
 
 class TestGlobalFunctions:

@@ -124,6 +124,8 @@ RUSSIAN_TRANSLATIONS = {
     "token_message_context": "Контекст: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
     "token_message_input": "Входные: {tokens:,}",
     "token_message_output": "Выходные: {tokens:,}",
+    "token_message_cached_tokens": "Кэш (чтение): {tokens:,}",
+    "token_message_cache_write_tokens": "Кэш (запись): {tokens:,}",
     "token_message_cost": "Стоимость: {cost}",
     # Status icons for token usage
     "token_status_good": "🟢",
@@ -462,6 +464,8 @@ ENGLISH_TRANSLATIONS = {
     "token_message_context": "Context: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
     "token_message_input": "Input: {tokens:,}",
     "token_message_output": "Output: {tokens:,}",
+    "token_message_cached_tokens": "Cache (read): {tokens:,}",
+    "token_message_cache_write_tokens": "Cache (write): {tokens:,}",
     "token_message_cost": "Cost: {cost}",
     # Status icons for token usage
     "token_status_good": "🟢",
