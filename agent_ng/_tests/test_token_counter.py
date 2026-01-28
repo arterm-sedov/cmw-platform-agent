@@ -185,6 +185,28 @@ class TestConversationTokenTracker:
         assert tracker.conversation_cost == 0.0025
         assert tracker.session_cost == 0.0025
 
+    def test_track_llm_response_with_cost_from_token_usage(self):
+        """OpenRouter via ChatOpenAI may place usage under response_metadata.token_usage."""
+        tracker = ConversationTokenTracker()
+        messages = [HumanMessage(content="Test message")]
+
+        class MockResponse:
+            def __init__(self):
+                self.usage_metadata = {"input_tokens": 20, "output_tokens": 10, "total_tokens": 30}
+                self.response_metadata = {
+                    "token_usage": {
+                        "prompt_tokens": 20,
+                        "completion_tokens": 10,
+                        "total_tokens": 30,
+                        "cost": 0.0025,
+                    }
+                }
+
+        response = MockResponse()
+        result = tracker.track_llm_response(response, messages)
+        assert result is not None
+        assert result.cost == 0.0025
+
     def test_track_llm_response_with_prompt_cache_details(self):
         """Parse OpenRouter prompt_tokens_details.{cached_tokens,cache_write_tokens}."""
         tracker = ConversationTokenTracker()

@@ -1399,6 +1399,14 @@ class NativeLangChainStreaming:
             # (preserves avg-per-message semantics).
             if hasattr(agent, "token_tracker") and agent.token_tracker:
                 try:
+                    # IMPORTANT: OpenRouter cost/cache details often appear only on the final chunk
+                    # under response_metadata.token_usage. Refresh once from final_chunk before finalize.
+                    try:
+                        agent.token_tracker.update_turn_usage_from_api(final_chunk)
+                    except Exception as exc:
+                        self._logger.debug(
+                            "Failed to refresh final usage from final_chunk: %s", exc
+                        )
                     agent.token_tracker.finalize_turn_usage(final_chunk, messages)
                 except Exception as e:
                     self._logger.exception("Error finalizing turn usage: %s", e)

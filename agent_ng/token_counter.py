@@ -681,6 +681,7 @@ class ConversationTokenTracker:
             logger = logging.getLogger(__name__)
             logger.debug("Extracting API tokens from response type=%s", type(response))
             cost = 0.0
+            fallback_result: tuple[int, int, int, float, int | None, int | None] | None = None
 
             if hasattr(response, "usage_metadata"):
                 usage = response.usage_metadata
@@ -715,7 +716,9 @@ class ConversationTokenTracker:
                     total_tokens,
                     cost,
                 )
-                return (
+                # Don't return yet: provider-specific cost/cache details (e.g. OpenRouter)
+                # typically live in response_metadata/token_usage, not in usage_metadata.
+                fallback_result = (
                     int(input_tokens or 0),
                     int(output_tokens or 0),
                     int(total_tokens or 0),
@@ -828,6 +831,8 @@ class ConversationTokenTracker:
                         cached_tokens,
                         cache_write_tokens,
                     )
+
+            return fallback_result
 
         except Exception as e:
             logging.getLogger(__name__).debug("Error extracting API tokens: %s", e)
