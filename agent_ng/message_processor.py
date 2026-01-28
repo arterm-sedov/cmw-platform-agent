@@ -239,7 +239,7 @@ When you have enough information to provide a complete answer, use the submit_an
         """
         # Create a reminder message to force final answer
         reminder_msg = HumanMessage(content="""
-Please provide your final answer now. You have all the information you need from the tool results above. 
+Please provide your final answer now. You have all the information you need from the tool results above.
 Use the submit_answer tool to provide your complete response.
 """)
 

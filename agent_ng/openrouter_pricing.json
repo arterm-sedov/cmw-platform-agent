@@ -1,0 +1,130 @@
+{
+  "deepseek/deepseek-v3.1-terminus:exacto": {
+    "prompt_price_per_1k": 0.0006983333333333334,
+    "completion_price_per_1k": 0.0014983333333333333
+  },
+  "deepseek/deepseek-v3.1-terminus": {
+    "prompt_price_per_1k": 0.0006983333333333334,
+    "completion_price_per_1k": 0.0014983333333333333
+  },
+  "deepseek/deepseek-v3.2-speciale": {
+    "prompt_price_per_1k": 0.00031666666666666665,
+    "completion_price_per_1k": 0.0006699999999999999
+  },
+  "deepseek/deepseek-chat-v3.1:free": {
+    "prompt_price_per_1k": 0.00036700000000000003,
+    "completion_price_per_1k": 0.001167
+  },
+  "deepseek/deepseek-chat-v3.1": {
+    "prompt_price_per_1k": 0.00036700000000000003,
+    "completion_price_per_1k": 0.001167
+  },
+  "deepseek/deepseek-r1-0528": {
+    "prompt_price_per_1k": 0.0016090909090909092,
+    "completion_price_per_1k": 0.0037754545454545454
+  },
+  "x-ai/grok-4-fast:free": {
+    "prompt_price_per_1k": 0.00019999999999999998,
+    "completion_price_per_1k": 0.0005
+  },
+  "x-ai/grok-4-fast": {
+    "prompt_price_per_1k": 0.00019999999999999998,
+    "completion_price_per_1k": 0.0005
+  },
+  "x-ai/grok-code-fast-1": {
+    "prompt_price_per_1k": 0.00019999999999999998,
+    "completion_price_per_1k": 0.0015
+  },
+  "qwen/qwen3-coder:free": {
+    "prompt_price_per_1k": 0.0007207142857142857,
+    "completion_price_per_1k": 0.0020485714285714287
+  },
+  "qwen/qwen3-coder": {
+    "prompt_price_per_1k": 0.0007207142857142857,
+    "completion_price_per_1k": 0.0020485714285714287
+  },
+  "qwen/qwen3-coder-flash": {
+    "prompt_price_per_1k": 0.0003,
+    "completion_price_per_1k": 0.0015
+  },
+  "qwen/qwen3-max": {
+    "prompt_price_per_1k": 0.0012,
+    "completion_price_per_1k": 0.006
+  },
+  "qwen/qwen3-coder-plus": {
+    "prompt_price_per_1k": 0.001,
+    "completion_price_per_1k": 0.005
+  },
+  "qwen/qwen3-coder:exacto": {
+    "prompt_price_per_1k": 0.0007207142857142857,
+    "completion_price_per_1k": 0.0020485714285714287
+  },
+  "qwen/qwen-plus-2025-07-28": {
+    "prompt_price_per_1k": 0.00039999999999999996,
+    "completion_price_per_1k": 0.0012
+  },
+  "moonshotai/kimi-k2-0905:exacto": {
+    "prompt_price_per_1k": 0.0006608333333333333,
+    "completion_price_per_1k": 0.0029491666666666663
+  },
+  "moonshotai/kimi-k2-0905": {
+    "prompt_price_per_1k": 0.0006608333333333333,
+    "completion_price_per_1k": 0.0029491666666666663
+  },
+  "moonshotai/kimi-k2-thinking": {
+    "prompt_price_per_1k": 0.0006669230769230769,
+    "completion_price_per_1k": 0.0028423076923076926
+  },
+  "z-ai/glm-4.6:exacto": {
+    "prompt_price_per_1k": 0.0005043181818181818,
+    "completion_price_per_1k": 0.0020072727272727273
+  },
+  "z-ai/glm-4.6": {
+    "prompt_price_per_1k": 0.0005043181818181818,
+    "completion_price_per_1k": 0.0020072727272727273
+  },
+  "z-ai/glm-4.7": {
+    "prompt_price_per_1k": 0.0006212500000000001,
+    "completion_price_per_1k": 0.0021271428571428574
+  },
+  "google/gemini-3-flash-preview": {
+    "prompt_price_per_1k": 0.0005,
+    "completion_price_per_1k": 0.003
+  },
+  "google/gemini-3-pro-preview": {
+    "prompt_price_per_1k": 0.002,
+    "completion_price_per_1k": 0.012
+  },
+  "anthropic/claude-sonnet-4.5": {
+    "prompt_price_per_1k": 0.003,
+    "completion_price_per_1k": 0.015000000000000001
+  },
+  "openai/gpt-oss-120b:exacto": {
+    "prompt_price_per_1k": 0.00011899999999999999,
+    "completion_price_per_1k": 0.0005004761904761905
+  },
+  "openai/gpt-oss-120b": {
+    "prompt_price_per_1k": 0.00011899999999999999,
+    "completion_price_per_1k": 0.0005004761904761905
+  },
+  "openai/gpt-5-mini": {
+    "prompt_price_per_1k": 0.00025,
+    "completion_price_per_1k": 0.002
+  },
+  "nvidia/nemotron-nano-9b-v2:free": {
+    "prompt_price_per_1k": 4.9999999999999996e-05,
+    "completion_price_per_1k": 0.000205
+  },
+  "nvidia/nemotron-nano-9b-v2": {
+    "prompt_price_per_1k": 4.9999999999999996e-05,
+    "completion_price_per_1k": 0.000205
+  },
+  "mistralai/codestral-2508": {
+    "prompt_price_per_1k": 0.0003,
+    "completion_price_per_1k": 0.0009
+  },
+  "minimax/minimax-m2.1": {
+    "prompt_price_per_1k": 0.00030083333333333335,
+    "completion_price_per_1k": 0.0013183333333333335
+  }
+}

@@ -451,13 +451,13 @@ class ChatTab(QuickActionsMixin):
                         if prompt_tokens:
                             stats_lines.append(
                                 self._get_translation("prompt_tokens").format(
-                                    tokens=prompt_tokens.formatted
+                                    tokens=prompt_tokens.formatted_no_cost
                                 )
                             )
                         if api_tokens:
                             stats_lines.append(
                                 self._get_translation("api_tokens").format(
-                                    tokens=api_tokens.formatted
+                                    tokens=api_tokens.formatted_no_cost
                                 )
                             )
                         # Provider/model and execution time where possible
@@ -627,22 +627,15 @@ class ChatTab(QuickActionsMixin):
         if prompt_tokens:
             stats_lines.append(
                 self._get_translation("prompt_tokens").format(
-                    tokens=prompt_tokens.formatted
+                    tokens=prompt_tokens.formatted_no_cost
                 )
             )
         if api_tokens:
-            # Show API tokens with input/output breakdown
+            # Show API tokens with input/output breakdown (no cost in chat)
             token_line = self._get_translation("api_tokens").format(
-                tokens=api_tokens.formatted
+                tokens=api_tokens.formatted_no_cost
             )
             stats_lines.append(token_line)
-
-            # Show turn cost (avoid misleading $0.0000 when cost is unknown)
-            stats_lines.append(
-                self._get_translation("turn_cost").format(
-                    cost=self._format_cost_display(agent, api_tokens.cost)
-                )
-            )
 
             # Cache details (OpenRouter prompt_tokens_details)
             if api_tokens.cached_tokens is not None:
@@ -701,15 +694,16 @@ class ChatTab(QuickActionsMixin):
 
     def _format_cost_display(self, agent, cost: float | None) -> str:
         """Format cost for UI: show $0.0000 only for free models, else '—' if unknown."""
-        try:
-            val = float(cost or 0.0)
-        except Exception:
-            val = 0.0
-        if val > 0.0:
-            return f"${val:.4f}"
-        if self._is_free_model(agent):
-            return "$0.0000"
-        return "—"
+        if cost is None:
+            return "—"  # Unknown pricing
+        if cost == 0.0:
+            # cost == 0.0: check if it's a free model or unknown
+            if self._is_free_model(agent):
+                return "$0.0000"  # Explicitly free model
+            return "—"  # Unknown (0.0 but not a free model)
+        # Use helper to format with minimum necessary decimal places
+        from agent_ng.utils import format_cost
+        return format_cost(cost)
 
     def format_token_budget_display(self, request: gr.Request = None) -> str:
         """Format and return the token budget display - now session-aware"""
@@ -890,7 +884,7 @@ class ChatTab(QuickActionsMixin):
             avg_cost_str = ""
             if message_count > 0:
                 # Treat 0-cost as "unknown" unless we know we're on a free model.
-                avg_cost = (conv_cost / message_count) if (conv_cost and conv_cost > 0) else 0.0
+                avg_cost = (conv_cost / message_count) if (conv_cost is not None and conv_cost > 0) else None
                 avg_cost_display = self._format_cost_display(agent, avg_cost)
                 avg_cost_str = f" / {avg_cost_display}"
             average = self._get_translation("token_usage_average").format(

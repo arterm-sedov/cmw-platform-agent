@@ -35,6 +35,51 @@ def safe_string(value: Any, default: str = "") -> str:
     return default if value is None else str(value)
 
 
+def format_cost(cost: float | None, max_decimals: int = 3) -> str:
+    """Format cost with limited decimal places and rounding.
+
+    Formats cost values intelligently:
+    - None → "—" (unknown)
+    - 0.0 → "$0.0000" (free)
+    - > 0.0 → Rounded to 2-3 decimal places (e.g., "$0.042", "$0.043", "$1.23")
+
+    Examples:
+        $0.04211483 → $0.042
+        $0.0429 → $0.043
+        $1.234567 → $1.235
+
+    Args:
+        cost: Cost value (None = unknown, 0.0 = free)
+        max_decimals: Maximum decimal places to use (default: 3)
+
+    Returns:
+        Formatted cost string
+    """
+    if cost is None:
+        return "—"
+    if cost == 0.0:
+        return "$0.0000"
+
+    # Round to max_decimals places
+    rounded = round(cost, max_decimals)
+
+    # For very small values that round to zero, show original with limited precision
+    if rounded == 0.0 and cost > 0.0:
+        # Show up to 4 decimal places for very small values
+        formatted = f"${cost:.4f}"
+        return formatted.rstrip('0').rstrip('.')
+
+    # Format with max_decimals places, then remove trailing zeros
+    formatted = f"${rounded:.{max_decimals}f}"
+    cleaned = formatted.rstrip('0').rstrip('.')
+
+    # Ensure we show at least one decimal place for values < 1.0
+    if cost < 1.0 and '.' not in cleaned:
+        return f"${rounded:.{max_decimals}f}".rstrip('0').rstrip('.')
+
+    return cleaned
+
+
 def parse_env_bool(env_name: str) -> bool:
     """Parse a boolean feature flag from environment variables in a single place.
 

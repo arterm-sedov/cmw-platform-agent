@@ -237,6 +237,14 @@ class CmwAgent:
                     "No LLM provider available. Check AGENT_PROVIDER environment variable."
                 )
 
+            # Load pricing for token tracker from model config
+            if hasattr(self, "token_tracker") and self.token_tracker:
+                model_config = getattr(self.llm_instance, "config", None)
+                if model_config:
+                    self.token_tracker.load_pricing_from_llm_config(
+                        self.llm_instance.model_name, model_config
+                    )
+
             # Initialize tools using LLM manager's cached tools
             self.tools = self.llm_manager.get_tools()
 
@@ -475,7 +483,7 @@ class CmwAgent:
                     "total_tokens": cumulative_stats.get("conversation_tokens", 0),
                     "conversation_tokens": cumulative_stats.get("session_tokens", 0),
                     "avg_tokens_per_message": cumulative_stats.get("avg_tokens_per_message", 0),
-                    "turn_cost": cumulative_stats.get("turn_cost", 0.0),
+                    "turn_cost": cumulative_stats.get("turn_cost"),  # None if unknown
                     "conversation_cost": cumulative_stats.get("conversation_cost", 0.0),
                     "total_cost": cumulative_stats.get("total_cost", 0.0),
                     "last_input_tokens": cumulative_stats.get("last_input_tokens", 0),

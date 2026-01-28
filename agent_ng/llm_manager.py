@@ -52,11 +52,13 @@ try:
     from .utils import ensure_valid_answer
     from .provider_adapters import MistralWrapper, is_mistral_model
     from .langsmith_config import get_langsmith_config, get_openai_wrapper
+    from .logging_config import _parse_bool
 except ImportError:
     try:
         from agent_ng.utils import ensure_valid_answer
         from agent_ng.provider_adapters import MistralWrapper, is_mistral_model
         from agent_ng.langsmith_config import get_langsmith_config, get_openai_wrapper
+        from agent_ng.logging_config import _parse_bool
     except ImportError as e:
         print(f"💥 CRITICAL ERROR: Cannot import required modules in llm_manager!")
         print(f"   Import failed: {e}")
@@ -119,366 +121,9 @@ class LLMManager:
     """
 
     # Single source of truth for LLM configuration
-    LLM_CONFIGS = {
-        LLMProvider.GEMINI: LLMConfig(
-            name="Google Gemini",
-            type_str="gemini",
-            api_key_env="GEMINI_KEY",
-            max_history=25,
-            tool_support=True,
-            force_tools=True,
-            models=[
-                {
-                    "model": "gemini-2.5-flash",
-                    "token_limit": 1048576,
-                    "max_tokens": 65536,
-                    "temperature": 0
-                },
-                {
-                    "model": "gemini-2.5-pro",
-                    "token_limit": 1048576,
-                    "max_tokens": 65536,
-                    "temperature": 0
-                },
-            ],
-            enable_chunking=False
-        ),
-        LLMProvider.GROQ: LLMConfig(
-            name="Groq",
-            type_str="groq",
-            api_key_env="GROQ_API_KEY",
-            max_history=15,
-            tool_support=True,
-            force_tools=True,
-            models=[
-                {
-                    "model": "groq/compound",
-                    "token_limit": 131072,
-                    "max_tokens": 8192,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "llama-3.3-70b-versatile",
-                    "token_limit": 131072,
-                    "max_tokens": 32768,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "llama-3.3-70b-8192",
-                    "token_limit": 16000,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                }
-            ],
-            enable_chunking=False
-        ),
-        LLMProvider.HUGGINGFACE: LLMConfig(
-            name="HuggingFace",
-            type_str="huggingface",
-            api_key_env="HUGGINGFACE_API_KEY",
-            max_history=20,
-            tool_support=False,
-            force_tools=False,
-            models=[
-                {
-                    "model": "Qwen/Qwen2.5-Coder-32B-Instruct",
-                    "task": "text-generation",
-                    "token_limit": 3000,
-                    "max_new_tokens": 1024,
-                    "do_sample": False,
-                    "temperature": 0
-                },
-                {
-                    "model": "microsoft/DialoGPT-medium",
-                    "task": "text-generation",
-                    "token_limit": 1000,
-                    "max_new_tokens": 512,
-                    "do_sample": False,
-                    "temperature": 0
-                },
-                {
-                    "model": "gpt2",
-                    "task": "text-generation",
-                    "token_limit": 1000,
-                    "max_new_tokens": 256,
-                    "do_sample": False,
-                    "temperature": 0
-                }
-            ],
-            enable_chunking=True
-        ),
-        LLMProvider.OPENROUTER: LLMConfig(
-            name="OpenRouter",
-            type_str="openrouter",
-            api_key_env="OPENROUTER_API_KEY",
-            api_base_env="OPENROUTER_BASE_URL",
-            max_history=20,
-            tool_support=True,
-            force_tools=False,
-            models=[
-                # DeepSeek Models
-                {
-                    "model": "deepseek/deepseek-v3.1-terminus:exacto",
-                    "token_limit": 131000,
-                    "max_tokens": 32768,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "deepseek/deepseek-v3.1-terminus",
-                    "token_limit": 131000,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "deepseek/deepseek-v3.2-speciale",
-                    "token_limit": 163840,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "deepseek/deepseek-chat-v3.1:free",
-                    "token_limit": 131000,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "deepseek/deepseek-r1-0528",
-                    "token_limit": 131000,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                # Grok (xAI) Models
-                {
-                    "model": "x-ai/grok-4-fast:free",
-                    "token_limit": 2000000,
-                    "max_tokens": 8192,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "x-ai/grok-code-fast-1",
-                    "token_limit": 256000,
-                    "max_tokens": 10000,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "x-ai/grok-4-fast",
-                    "token_limit": 2000000,
-                    "max_tokens": 30000,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                # Qwen Models
-                {
-                    "model": "qwen/qwen3-coder:free",
-                    "token_limit": 262144,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "qwen/qwen3-coder-flash",
-                    "token_limit": 128000,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "qwen/qwen3-max",
-                    "token_limit": 256000,
-                    "max_tokens": 32768,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "qwen/qwen3-coder-plus",
-                    "token_limit": 128000,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "qwen/qwen3-coder:exacto",
-                    "token_limit": 262144,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "qwen/qwen-plus-2025-07-28",
-                    "token_limit": 1000000,
-                    "max_tokens": 32768,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                # MoonshotAI (Kimi) Models
-                {
-                    "model": "moonshotai/kimi-k2-0905:exacto",
-                    "token_limit": 262144,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "moonshotai/kimi-k2-thinking",
-                    "token_limit": 262144,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                # Z.AI (GLM) Models
-                {
-                    "model": "z-ai/glm-4.6:exacto",
-                    "token_limit": 200000,
-                    "max_tokens": 128000,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "z-ai/glm-4.7",
-                    "token_limit": 200000,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                # Other Models
-                {
-                    "model": "google/gemini-3-flash-preview",
-                    "token_limit": 1048576,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "google/gemini-3-pro-preview",
-                    "token_limit": 1048576,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "anthropic/claude-sonnet-4.5",
-                    "token_limit": 1000000,
-                    "max_tokens": 64000,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "openai/gpt-oss-120b:exacto",
-                    "token_limit": 131072,
-                    "max_tokens": 32768,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "openai/gpt-5-mini",
-                    "token_limit": 400000,
-                    "max_tokens": 32768,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "nvidia/nemotron-nano-9b-v2:free",
-                    "token_limit": 128000,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "mistralai/codestral-2508",
-                    "token_limit": 256000,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                # MiniMax Models
-                {
-                    "model": "minimax/minimax-m2.1",
-                    "token_limit": 196608,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                }
-            ],
-            enable_chunking=False
-        ),
-        LLMProvider.MISTRAL: LLMConfig(
-            name="Mistral AI",
-            type_str="mistral",
-            api_key_env="MISTRAL_API_KEY",
-            max_history=20,
-            tool_support=True,
-            force_tools=True,
-            models=[
-                {
-                    "model": "mistral-large-latest",
-                    "token_limit": 32000,
-                    "max_tokens": 2048,
-                    "temperature": 0
-                },
-                {
-                    "model": "mistral-small-latest",
-                    "token_limit": 32000,
-                    "max_tokens": 2048,
-                    "temperature": 0
-                },
-                {
-                    "model": "mistral-medium-latest",
-                    "token_limit": 32000,
-                    "max_tokens": 2048,
-                    "temperature": 0
-                }
-            ],
-            token_per_minute_limit=500000,
-            enable_chunking=False
-        ),
-        LLMProvider.GIGACHAT: LLMConfig(
-            name="Sber GigaChat",
-            type_str="gigachat",
-            api_key_env="GIGACHAT_API_KEY",
-            scope_env="GIGACHAT_SCOPE",
-            verify_ssl_env="GIGACHAT_VERIFY_SSL",
-            max_history=20,
-            tool_support=True,
-            force_tools=True,
-            models=[
-                {
-                    "model": "GigaChat-2",
-                    "token_limit": 128000,
-                    "max_tokens": 2048,
-                    "temperature": 0,
-                    "top_p": 0.9,
-                    "repetition_penalty": 1.0
-                },
-                {
-                    "model": "GigaChat-2-Pro",
-                    "token_limit": 128000,
-                    "max_tokens": 2048,
-                    "temperature": 0,
-                    "top_p": 0.9,
-                    "repetition_penalty": 1.0
-                },
-                {
-                    "model": "GigaChat-2-Max",
-                    "token_limit": 128000,
-                    "max_tokens": 2048,
-                    "temperature": 0,
-                    "top_p": 0.9,
-                    "repetition_penalty": 1.0
-                }
-            ],
-            enable_chunking=False
-        ),
-    }
+    # Loaded from separate config module for better maintainability
+    # Can be enriched at runtime with pricing data from OpenRouter
+    LLM_CONFIGS = None  # Will be initialized in __init__
 
     # Single provider from environment variable
     # No more sequence - use AGENT_PROVIDER from dotenv
@@ -492,6 +137,15 @@ class LLMManager:
         self._last_health_check = 0
         # Allowed providers allowlist loaded from environment; None means no restriction
         self._allowed_providers = self._load_allowed_providers()
+        # Initialize LLM configurations (can be enriched with pricing data)
+        # Import here to avoid circular import (llm_configs imports from llm_manager)
+        try:
+            from .llm_configs import get_default_llm_configs
+        except ImportError:
+            from agent_ng.llm_configs import get_default_llm_configs
+        self.LLM_CONFIGS = get_default_llm_configs()
+        # Fetch and update pricing for OpenRouter models at startup
+        self._update_openrouter_pricing()
 
     def _log_initialization(self, message: str, level: str = "INFO"):
         """Log initialization messages"""
@@ -499,6 +153,141 @@ class LLMManager:
         log_entry = f"[{timestamp}] [{level}] {message}"
         self._initialization_logs.append(log_entry)
         print(log_entry)  # Also print to console for real-time feedback
+
+    def _load_pricing_from_json(self, model_names: List[str]) -> Optional[Dict[str, Any]]:
+        """Load pricing from JSON snapshot file as fallback.
+
+        Returns:
+            Pricing map (model_name -> {prompt_price_per_1k, completion_price_per_1k}) or None
+        """
+        try:
+            from pathlib import Path
+            import json
+
+            # Locate JSON file in agent_ng directory (next to llm_configs.py)
+            current_file = Path(__file__).resolve()
+            json_path = current_file.parent / "openrouter_pricing.json"
+
+            if not json_path.exists():
+                return None
+
+            with json_path.open("r", encoding="utf-8") as f:
+                pricing_data = json.load(f)
+
+            # Filter to only requested models
+            pricing_map = {}
+            for model_name in model_names:
+                # Free models always have 0.0 pricing regardless of JSON values
+                if ":free" in model_name.lower():
+                    pricing_map[model_name] = {
+                        "prompt_price_per_1k": 0.0,
+                        "completion_price_per_1k": 0.0
+                    }
+                    continue
+
+                # Try exact match first, then base model (without variant)
+                pricing = pricing_data.get(model_name) or pricing_data.get(model_name.split(":")[0])
+                if pricing:
+                    pricing_map[model_name] = pricing
+
+            return pricing_map if pricing_map else None
+        except Exception as e:
+            logging.getLogger(__name__).debug("Failed to load pricing from JSON: %s", e)
+            return None
+
+    def _update_openrouter_pricing(self) -> None:
+        """Fetch and update pricing for OpenRouter models at startup.
+
+        Fallback chain:
+        1. API fetch from `/models` endpoint (if enabled)
+        2. JSON snapshot file (if API fails or disabled)
+
+        If neither source provides pricing, models will use 0.0 (unknown pricing).
+        Updates model configs in memory (persistent for this agent run).
+        """
+        # Check if runtime pricing fetch is enabled
+        fetch_at_startup = _parse_bool(os.getenv("OPENROUTER_FETCH_PRICING_AT_STARTUP"), True)
+
+        config = self.LLM_CONFIGS.get(LLMProvider.OPENROUTER)
+        if not config or not config.models:
+            return
+
+        # Extract model names
+        model_names = [m.get("model", "") for m in config.models if m.get("model")]
+        if not model_names:
+            return
+
+        pricing_map = None
+        pricing_source = None
+
+        # Step 1: Try API fetch (if enabled)
+        if fetch_at_startup:
+            try:
+                api_key = self._get_api_key(config)
+                if api_key:
+                    base_url = os.getenv(config.api_base_env or "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+                    self._log_initialization(
+                        f"Fetching pricing via endpoints API for {len(model_names)} OpenRouter models (averaging endpoints)...", "INFO"
+                    )
+
+                    # Import here to avoid circular dependency
+                    from agent_ng.utils.openrouter_pricing import fetch_pricing_via_endpoints
+
+                    # Fetch pricing using /endpoints API and average across endpoints
+                    pricing_map = fetch_pricing_via_endpoints(model_names, api_key, base_url)
+                    if pricing_map:
+                        pricing_source = "API"
+            except Exception as e:
+                logging.getLogger(__name__).debug("API pricing fetch failed: %s", e)
+
+        # Step 2: Fallback to JSON snapshot (if API failed or disabled)
+        if not pricing_map:
+            pricing_map = self._load_pricing_from_json(model_names)
+            if pricing_map:
+                pricing_source = "JSON snapshot"
+                self._log_initialization(
+                    f"Loaded pricing from JSON snapshot for {len(pricing_map)} models", "INFO"
+                )
+
+        # If no pricing found, models will use 0.0 (unknown pricing)
+        if not pricing_map:
+            if fetch_at_startup:
+                self._log_initialization(
+                    "No pricing data available (API fetch failed, JSON not found). "
+                    "Models will use 0.0 pricing (unknown cost).", "WARNING"
+                )
+            else:
+                self._log_initialization(
+                    "Runtime pricing fetch disabled, JSON not found. "
+                    "Models will use 0.0 pricing (unknown cost).", "INFO"
+                )
+
+        # Update model configs in memory (only if pricing found from API or JSON)
+        if pricing_map:
+            updated_count = 0
+            for model_config in config.models:
+                model_name = model_config.get("model", "")
+                if not model_name:
+                    continue
+
+                # Free models always have 0.0 pricing regardless of API/JSON values
+                if ":free" in model_name.lower():
+                    model_config["prompt_price_per_1k"] = 0.0
+                    model_config["completion_price_per_1k"] = 0.0
+                    updated_count += 1
+                    continue
+
+                pricing = pricing_map.get(model_name) or pricing_map.get(model_name.split(":")[0])
+                if pricing:
+                    model_config["prompt_price_per_1k"] = pricing["prompt_price_per_1k"]
+                    model_config["completion_price_per_1k"] = pricing["completion_price_per_1k"]
+                    updated_count += 1
+                # If no pricing found, pricing remains None (unknown) in config
+
+            if updated_count > 0:
+                self._log_initialization(
+                    f"Updated pricing for {updated_count}/{len(model_names)} OpenRouter models from {pricing_source}", "INFO"
+                )
 
 
     def _get_api_key(self, config: LLMConfig) -> Optional[str]:

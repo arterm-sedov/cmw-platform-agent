@@ -228,7 +228,7 @@ Set up your CMW Platform connection in the Config tab:
   - **Context**: Conversation messages (system, user, assistant) - excludes tool results
   - **Tools**: Tool result messages (ToolMessage content) returned by executed tools
   - **Overhead**: Tool schemas sent with every LLM call (constant per tool set, ~600 tokens per tool)
-- **Cost Tracking**: Automatic cost extraction from OpenRouter API responses (includes `total_cost` in usage object)
+- **Cost Tracking**: For OpenRouter models, cost is computed from token counts and prices fetched at startup via the endpoints API (`/models/{author}/{slug}/endpoints`). The API returns prices per token, which we convert to per 1K tokens: `cost = (input_tokens/1000)*prompt_price_per_1k + (output_tokens/1000)*completion_price_per_1k`
 - **Multi-Level Statistics**: 
   - Per-turn cost and token counts (displayed in chat after each QA turn, including zero cost)
   - Per-conversation totals (session-scoped) with integrated cost display
@@ -237,7 +237,7 @@ Set up your CMW Platform connection in the Config tab:
 - **Overhead Adjustment Factor** (`OVERHEAD_ADJUSTMENT_FACTOR = 0.8`): Heuristic factor applied to tool schema overhead to better match API-reported tokens, compensating for differences between `tiktoken` and provider tokenization
 - **Event-Driven UI Updates**: Immediate budget and cost visibility without polling
 
-**Note**: The estimate may differ from actual API tokens due to provider-specific tokenization. The overhead adjustment factor (0.8) brings estimates within 1-2% of API-reported values by accounting for these differences.
+**Note**: The estimate may differ from actual API tokens due to provider-specific tokenization. The overhead adjustment factor (0.8) brings estimates within 1-2% of API-reported values by accounting for these differences. See also `docs/OPENROUTER_PRICING.md` for OpenRouter-specific details.
 
 ### History Compression
 
