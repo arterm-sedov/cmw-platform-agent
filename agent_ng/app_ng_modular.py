@@ -24,13 +24,17 @@ from collections.abc import AsyncGenerator
 import json
 import logging
 from pathlib import Path
+import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
-import time
 import threading
 from queue import Queue, Empty
 import gradio as gr
+from dotenv import load_dotenv
+
+# Load .env early so Gradio picks up env settings
+load_dotenv()
 
 # Initialize logging early (idempotent)
 try:
@@ -52,8 +56,6 @@ except ImportError:
     sys.path.append(str(Path(__file__).parent))
     from agent_config import config, get_language_settings, get_port_settings
 
-# LangChain imports
-import os
 
 # Local imports with robust fallback handling
 import sys
@@ -1516,10 +1518,6 @@ class NextGenAppWithLanguageDetection(NextGenApp):
             # Primary: Use GRADIO_DEFAULT_LANGUAGE environment variable
             import os
 
-            from dotenv import load_dotenv
-
-            load_dotenv()  # Load .env file
-
             gradio_lang = os.getenv("GRADIO_DEFAULT_LANGUAGE", "").lower()
             if gradio_lang is not None:
                 return gradio_lang
@@ -1725,6 +1723,7 @@ def main():
     _logger.info(
         "Launching Gradio interface on port %s with language switching...", port
     )
+
     demo.launch(
         debug=True,
         share=False,
