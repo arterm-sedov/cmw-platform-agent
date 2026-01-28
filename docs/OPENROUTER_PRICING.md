@@ -4,7 +4,7 @@
 
 - **Pricing source**: For OpenRouter models we use the `/endpoints` API  
   [`GET /models/{author}/{slug}/endpoints`](https://openrouter.ai/docs/api/api-reference/endpoints/list-endpoints)  
-  which provides endpoint-specific pricing. We average across all endpoints for each model to get accurate pricing.
+  which provides endpoint-specific pricing. We use **median pricing** across all endpoints for each model to get realistic pricing (less affected by outliers than average).
 - **API format**: OpenRouter API returns prices **per token** (e.g., `"0.00003"` = $0.00003 per token).  
   We convert to per 1K tokens: `price_per_1k = price_per_token * 1000`
 - **When**: Once per agent run, at startup, inside `LLMManager` (if enabled)
@@ -20,7 +20,7 @@
 3. **Fallback chain** (tries each in order until pricing is found):
    - **Step 1: API fetch** (if enabled):
      - Fetches endpoints for each configured model from `/models/{author}/{slug}/endpoints`
-     - Averages pricing across all endpoints for each model
+     - Uses median pricing across all endpoints for each model (less affected by outliers)
      - Updates model configs in memory: `prompt_price_per_1k`, `completion_price_per_1k`
    - **Step 2: JSON snapshot** (if API fails or disabled):
      - Loads pricing from `agent_ng/openrouter_pricing.json` (if exists)
