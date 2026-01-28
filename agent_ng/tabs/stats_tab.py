@@ -210,11 +210,46 @@ class StatsTab:
                     f"- {self._get_translation('compression_tokens_saved_label').format(tokens=stats['conversation_stats'].get('compression_tokens_saved', 0))}"
                 )
 
+            # Get model pricing info
+            pricing_line = ""
+            try:
+                model_name = stats['llm_info'].get('model_name', '')
+                provider = stats['llm_info'].get('provider', '')
+
+                if model_name and provider and hasattr(self, "main_app") and self.main_app:
+                    if hasattr(self.main_app, "llm_manager") and self.main_app.llm_manager:
+                        provider_config = self.main_app.llm_manager.get_provider_config(provider)
+                        if provider_config and provider_config.models:
+                            for model_config in provider_config.models:
+                                if model_config.get("model") == model_name:
+                                    prompt_price = model_config.get("prompt_price_per_1k")
+                                    completion_price = model_config.get("completion_price_per_1k")
+                                    if prompt_price is not None or completion_price is not None:
+                                        # Format as per 1M tokens (multiply by 1000)
+                                        prompt_per_m = (prompt_price * 1000) if prompt_price else None
+                                        completion_per_m = (completion_price * 1000) if completion_price else None
+
+                                        if prompt_per_m is not None and completion_per_m is not None:
+                                            from agent_ng.utils import format_cost
+                                            pricing_line = (
+                                                f"\n- {self._get_translation('model_pricing_input_label')}: "
+                                                f"{format_cost(prompt_per_m)}/M\n"
+                                                f"- {self._get_translation('model_pricing_output_label')}: "
+                                                f"{format_cost(completion_per_m)}/M"
+                                            )
+                                        break
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).debug(
+                    "Failed to get model pricing for stats: %s", exc
+                )
+
             # Format complete display using existing translation resources exactly as they are
             return (
                 f"{self._get_translation('agent_status_section')}\n"
                 f"- {self._get_translation('status_ready_true' if stats['agent_status']['is_ready'] else 'status_ready_false')}\n"
-                f"- {self._get_translation('current_model').format(model=stats['llm_info'].get('model_name', 'Unknown'))}\n"
+                f"- {self._get_translation('current_model').format(model=stats['llm_info'].get('model_name', 'Unknown'))}"
+                f"{pricing_line}\n"
                 f"- {self._get_translation('provider_info').format(provider=stats['llm_info'].get('provider', 'Unknown'))}\n"
                 f"- {self._get_translation('tools_label')}: {stats['agent_status']['tools_count']}\n\n"
                 f"{self._get_translation('conversation_section')}\n"

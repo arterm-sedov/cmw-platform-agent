@@ -102,6 +102,9 @@ RUSSIAN_TRANSLATIONS = {
     "mistral_switch_cancelled": "❌ Переключение на Mistral отменено",
     "current_provider": "Провайдер: {provider}",
     "current_model": "Модель: {model}",
+    "model_pricing_label": "Цена",
+    "model_pricing_input_label": "Ввод",
+    "model_pricing_output_label": "Вывод",
     # Status section
     "status_title": "Статус",
     "status_initializing": "🟡 Инициализация...",
@@ -442,6 +445,9 @@ ENGLISH_TRANSLATIONS = {
     "mistral_switch_cancelled": "❌ Mistral switching cancelled",
     "current_provider": "Provider: {provider}",
     "current_model": "**Model:** {model}",
+    "model_pricing_label": "Pricing",
+    "model_pricing_input_label": "Input",
+    "model_pricing_output_label": "Output",
     # Status section
     "status_title": "Status",
     "status_initializing": "🟡 Initializing...",
