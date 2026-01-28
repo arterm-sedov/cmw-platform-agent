@@ -21,6 +21,7 @@ Usage:
 """
 
 import json
+import logging
 import re
 from typing import List, Dict, Any, Optional, Union
 from dataclasses import dataclass
@@ -46,7 +47,7 @@ class MessageProcessor:
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt"""
-        return """You are a helpful AI assistant. You can use tools to help answer questions. 
+        return """You are a helpful AI assistant. You can use tools to help answer questions.
 When you have enough information to provide a complete answer, use the submit_answer tool with your final response."""
 
     def format_messages(self, context: MessageContext) -> List[BaseMessage]:
@@ -102,8 +103,9 @@ When you have enough information to provide a complete answer, use the submit_an
 
         return messages
 
-    def format_messages_simple(self, question: str, reference: Optional[str] = None, 
-                             chat_history: Optional[List[Dict[str, Any]]] = None) -> List[BaseMessage]:
+    def format_messages_simple(
+        self, question: str, reference: Optional[str] = None, chat_history: Optional[List[Dict[str, Any]]] = None
+    ) -> List[BaseMessage]:
         """
         Simple wrapper for format_messages with individual parameters.
 
@@ -220,8 +222,9 @@ When you have enough information to provide a complete answer, use the submit_an
 
         return None
 
-    def force_final_answer(self, messages: List[BaseMessage], tool_results_history: List[Any], 
-                          llm: Any) -> Any:
+    def force_final_answer(
+        self, messages: List[BaseMessage], tool_results_history: List[Any], llm: Any
+    ) -> Any:
         """
         Force the LLM to provide a final answer by adding a reminder prompt.
         Tool results are already available in the message history as ToolMessage objects.
@@ -258,7 +261,7 @@ Use the submit_answer tool to provide your complete response.
         Uses introspection, JSON-like handling, and smart filtering for optimal output.
         """
         separator = "------------------------------------------------\n"
-        print(separator) 
+        print(separator)
         print(f"Message {msg_index}:")
 
         # Get message type dynamically
@@ -277,15 +280,17 @@ Use the submit_answer tool to provide your complete response.
 
         # Print other attributes (excluding private ones and already printed ones)
         for attr_name in dir(msg):
-            if (not attr_name.startswith('_') and 
-                attr_name not in priority_attrs and 
-                not callable(getattr(msg, attr_name))):
+            if (
+                not attr_name.startswith('_')
+                and attr_name not in priority_attrs
+                and not callable(getattr(msg, attr_name))
+            ):
                 try:
                     value = getattr(msg, attr_name)
                     if value is not None and value != '':
                         self._print_attribute(attr_name, value)
-                except Exception:
-                    pass  # Skip attributes that can't be accessed
+                except Exception as e:
+                    logging.debug(f"Could not access attribute '{attr_name}' on message: {e}")
 
         print(separator)
 

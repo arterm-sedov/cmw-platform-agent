@@ -220,17 +220,22 @@ Set up your CMW Platform connection in the Config tab:
 - Manual provider switching with context preservation
 - Graceful degradation when components fail
 
-### Token Budget Tracking
+### Token Budget Tracking & Cost Management
 
-- Accurate token counting using `tiktoken` with `cl100k_base` encoding
-- Real-time token budget snapshots computed at key decision points
-- Breakdown display with three components:
+- **Accurate Token Counting**: Uses `tiktoken` with `cl100k_base` encoding, with API-reported tokens prioritized as ground truth
+- **Real-Time Budget Snapshots**: Computed at key decision points for immediate visibility
+- **Token Breakdown Display**: Three components shown:
   - **Context**: Conversation messages (system, user, assistant) - excludes tool results
   - **Tools**: Tool result messages (ToolMessage content) returned by executed tools
   - **Overhead**: Tool schemas sent with every LLM call (constant per tool set, ~600 tokens per tool)
+- **Cost Tracking**: Automatic cost extraction from OpenRouter API responses (includes `total_cost` in usage object)
+- **Multi-Level Statistics**: 
+  - Per-turn cost and token counts (displayed in chat after each QA turn, including zero cost)
+  - Per-conversation totals (session-scoped) with integrated cost display
+  - Overall totals (across all conversations) with cost tracking
+- **Input/Output Breakdown**: Token counts separated by input/output in stats pane
 - **Overhead Adjustment Factor** (`OVERHEAD_ADJUSTMENT_FACTOR = 0.8`): Heuristic factor applied to tool schema overhead to better match API-reported tokens, compensating for differences between `tiktoken` and provider tokenization
-- API-reported tokens prioritized as ground truth when available
-- Event-driven UI updates for immediate budget visibility
+- **Event-Driven UI Updates**: Immediate budget and cost visibility without polling
 
 **Note**: The estimate may differ from actual API tokens due to provider-specific tokenization. The overhead adjustment factor (0.8) brings estimates within 1-2% of API-reported values by accounting for these differences.
 

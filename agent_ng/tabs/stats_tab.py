@@ -56,13 +56,13 @@ class StatsTab:
         """Create the statistics monitoring interface"""
         # Main stats display area with card-like styling (similar to LLM selection)
         with gr.Column(
-            scale=1, 
+            scale=1,
             min_width=400,
             elem_classes=["stats-card"]
         ):
             # Create Markdown component for rich formatting
             self.components["stats_display"] = gr.Markdown(
-                value=self._get_translation("stats_loading"), 
+                value=self._get_translation("stats_loading"),
                 elem_id="stats-display"
             )
 

@@ -621,6 +621,7 @@ class ChatTab(QuickActionsMixin):
         """Build and return token statistics message for history"""
         prompt_tokens = agent.token_tracker.get_last_prompt_tokens()
         api_tokens = agent.token_tracker.get_last_api_tokens()
+        cumulative_stats = agent.token_tracker.get_cumulative_stats()
 
         stats_lines = []
         if prompt_tokens:
@@ -630,9 +631,16 @@ class ChatTab(QuickActionsMixin):
                 )
             )
         if api_tokens:
+            # Show API tokens with input/output breakdown
+            token_line = self._get_translation("api_tokens").format(
+                tokens=api_tokens.formatted
+            )
+            stats_lines.append(token_line)
+
+            # Show turn cost (including zero cost)
             stats_lines.append(
-                self._get_translation("api_tokens").format(
-                    tokens=api_tokens.formatted
+                self._get_translation("turn_cost").format(
+                    cost=f"${api_tokens.cost:.4f}"
                 )
             )
 
@@ -727,13 +735,31 @@ class ChatTab(QuickActionsMixin):
                     f"token_status_{budget_info['status']}"
                 )
 
-            # Build token usage display using separated components for better flexibility
+            # Build token usage display using hierarchical format
+            # Get cost information
+            conv_cost = cumulative_stats.get("conversation_cost")
+            total_cost = cumulative_stats.get("total_cost")
+            turn_cost = cumulative_stats.get("turn_cost")
+
+            # Format total with cost (precision .4f)
+            total_tokens = cumulative_stats["conversation_tokens"]
+            cost_str = ""
+            if total_cost is not None:
+                cost_str = f" / ${total_cost:.4f}"
             total = self._get_translation("token_usage_total").format(
-                total_tokens=cumulative_stats["conversation_tokens"]
-            )
+                total_tokens=total_tokens
+            ) + cost_str
+
+            # Format conversation with cost (precision .4f)
+            conv_tokens = cumulative_stats["session_tokens"]
+            conv_cost_str = ""
+            if conv_cost is not None:
+                conv_cost_str = f" / ${conv_cost:.4f}"
             conversation = self._get_translation("token_usage_conversation").format(
-                conversation_tokens=cumulative_stats["session_tokens"]
-            )
+                conversation_tokens=conv_tokens
+            ) + conv_cost_str
+
+            # Get estimated total for forecast breakdown
             estimated_total = 0
             try:
                 # Prefer monotonic per-turn estimate; fall back to latest snapshot total.
@@ -750,44 +776,71 @@ class ChatTab(QuickActionsMixin):
                 )
                 estimated_total = 0
 
-            estimate_line = self._get_translation("token_usage_estimate").format(
-                estimated_tokens=estimated_total
-            )
-            last_message = self._get_translation("token_usage_last_message").format(
-                percentage=percentage_for_display,
-                used=used_tokens,
-                context_window=budget_info["context_window"],
-                status_icon=status_icon,
-            )
-            average = self._get_translation("token_usage_average").format(
-                avg_tokens=cumulative_stats["avg_tokens_per_message"]
-            )
-
-            # Add token breakdown from latest budget snapshot
+            # Forecast breakdown (indented sub-items)
             breakdown_info = ""
             try:
                 snap = agent.token_tracker.get_budget_snapshot()
                 if isinstance(snap, dict):
-                    conv_tokens = snap.get("conversation_tokens", 0)
+                    conv_tokens_snap = snap.get("conversation_tokens", 0)
                     tool_tokens = snap.get("tool_tokens", 0)
                     overhead_tokens = snap.get("overhead_tokens", 0)
                     breakdown_info = (
-                        "\n" + self._get_translation("token_breakdown_context").format(conv_tokens=conv_tokens) +
-                        "\n" + self._get_translation("token_breakdown_tools").format(tool_tokens=tool_tokens) +
-                        "\n" + self._get_translation("token_breakdown_overhead").format(overhead_tokens=overhead_tokens)
+                        "\n    - " + self._get_translation("token_breakdown_context").format(conv_tokens=conv_tokens_snap)
+                        + "\n    - " + self._get_translation("token_breakdown_tools").format(tool_tokens=tool_tokens)
+                        + "\n    - " + self._get_translation("token_breakdown_overhead").format(overhead_tokens=overhead_tokens)
                     )
             except Exception as exc:
                 logging.getLogger(__name__).debug(
                     "Failed to get token breakdown: %s", exc
                 )
+            
+            estimate_line = "- " + self._get_translation("token_usage_estimate").format(
+                estimated_tokens=estimated_total
+            ) + breakdown_info
+            
+            # Message section with context, input/output, and cost (indented sub-items)
+            message_section = "- " + self._get_translation("token_usage_last_message")
+            input_tokens = cumulative_stats.get("last_input_tokens", 0)
+            output_tokens = cumulative_stats.get("last_output_tokens", 0)
+            
+            # Message context (percentage)
+            message_context_line = self._get_translation("token_message_context").format(
+                percentage=percentage_for_display,
+                used=used_tokens,
+                context_window=budget_info["context_window"],
+                status_icon=status_icon,
+            )
+            
+            # Input/output tokens
+            input_line = self._get_translation("token_message_input").format(tokens=input_tokens)
+            output_line = self._get_translation("token_message_output").format(tokens=output_tokens)
+            
+            # Cost for current message/turn
+            message_cost_str = "$0.0000"
+            if turn_cost is not None:
+                message_cost_str = f"${turn_cost:.4f}"
+            elif conv_cost is not None:
+                message_cost_str = f"${conv_cost:.4f}"
+            cost_line = self._get_translation("token_message_cost").format(cost=message_cost_str)
+            
+            message_details = f"\n    - {message_context_line}\n    - {input_line}\n    - {output_line}\n    - {cost_line}"
+
+            # Average with cost (precision .4f)
+            avg_tokens = cumulative_stats["avg_tokens_per_message"]
+            avg_cost_str = ""
+            if conv_cost is not None and cumulative_stats.get("message_count", 0) > 0:
+                avg_cost = conv_cost / cumulative_stats["message_count"]
+                avg_cost_str = f" / ${avg_cost:.4f}"
+            average = self._get_translation("token_usage_average").format(
+                avg_tokens=avg_tokens
+            ) + avg_cost_str
 
         except Exception as e:
             print(f"Error formatting token budget: {e}")
             return self._get_translation("token_budget_unknown")
         else:
             return (
-                f"- {total}\n- {conversation}\n- {estimate_line}{breakdown_info}\n"
-                f"- {last_message}\n- {average}"
+                f"- {total}\n- {conversation}\n{estimate_line}\n{message_section}{message_details}\n- {average}"
             )
 
     def _get_available_providers(self) -> list[str]:

@@ -8,6 +8,7 @@ Contains all configurable settings including refresh intervals, timeouts, and ot
 
 from dataclasses import dataclass
 from typing import Dict, Any
+import logging
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -79,8 +80,8 @@ class AgentConfig:
         if os.getenv('GRADIO_DEFAULT_PORT'):
             try:
                 self.settings.default_port = int(os.getenv('GRADIO_DEFAULT_PORT'))
-            except ValueError:
-                pass
+            except ValueError as e:
+                logging.warning(f"Invalid GRADIO_DEFAULT_PORT value, using default: {e}")
 
         # LLM provider/model settings
         if os.getenv('AGENT_PROVIDER'):
@@ -120,15 +121,15 @@ class AgentConfig:
         if interval_val is not None:
             try:
                 self.settings.refresh_intervals.interval = float(interval_val)
-            except ValueError:
-                pass
+            except ValueError as e:
+                logging.warning(f"Invalid UI_REFRESH_INTERVAL value, using default: {e}")
 
         iteration_val = os.getenv('ITERATION_REFRESH_INTERVAL')
         if iteration_val is not None:
             try:
                 self.settings.refresh_intervals.iteration = float(iteration_val)
-            except ValueError:
-                pass
+            except ValueError as e:
+                logging.warning(f"Invalid ITERATION_REFRESH_INTERVAL value, using default: {e}")
 
     def get_refresh_intervals(self) -> RefreshIntervals:
         """Get the current refresh intervals configuration"""

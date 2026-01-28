@@ -120,7 +120,7 @@ class TestStreamingAgentBehavior:
         # Multi-turn conversation
         messages = [
             "Hello! What's 5 + 3?",
-            "Now multiply that by 2", 
+            "Now multiply that by 2",
             "What's the sum of all the numbers I asked about?"
         ]
 

@@ -7,7 +7,7 @@ Tests for the lean, modular token counting system.
 
 import pytest
 from agent_ng.token_counter import (
-    TokenCount, TiktokenCounter, ApiTokenCounter, 
+    TokenCount, TiktokenCounter, ApiTokenCounter,
     ConversationTokenTracker, get_token_tracker, convert_chat_history_to_messages
 )
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -18,21 +18,27 @@ class TestTokenCount:
 
     def test_token_count_creation(self):
         """Test basic token count creation"""
-        count = TokenCount(100, 50, 150, False, "tiktoken")
+        count = TokenCount(100, 50, 150, False, "tiktoken", 0.0)
         assert count.input_tokens == 100
         assert count.output_tokens == 50
         assert count.total_tokens == 150
         assert not count.is_estimated
         assert count.source == "tiktoken"
+        assert count.cost == 0.0
 
     def test_formatted_display(self):
         """Test formatted display strings"""
-        # Actual tokens
-        actual = TokenCount(100, 50, 150, False, "api")
+        # Actual tokens without cost
+        actual = TokenCount(100, 50, 150, False, "api", 0.0)
         assert "150 total (100 input + 50 output)" in actual.formatted
 
+        # Actual tokens with cost
+        actual_with_cost = TokenCount(100, 50, 150, False, "api", 0.0015)
+        assert "150 total (100 input + 50 output)" in actual_with_cost.formatted
+        assert "$0.001500" in actual_with_cost.formatted
+
         # Estimated tokens
-        estimated = TokenCount(100, 50, 150, True, "tiktoken")
+        estimated = TokenCount(100, 50, 150, True, "tiktoken", 0.0)
         assert "~150 total (estimated via tiktoken)" in estimated.formatted
 
 
@@ -78,7 +84,7 @@ class TestApiTokenCounter:
         tiktoken_counter = TiktokenCounter()
         api_counter = ApiTokenCounter(tiktoken_counter)
 
-        api_counter.set_api_tokens(100, 50, 150)
+        api_counter.set_api_tokens(100, 50, 150, 0.0015)
         result = api_counter.count_tokens("test")
 
         assert result.input_tokens == 100
@@ -86,6 +92,7 @@ class TestApiTokenCounter:
         assert result.total_tokens == 150
         assert not result.is_estimated
         assert result.source == "api"
+        assert result.cost == 0.0015
 
     def test_fallback_to_tiktoken(self):
         """Test fallback to tiktoken when no API tokens"""
@@ -121,74 +128,162 @@ class TestConversationTokenTracker:
         assert result.total_tokens > 0
 
     def test_track_llm_response(self):
-        """Test tracking LLM response"""
+        """Test tracking LLM response with API tokens and cost"""
         tracker = ConversationTokenTracker()
         messages = [HumanMessage(content="Test message")]
 
-        # Mock response with usage metadata
+        # Mock response with usage metadata including cost
+        class MockUsageMetadata:
+            def __init__(self):
+                self.input_tokens = 10
+                self.output_tokens = 5
+                self.total_tokens = 15
+
         class MockResponse:
             def __init__(self):
-                self.usage_metadata = type('UsageMetadata', (), {
-                    'input_tokens': 10,
-                    'output_tokens': 5,
-                    'total_tokens': 15
-                })()
+                self.usage_metadata = MockUsageMetadata()
 
         response = MockResponse()
         result = tracker.track_llm_response(response, messages)
 
         assert isinstance(result, TokenCount)
-        assert tracker.conversation_tokens > 0
-        assert tracker.session_tokens > 0
+        assert result.input_tokens == 10
+        assert result.output_tokens == 5
+        assert result.total_tokens == 15
+        assert result.cost == 0.0  # No cost in usage_metadata object format
+        assert tracker.conversation_tokens == 15
+        assert tracker.session_tokens == 15
         assert tracker.message_count == 1
 
+    def test_track_llm_response_with_cost(self):
+        """Test tracking LLM response with cost from OpenRouter API"""
+        tracker = ConversationTokenTracker()
+        messages = [HumanMessage(content="Test message")]
+
+        # Mock response with cost in usage dict (OpenRouter format)
+        class MockResponse:
+            def __init__(self):
+                self.response_metadata = {
+                    "usage": {
+                        "prompt_tokens": 20,
+                        "completion_tokens": 10,
+                        "total_tokens": 30,
+                        "cost": 0.0025  # OpenRouter uses "cost" field, not "total_cost"
+                    }
+                }
+
+        response = MockResponse()
+        result = tracker.track_llm_response(response, messages)
+
+        assert isinstance(result, TokenCount)
+        assert result.input_tokens == 20
+        assert result.output_tokens == 10
+        assert result.total_tokens == 30
+        assert result.cost == 0.0025
+        assert tracker.conversation_tokens == 30
+        assert tracker.session_tokens == 30
+        assert tracker.conversation_cost == 0.0025
+        assert tracker.session_cost == 0.0025
+
     def test_cumulative_stats(self):
-        """Test cumulative statistics"""
+        """Test cumulative statistics including cost"""
         tracker = ConversationTokenTracker()
 
-        # Add some tokens
+        # Set up token and cost data
         tracker.conversation_tokens = 1000
         tracker.session_tokens = 500
         tracker.message_count = 10
+        tracker.conversation_cost = 0.05
+        tracker.session_cost = 0.025
+        tracker._last_turn_cost = 0.0025
+        tracker._last_api_tokens = TokenCount(100, 50, 150, False, "api", 0.0025)
 
         stats = tracker.get_cumulative_stats()
         assert stats['conversation_tokens'] == 1000
         assert stats['session_tokens'] == 500
         assert stats['message_count'] == 10
         assert stats['avg_tokens_per_message'] == 100.0
+        assert stats['turn_cost'] == 0.0025
+        assert stats['conversation_cost'] == 0.025
+        assert stats['total_cost'] == 0.05
+        assert stats['last_input_tokens'] == 100
+        assert stats['last_output_tokens'] == 50
 
     def test_reset_session(self):
-        """Test session reset"""
+        """Test session reset preserves conversation totals but resets session"""
         tracker = ConversationTokenTracker()
         tracker.conversation_tokens = 1000
         tracker.session_tokens = 500
         tracker.message_count = 10
+        tracker.conversation_cost = 0.05
+        tracker.session_cost = 0.025
 
         tracker.reset_session()
         assert tracker.conversation_tokens == 1000  # Not reset
         assert tracker.session_tokens == 0  # Reset
+        assert tracker.session_cost == 0.0  # Reset
+        assert tracker.conversation_cost == 0.05  # Not reset
         assert tracker.message_count == 10  # Not reset
+
+    def test_turn_based_cost_tracking(self):
+        """Test turn-based cost accumulation and finalization"""
+        tracker = ConversationTokenTracker()
+
+        # Begin a turn
+        tracker.begin_turn()
+        assert tracker._turn_active
+        assert tracker._turn_cost == 0.0
+
+        # Update turn usage with cost
+        class MockResponse:
+            def __init__(self):
+                self.response_metadata = {
+                    "usage": {
+                        "prompt_tokens": 50,
+                        "completion_tokens": 25,
+                        "total_tokens": 75,
+                        "cost": 0.0015  # OpenRouter uses "cost" field, not "total_cost"
+                    }
+                }
+
+        response = MockResponse()
+        success = tracker.update_turn_usage_from_api(response)
+        assert success
+        assert tracker._turn_input_tokens == 50
+        assert tracker._turn_output_tokens == 25
+        assert tracker._turn_total_tokens == 75
+        assert tracker._turn_cost == 0.0015
+
+        # Finalize turn
+        messages = [HumanMessage(content="Test")]
+        result = tracker.finalize_turn_usage(response, messages)
+        assert result is not None
+        assert result.cost == 0.0015
+        assert tracker.conversation_cost == 0.0015
+        assert tracker.session_cost == 0.0015
+        assert tracker._last_turn_cost == 0.0015
+        assert not tracker._turn_active
 
 
 class TestGlobalFunctions:
     """Test global functions"""
 
-    def test_get_token_tracker(self):
-        """Test getting global token tracker"""
+    def test_get_token_tracker_default_session(self):
+        """Test getting token tracker for default session"""
         tracker1 = get_token_tracker()
         tracker2 = get_token_tracker()
-        assert tracker1 is tracker2  # Should be same instance
+        assert tracker1 is tracker2  # Same session should return same instance
 
-    def test_tracker_singleton(self):
-        """Test tracker is singleton"""
-        from agent_ng.token_counter import reset_token_tracker, get_token_tracker
+    def test_tracker_session_isolation(self):
+        """Test tracker provides session-specific instances"""
+        tracker1 = get_token_tracker("session1")
+        tracker2 = get_token_tracker("session2")
+        tracker1_again = get_token_tracker("session1")
 
-        tracker1 = get_token_tracker()
-        reset_token_tracker()
-        tracker2 = get_token_tracker()
-
-        # Should be different instances after reset
+        # Different sessions should get different instances
         assert tracker1 is not tracker2
+        # Same session should get same instance
+        assert tracker1 is tracker1_again
 
 
 class TestUtilityFunctions:

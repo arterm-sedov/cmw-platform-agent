@@ -47,7 +47,7 @@ __all__ = [
 
     # LLM management
     'LLMManager',
-    'LLMProvider', 
+    'LLMProvider',
     'LLMConfig',
     'LLMInstance',
     'get_llm_manager',

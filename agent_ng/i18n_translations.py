@@ -112,15 +112,19 @@ RUSSIAN_TRANSLATIONS = {
     "token_budget_initializing": "🟡 Загрузка...",
     "token_statistics_title": "📊 Статистика",
     # Token usage components (separated for flexibility)
-    "token_usage_header": "**Расход токенов:**",
+    "token_usage_header": "Расход токенов:",
     "token_usage_total": "Всего: {total_tokens:,}",
     "token_usage_conversation": "Диалог: {conversation_tokens:,}",
     "token_usage_estimate": "Прогноз: {estimated_tokens:,}",
-    "token_usage_last_message": "Сообщение: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
+    "token_usage_last_message": "Сообщение:",
     "token_usage_average": "Средний на сообщение: {avg_tokens:,}",
-    "token_breakdown_context": "   - Контекст: {conv_tokens:,}",
-    "token_breakdown_tools": "   - Инструменты: {tool_tokens:,}",
-    "token_breakdown_overhead": "   - Накладные: {overhead_tokens:,}",
+    "token_breakdown_context": "Контекст: {conv_tokens:,}",
+    "token_breakdown_tools": "Инструменты: {tool_tokens:,}",
+    "token_breakdown_overhead": "Накладные: {overhead_tokens:,}",
+    "token_message_context": "Контекст: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
+    "token_message_input": "Входные: {tokens:,}",
+    "token_message_output": "Выходные: {tokens:,}",
+    "token_message_cost": "Стоимость: {cost}",
     # Status icons for token usage
     "token_status_good": "🟢",
     "token_status_moderate": "🟡",
@@ -128,7 +132,7 @@ RUSSIAN_TRANSLATIONS = {
     "token_status_critical": "🔴",
     "token_status_unknown": "❓",
     # Legacy combined format (for backward compatibility)
-    "token_budget_detailed": """**Расход токенов:**
+    "token_budget_detailed": """Расход токенов:
 - Всего: {total_tokens:,}
 - Диалог: {conversation_tokens:,}
 - Сообщение {percentage}% ({used:,}/{context_window:,}) {status_icon}
@@ -170,6 +174,13 @@ RUSSIAN_TRANSLATIONS = {
     # Token and execution info
     "prompt_tokens": "**Токены запроса:** {tokens}",
     "api_tokens": "**API токены:** {tokens}",
+    "turn_cost": "**Стоимость запроса:** {cost}",
+    "conversation_cost": "**Стоимость диалога:** {cost}",
+    "total_cost": "**Итого:** {cost}",
+    "cost_label": "стоимость: {cost}",
+    "last_turn_cost": "Последний запрос: {cost}",
+    "input_tokens_label": "**Входные токены:** {tokens:,}",
+    "output_tokens_label": "**Выходные токены:** {tokens:,}",
     "execution_time": "**Время выполнения:** {time:.2f}с",
     "provider_model": "**Провайдер / модель:** {provider} / {model}",
     "deduplication": "**Дедупликация:** {duplicates} дублирующих вызовов предотвращено ({breakdown})",
@@ -221,6 +232,10 @@ RUSSIAN_TRANSLATIONS = {
     # Statistics labels
     "agent_status_section": "**Агент:**",
     "conversation_section": "**Диалог:**",
+    "token_usage_section": "**Использование токенов:**",
+    "cost_section": "**Стоимость:**",
+    "token_usage_overall": "Всего (все диалоги): {total_tokens:,}",
+    "avg_tokens_per_message_label": "Среднее на сообщение: {avg:,}",
     "tools_section": "**Инструменты:**",
     "messages_label": "Сообщения",
     "user_messages_label": "Пользователь",
@@ -439,11 +454,15 @@ ENGLISH_TRANSLATIONS = {
     "token_usage_total": "Total: {total_tokens:,}",
     "token_usage_conversation": "Conversation: {conversation_tokens:,}",
     "token_usage_estimate": "Forecast: {estimated_tokens:,}",
-    "token_usage_last_message": "Message: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
+    "token_usage_last_message": "Message:",
     "token_usage_average": "Average per message: {avg_tokens:,}",
-    "token_breakdown_context": "   - Context: {conv_tokens:,}",
-    "token_breakdown_tools": "   - Tools: {tool_tokens:,}",
-    "token_breakdown_overhead": "   - Overhead: {overhead_tokens:,}",
+    "token_breakdown_context": "Context: {conv_tokens:,}",
+    "token_breakdown_tools": "Tools: {tool_tokens:,}",
+    "token_breakdown_overhead": "Overhead: {overhead_tokens:,}",
+    "token_message_context": "Context: {percentage}% ({used:,}/{context_window:,}) {status_icon}",
+    "token_message_input": "Input: {tokens:,}",
+    "token_message_output": "Output: {tokens:,}",
+    "token_message_cost": "Cost: {cost}",
     # Status icons for token usage
     "token_status_good": "🟢",
     "token_status_moderate": "🟡",
@@ -451,7 +470,7 @@ ENGLISH_TRANSLATIONS = {
     "token_status_critical": "🔴",
     "token_status_unknown": "❓",
     # Legacy combined format (for backward compatibility)
-    "token_budget_detailed": """**Token usage:**
+    "token_budget_detailed": """Token usage:
 - Total: {total_tokens:,}
 - Conversation: {conversation_tokens:,}
 - Last message {percentage}% ({used:,}/{context_window:,}) {status_icon}
@@ -493,6 +512,13 @@ ENGLISH_TRANSLATIONS = {
     # Token and execution info
     "prompt_tokens": "**Prompt tokens:** {tokens}",
     "api_tokens": "**API tokens:** {tokens}",
+    "turn_cost": "**Turn cost:** {cost}",
+    "conversation_cost": "**Conversation cost:** {cost}",
+    "total_cost": "**Total cost:** {cost}",
+    "cost_label": "cost: {cost}",
+    "last_turn_cost": "Last turn: {cost}",
+    "input_tokens_label": "**Input tokens:** {tokens:,}",
+    "output_tokens_label": "**Output tokens:** {tokens:,}",
     "execution_time": "**Execution time:** {time:.2f}s",
     "provider_model": "**Provider / model:** {provider} / {model}",
     "deduplication": "**Deduplication:** {duplicates} duplicate calls prevented ({breakdown})",
@@ -541,6 +567,10 @@ ENGLISH_TRANSLATIONS = {
     # Statistics labels
     "agent_status_section": "**Agent:**",
     "conversation_section": "**Conversation:**",
+    "token_usage_section": "**Token Usage:**",
+    "cost_section": "**Cost:**",
+    "token_usage_overall": "Total (all conversations): {total_tokens:,}",
+    "avg_tokens_per_message_label": "Average per message: {avg:,}",
     "tools_section": "**Tools:**",
     "messages_label": "Messages",
     "user_messages_label": "User",

@@ -22,6 +22,7 @@ Usage:
 
 import re
 import json
+import logging
 import time
 import numpy as np
 from typing import Dict, Optional, Any, Tuple, List
@@ -129,8 +130,8 @@ class ErrorHandler:
                     return int(error_data['status'])
                 elif 'code' in error_data:
                     return int(error_data['code'])
-        except (json.JSONDecodeError, ValueError, KeyError):
-            pass
+        except (json.JSONDecodeError, ValueError, KeyError) as e:
+            logging.debug(f"Failed to extract status code from JSON pattern: {e}")
 
         # Pattern 4: Look for HTTP status codes in URLs and error messages
         url_status_match = re.search(r'/(\d{3})/', error_str)
@@ -219,8 +220,8 @@ class ErrorHandler:
 
         # Direct substring checks for efficiency
         token_indicators = [
-            "413", "429", "token", "limit", "tokens per minute", 
-            "truncated", "tpm", "router.huggingface.co", "402", 
+            "413", "429", "token", "limit", "tokens per minute",
+            "truncated", "tpm", "router.huggingface.co", "402",
             "payment required", "rate limit", "rate_limit", "context too long",
             "input too long", "message too large"
         ]

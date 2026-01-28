@@ -11,7 +11,7 @@ from typing import Any
 
 def ensure_valid_answer(answer: Any) -> str:
     """
-    Ensure the answer is a valid string. Only returns "No answer provided" 
+    Ensure the answer is a valid string. Only returns "No answer provided"
     when there is literally no answer at all.
 
     Args:
@@ -56,7 +56,7 @@ def get_tool_call_count(agent, session_id: str) -> int:
     This function uses direct access to memory manager to avoid circular dependencies.
     Used across:
     - Sidebar status display
-    - Stats tab display  
+    - Stats tab display
 
     Args:
         agent: The session-specific agent instance

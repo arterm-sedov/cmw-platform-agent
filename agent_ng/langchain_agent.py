@@ -461,8 +461,34 @@ class CmwAgent:
             "conversation_stats": self._get_conversation_stats(),
         }
 
-    def _get_conversation_stats(self, debug: bool = False) -> Dict[str, int]:
-        """Get conversation statistics from memory manager
+    def _get_token_stats(self) -> Dict[str, Any]:
+        """Get token and cost statistics from token tracker (helper method).
+
+        Returns:
+            Dictionary with token and cost statistics, or empty dict if unavailable.
+        """
+        token_stats = {}
+        if hasattr(self, "token_tracker") and self.token_tracker:
+            try:
+                cumulative_stats = self.token_tracker.get_cumulative_stats()
+                token_stats = {
+                    "total_tokens": cumulative_stats.get("conversation_tokens", 0),
+                    "conversation_tokens": cumulative_stats.get("session_tokens", 0),
+                    "avg_tokens_per_message": cumulative_stats.get("avg_tokens_per_message", 0),
+                    "turn_cost": cumulative_stats.get("turn_cost", 0.0),
+                    "conversation_cost": cumulative_stats.get("conversation_cost", 0.0),
+                    "total_cost": cumulative_stats.get("total_cost", 0.0),
+                    "last_input_tokens": cumulative_stats.get("last_input_tokens", 0),
+                    "last_output_tokens": cumulative_stats.get("last_output_tokens", 0),
+                    "turn_input_tokens": cumulative_stats.get("turn_input_tokens", 0),
+                    "turn_output_tokens": cumulative_stats.get("turn_output_tokens", 0),
+                }
+            except Exception as e:
+                logging.warning(f"Failed to get token stats from tracker: {e}")
+        return token_stats
+
+    def _get_conversation_stats(self, debug: bool = False) -> Dict[str, Any]:
+        """Get conversation statistics from memory manager and token tracker
 
         Args:
             debug: If True, show detailed debug messages. If False, only log on changes.
@@ -592,6 +618,9 @@ class CmwAgent:
                     self.session_id
                 )
 
+                # Get token and cost stats from token tracker
+                token_stats = self._get_token_stats()
+
                 return {
                     "message_count": total_messages,
                     "user_messages": user_messages,
@@ -600,19 +629,32 @@ class CmwAgent:
                     "total_tool_calls": tool_call_count,
                     "compression_count": compression_count,
                     "compression_tokens_saved": total_tokens_saved,
+                    **token_stats,  # Merge token stats
                 }
 
             if debug:
                 self._logger.debug("No memory manager available")
-            return {"message_count": 0, "user_messages": 0, "assistant_messages": 0, "system_prompt_count": 0, "total_tool_calls": 0}
+            # Still return token stats even if no memory manager
+            token_stats = self._get_token_stats()
+            return {
+                "message_count": 0,
+                "user_messages": 0,
+                "assistant_messages": 0,
+                "system_prompt_count": 0,
+                "total_tool_calls": 0,
+                **token_stats,
+            }
         except Exception as e:
             self._logger.exception("Error getting conversation stats: %s", e)
+            # Still try to get token stats even on error
+            token_stats = self._get_token_stats()
             return {
                 "message_count": 0,
                 "user_messages": 0,
                 "assistant_messages": 0,
                 "compression_count": 0,
                 "compression_tokens_saved": 0,
+                **token_stats,
             }
 
     def get_token_counts(self, messages: List[Any]) -> Dict[str, Any]:

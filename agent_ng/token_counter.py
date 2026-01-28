@@ -52,15 +52,18 @@ class TokenCount:
     total_tokens: int
     is_estimated: bool = False
     source: str = "unknown"
+    cost: float = 0.0  # Cost in USD credits
 
     @property
     def formatted(self) -> str:
         """Format token count for display"""
         if self.is_estimated:
             return f"~{self.total_tokens:,} total (estimated via {self.source})"
+        cost_str = f" | ${self.cost:.4f}" if self.cost > 0 else ""
         return (
             f"{self.total_tokens:,} total "
             f"({self.input_tokens:,} input + {self.output_tokens:,} output)"
+            f"{cost_str}"
         )
 
 
@@ -203,7 +206,7 @@ class ApiTokenCounter(TokenCounter):
         self._last_api_tokens: TokenCount | None = None
 
     def set_api_tokens(
-        self, input_tokens: int, output_tokens: int, total_tokens: int
+        self, input_tokens: int, output_tokens: int, total_tokens: int, cost: float = 0.0
     ) -> None:
         """Set token count from API response"""
         self._last_api_tokens = TokenCount(
@@ -212,6 +215,7 @@ class ApiTokenCounter(TokenCounter):
             total_tokens,
             is_estimated=False,
             source="api",
+            cost=cost,
         )
 
     def count_tokens(
@@ -267,6 +271,7 @@ class ConversationTokenTracker:
         self._turn_input_tokens: int = 0
         self._turn_output_tokens: int = 0
         self._turn_total_tokens: int = 0
+        self._turn_cost: float = 0.0  # Cost per turn in USD
         # Per-QA-turn monotonic estimate (used only when API usage isn't available and
         # turn was interrupted/failed).
         self._turn_estimated_total_tokens: int = 0
@@ -274,6 +279,10 @@ class ConversationTokenTracker:
         self._last_turn_estimated_total_tokens: int = 0
         # Track if the turn was interrupted/failed (so we know to use estimates).
         self._turn_interrupted: bool = False
+        # Cost tracking: per-conversation and overall totals
+        self.conversation_cost: float = 0.0  # Total cost across all conversations
+        self.session_cost: float = 0.0  # Cost for current conversation/session
+        self._last_turn_cost: float = 0.0  # Cost of last finalized turn
 
     def count_prompt_tokens(self, messages: list[BaseMessage]) -> TokenCount:
         """Count tokens in user prompt context"""
@@ -293,12 +302,14 @@ class ConversationTokenTracker:
         # Get token count (API or estimated)
         if api_tokens:
             # Use API tokens directly
+            cost = api_tokens[3] if len(api_tokens) >= 4 else 0.0
             token_count = TokenCount(
                 api_tokens[0],  # input_tokens
                 api_tokens[1],  # output_tokens
                 api_tokens[2],  # total_tokens
                 is_estimated=False,  # Not estimated
                 source="api",
+                cost=cost,
             )
             logger.debug("Using API tokens: %d", token_count)
         else:
@@ -339,6 +350,7 @@ class ConversationTokenTracker:
         self._turn_input_tokens = 0
         self._turn_output_tokens = 0
         self._turn_total_tokens = 0
+        self._turn_cost = 0.0
         self._turn_estimated_total_tokens = 0
         self._turn_interrupted = False
 
@@ -360,12 +372,14 @@ class ConversationTokenTracker:
         if not api_tokens:
             return False
 
-        input_tokens, output_tokens, total_tokens = api_tokens
+        input_tokens, output_tokens, total_tokens = api_tokens[0], api_tokens[1], api_tokens[2]
+        cost = api_tokens[3] if len(api_tokens) >= 4 else 0.0
         try:
             # API returns accumulated spending per turn - use replacement, not addition
             self._turn_input_tokens = int(input_tokens or 0)
             self._turn_output_tokens = int(output_tokens or 0)
             self._turn_total_tokens = int(total_tokens or 0)
+            self._turn_cost = float(cost or 0.0)
         except Exception as exc:
             logging.getLogger(__name__).debug(
                 "Failed to accumulate LLM call usage: %s", exc
@@ -379,6 +393,7 @@ class ConversationTokenTracker:
             self._turn_total_tokens,
             is_estimated=False,
             source="api",
+            cost=self._turn_cost,
         )
         return True
 
@@ -438,8 +453,10 @@ class ConversationTokenTracker:
                 self._turn_total_tokens,
                 is_estimated=False,
                 source="api",
+                cost=self._turn_cost,
             )
             self._last_api_tokens = token_count
+            self._last_turn_cost = self._turn_cost
             # For normal completions with API values, don't contaminate with estimates
             self._last_turn_estimated_total_tokens = 0
             # Reset turn estimates since the turn is complete
@@ -450,6 +467,9 @@ class ConversationTokenTracker:
             self.session_tokens += token_count.total_tokens
             self.last_conversation_tokens = self.session_tokens
             self.message_count += 1
+            # Track costs
+            self.conversation_cost += self._turn_cost
+            self.session_cost += self._turn_cost
 
             # Track API-only totals for accurate average calculation.
             self._api_only_tokens += token_count.total_tokens
@@ -524,11 +544,17 @@ class ConversationTokenTracker:
 
         return current_request
 
-    def _extract_api_tokens(self, response: Any) -> tuple[int, int, int] | None:
-        """Extract token usage from API response"""
+    def _extract_api_tokens(self, response: Any) -> tuple[int, int, int, float] | None:
+        """Extract token usage and cost from API response
+
+        Returns:
+            Tuple of (input_tokens, output_tokens, total_tokens, cost) or None
+        """
         try:
             logger = logging.getLogger(__name__)
             logger.debug("Extracting API tokens from response type=%s", type(response))
+            cost = 0.0
+
             if hasattr(response, "usage_metadata"):
                 usage = response.usage_metadata
                 logger.debug("Found usage_metadata type=%s", type(usage))
@@ -540,20 +566,25 @@ class ConversationTokenTracker:
                     total_tokens = usage.get(
                         "total_tokens", input_tokens + output_tokens
                     )
+                    # Extract cost if available (OpenRouter uses "cost" field)
+                    cost = float(usage.get("cost", 0.0) or 0.0)
                 else:
                     input_tokens = getattr(usage, "input_tokens", 0)
                     output_tokens = getattr(usage, "output_tokens", 0)
                     total_tokens = getattr(
                         usage, "total_tokens", input_tokens + output_tokens
                     )
+                    # Extract cost if available (OpenRouter uses "cost" field)
+                    cost = float(getattr(usage, "cost", 0.0) or 0.0)
 
                 logger.debug(
-                    "Extracted tokens from usage_metadata: input=%s output=%s total=%s",
+                    "Extracted tokens from usage_metadata: input=%s output=%s total=%s cost=%s",
                     input_tokens,
                     output_tokens,
                     total_tokens,
+                    cost,
                 )
-                return (input_tokens, output_tokens, total_tokens)
+                return (input_tokens, output_tokens, total_tokens, cost)
 
             # Provider/model wrappers often attach usage to response_metadata or
             # additional_kwargs.
@@ -605,22 +636,34 @@ class ConversationTokenTracker:
                         )
                         total_tokens = 0
 
+                # Extract cost if available (OpenRouter uses "cost" field)
+                cost = float(usage.get("cost", 0.0) or 0.0)
+
                 if int(total_tokens or 0) > 0:
                     logger.debug(
-                        "Extracted tokens from metadata dict: input=%s output=%s total=%s",  # noqa: E501
+                        "Extracted tokens from metadata dict: input=%s output=%s total=%s cost=%s",  # noqa: E501
                         input_tokens,
                         output_tokens,
                         total_tokens,
+                        cost,
                     )
                     return (
                         int(input_tokens or 0),
                         int(output_tokens or 0),
                         int(total_tokens or 0),
+                        cost,
                     )
 
         except Exception as e:
             logging.getLogger(__name__).debug("Error extracting API tokens: %s", e)
         return None
+
+    def _extract_api_cost(self, response: Any) -> float:
+        """Extract cost from API response (helper method for backward compatibility)"""
+        result = self._extract_api_tokens(response)
+        if result and len(result) >= 4:
+            return result[3]  # cost is the 4th element
+        return 0.0
 
     def _update_cumulative_tokens(self, token_count: TokenCount) -> None:
         """Update cumulative token tracking.
@@ -636,6 +679,10 @@ class ConversationTokenTracker:
             self.session_tokens += token_count.total_tokens
             self.last_conversation_tokens = self.session_tokens
             self.message_count += 1
+            # Track costs
+            self.conversation_cost += token_count.cost
+            self.session_cost += token_count.cost
+            self._last_turn_cost = token_count.cost
 
             # Track API-only totals for accurate average calculation.
             self._api_only_tokens += token_count.total_tokens
@@ -654,6 +701,7 @@ class ConversationTokenTracker:
           estimates only for interrupted turns without API counts.
         - avg_tokens_per_message (Average per
           message): Per-conversation average (session_tokens / message_count).
+        - Cost tracking: per-turn, per-conversation, and overall totals.
         """
         # Calculate average per message for current conversation only
         # Use session_tokens (per-conversation) divided by message_count (per-conversation)
@@ -663,19 +711,42 @@ class ConversationTokenTracker:
             else 0
         )
 
+        # Get last turn token counts if available
+        last_input_tokens = 0
+        last_output_tokens = 0
+        if self._last_api_tokens:
+            last_input_tokens = self._last_api_tokens.input_tokens
+            last_output_tokens = self._last_api_tokens.output_tokens
+
+        # Get cumulative input/output token counts
+        # For now, we track per-turn but need to accumulate for totals
+        # This is a simplified version - in practice, we'd need to track these separately
+        # For now, we'll use the last turn's breakdown as an indicator
+
         # conversation_tokens and session_tokens are already API-only (only updated
         # with API counts or interrupted-turn estimates in finalize_turn_usage).
         return {
             "conversation_tokens": self.conversation_tokens,
             "session_tokens": self.last_conversation_tokens,
             "message_count": self.message_count,
-            "avg_tokens_per_message": int(avg_tokens)
+            "avg_tokens_per_message": int(avg_tokens),
+            # Cost tracking
+            "turn_cost": self._last_turn_cost,
+            "conversation_cost": self.session_cost,
+            "total_cost": self.conversation_cost,
+            # Token breakdowns
+            "last_input_tokens": last_input_tokens,
+            "last_output_tokens": last_output_tokens,
+            # Per-turn breakdown (for current/last turn)
+            "turn_input_tokens": self._turn_input_tokens if not self._turn_active else 0,
+            "turn_output_tokens": self._turn_output_tokens if not self._turn_active else 0,
         }
 
     def reset_session(self) -> None:
         """Reset session tokens while keeping conversation total"""
         self.session_tokens = 0
         self.last_conversation_tokens = 0
+        self.session_cost = 0.0
         # Reset API-only tracking for session (but keep conversation total).
         # Note: We keep _api_only_tokens and _api_only_message_count for
         # accurate average across all conversations.
@@ -684,6 +755,7 @@ class ConversationTokenTracker:
         """Start tracking a new conversation"""
         self.session_tokens = 0
         self.last_conversation_tokens = 0
+        self.session_cost = 0.0
         # Reset API-only tracking for new conversation (but keep conversation total).
         # Note: We keep _api_only_tokens and _api_only_message_count for
         # accurate average across all conversations.
@@ -694,10 +766,12 @@ class ConversationTokenTracker:
         self._turn_total_tokens = 0
         self._turn_input_tokens = 0
         self._turn_output_tokens = 0
+        self._turn_cost = 0.0
         self._turn_active = False
         self._turn_interrupted = False
         self._last_api_tokens = None
         self._last_turn_estimated_total_tokens = 0
+        self._last_turn_cost = 0.0
         self._last_turn_used_estimate = False
         # Reset per-conversation message count for average calculation
         # (but keep cumulative _api_only_message_count for cross-conversation average)

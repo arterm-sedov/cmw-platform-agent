@@ -18,7 +18,7 @@ from .sidebar import Sidebar
 __all__ = [
     "ChatTab",
     "HomeTab",
-    "LogsTab", 
+    "LogsTab",
     "StatsTab",
     "ConfigTab",
     "Sidebar",

@@ -65,7 +65,7 @@ try:
     from langchain.globals import set_verbose
     set_verbose(False)  # Set to True for debugging if needed
 except ImportError:
-    pass  # Older LangChain version, no action needed
+    logging.debug("langchain.globals.set_verbose not available (older LangChain version)")
 
 # Add current directory to path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -554,8 +554,8 @@ class NextGenApp:
                 # Ensure session status converges to ready to prevent stale text
                 try:
                     self.session_manager.set_status(session_id, rendered)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(f"Failed to set session status to ready for session {session_id}: {e}")
 
         # Reduce UI churn with a small cache
         last = self._progress_cache.get(session_id)
@@ -732,8 +732,8 @@ class NextGenApp:
                             if metadata and metadata.get("early_finish"):
                                 # Stop processing to hide stop button and enable download UI
                                 self.stop_processing(session_id)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logging.warning(f"Failed to stop processing on early finish for session {session_id}: {e}")
                         yield working_history, ""
 
                     elif event_type == "completion":
@@ -1067,8 +1067,8 @@ class NextGenApp:
             # Clear session context after turn
             try:
                 set_current_session_id(None)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"Failed to clear session context: {e}")
 
     def _create_event_handlers(self) -> dict[str, Any]:
         """Create event handlers for all tabs"""
@@ -1122,8 +1122,8 @@ class NextGenApp:
             try:
                 if not future.done():
                     future.cancel()
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"Failed to cancel future: {e}")
 
         # Refresh UI after streaming completes (EVENT-DRIVEN)
         self._refresh_ui_after_message()
