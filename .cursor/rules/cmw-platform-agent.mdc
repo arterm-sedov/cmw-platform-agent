@@ -2,63 +2,98 @@
 alwaysApply: true
 ---
 
-- Before any coding gather information:
-    - search internet for reference documentation on the frameworks and libraries to use
-    - then go to the official documentation sources you found and digest the best practices
-    - do not read just a page or to, scan the docs and links and doc hierarchy
-    - gather all the information to base your actions on ground truth
-- PLAN your course of action after gathering the reference info.
-- Code style: langchain-pure, super dry, super lean, abstract, modular, pythonic, super smart, modular, linted, deduplicated, pydantic, pythonic
-- Always run linter after making any changes:
-    - Use Ruff as the primary linter: `ruff check <file_path>` for specific files
-    - Run Ruff before committing: `ruff check <file_path>` for changed files only
-    - Be critical about Ruff reports, implement only the necessary changes
-    - Only lint the files that were modified, not the entire codebase
-    - Configuration in pyproject.toml follows LangChain and Gradio best practices
-- Ensure testability and extensibility.
-- When refactoring code, change only the levant parts.
-- Ensure LangChain purity.
+## Research & Planning
+- Before any coding, gather information:
+  - Search internet for reference documentation on the frameworks and libraries to use
+  - Go to official documentation sources and digest best practices
+  - Do not read just a page or two, scan the docs and links and doc hierarchy
+  - Gather all information to base actions on ground truth
+- PLAN your course of action after gathering reference information
+
+## Code Style & Quality
+- Code style: langchain-pure, super dry, super lean, abstract, modular, pythonic, super smart, linted, deduplicated, pydantic
+- Always run linter after making changes:
+  - Use Ruff as primary linter: `ruff check <file_path>` for specific files
+  - Run Ruff before committing: `ruff check <file_path>` for changed files only
+  - Be critical about Ruff reports, implement only necessary changes
+  - Only lint files that were modified, not entire codebase
+  - Configuration in pyproject.toml follows LangChain and Gradio best practices
+- Place imports always on top
+- Use consistent formatting, e.g. same type of quotes
+- Do not add orphan spaces on empty lines
+- Produce flawless code
+- Reanalyze changes twice for any issues introduced
+
+## Code Organization & Structure
+- Group and isolate code based on function in different files to avoid clutter
+- Do not duplicate code, encapsulate reused code in methods/functions:
+  - When same code block repeated 2+ times, extract to helper method (even if saves ~5 lines)
+  - Helper methods should be self-contained, testable, and have clear single responsibility
+- Single Responsibility: Each function/class should have one well-defined purpose
+- Open/Closed: Design for extension without modification - use abstraction and interfaces
+- Group related functionality together; separate concerns into different modules/files
+- Ensure testability and extensibility
+
+## Framework Conventions
+- Ensure LangChain purity
 - Follow LangChain's best practices, patterns, and conventions:
-    - https://python.langchain.com/docs/introduction/
-    - https://python.langchain.com/docs/concepts/streaming/
-    - https://python.langchain.com/docs/concepts/runnables/
-    - https://python.langchain.com/docs/concepts/tool_calling/
-    - https://langchain-ai.github.io/langgraph/concepts/memory/
-    - https://python.langchain.com/docs/how_to/
-    - https://langchain-ai.github.io/langgraph/concepts/why-langgraph/
-    - https://python.langchain.com/docs/how_to/
-    - https://python.langchain.com/docs/concepts/
-    - https://python.langchain.com/docs/integrations/providers/
-    - https://python.langchain.com/api_reference/
-    - https://langchain-ai.github.io/langgraph/guides/
-    - https://langchain-ai.github.io/langgraph/concepts/streaming/
-    - https://langchain-ai.github.io/langgraph/concepts/memory/
-- Ensure Gradio purity when possible.
+  - https://python.langchain.com/docs/introduction/
+  - https://python.langchain.com/docs/concepts/streaming/
+  - https://python.langchain.com/docs/concepts/runnables/
+  - https://python.langchain.com/docs/concepts/tool_calling/
+  - https://langchain-ai.github.io/langgraph/concepts/memory/
+  - https://python.langchain.com/docs/how_to/
+  - https://langchain-ai.github.io/langgraph/concepts/why-langgraph/
+  - https://python.langchain.com/docs/concepts/
+  - https://python.langchain.com/docs/integrations/providers/
+  - https://python.langchain.com/api_reference/
+  - https://langchain-ai.github.io/langgraph/guides/
+- Ensure Gradio purity when possible
 - Follow Gradio's best practices, patterns, and conventions:
-    - https://www.gradio.app/docs
-    - https://www.gradio.app/guides/the-interface-class/
-    - https://www.gradio.app/guides/interface-state/
-    - https://www.gradio.app/guides/blocks-and-event-listeners/
-    - https://www.gradio.app/guides/controlling-layout/
-    - https://www.gradio.app/guides/dynamic-apps-with-render-decorator/
+  - https://www.gradio.app/docs
+  - https://www.gradio.app/guides/the-interface-class/
+  - https://www.gradio.app/guides/interface-state/
+  - https://www.gradio.app/guides/blocks-and-event-listeners/
+  - https://www.gradio.app/guides/controlling-layout/
+  - https://www.gradio.app/guides/dynamic-apps-with-render-decorator/
 - Follow Python's best practices, patterns, and conventions:
-    - https://peps.python.org/pep-0008/
-    - https://peps.python.org/pep-0257/
-    - https://google.github.io/styleguide/pyguide.html
-    - https://docs.python-guide.org/
-- Group and isolate code based on its function in different files to avoid clutter.
-- Do not duplicate code, encapsulate any reused code in methods/functions.
-- Never break existing code.
-- Do not delete logging, but update it.
-- Do not delete comments, rather update them.
-- Produce flawless code.
-- Reanalyze your changes twice for any issues you might have introduced.
-- Place imports always on top.
-- Use consistent formatting, e.g. the same type of quotes.
-- Do not add orphan spaces on empty lines.
-- Use environment variables for secrets.
-- Put reports to a relevant `docs/**/progress_reports/` folder under `/docs/` or its relevant `cwd/subfolder`
-- Put tests to `/agent_ng/_tests` preferably, or under a relevant `cwd/_tests` where the files are modified or created, otherwise to `@/.misc_files`
-- Do not add unnecessary useless try-catches unless they are helpful or add value.
-- Do not leave empty `except: pass` constructs, add logging via logging engine. Empty except:pass are not debuggable. Add logging or fail. DO NOT add silent exceptions!
-- Do not use nested exceptions they are ugly and non-debuggable.
+  - https://peps.python.org/pep-0008/
+  - https://peps.python.org/pep-0257/
+  - https://google.github.io/styleguide/pyguide.html
+  - https://docs.python-guide.org/
+
+## Error Handling & Defensive Programming
+- Do not add unnecessary try-catches unless helpful or add value
+- Do not leave empty `except: pass` constructs, add logging via logging engine
+- Empty except:pass are not debuggable - add logging or fail, DO NOT add silent exceptions
+- Do not use nested exceptions - they are ugly and non-debuggable
+- Validate external data thoroughly before processing - check response.ok, validate structure, handle missing fields
+- Handle multiple response formats gracefully (dict vs object, different field names) - check multiple locations when extracting data
+- Use safe defaults for optional fields (0.0, None, empty collections) to ensure backward compatibility
+- Normalize data from different sources to common internal representation
+- Centralize error handling and validation logic rather than scattering throughout code
+
+## Refactoring & Maintenance
+- When refactoring code, change only relevant parts
+- Never break existing code
+- Do not delete logging, but update it
+- Do not delete comments, rather update them
+
+## Testing
+- Test behaviors and functionality that users care about, not implementation details
+- Focus on important features: error handling, data integrity, user-facing functionality
+- Do not test irrelevant patterns (internal state management, singleton implementations, framework internals)
+- When fixing broken tests, replace with tests that verify actual behavior and business logic
+- Cover edge cases: boundary conditions, missing data, invalid inputs, error scenarios
+- Put tests to `/agent_ng/_tests` preferably, or under relevant `cwd/_tests` where files are modified or created, otherwise to `@/.misc_files`
+
+## UI/UX Display Principles
+- Clarity over clutter: Remove redundant elements - if symbol (like `$`) conveys meaning, don't add redundant labels
+- Maximize data-ink ratio: Every element should add value; remove decorative or redundant elements
+- Visual hierarchy: Group related information together; use consistent formatting for related metrics
+- Progressive disclosure: Show essential information prominently; details as sub-items or on demand
+- Data integrity: Display zero values when they're meaningful information, not just absence of data
+
+## File Organization
+- Use environment variables for secrets
+- Put reports to relevant `docs/**/progress_reports/` folder under `/docs/` or relevant `cwd/subfolder`
