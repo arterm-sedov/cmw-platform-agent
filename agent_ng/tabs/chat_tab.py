@@ -637,20 +637,6 @@ class ChatTab(QuickActionsMixin):
             )
             stats_lines.append(token_line)
 
-            # Cache details (OpenRouter prompt_tokens_details)
-            if api_tokens.cached_tokens is not None:
-                stats_lines.append(
-                    self._get_translation("token_message_cached_tokens").format(
-                        tokens=int(api_tokens.cached_tokens or 0)
-                    )
-                )
-            if api_tokens.cache_write_tokens is not None:
-                stats_lines.append(
-                    self._get_translation("token_message_cache_write_tokens").format(
-                        tokens=int(api_tokens.cache_write_tokens or 0)
-                    )
-                )
-
         # Provider/model info
         provider = "unknown"
         model = "unknown"

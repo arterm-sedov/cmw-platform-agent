@@ -904,7 +904,9 @@ class NextGenApp:
             if prompt_tokens:
                 token_displays.append(
                     format_translation(
-                        "prompt_tokens", self.language, tokens=prompt_tokens.formatted
+                        "prompt_tokens",
+                        self.language,
+                        tokens=prompt_tokens.formatted_no_cost,
                     )
                 )
 
@@ -919,7 +921,7 @@ class NextGenApp:
                             format_translation(
                                 "api_tokens",
                                 self.language,
-                                tokens=last_api_tokens.formatted,
+                                tokens=last_api_tokens.formatted_no_cost,
                             )
                         )
                         # print(f"🔍 DEBUG: Added API token display")
