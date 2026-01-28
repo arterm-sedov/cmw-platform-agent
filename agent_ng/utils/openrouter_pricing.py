@@ -139,17 +139,18 @@ def extract_pricing_from_model(model: dict[str, Any]) -> tuple[float, float]:
     return (prompt_per_1k, completion_per_1k)
 
 
-def median_endpoint_pricing(endpoints: list[dict[str, Any]]) -> tuple[float, float]:
-    """Calculate median pricing across multiple endpoints.
+def interquartile_mean_endpoint_pricing(endpoints: list[dict[str, Any]]) -> tuple[float, float]:
+    """Calculate interquartile mean pricing across multiple endpoints.
 
-    Uses median instead of average to be less affected by outliers and better
-    reflect typical costs users experience.
+    Uses interquartile mean (average of 25th-75th percentile) to remove outliers
+    on both ends while better reflecting typical costs users experience.
+    More robust than average, more representative than median.
 
     Args:
         endpoints: List of endpoint dictionaries
 
     Returns:
-        Tuple of (median_prompt_price_per_1k, median_completion_price_per_1k) in USD
+        Tuple of (iq_mean_prompt_price_per_1k, iq_mean_completion_price_per_1k) in USD
     """
     if not endpoints:
         return (0.0, 0.0)
@@ -171,23 +172,31 @@ def median_endpoint_pricing(endpoints: list[dict[str, Any]]) -> tuple[float, flo
         if completion_per_token > 0:
             completion_prices.append(completion_per_token * 1000.0)  # Convert per token to per 1K
 
-    # Calculate median (middle value when sorted)
-    def _median(values: list[float]) -> float:
+    def _interquartile_mean(values: list[float]) -> float:
+        """Calculate interquartile mean (average of 25th-75th percentile)."""
         if not values:
             return 0.0
+        if len(values) <= 2:
+            # Too few values, just return average
+            return sum(values) / len(values)
+
         sorted_values = sorted(values)
         n = len(sorted_values)
-        if n % 2 == 0:
-            # Even number of values: average of two middle values
-            return (sorted_values[n // 2 - 1] + sorted_values[n // 2]) / 2.0
-        else:
-            # Odd number of values: middle value
-            return sorted_values[n // 2]
 
-    median_prompt = _median(prompt_prices)
-    median_completion = _median(completion_prices)
+        # Calculate quartile indices
+        q1_idx = n // 4
+        q3_idx = (3 * n) // 4
 
-    return (median_prompt, median_completion)
+        # Get interquartile range (25th to 75th percentile)
+        iq_range = sorted_values[q1_idx:q3_idx + 1]
+
+        # Return average of interquartile range
+        return sum(iq_range) / len(iq_range)
+
+    iq_mean_prompt = _interquartile_mean(prompt_prices)
+    iq_mean_completion = _interquartile_mean(completion_prices)
+
+    return (iq_mean_prompt, iq_mean_completion)
 
 
 def parse_model_slug(model_slug: str) -> tuple[str | None, str | None]:
@@ -324,8 +333,8 @@ def fetch_pricing_via_endpoints(
             logger.debug("No endpoints found for %s/%s", author, model_slug)
             continue
 
-        # Median pricing across endpoints
-        prompt_price, completion_price = median_endpoint_pricing(endpoints)
+        # Interquartile mean pricing across endpoints (removes outliers)
+        prompt_price, completion_price = interquartile_mean_endpoint_pricing(endpoints)
         if prompt_price > 0 or completion_price > 0:
             pricing_map[model_name] = {
                 "prompt_price_per_1k": prompt_price,
@@ -415,10 +424,10 @@ def fetch_pricing_for_models(
             if author and model_slug:
                 endpoints = fetch_model_endpoints(author, model_slug, api_key, base_url)
                 if endpoints:
-                    prompt_price, completion_price = median_endpoint_pricing(endpoints)
+                    prompt_price, completion_price = interquartile_mean_endpoint_pricing(endpoints)
                     if prompt_price > 0 or completion_price > 0:
                         logger.info(
-                            "Model %s: prompt=$%.6f/1K, completion=$%.6f/1K (median from %d endpoints)",
+                            "Model %s: prompt=$%.6f/1K, completion=$%.6f/1K (interquartile mean from %d endpoints)",
                             slug,
                             prompt_price,
                             completion_price,
@@ -498,10 +507,10 @@ def update_llm_config_with_pricing(
             if author and model_slug:
                 endpoints = fetch_model_endpoints(author, model_slug, api_key, base_url)
                 if endpoints:
-                    prompt_price, completion_price = median_endpoint_pricing(endpoints)
+                    prompt_price, completion_price = interquartile_mean_endpoint_pricing(endpoints)
                     if prompt_price > 0 or completion_price > 0:
                         logger.info(
-                            "Model %s: prompt=$%.6f/1K, completion=$%.6f/1K (median from %d endpoints)",
+                            "Model %s: prompt=$%.6f/1K, completion=$%.6f/1K (interquartile mean from %d endpoints)",
                             slug,
                             prompt_price,
                             completion_price,
@@ -609,7 +618,7 @@ def main() -> None:
             sys.exit(1)
 
         model_names = [m.get("model", "") for m in config.models if m.get("model")]
-        logger.info("Fetching pricing via endpoints API for %d models (using median pricing)...", len(model_names))
+        logger.info("Fetching pricing via endpoints API for %d models (using interquartile mean pricing)...", len(model_names))
         pricing_map = fetch_pricing_via_endpoints(model_names, api_key, base_url)
     except Exception as exc:  # pragma: no cover - CLI helper only
         logger.exception("Failed to fetch pricing: %s", exc)

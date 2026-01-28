@@ -227,13 +227,13 @@ class LLMManager:
                 if api_key:
                     base_url = os.getenv(config.api_base_env or "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
                     self._log_initialization(
-                        f"Fetching pricing via endpoints API for {len(model_names)} OpenRouter models (using median pricing)...", "INFO"
+                        f"Fetching pricing via endpoints API for {len(model_names)} OpenRouter models (using interquartile mean pricing)...", "INFO"
                     )
 
                     # Import here to avoid circular dependency
                     from agent_ng.utils.openrouter_pricing import fetch_pricing_via_endpoints
 
-                    # Fetch pricing using /endpoints API and use median across endpoints
+                    # Fetch pricing using /endpoints API and use interquartile mean across endpoints
                     pricing_map = fetch_pricing_via_endpoints(model_names, api_key, base_url)
                     if pricing_map:
                         pricing_source = "API"
