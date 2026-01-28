@@ -699,7 +699,13 @@ class ChatTab(QuickActionsMixin):
                 return self._get_translation("token_budget_unknown")
 
             # Get cumulative stats for detailed display
-            cumulative_stats = agent.token_tracker.get_cumulative_stats()
+            try:
+                cumulative_stats = agent.token_tracker.get_cumulative_stats()
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to get cumulative stats: %s", exc
+                )
+                return self._get_translation("token_budget_initializing")
 
             # "Сообщение" is per-turn and must be monotonic:
             # - sums API usage across iterations when available
@@ -742,7 +748,7 @@ class ChatTab(QuickActionsMixin):
             turn_cost = cumulative_stats.get("turn_cost")
 
             # Format total with cost (precision .4f)
-            total_tokens = cumulative_stats["conversation_tokens"]
+            total_tokens = cumulative_stats.get("conversation_tokens", 0)
             cost_str = ""
             if total_cost is not None:
                 cost_str = f" / ${total_cost:.4f}"
@@ -751,7 +757,7 @@ class ChatTab(QuickActionsMixin):
             ) + cost_str
 
             # Format conversation with cost (precision .4f)
-            conv_tokens = cumulative_stats["session_tokens"]
+            conv_tokens = cumulative_stats.get("session_tokens", 0)
             conv_cost_str = ""
             if conv_cost is not None:
                 conv_cost_str = f" / ${conv_cost:.4f}"
@@ -826,10 +832,11 @@ class ChatTab(QuickActionsMixin):
             message_details = f"\n    - {message_context_line}\n    - {input_line}\n    - {output_line}\n    - {cost_line}"
 
             # Average with cost (precision .4f)
-            avg_tokens = cumulative_stats["avg_tokens_per_message"]
+            avg_tokens = cumulative_stats.get("avg_tokens_per_message", 0)
             avg_cost_str = ""
-            if conv_cost is not None and cumulative_stats.get("message_count", 0) > 0:
-                avg_cost = conv_cost / cumulative_stats["message_count"]
+            message_count = cumulative_stats.get("message_count", 0)
+            if conv_cost is not None and message_count > 0:
+                avg_cost = conv_cost / message_count
                 avg_cost_str = f" / ${avg_cost:.4f}"
             average = self._get_translation("token_usage_average").format(
                 avg_tokens=avg_tokens
