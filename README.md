@@ -15,8 +15,11 @@ python_version: 3.12
 
 # Comindware Analyst Copilot
 
-**Authors:** Arte(r)m Sedov & Marat Mutalimov
-**GitHub:** [https://github.com/arterm-sedov/](https://github.com/arterm-sedov/)  
+**Authors:**  
+
+- **Arte(r)m Sedov** [https://github.com/arterm-sedov/](https://github.com/arterm-sedov/)
+- **Marat Mutalimov**
+
 **Repository:** [https://github.com/arterm-sedov/cmw-platform-agent](https://github.com/arterm-sedov/cmw-platform-agent)
 
 [Ask DeepWiki](https://deepwiki.com/arterm-sedov/cmw-platform-agent)
