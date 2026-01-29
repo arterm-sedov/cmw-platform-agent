@@ -17,8 +17,8 @@ python_version: 3.12
 
 **Authors:**  
 
-- **Arte(r)m Sedov** [https://github.com/arterm-sedov/](https://github.com/arterm-sedov/)
-- **Marat Mutalimov**
+- [**Arte(r)m Sedov**](https://github.com/arterm-sedov/)
+- [**Marat Mutalimov**](https://github.com/Dagdaf)
 
 **Repository:** [https://github.com/arterm-sedov/cmw-platform-agent](https://github.com/arterm-sedov/cmw-platform-agent)
 
