@@ -75,6 +75,10 @@
     "prompt_price_per_1k": 0.0005928571428571429,
     "completion_price_per_1k": 0.0025
   },
+  "moonshotai/kimi-k2.5": {
+    "prompt_price_per_1k": 0.000588,
+    "completion_price_per_1k": 0.00294
+  },
   "z-ai/glm-4.6:exacto": {
     "prompt_price_per_1k": 0.0005153571428571428,
     "completion_price_per_1k": 0.0020628571428571428
@@ -84,7 +88,7 @@
     "completion_price_per_1k": 0.0020628571428571428
   },
   "z-ai/glm-4.7": {
-    "prompt_price_per_1k": 0.0005034375,
+    "prompt_price_per_1k": 0.0005021875,
     "completion_price_per_1k": 0.002085
   },
   "google/gemini-3-flash-preview": {

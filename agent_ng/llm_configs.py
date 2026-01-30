@@ -239,6 +239,13 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "temperature": 0,
                     "force_tools": True
                 },
+                {
+                    "model": "moonshotai/kimi-k2.5",
+                    "token_limit": 262144,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
                 # Z.AI (GLM) Models
                 {
                     "model": "z-ai/glm-4.6:exacto",
