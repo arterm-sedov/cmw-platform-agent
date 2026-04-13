@@ -58,8 +58,8 @@
     Shows all available log files with sizes and modification times.
 
 .EXAMPLE
-    .\run-agent.ps1 -Action tail
-    Follows the latest log file in real-time (respects Python log rotation).
+    .\run-agent.ps1 -Action restart
+    Stops the agent if running, then starts a fresh instance.
 
 .EXAMPLE
     .\run-agent.ps1 -Port 8080
@@ -74,6 +74,7 @@
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #>
 
+[CmdletBinding(SupportsShouldProcess, ConfirmImpact='High')]
 param (
     [ValidateSet("start","stop","status","tail","restart","logs")]
     [string]$Action = "start",
@@ -230,7 +231,7 @@ function Stop-Agent {
     Write-Info "Searching for Python processes running the agent..."
     $pythonProcesses = Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object {
         try {
-            $commandLine = (Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
+            $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
             return $commandLine -and $commandLine.Contains($ScriptPath)
         } catch {
             return $false
@@ -239,7 +240,7 @@ function Stop-Agent {
     
     # Also find child processes of the main agent process
     if ($processId) {
-        $childProcesses = Get-WmiObject Win32_Process | Where-Object { $_.ParentProcessId -eq $processId }
+        $childProcesses = Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $processId }
         foreach ($child in $childProcesses) {
             if ($child.ProcessName -eq "python") {
                 $pythonProcesses += Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue
@@ -266,7 +267,7 @@ function Stop-Agent {
             Write-Host "Processes:" -ForegroundColor Yellow
             foreach ($proc in $allPythonProcesses) {
                 try {
-                    $commandLine = (Get-WmiObject Win32_Process -Filter "ProcessId = $($proc.Id)").CommandLine
+                    $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($proc.Id)").CommandLine
                     Write-Host "  - PID $($proc.Id): $commandLine" -ForegroundColor Yellow
                 } catch {
                     Write-Host "  - PID $($proc.Id): (unable to get command line)" -ForegroundColor Yellow
@@ -320,7 +321,7 @@ function Show-Status {
     # Check for Python processes running our script
     $pythonProcesses = Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object {
         try {
-            $commandLine = (Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
+            $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
             return $commandLine -and $commandLine.Contains($ScriptPath)
         } catch {
             return $false
@@ -329,7 +330,7 @@ function Show-Status {
     
     # Also check child processes of the main agent process
     if ($processId) {
-        $childProcesses = Get-WmiObject Win32_Process | Where-Object { $_.ParentProcessId -eq $processId }
+        $childProcesses = Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $processId }
         foreach ($child in $childProcesses) {
             if ($child.ProcessName -eq "python") {
                 $childProc = Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue
@@ -345,7 +346,7 @@ function Show-Status {
         Write-Host "Python agent processes running: $pythonProcessesRunning" -ForegroundColor Green
         foreach ($proc in $pythonProcesses) {
             try {
-                $commandLine = (Get-WmiObject Win32_Process -Filter "ProcessId = $($proc.Id)").CommandLine
+                $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($proc.Id)").CommandLine
                 $memoryMB = [math]::Round($proc.WorkingSet64 / 1MB, 1)
                 Write-Host "  - PID $($proc.Id) (${memoryMB}MB)" -ForegroundColor Cyan
                 if ($commandLine) {
