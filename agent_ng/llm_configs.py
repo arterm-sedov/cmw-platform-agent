@@ -123,9 +123,22 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             tool_support=True,
             force_tools=False,
             models=[
-                # DeepSeek Models
                 {
-                    "model": "deepseek/deepseek-v3.1-terminus:exacto",
+                    "model": "anthropic/claude-sonnet-4.5",
+                    "token_limit": 1000000,
+                    "max_tokens": 64000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "deepseek/deepseek-chat-v3.1:free",
+                    "token_limit": 131000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "deepseek/deepseek-r1-0528",
                     "token_limit": 131000,
                     "max_tokens": 32768,
                     "temperature": 0,
@@ -139,6 +152,13 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": True
                 },
                 {
+                    "model": "deepseek/deepseek-v3.1-terminus:exacto",
+                    "token_limit": 131000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
                     "model": "deepseek/deepseek-v3.2-speciale",
                     "token_limit": 163840,
                     "max_tokens": 65536,
@@ -146,85 +166,47 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": True
                 },
                 {
-                    "model": "deepseek/deepseek-chat-v3.1:free",
-                    "token_limit": 131000,
+                    "model": "google/gemma-3-flash-preview",
+                    "token_limit": 1048576,
                     "max_tokens": 65536,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
-                    "model": "deepseek/deepseek-r1-0528",
-                    "token_limit": 131000,
+                    "model": "google/gemma-3-pro-preview",
+                    "token_limit": 1048576,
                     "max_tokens": 65536,
                     "temperature": 0,
                     "force_tools": True
                 },
-                # Grok (xAI) Models
                 {
-                    "model": "x-ai/grok-4-fast:free",
-                    "token_limit": 2000000,
-                    "max_tokens": 8192,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "x-ai/grok-code-fast-1",
-                    "token_limit": 256000,
-                    "max_tokens": 10000,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "x-ai/grok-4-fast",
-                    "token_limit": 2000000,
-                    "max_tokens": 30000,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                # Qwen Models
-                {
-                    "model": "qwen/qwen3-coder:free",
-                    "token_limit": 262144,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "qwen/qwen3-coder-flash",
-                    "token_limit": 128000,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "qwen/qwen3-max",
-                    "token_limit": 256000,
+                    "model": "google/gemma-4-31b-it:free",
+                    "token_limit": 131072,
                     "max_tokens": 32768,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
-                    "model": "qwen/qwen3-coder-plus",
-                    "token_limit": 128000,
+                    "model": "minimax/minimax-m2.1",
+                    "token_limit": 196608,
                     "max_tokens": 65536,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
-                    "model": "qwen/qwen3-coder:exacto",
-                    "token_limit": 262144,
+                    "model": "minimax/minimax-m2.5:free",
+                    "token_limit": 196608,
                     "max_tokens": 65536,
                     "temperature": 0,
                     "force_tools": True
                 },
                 {
-                    "model": "qwen/qwen-plus-2025-07-28",
-                    "token_limit": 1000000,
-                    "max_tokens": 32768,
+                    "model": "mistralai/codestral-2508",
+                    "token_limit": 256000,
+                    "max_tokens": 4096,
                     "temperature": 0,
                     "force_tools": True
                 },
-                # MoonshotAI (Kimi) Models
                 {
                     "model": "moonshotai/kimi-k2-0905:exacto",
                     "token_limit": 262144,
@@ -246,7 +228,111 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "temperature": 0,
                     "force_tools": True
                 },
-                # Z.AI (GLM) Models
+                {
+                    "model": "nvidia/nemotron-3-super-120b-a12b:free",
+                    "token_limit": 256000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "nvidia/nemotron-nano-9b-v2:free",
+                    "token_limit": 128000,
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "openai/gpt-5-mini",
+                    "token_limit": 400000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "openai/gpt-oss-120b:free",
+                    "token_limit": 131072,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "openai/gpt-oss-120b:exacto",
+                    "token_limit": 131072,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "qwen/qwen-plus-2025-07-28",
+                    "token_limit": 1000000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "qwen/qwen3-coder:free",
+                    "token_limit": 262144,
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "qwen/qwen3-coder-flash",
+                    "token_limit": 128000,
+                    "max_tokens": 4096,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "qwen/qwen3-coder-plus",
+                    "token_limit": 128000,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "qwen/qwen3-coder:exacto",
+                    "token_limit": 262144,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "qwen/qwen3-max",
+                    "token_limit": 256000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "x-ai/grok-4-fast",
+                    "token_limit": 2000000,
+                    "max_tokens": 30000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "x-ai/grok-4-fast:free",
+                    "token_limit": 2000000,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "x-ai/grok-code-fast-1",
+                    "token_limit": 256000,
+                    "max_tokens": 10000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "z-ai/glm-4.5-air:free",
+                    "token_limit": 200000,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
                 {
                     "model": "z-ai/glm-4.6:exacto",
                     "token_limit": 200000,
@@ -261,64 +347,13 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "temperature": 0,
                     "force_tools": True
                 },
-                # Other Models
                 {
-                    "model": "google/gemini-3-flash-preview",
-                    "token_limit": 1048576,
+                    "model": "z-ai/glm-5.1",
+                    "token_limit": 200000,
                     "max_tokens": 65536,
                     "temperature": 0,
                     "force_tools": True
                 },
-                {
-                    "model": "google/gemini-3-pro-preview",
-                    "token_limit": 1048576,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "anthropic/claude-sonnet-4.5",
-                    "token_limit": 1000000,
-                    "max_tokens": 64000,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "openai/gpt-oss-120b:exacto",
-                    "token_limit": 131072,
-                    "max_tokens": 32768,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "openai/gpt-5-mini",
-                    "token_limit": 400000,
-                    "max_tokens": 32768,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "nvidia/nemotron-nano-9b-v2:free",
-                    "token_limit": 128000,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                {
-                    "model": "mistralai/codestral-2508",
-                    "token_limit": 256000,
-                    "max_tokens": 4096,
-                    "temperature": 0,
-                    "force_tools": True
-                },
-                # MiniMax Models
-                {
-                    "model": "minimax/minimax-m2.1",
-                    "token_limit": 196608,
-                    "max_tokens": 65536,
-                    "temperature": 0,
-                    "force_tools": True
-                }
             ],
             enable_chunking=False
         ),
