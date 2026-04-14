@@ -2,6 +2,8 @@
 
 This file provides essential information for AI coding agents working on the CMW Platform Agent codebase. These guidelines are battle-tested from production use and specific to this LangChain-based AI agent.
 
+**Plan:** lean, dry, minimal, abstract, non-breaking, brilliant, genius code. Deduplicated reusable code following best practices in TDD, SDD, Python, 12-factor agents, 12-factor software, Gradio, and LangChain.
+
 ## Project Overview
 
 - **Language**: Python 3.11+
@@ -12,6 +14,7 @@ This file provides essential information for AI coding agents working on the CMW
 ## Build/Lint/Test Commands
 
 ### Environment Setup (ALWAYS REQUIRED)
+
 ```powershell
 # PowerShell
 .venv\Scripts\Activate.ps1
@@ -116,6 +119,7 @@ except ImportError:
 - Use conditional imports for optional dependencies with availability flags
 
 ### Naming Conventions
+
 - **Classes**: PascalCase (`ChatTab`, `LLMManager`, `TokenCount`)
 - **Functions/Variables**: snake_case (`get_token_tracker`, `format_cost`)
 - **Constants**: UPPER_SNAKE_CASE (`TOKEN_STATUS_CRITICAL`)
@@ -123,21 +127,60 @@ except ImportError:
 - **Modules**: snake_case (`langchain_agent.py`)
 
 ### Type Annotations
+
 - Comprehensive type hints for all function signatures
 - Use Union types for optional parameters (`str | None`)
 - Generic types with `Dict`, `List`, `Optional`
 - Always specify return types for public functions
 
 ### Code Quality Standards
+
 - **Line length**: 88 characters (Black-compatible)
 - **Quotes**: Double quotes consistently
 - **No orphan spaces** on empty lines
 - **Flawless code** - reanalyze changes twice for issues
 - **DRY principle**: Extract repeated code (2+ times) into helpers
 
+## Design Principles
+
+- **TDD:** Write tests first, define behavior contracts before implementation
+- **SDD:** Plan with specs, understand requirements before coding
+- **Non-breaking:** Never break existing functionality - verify all endpoints still work
+- **Lean:** Minimal code, no overengineering, delete unnecessary complexity
+- **Pythonic:** Follow Python idioms, use standard library, prefer clarity over cleverness
+- **Brilliant:** Simple solutions that work, not complex ones that impress
+- **Extensibility:** Ensure testability and extensibility
+
+## 12-Factor App Principles
+
+Based on [12-factor app](https://12factor.net/) + [12-factor AI agents](https://github.com/humanlayer/12-factor-agents) methodology:
+
+- **Codebase:** One codebase tracked in revision control, many deploys.
+- **Dependencies:** Declare all dependencies explicitly in `requirements.txt` and `pyproject.toml`. Use virtual environment isolation.
+- **Config:** Store all environment-specific config in env vars (never in code). Use `.env` files for local dev, ensure codebase could be open-sourced without compromising credentials.
+- **Backing Services:** Treat databases, caches, vector stores as attached resources accessed via URLs/credentials. No distinction between local and third-party in code.
+- **Build, Release, Run:** Strictly separate build and run stages.
+- **Processes:** Execute as stateless processes. Session data in backing services.
+- **Port Binding:** Export services via port binding. Self-contained, port specified via env var.
+- **Concurrency:** Scale via process model. Use Gradio concurrency limits and thread pools.
+- **Disposability:** Fast startup, graceful shutdown on SIGTERM.
+- **Dev/Prod Parity:** Keep dev, staging, prod similar.
+- **Logs:** Treat as event streams. Prefer stdout for containerized.
+- **Admin Processes:** Run as one-off processes using same codebase and config.
+
+## Verification Checklist
+
+Before considering work complete:
+
+1. Tests pass
+2. Lint passes
+3. Shared logic (DRY)
+4. No breakage of existing functionality
+
 ## Error Handling Patterns
 
 ### Multi-Layered Error Handling
+
 ```python
 # 1. Graceful import fallbacks
 try:
@@ -161,6 +204,7 @@ except Exception as e:
 ```
 
 ### Error Handling Rules
+
 - **No silent exceptions** - always add logging or fail explicitly
 - **No nested exceptions** - they're ugly and non-debuggable  
 - **Validate external data** thoroughly before processing
@@ -171,6 +215,7 @@ except Exception as e:
 ## Framework-Specific Conventions
 
 ### LangChain Patterns
+
 - Use pure LangChain patterns (chains, memory, tools)
 - Follow LangChain Expression Language (LCEL)
 - Support streaming with `astream()` and `astream_events()`
@@ -179,12 +224,30 @@ except Exception as e:
 - **LangChain purity** is mandatory - no competing patterns
 
 ### Gradio Patterns
+
 - Ensure Gradio purity when possible
 - Use Gradio's i18n system for internationalization
 - Follow Gradio component patterns
 - Implement proper state management
 
 ## Testing Guidelines
+
+### Test Behavior, Not Implementation
+
+**Core Principles:**
+
+- Tests should validate what code **does**, not **how** it does it
+- Test outcomes, not mechanisms
+- Avoid hardcoded values in assertions
+- Test behavior contracts (inputs → outputs)
+- Use mocks judiciously - mock external dependencies, not internal details
+
+**Benefits:**
+
+- Tests remain valid when implementation changes
+- Tests document intended functionality
+- Easier to refactor without breaking tests
+- Tests serve as specifications
 
 ### What to Test
 - Test behaviors users care about, not implementation details
@@ -209,9 +272,27 @@ class TestFeatureName:
 - Alternative: relevant `cwd/_tests` where files are modified
 - Fallback: `.misc_files` for miscellaneous tests
 
+### Integration Tests
+
+Use pytest markers for slow/integration tests:
+
+```bash
+pytest -m "not slow"         # Run fast unit tests only
+pytest -m integration        # Run integration tests only
+```
+
+### Cross-Model Testing
+
+Test multiple models/configurations with same logic. Use parametrized tests for different configs or inputs.
+
+### Shared Logic Verification
+
+When multiple endpoints compute the same thing, verify they produce identical results.
+
 ## Architectural Patterns
 
 ### Manager Pattern
+
 Use centralized managers for core functionality:
 ```python
 # Example managers in the codebase
@@ -222,6 +303,7 @@ SessionManager()       # User session handling
 ```
 
 ### Adapter Pattern
+
 Provider-specific adapters for LLM integrations:
 ```python
 # Provider adapters handle different APIs
@@ -229,6 +311,7 @@ GeminiAdapter, GroqAdapter, MistralAdapter, etc.
 ```
 
 ### Factory Pattern
+
 Used for creating LLM instances and token counters:
 ```python
 def create_llm(provider: str, use_tools: bool = True) -> LLMInstance
@@ -238,6 +321,7 @@ def get_token_tracker() -> ConversationTokenTracker
 ## Documentation Standards
 
 ### File Organization
+
 - Use environment variables for secrets (see `.env.example`)
 - Put reports to `docs/**/progress_reports/` folder
 - Use GitHub Markdown format with `YYYYMMDD_` filename prefix
@@ -257,25 +341,42 @@ Usage:
 """
 ```
 
-## Quality Gates
+### Documentation Structure
 
-### Linter Configuration
-- **Target Python**: 3.11+
-- **Line length**: 88 characters
-- **Extensive rule set**: 40+ categories enabled in `pyproject.toml`
-- **Framework-specific ignores**: Tailored for LangChain, Gradio, HuggingFace
-- **Unfixable rules**: Preserved to prevent auto-deletion of debugging code
+- **Clear hierarchy:** Use consistent heading levels (H1 → H2 → H3). One H1 per file.
+- **Front-load value:** Put key conclusions and recommendations first.
+- **SCQA framework:** Situation (Ситуация) → Complication (Проблема) → Question (Вопрос для решения) → Answer (Рекомендуемый ответ) for executive summaries or report intros.
+- **Chunked content:** Use bulleted lists, short paragraphs, and visual breaks. Avoid walls of text.
+- **Actionable sections:** Each section should answer "So what?" and lead to a decision or next step.
 
-### Pre-commit Workflow
-1. Make code changes
-2. Run `ruff check <changed_files>` 
-3. Fix critical issues only (be selective)
-4. Run tests for modified functionality
-5. Verify imports and type annotations
+## Agent Behavior & Commit Discipline
+
+**Work Tracking:** Always write down as files to maintain context and avoid losing track:
+- **Plans:** Actionable step-by-step plans with checkpoints → `.opencode/plans/YYYYMMDD_<topic>/plan.md`
+- **Research:** Research results and findings → `.opencode/research/YYYYMMDD_<topic>/research.md`
+- **Progress:** Progress reports for ongoing work → `.opencode/progress_reports/YYYYMMDD_<topic>/progress_YYYYMMDD.md`
+- Use GitHub Markdown format. Parent folder dated with inception timestamp.
+
+**Commit Discipline:** Do NOT create or push commits unless explicitly asked by the user.
+
+### Commit Messages
+
+- **Format:** Concise, structured, and strictly relevant to the changes.
+- **Content:** Keep length to the necessary minimum. Avoid fluff.
+
+### Agent Instructions
+
+- **Information Gathering:** Search docs/internet before coding. Digest best practices from official sources. Scan doc hierarchy, not just 1-2 pages.
+- **Planning:** PLAN your course of action before implementing. Write a plan to `.opencode/plans/` that is lean, dry, actionable, step-by-step, verifiable, and follows TDD-first best practices.
+- **Verification:** Run `ruff check <modified_file>` after changes. Run relevant tests. Reanalyze changes twice for introduced issues.
+- **Secrets:** NEVER hardcode secrets. Use environment variables. NEVER commit `.env` files to version control.
+- **No Breakage:** Never break existing code.
+- **Memory:** Compact memory proactively once in a while during conversation rather than waiting for overflow — prevent "dementia" by summarizing and pruning before resources exhaust.
 
 ## Research & Planning (Required)
 
 Before any coding:
+
 1. **Gather information**: Search for reference documentation on frameworks/libraries
 2. **Go to official sources**: Digest best practices from official docs
 3. **Comprehensive review**: Scan doc hierarchy, not just 1-2 pages
@@ -292,17 +393,20 @@ Before any coding:
 ## Key Dependencies
 
 ### Core Stack
+
 - `langchain>=0.3.27` - Primary framework
 - `gradio>=5.49.1` - UI framework with i18n
 - `pydantic>=2.11.10` - Data validation
 - `tiktoken>=0.12.0` - Token counting
 
 ### Development Tools
+
 - `ruff>=0.14.0` - Linting and formatting
 - `pytest>=8.4.2` - Testing framework
 - `python-dotenv` - Environment configuration
 
 ### Observability
+
 - `langsmith>=0.4.34` - Tracing and debugging
 - `langfuse>=3.6.2` - Alternative observability
 
