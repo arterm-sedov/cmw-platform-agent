@@ -26,6 +26,7 @@ This file provides essential information for AI coding agents working on the CMW
 **IMPORTANT**: Never run Python commands without activating the virtual environment first.
 
 ### Linting Commands
+
 ```bash
 # Check specific file
 ruff check agent_ng/langchain_agent.py
@@ -46,6 +47,7 @@ python lint.py --changed                   # Changed vs HEAD
 ```
 
 ### Testing Commands
+
 ```bash
 # Run all tests
 python -m pytest agent_ng/_tests/
@@ -67,6 +69,7 @@ python -m pytest agent_ng/_tests/ -k "test_token"
 ```
 
 ### Development Commands
+
 ```bash
 # Start the Gradio application
 python agent_ng/app_ng_modular.py
@@ -84,6 +87,7 @@ python agent_ng/app_ng_modular.py
 ## Code Style Guidelines
 
 ### Import Organization (Strict Hierarchy)
+
 ```python
 # 1. Standard library imports
 import asyncio
@@ -107,6 +111,7 @@ tools.file_utils import FileUtils
 ```
 
 **Import Best Practices:**
+
 - Always place imports at the top
 - Use a consistent import hierarchy
 - Implement robust fallback handling for relative imports:
@@ -250,12 +255,14 @@ except Exception as e:
 - Tests serve as specifications
 
 ### What to Test
+
 - Test behaviors users care about, not implementation details
 - Focus on: error handling, data integrity, user-facing functionality
 - Cover edge cases: boundary conditions, missing data, invalid inputs
 - Do NOT test: internal state management, singleton implementations, framework internals
 
 ### Test Organization
+
 ```python
 class TestFeatureName:
     """Descriptive docstring"""
@@ -268,6 +275,7 @@ class TestFeatureName:
 ```
 
 ### Test File Location
+
 - Primary location: `agent_ng/_tests/`
 - Alternative: relevant `cwd/_tests` where files are modified
 - Fallback: `.misc_files` for miscellaneous tests
@@ -294,6 +302,7 @@ When multiple endpoints compute the same thing, verify they produce identical re
 ### Manager Pattern
 
 Use centralized managers for core functionality:
+
 ```python
 # Example managers in the codebase
 LLMManager()           # LLM provider management
@@ -305,6 +314,7 @@ SessionManager()       # User session handling
 ### Adapter Pattern
 
 Provider-specific adapters for LLM integrations:
+
 ```python
 # Provider adapters handle different APIs
 GeminiAdapter, GroqAdapter, MistralAdapter, etc.
@@ -313,6 +323,7 @@ GeminiAdapter, GroqAdapter, MistralAdapter, etc.
 ### Factory Pattern
 
 Used for creating LLM instances and token counters:
+
 ```python
 def create_llm(provider: str, use_tools: bool = True) -> LLMInstance
 def get_token_tracker() -> ConversationTokenTracker
@@ -327,6 +338,7 @@ def get_token_tracker() -> ConversationTokenTracker
 - Use GitHub Markdown format with `YYYYMMDD_` filename prefix
 
 ### Docstring Patterns
+
 ```python
 """
 Module docstring with key features and usage examples.
@@ -348,6 +360,7 @@ Usage:
 - **SCQA framework:** Situation (Ситуация) → Complication (Проблема) → Question (Вопрос для решения) → Answer (Рекомендуемый ответ) for executive summaries or report intros.
 - **Chunked content:** Use bulleted lists, short paragraphs, and visual breaks. Avoid walls of text.
 - **Actionable sections:** Each section should answer "So what?" and lead to a decision or next step.
+- **Markdown spacing:** Always add a blank line after any heading (H1–H4) and before any list (bullet, numbered, or definition). This applies to all markdown files including AGENTS.md itself. No heading should be immediately followed by content without a blank line, and no list should start on the line right after a heading without a blank line in between.
 
 ## Agent Behavior & Commit Discipline
 
@@ -355,6 +368,7 @@ Usage:
 - **Plans:** Actionable step-by-step plans with checkpoints → `.opencode/plans/YYYYMMDD_<topic>/plan.md`
 - **Research:** Research results and findings → `.opencode/research/YYYYMMDD_<topic>/research.md`
 - **Progress:** Progress reports for ongoing work → `.opencode/progress_reports/YYYYMMDD_<topic>/progress_YYYYMMDD.md`
+- **Platform Work:** Platform interactions, evals, intermediate results → `cmw-platform-workspace/` (gitignored)
 - Use GitHub Markdown format. Parent folder dated with inception timestamp.
 
 **Commit Discipline:** Do NOT create or push commits unless explicitly asked by the user.
