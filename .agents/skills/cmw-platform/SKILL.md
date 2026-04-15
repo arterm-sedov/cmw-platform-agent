@@ -156,12 +156,25 @@ def retry_call(func, payload, max_retries=3):
 
 ## System Prompt Alignment
 
-This skill follows principles from the agent's main system prompt (AGENTS.md):
+This skill aligns with the agent's system prompts:
 
+**Primary**: `agent_ng/system_prompt.json` - Core agentic behavior:
+- Intent → Plan → Validate → Execute → Result workflow
+- Tool usage discipline (no duplicate calls, cache results)
+- CMW Platform vocabulary and terminology
+- Idempotency and confirmation rules
+
+**Secondary**: `AGENTS.md` (project guidelines):
 - **TDD/SDD**: Read existing state before implementing changes
 - **Non-breaking**: Tools support partial updates to preserve existing data
 - **Lean/Dry**: Minimal changes, reusable patterns, no redundancy
 - **Logs**: All operations logged to `cmw-platform-workspace/` for traceability
+
+**For any platform operation, the agent should:**
+1. Follow the Intent → Plan → Validate → Execute → Result structure from system_prompt.json
+2. Use platform terminology (alias=system_name, instance=record, etc.)
+3. Confirm risky edits before execution
+4. Present results in human-readable format, not raw JSON
 
 ## Diagnostic Script
 
