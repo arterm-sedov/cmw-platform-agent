@@ -21,6 +21,18 @@ class AttributeResult(BaseModel):
     class Config:
         extra = 'allow'
 
+class FormResult(BaseModel):
+    """
+    Result model for a fetched or edited form.
+    Contains cleaned data after successful fetch or edit.
+    """
+    success: bool
+    status_code: int
+    error: Optional[str] = Field(default=None)
+
+    class Config:
+        extra = 'allow'
+
 class CommonAttributeFields(BaseModel):
     """
     Common field definitions for attribute schemas across all tool modules.

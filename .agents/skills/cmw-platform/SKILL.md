@@ -3,6 +3,21 @@ name: cmw-platform
 description: Use when working with Comindware Platform — connecting to platform, listing applications, exploring templates, managing records, querying data, creating or editing attributes, or any task requiring autonomous platform interaction. Triggers on platform operations, CMW queries, tenant management, rental lot operations, debt tracking, or record CRUD. Also triggers when user mentions working directly with API credentials, using manual HTTP approaches, or trying to bypass the tool layer.
 ---
 
+## ⚠️ CRITICAL: Save Before Making Changes
+
+**ALWAYS save schemas and data BEFORE editing or deleting.**
+
+```bash
+# Save to cmw-platform-workspace/ immediately after fetching
+cp Step1_Schema_GET.json cmw-platform-workspace/Step1_Schema_BEFORE.json
+# ... make changes ...
+cp Step2_Schema_GET_AFTER.json cmw-platform-workspace/Step2_Schema_AFTER.json
+```
+
+**This is NOT optional.** Violating this rule has caused data loss before.
+
+---
+
 # cmw-platform Skill
 
 Enables autonomous interaction with Comindware Platform using tools from the agent's tools directory.

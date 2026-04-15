@@ -466,7 +466,17 @@ def _apply_partial_update(endpoint: str, request_body: dict[str, Any]) -> dict[s
 
         elif endpoint.startswith("webapi/Form/"):
             parts = endpoint.split("/")
-            if len(parts) >= 4:
+            # PUT/POST: webapi/Form/{solutionAlias} - form alias in body
+            if len(parts) == 3:
+                app_name = parts[-1]
+                ga = request_body.get("globalAlias", {})
+                template_owner = ga.get("owner", "")
+                alias_value = ga.get("alias", "")
+                if template_owner and alias_value:
+                    list_endpoint = f"{base_url}/webapi/Form/List/Template@{app_name}.{template_owner}"
+                    alias_path = ("globalAlias", "alias")
+            # GET/DELETE: webapi/Form/{solutionAlias}/{formGlobalAlias}
+            elif len(parts) >= 4:
                 app_name = parts[-2]
                 form_alias = parts[-1]
                 if form_alias.startswith("Form@"):
