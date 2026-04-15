@@ -205,6 +205,30 @@ edit_or_create_toolbar.invoke({
 })
 ```
 
+**⚠️ IMPORTANT: Toolbar Item Names Override Button Names**
+
+Toolbar items have their own `name` field that **overrides** the button's display name. To change a button's label in a toolbar:
+1. Use `edit_or_create_toolbar` with `items` array
+2. Set `display_name` on each item (not the button itself)
+
+```python
+# WRONG: Editing button name won't affect toolbar display
+edit_or_create_button.invoke({
+    "operation": "edit",
+    "button_system_name": "create",
+    "name": "Новая запись"  # This changes the BUTTON, not toolbar item
+})
+
+# CORRECT: Update toolbar items to change displayed labels
+edit_or_create_toolbar.invoke({
+    "operation": "edit",
+    "toolbar_system_name": "defaultListToolbar",
+    "items": [
+        {"button_system_name": "create", "display_name": "Новая запись", "item_order": 0}
+    ]
+})
+```
+
 ### List and Edit Buttons
 
 ```python
