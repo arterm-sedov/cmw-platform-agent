@@ -273,20 +273,6 @@ edit_or_create_numeric_attribute.invoke({
 
 **Note:** Text/String attributes require **no type-specific fields** - they work with defaults. Only provide `display_format` (e.g., `PlainText`) when you need a specific format.
 
-### Safe Translation Scripts
-
-```bash
-# Safe script - direct API, guaranteed partial
-python .agents/skills/cmw-platform/scripts/safe_translate_attribute.py \
-    --app Volga --template RentLots --attr Ploschad --name "Lot Area" --desc "Area in sqm"
-
-# Safe script - edit name/description only
-python .agents/skills/cmw-platform/scripts/safe_edit_attribute.py \
-    --app Volga --template RentLots --attr Ploschad --name "Lot Area"
-```
-
-These scripts bypass the tool layer entirely for guaranteed control.
-
 ## Working Files
 
 **ALWAYS save fetched schemas to `cmw-platform-workspace/` immediately after fetching.**

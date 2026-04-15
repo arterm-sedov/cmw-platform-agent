@@ -198,16 +198,6 @@ edit_or_create_numeric_attribute.invoke({
 })
 ```
 
-### When to Use Direct API Scripts
-
-Use the safe scripts when you need **guaranteed partial control** (bypass tool layer):
-
-```python
-# Via safe script - direct API GET → modify → PUT
-python .agents/skills/cmw-platform/scripts/safe_translate_attribute.py \
-    --app Volga --template RentLots --attr Ploschad --name "Lot Area" --desc "Area in sqm"
-```
-
 ### Partial Update Behavior Summary
 
 | Scenario | Field Provided? | Result |
@@ -227,4 +217,42 @@ These scripts are in `scripts/` directory and can be run directly:
 | `explore_templates.py` | Explore multiple templates | `python scripts/explore_templates.py --app <app> --templates T1,T2` |
 | `query_with_filter.py` | Paginated query with in-code filter | `python scripts/query_with_filter.py --app <app> --template <tmpl> --filter-attr <attr> --filter-op gt --filter-value 0` |
 | `analyze_stats.py` | Statistical analysis of numeric attributes | `python scripts/analyze_stats.py --app <app> --template <tmpl> --attr <attr> --top 10` |
-| `safe_translate_attribute.py` | Safe attribute name/description translation | `python scripts/safe_translate_attribute.py --app <app> --template <tmpl> --attr <attr> --name "New Name"` |
+| `batch_edit_attributes.py` | Batch edit multiple attributes in one call | `python scripts/batch_edit_attributes.py --app <app> --template <tmpl> --mapping edits.json [--dry-run | --execute]` |
+
+## Batch Edit Workflow
+
+For editing multiple attributes at once, use `batch_edit_attributes.py`:
+
+```bash
+# Preview changes (dry-run)
+python .agents/skills/cmw-platform/scripts/batch_edit_attributes.py \
+    --app FacilityManagement --template Buildings \
+    --mapping edits.json --dry-run
+
+# Execute changes
+python .agents/skills/cmw-platform/scripts/batch_edit_attributes.py \
+    --app FacilityManagement --template Buildings \
+    --mapping edits.json --execute
+```
+
+### Mapping File Format
+
+Any attribute field can be included. Fields not provided are preserved.
+
+```json
+{
+    "attributes": {
+        "AttrSystemName": {
+            "name": "New Name",
+            "description": "New Description",
+            "isMandatory": true
+        },
+        "AnotherAttr": {
+            "name": "Another Name",
+            "displayFormat": "PlainText"
+        }
+    }
+}
+```
+
+Supported types: String, Text, Decimal, Enum, Record, DateTime, Document, Image, Duration, Account.
