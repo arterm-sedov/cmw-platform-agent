@@ -271,6 +271,8 @@ edit_or_create_numeric_attribute.invoke({
 | Account | `related_template_system_name` |
 | Record | `related_template_system_name` |
 
+**Note:** Text/String attributes require **no type-specific fields** - they work with defaults. Only provide `display_format` (e.g., `PlainText`) when you need a specific format.
+
 ### Safe Translation Scripts
 
 ```bash
