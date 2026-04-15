@@ -171,3 +171,14 @@ def create_with_schema(app_name: str, template_name: str, values: dict):
     
     return result
 ```
+
+## Ready-Made Scripts
+
+These scripts are in `scripts/` directory and can be run directly:
+
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `diagnose_connection.py` | Verify platform connectivity | `python scripts/diagnose_connection.py` |
+| `explore_templates.py` | Explore multiple templates | `python scripts/explore_templates.py --app <app> --templates T1,T2` |
+| `query_with_filter.py` | Paginated query with in-code filter | `python scripts/query_with_filter.py --app <app> --template <tmpl> --filter-attr <attr> --filter-op gt --filter-value 0` |
+| `analyze_stats.py` | Statistical analysis of numeric attributes | `python scripts/analyze_stats.py --app <app> --template <tmpl> --attr <attr> --top 10` |
