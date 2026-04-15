@@ -420,6 +420,94 @@ def execute_get_operation(
     return validated.model_dump()
 
 
+def _apply_partial_update(endpoint: str, request_body: dict[str, Any]) -> dict[str, Any]:
+    """
+    For edit operations, fetch current schema and merge missing fields.
+
+    Supports:
+    - webapi/Attribute/{app} → fetches from webapi/Attribute/List/Template@{app}.{owner}
+    - webapi/RecordTemplate/{app} → fetches from webapi/RecordTemplate/List/{app}
+    - webapi/Form/{app}/... → fetches from webapi/Form/List/Template@{app}.{template}
+    """
+    import base64
+    import os
+    import requests
+
+    base_url = os.environ.get("CMW_BASE_URL", "").rstrip("/")
+    login = os.environ.get("CMW_LOGIN", "")
+    password = os.environ.get("CMW_PASSWORD", "")
+
+    if not base_url or not login or not password:
+        return request_body
+
+    creds = base64.b64encode(f"{login}:{password}".encode()).decode()
+    headers = {"Authorization": f"Basic {creds}", "Content-Type": "application/json"}
+
+    try:
+        list_endpoint = None
+        alias_path = None  # path to alias in the response item
+        alias_value = None
+
+        if endpoint.startswith("webapi/Attribute/"):
+            app_name = endpoint.rsplit("/", maxsplit=1)[-1]
+            global_alias = request_body.get("globalAlias", {})
+            owner = global_alias.get("owner", "")
+            alias_value = global_alias.get("alias", "")
+            if owner and alias_value:
+                list_endpoint = f"{base_url}/webapi/Attribute/List/Template@{app_name}.{owner}"
+                alias_path = ("globalAlias", "alias")
+
+        elif endpoint.startswith("webapi/RecordTemplate/"):
+            app_name = endpoint.rsplit("/", maxsplit=1)[-1]
+            alias_value = request_body.get("globalAlias", {}).get("alias")
+            if alias_value:
+                list_endpoint = f"{base_url}/webapi/RecordTemplate/List/{app_name}"
+                alias_path = ("globalAlias", "alias")
+
+        elif endpoint.startswith("webapi/Form/"):
+            parts = endpoint.split("/")
+            if len(parts) >= 4:
+                app_name = parts[-2]
+                form_alias = parts[-1]
+                if form_alias.startswith("Form@"):
+                    template_owner = form_alias.split("@")[1].split(".")[0] if "@" in form_alias else None
+                    alias_value = form_alias.split(".")[-1] if "." in form_alias else None
+                    if template_owner:
+                        list_endpoint = f"{base_url}/webapi/Form/List/Template@{app_name}.{template_owner}"
+                        alias_path = ("globalAlias", "alias")
+
+        if not list_endpoint or not alias_value:
+            return request_body
+
+        resp = requests.get(list_endpoint, headers=headers, timeout=30)
+        if resp.status_code != 200:
+            return request_body
+
+        data = resp.json()
+        items = data.get("response", []) if isinstance(data, dict) else []
+
+        current = None
+        for item in items:
+            item_alias = None
+            if alias_path and len(alias_path) == 2:
+                item_alias = item.get(alias_path[0], {}).get(alias_path[1])
+            elif alias_path:
+                item_alias = item.get(alias_path[0] if isinstance(alias_path, str) else "")
+            if item_alias == alias_value:
+                current = item
+                break
+
+        if current:
+            for key, value in current.items():
+                if key not in request_body:
+                    request_body[key] = value
+
+    except Exception:
+        pass
+
+    return request_body
+
+
 def execute_edit_or_create_operation(
     request_body: dict[str, Any],
     operation: str,
@@ -441,53 +529,9 @@ def execute_edit_or_create_operation(
     # Убираем None-значения
     request_body = remove_values(request_body)
 
-    # For edit operations on attributes, do partial update - fetch current schema first
-    if operation == "edit" and endpoint.startswith("webapi/Attribute/"):
-        app_name = endpoint.rsplit("/", maxsplit=1)[-1]
-
-        global_alias = request_body.get("globalAlias", {})
-        owner = global_alias.get("owner", "")
-        alias = global_alias.get("alias", "")
-
-        if owner and alias:
-            base_url = os.environ.get("CMW_BASE_URL", "").rstrip("/")
-            login = os.environ.get("CMW_LOGIN", "")
-            password = os.environ.get("CMW_PASSWORD", "")
-
-            if base_url and login and password:
-                creds = base64.b64encode(f"{login}:{password}".encode()).decode()
-                headers = {
-                    "Authorization": f"Basic {creds}",
-                    "Content-Type": "application/json",
-                }
-
-                try:
-                    resp = requests.get(
-                        f"{base_url}/webapi/Attribute/List/Template@{app_name}.{owner}",
-                        headers=headers,
-                        timeout=30,
-                    )
-
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        if data.get("response"):
-                            attrs = data["response"]
-                            current = next(
-                                (
-                                    a
-                                    for a in attrs
-                                    if a.get("globalAlias", {}).get("alias") == alias
-                                ),
-                                None,
-                            )
-
-                            if current:
-                                # Merge: use current values for any missing fields in request
-                                for key, value in current.items():
-                                    if key not in request_body:
-                                        request_body[key] = value
-                except Exception:
-                    pass  # Fall back to standard behavior
+    # For edit operations, do partial update - fetch current schema first
+    if operation == "edit":
+        request_body = _apply_partial_update(endpoint, request_body)
 
     try:
         if operation == "create":

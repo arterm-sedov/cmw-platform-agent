@@ -49,8 +49,8 @@ TYPE_TO_TOOL = {
     "Image": ("tools.attributes_tools.tools_image_attribute", "edit_or_create_image_attribute"),
     "Duration": ("tools.attributes_tools.tools_duration_attribute", "edit_or_create_duration_attribute"),
     "Account": ("tools.attributes_tools.tools_account_attribute", "edit_or_create_account_attribute"),
-    "String": ("direct", "string"),
-    "Text": ("direct", "string"),
+    "String": ("tools.attributes_tools.tools_text_attribute", "edit_or_create_text_attribute"),
+    "Text": ("tools.attributes_tools.tools_text_attribute", "edit_or_create_text_attribute"),
 }
 
 
@@ -86,56 +86,6 @@ def get_attribute_type(app: str, template: str, attr_alias: str) -> str | None:
     return None
 
 
-def edit_attribute_direct(
-    app: str, template: str, attr_alias: str, changes: dict[str, Any]
-) -> dict[str, Any]:
-    """Edit a String/Text attribute using direct API."""
-    import base64
-
-    import requests
-
-    base_url = os.environ.get("CMW_BASE_URL", "").rstrip("/")
-    login = os.environ.get("CMW_LOGIN", "")
-    password = os.environ.get("CMW_PASSWORD", "")
-
-    if not base_url or not login or not password:
-        return {"success": False, "error": "Missing credentials"}
-
-    creds = base64.b64encode(f"{login}:{password}".encode()).decode()
-    headers = {"Authorization": f"Basic {creds}", "Content-Type": "application/json"}
-
-    resp = requests.get(
-        f"{base_url}/webapi/Attribute/List/Template@{app}.{template}",
-        headers=headers,
-        timeout=30,
-    )
-
-    if not resp.json().get("response"):
-        return {"success": False, "error": f"Cannot read attributes: {resp.json().get('error')}"}
-
-    attrs = resp.json()["response"]
-    current = None
-    for a in attrs:
-        if a.get("globalAlias", {}).get("alias") == attr_alias:
-            current = a
-            break
-
-    if not current:
-        return {"success": False, "error": f"Attribute not found: {attr_alias}"}
-
-    for key, value in changes.items():
-        current[key] = value
-
-    put_resp = requests.put(
-        f"{base_url}/webapi/Attribute/{app}",
-        headers=headers,
-        json=current,
-        timeout=30,
-    )
-
-    return put_resp.json()
-
-
 def edit_attribute_via_tool(
     app: str, template: str, attr_alias: str, attr_type: str, changes: dict[str, Any]
 ) -> dict[str, Any]:
@@ -145,9 +95,6 @@ def edit_attribute_via_tool(
         return {"success": False, "error": f"No tool for type: {attr_type}"}
 
     module_path, tool_name = tool_info
-
-    if module_path == "direct":
-        return edit_attribute_direct(app, template, attr_alias, changes)
 
     try:
         module = __import__(module_path, fromlist=[tool_name])
@@ -206,10 +153,7 @@ def batch_edit(
             })
             continue
 
-        if attr_type in ("String", "Text"):
-            result = edit_attribute_direct(app, template, attr_alias, changes)
-        else:
-            result = edit_attribute_via_tool(app, template, attr_alias, attr_type, changes)
+        result = edit_attribute_via_tool(app, template, attr_alias, attr_type, changes)
 
         results.append({
             "alias": attr_alias,
