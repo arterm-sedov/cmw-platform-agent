@@ -253,10 +253,12 @@ These scripts bypass the tool layer entirely for guaranteed control.
 
 This directory is gitignored - use it for:
 - Complete schemas (before and after changes)
+- **Temporary scripts** created during exploration or debugging
 - Evaluation outputs
 - Intermediate query results
 - Debug logs
 - Test artifacts
+- Any ad-hoc Python scripts for data analysis or fixes
 
 ### Before Any Edit: Save Current State
 
