@@ -7,6 +7,18 @@ description: Use when working with Comindware Platform — connecting to platfor
 
 Enables autonomous interaction with Comindware Platform using tools from the agent's tools directory.
 
+## Guiding Principles
+
+**Follow these principles for all platform operations (per AGENTS.md):**
+
+1. **Persist Context**: Always save complete schemas and results to `cmw-platform-workspace/` before making changes. This provides recovery points and prevents context loss.
+
+2. **Read Before Write**: Fetch current state first, save it, then modify. Never edit without reading and persisting first.
+
+3. **Idempotent Operations**: Design operations so running them multiple times produces the same result.
+
+4. **Explicit Over Implicit**: If you provide a value, it overrides. If you don't, the patch preserves existing.
+
 ## Quick Start
 
 1. Import tool: `from tools.<category>.<tool_file> import <tool_function>`
@@ -142,6 +154,15 @@ def retry_call(func, payload, max_retries=3):
 - [Workflow Sequences](references/workflow_sequences.md) - Reusable code patterns
 - [Error Playbook](references/errors.md) - Recovery procedures
 
+## System Prompt Alignment
+
+This skill follows principles from the agent's main system prompt (AGENTS.md):
+
+- **TDD/SDD**: Read existing state before implementing changes
+- **Non-breaking**: Tools support partial updates to preserve existing data
+- **Lean/Dry**: Minimal changes, reusable patterns, no redundancy
+- **Logs**: All operations logged to `cmw-platform-workspace/` for traceability
+
 ## Diagnostic Script
 
 ```bash
@@ -150,14 +171,118 @@ python .agents/skills/cmw-platform/scripts/diagnose_connection.py
 
 Exit code 0 = pass, 1 = fail. Run this to verify platform connectivity.
 
+## Safe Attribute Translation
+
+### How edit_or_create Tools Work
+
+The edit_or_create attribute tools have **smart partial update support**:
+
+| Operation | Behavior | Mechanism |
+|-----------|----------|----------|
+| **Create** | Requires ALL type-specific fields | Model validator raises error if missing |
+| **Edit - partial** | Missing fields fetched from API and merged | `tool_utils.py` patch fills gaps |
+| **Edit - explicit** | Provided fields override existing values | User intent respected |
+
+### How the Patch Works
+
+When editing with missing fields:
+
+```python
+# Agent calls edit with only name/description
+edit_or_create_numeric_attribute.invoke({
+    "operation": "edit",
+    "name": "New Name",
+    "system_name": "Ploschad",
+    "application_system_name": "Volga",
+    "template_system_name": "RentLots"
+    # number_decimal_places NOT provided
+})
+```
+
+**What happens internally:**
+
+1. `remove_values()` strips `None` fields → `number_decimal_places` not in body
+2. `tool_utils.py` fetches current `Ploschad` schema from API
+3. Patch merges: adds `decimalPlaces: 2` from current
+4. API receives complete schema with `decimalPlaces: 2` preserved ✅
+
+### Edit with Explicit Values
+
+```python
+# Agent provides value - THIS WILL OVERRIDE
+edit_or_create_numeric_attribute.invoke({
+    "operation": "edit",
+    "name": "New Name",
+    "system_name": "Ploschad",
+    "number_decimal_places": 3  # ← Explicit value overrides existing
+})
+```
+
+**Result:** API receives `decimalPlaces: 3` - existing value is overridden.
+
+### Required Fields for Create
+
+| Attribute Type | Required Fields |
+|---------------|----------------|
+| Decimal | `number_decimal_places` |
+| Enum | `display_format`, `enum_values` |
+| DateTime | `display_format` |
+| Document | `display_format` |
+| Image | `rendering_color_mode` |
+| Duration | `display_format` |
+| Account | `related_template_system_name` |
+| Record | `related_template_system_name` |
+
+### Safe Translation Scripts
+
+```bash
+# Safe script - direct API, guaranteed partial
+python .agents/skills/cmw-platform/scripts/safe_translate_attribute.py \
+    --app Volga --template RentLots --attr Ploschad --name "Lot Area" --desc "Area in sqm"
+
+# Safe script - edit name/description only
+python .agents/skills/cmw-platform/scripts/safe_edit_attribute.py \
+    --app Volga --template RentLots --attr Ploschad --name "Lot Area"
+```
+
+These scripts bypass the tool layer entirely for guaranteed control.
+
 ## Working Files
 
-**Always store intermediate steps and results in `cmw-platform-workspace/` directory.**
+**ALWAYS save to `cmw-platform-workspace/` before making changes.**
 
 This directory is gitignored - use it for:
+- Complete schemas (before and after changes)
 - Evaluation outputs
 - Intermediate query results
 - Debug logs
 - Test artifacts
 
-If the LLM hangs or context is lost, retry can resume from saved files instead of starting over.
+### Before Any Edit: Save Current State
+
+```python
+import json
+from tools.templates_tools.tool_list_attributes import list_attributes
+
+# Step 1: READ and SAVE current complete schema
+attrs = list_attributes.invoke({
+    "application_system_name": "Volga",
+    "template_system_name": "RentLots"
+})
+
+# Save for recovery and reference
+with open("cmw-platform-workspace/rentlots_schema_BEFORE.json", "w") as f:
+    json.dump(attrs, f, indent=2)
+
+# Step 2: Now you can safely edit - you have the backup
+```
+
+### File Naming Convention
+
+```
+{entity}_schema_BEFORE.json   # State before changes
+{entity}_schema_AFTER.json    # State after changes (optional)
+{entity}_changes.json        # Summary of what changed
+```
+
+**If the LLM hangs or context is lost, retry can resume from saved files.**

@@ -1,41 +1,41 @@
 from ..tool_utils import *
 
-ALLOWED_EXTENSIONS_LIST = ['PNG', 'JPG', 'BMP', 'EMF']
-ALLOWED_COLOR_RENDERING_MODES_LIST = ['Original', 'Bitonal', 'GreyScale']
+ALLOWED_EXTENSIONS_LIST = ["PNG", "JPG", "BMP", "EMF"]
+ALLOWED_COLOR_RENDERING_MODES_LIST = ["Original", "Bitonal", "GreyScale"]
 
 ALLOWED_EXTENSIONS_SET = set(ALLOWED_EXTENSIONS_LIST)
 ALLOWED_COLOR_RENDERING_MODES_SET = set(ALLOWED_COLOR_RENDERING_MODES_LIST)
+
+
 class EditOrCreateImageAttributeSchema(CommonAttributeFields):
-    rendering_color_mode: str = Field(
+    rendering_color_mode: Optional[str] = Field(
+        default=None,
         description="Image color mode. "
-                    "RU: Цветовой режим. "
-                    f"Allowed: {ALLOWED_COLOR_RENDERING_MODES_LIST}"
+        "RU: Цветовой режим. "
+        f"Allowed: {ALLOWED_COLOR_RENDERING_MODES_LIST}. "
+        "Required for create, optional for edit.",
     )
     use_to_search_records: bool = Field(
         default=False,
         description="Set to `True` to allow the users to search the records by this attribute's value. "
-                    "RU: Использовать для поиска записей",
+        "RU: Использовать для поиска записей",
     )
     file_extensions_filter: Optional[List[str]] = Field(
         default=None,
         description="Filter of file extensions that can store an attribute. "
-                    "RU: Фильтр расширений файлов. "
-                    f"Allowed: {ALLOWED_EXTENSIONS_LIST}"
+        "RU: Фильтр расширений файлов. "
+        f"Allowed: {ALLOWED_EXTENSIONS_LIST}",
     )
     image_width: Optional[int] = Field(
-        default=None,
-        description="Image width. "
-                    "RU: Ширина"
+        default=None, description="Image width. RU: Ширина"
     )
     image_height: Optional[int] = Field(
-        default=None,
-        description="Image height. "
-                    "RU: Высота"
+        default=None, description="Image height. RU: Высота"
     )
     save_image_aspect_ratio: bool = Field(
         default=False,
         description="Set to `True` to maintain the image's original aspect ratio. "
-                    "RU: Сохранить соотношения сторон"
+        "RU: Сохранить соотношения сторон",
     )
 
     @field_validator("file_extensions_filter", mode="before")
@@ -45,31 +45,63 @@ class EditOrCreateImageAttributeSchema(CommonAttributeFields):
         if isinstance(v, str):
             v = [x.strip() for x in v.split(",") if x.strip()]
         if not isinstance(v, list):
-            raise ValueError("file_extensions_filter must be a list or comma-separated string")    
+            raise ValueError(
+                "file_extensions_filter must be a list or comma-separated string"
+            )
         normalized = [str(ext).strip().lower() for ext in v]
 
         invalid = set(normalized) - ALLOWED_EXTENSIONS_SET
         if invalid:
-            raise ValueError(f"Invalid file extensions: {sorted(invalid)}. " f"Allowed: {sorted(ALLOWED_EXTENSIONS_SET)}")
+            raise ValueError(
+                f"Invalid file extensions: {sorted(invalid)}. "
+                f"Allowed: {sorted(ALLOWED_EXTENSIONS_SET)}"
+            )
         return normalized
 
     @field_validator("rendering_color_mode", mode="before")
-    def validate_rendering_color_mode(cls, v: Any) -> str:
+    def validate_rendering_color_mode(cls, v: Any) -> Optional[str]:
         if v is None:
-            raise ValueError("rendering_color_mode is required")
+            return None
         normalized = str(v).strip()
         if normalized not in ALLOWED_COLOR_RENDERING_MODES_SET:
-            raise ValueError(f"Invalid color mode: {normalized}. Allowed: {sorted(ALLOWED_COLOR_RENDERING_MODES_SET)}")
+            raise ValueError(
+                f"Invalid color mode: {normalized}. Allowed: {sorted(ALLOWED_COLOR_RENDERING_MODES_SET)}"
+            )
         return normalized
 
-@tool("edit_or_create_image_attribute", return_direct=False, args_schema=EditOrCreateImageAttributeSchema)
+    @model_validator(mode="after")
+    def _validate_create_required_fields(self) -> "EditOrCreateImageAttributeSchema":
+        """
+        Validate that required fields are provided for create operations.
+
+        When operation is 'create', the following fields are REQUIRED:
+            - rendering_color_mode: How the image is rendered (Original, Bitonal, GreyScale)
+
+        When operation is 'edit', all fields are OPTIONAL - the tool will
+        fetch current values from the API for any missing fields.
+        """
+        if self.operation == "create":
+            if self.rendering_color_mode is None:
+                raise ValueError(
+                    "rendering_color_mode is REQUIRED when operation='create'. "
+                    "Choose from: Original, Bitonal, GreyScale. "
+                    "For edit operations, this field is optional."
+                )
+        return self
+
+
+@tool(
+    "edit_or_create_image_attribute",
+    return_direct=False,
+    args_schema=EditOrCreateImageAttributeSchema,
+)
 def edit_or_create_image_attribute(
     operation: str,
     name: str,
     system_name: str,
     application_system_name: str,
     template_system_name: str,
-    rendering_color_mode: str,
+    rendering_color_mode: Optional[str] = None,
     description: Optional[str] = None,
     use_to_search_records: Optional[bool] = False,
     write_changes_to_the_log: Optional[bool] = False,
@@ -77,7 +109,7 @@ def edit_or_create_image_attribute(
     file_extensions_filter: Optional[List[str]] = None,
     save_image_aspect_ration: Optional[bool] = False,
     image_width: Optional[int] = None,
-    image_height: Optional[int] = None
+    image_height: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Edit or Create an image attribute (Изображение).
@@ -89,7 +121,7 @@ def edit_or_create_image_attribute(
     Returns:
         dict: {
             "success": bool - True if the attribute was created or edited successfully
-            "status_code": int - HTTP response status code  
+            "status_code": int - HTTP response status code
             "raw_response": dict|str|None - Raw response for auditing or payload body (sanitized)
             "error": str|None - Error message if operation failed
         }
@@ -99,7 +131,7 @@ def edit_or_create_image_attribute(
         "globalAlias": {
             "owner": template_system_name,
             "type": "Undefined",
-            "alias": system_name
+            "alias": system_name,
         },
         "type": "Image",
         "name": name,
@@ -107,12 +139,17 @@ def edit_or_create_image_attribute(
         "isIndexed": use_to_search_records,
         "isTracked": write_changes_to_the_log,
         "isMultiValue": store_multiple_values,
-        "fileFormat": file_extensions_filter,
-        "imageWidth": image_width,
-        "imageHeight": image_height,
-        "imageColorType": rendering_color_mode,
-        "imagePreserveAspectRatio": save_image_aspect_ration
     }
+    if rendering_color_mode is not None:
+        request_body["imageColorType"] = rendering_color_mode
+    if file_extensions_filter is not None:
+        request_body["fileFormat"] = file_extensions_filter
+    if image_width is not None:
+        request_body["imageWidth"] = image_width
+    if image_height is not None:
+        request_body["imageHeight"] = image_height
+    if save_image_aspect_ration is not None:
+        request_body["imagePreserveAspectRatio"] = save_image_aspect_ration
 
     endpoint = f"{ATTRIBUTE_ENDPOINT}/{application_system_name}"
 
@@ -120,18 +157,21 @@ def edit_or_create_image_attribute(
         request_body=request_body,
         operation=operation,
         endpoint=endpoint,
-        result_model=AttributeResult
+        result_model=AttributeResult,
     )
 
+
 if __name__ == "__main__":
-    results = edit_or_create_image_attribute.invoke({
-        "operation": "create",
-        "name": "Product Image",
-        "system_name": "ProductImage",
-        "application_system_name": "AItestAndApi",
-        "template_system_name": "Test",
-        "rendering_color_mode": "Original",
-        "description": "Product image attachment",
-        "use_to_search_records": False
-    })
+    results = edit_or_create_image_attribute.invoke(
+        {
+            "operation": "create",
+            "name": "Product Image",
+            "system_name": "ProductImage",
+            "application_system_name": "AItestAndApi",
+            "template_system_name": "Test",
+            "rendering_color_mode": "Original",
+            "description": "Product image attachment",
+            "use_to_search_records": False,
+        }
+    )
     print(results)

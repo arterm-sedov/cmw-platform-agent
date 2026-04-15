@@ -155,7 +155,7 @@ def create_with_schema(app_name: str, template_name: str, values: dict):
     
     if not schema_result["success"]:
         return {"error": schema_result["error"]}
-    
+
     # Build attribute type map
     attr_types = {}
     for attr in schema_result.get("data", []):
@@ -172,6 +172,51 @@ def create_with_schema(app_name: str, template_name: str, values: dict):
     return result
 ```
 
+## 7. Safe Attribute Translation (READ → EDIT)
+
+**The edit_or_create tools now support partial updates automatically.**
+
+### How It Works
+
+1. **Create**: All type-specific fields required (model validator enforces)
+2. **Edit - partial**: Tool's `tool_utils.py` patch fetches current schema, fills missing fields
+3. **Edit - explicit**: Provided values override existing ones
+
+### Using the Tools Directly
+
+```python
+from tools.attributes_tools.tools_decimal_attribute import edit_or_create_numeric_attribute
+
+# EDIT with only name - existing type/format PRESERVED via patch
+edit_or_create_numeric_attribute.invoke({
+    "operation": "edit",
+    "name": "Lot Area",
+    "system_name": "Ploschad",
+    "application_system_name": "Volga",
+    "template_system_name": "RentLots"
+    # number_decimal_places NOT provided - patch fills from current schema
+})
+```
+
+### When to Use Direct API Scripts
+
+Use the safe scripts when you need **guaranteed partial control** (bypass tool layer):
+
+```python
+# Via safe script - direct API GET → modify → PUT
+python .agents/skills/cmw-platform/scripts/safe_translate_attribute.py \
+    --app Volga --template RentLots --attr Ploschad --name "Lot Area" --desc "Area in sqm"
+```
+
+### Partial Update Behavior Summary
+
+| Scenario | Field Provided? | Result |
+|----------|----------------|--------|
+| Edit - nothing | No | Patch fills missing → **preserved** |
+| Edit - value | Yes | Value sent → **overridden** |
+| Edit - explicit None | None | Stripped → patch fills → **preserved** |
+| Create - missing | N/A | Validator error → **rejected** |
+
 ## Ready-Made Scripts
 
 These scripts are in `scripts/` directory and can be run directly:
@@ -182,3 +227,4 @@ These scripts are in `scripts/` directory and can be run directly:
 | `explore_templates.py` | Explore multiple templates | `python scripts/explore_templates.py --app <app> --templates T1,T2` |
 | `query_with_filter.py` | Paginated query with in-code filter | `python scripts/query_with_filter.py --app <app> --template <tmpl> --filter-attr <attr> --filter-op gt --filter-value 0` |
 | `analyze_stats.py` | Statistical analysis of numeric attributes | `python scripts/analyze_stats.py --app <app> --template <tmpl> --attr <attr> --top 10` |
+| `safe_translate_attribute.py` | Safe attribute name/description translation | `python scripts/safe_translate_attribute.py --app <app> --template <tmpl> --attr <attr> --name "New Name"` |
