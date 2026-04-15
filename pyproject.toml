@@ -83,7 +83,7 @@ unfixable = [
 "**/*langfuse*" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Langfuse files
 "**/*langsmith*" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Langsmith files
 "**/agent_ng/*.py" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Agent files need debugging
-"**/tools/*.py" = ["PLR0913", "ANN401", "BLE001"]  # Tool files
+"**/tools/*.py" = ["PLR0913", "ANN401", "BLE001", "N805", "TRY003", "EM101", "E501", "FBT001", "FBT002", "SLF001", "ARG001"]  # Tool files - pydantic patterns
 "**/i18n_translations.py" = ["E501"]  # Translation dictionaries contain long strings
 
 # Import sorting - conservative configuration to preserve imports

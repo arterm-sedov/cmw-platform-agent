@@ -156,6 +156,50 @@ except ImportError:
 - **Brilliant:** Simple solutions that work, not complex ones that impress
 - **Extensibility:** Ensure testability and extensibility
 
+## CMW Platform Terminology Conventions
+
+**Critical Rule:** Never expose legacy/internal API terms to LLMs/agents. Always map to human-readable terms.
+
+### API-to-LLM Terminology Mapping
+
+| API/Legacy Term | LLM-Friendly Term | Notes |
+|-----------------|------------------|-------|
+| `alias` | system name | Unique identifier for entities |
+| `instance` | record | A specific entry in a template/table |
+| `user command` | button | Interactive UI element |
+| `container` | template | Template/container |
+| `solution` | application | The business app |
+| `property` | attribute | Field in a template |
+| `list` | array | Collection type |
+| `stream` | file | Stored file |
+| `scheme` | process diagram | BPMN diagram |
+
+### Implementation Guidelines
+
+1. **Tool names** must use LLM-friendly terms:
+   - `get_user_command` → `get_button`
+   - `list_instances` → `list_records`
+   - `get_by_alias` → `get_by_system_name`
+
+2. **Parameter names** must use LLM-friendly terms:
+   - `alias` → `system_name`
+   - `template_system_name` (correct - template is acceptable as it's business terminology)
+   - `button_system_name` (correct - button is LLM-friendly)
+
+3. **Descriptions** must translate API terms to human-readable forms:
+   - Bad: "Fetch by alias"
+   - Good: "Fetch by system name"
+
+4. **Field validation** messages must use LLM-friendly terms:
+   - Bad: "alias is required"
+   - Good: "system_name is required"
+
+### Reference Sources
+
+- Primary: `agent_ng/system_prompt.json` → `cmw_platform_terminology` section
+- MCP knowledge base: Use `cmw-platform_knowledge-base_ask_comindware` for platform terminology questions
+- CMW API docs: Translate API concepts to LLM terms before exposing
+
 ## 12-Factor App Principles
 
 Based on [12-factor app](https://12factor.net/) + [12-factor AI agents](https://github.com/humanlayer/12-factor-agents) methodology:

@@ -71,6 +71,16 @@ print(result["data"])
 | list_attributes | tools.templates_tools.tool_list_attributes | Get schema |
 | list_template_records | tools.templates_tools.tool_list_records | Query records |
 | create_edit_record | tools.templates_tools.tool_create_edit_record | CRUD records |
+| list_forms | tools.templates_tools.tools_form | List forms |
+| get_form | tools.templates_tools.tools_form | Get form details |
+| edit_or_create_form | tools.templates_tools.tools_form | Edit form widgets |
+| list_toolbars | tools.templates_tools.tools_toolbar | List toolbars |
+| get_toolbar | tools.templates_tools.tools_toolbar | Get toolbar details |
+| edit_or_create_toolbar | tools.templates_tools.tools_toolbar | Edit toolbar/items |
+| list_buttons | tools.templates_tools.tools_toolbar | List buttons |
+| get_button | tools.templates_tools.tools_toolbar | Get button details |
+| edit_or_create_button | tools.templates_tools.tools_toolbar | Edit button |
+| archive_unarchive_button | tools.templates_tools.tools_toolbar | Archive/unarchive button |
 
 ## Knowledge Base
 
@@ -156,6 +166,102 @@ result = create_edit_record.invoke({
         "AttributeName": "value",
         "AnotherAttribute": 123.45
     }
+})
+```
+
+### List and Edit Toolbars
+
+```python
+from tools.templates_tools.tools_toolbar import list_toolbars, get_toolbar, edit_or_create_toolbar
+
+# List all toolbars for a template
+toolbars = list_toolbars.invoke({
+    "application_system_name": "FacilityManagement",
+    "template_system_name": "WorkOrders"
+})
+for tb in toolbars["data"]:
+    print(f"{tb['globalAlias']['alias']}: {tb['name']}")
+
+# Get toolbar with items
+toolbar = get_toolbar.invoke({
+    "application_system_name": "FacilityManagement",
+    "template_system_name": "WorkOrders",
+    "toolbar_system_name": "ToolbarComponent"
+})
+for item in toolbar.get("items", []):
+    print(f"  - {item['name']} ({item['action']['alias']})")
+
+# Edit toolbar name and items
+edit_or_create_toolbar.invoke({
+    "operation": "edit",
+    "application_system_name": "FacilityManagement",
+    "template_system_name": "WorkOrders",
+    "toolbar_system_name": "defaultListToolbar",
+    "name": "List Actions",
+    "items": [
+        {"button_system_name": "create", "display_name": "New Record", "item_order": 0},
+        {"button_system_name": "archive", "display_name": "Archive", "item_order": 1},
+    ]
+})
+```
+
+### List and Edit Buttons
+
+```python
+from tools.templates_tools.tools_toolbar import list_buttons, get_button, edit_or_create_button
+
+# List all buttons for a template
+buttons = list_buttons.invoke({
+    "application_system_name": "FacilityManagement",
+    "template_system_name": "WorkOrders"
+})
+for btn in buttons["data"]:
+    print(f"{btn['name']}: kind={btn['kind']}, disabled={btn['isDisabled']}")
+
+# Edit button name
+edit_or_create_button.invoke({
+    "operation": "edit",
+    "application_system_name": "FacilityManagement",
+    "template_system_name": "WorkOrders",
+    "button_system_name": "edit",
+    "name": "Save",
+    "kind": "Edit"
+})
+
+# Archive a button
+from tools.templates_tools.tools_toolbar import archive_unarchive_button
+archive_unarchive_button.invoke({
+    "application_system_name": "FacilityManagement",
+    "template_system_name": "WorkOrders",
+    "button_system_name": "archive",
+    "operation": "archive"
+})
+```
+
+### Edit Form Widgets
+
+```python
+from tools.templates_tools.tools_form import get_form, edit_or_create_form
+
+# Get form with widgets
+form = get_form.invoke({
+    "application_system_name": "FacilityManagement",
+    "template_system_name": "WorkOrders",
+    "form_system_name": "defaultForm"
+})
+for widget in form.get("widgets", []):
+    print(f"{widget['globalAlias']['alias']}: {widget.get('label', widget.get('name'))}")
+
+# Edit widget labels
+edit_or_create_form.invoke({
+    "operation": "edit",
+    "application_system_name": "FacilityManagement",
+    "template_system_name": "WorkOrders",
+    "form_system_name": "defaultForm",
+    "widgets": [
+        {"system_name": "GroupPanelComponent(2)", "label": "Section 1"},
+        {"system_name": "_isDisabled", "label": "Archived"},
+    ]
 })
 ```
 
