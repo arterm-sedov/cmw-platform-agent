@@ -57,6 +57,28 @@ print(result["data"])
 | list_template_records | tools.templates_tools.tool_list_records | Query records |
 | create_edit_record | tools.templates_tools.tool_create_edit_record | CRUD records |
 
+## Knowledge Base
+
+**When needing platform expertise, use the MCP knowledge base tool:**
+
+```python
+from cmw_platform_knowledge-base_get_knowledge_base_articles import get_knowledge_base_articles
+
+# Search for relevant platform documentation
+articles = get_knowledge_base_articles.invoke({
+    "query": "attribute schema edit partial update",
+    "top_k": 5
+})
+```
+
+**Use this tool when:**
+- Uncertain about attribute types, formats, or API behavior
+- Need examples of proper attribute configuration
+- Exploring platform best practices for specific operations
+- Troubleshooting API errors or unexpected behavior
+
+**Do NOT use `ask_comindware`** - that tool provides conversational answers. Use `get_knowledge_base_articles` for programmatic access to documentation.
+
 ## Core Workflows
 
 ### Explore Application Structure
