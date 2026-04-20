@@ -269,6 +269,24 @@ def edit_or_create_toolbar(
     request_body["IsDefaultForLists"] = is_default_for_lists
     request_body["IsDefaultForTaskLists"] = is_default_for_task_lists
 
+    if items is not None:
+        toolbar_items = []
+        for idx, item_input in enumerate(items):
+            item = {
+                "action": {
+                    "type": "UserCommand",
+                    "owner": template_system_name,
+                    "alias": item_input.button_system_name,
+                },
+                "name": item_input.display_name or item_input.button_system_name,
+                "order": item_input.item_order or idx,
+                "type": "Action",
+                "iconType": item_input.icon or "Undefined",
+                "severity": "None",
+            }
+            toolbar_items.append(item)
+        request_body["items"] = toolbar_items
+
     return execute_edit_or_create_operation(
         request_body=request_body,
         operation=operation,

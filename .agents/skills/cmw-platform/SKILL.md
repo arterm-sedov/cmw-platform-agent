@@ -214,22 +214,31 @@ If a dataset shares a toolbar with other datasets, editing that toolbar will aff
 
 To have buttons specific to ONE dataset only:
 1. Create a NEW toolbar using `edit_or_create_toolbar` with `operation="create"`
-2. Link it to the dataset using `edit_or_create_dataset` with `toolbar_system_name`
+2. Add items to toolbar using `edit_or_create_toolbar` with `operation="edit"`
+3. Link it to the dataset using `edit_or_create_dataset` with `toolbar_system_name`
 
 ```python
-# Step 1: Create new toolbar
+# Step 1: Create toolbar
 edit_or_create_toolbar.invoke({
     "operation": "create",
     "application_system_name": "<app>",
     "template_system_name": "<template>",
     "toolbar_system_name": "<toolbar>",
-    "name": "<Name>",
+    "name": "<Name>"
+})
+
+# Step 2: Add items to toolbar
+edit_or_create_toolbar.invoke({
+    "operation": "edit",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "toolbar_system_name": "<toolbar>",
     "items": [
         {"button_system_name": "<button>", "display_name": "<Label>", "item_order": 0},
     ]
 })
 
-# Step 2: Link toolbar to dataset
+# Step 3: Link toolbar to dataset
 edit_or_create_dataset.invoke({
     "operation": "edit",
     "application_system_name": "<app>",
