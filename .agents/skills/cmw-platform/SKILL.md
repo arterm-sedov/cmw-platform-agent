@@ -375,6 +375,13 @@ edit_or_create_dataset.invoke({
 - `{"<column>": null}` or `{"<column>": {"_delete": true}}` - delete/remove column from dataset
 - `{"<newColumn>": {"Name": "<Label>", "propertyPath": [{"type": "Attribute", "owner": "<template>", "alias": "<attribute>"}]}}` - add new column
 
+**Dataset options:**
+- `is_default: true/false` - set as default dataset
+- `show_disabled: true/false` - show disabled records
+- `sorting: [{propertyPath: [...], direction: "Asc"|"Desc", nullValuesOnTop: bool}]`
+- `grouping: [{propertyPath: [...], name: "<GroupName>", direction: "Asc"|"Desc", level: 1, fields: [{propertyPath: [...], aggregationMethod: "Count"|"Sum"|..., type: "String"|"Number"|"Boolean"|"Record", format: "Undefined"}]}]`
+  - Note: Add `fields` with `aggregationMethod` to enable totals/summary in grouping
+
 ## Error Handling
 
 | Status | Meaning | Action |
