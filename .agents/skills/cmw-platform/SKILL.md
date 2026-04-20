@@ -311,8 +311,9 @@ dataset = get_dataset.invoke({
     "template_system_name": "WorkOrders",
     "dataset_system_name": "defaultList"
 })
+# Note: dataset returns data directly (not nested under "data")
 for col in dataset.get("columns", []):
-    print(f"  - {col.get('globalAlias', {}).get('alias')}: {col.get('name')}")
+    print(f"  - {col.get('name')}")
 
 # Edit dataset name and column labels
 edit_or_create_dataset.invoke({

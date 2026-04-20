@@ -12,10 +12,16 @@ AI coding agent guidelines for this LangChain-based Python 3.11+ project.
 ```bash
 ruff check <file_path>                    # Check specific file
 ruff format <file_path>                  # Format specific file
-python lint.py file.py                  # Custom lint script
-python lint.py --staged                  # Staged files only
-python lint.py --changed                 # Changed vs HEAD (default)
-python lint.py --all                     # Full repository
+python lint.py file.py                    # Custom lint script
+python lint.py --staged                   # Staged files only
+python lint.py --changed                  # Changed vs HEAD (default)
+python lint.py --all                      # Full repository
+```
+
+**Type Checking:**
+```bash
+mypy <file_path>                          # Type check specific file
+mypy agent_ng/                            # Type check module
 ```
 
 **Testing:**
@@ -31,11 +37,7 @@ python -m pytest agent_ng/_tests/ -k "pattern"            # By pattern match
 
 ## Code Style Guidelines
 
-### Import Organization (3 groups)
-1. Standard library (`asyncio`, `json`, `logging`, `typing`, etc.)
-2. Third-party (`gradio`, `langchain`, `pydantic`, etc.)
-3. Local imports (relative with fallback)
-
+**Imports (3 groups):** Standard library → Third-party → Local with fallback
 ```python
 try:
     from .utils import helper
@@ -43,19 +45,18 @@ except ImportError:
     from agent_ng.utils import helper
 ```
 
-### Naming Conventions
-- **Classes**: PascalCase (`ChatTab`, `LLMManager`)
-- **Functions/Variables**: snake_case (`get_token_tracker`)
-- **Constants**: UPPER_SNAKE_CASE (`TOKEN_STATUS_CRITICAL`)
-- **Private**: Leading underscore (`_internal_func`)
+**Naming:** Classes PascalCase, functions/variables snake_case, constants UPPER_SNAKE, private prefix `_`
+**Code Quality:** Line 88 chars, double quotes, no orphan spaces, DRY (2+ uses → helper), run linter after changes
+**Imports always on top**, consistent formatting, produce flawless code
+**Line Limit:** Maximum 88 characters per line
 
-### Code Quality
-- Line length: 88 chars (Black-compatible)
-- Double quotes consistently
-- No orphan spaces on empty lines
-- DRY: Extract repeated code (2+ times) into helpers
-- Reanalyze changes twice before finalizing
-- Run linter after every change
+## Research & Planning
+
+- Before coding, search internet for reference documentation on frameworks/libraries
+- Go to official documentation sources and digest best practices
+- Scan docs hierarchy, don't just read a page or two
+- Gather all information before planning course of action
+- PLAN after gathering reference information, not before
 
 ## Design Principles
 
@@ -65,6 +66,9 @@ except ImportError:
 - **Lean:** Minimal code, no overengineering
 - **Pythonic:** Follow Python idioms, prefer clarity over cleverness
 - **Modular:** Single responsibility, group related functionality
+- **Open/Closed:** Design for extension without modification
+- **Research first:** Search docs/internet before coding, scan full doc hierarchy
+- **Abstraction:** Use interfaces and abstractions for extensibility
 
 ## Error Handling
 
@@ -74,18 +78,22 @@ except ImportError:
 - **Validate external data** before processing
 - **Safe defaults** for optional fields (0.0, None, empty collections)
 - Handle multiple response formats gracefully (dict vs object)
+- Centralize error handling and validation logic
 
 ## Framework Conventions
 
 **LangChain:** Pure patterns, LCEL, streaming with `astream()`, Pydantic for tool params
+**LangChain References:** https://python.langchain.com/docs/ - Streaming, Runnables, Tool Calling, LCEL
 **Gradio:** Use i18n system, follow component patterns, proper state management
+**Gradio References:** https://www.gradio.app/docs - Components, State, Event Listeners
 
 ## Testing Guidelines
 
 - Test **behavior**, not implementation
 - Focus on: error handling, data integrity, user-facing functionality
 - Cover edge cases: boundary conditions, missing data, invalid inputs
-- Location: `agent_ng/_tests/`
+- Location: `agent_ng/_tests/` or relevant `cwd/_tests`
+- Do not test irrelevant patterns (internal state, singletons, framework internals)
 
 ## CMW Platform Terminology
 
@@ -99,14 +107,17 @@ except ImportError:
 | container | template |
 | property | attribute |
 
-## Agent Workflow
+## CMW Platform Architecture
 
-1. **Research first** - Search docs/internet before coding, scan full doc hierarchy
-2. **Plan thoroughly** - Write plans to `.opencode/plans/YYYYMMDD_<topic>/plan.md`
-3. **Run linter** - Always `ruff check <file>` after changes
-4. **No breakage** - Verify existing functionality still works
-5. **Env vars** - Use for secrets, never hardcode
-6. **Docs** - Put reports to `docs/**/progress_reports/` with `YYYYMMDD_` prefix
+**Key Concept:** Datasets, Toolbars, and Buttons are **separate API entities** with different endpoints:
+
+| Entity | Tool to Get | Tool to Edit | Endpoint Pattern |
+|--------|-------------|--------------|-------------------|
+| Dataset | `get_dataset` | `edit_or_create_dataset` | `webapi/Dataset/{app}/Dataset@{tpl}.{dataset}` |
+| Toolbar | `get_toolbar` | `edit_or_create_toolbar` | `webapi/Toolbar/{app}/Toolbar@{tpl}.{toolbar}` |
+| Button | `get_button` | `edit_or_create_button` | `webapi/Button/{app}/Button@{tpl}.{button}` |
+
+**Toolbar-Dataset Link:** Toolbars link to datasets via toolbar's `IsDefaultForLists` flag.
 
 ## Key Dependencies
 
@@ -119,9 +130,9 @@ except ImportError:
 
 ## Commit Guidelines
 
-- Only create commits when explicitly asked by the user
-- Keep messages concise, structured, and relevant to changes
-- Avoid fluff and unnecessary length
+- Only create commits when explicitly asked
+- Keep messages concise, structured, strictly relevant to changes
+- Never add files, stage, or push - only generate commit message text
 
 ## UI/UX Principles
 
@@ -129,7 +140,7 @@ except ImportError:
 - **Maximize data-ink ratio** - Every element adds value
 - **Visual hierarchy** - Group related information consistently
 - **Progressive disclosure** - Essential info prominent, details on demand
-- **Data integrity** - Display zero values when meaningful
+- **Data integrity** - Display zero values when meaningful, not just absence
 
 ## File Organization
 
@@ -137,26 +148,20 @@ except ImportError:
 - Module docstrings with key features and usage examples
 - Use `.env` files for local config, never commit secrets
 - Progress reports to `docs/**/progress_reports/` with `YYYYMMDD_` prefix
+- Documentation files to `docs/` folder
 
-## Refactoring & Secrets
+## Terminal Commands
 
-- Change only relevant parts when refactoring - never break existing code
-- Never hardcode secrets - use environment variables
-- Update logging and comments when changing code, don't delete them
+- ALWAYS activate venv before running Python commands
+- PowerShell: `.venv\Scripts\Activate.ps1`
+- WSL/Linux: `.venv-ubuntu/bin/activate`
+- Do not execute Python without active venv
 
-## Cursor Rules Integration
+## Python References
 
-Include these rules from `.cursor/rules/`:
-- Terminal: Always activate venv before running Python commands
-- Docs: Put reports to relevant `docs/**/progress_reports/` folder
-- Framework purity: LangChain-pure, Gradio-pure patterns
-
-## Framework References
-
-- LangChain: https://python.langchain.com/docs/
-- Gradio: https://www.gradio.app/docs
-- Python: https://peps.python.org/pep-0008/
-- Google Python Style: https://google.github.io/styleguide/pyguide.html
+- PEP 8: https://peps.python.org/pep-0008/
+- PEP 257: https://peps.python.org/pep-0257/
+- Google Style: https://google.github.io/styleguide/pyguide.html
 
 ---
 
