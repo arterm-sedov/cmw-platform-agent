@@ -369,7 +369,10 @@ edit_or_create_dataset.invoke({
 })
 ```
 
-**Note:** Column edits use `name` (not `label`) to rename/hide columns.
+**Note:** Column edits support:
+- `{"<column>": {"Name": "<New Label>"}}` - rename existing column
+- `{"<column>": {"isHidden": True}}` - hide existing column
+- `{"<newColumn>": {"Name": "<Label>", "propertyPath": [{"type": "Attribute", "owner": "<template>", "alias": "<attribute>"}]}}` - add new column
 
 ## Error Handling
 
