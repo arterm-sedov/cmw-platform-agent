@@ -7,6 +7,8 @@ from tools import requests_
 from tools.models import AttributeResult, CommonFormFields, FormResult
 from tools.tool_utils import (
     _apply_partial_update,
+    _fetch_entity,
+    build_global_alias,
     execute_edit_or_create_operation,
     execute_get_operation,
     execute_list_operation,
@@ -106,15 +108,14 @@ def _apply_widget_edits(form_data: dict[str, Any], widget_edits: dict[str, dict[
 
 
 def _fetch_form(application_system_name: str, template_system_name: str, form_system_name: str) -> dict[str, Any] | None:
-    """Fetch current form JSON."""
-    form_global_alias = f"Form@{template_system_name}.{form_system_name}"
-    endpoint = f"{FORM_ENDPOINT}/{application_system_name}/{form_global_alias}"
-    result = execute_get_operation(FormResult, endpoint)
-    if result.get("success"):
-        # Strip metadata fields - return only form data
-        meta_fields = {"success", "status_code", "error", "data"}
-        return {k: v for k, v in result.items() if k not in meta_fields}
-    return None
+    """Fetch current form JSON using generic _fetch_entity."""
+    return _fetch_entity(
+        "Form",
+        application_system_name,
+        template_system_name,
+        form_system_name,
+        FORM_ENDPOINT,
+    )
 
 
 @tool("edit_or_create_form", return_direct=False, args_schema=EditOrCreateFormSchema)
@@ -148,11 +149,7 @@ def edit_or_create_form(
     endpoint = f"{FORM_ENDPOINT}/{application_system_name}"
 
     request_body: dict[str, Any] = {
-        "globalAlias": {
-            "type": "Form",
-            "owner": template_system_name,
-            "alias": form_system_name,
-        }
+        "globalAlias": build_global_alias("Form", template_system_name, form_system_name),
     }
 
     if name is not None:

@@ -5,23 +5,25 @@ AI coding agent guidelines for this LangChain-based Python 3.11+ project.
 ## Build/Lint/Test Commands
 
 **Environment Setup (ALWAYS REQUIRED):**
-- `.venv\Scripts\Activate.ps1` (PowerShell)
-- `.venv-ubuntu/bin/activate` (WSL/Linux)
+```bash
+.venv\Scripts\Activate.ps1  # PowerShell
+.venv-ubuntu/bin/activate   # WSL/Linux
+```
 
 **Linting:**
 ```bash
-ruff check <file_path>                    # Check specific file
-ruff format <file_path>                  # Format specific file
-python lint.py file.py                    # Custom lint script
-python lint.py --staged                   # Staged files only
-python lint.py --changed                  # Changed vs HEAD (default)
-python lint.py --all                      # Full repository
+ruff check <file_path>           # Check specific file
+ruff format <file_path>          # Format specific file
+python lint.py file.py           # Custom lint script (default: changed vs HEAD)
+python lint.py --staged          # Staged files only
+python lint.py --changed         # Changed vs HEAD (default)
+python lint.py --all             # Full repository
 ```
 
 **Type Checking:**
 ```bash
-mypy <file_path>                          # Type check specific file
-mypy agent_ng/                            # Type check module
+mypy <file_path>                 # Type check specific file
+mypy agent_ng/                   # Type check module
 ```
 
 **Testing:**
@@ -29,13 +31,19 @@ mypy agent_ng/                            # Type check module
 python -m pytest agent_ng/_tests/                          # All tests
 python -m pytest agent_ng/_tests/test_file.py             # Single file
 python -m pytest agent_ng/_tests/test_file.py::ClassName  # Single test class
-python -m pytest agent_ng/_tests/test_file.py::test_method  # Single test method
+python -m pytest agent_ng/_tests/test_file.py::test_method # Single test method
 python -m pytest agent_ng/_tests/ -k "pattern"            # By pattern match
 ```
 
 **Run App:** `python agent_ng/app_ng_modular.py`
 
 ## Code Style Guidelines
+
+**Ruff Configuration (pyproject.toml):**
+- Line length: 88 characters
+- Target Python: 3.11+
+- Quotes: double quotes for inline and docstrings
+- See pyproject.toml for full rule configuration
 
 **Imports (3 groups):** Standard library → Third-party → Local with fallback
 ```python
@@ -46,9 +54,8 @@ except ImportError:
 ```
 
 **Naming:** Classes PascalCase, functions/variables snake_case, constants UPPER_SNAKE, private prefix `_`
-**Code Quality:** Line 88 chars, double quotes, no orphan spaces, DRY (2+ uses → helper), run linter after changes
-**Imports always on top**, consistent formatting, produce flawless code
 **Line Limit:** Maximum 88 characters per line
+**Imports always on top**, consistent formatting, produce flawless code
 
 ## Research & Planning
 
@@ -67,18 +74,17 @@ except ImportError:
 - **Pythonic:** Follow Python idioms, prefer clarity over cleverness
 - **Modular:** Single responsibility, group related functionality
 - **Open/Closed:** Design for extension without modification
-- **Research first:** Search docs/internet before coding, scan full doc hierarchy
-- **Abstraction:** Use interfaces and abstractions for extensibility
+- **DRY:** 2+ uses → extract to helper, super dry, super lean
 
 ## Error Handling
 
-- **No silent exceptions** - always add logging
+- **No silent exceptions** - always add logging (empty `except: pass` is forbidden)
 - **No nested exceptions** - ugly and non-debuggable
-- **No unnecessary try-catches** - only add when helpful
-- **Validate external data** before processing
+- **No unnecessary try-catches** - only add when helpful or adds value
+- **Validate external data** before processing (check response.ok, validate structure)
 - **Safe defaults** for optional fields (0.0, None, empty collections)
-- Handle multiple response formats gracefully (dict vs object)
-- Centralize error handling and validation logic
+- **Handle multiple response formats** gracefully (dict vs object, different field names)
+- **Centralize error handling** and validation logic
 
 ## Framework Conventions
 
@@ -131,8 +137,9 @@ except ImportError:
 ## Commit Guidelines
 
 - Only create commits when explicitly asked
-- Keep messages concise, structured, strictly relevant to changes
-- Never add files, stage, or push - only generate commit message text
+- Generate commit message text, but do NOT add files, stage, or push
+- Keep messages concise, structured, and strictly relevant to changes
+- Avoid blabber - keep length to necessary minimum
 
 ## UI/UX Principles
 
@@ -150,13 +157,6 @@ except ImportError:
 - Progress reports to `docs/**/progress_reports/` with `YYYYMMDD_` prefix
 - Documentation files to `docs/` folder
 
-## Terminal Commands
-
-- ALWAYS activate venv before running Python commands
-- PowerShell: `.venv\Scripts\Activate.ps1`
-- WSL/Linux: `.venv-ubuntu/bin/activate`
-- Do not execute Python without active venv
-
 ## Python References
 
 - PEP 8: https://peps.python.org/pep-0008/
@@ -165,4 +165,4 @@ except ImportError:
 
 ---
 
-**Remember:** LangChain-pure, dry, lean, modular, pythonic patterns. Always research first, plan thoroughly, produce flawless code.
+**Remember:** LangChain-pure, DRY, lean, modular, pythonic patterns. Always research first, plan thoroughly, produce flawless code.

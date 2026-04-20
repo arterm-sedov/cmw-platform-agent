@@ -17,6 +17,10 @@ from .models import (
 APPLICATION_ENDPOINT = "webapi/Solution"
 ATTRIBUTE_ENDPOINT = "webapi/Attribute"
 RECORD_TEMPLATE_ENDPOINT = "webapi/RecordTemplate"
+FORM_ENDPOINT = "webapi/Form"
+DATASET_ENDPOINT = "webapi/Dataset"
+TOOLBAR_ENDPOINT = "webapi/Toolbar"
+BUTTON_ENDPOINT = "webapi/UserCommand"
 KEYS_TO_REMOVE_MAPPING = {
     "String": [
         "isMultiValue",
@@ -351,6 +355,89 @@ def _set_input_mask(display_format: str) -> str:
     return input_mask_mapping.get(display_format)
 
 
+def build_global_alias(entity_type: str, owner: str, alias: str) -> dict[str, str]:
+    """
+    Build a standardized globalAlias dict for API requests.
+
+    Args:
+        entity_type: Type of entity (Form, Dataset, Toolbar, UserCommand, Attribute)
+        owner: Owner/template system name
+        alias: Entity system name
+
+    Returns:
+        dict with type, owner, alias keys
+    """
+    return {"type": entity_type, "owner": owner, "alias": alias}
+
+
+def _fetch_entity(
+    entity_type: str,
+    application_system_name: str,
+    template_system_name: str,
+    entity_system_name: str,
+    endpoint_prefix: str | None = None,
+) -> dict[str, Any] | None:
+    """
+    Generic fetch function for any entity type.
+
+    Args:
+        entity_type: Type in globalAlias (Form, Dataset, Toolbar, UserCommand, Attribute)
+        application_system_name: Application system name
+        template_system_name: Template system name
+        entity_system_name: Entity system name
+        endpoint_prefix: Optional custom endpoint prefix
+
+    Returns:
+        Entity data dict or None if not found
+    """
+    global_alias = f"{entity_type}@{template_system_name}.{entity_system_name}"
+    if endpoint_prefix is None:
+        endpoint_prefix = f"webapi/{entity_type}"
+    endpoint = f"{endpoint_prefix}/{application_system_name}/{global_alias}"
+    result = execute_get_operation(AttributeResult, endpoint)
+    if result.get("success"):
+        meta_fields = {"success", "status_code", "error"}
+        # Data may be in result.data or at top level of result
+        data = result.get("data")
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if k not in meta_fields}
+        # Fall back to top-level fields (excluding meta)
+        return {k: v for k, v in result.items() if k not in meta_fields}
+    return None
+
+
+def _build_toolbar_items(
+    items: list[BaseModel],
+    template_system_name: str,
+) -> list[dict[str, Any]]:
+    """
+    Build toolbar items list from input schemas.
+
+    Args:
+        items: List of ToolbarItemInputSchema or similar
+        template_system_name: Template system name for action owner
+
+    Returns:
+        List of toolbar item dicts
+    """
+    toolbar_items = []
+    for idx, item_input in enumerate(items):
+        item = {
+            "action": {
+                "type": "UserCommand",
+                "owner": template_system_name,
+                "alias": item_input.button_system_name,
+            },
+            "name": item_input.display_name or item_input.button_system_name,
+            "order": item_input.item_order or idx,
+            "type": "Action",
+            "iconType": item_input.icon or "Undefined",
+            "severity": "None",
+        }
+        toolbar_items.append(item)
+    return toolbar_items
+
+
 def execute_get_operation(
     result_model: type[BaseModel], endpoint: str
 ) -> dict[str, Any]:
@@ -402,6 +489,15 @@ def execute_get_operation(
         else raw_response["response"]
     )
 
+    if data is None:
+        adapted = {
+            "success": False,
+            "status_code": result.get("status_code"),
+            "data": None,
+            "error": "No response data in server response",
+        }
+        return result_model(**adapted).model_dump()
+
     if isinstance(data, dict):
         # Определяем тип атрибута
         data = process_data(data, f"{caller_name}")
@@ -413,7 +509,7 @@ def execute_get_operation(
         "error": None,
     }
 
-    final_result = {**data, **final_result}
+    final_result = {**data, **final_result} if isinstance(data, dict) else final_result
 
     # Валидируем и возвращаем
     validated = result_model(**final_result)
