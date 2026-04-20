@@ -371,7 +371,8 @@ edit_or_create_dataset.invoke({
 
 **Note:** Column edits support:
 - `{"<column>": {"Name": "<New Label>"}}` - rename existing column
-- `{"<column>": {"isHidden": True}}` - hide existing column
+- `{"<column>": {"isHidden": true}}` - hide column from UI
+- `{"<column>": null}` or `{"<column>": {"_delete": true}}` - delete/remove column from dataset
 - `{"<newColumn>": {"Name": "<Label>", "propertyPath": [{"type": "Attribute", "owner": "<template>", "alias": "<attribute>"}]}}` - add new column
 
 ## Error Handling
