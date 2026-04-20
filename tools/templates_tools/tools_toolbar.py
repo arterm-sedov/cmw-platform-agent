@@ -209,7 +209,11 @@ def edit_or_create_toolbar(
             "type": "Toolbar",
             "owner": template_system_name,
             "alias": toolbar_system_name,
-        }
+        },
+        "container": {
+            "type": "RecordTemplate",
+            "alias": template_system_name,
+        },
     }
 
     if name is not None:

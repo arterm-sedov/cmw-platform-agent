@@ -179,17 +179,17 @@ from tools.templates_tools.tools_toolbar import list_toolbars, get_toolbar, edit
 
 # List all toolbars for a template
 toolbars = list_toolbars.invoke({
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "WorkOrders"
+    "application_system_name": "<app>",
+    "template_system_name": "<template>"
 })
 for tb in toolbars["data"]:
     print(f"{tb['globalAlias']['alias']}: {tb['name']}")
 
 # Get toolbar with items
 toolbar = get_toolbar.invoke({
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "WorkOrders",
-    "toolbar_system_name": "ToolbarComponent"
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "toolbar_system_name": "<toolbar>"
 })
 for item in toolbar.get("items", []):
     print(f"  - {item['name']} ({item['action']['alias']})")
@@ -197,14 +197,45 @@ for item in toolbar.get("items", []):
 # Edit toolbar name and items
 edit_or_create_toolbar.invoke({
     "operation": "edit",
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "WorkOrders",
-    "toolbar_system_name": "defaultListToolbar",
-    "name": "List Actions",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "toolbar_system_name": "<toolbar>",
+    "name": "<New Name>",
     "items": [
-        {"button_system_name": "create", "display_name": "New Record", "item_order": 0},
-        {"button_system_name": "archive", "display_name": "Archive", "item_order": 1},
+        {"button_system_name": "create", "display_name": "<Label>", "item_order": 0},
+        {"button_system_name": "archive", "display_name": "<Label>", "item_order": 1},
     ]
+})
+```
+
+**⚠️ IMPORTANT: Dataset-Specific Toolbars**
+
+If a dataset shares a toolbar with other datasets, editing that toolbar will affect ALL linked datasets.
+
+To have buttons specific to ONE dataset only:
+1. Create a NEW toolbar using `edit_or_create_toolbar` with `operation="create"`
+2. Link it to the dataset using `edit_or_create_dataset` with `toolbar_system_name`
+
+```python
+# Step 1: Create new toolbar
+edit_or_create_toolbar.invoke({
+    "operation": "create",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "toolbar_system_name": "<toolbar>",
+    "name": "<Name>",
+    "items": [
+        {"button_system_name": "<button>", "display_name": "<Label>", "item_order": 0},
+    ]
+})
+
+# Step 2: Link toolbar to dataset
+edit_or_create_dataset.invoke({
+    "operation": "edit",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "dataset_system_name": "<dataset>",
+    "toolbar_system_name": "<toolbar>"
 })
 ```
 
@@ -215,19 +246,19 @@ Toolbar items have their own `name` field that **overrides** the button's displa
 2. Set `display_name` on each item (not the button itself)
 
 ```python
-# WRONG: Editing button name won't affect toolbar display
+# WRONG: Editing button won't affect toolbar display
 edit_or_create_button.invoke({
     "operation": "edit",
-    "button_system_name": "create",
-    "name": "Новая запись"  # This changes the BUTTON, not toolbar item
+    "button_system_name": "<button>",
+    "name": "<Label>"
 })
 
-# CORRECT: Update toolbar items to change displayed labels
+# CORRECT: Update toolbar items
 edit_or_create_toolbar.invoke({
     "operation": "edit",
-    "toolbar_system_name": "defaultListToolbar",
+    "toolbar_system_name": "<toolbar>",
     "items": [
-        {"button_system_name": "create", "display_name": "Новая запись", "item_order": 0}
+        {"button_system_name": "<button>", "display_name": "<Label>", "item_order": 0}
     ]
 })
 ```
@@ -239,20 +270,20 @@ from tools.templates_tools.tools_toolbar import list_buttons, get_button, edit_o
 
 # List all buttons for a template
 buttons = list_buttons.invoke({
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "WorkOrders"
+    "application_system_name": "<app>",
+    "template_system_name": "<template>"
 })
 for btn in buttons["data"]:
     print(f"{btn['name']}: kind={btn['kind']}, disabled={btn['isDisabled']}")
 
-# Edit button name
+# Edit button
 edit_or_create_button.invoke({
     "operation": "edit",
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "WorkOrders",
-    "button_system_name": "edit",
-    "name": "Save",
-    "kind": "Edit"
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "button_system_name": "<button>",
+    "name": "<Name>",
+    "kind": "<Kind>"
 })
 
 # Archive a button
@@ -272,9 +303,9 @@ from tools.templates_tools.tools_form import get_form, edit_or_create_form
 
 # Get form with widgets
 form = get_form.invoke({
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "WorkOrders",
-    "form_system_name": "defaultForm"
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "form_system_name": "<form>"
 })
 for widget in form.get("widgets", []):
     print(f"{widget['globalAlias']['alias']}: {widget.get('label', widget.get('name'))}")
@@ -282,12 +313,11 @@ for widget in form.get("widgets", []):
 # Edit widget labels
 edit_or_create_form.invoke({
     "operation": "edit",
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "WorkOrders",
-    "form_system_name": "defaultForm",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "form_system_name": "<form>",
     "widgets": [
-        {"system_name": "GroupPanelComponent(2)", "label": "Section 1"},
-        {"system_name": "_isDisabled", "label": "Archived"},
+        {"system_name": "<widget>", "label": "<New Label>"},
     ]
 })
 ```
@@ -299,35 +329,38 @@ from tools.templates_tools.tools_dataset import list_datasets, get_dataset, edit
 
 # List all datasets for a template
 datasets = list_datasets.invoke({
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "WorkOrders"
+    "application_system_name": "<app>",
+    "template_system_name": "<template>"
 })
 for ds in datasets.get("data", []):
-    print(f"{ds.get('globalAlias', {}).get('alias')}: {ds.get('name')}")
+    has_toolbar = "toolbar" in ds
+    print(f"{ds.get('globalAlias', {}).get('alias')}: {ds.get('name')} (toolbar: {has_toolbar})")
 
 # Get dataset with columns
 dataset = get_dataset.invoke({
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "WorkOrders",
-    "dataset_system_name": "defaultList"
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "dataset_system_name": "<dataset>"
 })
-# Note: dataset returns data directly (not nested under "data")
 for col in dataset.get("columns", []):
     print(f"  - {col.get('name')}")
 
-# Edit dataset name and column labels
+# Edit dataset name, columns, and link toolbar
 edit_or_create_dataset.invoke({
     "operation": "edit",
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "WorkOrders",
-    "dataset_system_name": "defaultList",
-    "name": "Work Orders List",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "dataset_system_name": "<dataset>",
+    "name": "<New Name>",
+    "toolbar_system_name": "<toolbar>",
     "columns": {
-        "CreatedDate": {"label": "Created", "helpText": "Creation date"},
-        "Status": {"label": "Current Status"},
+        "<column>": {"Name": "<New Label>"},
+        "<columnToHide>": {"isHidden": True},
     }
 })
 ```
+
+**Note:** Column edits use `name` (not `label`) to rename/hide columns.
 
 ## Error Handling
 
