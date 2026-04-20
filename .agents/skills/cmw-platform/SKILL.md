@@ -81,6 +81,9 @@ print(result["data"])
 | get_button | tools.templates_tools.tools_toolbar | Get button details |
 | edit_or_create_button | tools.templates_tools.tools_toolbar | Edit button |
 | archive_unarchive_button | tools.templates_tools.tools_toolbar | Archive/unarchive button |
+| list_datasets | tools.templates_tools.tools_dataset | List datasets |
+| get_dataset | tools.templates_tools.tools_dataset | Get dataset details |
+| edit_or_create_dataset | tools.templates_tools.tools_dataset | Edit dataset name/columns |
 
 ## Knowledge Base
 
@@ -286,6 +289,42 @@ edit_or_create_form.invoke({
         {"system_name": "GroupPanelComponent(2)", "label": "Section 1"},
         {"system_name": "_isDisabled", "label": "Archived"},
     ]
+})
+```
+
+### List and Edit Datasets
+
+```python
+from tools.templates_tools.tools_dataset import list_datasets, get_dataset, edit_or_create_dataset
+
+# List all datasets for a template
+datasets = list_datasets.invoke({
+    "application_system_name": "FacilityManagement",
+    "template_system_name": "WorkOrders"
+})
+for ds in datasets.get("data", []):
+    print(f"{ds.get('globalAlias', {}).get('alias')}: {ds.get('name')}")
+
+# Get dataset with columns
+dataset = get_dataset.invoke({
+    "application_system_name": "FacilityManagement",
+    "template_system_name": "WorkOrders",
+    "dataset_system_name": "defaultList"
+})
+for col in dataset.get("columns", []):
+    print(f"  - {col.get('globalAlias', {}).get('alias')}: {col.get('name')}")
+
+# Edit dataset name and column labels
+edit_or_create_dataset.invoke({
+    "operation": "edit",
+    "application_system_name": "FacilityManagement",
+    "template_system_name": "WorkOrders",
+    "dataset_system_name": "defaultList",
+    "name": "Work Orders List",
+    "columns": {
+        "CreatedDate": {"label": "Created", "helpText": "Creation date"},
+        "Status": {"label": "Current Status"},
+    }
 })
 ```
 

@@ -81,6 +81,10 @@ from .templates_tools import (
     edit_or_create_button,
     # Form tools
     edit_or_create_form,
+    # Dataset tools
+    edit_or_create_dataset,
+    get_dataset,
+    list_datasets,
     # Record template
     edit_or_create_record_template,
     # Toolbar tools
@@ -124,6 +128,11 @@ __all__ = [
     "edit_or_create_form",
     "get_form",
     "list_forms",
+
+    # Dataset tools
+    "edit_or_create_dataset",
+    "get_dataset",
+    "list_datasets",
 
     # Toolbar tools
     "get_toolbar",
