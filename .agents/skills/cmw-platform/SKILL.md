@@ -77,10 +77,10 @@ print(result["data"])
 | list_toolbars | tools.templates_tools.tools_toolbar | List toolbars |
 | get_toolbar | tools.templates_tools.tools_toolbar | Get toolbar details |
 | edit_or_create_toolbar | tools.templates_tools.tools_toolbar | Edit toolbar/items |
-| list_buttons | tools.templates_tools.tools_toolbar | List buttons |
-| get_button | tools.templates_tools.tools_toolbar | Get button details |
-| edit_or_create_button | tools.templates_tools.tools_toolbar | Edit button |
-| archive_unarchive_button | tools.templates_tools.tools_toolbar | Archive/unarchive button |
+| list_buttons | tools.templates_tools.tools_button | List buttons |
+| get_button | tools.templates_tools.tools_button | Get button details |
+| edit_or_create_button | tools.templates_tools.tools_button | Edit button |
+| archive_unarchive_button | tools.templates_tools.tools_button | Archive/unarchive button |
 | list_datasets | tools.templates_tools.tools_dataset | List datasets |
 | get_dataset | tools.templates_tools.tools_dataset | Get dataset details |
 | edit_or_create_dataset | tools.templates_tools.tools_dataset | Edit dataset name/columns |
@@ -275,7 +275,7 @@ edit_or_create_toolbar.invoke({
 ### List and Edit Buttons
 
 ```python
-from tools.templates_tools.tools_toolbar import list_buttons, get_button, edit_or_create_button
+from tools.templates_tools.tools_button import list_buttons, get_button, edit_or_create_button, archive_unarchive_button
 
 # List all buttons for a template
 buttons = list_buttons.invoke({
@@ -285,22 +285,21 @@ buttons = list_buttons.invoke({
 for btn in buttons["data"]:
     print(f"{btn['name']}: kind={btn['kind']}, disabled={btn['isDisabled']}")
 
-# Edit button
+# Edit button (partial update - only name and description are safe for most buttons)
 edit_or_create_button.invoke({
     "operation": "edit",
     "application_system_name": "<app>",
     "template_system_name": "<template>",
     "button_system_name": "<button>",
     "name": "<Name>",
-    "kind": "<Kind>"
+    "description": "<Description>"
 })
 
 # Archive a button
-from tools.templates_tools.tools_toolbar import archive_unarchive_button
 archive_unarchive_button.invoke({
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "WorkOrders",
-    "button_system_name": "archive",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "button_system_name": "<button>",
     "operation": "archive"
 })
 ```
@@ -510,6 +509,71 @@ edit_or_create_numeric_attribute.invoke({
 | Record | `related_template_system_name` |
 
 **Note:** Text/String attributes require **no type-specific fields** - they work with defaults. Only provide `display_format` (e.g., `PlainText`) when you need a specific format.
+
+## Edit Tool Validation Pattern
+
+All edit_or_create tools (datasets, buttons, toolbars, forms, attributes) follow the same validation pattern:
+
+| Operation | Required Fields | Optional Fields |
+|-----------|----------------|-----------------|
+| **Create** | `name` + identifiers | All editable fields |
+| **Edit** | identifiers only | All editable fields (partial update) |
+
+### Identifiers (Always Required)
+- `operation`: "create" or "edit"
+- `application_system_name`: App system name
+- `template_system_name`: Template system name
+- `{entity}_system_name`: The specific entity (button_system_name, toolbar_system_name, etc.)
+
+### Editable Fields for Each Tool Type
+
+**Dataset (`edit_or_create_dataset`):**
+- `name` - display name
+- `view_type` - Undefined, General, SplitVertical, SplitHorizontal
+- `is_default` - set as default dataset
+- `show_disabled` - show disabled records
+- `toolbar_system_name` - link toolbar
+- `columns` - add/remove/rename columns
+- `sorting`, `grouping`, `totals` - view configuration
+
+**Button (`edit_or_create_button`):**
+- `name` - display name
+- `description` - button description
+- `kind` - UserEvent, Create, Edit, Delete, Archive, Unarchive, Test
+- `context` - Record, List
+- `multiplicity` - OneByOne, Many
+- `result_type` - DataChange, Redirect
+- `has_confirmation` - show confirmation dialog
+- `navigation_target` - SameForm, NewForm, Undefined
+
+**Toolbar (`edit_or_create_toolbar`):**
+- `name` - display name
+- `is_default_for_forms` - default for forms
+- `is_default_for_lists` - default for lists
+- `is_default_for_task_lists` - default for task lists
+- `items` - add/remove toolbar items (buttons)
+
+**⚠️ WARNING: System Buttons**
+Buttons with system names "create", "edit", "archive", "delete", "unarchive" are platform defaults. Only modify `name` and `description` for these - other changes may cause unexpected behavior.
+
+### How Partial Updates Work
+
+1. Edit call provides only fields to change
+2. Tool fetches current entity state from API
+3. Tool merges current state with provided fields
+4. Missing fields are preserved from fetched state
+
+```python
+# Example: Edit only dataset name
+edit_or_create_dataset.invoke({
+    "operation": "edit",
+    "application_system_name": "supportTest",
+    "template_system_name": "LegalEntity",
+    "dataset_system_name": "testDataset",
+    "name": "New Dataset Name"
+    # Other fields omitted - will be fetched and preserved
+})
+```
 
 ## Working Files
 
