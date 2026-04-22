@@ -348,6 +348,13 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": True
                 },
                 {
+                    "model": "minimax/minimax-m2.7",
+                    "token_limit": 196608,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
                     "model": "z-ai/glm-5.1",
                     "token_limit": 200000,
                     "max_tokens": 65536,
