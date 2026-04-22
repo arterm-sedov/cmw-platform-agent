@@ -1,21 +1,23 @@
-"""LangChain tool for getting current date and time.
-
-This tool provides the current date and time information to help the agent
-answer time-related questions and filter information by date periods.
-"""
+"""Datetime utilities for getting current date/time."""
 
 from datetime import datetime
 import json
 import logging
+import os
 from zoneinfo import ZoneInfo
 
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 
+
+def _get_default_timezone() -> str:
+    """Get default timezone from environment or fallback to UTC."""
+    return os.environ.get("DEFAULT_TIMEZONE", "UTC")
+
+
 logger = logging.getLogger(__name__)
 
-# Default timezone - can be overridden via settings if needed
-DEFAULT_TIMEZONE = "UTC"
+DEFAULT_TIMEZONE = _get_default_timezone()
 
 
 def _get_current_datetime_dict(timezone: str | None = None) -> dict:

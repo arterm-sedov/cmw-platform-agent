@@ -6,9 +6,7 @@ to avoid unnecessary tool calls while keeping tool available for explicit querie
 
 import json
 
-from tools.get_datetime import _get_current_datetime_dict
-
-DEFAULT_TIMEZONE = "UTC"
+from tools.get_datetime import DEFAULT_TIMEZONE, _get_current_datetime_dict
 
 
 def get_datetime_context(timezone: str | None = None) -> str:
