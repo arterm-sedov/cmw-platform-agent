@@ -177,6 +177,7 @@ uritemplate==4.2.0
 urllib3==2.5.0
 uvicorn==0.37.0
 websockets==15.0.1
+markitdown[docx,xlsx,pptx]
 wheel==0.45.1
 wikipedia==1.4.0
 wrapt==1.17.3

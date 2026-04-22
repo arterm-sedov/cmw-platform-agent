@@ -149,6 +149,14 @@ except ImportError:
     GEMINI_AVAILABLE = False
     print("Warning: Google Gemini not available. Install with: pip install google-genai")
 
+# MarkItDown for Office documents and HTML text extraction
+try:
+    from markitdown import MarkItDown
+    MARKITDOWN_AVAILABLE = True
+except ImportError:
+    MARKITDOWN_AVAILABLE = False
+    print("Warning: markitdown not available. Install with: pip install markitdown[docx,xlsx,pptx]")
+
 # ========== GEMINI HELPER FUNCTIONS ==========
 def _get_gemini_client():
     """
@@ -797,73 +805,141 @@ def arxiv_search(input: str) -> str:
             "error": f"Error in Arxiv search: {str(e)}"
         })
 # ========== FILE/DATA TOOLS ==========
-@tool
-def read_text_based_file(file_reference: str, agent=None) -> str:
+class ReadTextBasedFileSchema(BaseModel):
+    """Input schema for read_text_based_file tool."""
+    file_reference: str = Field(description="Filename, path, or URL to read")
+    read_html_as_markdown: bool = Field(
+        default=True,
+        description="For HTML files only: if True (default), converts HTML to Markdown to save tokens and improve readability. Set to False only when full HTML structure is needed (e.g., extracting specific tags, attributes, or raw markup)."
+    )
+
+
+@tool(args_schema=ReadTextBasedFileSchema)
+def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True, agent=None) -> str:
     """
-    Read text-based files and return raw content as text.
-    This is the general-purpose text file reader that handles most text-based formats.
-    Use this tool for any text file unless there's a specialized tool available.
+    Read text-based files and return content as text.
+    This is the general-purpose text file reader for most formats.
+    Use this tool when you need file content - for specialized analysis, use dedicated tools.
+
     Supported file types:
     - Text files: .txt, .md, .log, .rtf
     - Code files: .py, .js, .ts, .html, .htm, .css, .sql, .java, .cpp, .c, .php, .rb, .go
     - Configuration files: .ini, .cfg, .conf, .env, .properties, .yaml, .yml
     - Structured text: .json, .xml, .svg
-    - Web files: .html, .htm, .xml
+    - Web files: .html, .htm (see HTML options below)
     - Documentation: .md, .rst, .tex
-    - PDF files: .pdf (extracts text content and metadata)
-    Note: For specialized analysis, use dedicated tools instead:
-    - CSV files (.csv, .tsv): use analyze_csv_file
-    - Excel files (.xlsx, .xls): use analyze_excel_file
-    - Images: use analyze_image or extract_text_from_image
+    - Office documents: .docx, .xlsx, .pptx (converted to Markdown for clean text extraction)
+    - PDF files: .pdf (extracts text content as Markdown)
+
+    HTML-specific options:
+    - read_html_as_markdown (bool, default=True): Converts HTML to Markdown to save tokens
+      and improve readability. Set to False only when you need the raw HTML structure
+      (e.g., extracting specific tags, attributes, CSS, or JavaScript).
+
+    XLSX/Excel: When to use this tool vs analyze_excel_file?
+    - read_text_based_file: Use for simple text extraction - reads Excel content as Markdown
+      tables. Good for understanding document structure and reading text content.
+    - analyze_excel_file: Use when you need data analysis, statistics, pandas operations,
+      charts, or need to query/transform the data.
+
     The tool automatically:
     - Detects file encoding and handles multiple encodings (UTF-8, Latin-1, CP1252, ISO-8859-1)
     - Resolves filenames to full file paths via agent's file registry
     - Downloads files from URLs automatically
     - Provides file metadata (name, size, encoding) in results
+
     Args:
         file_reference (str): Original filename from user upload OR URL to download
+        read_html_as_markdown (bool): For HTML files. If True (default), converts HTML to
+            Markdown for token efficiency and readability. Set False only when raw HTML
+            structure is needed.
         agent: Agent instance for file resolution (injected automatically)
+
     Returns:
-        str: The raw text content of the file with metadata, or an error message if reading fails
+        str: The text content of the file with metadata, or an error message if reading fails
     """
     from .file_utils import FileUtils
-    # Resolve file reference (filename or URL) to full path
     file_path = FileUtils.resolve_file_reference(file_reference, agent)
     if not file_path:
         return FileUtils.create_tool_response("read_text_based_file", error=f"File not found: {file_reference}")
-    # Get file info for validation
     file_info = FileUtils.get_file_info(file_path)
     if not file_info.exists:
         return FileUtils.create_tool_response("read_text_based_file", error=file_info.error)
-    # Check if it's a PDF file and handle accordingly
+
     if file_info.extension == '.pdf':
         try:
             from .pdf_utils import PDFUtils
             if not PDFUtils.is_available():
                 return FileUtils.create_tool_response("read_text_based_file", error="PyMuPDF not available. Install with: pip install pymupdf", file_info=file_info)
-            # Extract text from PDF using LangChain and PyMuPDF4LLM
             pdf_result = PDFUtils.extract_text_from_pdf(file_path, use_markdown=True)
             if not pdf_result.success:
                 return FileUtils.create_tool_response("read_text_based_file", error=pdf_result.error_message, file_info=file_info)
-            # Show original reference in result
             display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
             size_str = FileUtils.format_file_size(file_info.size)
-            # Format the response - just the content, no internal details
             content = pdf_result.text_content
             result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
             return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
         except Exception as e:
             return FileUtils.create_tool_response("read_text_based_file", error=f"Error processing PDF: {str(e)}", file_info=file_info)
-    # Use modular file utilities with Pydantic validation for other text files
+
+    if file_info.extension in ('.docx', '.xlsx', '.pptx', '.html'):
+        if not MARKITDOWN_AVAILABLE:
+            return FileUtils.create_tool_response(
+                "read_text_based_file",
+                error="markitdown not available. Install with: pip install markitdown[docx,xlsx,pptx]",
+                file_info=file_info
+            )
+        try:
+            md = MarkItDown()
+            result = md.convert(file_path)
+            content = result.text_content
+            if not content or not content.strip():
+                return FileUtils.create_tool_response(
+                    "read_text_based_file",
+                    error=f"No text content found in {file_info.extension} file",
+                    file_info=file_info
+                )
+
+            display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
+            size_str = FileUtils.format_file_size(file_info.size)
+
+            if file_info.extension == '.html' and not read_html_as_markdown:
+                raw_result = FileUtils.read_text_file(file_path)
+                if raw_result.success:
+                    content = raw_result.content
+                    result_text = f"File: {display_name} ({size_str}, raw HTML)\n\nContent:\n{content}"
+                else:
+                    return FileUtils.create_tool_response(
+                        "read_text_based_file",
+                        error=f"Could not read HTML as raw text: {raw_result.error}",
+                        file_info=file_info
+                    )
+            else:
+                if file_info.extension == '.html':
+                    result_text = f"File: {display_name} ({size_str}, converted to Markdown)\n\nContent:\n{content}"
+                else:
+                    result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
+
+            return FileUtils.create_tool_response(
+                "read_text_based_file",
+                result=result_text,
+                file_info=file_info
+            )
+        except Exception as e:
+            return FileUtils.create_tool_response(
+                "read_text_based_file",
+                error=f"Error processing {file_info.extension}: {str(e)}",
+                file_info=file_info
+            )
+
     result = FileUtils.read_text_file(file_path)
     if not result.success:
         return FileUtils.create_tool_response("read_text_based_file", error=result.error)
-    # Format the result
+
     file_info = result.file_info
     content = result.content
     encoding = result.encoding
     size_str = FileUtils.format_file_size(file_info.size)
-    # Show original reference in result
     display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
     if encoding != 'utf-8':
         result_text = f"File: {display_name} ({size_str}, {encoding} encoding)\n\nContent:\n{content}"
@@ -1142,6 +1218,13 @@ def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
     - Excel files: .xlsx, .xls
     - Excel workbooks with multiple sheets
     - Excel files with different encodings and formats
+
+    When to use this tool vs read_text_based_file?
+    - Use analyze_excel_file for: data analysis, statistics, pandas operations, charts,
+      querying/transforming data, understanding numerical patterns, describe() summaries.
+    - Use read_text_based_file for: simple text extraction, reading cell content as text,
+      understanding document structure when you don't need analytics.
+
     The tool automatically:
     - Detects sheet structure and provides comprehensive analysis
     - Resolves filenames to full file paths via agent's file registry
