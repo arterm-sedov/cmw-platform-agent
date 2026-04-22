@@ -103,6 +103,8 @@ class ChatTab(QuickActionsMixin):
                 elem_id="message-input",
                 elem_classes=["message-card"],
                 file_types=[
+                    ".txt",  # Pasted text files from Gradio
+                    "text",  # MIME category for all text/*
                     ".pdf", ".csv", ".tsv", ".xlsx", ".xls",  # Documents and data
                     ".docx", ".pptx", ".vsdx", ".msg", ".eml",  # Office documents
                     ".zip", ".rar", ".tar", ".gz", ".bz2",  # Archives
@@ -1367,8 +1369,17 @@ class ChatTab(QuickActionsMixin):
                         if agent and hasattr(agent, "register_file"):
                             agent.register_file(original_filename, file_path)
                             current_files.append(original_filename)
-                            print(
-                                f"📁 Registered file: {original_filename} -> {agent.file_registry.get((session_id, original_filename), 'NOT_FOUND')}"
+                            logging.getLogger(__name__).debug(
+                                "File registered: orig_name=%s, path=%s, session=%s",
+                                original_filename,
+                                file_path,
+                                session_id,
+                            )
+                        else:
+                            logging.getLogger(__name__).warning(
+                                "Agent or register_file not available: agent=%s, has_register=%s",
+                                agent,
+                                agent and hasattr(agent, "register_file"),
                             )
 
                 file_info += ", ".join(file_list) + "]"
