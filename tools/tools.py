@@ -805,16 +805,7 @@ def arxiv_search(input: str) -> str:
             "error": f"Error in Arxiv search: {str(e)}"
         })
 # ========== FILE/DATA TOOLS ==========
-class ReadTextBasedFileSchema(BaseModel):
-    """Input schema for read_text_based_file tool."""
-    file_reference: str = Field(description="Filename, path, or URL to read")
-    read_html_as_markdown: bool = Field(
-        default=True,
-        description="For HTML files only: if True (default), converts HTML to Markdown to save tokens and improve readability. Set to False only when full HTML structure is needed (e.g., extracting specific tags, attributes, or raw markup)."
-    )
-
-
-@tool(args_schema=ReadTextBasedFileSchema)
+@tool
 def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True, agent=None) -> str:
     """
     Read text-based files and return content as text.
