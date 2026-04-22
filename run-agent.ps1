@@ -170,9 +170,15 @@ function Start-Agent {
     $scriptFullPath = Resolve-Path -Path $ScriptPath -ErrorAction Stop
     $workingDir = Split-Path -Path $scriptFullPath -Parent
 
+    # Set log path to repo root (parent of workingDir)
+    $logDir = Split-Path -Path $workingDir -Parent
+    $logPath = Join-Path -Path $logDir -ChildPath $LogPath
+    [System.Environment]::SetEnvironmentVariable("LOG_FILE", $logPath, "Process")
+
     Write-Info "Starting agent in background (detached from terminal)..."
     Write-Info "Working directory: $workingDir"
     Write-Info "Script: $scriptFullPath"
+    Write-Info "Log file: $logPath"
     
     # Build argument list for Python script
     $scriptArgs = "`"$scriptFullPath`""
@@ -406,7 +412,21 @@ function Get-LatestLogFile {
 }
 
 function Tail-Logs {
-    $latestLogFile = Get-LatestLogFile -BaseLogPath $LogPath
+    # Check if LOG_FILE is set in environment
+    $logFile = [System.Environment]::GetEnvironmentVariable("LOG_FILE")
+    if ([string]::IsNullOrEmpty($logFile)) {
+        # Default to repo root location
+        $scriptFullPath = Resolve-Path -Path $ScriptPath -ErrorAction SilentlyContinue
+        if ($scriptFullPath) {
+            $workingDir = Split-Path -Path $scriptFullPath -Parent
+            $logDir = Split-Path -Path $workingDir -Parent
+            $logFile = Join-Path -Path $logDir -ChildPath $LogPath
+        } else {
+            $logFile = $LogPath
+        }
+    }
+    
+    $latestLogFile = Get-LatestLogFile -BaseLogPath $logFile
     
     if (-not (Test-Path -Path $latestLogFile)) {
         Write-Warn "Log file not found at $latestLogFile. It will be created after start."
@@ -420,7 +440,15 @@ function Show-LogFiles {
     # Check if LOG_FILE is set in environment
     $logFile = [System.Environment]::GetEnvironmentVariable("LOG_FILE")
     if ([string]::IsNullOrEmpty($logFile)) {
-        $logFile = $LogPath
+        # Default to repo root location
+        $scriptFullPath = Resolve-Path -Path $ScriptPath -ErrorAction SilentlyContinue
+        if ($scriptFullPath) {
+            $workingDir = Split-Path -Path $scriptFullPath -Parent
+            $logDir = Split-Path -Path $workingDir -Parent
+            $logFile = Join-Path -Path $logDir -ChildPath $LogPath
+        } else {
+            $logFile = $LogPath
+        }
     }
     
     # Get the base name without extension
