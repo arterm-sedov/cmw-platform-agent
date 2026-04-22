@@ -80,6 +80,9 @@ from .attributes_tools.tool_delete_attribute import delete_attribute
 from .attributes_tools.tool_archive_or_unarchive_attribute import archive_or_unarchive_attribute
 from .attributes_tools.tool_get_attribute import get_attribute
 
+# Datetime tool
+from .get_datetime import get_current_datetime
+
 # Global configuration for search tools
 SEARCH_LIMIT = 5  # Maximum number of results for all search tools (Tavily, Wikipedia, Arxiv)
 

@@ -32,6 +32,7 @@ from langchain_core.messages import (
 )
 
 from .debug_streamer import get_debug_streamer
+from .datetime_context import wrap_user_message
 from .history_compression import (
     compress_conversation_history,
     emit_compression_notification,
@@ -505,8 +506,9 @@ class NativeLangChainStreaming:
                 f"🔍 DEBUG: Added {len(non_system_history)} messages from history to LLM context"
             )
 
-            # Create user message and save to memory
-            user_message = HumanMessage(content=message)
+            # Create user message with datetime context and save to memory
+            wrapped_message = wrap_user_message(message)
+            user_message = HumanMessage(content=wrapped_message)
             messages.append(user_message)
             agent.memory_manager.add_message(conversation_id, user_message)
 

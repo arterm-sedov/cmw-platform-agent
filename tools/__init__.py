@@ -27,6 +27,9 @@ except Exception:
     # Tools can be used standalone; ignore if agent_ng not available
     pass
 
+# Tools - Standalone tools
+from .get_datetime import get_current_datetime
+
 # Import all tool modules
 from . import (
     applications_tools,
@@ -100,6 +103,9 @@ from .templates_tools import (
 )
 
 __all__ = [
+    # Datetime tool
+    "get_current_datetime",
+
     # Module imports
     "applications_tools",
     "attributes_tools",
