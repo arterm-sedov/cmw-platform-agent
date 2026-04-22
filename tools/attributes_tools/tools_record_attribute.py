@@ -132,7 +132,7 @@ if __name__ == "__main__":
             "application_system_name": "AItestAndApi",
             "template_system_name": "Test",
             "related_template_system_name": "Task",
-            "description": "Related task instance",
+            "description": "Related task record",
             "store_multiple_values": False,
         }
     )

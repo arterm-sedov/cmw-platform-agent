@@ -22,7 +22,7 @@ class GetToolbarSchema(CommonToolbarFields):
 
 class ToolbarItemInputSchema(BaseModel):
     button_system_name: str = Field(
-        description="System name of the button/user command to add. RU: Системное имя кнопки",
+        description="System name of the button to add. RU: Системное имя кнопки",
     )
     display_name: str | None = Field(
         default=None,

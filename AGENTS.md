@@ -112,6 +112,7 @@ except ImportError:
 | user command | button |
 | container | template |
 | property | attribute |
+| dataset | table |
 
 ## CMW Platform Architecture
 

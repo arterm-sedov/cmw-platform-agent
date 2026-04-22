@@ -25,10 +25,10 @@ class EditOrCreateButtonSchema(CommonButtonFields):
     description: str | None = Field(
         default=None,
         description="Description of what the button does.",
-    )
+)
     kind: str = Field(
-        default="UserEvent",
-        description="Button kind: UserEvent (custom), Create, Edit, Delete, Archive, Unarchive, Test. Default: UserEvent",
+        default="Trigger scenario",
+        description="Button action: Trigger scenario (triggers scenario on click), Create, Edit, Delete, Archive, Unarchive, Test. Default: Trigger scenario",
     )
     context: str = Field(
         default="Record",
@@ -137,7 +137,7 @@ def edit_or_create_button(
     button_system_name: str,
     name: str | None = None,
     description: str | None = None,
-    kind: str = "UserEvent",
+    kind: str = "Trigger scenario",
     context: str = "Record",
     multiplicity: str = "OneByOne",
     result_type: str = "DataChange",
@@ -200,7 +200,7 @@ def edit_or_create_button(
                 current["name"] = name
             if description is not None:
                 current["description"] = description
-            if kind != "UserEvent":
+            if kind != "Trigger scenario":
                 current["kind"] = kind
             if has_confirmation:
                 current["isConfirmationActive"] = has_confirmation

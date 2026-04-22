@@ -219,6 +219,7 @@
             "transfer": "Application version control. Контроль версий приложения",
             "trigger": "Scenario. Сценарий",
             "user command": "Button. Кнопка",
+            "user event": "Button action that triggers a scenario on click. Действие кнопки, запускающее сценарий при нажатии",
             "worker": "System service. Системный сервис",
             "object": "Set of property/value pairs. Набор свойств/значений",
             "record": "Record. Запись",
@@ -269,6 +270,10 @@
             "тройки",
             "триплеты",
             "Notation3"
+        ],
+        "Trigger scenario": [
+            "UserEvent",
+            "custom action"
         ]
     },
     "response_guidelines": [
