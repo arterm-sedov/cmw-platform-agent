@@ -210,6 +210,17 @@ Set up your CMW Platform connection in the Config tab:
 - Session-based file handling and resource management
 - Automatic cleanup and memory management
 
+### File Upload & Analysis
+
+The agent supports uploading and analyzing various file types through Gradio's MultimodalTextbox:
+
+- **Documents**: PDF, DOCX, XLSX, PPTX, TXT, Markdown, HTML
+- **Data**: CSV, TSV, Excel (with pandas-powered analysis)
+- **Media**: Images (PNG, JPG, etc.), video, audio
+- **Code**: Python, JavaScript, SQL, and other text-based formats
+
+Files are automatically registered in a session-isolated registry and accessible to analysis tools (`read_text_based_file`, `analyze_csv_file`, `analyze_excel_file`, `analyze_image`, etc.). See `docs/20260423_FILE_HANDLING_FIX_AND_TOOL_SCHEMA_ANALYSIS.md` for implementation details.
+
 ### Internationalization
 
 - Full support for English and Russian languages
