@@ -127,6 +127,9 @@ except ImportError as e1:
         )
 
 
+logger = logging.getLogger(__name__)
+
+
 @dataclass
 class ChatMessage:
     """Structured chat message for Gradio compatibility"""
@@ -361,13 +364,16 @@ class CmwAgent:
         Returns:
             str: Full path to the file, or None if not found
         """
-        # Check if we have this file in our session-isolated registry
         registry_key = (self.session_id, original_filename)
 
         if registry_key in self.file_registry:
             full_path = self.file_registry[registry_key]
             if os.path.exists(full_path):
                 return full_path
+            logger.warning(
+                "Registered file no longer exists: %s -> %s",
+                original_filename, full_path,
+            )
 
         return None
 
@@ -399,10 +405,14 @@ class CmwAgent:
             # Register the unique file path in session-isolated registry
             registry_key = (self.session_id, original_filename)
             self.file_registry[registry_key] = unique_file_path
-            print(f"📁 Registered file: {original_filename} -> {unique_file_path}")
+            logger.debug(
+                "Registered file: %s -> %s", original_filename, unique_file_path,
+            )
 
         except Exception as e:
-            print(f"⚠️ Failed to move file {original_filename} to Gradio cache: {e}")
+            logger.warning(
+                "Failed to move file %s to cache: %s", original_filename, e,
+            )
             # Fallback: register original path
             registry_key = (self.session_id, original_filename)
             self.file_registry[registry_key] = file_path

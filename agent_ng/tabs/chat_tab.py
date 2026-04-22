@@ -1357,36 +1357,37 @@ class ChatTab(QuickActionsMixin):
                         file_list.append(f"{original_filename}")
 
                     # Register file with agent's session-isolated registry
-                    if (
-                        hasattr(self, "main_app")
-                        and self.main_app
-                        and hasattr(self.main_app, "session_manager")
-                    ):
-                        session_id = self.main_app.session_manager.get_session_id(
-                            request
+                    _main_app = getattr(self, "main_app", None)
+                    _session_mgr = getattr(_main_app, "session_manager", None) if _main_app else None
+                    if _main_app and _session_mgr:
+                        try:
+                            session_id = _session_mgr.get_session_id(request)
+                            agent = _session_mgr.get_agent(session_id)
+                            if agent and hasattr(agent, "register_file"):
+                                agent.register_file(original_filename, file_path)
+                                current_files.append(original_filename)
+                            else:
+                                logging.getLogger(__name__).warning(
+                                    "Agent or register_file not available: agent=%s",
+                                    agent is not None,
+                                )
+                        except Exception as e:
+                            logging.getLogger(__name__).error(
+                                "Error registering file %s: %s",
+                                original_filename, e,
+                            )
+                    else:
+                        logging.getLogger(__name__).warning(
+                            "Cannot register file: main_app=%s, session_mgr=%s",
+                            _main_app is not None, _session_mgr is not None,
                         )
-                        agent = self.main_app.session_manager.get_agent(session_id)
-                        if agent and hasattr(agent, "register_file"):
-                            agent.register_file(original_filename, file_path)
-                            current_files.append(original_filename)
-                            logging.getLogger(__name__).debug(
-                                "File registered: orig_name=%s, path=%s, session=%s",
-                                original_filename,
-                                file_path,
-                                session_id,
-                            )
-                        else:
-                            logging.getLogger(__name__).warning(
-                                "Agent or register_file not available: agent=%s, has_register=%s",
-                                agent,
-                                agent and hasattr(agent, "register_file"),
-                            )
 
                 file_info += ", ".join(file_list) + "]"
                 message += file_info
 
-                # Store current files (deprecated - use session manager)
-                print(f"📁 Registered {len(current_files)} files: {current_files}")
+                logging.getLogger(__name__).debug(
+                    "Registered %d files: %s", len(current_files), current_files,
+                )
             else:
                 # No files, just use the text message
                 pass
