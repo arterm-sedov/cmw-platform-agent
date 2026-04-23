@@ -140,15 +140,23 @@ class VLModelTester:
             # Check response
             if response.status_code == 200:
                 data = response.json()
-                result["success"] = True
-                result["response"] = data["choices"][0]["message"]["content"]
 
-                # Extract usage info if available
-                if "usage" in data:
-                    result["usage"] = data["usage"]
+                # Debug: print full response
+                print(f"\nDEBUG - Full response: {json.dumps(data, indent=2)[:1000]}")
 
-                print(f"\n✅ SUCCESS (latency: {latency:.0f}ms)")
-                print(f"\nResponse:\n{result['response'][:500]}...")
+                if "choices" in data and len(data["choices"]) > 0:
+                    result["success"] = True
+                    result["response"] = data["choices"][0]["message"]["content"]
+
+                    # Extract usage info if available
+                    if "usage" in data:
+                        result["usage"] = data["usage"]
+
+                    print(f"\n✅ SUCCESS (latency: {latency:.0f}ms)")
+                    print(f"\nResponse:\n{result['response'][:500]}...")
+                else:
+                    result["error"] = f"No choices in response: {json.dumps(data)[:500]}"
+                    print(f"\n❌ FAILED: {result['error']}")
 
             else:
                 result["error"] = f"HTTP {response.status_code}: {response.text}"
@@ -248,29 +256,15 @@ def main():
             "file_type": "image"
         },
 
-        # Gemini 3.1 Flash tests (if available)
+        # Gemini 2.5 Flash tests (battle tested)
         {
-            "model": "google/gemini-3.1-flash",
+            "model": "google/gemini-2.5-flash",
             "file_path": "experiments/test_files/test_image.jpg",
             "prompt": "Describe this image in detail.",
             "file_type": "image"
         },
         {
-            "model": "google/gemini-3.1-flash",
-            "file_path": "experiments/test_files/test_document.jpg",
-            "prompt": "Extract all text from this image (OCR). Return only the extracted text.",
-            "file_type": "image"
-        },
-
-        # Gemini 2.0 Flash tests (fallback)
-        {
-            "model": "google/gemini-2.0-flash-exp",
-            "file_path": "experiments/test_files/test_image.jpg",
-            "prompt": "Describe this image in detail.",
-            "file_type": "image"
-        },
-        {
-            "model": "google/gemini-2.0-flash-exp",
+            "model": "google/gemini-2.5-flash",
             "file_path": "experiments/test_files/test_document.jpg",
             "prompt": "Extract all text from this image (OCR). Return only the extracted text.",
             "file_type": "image"
@@ -282,6 +276,14 @@ def main():
             "file_path": "experiments/test_files/test_image.jpg",
             "prompt": "Describe this image in detail.",
             "file_type": "image"
+        },
+
+        # YouTube video test (Qwen 3.6 Plus)
+        {
+            "model": "qwen/qwen3.6-plus",
+            "file_path": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "prompt": "Describe what happens in this video.",
+            "file_type": "video"
         },
     ]
 

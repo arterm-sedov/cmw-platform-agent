@@ -1,0 +1,212 @@
+[
+  {
+    "model": "qwen/qwen3.6-plus",
+    "file_path": "experiments/test_files/test_image.jpg",
+    "file_type": "image",
+    "prompt": "Describe this image in detail.",
+    "timestamp": 1776932398.809122,
+    "success": true,
+    "response": " content, here is a detailed description of the image:\n\n**Overall Composition:**\nThe image appears to be a simple, digital graphic set against a solid, light sky-blue background. It resembles a basic drawing or a test pattern.\n\n**Key Elements:**\n\n1.  **Central Shape (The Sun):**\n    *   Located in the upper-middle portion of the canvas is a large, horizontal oval or ellipse.\n    *   The shape is filled with a bright, solid yellow color.\n    *   It is outlined with a thin orange border.\n    *   In the exact center of this yellow shape, there is small, black sans-serif text that reads \"Test Image\".\n\n2.  **Bottom Shape (The Ground):**\n    *   Near the bottom of the image, there is a long, horizontal rectangle.\n    *   It is filled with a solid, dark green color.\n    *   This rectangle stretches across most of the width of the image but does not touch the edges, leaving a small margin of blue background on either side. It visually suggests a strip of grass or ground beneath the \"sun.\"",
+    "error": null,
+    "latency_ms": 9432.842254638672,
+    "cost_estimate": null,
+    "usage": {
+      "prompt_tokens": 493,
+      "completion_tokens": 703,
+      "total_tokens": 1196,
+      "cost": 0.001531075,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.001531075,
+        "upstream_inference_prompt_cost": 0.000160225,
+        "upstream_inference_completions_cost": 0.00137085
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 458,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  },
+  {
+    "model": "qwen/qwen3.6-plus",
+    "file_path": "experiments/test_files/test_document.jpg",
+    "file_type": "image",
+    "prompt": "Extract all text from this image (OCR). Return only the extracted text.",
+    "timestamp": 1776932410.2438126,
+    "success": true,
+    "response": "Sample Document\nThis is a test image\nfor OCR testing\n\nLine 1: Hello World\nLine 2: Testing 123\nLine 3: Vision Models",
+    "error": null,
+    "latency_ms": 3405.8468341827393,
+    "cost_estimate": null,
+    "usage": {
+      "prompt_tokens": 502,
+      "completion_tokens": 187,
+      "total_tokens": 689,
+      "cost": 0.0005278,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0005278,
+        "upstream_inference_prompt_cost": 0.00016315,
+        "upstream_inference_completions_cost": 0.00036465
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 147,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  },
+  {
+    "model": "qwen/qwen3.6-plus",
+    "file_path": "experiments/test_files/test_chart.jpg",
+    "file_type": "image",
+    "prompt": "Analyze this chart and extract the data in a structured format.",
+    "timestamp": 1776932415.651174,
+    "success": true,
+    "response": " analysis of the chart, here is the extracted data in a structured format.\n\n**Note:** The chart lacks specific axis labels, a legend, and numerical values. Therefore, the data below represents relative estimates based on bar height and color.\n\n### Chart Overview\n*   **Title:** SalesChart\n*   **Chart Type:** Vertical Bar Chart\n*   **Background Color:** Light Blue\n\n### Data Extraction (Estimated Relative Values)\n\n| Bar Position | Color | Relative Height | Estimated Rank |\n| :--- | :--- | :--- | :--- |\n| **Left** | Red | ~100% (Tallest) | 1 (Highest) |\n| **Center** | Green | ~75% (Shortest) | 3 (Lowest) |\n| **Right** | Blue | ~90% (Medium) | 2 (Middle) |\n\n### JSON Format\n```json\n{\n  \"chart_title\": \"SalesChart\",\n  \"chart_type\": \"bar_chart\",\n  \"axes_present\": false,\n  \"data_points\": [\n    {\n      \"position\": \"left\",\n      \"color\": \"red\",\n      \"description\": \"Highest bar\"\n    },\n    {\n      \"position\": \"center\",\n      \"color\": \"green\",\n      \"description\": \"Lowest bar\"\n    },\n    {\n      \"position\": \"right\",\n      \"color\": \"blue\",\n      \"description\": \"Medium height bar\"\n    }\n  ]\n}\n```",
+    "error": null,
+    "latency_ms": 15465.502977371216,
+    "cost_estimate": null,
+    "usage": {
+      "prompt_tokens": 500,
+      "completion_tokens": 1128,
+      "total_tokens": 1628,
+      "cost": 0.0023621,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0023621,
+        "upstream_inference_prompt_cost": 0.0001625,
+        "upstream_inference_completions_cost": 0.0021996
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 785,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "file_path": "experiments/test_files/test_image.jpg",
+    "file_type": "image",
+    "prompt": "Describe this image in detail.",
+    "timestamp": 1776932433.1183932,
+    "success": true,
+    "response": "This image displays a simple, digitally created graphic featuring basic shapes on a solid blue background.\n\nThe most prominent element is a large, vibrant yellow circle, centrally located in the upper half of the image. This circle has a thin orange outline, creating a defined edge against the blue background. Inside the yellow circle, slightly off-center towards the right, the words \"Test Image\" are written in small, black sans-serif font.\n\nBelow the yellow circle, and positioned towards the bottom of the image, is a rectangular bar. This bar is dark green in color and extends horizontally across a significant portion of the lower frame. It is wider than it is tall, giving it a flat, elongated appearance.\n\nThe background of the entire image is a uniform light blue, suggesting a clear sky or an empty, abstract space. The overall impression is one of a basic illustration or a placeholder image due to the \"Test Image\" text. The colors are bold and primary, contributing to a clean and straightforward aesthetic.",
+    "error": null,
+    "latency_ms": 2882.6723098754883,
+    "cost_estimate": null,
+    "usage": {
+      "prompt_tokens": 1296,
+      "completion_tokens": 204,
+      "total_tokens": 1500,
+      "cost": 0.0008988,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0008988,
+        "upstream_inference_prompt_cost": 0.0003888,
+        "upstream_inference_completions_cost": 0.00051
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "file_path": "experiments/test_files/test_document.jpg",
+    "file_type": "image",
+    "prompt": "Extract all text from this image (OCR). Return only the extracted text.",
+    "timestamp": 1776932438.0031233,
+    "success": true,
+    "response": "Sample Document\nThis is a test image\nfor OCR testing\n\nLine 1: Hello World\nLine 2: Testing 123\nLine 3: Vision Models",
+    "error": null,
+    "latency_ms": 1686.0945224761963,
+    "cost_estimate": null,
+    "usage": {
+      "prompt_tokens": 1305,
+      "completion_tokens": 36,
+      "total_tokens": 1341,
+      "cost": 0.0004815,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0004815,
+        "upstream_inference_prompt_cost": 0.0003915,
+        "upstream_inference_completions_cost": 9e-05
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  },
+  {
+    "model": "xiaomi/mimo-v2.5",
+    "file_path": "experiments/test_files/test_image.jpg",
+    "file_type": "image",
+    "prompt": "Describe this image in detail.",
+    "timestamp": 1776932441.6910124,
+    "success": true,
+    "response": "This is a simple, graphic-style image with distinct flat-colored elements:\n1.  **Background**: The entire canvas is filled with a solid, muted light sky-blue color.\n2.  **Central Oval**: A large, bright, solid yellow ellipse, an oval, is positioned in the upper-center of the image, vertically and horizontally centered in the top half. It is bordered by a thin, thin, bright orange outline along its curved edge. Centered perfectly inside this yellow oval is small, plain black text that reads *Test Image*.\n3.  **Bottom Bar**: At the bottom of the image, below the oval, there is a solid, dark forest-green horizontal rectangle, a flat bar. It spans most of the image's width, is centered horizontally, and has sharp, clean edges against the blue background.",
+    "error": null,
+    "latency_ms": 6765.122413635254,
+    "cost_estimate": null,
+    "usage": {
+      "prompt_tokens": 730,
+      "completion_tokens": 343,
+      "total_tokens": 1073,
+      "cost": 0.00075272,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 704,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00075272,
+        "upstream_inference_prompt_cost": 6.672e-05,
+        "upstream_inference_completions_cost": 0.000686
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 173,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  }
+]
