@@ -283,8 +283,8 @@ class LLMManager:
 
                 pricing = pricing_map.get(model_name) or pricing_map.get(model_name.split(":")[0])
                 if pricing:
-                    model_config["prompt_price_per_1k"] = pricing["prompt_price_per_1k"]
-                    model_config["completion_price_per_1k"] = pricing["completion_price_per_1k"]
+                    model_config["prompt_price_per_1k"] = pricing.get("prompt_price_per_1k", 0.0)
+                    model_config["completion_price_per_1k"] = pricing.get("completion_price_per_1k", 0.0)
                     updated_count += 1
                 # If no pricing found, pricing remains None (unknown) in config
 
