@@ -186,5 +186,21 @@
   "z-ai/glm-5.1": {
     "prompt_price_per_1k": 0.001378888888888889,
     "completion_price_per_1k": 0.0044
+  },
+  "google/gemini-2.5-flash": {
+    "prompt": "0.00000025",
+    "completion": "0.0000015"
+  },
+  "google/gemini-3.1-flash-lite-preview": {
+    "prompt": "0.00000025",
+    "completion": "0.0000015"
+  },
+  "google/gemini-3.1-pro-preview": {
+    "prompt": "0.000002",
+    "completion": "0.000012"
+  },
+  "google/gemini-3-flash-preview": {
+    "prompt": "0.0000005",
+    "completion": "0.000003"
   }
 }
