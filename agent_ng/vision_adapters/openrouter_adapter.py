@@ -8,9 +8,14 @@ from typing import Dict, Any, Optional
 import base64
 from pathlib import Path
 
-from .vision_input import VisionInput, MediaType
-from .vision_tool_manager import VisionProviderAdapter
-from .llm_manager import LLMManager, LLMProvider
+try:
+    from ..vision_input import VisionInput, MediaType
+    from ..vision_tool_manager import VisionProviderAdapter
+    from ..llm_manager import LLMManager, LLMProvider
+except ImportError:
+    from agent_ng.vision_input import VisionInput, MediaType
+    from agent_ng.vision_tool_manager import VisionProviderAdapter
+    from agent_ng.llm_manager import LLMManager, LLMProvider
 
 
 class OpenRouterVisionAdapter(VisionProviderAdapter):
@@ -179,9 +184,13 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
             import os
             model = os.getenv('VL_DEFAULT_MODEL', 'qwen/qwen3.6-plus')
 
-        llm = self.llm_manager.get_llm(self.provider, model_name=model)
-        if not llm:
+        # Get LLM - convert provider enum to string
+        llm_instance = self.llm_manager.get_llm(self.provider.value, use_tools=False, model_index=0)
+        if not llm_instance:
             raise RuntimeError(f"Failed to load model: {model}")
+
+        # Extract actual LLM from LLMInstance wrapper
+        llm = llm_instance.llm
 
         # Format input
         message = self.format_input(vision_input)
