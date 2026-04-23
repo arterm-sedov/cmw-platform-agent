@@ -30,20 +30,61 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             api_key_env="GEMINI_KEY",
             max_history=25,
             tool_support=True,
-            force_tools=True,
+            force_tools=False,
+            vision_support=True,  # Gemini supports vision
+            video_support=True,   # Gemini supports video
+            audio_support=True,   # Gemini supports audio
             models=[
                 {
                     "model": "gemini-2.5-flash",
                     "token_limit": 1048576,
-                    "max_tokens": 65536,
-                    "temperature": 0
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
                 },
                 {
                     "model": "gemini-2.5-pro",
-                    "token_limit": 1048576,
-                    "max_tokens": 65536,
-                    "temperature": 0
+                    "token_limit": 2097152,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
                 },
+                {
+                    "model": "gemini-3.1-flash-lite-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                },
+                {
+                    "model": "gemini-3.1-pro-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                },
+                {
+                    "model": "gemini-3-flash-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                }
             ],
             enable_chunking=False
         ),
@@ -282,7 +323,49 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "token_limit": 1000000,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True
+                },
+                {
+                    "model": "google/gemini-2.5-flash",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                },
+                {
+                    "model": "google/gemini-3.1-flash-lite-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                },
+                {
+                    "model": "google/gemini-3.1-pro-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                },
+                {
+                    "model": "google/gemini-3-flash-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
                 },
                 {
                     "model": "qwen/qwen3-coder:free",
