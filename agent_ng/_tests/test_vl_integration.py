@@ -69,17 +69,16 @@ class TestVLCapabilityFlags:
         assert not model.get("audio_support"), "Qwen 3.6 Plus does NOT support audio"
 
     def test_gemini_2_5_flash_has_all_modalities(self):
-        # Gemini Direct supports audio, OpenRouter Gemini does not.
+        # Both Direct and OpenRouter paths support audio when the client sends
+        # input_audio (base64 + format); the OpenRouter app previously used
+        # audio_url data URLs, which do not work reliably for transcription.
         gemini_models = [m for m in self._all_models()
                          if "gemini-2.5-flash" in m["model"]]
         assert len(gemini_models) >= 1, "gemini-2.5-flash must be in configs"
         for m in gemini_models:
             assert m.get("vision_support") is True
             assert m.get("video_support") is True
-            if m["model"].startswith("google/"):
-                assert m.get("audio_support") is False, f"{m['model']} should not claim audio support"
-            else:
-                assert m.get("audio_support") is True, f"{m['model']} should support audio"
+            assert m.get("audio_support") is True, f"{m['model']} should support audio"
 
     def test_mimo_v2_5_is_text_only_via_openrouter(self):
         model = next((m for m in self._all_models() if m["model"] == "xiaomi/mimo-v2.5"), None)
@@ -87,6 +86,13 @@ class TestVLCapabilityFlags:
         assert model.get("vision_support") is False
         assert model.get("video_support") is False
         assert model.get("audio_support") is False
+
+    def test_mimo_v2_omni_is_omni_on_openrouter(self):
+        model = next((m for m in self._all_models() if m["model"] == "xiaomi/mimo-v2-omni"), None)
+        assert model is not None, "mimo-v2-omni should be in OpenRouter config"
+        assert model.get("vision_support") is True
+        assert model.get("video_support") is True
+        assert model.get("audio_support") is True
 
     def test_claude_has_image_only(self):
         claude_models = [m for m in self._all_models() if "claude-sonnet-4" in m["model"]]

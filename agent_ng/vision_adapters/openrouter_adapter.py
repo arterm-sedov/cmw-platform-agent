@@ -4,9 +4,9 @@ OpenRouter Vision Adapter - Provider-specific implementation for OpenRouter API
 Handles multimodal inputs (image, video, audio) for OpenRouter models
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 import base64
-from pathlib import Path
+import urllib.request
 
 try:
     from ..vision_input import VisionInput, MediaType
@@ -27,8 +27,85 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
     - Videos (via base64 or URL) 
     - Audio (via base64 or URL)
 
-    OpenRouter uses OpenAI-compatible format for multimodal inputs
+    OpenRouter uses OpenAI-compatible format for multimodal inputs.
+    Audio: ``input_audio`` with raw base64 and ``format`` (e.g. mp3) per
+    https://openrouter.ai/docs/guides/overview/multimodal/audio
+    (``audio_url`` / data-URL delivery is not reliable for transcription.)
     """
+
+    @staticmethod
+    def _openrouter_audio_format(
+        mime_type: Optional[str], path_hint: Optional[str] = None
+    ) -> str:
+        """Map MIME or path to OpenRouter ``input_audio.format`` id."""
+        m = (mime_type or "").lower()
+        p = (path_hint or "").lower()
+        if "mpeg" in m or m == "audio/mp3" or p.endswith(".mp3"):
+            return "mp3"
+        if "wav" in m or p.endswith(".wav"):
+            return "wav"
+        if "flac" in m or p.endswith(".flac"):
+            return "flac"
+        if "m4a" in m or m == "audio/x-m4a" or p.endswith(".m4a"):
+            return "m4a"
+        if "ogg" in m or p.endswith(".ogg"):
+            return "ogg"
+        if "aac" in m or p.endswith(".aac"):
+            return "aac"
+        if "aiff" in m or p.endswith((".aiff", ".aif")):
+            return "aiff"
+        if m == "audio/pcm" or p.endswith(".pcm"):
+            return "pcm16"
+        return "mp3"
+
+    @classmethod
+    def _openrouter_audio_b64_and_format(
+        cls, vision_input: VisionInput
+    ) -> Optional[Tuple[str, str]]:
+        """
+        (raw_base64, format) for OpenRouter ``input_audio``, or None.
+        Supports path, base64, data: URLs; fetches http(s) URLs to bytes.
+        """
+        if vision_input.audio_url and vision_input.audio_url.startswith("data:"):
+            meta, _, b64 = vision_input.audio_url.partition(",")
+            if not b64:
+                return None
+            mime = "audio/mpeg"
+            if meta.startswith("data:") and ";" in meta[5:]:
+                mime = meta[5:].split(";")[0]
+            return b64, cls._openrouter_audio_format(mime, None)
+        if vision_input.audio_url and (
+            vision_input.audio_url.startswith("http://")
+            or vision_input.audio_url.startswith("https://")
+        ):
+            req = urllib.request.Request(
+                vision_input.audio_url, headers={"User-Agent": "cmw-platform-agent/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+                raw = resp.read()
+            b64 = base64.b64encode(raw).decode("utf-8")
+            return b64, cls._openrouter_audio_format(
+                vision_input.mime_type, str(vision_input.audio_url)
+            )
+        if vision_input.audio_base64:
+            b64 = vision_input.audio_base64
+            mime = vision_input.mime_type or "audio/mpeg"
+            if b64.startswith("data:"):
+                meta, _, rest = b64.partition(",")
+                b64 = rest
+                if meta.startswith("data:") and ";" in meta[5:]:
+                    mime = meta[5:].split(";")[0]
+            return b64, cls._openrouter_audio_format(
+                mime, str(vision_input.audio_path) if vision_input.audio_path else None
+            )
+        if vision_input.audio_path:
+            b64 = vision_input.to_base64()
+            if not b64:
+                return None
+            mime = vision_input.mime_type or "audio/mpeg"
+            p = str(vision_input.audio_path)
+            return b64, cls._openrouter_audio_format(mime, p)
+        return None
 
     def __init__(self, llm_manager: LLMManager):
         """
@@ -95,14 +172,18 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
                 })
 
         elif vision_input.media_type == MediaType.AUDIO:
-            audio_data = self._get_audio_data(vision_input)
-            if audio_data:
-                # OpenRouter uses "audio_url" type
-                # https://openrouter.ai/docs/guides/overview/multimodal/audio
-                content.append({
-                    "type": "audio_url",
-                    "audio_url": {"url": audio_data}
-                })
+            ap = self._openrouter_audio_b64_and_format(vision_input)
+            if ap:
+                b64, fmt = ap
+                content.append(
+                    {
+                        "type": "input_audio",
+                        "input_audio": {
+                            "data": b64,
+                            "format": fmt,
+                        },
+                    }
+                )
 
         return {
             "role": "user",
@@ -143,25 +224,6 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
         if vision_input.video_path:
             base64_data = vision_input.to_base64()
             mime_type = vision_input.mime_type or "video/mp4"
-            return f"data:{mime_type};base64,{base64_data}"
-
-        return None
-
-    def _get_audio_data(self, vision_input: VisionInput) -> Optional[str]:
-        """Get audio data as data URL"""
-        # Prefer URL if available
-        if vision_input.audio_url:
-            return vision_input.audio_url
-
-        # Use base64 if available
-        if vision_input.audio_base64:
-            mime_type = vision_input.mime_type or "audio/mpeg"
-            return f"data:{mime_type};base64,{vision_input.audio_base64}"
-
-        # Convert file to base64
-        if vision_input.audio_path:
-            base64_data = vision_input.to_base64()
-            mime_type = vision_input.mime_type or "audio/mpeg"
             return f"data:{mime_type};base64,{base64_data}"
 
         return None

@@ -141,22 +141,18 @@ class VisionToolManager:
         Select model based on media type and source.
 
         Routing rules:
-        - Audio → Gemini Direct (only model with audio support)
+        - Audio → VL_AUDIO_MODEL; Gemini ids go through VL_GEMINI_PROVIDER (default auto
+          prefers OpenRouter for ``google/gemini-*`` now that OpenRouter uses ``input_audio``)
         - YouTube URLs → Gemini via OpenRouter (native YouTube support)
         - Video files → Qwen via OpenRouter (default)
         - Images → Qwen via OpenRouter (default)
         """
-        # Audio: prefer explicit VL_AUDIO_MODEL, but auto-correct Gemini to Direct
-        # when no provider was forced (OpenRouter Gemini audio is unsupported).
         if vision_input.media_type == MediaType.AUDIO:
             audio_model = self.vl_audio_model
-            if (
-                self.vl_gemini_provider == 'auto'
-                and audio_model.startswith('google/gemini-')
-            ):
-                return self._to_google_direct_model(audio_model)
             if audio_model.startswith('gemini-') or audio_model.startswith('google/gemini-'):
-                return self._resolve_gemini_model(audio_model, prefer_openrouter_on_auto=False)
+                return self._resolve_gemini_model(
+                    audio_model, prefer_openrouter_on_auto=True
+                )
             return audio_model
 
         # YouTube: use VL_GEMINI_MODEL (same key as other Gemini-routed cases).
@@ -216,7 +212,7 @@ class VisionToolManager:
         return self.analyze(vision_input)
 
     def analyze_audio(self, audio_path: str, prompt: str) -> str:
-        """Analyze audio - uses Gemini (the only model with audio support)"""
+        """Analyze audio using VL_AUDIO_MODEL and VL_GEMINI_PROVIDER resolution."""
         vision_input = VisionInput(prompt=prompt, audio_path=audio_path)
         return self.analyze(vision_input, model=self.vl_audio_model)
 
