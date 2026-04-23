@@ -1754,7 +1754,7 @@ def understand_video(file_reference: str, prompt: str, system_prompt: str = None
     Supports:
     - Uploaded video files
     - Direct video URLs
-    - YouTube URLs (routed to Gemini per VL_GEMINI_MODEL / VL_GEMINI_PROVIDER in .env)
+    - YouTube URLs (routed per VL_YOUTUBE_MODEL, VL_YOUTUBE_GEMINI_PROVIDER, VL_GEMINI_PROVIDER in .env)
 
     Args:
         file_reference (str): Original filename from user upload OR direct video URL 
