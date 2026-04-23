@@ -676,9 +676,45 @@ if result["success"]:
 - Duplicate IDs are removed
 - MessageTemplate: only IDs starting with `msgt.` are included
 
-### Step 2: Get Object Details
+### Step 2: Update Object Properties
 
-Use the IDs to fetch full object details including display names.
+Use `update_object_property` to rename display names:
+
+```python
+from tools.applications_tools.tool_update_object_property import update_object_property
+
+result = update_object_property.invoke({
+    "object_id": "form.338",
+    "object_type": "Form",
+    "new_value": "MigrationForm",
+})
+
+if result["success"]:
+    print(f"Updated {result['object_id']}: {result['predicate']} = {result['new_value']}")
+```
+
+**Important:** Alias values must be without spaces (use CamelCase or underscores).
+
+**Supported types and predicates:**
+
+| Type | Predicate |
+|------|-----------|
+| RecordTemplate | cmw.container.alias |
+| ProcessTemplate | cmw.container.alias |
+| RoleTemplate | cmw.container.alias |
+| AccountTemplate | cmw.container.alias |
+| OrgStructureTemplate | cmw.container.alias |
+| MessageTemplate | cmw.message.type.alias |
+| Workspace | cmw.alias |
+| Page | cmw.desktopPage.alias |
+| Attribute | cmw.object.alias |
+| Dataset | cmw.alias |
+| Toolbar | cmw.alias |
+| Form | cmw.alias |
+| UserCommand | cmw.alias |
+| Card | cmw.alias |
+| Cart | cmw.cart.alias |
+| Trigger | cmw.trigger.alias |
 
 ### Step 3-4: Export/Import CTF for Localization
 
