@@ -87,19 +87,21 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
         elif vision_input.media_type == MediaType.VIDEO:
             video_data = self._get_video_data(vision_input)
             if video_data:
-                # Some models use "video_url" type
+                # OpenRouter uses "video_url" type (not "image_url")
+                # https://openrouter.ai/docs/guides/overview/multimodal/videos
                 content.append({
-                    "type": "image_url",  # OpenRouter may use image_url for video
-                    "image_url": {"url": video_data}
+                    "type": "video_url",
+                    "video_url": {"url": video_data}
                 })
 
         elif vision_input.media_type == MediaType.AUDIO:
             audio_data = self._get_audio_data(vision_input)
             if audio_data:
-                # Audio format varies by model
+                # OpenRouter uses "audio_url" type
+                # https://openrouter.ai/docs/guides/overview/multimodal/audio
                 content.append({
-                    "type": "image_url",  # OpenRouter may use image_url for audio
-                    "image_url": {"url": audio_data}
+                    "type": "audio_url",
+                    "audio_url": {"url": audio_data}
                 })
 
         return {
