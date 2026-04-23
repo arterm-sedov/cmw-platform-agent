@@ -2027,13 +2027,18 @@ def understand_video(file_reference: str, prompt: str, system_prompt: str = None
         })
 
 @tool
-def understand_audio(file_reference: str, prompt: str, system_prompt: str = None, agent=None, 
+def understand_audio(file_reference: str, prompt: str, system_prompt: str = None, agent=None,
                      start_time: str = None, end_time: str = None) -> str:
     """
-    Analyze an audio file using Google Gemini's audio understanding capabilities.
+    Analyze an audio file using vision-language models (Gemini).
+
+    This tool uses VisionToolManager for improved audio understanding.
+    Automatically uses Gemini 2.5 Flash (only model with audio support).
+
     This tool can transcribe audio, understand spoken content, and answer questions
     about the audio content. Supports timestamp references in prompts (MM:SS format).
-    The audio file is uploaded to Gemini and then analyzed with the provided prompt.
+    The audio file is uploaded and analyzed with the provided prompt.
+
     Args:
         file_reference (str): Original filename from user upload OR URL to download OR base64 encoded audio data.
         prompt (str): A question or request regarding the audio content.
@@ -2045,6 +2050,47 @@ def understand_audio(file_reference: str, prompt: str, system_prompt: str = None
         str: Analysis of the audio content based on the prompt, or error message.
     """
     from .file_utils import FileUtils
+
+    # Try VisionToolManager first (new approach with better models)
+    try:
+        from agent_ng.vision_tool_manager import VisionToolManager
+        from agent_ng.vision_input import VisionInput
+
+        # Resolve file reference to full path
+        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        if file_path:
+            # Create VisionInput
+            vision_input = VisionInput(
+                prompt=prompt,
+                audio_path=file_path
+            )
+
+            # Validate input
+            vision_input.validate()
+
+            # Initialize VisionToolManager
+            import os
+            os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
+            manager = VisionToolManager()
+
+            # Analyze audio (uses Gemini 2.5 Flash - only model with audio support)
+            result = manager.analyze_audio(audio_path=file_path, prompt=prompt)
+
+            # Return result
+            return FileUtils.create_tool_response(
+                "understand_audio",
+                result=result,
+                metadata={
+                    "file": file_reference,
+                    "model_used": manager.audio_model,
+                    "approach": "VisionToolManager"
+                }
+            )
+    except (ImportError, Exception) as e:
+        # VisionToolManager not available or failed, fall back to legacy Gemini
+        pass
+
+    # Legacy Gemini implementation (fallback)
     try:
         client = _get_gemini_client()
         if not client:
