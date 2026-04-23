@@ -36,14 +36,6 @@ except (ImportError, Exception) as e:
     plt = None
     print(f"Warning: matplotlib not available: {e}")
 
-# Try to import pytesseract for OCR
-try:
-    import pytesseract
-    PYTESSERACT_AVAILABLE = True
-except ImportError:
-    PYTESSERACT_AVAILABLE = False
-    pytesseract = None
-
 # Always import the tool decorator - it's essential
 from langchain_core.tools import tool
 
@@ -268,7 +260,7 @@ class CodeInterpreter:
             "numpy", "pandas", "matplotlib", "scipy", "sklearn", 
             "math", "random", "statistics", "datetime", "collections",
             "itertools", "functools", "operator", "re", "json",
-            "sympy", "networkx", "nltk", "PIL", "pytesseract", 
+            "sympy", "networkx", "nltk", "PIL",
             "cmath", "uuid", "tempfile", "requests", "urllib"
         ]
         self.max_execution_time = max_execution_time
@@ -940,36 +932,6 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
     else:
         result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
     return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
-
-@tool
-def extract_text_from_image(file_reference: str, agent=None) -> str:
-    """
-    Extract text from an image file using OCR (pytesseract) and return the extracted text.
-
-    Args:
-        file_reference (str): Original filename from user upload OR URL to download
-        agent: Agent instance for file resolution (injected automatically)
-
-    Returns:
-        str: The extracted text, or an error message if extraction fails.
-    """
-    from .file_utils import FileUtils
-    try:
-        # Resolve file reference (filename or URL) to full path
-        file_path = FileUtils.resolve_file_reference(file_reference, agent)
-        if not file_path:
-            return FileUtils.create_tool_response("extract_text_from_image", error=f"File not found: {file_reference}")
-        image = Image.open(file_path)
-        if PYTESSERACT_AVAILABLE:
-            text = pytesseract.image_to_string(image)
-        else:
-            return FileUtils.create_tool_response(
-                "extract_text_from_image", 
-                error="OCR not available. Install with: pip install pytesseract"
-            )
-        return FileUtils.create_tool_response("extract_text_from_image", result=f"Extracted text from image:\n\n{text}")
-    except Exception as e:
-        return FileUtils.create_tool_response("extract_text_from_image", error=f"Error extracting text from image: {str(e)}")
 
 # ========== PANDAS QUERY/PIPELINE HELPERS ==========
 def _safe_to_markdown(df: pd.DataFrame, max_rows: int = 10, max_cols: int = 20) -> str:

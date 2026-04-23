@@ -55,7 +55,6 @@ Based on the project's requirements files [2](#0-1) , here are the external libr
 | **scikit-learn** | 1.7.2 | BSD 3-Clause |
 | **pillow** | 12.0.0 | HPND (Historical Permission Notice and Disclaimer) |
 | **matplotlib** | 3.10.7 | PSF (Python Software Foundation) |
-| **pytesseract** | 0.3.13 | Apache 2.0 |
 
 ### Web & API Integrations
 
@@ -203,7 +202,6 @@ pillow==12.0.0
 
 # Optional: Advanced Data Processing
 matplotlib==3.10.7
-pytesseract==0.3.13
 
 # =============================================================================
 # WEB & API INTEGRATIONS
@@ -234,8 +232,6 @@ Markdown==3.10
 
 # Plotting
 matplotlib==3.10.7
-# OCR for image text extraction
-pytesseract==0.3.13
 
 # =============================================================================
 # OBSERVABILITY
@@ -331,7 +327,6 @@ pillow==12.0.0
 
 # Optional: Advanced Data Processing
 matplotlib==3.10.7  # Optional - with fallback in code
-pytesseract==0.3.13  # Optional - OCR functionality
 
 # =============================================================================
 # WEB & API INTEGRATIONS

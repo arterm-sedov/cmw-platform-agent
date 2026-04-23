@@ -128,7 +128,6 @@ PyJWT==2.10.1
 PyMuPDF==1.26.5
 pymupdf4llm==0.0.27
 pyparsing==3.2.5
-pytesseract==0.3.13
 pytest==8.4.2
 pytest-asyncio==1.2.0
 python-dateutil==2.9.0.post0
