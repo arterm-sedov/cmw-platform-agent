@@ -1384,6 +1384,16 @@ def analyze_image_ai(
     """
     from .file_utils import FileUtils
 
+    # Check if VisionToolManager is enabled (default: true)
+    import os
+    use_vision_manager = os.getenv('USE_VISION_TOOL_MANAGER', 'true').lower() == 'true'
+
+    if not use_vision_manager:
+        return FileUtils.create_tool_response(
+            "analyze_image_ai",
+            error="VisionToolManager is disabled. Set USE_VISION_TOOL_MANAGER=true to enable AI-powered image analysis."
+        )
+
     try:
         # Resolve file reference to full path
         file_path = FileUtils.resolve_file_reference(file_reference, agent)
@@ -1841,44 +1851,48 @@ def understand_video(file_reference: str, prompt: str, system_prompt: str = None
     """
     from .file_utils import FileUtils
 
+    # Check if VisionToolManager is enabled (default: true)
+    import os
+    use_vision_manager = os.getenv('USE_VISION_TOOL_MANAGER', 'true').lower() == 'true'
+
     # Try VisionToolManager first (new approach with better models)
-    try:
-        from agent_ng.vision_tool_manager import VisionToolManager
-        from agent_ng.vision_input import VisionInput
+    if use_vision_manager:
+        try:
+            from agent_ng.vision_tool_manager import VisionToolManager
+            from agent_ng.vision_input import VisionInput
 
-        # Resolve file reference to full path
-        file_path = FileUtils.resolve_file_reference(file_reference, agent)
-        if file_path:
-            # Create VisionInput
-            vision_input = VisionInput(
-                prompt=prompt,
-                video_path=file_path
-            )
+            # Resolve file reference to full path
+            file_path = FileUtils.resolve_file_reference(file_reference, agent)
+            if file_path:
+                # Create VisionInput
+                vision_input = VisionInput(
+                    prompt=prompt,
+                    video_path=file_path
+                )
 
-            # Validate input
-            vision_input.validate()
+                # Validate input
+                vision_input.validate()
 
-            # Initialize VisionToolManager
-            import os
-            os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
-            manager = VisionToolManager()
+                # Initialize VisionToolManager
+                os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
+                manager = VisionToolManager()
 
-            # Analyze video (uses Qwen 3.6 Plus or Gemini)
-            result = manager.analyze_video(video_path=file_path, prompt=prompt)
+                # Analyze video (uses Qwen 3.6 Plus or Gemini)
+                result = manager.analyze_video(video_path=file_path, prompt=prompt)
 
-            # Return result
-            return FileUtils.create_tool_response(
-                "understand_video",
-                result=result,
-                metadata={
-                    "file": file_reference,
-                    "model_used": manager.default_model,
-                    "approach": "VisionToolManager"
-                }
-            )
-    except (ImportError, Exception) as e:
-        # VisionToolManager not available or failed, fall back to legacy Gemini
-        pass
+                # Return result
+                return FileUtils.create_tool_response(
+                    "understand_video",
+                    result=result,
+                    metadata={
+                        "file": file_reference,
+                        "model_used": manager.default_model,
+                        "approach": "VisionToolManager"
+                    }
+                )
+        except (ImportError, Exception) as e:
+            # VisionToolManager not available or failed, fall back to legacy Gemini
+            pass
 
     # Legacy Gemini implementation (fallback)
     def create_video_metadata():
@@ -2055,44 +2069,48 @@ def understand_audio(file_reference: str, prompt: str, system_prompt: str = None
     """
     from .file_utils import FileUtils
 
+    # Check if VisionToolManager is enabled (default: true)
+    import os
+    use_vision_manager = os.getenv('USE_VISION_TOOL_MANAGER', 'true').lower() == 'true'
+
     # Try VisionToolManager first (new approach with better models)
-    try:
-        from agent_ng.vision_tool_manager import VisionToolManager
-        from agent_ng.vision_input import VisionInput
+    if use_vision_manager:
+        try:
+            from agent_ng.vision_tool_manager import VisionToolManager
+            from agent_ng.vision_input import VisionInput
 
-        # Resolve file reference to full path
-        file_path = FileUtils.resolve_file_reference(file_reference, agent)
-        if file_path:
-            # Create VisionInput
-            vision_input = VisionInput(
-                prompt=prompt,
-                audio_path=file_path
-            )
+            # Resolve file reference to full path
+            file_path = FileUtils.resolve_file_reference(file_reference, agent)
+            if file_path:
+                # Create VisionInput
+                vision_input = VisionInput(
+                    prompt=prompt,
+                    audio_path=file_path
+                )
 
-            # Validate input
-            vision_input.validate()
+                # Validate input
+                vision_input.validate()
 
-            # Initialize VisionToolManager
-            import os
-            os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
-            manager = VisionToolManager()
+                # Initialize VisionToolManager
+                os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
+                manager = VisionToolManager()
 
-            # Analyze audio (uses Gemini 2.5 Flash - only model with audio support)
-            result = manager.analyze_audio(audio_path=file_path, prompt=prompt)
+                # Analyze audio (uses Gemini 2.5 Flash - only model with audio support)
+                result = manager.analyze_audio(audio_path=file_path, prompt=prompt)
 
-            # Return result
-            return FileUtils.create_tool_response(
-                "understand_audio",
-                result=result,
-                metadata={
-                    "file": file_reference,
-                    "model_used": manager.audio_model,
-                    "approach": "VisionToolManager"
-                }
-            )
-    except (ImportError, Exception) as e:
-        # VisionToolManager not available or failed, fall back to legacy Gemini
-        pass
+                # Return result
+                return FileUtils.create_tool_response(
+                    "understand_audio",
+                    result=result,
+                    metadata={
+                        "file": file_reference,
+                        "model_used": manager.audio_model,
+                        "approach": "VisionToolManager"
+                    }
+                )
+        except (ImportError, Exception) as e:
+            # VisionToolManager not available or failed, fall back to legacy Gemini
+            pass
 
     # Legacy Gemini implementation (fallback)
     try:
