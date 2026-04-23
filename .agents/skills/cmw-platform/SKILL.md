@@ -605,27 +605,93 @@ CMW Platform uses hash-based routing (SPA). All admin pages verified by browser 
 
 ## 6. Localization
 
-Russian→English translation workflow for Comindware Platform JSON configs.
+Russian→English translation workflow for Comindware Platform.
 
-### Workflow
+### Step 1: Get Object IDs by Type
 
-1. **Harvest** strings from JSON files
-2. **Build** translation dictionary
-3. **Apply** translations to files
-4. **Update** CSV reference
+For CTF-based localization, first retrieve all object IDs using `get_ontology_objects`:
 
-### Scripts
+```python
+from tools.applications_tools.tool_get_ontology_objects import get_ontology_objects
+
+result = get_ontology_objects.invoke({
+    "application_system_name": "supportTest",
+    "types": ["RecordTemplate", "ProcessTemplate", "RoleTemplate", "AccountTemplate",
+              "Dataset", "Form", "Toolbar", "UserCommand", "Card", "Cart", "Trigger"],
+    "parameter": "alias",
+    "min_count": 1,
+    "max_count": 10000,
+})
+
+if result["success"]:
+    print(f"Found {result['total_count']} objects")
+    for obj in result["data"]:
+        print(f"  - {obj['type']}: {obj['id']}")
+```
+
+**Returns:**
+
+```python
+{
+    "success": true,
+    "data": [
+        {"type": "RecordTemplate", "id": "oa.230", "systemName": "oa.230"},
+        {"type": "ProcessTemplate", "id": "pa.1", "systemName": "pa.1"},
+        {"type": "Dataset", "id": "lst.558", "systemName": "lst.558"},
+        {"type": "Form", "id": "form.2024", "systemName": "form.2024"},
+        {"type": "Toolbar", "id": "tb.4465", "systemName": "tb.4465"},
+        {"type": "UserCommand", "id": "event.7029", "systemName": "event.7029"},
+        {"type": "Card", "id": "card.xxx", "systemName": "card.xxx"},
+        ...
+    ],
+    "errors": {},
+    "total_count": 20085
+}
+```
+
+**Supported types:**
+
+| Type | Predicate | ID Prefix |
+|------|-----------|-----------|
+| RecordTemplate | cmw.container.alias | oa. |
+| ProcessTemplate | cmw.container.alias | pa. |
+| RoleTemplate | cmw.container.alias | ra. |
+| AccountTemplate | cmw.container.alias | aa. |
+| OrgStructureTemplate | cmw.container.alias | os. |
+| MessageTemplate | cmw.message.type.alias | msgt. |
+| Workspace | cmw.alias | workspace. |
+| Page | cmw.desktopPage.alias | - |
+| Attribute | cmw.object.alias | - |
+| Dataset | cmw.alias | lst. |
+| Toolbar | cmw.alias | tb. |
+| Form | cmw.alias | form. |
+| UserCommand | cmw.alias | event. |
+| Card | cmw.alias | card. |
+| Cart | cmw.cart.alias | cart. |
+| Trigger | cmw.trigger.alias | trigger. |
+| Routes | cmw.procedure.name | - |
+
+**Notes:**
+- Results are filtered by ID prefix to match correct types
+- Duplicate IDs are removed
+- MessageTemplate: only IDs starting with `msgt.` are included
+
+### Step 2: Get Object Details
+
+Use the IDs to fetch full object details including display names.
+
+### Step 3-4: Export/Import CTF for Localization
 
 ```bash
-# Extract translatable strings (outputs JSON)
+# Export app to CTF
 python .agents/skills/cmw-platform/scripts/harvest_strings.py \
     "path/to/Workspaces" --output harvested.json
 
-# Build translation dict (edit JSON manually or use LLM)
+# Build translation dict
 python .agents/skills/cmw-platform/scripts/build_translations.py \
     harvested.json --output translations.json
 
-# Apply translations to JSON files
+# Apply translations
 python .agents/skills/cmw-platform/scripts/apply_translations.py \
     "path/to/Workspaces" translations.json
 
