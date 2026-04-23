@@ -186,8 +186,19 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
             import os
             model = os.getenv('VL_DEFAULT_MODEL', 'qwen/qwen3.6-plus')
 
-        # Get LLM - convert provider enum to string
-        llm_instance = self.llm_manager.get_llm(self.provider.value, use_tools=False, model_index=0)
+        # Get LLM - find model index for the specified model
+        config = self.llm_manager.LLM_CONFIGS.get(self.provider)
+        if not config:
+            raise RuntimeError(f"No config found for provider: {self.provider}")
+
+        # Find model index by name
+        model_index = 0
+        for idx, m in enumerate(config.models):
+            if m.get("model") == model:
+                model_index = idx
+                break
+
+        llm_instance = self.llm_manager.get_llm(self.provider.value, use_tools=False, model_index=model_index)
         if not llm_instance:
             raise RuntimeError(f"Failed to load model: {model}")
 

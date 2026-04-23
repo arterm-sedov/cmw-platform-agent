@@ -12,7 +12,8 @@ from unittest.mock import Mock, patch, MagicMock
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from tools.tools import analyze_image_ai
+from tools import tools
+analyze_image_ai = tools.analyze_image_ai.func  # Get the actual function
 
 
 class TestAnalyzeImageAI:
@@ -82,7 +83,7 @@ class TestAnalyzeImageAI:
                 Path(temp_path).unlink()
 
     def test_analyze_image_ai_fast_mode(self):
-        """Test fast mode uses Gemini 2.5 Flash"""
+        """Test default analysis"""
         with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
             from PIL import Image
             img = Image.new('RGB', (100, 100), color='green')
@@ -93,11 +94,10 @@ class TestAnalyzeImageAI:
             mock_agent = Mock()
             mock_agent.file_registry = {Path(image_path).name: image_path}
 
-            # Call with fast mode
+            # Call tool
             result = analyze_image_ai(
                 file_reference=Path(image_path).name,
                 prompt="Quick description",
-                mode="fast",
                 agent=mock_agent
             )
 
@@ -110,7 +110,7 @@ class TestAnalyzeImageAI:
             Path(image_path).unlink()
 
     def test_analyze_image_ai_quality_mode(self):
-        """Test quality mode uses Qwen 3.6 Plus"""
+        """Test analysis with system prompt"""
         with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
             from PIL import Image
             img = Image.new('RGB', (100, 100), color='yellow')
@@ -121,11 +121,11 @@ class TestAnalyzeImageAI:
             mock_agent = Mock()
             mock_agent.file_registry = {Path(image_path).name: image_path}
 
-            # Call with quality mode
+            # Call with system prompt
             result = analyze_image_ai(
                 file_reference=Path(image_path).name,
                 prompt="Detailed analysis",
-                mode="quality",
+                system_prompt="Analyze carefully",
                 agent=mock_agent
             )
 
@@ -229,7 +229,6 @@ class TestAnalyzeImageAIIntegration:
         result = analyze_image_ai(
             file_reference=test_image.name,
             prompt="Describe the shapes and colors in this image",
-            mode="fast",
             agent=mock_agent
         )
 

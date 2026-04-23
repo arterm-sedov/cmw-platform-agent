@@ -83,12 +83,10 @@ def test_vl_configuration():
     vl_default = os.getenv('VL_DEFAULT_MODEL', 'NOT_SET')
     vl_fast = os.getenv('VL_FAST_MODEL', 'NOT_SET')
     vl_audio = os.getenv('VL_AUDIO_MODEL', 'NOT_SET')
-    vl_fallback = os.getenv('VL_FALLBACK_MODEL', 'NOT_SET')
 
     print(f"VL_DEFAULT_MODEL: {vl_default}")
     print(f"VL_FAST_MODEL: {vl_fast}")
     print(f"VL_AUDIO_MODEL: {vl_audio}")
-    print(f"VL_FALLBACK_MODEL: {vl_fallback}")
 
     if vl_default != 'NOT_SET':
         print("✅ VL environment variables configured")

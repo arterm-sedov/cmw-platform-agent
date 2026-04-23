@@ -132,13 +132,12 @@ except ImportError:
     ARXIVLOADER_AVAILABLE = False
     print("Warning: ArxivLoader not available. Install with: pip install langchain-community")
 
-# Try to import Exa for AI-powered answers
+# Optional: Exa deep research (web_search_deep_research_exa_ai returns a clear JSON error if exa-py is missing)
 try:
     from exa_py import Exa
     EXA_AVAILABLE = True
 except ImportError:
     EXA_AVAILABLE = False
-    print("Warning: Exa not available. Install with: pip install exa-py")
 
 # Google Gemini imports for video/audio understanding
 try:
@@ -1339,15 +1338,15 @@ def analyze_image(file_reference: str, agent=None) -> str:
         return FileUtils.create_tool_response("analyze_image", error=str(e))
 
 
+@tool
 def analyze_image_ai(
     file_reference: str,
     prompt: str,
-    mode: str = "fast",
     system_prompt: str = None,
     agent=None
 ) -> str:
     """
-    AI-powered image analysis using vision-language models (Gemini, Qwen, Claude).
+    AI-powered image analysis using vision-language models.
 
     This tool uses advanced vision-language models to understand image content semantically:
     - Describe what's in the image
@@ -1357,26 +1356,16 @@ def analyze_image_ai(
     - Analyze charts, graphs, diagrams
     - Read documents and forms
 
-    Supports two modes:
-    - "fast": Uses Gemini 2.5 Flash (4x faster, cheaper, good quality)
-    - "quality": Uses Qwen 3.6 Plus (slower, more detailed analysis)
-
     For basic metadata (dimensions, colors), use the legacy analyze_image() instead.
 
     Args:
         file_reference (str): Original filename from user upload OR URL to download
         prompt (str): Question or instruction about the image (e.g., "What's in this image?")
-        mode (str): "fast" (Gemini 2.5 Flash) or "quality" (Qwen 3.6 Plus). Default: "fast"
         system_prompt (str, optional): System instruction for the model
         agent: Agent instance for file resolution (injected automatically)
 
     Returns:
         str: JSON string with AI analysis result or error message
-
-    Examples:
-        >>> analyze_image_ai("photo.jpg", "Describe this image in detail")
-        >>> analyze_image_ai("chart.png", "Extract the data from this chart", mode="quality")
-        >>> analyze_image_ai("document.jpg", "What text is in this image?")
     """
     from .file_utils import FileUtils
 
@@ -1399,32 +1388,21 @@ def analyze_image_ai(
             image_path=file_path
         )
 
-        # Validate input
-        try:
-            vision_input.validate()
-        except ValueError as e:
-            return FileUtils.create_tool_response(
-                "analyze_image_ai",
-                error=f"Invalid input: {e}"
-            )
-
         # Initialize VisionToolManager
         import os
         os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
         manager = VisionToolManager()
 
         # Analyze image
-        prefer_fast = (mode == "fast")
-        result = manager.analyze(vision_input, prefer_fast=prefer_fast)
+        result = manager.analyze(vision_input)
 
         # Return result
         return FileUtils.create_tool_response(
             "analyze_image_ai",
             result=result,
-            metadata={
+            extra={
                 "file": file_reference,
-                "mode": mode,
-                "model_used": manager.fast_model if prefer_fast else manager.default_model
+                "model_used": manager.vl_model
             }
         )
 
@@ -1807,7 +1785,7 @@ def understand_video(file_reference: str, prompt: str, system_prompt: str = None
     Supports:
     - Uploaded video files
     - Direct video URLs
-    - YouTube URLs (via Gemini Direct adapter)
+    - YouTube URLs (routed to Gemini per VL_GEMINI_MODEL / VL_GEMINI_PROVIDER in .env)
 
     Args:
         file_reference (str): Original filename from user upload OR direct video URL 
@@ -1828,19 +1806,24 @@ def understand_video(file_reference: str, prompt: str, system_prompt: str = None
         from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.vision_input import VisionInput
 
-        # Resolve file reference to full path
-        file_path = FileUtils.resolve_file_reference(file_reference, agent)
-        if not file_path:
-            return FileUtils.create_tool_response(
-                "understand_video",
-                error=f"File not found: {file_reference}"
+        # Handle direct URLs without forcing local download first
+        lowered_ref = file_reference.strip().lower()
+        is_direct_url = lowered_ref.startswith("http://") or lowered_ref.startswith("https://")
+        if is_direct_url:
+            vision_input = VisionInput(prompt=prompt, video_url=file_reference.strip())
+            file_path = None
+        else:
+            # Resolve uploaded/local file reference
+            file_path = FileUtils.resolve_file_reference(file_reference, agent)
+            if not file_path:
+                return FileUtils.create_tool_response(
+                    "understand_video",
+                    error=f"File not found: {file_reference}"
+                )
+            vision_input = VisionInput(
+                prompt=prompt,
+                video_path=file_path
             )
-
-        # Create VisionInput
-        vision_input = VisionInput(
-            prompt=prompt,
-            video_path=file_path
-        )
 
         # Validate input
         vision_input.validate()
@@ -1850,24 +1833,25 @@ def understand_video(file_reference: str, prompt: str, system_prompt: str = None
         os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
         manager = VisionToolManager()
 
-        # Analyze video (uses Qwen 3.6 Plus or Gemini)
-        result = manager.analyze_video(video_path=file_path, prompt=prompt)
+        # Analyze video using URL-aware manager routing
+        result = manager.analyze(vision_input)
+        selected_model = manager.get_model_for_input(vision_input)
 
         # Return result
         return FileUtils.create_tool_response(
             "understand_video",
             result=result,
-            metadata={
+            extra={
                 "file": file_reference,
-                "model_used": manager.default_model
+                "model_used": selected_model
             }
         )
-
     except Exception as e:
         return FileUtils.create_tool_response(
             "understand_video",
             error=f"Video analysis failed: {str(e)}"
         )
+
 
 @tool
 def understand_audio(file_reference: str, prompt: str, system_prompt: str = None, agent=None,
@@ -1909,24 +1893,21 @@ def understand_audio(file_reference: str, prompt: str, system_prompt: str = None
             audio_path=file_path
         )
 
-        # Validate input
-        vision_input.validate()
-
         # Initialize VisionToolManager
         import os
         os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
         manager = VisionToolManager()
 
-        # Analyze audio (uses Gemini 2.5 Flash - only model with audio support)
+        # Analyze audio
         result = manager.analyze_audio(audio_path=file_path, prompt=prompt)
 
         # Return result
         return FileUtils.create_tool_response(
             "understand_audio",
             result=result,
-            metadata={
+            extra={
                 "file": file_reference,
-                "model_used": manager.audio_model
+                "model_used": manager.vl_audio_model
             }
         )
 
@@ -1936,40 +1917,19 @@ def understand_audio(file_reference: str, prompt: str, system_prompt: str = None
             error=f"Audio analysis failed: {str(e)}"
         )
 
+
 @tool
 def web_search_deep_research_exa_ai(instructions: str) -> str:
     """
     Search the web and site content using deep research tool.
     Ask a query and get a well-researched answer with references.
     Can provide FINAL ANSWER candidate.
-    Ideal for research tasks on any topic that require fact searching.
-    Can find answers and reference about science, scholars, sports, events, books, films, movies, mems, citations, etc.
 
-    The tool researches a topic, verifies facts and outputs a structured answer.
-    It deeply crawls websites to find the right answer, results and links.
-    RESPONSE STRUCTURE:
-    The tool returns a structured response with the following format:
-    1. Task ID and Status
-    2. Original Instructions
-    3. Inferred Schema (JSON schema describing the response data structure)
-    4. Data (JSON object containing the answer according to the schema)
-    5. Citations (source references)
-    SCHEMA INFERENCE:
-    The tool automatically infers the appropriate schema based on your question.
-    For example, a schema might include:
-    - Person data: {"firstName", "lastName", "nationality", "year", etc.}
-    - Event data: {"event", "date", "location", "participants", etc.}
-    - Fact data: {"fact", "source", "context", etc.}
-    DATA EXTRACTION:
-    To extract the answer from the response:
-    1. Look for the "Data" section in the response
-    2. Parse the JSON object in the "Data" field  according to the schema
-    3. Extract the relevant fields based on your question
     Args:
-        instructions (str): Direct question or research instructions.
+        instructions: The prompt or query describing the research goal.
 
     Returns:
-        str: The research result as a structured JSON string with schema, data, and citations, or an error message.
+        The results of the deep research as a string.
     """
     if not EXA_AVAILABLE:
         return json.dumps({
@@ -2003,6 +1963,7 @@ def web_search_deep_research_exa_ai(instructions: str) -> str:
             "tool_name": "web_search_deep_research_exa_ai",
             "error": f"Error in Exa research: {str(e)}"
         })
+
 
 # ========== PYDANTIC SCHEMAS ==========
 
