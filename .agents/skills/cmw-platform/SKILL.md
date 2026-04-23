@@ -486,22 +486,64 @@ BrowserSessionManager.cleanup_all()
 
 ### Known URL Patterns
 
-CMW Platform uses hash-based routing (SPA):
+CMW Platform uses hash-based routing (SPA). All admin pages verified by browser exploration:
 
-| Page Type | Hash Pattern | Example |
-|-----------|--------------|---------|
-| Settings/Admin | `#Settings/{Section}` | `#Settings/Administration` |
-| Global Security | `#Settings/globalSecurity` | `#Settings/globalSecurity` |
-| Groups | `#Settings/Groups` | `#Settings/Groups` |
-| Solutions | `#solutions` | `#solutions` |
-| Dashboard | `#desktop/` | `#desktop/` |
+**Appearance:**
+| Page | URL Pattern |
+|------|-------------|
+| Themes | `#Settings/Theme` |
+| Login/Registration Design | `#Settings/LoginDesign` |
 
-**Utility Script:**
-```bash
-# Navigate to admin pages using discovered patterns
-python .agents/skills/cmw-platform/scripts/browser/browser_admin_util.py \
-    --session cmw-admin --page administration
-```
+**Architecture:**
+| Page | URL Pattern |
+|------|-------------|
+| Applications | `#Settings/Applications` |
+| Navigation Sections | `#Settings/NavigationSections` |
+| Templates | `#Settings/Templates` |
+| Diagrams | `#Settings/Diagrams` |
+| Functions | `#Settings/Functions` |
+| Data Transfer Paths | `#Settings/DataTransferPaths` |
+
+**Account Administration:**
+| Page | URL Pattern |
+|------|-------------|
+| Accounts | `#Settings/Accounts` |
+| Groups | `#Settings/Groups` |
+| System Roles | `#Settings/Roles` |
+| Permissions Audit | `#Settings/PermissionsAudit` |
+| Substitutions | `#Settings/Substitutions` |
+| Registration and Login | `#Settings/RegistrationAndLogin` |
+
+**Infrastructure:**
+| Page | URL Pattern |
+|------|-------------|
+| Monitoring | `#Settings/Monitoring` |
+| Event Logs | `#Settings/EventLogs` |
+| Licensing | `#Settings/Licensing` |
+| Backup | `#Settings/Backup` |
+| Connections | `#Settings/Connections` |
+| Performance | `#Settings/Performance` |
+| Logging Configuration | `#Settings/LoggingConfiguration` |
+| Global Configuration | `#Settings/GlobalConfiguration` |
+| Adapters | `#Settings/Adapters` |
+| Authentication Keys | `#Settings/AuthenticationKeys` |
+
+**Corporate Architecture:**
+| Page | URL Pattern |
+|------|-------------|
+| Org Structure | `#Settings/OrgStructure` |
+| Processes | `#Settings/Processes` |
+| Version Management | `#Settings/VersionManagement` |
+
+**Other:**
+| Page | URL Pattern |
+|------|-------------|
+| Administration (hub) | `#Settings/Administration` |
+| Global Security | `#Settings/globalSecurity` |
+| Solutions | `#solutions` |
+| Dashboard | `#desktop/` |
+
+**Naming convention:** PascalCase (`#Settings/Applications`), one camelCase exception (`#Settings/globalSecurity`).
 
 ### Browser Troubleshooting
 

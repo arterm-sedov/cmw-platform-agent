@@ -40,14 +40,52 @@ CMW Platform's OpenAPI specifications don't cover all platform features. Some op
 
 ### URL Structure Discovery (2026-04-23)
 
-✅ **COMPLETED** - Actual URL patterns documented:
-- Settings/Administration: `#Settings/Administration`
-- Global Security: `#Settings/globalSecurity`
-- Groups: `#Settings/Groups`
-- Solutions: `#solutions`
-- Dashboard: `#desktop/`
+✅ **COMPLETED** - All admin page URLs verified by browser exploration:
 
-**Pattern:** Hash-based routing with `#Settings/{Section}` for admin pages.
+**Naming convention:** PascalCase for most pages, one camelCase exception (`globalSecurity`)
+
+**Appearance:**
+- `#Settings/Theme` - Themes
+- `#Settings/LoginDesign` - Login/Registration Design
+
+**Architecture:**
+- `#Settings/Applications` - Applications
+- `#Settings/NavigationSections` - Navigation Sections
+- `#Settings/Templates` - Templates
+- `#Settings/Diagrams` - Diagrams
+- `#Settings/Functions` - Functions
+- `#Settings/DataTransferPaths` - Data Transfer Paths
+
+**Account Administration:**
+- `#Settings/Accounts` - Accounts
+- `#Settings/Groups` - Groups
+- `#Settings/Roles` - System Roles
+- `#Settings/PermissionsAudit` - Permissions Audit
+- `#Settings/Substitutions` - Substitutions
+- `#Settings/RegistrationAndLogin` - Registration and Login
+
+**Infrastructure:**
+- `#Settings/Monitoring` - Monitoring
+- `#Settings/EventLogs` - Event Logs
+- `#Settings/Licensing` - Licensing
+- `#Settings/Backup` - Backup
+- `#Settings/Connections` - Connections
+- `#Settings/Performance` - Performance
+- `#Settings/LoggingConfiguration` - Logging Configuration
+- `#Settings/GlobalConfiguration` - Global Configuration
+- `#Settings/Adapters` - Adapters
+- `#Settings/AuthenticationKeys` - Authentication Keys
+
+**Corporate Architecture:**
+- `#Settings/OrgStructure` - Org Structure
+- `#Settings/Processes` - Processes
+- `#Settings/VersionManagement` - Version Management
+
+**Non-settings pages:**
+- `#Settings/Administration` - Main admin hub
+- `#Settings/globalSecurity` - Global Security (camelCase exception)
+- `#solutions` - Solutions
+- `#desktop/` - Dashboard
 
 ---
 
@@ -628,6 +666,49 @@ def test_browser_login_failure():
 
 None! agent-browser is already installed (v0.25.4).
 
+**Runtime Requirements:**
+- Chrome/Chromium (browser automation target)
+- Node.js (agent-browser daemon runs on Node)
+- Python 3.11+ (agent tools)
+
+### Python Integration Approaches
+
+**Option A: subprocess CLI (Phase 1 default)**
+```python
+import subprocess
+
+def browser_navigate(url: str, session_id: str) -> dict:
+    result = subprocess.run(
+        f"agent-browser --session-name {session_id} open \"{url}\"",
+        shell=True,
+        capture_output=True,
+        text=True,
+        timeout=60
+    )
+    return {"success": result.returncode == 0, "output": result.stdout}
+```
+
+**Pros:** Simple, no new deps, daemon auto-starts
+**Cons:** String parsing, potential Windows subprocess hang issue
+
+**Option B: ai-browser-sdk (Python SDK)**
+```bash
+pip install ai-browser-sdk
+```
+```python
+from ai_browser import AIBrowser
+async with AIBrowser("http://localhost:8222") as browser:
+    session = await browser.create_session()
+    nav = await session.navigate("https://...")
+```
+
+**Pros:** Clean async API, Pydantic models, proper error handling
+**Cons:** Requires daemon running REST API, extra dependency
+
+**Known Issue (Windows):** First `subprocess.run()` can hang due to daemon spawn failure. AutoGPT solved this by pre-starting daemon or using SDK.
+
+**Decision:** Start with subprocess CLI (Option A) for Phase 1. Migrate to SDK if complexity warrants.
+
 ### Environment Variables
 
 ```bash
@@ -658,6 +739,65 @@ BROWSER_SCREENSHOT_DIR=screenshots    # Screenshot storage (relative to state di
 | **Debugging difficulty** | Medium | Medium | Screenshot on error, detailed logging |
 | **State corruption** | Medium | JSON snapshots before/after, rollback capability |
 | **Concurrent access** | Low | Per-user session isolation, unique session names |
+
+---
+
+## Deployment Options
+
+### Option 1: Same Machine (Default)
+
+agent-browser runs on the same machine as the agent.
+
+**Requirements:**
+- Chrome/Chromium installed
+- Node.js runtime (for agent-browser daemon)
+- Python 3.11+ for agent tools
+
+**How it works:**
+- agent-browser uses client-daemon architecture (Rust binary + background daemon)
+- Daemon auto-starts on first CLI command, persists between calls
+- Python tools call `subprocess.run("agent-browser ...")` which talks to daemon via socket
+
+**Pros:** Simple, no network overhead, single deployment
+**Cons:** Need Chrome on same machine, heavier container image for Docker
+
+### Option 2: HuggingFace Spaces
+
+⚠️ **Not recommended** - Spaces have container restrictions:
+
+**Problems:**
+1. No Chrome/Chromium in Space containers (browser needs full system)
+2. Node.js may not be available in Space runtime
+3. agent-browser daemon requires persistent background process
+4. Spaces are designed for inference, not long-running daemons
+
+**Verdict:** Browser automation not suitable for HuggingFace Spaces.
+
+### Option 3: Separate Machine (Dedicated Browser Server)
+
+Run agent-browser on a dedicated machine/VM accessed via network.
+
+**Architecture:**
+```
+[Agent] ---subprocess---> [agent-browser CLI] ---socket---> [daemon on browser-machine]
+                                                    |
+                                            Chrome running there
+```
+
+**Pros:** Heavy browser process isolated from agent
+**Cons:** Network latency, extra infrastructure, session sync complexity
+
+**Verdict:** Overkill for our use case.
+
+### Recommended Approach: Option 1 (Same Machine)
+
+For local development: Works natively.
+For Docker: Build image with Chrome + Node.js + Python.
+
+**Docker base image consideration:**
+- `mcr.microsoft.com/playwright:v1.40.0` (includes Chrome)
+- Add Node.js + agent-browser on top
+- Or use `chrome-aws` layer
 
 ---
 
