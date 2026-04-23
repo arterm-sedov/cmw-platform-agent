@@ -341,6 +341,13 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": True
                 },
                 {
+                    "model": "x-ai/grok-4.20-multi-agent",
+                    "token_limit": 2000000,
+                    "max_tokens": 30000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
                     "model": "x-ai/grok-4.1-fast",
                     "token_limit": 2000000,
                     "max_tokens": 30000,
