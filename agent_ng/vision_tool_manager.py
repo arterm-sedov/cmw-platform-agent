@@ -75,19 +75,19 @@ class VisionToolManager:
 
     def _init_adapters(self):
         """Initialize provider adapters"""
+        # OpenRouter adapter
         try:
             from .vision_adapters import OpenRouterVisionAdapter
             self.adapters['openrouter'] = OpenRouterVisionAdapter(self.llm_manager)
         except ImportError as e:
             print(f"Warning: Could not load OpenRouterVisionAdapter: {e}")
 
-        # Gemini Direct adapter is optional (may have IP blocks in Russia)
-        # Will be added later if needed
-        # try:
-        #     from .vision_adapters import GeminiDirectAdapter
-        #     self.adapters['gemini'] = GeminiDirectAdapter(self.llm_manager)
-        # except ImportError:
-        #     pass
+        # Gemini Direct adapter
+        try:
+            from .vision_adapters import GeminiDirectVisionAdapter
+            self.adapters['gemini'] = GeminiDirectVisionAdapter(self.llm_manager)
+        except ImportError as e:
+            print(f"Warning: Could not load GeminiDirectVisionAdapter: {e}")
 
     def get_model_for_media_type(self, media_type: MediaType, prefer_fast: bool = False) -> str:
         """

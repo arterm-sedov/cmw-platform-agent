@@ -1380,16 +1380,6 @@ def analyze_image_ai(
     """
     from .file_utils import FileUtils
 
-    # Check if VisionToolManager is enabled (default: true)
-    import os
-    use_vision_manager = os.getenv('USE_VISION_TOOL_MANAGER', 'true').lower() == 'true'
-
-    if not use_vision_manager:
-        return FileUtils.create_tool_response(
-            "analyze_image_ai",
-            error="VisionToolManager is disabled. Set USE_VISION_TOOL_MANAGER=true to enable AI-powered image analysis."
-        )
-
     try:
         # Resolve file reference to full path
         file_path = FileUtils.resolve_file_reference(file_reference, agent)
@@ -1400,14 +1390,8 @@ def analyze_image_ai(
             )
 
         # Import VisionToolManager
-        try:
-            from agent_ng.vision_tool_manager import VisionToolManager
-            from agent_ng.vision_input import VisionInput
-        except ImportError as e:
-            return FileUtils.create_tool_response(
-                "analyze_image_ai",
-                error=f"VisionToolManager not available: {e}"
-            )
+        from agent_ng.vision_tool_manager import VisionToolManager
+        from agent_ng.vision_input import VisionInput
 
         # Create VisionInput
         vision_input = VisionInput(
@@ -1812,233 +1796,78 @@ def combine_images(images_base64: List[str], operation: str,
 
 # ========== VIDEO/AUDIO UNDERSTANDING TOOLS ==========
 @tool
-def understand_video(file_reference: str, prompt: str, system_prompt: str = None, agent=None, 
+def understand_video(file_reference: str, prompt: str, system_prompt: str = None, agent=None,
                      start_time: str = None, end_time: str = None, fps: float = None) -> str:
     """
-    Analyze a video using Google Gemini's video understanding capabilities.
-    This tool can understand video content, extract information, answer questions,
-    and provide transcriptions with timestamps. Supports video clipping and custom frame rates.
-    Supports four input methods:
-    1. Uploaded video files - File size >20MB
-    2. Direct video URLs - File size >20MB
-    3. YouTube URLs - No size limit
-    4. Inline video data - For small videos <20MB
-    Advanced features:
-    - Video clipping: Specify start_time and end_time in MM:SS format (e.g., "02:30", "03:29")
-    - Custom frame rate: Set fps for different sampling rates (default: 1 FPS)
-    - Timestamp references: Use MM:SS format in prompts for specific video segments
+    Analyze a video using vision-language models (Gemini, Qwen).
+
+    This tool uses VisionToolManager for video understanding with multiple model options.
+    Automatically selects the best model based on video characteristics.
+
+    Supports:
+    - Uploaded video files
+    - Direct video URLs
+    - YouTube URLs (via Gemini Direct adapter)
+
     Args:
         file_reference (str): Original filename from user upload OR direct video URL 
-                             OR YouTube URL OR base64 encoded video data (<20MB)
+                             OR YouTube URL
         prompt (str): A question or request regarding the video content
-                        When referring to specific moments in a video within your prompt,
-                        use the MM:SS format (e.g., "01:15" for 1 minute and 15 seconds).
-        system_prompt (str, optional): System instruction
+        system_prompt (str, optional): System instruction (not used currently)
         agent: Agent instance for file resolution (injected automatically)
         start_time (str, optional): Start time for video clipping in MM:SS format (e.g., "02:30")
         end_time (str, optional): End time for video clipping in MM:SS format (e.g., "03:29")
-        fps (float, optional): Custom frame rate for video processing (default: 1 FPS).
-                               You might want to set low FPS (< 1) for long videos.
-                               This is especially useful for mostly static videos (e.g. lectures). 
-                               If you want to capture more details in rapidly changing visuals, 
-                               consider setting a higher FPS value.
+        fps (float, optional): Custom frame rate for video processing (default: 1 FPS)
+
     Returns:
         str: Analysis of the video content based on the prompt, or error message
     """
     from .file_utils import FileUtils
 
-    # Check if VisionToolManager is enabled (default: true)
-    import os
-    use_vision_manager = os.getenv('USE_VISION_TOOL_MANAGER', 'true').lower() == 'true'
-
-    # Try VisionToolManager first (new approach with better models)
-    if use_vision_manager:
-        try:
-            from agent_ng.vision_tool_manager import VisionToolManager
-            from agent_ng.vision_input import VisionInput
-
-            # Resolve file reference to full path
-            file_path = FileUtils.resolve_file_reference(file_reference, agent)
-            if file_path:
-                # Create VisionInput
-                vision_input = VisionInput(
-                    prompt=prompt,
-                    video_path=file_path
-                )
-
-                # Validate input
-                vision_input.validate()
-
-                # Initialize VisionToolManager
-                os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
-                manager = VisionToolManager()
-
-                # Analyze video (uses Qwen 3.6 Plus or Gemini)
-                result = manager.analyze_video(video_path=file_path, prompt=prompt)
-
-                # Return result
-                return FileUtils.create_tool_response(
-                    "understand_video",
-                    result=result,
-                    metadata={
-                        "file": file_reference,
-                        "model_used": manager.default_model,
-                        "approach": "VisionToolManager"
-                    }
-                )
-        except (ImportError, Exception) as e:
-            # VisionToolManager not available or failed, fall back to legacy Gemini
-            pass
-
-    # Legacy Gemini implementation (fallback)
-    def create_video_metadata():
-        """Create video metadata for clipping and frame rate if specified."""
-        def time_to_seconds(time_str):
-            """Convert MM:SS or raw seconds to API-required seconds format with 's' suffix.
-            Examples:
-                "02:30" -> "150s"
-                "1:15" -> "75s"
-                "1250" -> "1250s"
-                "1250s" -> "1250s"
-            """
-            if not time_str:
-                return None
-            # If already has 's' suffix, return as-is
-            if time_str.endswith('s'):
-                return time_str
-            # Check if it's MM:SS format
-            if ':' in time_str:
-                parts = time_str.split(':')
-                if len(parts) == 2:
-                    minutes, seconds = parts
-                    total_seconds = int(minutes) * 60 + int(seconds)
-                    return f"{total_seconds}s"
-            # Assume it's already in seconds, add 's' suffix
-            return f"{time_str}s"
-        metadata = {}
-        if start_time:
-            metadata['start_offset'] = time_to_seconds(start_time)
-        if end_time:
-            metadata['end_offset'] = time_to_seconds(end_time)
-        if fps is not None:
-            metadata['fps'] = fps
-        return metadata if metadata else None
     try:
-        client = _get_gemini_client()
-        if not client:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_video",
-                "error": "Gemini client not available. Check GEMINI_KEY environment variable."
-            })
-        # Create video metadata if any advanced features are specified
-        video_metadata = create_video_metadata()
-        # Determine input type and handle accordingly
-        video_part = None
-        # Check if it's a YouTube URL (special handling)
-        if file_reference.startswith(('https://www.youtube.com/', 'https://youtube.com/', 
-                                     'https://youtu.be/', 'http://www.youtube.com/',
-                                     'http://youtube.com/', 'http://youtu.be/')):
-            # YouTube URL - pass directly to Gemini with optional metadata
-            if video_metadata:
-                video_part = types.Part(
-                    file_data=types.FileData(file_uri=file_reference),
-                    video_metadata=types.VideoMetadata(**video_metadata)
-                )
-            else:
-                video_part = types.Part(file_data=types.FileData(file_uri=file_reference))
-        else:
-            # Try to resolve as file reference (uploaded file or regular URL)
-            resolved_path = FileUtils.resolve_file_reference(file_reference, agent)
-            if resolved_path:
-                # It's a file (uploaded or downloaded from URL)
-                try:
-                    uploaded_file = client.files.upload(file=resolved_path)
-                    if video_metadata:
-                        video_part = types.Part(
-                            file_data=types.FileData(file_uri=uploaded_file.uri),
-                            video_metadata=types.VideoMetadata(**video_metadata)
-                        )
-                    else:
-                        video_part = types.Part(file_data=types.FileData(file_uri=uploaded_file.uri))
-                except Exception as upload_error:
-                    return json.dumps({
-                        "type": "tool_response",
-                        "tool_name": "understand_video",
-                        "error": f"Error uploading video file to Gemini: {str(upload_error)}"
-                    })
-            else:
-                # Try inline video data for small files (<20MB)
-                try:
-                    # Decode base64 and use inline data (not temporary file)
-                    video_data = base64.b64decode(file_reference)
-                    # Check size limit (20MB = 20 * 1024 * 1024 bytes)
-                    if len(video_data) > 20 * 1024 * 1024:
-                        return json.dumps({
-                            "type": "tool_response",
-                            "tool_name": "understand_video",
-                            "error": "Video data too large for inline processing (>20MB). Please use file upload or URL instead."
-                        })
-                    # Use inline data for small videos with optional metadata
-                    if video_metadata:
-                        video_part = types.Part(
-                            inline_data=types.Blob(
-                                data=video_data,
-                                mime_type='video/mp4'  # Default to mp4, could be detected from file extension
-                            ),
-                            video_metadata=types.VideoMetadata(**video_metadata)
-                        )
-                    else:
-                        video_part = types.Part(
-                            inline_data=types.Blob(
-                                data=video_data,
-                                mime_type='video/mp4'  # Default to mp4, could be detected from file extension
-                            )
-                        )
-                except Exception as decode_error:
-                    return json.dumps({
-                        "type": "tool_response",
-                        "tool_name": "understand_video",
-                        "error": f"Error processing video data: {str(decode_error)}. Expected base64 encoded video data (<20MB), valid file path, YouTube URL, or direct video URL."
-                    })
-        # Don't embed system_prompt in user prompt - use API parameter instead
-        enhanced_prompt = prompt
-        # Generate content using the video
-        contents = types.Content(
-            parts=[
-                video_part,
-                types.Part(text=enhanced_prompt)
-            ]
+        from agent_ng.vision_tool_manager import VisionToolManager
+        from agent_ng.vision_input import VisionInput
+
+        # Resolve file reference to full path
+        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        if not file_path:
+            return FileUtils.create_tool_response(
+                "understand_video",
+                error=f"File not found: {file_reference}"
+            )
+
+        # Create VisionInput
+        vision_input = VisionInput(
+            prompt=prompt,
+            video_path=file_path
         )
-        # Create config with system_instruction if provided
-        config = None
-        if system_prompt:
-            config = types.GenerateContentConfig(
-                system_instruction=system_prompt
-            )
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=contents,
-                config=config
-            )
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_video",
-                "result": response.text
-            })
-        except Exception as e:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_video",
-                "error": f"Error in video understanding request: {str(e)}"
-            })
+
+        # Validate input
+        vision_input.validate()
+
+        # Initialize VisionToolManager
+        import os
+        os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
+        manager = VisionToolManager()
+
+        # Analyze video (uses Qwen 3.6 Plus or Gemini)
+        result = manager.analyze_video(video_path=file_path, prompt=prompt)
+
+        # Return result
+        return FileUtils.create_tool_response(
+            "understand_video",
+            result=result,
+            metadata={
+                "file": file_reference,
+                "model_used": manager.default_model
+            }
+        )
+
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "understand_video",
-            "error": f"Error understanding video: {str(e)}"
-        })
+        return FileUtils.create_tool_response(
+            "understand_video",
+            error=f"Video analysis failed: {str(e)}"
+        )
 
 @tool
 def understand_audio(file_reference: str, prompt: str, system_prompt: str = None, agent=None,
@@ -2046,159 +1875,66 @@ def understand_audio(file_reference: str, prompt: str, system_prompt: str = None
     """
     Analyze an audio file using vision-language models (Gemini).
 
-    This tool uses VisionToolManager for improved audio understanding.
+    This tool uses VisionToolManager for audio understanding.
     Automatically uses Gemini 2.5 Flash (only model with audio support).
 
-    This tool can transcribe audio, understand spoken content, and answer questions
-    about the audio content. Supports timestamp references in prompts (MM:SS format).
-    The audio file is uploaded and analyzed with the provided prompt.
-
     Args:
-        file_reference (str): Original filename from user upload OR URL to download OR base64 encoded audio data.
-        prompt (str): A question or request regarding the audio content.
-        system_prompt (str, optional): System instruction.
+        file_reference (str): Original filename from user upload OR URL to download
+        prompt (str): A question or request regarding the audio content
+        system_prompt (str, optional): System instruction (not used currently)
         agent: Agent instance for file resolution (injected automatically)
         start_time (str, optional): Start time reference in MM:SS format (e.g., "02:30")
         end_time (str, optional): End time reference in MM:SS format (e.g., "03:29")
+
     Returns:
-        str: Analysis of the audio content based on the prompt, or error message.
+        str: Analysis of the audio content based on the prompt, or error message
     """
     from .file_utils import FileUtils
 
-    # Check if VisionToolManager is enabled (default: true)
-    import os
-    use_vision_manager = os.getenv('USE_VISION_TOOL_MANAGER', 'true').lower() == 'true'
-
-    # Try VisionToolManager first (new approach with better models)
-    if use_vision_manager:
-        try:
-            from agent_ng.vision_tool_manager import VisionToolManager
-            from agent_ng.vision_input import VisionInput
-
-            # Resolve file reference to full path
-            file_path = FileUtils.resolve_file_reference(file_reference, agent)
-            if file_path:
-                # Create VisionInput
-                vision_input = VisionInput(
-                    prompt=prompt,
-                    audio_path=file_path
-                )
-
-                # Validate input
-                vision_input.validate()
-
-                # Initialize VisionToolManager
-                os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
-                manager = VisionToolManager()
-
-                # Analyze audio (uses Gemini 2.5 Flash - only model with audio support)
-                result = manager.analyze_audio(audio_path=file_path, prompt=prompt)
-
-                # Return result
-                return FileUtils.create_tool_response(
-                    "understand_audio",
-                    result=result,
-                    metadata={
-                        "file": file_reference,
-                        "model_used": manager.audio_model,
-                        "approach": "VisionToolManager"
-                    }
-                )
-        except (ImportError, Exception) as e:
-            # VisionToolManager not available or failed, fall back to legacy Gemini
-            pass
-
-    # Legacy Gemini implementation (fallback)
     try:
-        client = _get_gemini_client()
-        if not client:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_audio",
-                "error": "Gemini client not available. Check GEMINI_KEY environment variable."
-            })
+        from agent_ng.vision_tool_manager import VisionToolManager
+        from agent_ng.vision_input import VisionInput
 
-        # First try to resolve as file reference (uploaded file or URL)
-        resolved_path = FileUtils.resolve_file_reference(file_reference, agent)
-
-        if resolved_path:
-            # It's a file (uploaded or downloaded from URL)
-            try:
-                mp3_file = client.files.upload(file=resolved_path)
-            except Exception as upload_error:
-                return json.dumps({
-                    "type": "tool_response",
-                    "tool_name": "understand_audio",
-                    "error": f"Error uploading audio file to Gemini: {str(upload_error)}"
-                })
-        else:
-            # Check if it looks like a URL that failed to download
-            if file_reference.startswith(('http://', 'https://', 'ftp://')):
-                return json.dumps({
-                    "type": "tool_response",
-                    "tool_name": "understand_audio",
-                    "error": f"Failed to download audio from URL: {file_reference}. Please check the URL is accessible and try again."
-                })
-
-            # Try base64 fallback
-            try:
-                # Decode base64 and create temporary file
-                audio_data = base64.b64decode(file_reference)
-                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
-                    temp_file.write(audio_data)
-                    temp_file_path = temp_file.name
-
-                try:
-                    mp3_file = client.files.upload(file=temp_file_path)
-                finally:
-                    # Clean up temporary file
-                    os.unlink(temp_file_path)
-            except Exception as decode_error:
-                return json.dumps({
-                    "type": "tool_response",
-                    "tool_name": "understand_audio",
-                    "error": f"Error processing audio data: {str(decode_error)}. Expected base64 encoded audio data, valid file path, or URL."
-                })
-        # Create enhanced prompt with timestamp references if provided
-        timestamp_instruction = ""
-        if start_time and end_time:
-            timestamp_instruction = f" Focus on the audio segment from {start_time} to {end_time}."
-        elif start_time:
-            timestamp_instruction = f" Focus on the audio segment starting from {start_time}."
-        elif end_time:
-            timestamp_instruction = f" Focus on the audio segment up to {end_time}."
-        # Build prompt with timestamp instructions only
-        enhanced_prompt = f"{prompt}\n\n{timestamp_instruction}"
-        contents = [enhanced_prompt, mp3_file]
-        # Create config with system_instruction if provided
-        config = None
-        if system_prompt:
-            config = types.GenerateContentConfig(
-                system_instruction=system_prompt
+        # Resolve file reference to full path
+        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        if not file_path:
+            return FileUtils.create_tool_response(
+                "understand_audio",
+                error=f"File not found: {file_reference}"
             )
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=contents,
-                config=config
-            )
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_audio",
-                "result": response.text
-            })
-        except Exception as e:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_audio",
-                "error": f"Error in audio understanding request: {str(e)}"
-            })
+
+        # Create VisionInput
+        vision_input = VisionInput(
+            prompt=prompt,
+            audio_path=file_path
+        )
+
+        # Validate input
+        vision_input.validate()
+
+        # Initialize VisionToolManager
+        import os
+        os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
+        manager = VisionToolManager()
+
+        # Analyze audio (uses Gemini 2.5 Flash - only model with audio support)
+        result = manager.analyze_audio(audio_path=file_path, prompt=prompt)
+
+        # Return result
+        return FileUtils.create_tool_response(
+            "understand_audio",
+            result=result,
+            metadata={
+                "file": file_reference,
+                "model_used": manager.audio_model
+            }
+        )
+
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "understand_audio",
-            "error": f"Error understanding audio: {str(e)}"
-        })
+        return FileUtils.create_tool_response(
+            "understand_audio",
+            error=f"Audio analysis failed: {str(e)}"
+        )
 
 @tool
 def web_search_deep_research_exa_ai(instructions: str) -> str:
