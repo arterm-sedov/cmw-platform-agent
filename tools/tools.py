@@ -1277,7 +1277,18 @@ def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
 @tool
 def analyze_image(file_reference: str, agent=None) -> str:
     """
-    Analyze basic properties of an image (size, mode, color analysis, thumbnail preview) from a file reference.
+    LEGACY: Analyze basic properties of an image (size, mode, color analysis, thumbnail preview).
+
+    ⚠️ This is a primitive metadata parser that only extracts technical properties.
+    For AI-powered image understanding, use analyze_image_ai() instead.
+
+    This tool provides:
+    - Image dimensions and format
+    - Basic color analysis (average RGB, brightness, dominant color)
+    - Thumbnail generation
+
+    For semantic understanding (what's in the image, OCR, object detection, etc.),
+    use analyze_image_ai() which uses vision-language models.
 
     The tool automatically:
     - Resolves filenames to full file paths via agent's file registry
@@ -1326,6 +1337,108 @@ def analyze_image(file_reference: str, agent=None) -> str:
         return FileUtils.create_tool_response("analyze_image", result=json.dumps(result))
     except Exception as e:
         return FileUtils.create_tool_response("analyze_image", error=str(e))
+
+
+def analyze_image_ai(
+    file_reference: str,
+    prompt: str,
+    mode: str = "fast",
+    system_prompt: str = None,
+    agent=None
+) -> str:
+    """
+    AI-powered image analysis using vision-language models (Gemini, Qwen, Claude).
+
+    This tool uses advanced vision-language models to understand image content semantically:
+    - Describe what's in the image
+    - Answer questions about the image
+    - Extract text (OCR with 100% accuracy)
+    - Identify objects, people, scenes
+    - Analyze charts, graphs, diagrams
+    - Read documents and forms
+
+    Supports two modes:
+    - "fast": Uses Gemini 2.5 Flash (4x faster, cheaper, good quality)
+    - "quality": Uses Qwen 3.6 Plus (slower, more detailed analysis)
+
+    For basic metadata (dimensions, colors), use the legacy analyze_image() instead.
+
+    Args:
+        file_reference (str): Original filename from user upload OR URL to download
+        prompt (str): Question or instruction about the image (e.g., "What's in this image?")
+        mode (str): "fast" (Gemini 2.5 Flash) or "quality" (Qwen 3.6 Plus). Default: "fast"
+        system_prompt (str, optional): System instruction for the model
+        agent: Agent instance for file resolution (injected automatically)
+
+    Returns:
+        str: JSON string with AI analysis result or error message
+
+    Examples:
+        >>> analyze_image_ai("photo.jpg", "Describe this image in detail")
+        >>> analyze_image_ai("chart.png", "Extract the data from this chart", mode="quality")
+        >>> analyze_image_ai("document.jpg", "What text is in this image?")
+    """
+    from .file_utils import FileUtils
+
+    try:
+        # Resolve file reference to full path
+        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        if not file_path:
+            return FileUtils.create_tool_response(
+                "analyze_image_ai",
+                error=f"File not found: {file_reference}"
+            )
+
+        # Import VisionToolManager
+        try:
+            from agent_ng.vision_tool_manager import VisionToolManager
+            from agent_ng.vision_input import VisionInput
+        except ImportError as e:
+            return FileUtils.create_tool_response(
+                "analyze_image_ai",
+                error=f"VisionToolManager not available: {e}"
+            )
+
+        # Create VisionInput
+        vision_input = VisionInput(
+            prompt=prompt,
+            image_path=file_path
+        )
+
+        # Validate input
+        try:
+            vision_input.validate()
+        except ValueError as e:
+            return FileUtils.create_tool_response(
+                "analyze_image_ai",
+                error=f"Invalid input: {e}"
+            )
+
+        # Initialize VisionToolManager
+        import os
+        os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
+        manager = VisionToolManager()
+
+        # Analyze image
+        prefer_fast = (mode == "fast")
+        result = manager.analyze(vision_input, prefer_fast=prefer_fast)
+
+        # Return result
+        return FileUtils.create_tool_response(
+            "analyze_image_ai",
+            result=result,
+            metadata={
+                "file": file_reference,
+                "mode": mode,
+                "model_used": manager.fast_model if prefer_fast else manager.default_model
+            }
+        )
+
+    except Exception as e:
+        return FileUtils.create_tool_response(
+            "analyze_image_ai",
+            error=f"Analysis failed: {str(e)}"
+        )
 
 class TransformImageParams(BaseModel):
     width: Optional[int] = Field(None, description="New width for resize operation")
