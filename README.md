@@ -38,7 +38,7 @@ The Comindware Analyst Copilot is a LangChain-native AI agent designed for creat
 - **Real-Time Streaming**: Live response streaming with tool usage visualization
 - **Session Isolation**: Each user gets isolated agent instances with proper cleanup
 - **Internationalization**: Full support for English and Russian UI
-- **Comprehensive Tool Suite**: 49 specialized tools (27 CMW Platform + 22 utility tools)
+- **Comprehensive Tool Suite**: 61 specialized tools (38 CMW Platform + 23 general utility)
 
 ### Target Use Cases
 
@@ -65,9 +65,9 @@ graph TD
         B4["ErrorHandler<br/>Recovery"]
     end
     
-    subgraph "Tools (49)"
-        C1["CMW Platform<br/>27 tools"]
-        C2["Utility Tools<br/>22 tools"]
+    subgraph "Tools (61)"
+        C1["CMW Platform<br/>38 tools"]
+        C2["Utility Tools<br/>23 tools"]
     end
     
     subgraph "APIs"
@@ -89,7 +89,7 @@ graph TD
 
 - **CmwAgent** (`langchain_agent.py`) - Main orchestrator using pure LangChain patterns
 - **LLMManager** (`llm_manager.py`) - Multi-provider management with persistent instances
-- **Tool System** (`tools/`) - 49 tools (27 CMW Platform + 22 utility)
+- **Tool System** (`tools/`) - 61 tools (38 CMW Platform + 23 utility)
 - **UI Layer** (`tabs/`) - Gradio modular tabs with real-time updates
 - **Session Management** (`session_manager.py`) - User isolation and cleanup
 - **Error Handler** (`error_handler.py`) - Vector similarity error classification
@@ -110,17 +110,17 @@ The agent provides comprehensive integration with the CMW Platform through speci
 
 ### Tool Categories
 
-**CMW Platform Tools (27 tools)**
+**CMW Platform Tools (38 tools)**
 
 - **Applications & Templates (6 tools)**: List/create applications, manage templates, generate URLs, process diagrams
 - **Attributes (15 tools)**: 12 attribute types (Text, Boolean, DateTime, Decimal, Document, Drawing, Duration, Image, Record, Role, Account, Enum) + general operations (get, create, edit, delete, archive)
-- **Templates & Records (6 tools)**: List attributes/records, create/edit templates, form management
+- **Templates, forms, toolbars, buttons, records (17 tools)**: Template and record CRUD, form management, toolbars, buttons
 
-**Utility Tools (22 tools)**
+**Utility Tools (23 tools)**
 
 - **Search & Research**: Web search, Wikipedia, ArXiv, deep research
 - **Code Execution**: Multi-language support (Python, Bash, SQL, C, Java)
-- **File Analysis**: CSV, Excel, images, PDFs, OCR text extraction
+- **File Analysis**: CSV, Excel, images, PDFs; image text via vision models (`analyze_image_ai`), not local OCR
 - **Image/Video Processing**: Analysis, transformation, generation, combination
 - **Mathematical Operations**: Basic arithmetic and advanced functions
 
