@@ -1840,6 +1840,47 @@ def understand_video(file_reference: str, prompt: str, system_prompt: str = None
         str: Analysis of the video content based on the prompt, or error message
     """
     from .file_utils import FileUtils
+
+    # Try VisionToolManager first (new approach with better models)
+    try:
+        from agent_ng.vision_tool_manager import VisionToolManager
+        from agent_ng.vision_input import VisionInput
+
+        # Resolve file reference to full path
+        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        if file_path:
+            # Create VisionInput
+            vision_input = VisionInput(
+                prompt=prompt,
+                video_path=file_path
+            )
+
+            # Validate input
+            vision_input.validate()
+
+            # Initialize VisionToolManager
+            import os
+            os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
+            manager = VisionToolManager()
+
+            # Analyze video (uses Qwen 3.6 Plus or Gemini)
+            result = manager.analyze_video(video_path=file_path, prompt=prompt)
+
+            # Return result
+            return FileUtils.create_tool_response(
+                "understand_video",
+                result=result,
+                metadata={
+                    "file": file_reference,
+                    "model_used": manager.default_model,
+                    "approach": "VisionToolManager"
+                }
+            )
+    except (ImportError, Exception) as e:
+        # VisionToolManager not available or failed, fall back to legacy Gemini
+        pass
+
+    # Legacy Gemini implementation (fallback)
     def create_video_metadata():
         """Create video metadata for clipping and frame rate if specified."""
         def time_to_seconds(time_str):
