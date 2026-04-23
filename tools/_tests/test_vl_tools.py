@@ -54,33 +54,30 @@ class TestAnalyzeImageAI:
             Path(image_path).unlink()
 
     def test_analyze_image_ai_with_url(self):
-        """Test analyzing image from URL"""
+        """HTTPS image URL is passed as image_url; FileUtils is not used to download."""
         mock_agent = Mock()
+        test_url = "https://example.com/image.jpg"
 
-        with patch('tools.file_utils.FileUtils.resolve_file_reference') as mock_resolve:
-            # Mock URL download
-            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
-                from PIL import Image
-                img = Image.new('RGB', (100, 100), color='blue')
-                img.save(f.name)
-                temp_path = f.name
-
-            try:
-                mock_resolve.return_value = temp_path
-
-                result = analyze_image_ai(
-                    file_reference="https://example.com/image.jpg",
-                    prompt="Describe this image",
-                    agent=mock_agent
-                )
-
-                assert isinstance(result, str)
-                import json
-                result_data = json.loads(result)
-                assert result_data["type"] == "tool_response"
-
-            finally:
-                Path(temp_path).unlink()
+        with patch("tools.file_utils.FileUtils.resolve_file_reference") as mock_resolve, patch(
+            "agent_ng.vision_tool_manager.VisionToolManager"
+        ) as MockMgr:
+            inst = MockMgr.return_value
+            inst.vl_model = "qwen/qwen3.6-plus"
+            inst.analyze = Mock(return_value="ok")
+            result = analyze_image_ai(
+                file_reference=test_url,
+                prompt="Describe this image",
+                agent=mock_agent,
+            )
+            mock_resolve.assert_not_called()
+            assert inst.analyze.called
+            vi = inst.analyze.call_args[0][0]
+            assert vi.image_url == test_url
+            assert vi.image_path is None
+            import json
+            result_data = json.loads(result)
+            assert result_data["type"] == "tool_response"
+            assert result_data.get("result") == "ok"
 
     def test_analyze_image_ai_fast_mode(self):
         """Test default analysis"""

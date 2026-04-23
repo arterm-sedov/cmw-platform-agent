@@ -1321,7 +1321,7 @@ def analyze_image_ai(
     For basic metadata (dimensions, colors), use the legacy analyze_image() instead.
 
     Args:
-        file_reference (str): Original filename from user upload OR URL to download
+        file_reference (str): Uploaded image filename, or a URL to an image.
         prompt (str): Question or instruction about the image (e.g., "What's in this image?")
         system_prompt (str, optional): System instruction for the model
         agent: Agent instance for file resolution (injected automatically)
@@ -1332,23 +1332,26 @@ def analyze_image_ai(
     from .file_utils import FileUtils
 
     try:
-        # Resolve file reference to full path
-        file_path = FileUtils.resolve_file_reference(file_reference, agent)
-        if not file_path:
-            return FileUtils.create_tool_response(
-                "analyze_image_ai",
-                error=f"File not found: {file_reference}"
-            )
-
-        # Import VisionToolManager
         from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.vision_input import VisionInput
 
-        # Create VisionInput
-        vision_input = VisionInput(
-            prompt=prompt,
-            image_path=file_path
+        lowered_ref = file_reference.strip().lower()
+        is_direct_url = lowered_ref.startswith("http://") or lowered_ref.startswith(
+            "https://"
         )
+        if is_direct_url:
+            vision_input = VisionInput(
+                prompt=prompt,
+                image_url=file_reference.strip(),
+            )
+        else:
+            file_path = FileUtils.resolve_file_reference(file_reference, agent)
+            if not file_path:
+                return FileUtils.create_tool_response(
+                    "analyze_image_ai",
+                    error=f"File not found: {file_reference}",
+                )
+            vision_input = VisionInput(prompt=prompt, image_path=file_path)
 
         # Initialize VisionToolManager
         import os
