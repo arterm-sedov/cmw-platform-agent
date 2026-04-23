@@ -91,6 +91,10 @@ class LLMConfig:
     models: List[Dict[str, Any]] = None
     token_per_minute_limit: Optional[int] = None
     enable_chunking: bool = True
+    # Vision-Language capabilities
+    vision_support: bool = False
+    video_support: bool = False
+    audio_support: bool = False
 
     def __post_init__(self):
         if self.models is None:
