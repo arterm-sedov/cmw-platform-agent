@@ -147,6 +147,10 @@
     "prompt_price_per_1k": 0.002,
     "completion_price_per_1k": 0.006
   },
+  "x-ai/grok-4.20-multi-agent": {
+    "prompt_price_per_1k": 0.002,
+    "completion_price_per_1k": 0.006
+  },
   "x-ai/grok-4.1-fast": {
     "prompt_price_per_1k": 0.00019999999999999998,
     "completion_price_per_1k": 0.0005
