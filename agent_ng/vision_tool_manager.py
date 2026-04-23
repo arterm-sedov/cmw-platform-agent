@@ -66,8 +66,11 @@ class VisionToolManager:
         # VL model configuration
         self.vl_model = os.getenv('VL_DEFAULT_MODEL', 'qwen/qwen3.6-plus')
         self.vl_audio_model = os.getenv('VL_AUDIO_MODEL', 'gemini-2.5-flash')
-        self.vl_gemini_model = os.getenv('VL_GEMINI_MODEL', 'gemini-2.5-flash')
+        self.vl_youtube_model = os.getenv("VL_YOUTUBE_MODEL", "gemini-2.5-flash")
         self.vl_gemini_provider = os.getenv('VL_GEMINI_PROVIDER', 'auto').strip().lower()
+        # If set, overrides VL_GEMINI_PROVIDER only for YouTube videoUrl routing
+        ygp = os.getenv("VL_YOUTUBE_GEMINI_PROVIDER", "").strip().lower()
+        self.vl_youtube_gemini_provider: Optional[str] = ygp or None
 
         # Initialize adapters
         self._init_adapters()
@@ -116,20 +119,23 @@ class VisionToolManager:
         self,
         base_model: str,
         *,
-        prefer_openrouter_on_auto: bool
+        prefer_openrouter_on_auto: bool,
+        provider: Optional[str] = None,
     ) -> str:
         """
         Resolve Gemini model using explicit provider preference.
 
-        VL_GEMINI_PROVIDER:
+        ``provider`` defaults to :attr:`vl_gemini_provider` (``VL_GEMINI_PROVIDER``).
+
+        VL_GEMINI_PROVIDER (and YouTube when ``VL_YOUTUBE_GEMINI_PROVIDER`` is set):
         - openrouter: always google/<model>
         - google: always gemini-<...>
-        - auto: OpenRouter for video/image, Google Direct when only viable
+        - auto: use ``prefer_openrouter_on_auto`` to pick OpenRouter vs Google Direct
         """
-        provider = self.vl_gemini_provider
-        if provider == 'openrouter':
+        p = (provider or self.vl_gemini_provider).strip().lower()
+        if p == "openrouter":
             return self._to_openrouter_gemini_model(base_model)
-        if provider == 'google':
+        if p == "google":
             return self._to_google_direct_model(base_model)
         # auto
         if prefer_openrouter_on_auto:
@@ -143,7 +149,8 @@ class VisionToolManager:
         Routing rules:
         - Audio → VL_AUDIO_MODEL; Gemini ids go through VL_GEMINI_PROVIDER (default auto
           prefers OpenRouter for ``google/gemini-*`` now that OpenRouter uses ``input_audio``)
-        - YouTube URLs → Gemini via OpenRouter (native YouTube support)
+        - YouTube URLs → ``VL_YOUTUBE_MODEL``; provider: ``VL_YOUTUBE_GEMINI_PROVIDER`` if
+          set, else ``VL_GEMINI_PROVIDER``
         - Video files → Qwen via OpenRouter (default)
         - Images → Qwen via OpenRouter (default)
         """
@@ -155,13 +162,17 @@ class VisionToolManager:
                 )
             return audio_model
 
-        # YouTube: use VL_GEMINI_MODEL (same key as other Gemini-routed cases).
+        # YouTube: use VL_YOUTUBE_MODEL; optional VL_YOUTUBE_GEMINI_PROVIDER override.
         if vision_input.media_type == MediaType.VIDEO:
             video_url = vision_input.video_url or vision_input.get_media_url()
             if self._is_youtube_url(video_url):
-                gm = self.vl_gemini_model
+                gm = self.vl_youtube_model
                 if gm.startswith('gemini-') or gm.startswith('google/gemini-'):
-                    return self._resolve_gemini_model(gm, prefer_openrouter_on_auto=True)
+                    return self._resolve_gemini_model(
+                        gm,
+                        prefer_openrouter_on_auto=True,
+                        provider=self.vl_youtube_gemini_provider,
+                    )
                 return gm
 
         # Everything else uses default (Qwen via OpenRouter)
@@ -227,10 +238,12 @@ class VisionToolManager:
             "models": {
                 "default": self.vl_model,
                 "audio": self.vl_audio_model,
-                "gemini": self.vl_gemini_model
+                "youtube": self.vl_youtube_model,
             },
             "routing": {
-                "gemini_provider": self.vl_gemini_provider
+                "gemini_provider": self.vl_gemini_provider,
+                "youtube_provider": self.vl_youtube_gemini_provider
+                or self.vl_gemini_provider,
             },
             "media_types": {
                 "image": True,

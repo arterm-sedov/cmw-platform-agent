@@ -13,6 +13,7 @@ import os
 import json
 import pytest
 from pathlib import Path
+from unittest.mock import patch
 from dotenv import load_dotenv
 
 # Load .env so real API keys are available
@@ -119,9 +120,14 @@ class TestVisionToolManagerRouting:
     def test_audio_routes_to_gemini(self):
         from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.vision_input import VisionInput, MediaType
-        mgr = VisionToolManager()
-        vi = VisionInput(prompt="transcribe", audio_url="http://example.com/x.mp3")
-        model = mgr.get_model_for_input(vi)
+        with patch.dict(
+            os.environ,
+            {"VL_AUDIO_MODEL": "gemini-2.5-flash"},
+            clear=False,
+        ):
+            mgr = VisionToolManager()
+            vi = VisionInput(prompt="transcribe", audio_url="http://example.com/x.mp3")
+            model = mgr.get_model_for_input(vi)
         assert "gemini" in model.lower(), f"Audio should route to Gemini, got: {model}"
 
     def test_image_routes_to_default_model(self):
@@ -139,6 +145,44 @@ class TestVisionToolManagerRouting:
         vi = VisionInput(prompt="describe", video_url="http://example.com/x.mp4")
         model = mgr.get_model_for_input(vi)
         assert model == os.getenv("VL_DEFAULT_MODEL", "qwen/qwen3.6-plus")
+
+    def test_youtube_VL_YOUTUBE_GEMINI_PROVIDER_google_bypasses_openrouter_id(self):
+        from agent_ng.vision_tool_manager import VisionToolManager
+        from agent_ng.vision_input import VisionInput
+        with patch.dict(
+            os.environ,
+            {
+                "VL_YOUTUBE_MODEL": "gemini-2.5-flash",
+                "VL_GEMINI_PROVIDER": "openrouter",
+                "VL_YOUTUBE_GEMINI_PROVIDER": "google",
+            },
+            clear=False,
+        ):
+            mgr = VisionToolManager()
+            vi = VisionInput(
+                prompt="x",
+                video_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            )
+            assert mgr.get_model_for_input(vi) == "gemini-2.5-flash"
+
+    def test_youtube_uses_VL_GEMINI_PROVIDER_when_youtube_override_unset(self):
+        from agent_ng.vision_tool_manager import VisionToolManager
+        from agent_ng.vision_input import VisionInput
+        with patch.dict(
+            os.environ,
+            {
+                "VL_YOUTUBE_MODEL": "gemini-2.5-flash",
+                "VL_GEMINI_PROVIDER": "openrouter",
+                "VL_YOUTUBE_GEMINI_PROVIDER": "",
+            },
+            clear=False,
+        ):
+            mgr = VisionToolManager()
+            vi = VisionInput(
+                prompt="x",
+                video_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            )
+            assert mgr.get_model_for_input(vi) == "google/gemini-2.5-flash"
 
     def test_adapter_openrouter_for_qwen(self):
         from agent_ng.vision_tool_manager import VisionToolManager
