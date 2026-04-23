@@ -1,11 +1,13 @@
 ---
 name: cmw-platform
-description: Use when working with Comindware Platform — connecting to platform, listing applications, exploring templates, managing records, querying data, creating or editing attributes, or any task requiring autonomous platform interaction. Triggers on platform operations, CMW queries, tenant management, rental lot operations, debt tracking, or record CRUD. Also triggers when user mentions working directly with API credentials, using manual HTTP approaches, or trying to bypass the tool layer.
+description: Use when working with Comindware Platform — connecting to platform, listing applications, exploring templates, managing records, querying data, creating or editing attributes, or any task requiring autonomous platform interaction. Triggers on platform operations, CMW queries, tenant management, rental lot operations, debt tracking, or record CRUD. Also triggers when user mentions working directly with API credentials, using manual HTTP approaches, or trying to bypass the tool layer. ALSO triggers when user mentions browser automation, UI-only features, visual verification, or accessing platform features not available via API.
 ---
 
 # CMW Platform Skill
 
 Enables autonomous interaction with Comindware Platform using tools from the agent's `tools/` directory.
+
+**NEW:** Browser automation capabilities for UI-only features and visual verification.
 
 ---
 
@@ -301,7 +303,220 @@ edit_or_create_form.invoke({
 
 ---
 
-## 5. Localization
+## 5. Browser Automation (NEW)
+
+**Use browser automation when:**
+- API endpoints don't cover the feature
+- Need visual verification of changes
+- Working with workflow designers or visual editors
+- Testing actual user workflows
+- Debugging UI issues
+
+### When to Use Browser vs API
+
+| Operation | Use API | Use Browser |
+|-----------|---------|-------------|
+| List records | ✅ Fast, structured | ❌ Slow, parsing needed |
+| Create/edit attributes | ✅ Direct, reliable | ❌ Complex UI navigation |
+| Visual workflow designer | ❌ No API | ✅ UI-only feature |
+| Admin panel configuration | ⚠️ Limited API | ✅ Full access |
+| Verify UI changes | ❌ Can't see UI | ✅ Screenshots |
+| Extract UI table data | ⚠️ If no API | ✅ Fallback option |
+
+### Browser Login
+
+```python
+from tools.browser_tools.tool_browser_login import browser_login
+
+result = browser_login.invoke({
+    "base_url": "https://platform.example.com/",
+    "username": "user",
+    "password": "pass",
+    "session_id": "user-session-123"
+})
+
+if result["success"]:
+    print(f"Logged in, extracted {result['cookies_extracted']} cookies")
+    print(f"Screenshot: {result['screenshot']}")
+```
+
+**What it does:**
+1. Opens platform in browser
+2. Fills login form
+3. Extracts session cookies
+4. Injects cookies into HTTP session (enables API calls)
+5. Saves browser state for reuse
+
+### Navigate to Admin Pages
+
+```python
+from tools.browser_tools.tool_browser_navigate import browser_navigate
+
+result = browser_navigate.invoke({
+    "url": "#Settings/Administration",  # Hash fragment for SPA
+    "wait_for_text": "Administration",  # Wait for content
+    "session_id": "user-session-123"
+})
+
+if result["success"]:
+    print(f"Current URL: {result['current_url']}")
+    print(f"Snapshot:\n{result['snapshot']}")
+    print(f"Screenshot: {result['screenshot']}")
+```
+
+**SPA Navigation Notes:**
+- CMW Platform is a Single Page Application
+- Content loads dynamically after URL changes
+- Always use `wait_for_text` for reliable content detection
+- Additional 2-second buffer added automatically
+
+### Interact with UI Elements
+
+```python
+from tools.browser_tools.tool_browser_interact import browser_interact
+
+# Click a button
+result = browser_interact.invoke({
+    "action": "click",
+    "element_ref": "@e5",  # From snapshot
+    "session_id": "user-session-123"
+})
+
+# Fill a form field
+result = browser_interact.invoke({
+    "action": "fill",
+    "element_ref": "@e8",
+    "value": "New Value",
+    "session_id": "user-session-123"
+})
+
+# Select dropdown option
+result = browser_interact.invoke({
+    "action": "select",
+    "element_ref": "@e12",
+    "value": "option-value",
+    "session_id": "user-session-123"
+})
+```
+
+**Element Refs:**
+- Get refs from `browser_navigate` snapshot
+- Refs are like `@e1`, `@e2`, `@e3`
+- Refs invalidate after page changes (re-snapshot)
+
+### Extract Data from UI
+
+```python
+from tools.browser_tools.tool_browser_extract import browser_extract
+
+result = browser_extract.invoke({
+    "element_ref": "@e10",  # Table or grid element
+    "extraction_type": "table",
+    "session_id": "user-session-123"
+})
+
+if result["success"]:
+    data = result["data"]  # Structured JSON/CSV
+    print(f"Extracted {len(data)} rows")
+```
+
+### Visual Verification
+
+```python
+from tools.browser_tools.tool_browser_screenshot import browser_screenshot
+
+# Full page screenshot
+result = browser_screenshot.invoke({
+    "session_id": "user-session-123"
+})
+
+# Element screenshot
+result = browser_screenshot.invoke({
+    "element_ref": "@e5",
+    "session_id": "user-session-123"
+})
+
+# Annotated screenshot (shows all refs)
+result = browser_screenshot.invoke({
+    "annotate": True,
+    "session_id": "user-session-123"
+})
+
+print(f"Screenshot saved: {result['screenshot_path']}")
+```
+
+### Advanced: Execute Raw Commands
+
+```python
+from tools.browser_tools.tool_browser_execute import browser_execute
+
+result = browser_execute.invoke({
+    "commands": [
+        "open https://platform.example.com/#Settings/Administration",
+        "wait --load networkidle",
+        "wait --text 'Administration'",
+        "snapshot -i",
+        "screenshot administration.png"
+    ],
+    "session_id": "user-session-123"
+})
+
+for cmd_result in result["results"]:
+    print(f"{cmd_result['command']}: {cmd_result['success']}")
+```
+
+### Browser Session Management
+
+**Automatic:**
+- Sessions isolated per user (via `session_id`)
+- State saved automatically after operations
+- Sessions restored on next use
+- Auto-cleanup after timeout (default: 1 hour)
+
+**Manual:**
+```python
+from tools.browser_tools.browser_session_manager import BrowserSessionManager
+
+# Cleanup specific session
+BrowserSessionManager.cleanup_session("user-session-123")
+
+# Cleanup all sessions
+BrowserSessionManager.cleanup_all()
+```
+
+### Known URL Patterns
+
+CMW Platform uses hash-based routing (SPA):
+
+| Page Type | Hash Pattern | Example |
+|-----------|--------------|---------|
+| Settings/Admin | `#Settings/{Section}` | `#Settings/Administration` |
+| Global Security | `#Settings/globalSecurity` | `#Settings/globalSecurity` |
+| Groups | `#Settings/Groups` | `#Settings/Groups` |
+| Solutions | `#solutions` | `#solutions` |
+| Dashboard | `#desktop/` | `#desktop/` |
+
+**Utility Script:**
+```bash
+# Navigate to admin pages using discovered patterns
+python .agents/skills/cmw-platform/scripts/browser/browser_admin_util.py \
+    --session cmw-admin --page administration
+```
+
+### Browser Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| "Element not found" | Refs invalidated | Re-snapshot after page changes |
+| "Timeout waiting for content" | SPA loading slow | Increase wait time or use `wait --text` |
+| "Session expired" | Inactivity timeout | Re-login with `browser_login` |
+| "Screenshot shows old content" | Snapshot taken too early | Add `wait_for_text` parameter |
+
+→ See also: [references/browser_automation.md](references/browser_automation.md)
+
+---
+
+## 6. Localization
 
 Russian→English translation workflow for Comindware Platform JSON configs.
 
@@ -336,7 +551,7 @@ python .agents/skills/cmw-platform/scripts/update_csv.py \
 
 ---
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 ### Error Handling
 
@@ -394,7 +609,8 @@ Exit code 0 = pass, 1 = fail.
 | [references/errors.md](references/errors.md) | Error handling playbook |
 | [references/workflow_sequences.md](references/workflow_sequences.md) | Reusable code patterns |
 | [references/localization.md](references/localization.md) | Russian→English translation guide |
+| [references/browser_automation.md](references/browser_automation.md) | **NEW:** Browser automation guide |
 
 ---
 
-*End of SKILL.md*
+*End of SKILL.md - Updated 2026-04-22 with browser automation capabilities*

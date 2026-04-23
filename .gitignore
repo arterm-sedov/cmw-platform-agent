@@ -10,3 +10,7 @@ server_config.yml
 cmw-agent.pid
 .reference_repos/**
 cmw-platform-workspace/**
+browser-automation-poc/**
+docs/cmw_urls_real.md
+.agents/skills/cmw-platform/SKILL.md.backup_20260422
+.opencode/plans/20260423_browser_automation_implementation_plan.md.backup
