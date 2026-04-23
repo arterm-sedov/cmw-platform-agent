@@ -31,6 +31,14 @@ Credentials from configuration: `CMW_LOGIN`, `CMW_PASSWORD`
 | webapi/Record/{record_id} | PUT | Update existing record |
 | webapi/Record/{record_id} | DELETE | Delete record |
 
+## Transfer (Import/Export)
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| webapi/Transfer/{solutionAlias} | GET | Export application to CTF (Base64 in response.response.data) |
+| webapi/Transfer/Upload | POST | Upload CTF (send Base64 string as JSON body, Content-Type: application/json) |
+| webapi/Transfer/{solutionAlias}/{fileId}/true/ApplyNew | POST | Import CTF (publishAfterImport=true, policy=ApplyNew) |
+
 ## Request/Response Format
 
 ### Request (POST/PUT)

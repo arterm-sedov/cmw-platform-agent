@@ -105,3 +105,23 @@ result = list_template_records.invoke({"offset": 0, "limit": 100})
 # Page 2
 result = list_template_records.invoke({"offset": 100, "limit": 100})
 ```
+
+## Transfer Tools
+
+### export_application
+- **Import:** `from tools.transfer_tools.tool_export_application import export_application`
+- **Signature:** `export_application.invoke({...})`
+- **Parameters:**
+  - `application_system_name` (required): System name of the application to export
+  - `save_to_file` (optional): True saves CTF to /tmp/cmw-transfer/ (default: True)
+- **Returns:** `{"success": bool, "ctf_data": str, "ctf_file_path": str, "result_message": str}`
+
+### import_application
+- **Import:** `from tools.transfer_tools.tool_import_application import import_application`
+- **Signature:** `import_application.invoke({...})`
+- **Parameters:**
+  - `application_system_name` (required): System name for the imported application
+  - `ctf_data` (optional): Base64-encoded CTF string
+  - `ctf_file_path` (optional): Path to .ctf file (takes precedence over ctf_data)
+- **Returns:** `{"success": bool, "file_id": str, "validation_errors": list|null}`
+- **Note:** Import is a 2-step process (upload + execute). Use ctf_file_path for simplicity.

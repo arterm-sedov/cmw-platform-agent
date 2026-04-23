@@ -77,6 +77,10 @@ from .attributes_tools.tools_enum_attribute import edit_or_create_enum_attribute
 
 # Attributes tools - Utility functions
 from .attributes_tools.tool_delete_attribute import delete_attribute
+
+# Transfer tools
+from .transfer_tools.tool_export_application import export_application
+from .transfer_tools.tool_import_application import import_application
 from .attributes_tools.tool_archive_or_unarchive_attribute import archive_or_unarchive_attribute
 from .attributes_tools.tool_get_attribute import get_attribute
 

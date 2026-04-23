@@ -1,61 +1,52 @@
-# AGENTS.md - CMW Platform Agent Coding Guidelines
+# AGENTS.md - CMW Platform Agent
 
-AI coding agent guidelines for this LangChain-based Python 3.11+ project.
+Repo-specific guidance for this LangChain + Gradio Python 3.11+ project.
 
-## Build/Lint/Test Commands
+## Dev Commands
 
-**Environment Setup (ALWAYS REQUIRED):**
 ```bash
+# Activate venv first (required)
+source .venv/bin/activate   # Linux/WSL
 .venv\Scripts\Activate.ps1  # PowerShell
-.venv-ubuntu/bin/activate   # WSL/Linux
+
+# Run app
+python agent_ng/app_ng_modular.py
+
+# Lint (custom script - default changes vs HEAD)
+python lint.py                    # Changed files (default)
+python lint.py --staged           # Staged files
+python lint.py --all              # Full repo
+ruff check <file.py>
+
+# Typecheck
+mypy agent_ng/
+
+# Test
+python -m pytest agent_ng/_tests/           # All tests
+python -m pytest agent_ng/_tests/test_x.py   # Single file
+python -m pytest -k "pattern"              # Filter by name
 ```
 
-**Linting:**
-```bash
-ruff check <file_path>           # Check specific file
-ruff format <file_path>          # Format specific file
-python lint.py file.py           # Custom lint script (default: changed vs HEAD)
-python lint.py --staged          # Staged files only
-python lint.py --changed         # Changed vs HEAD (default)
-python lint.py --all             # Full repository
-```
+## Project Structure
 
-**Type Checking:**
-```bash
-mypy <file_path>                 # Type check specific file
-mypy agent_ng/                   # Type check module
-```
+- **Entry:** `agent_ng/app_ng_modular.py`
+- **Core agent:** `agent_ng/langchain_agent.py`
+- **Tools:** `tools/` (49 tools)
+- **Tests:** `agent_ng/_tests/`
+- **Config:** `.env.example` for API keys
 
-**Testing:**
-```bash
-python -m pytest agent_ng/_tests/                          # All tests
-python -m pytest agent_ng/_tests/test_file.py             # Single file
-python -m pytest agent_ng/_tests/test_file.py::ClassName  # Single test class
-python -m pytest agent_ng/_tests/test_file.py::test_method # Single test method
-python -m pytest agent_ng/_tests/ -k "pattern"            # By pattern match
-```
+## Code Style
 
-**Run App:** `python agent_ng/app_ng_modular.py`
+**Ruff (pyproject.toml):** Line length 88, Python 3.11+, double quotes. Many rules are `unfixable` - ruff flags but won't auto-fix (F401, F403, T201, PLR, ANN, etc). Run `ruff check --fix --unsafe-fixes` to auto-fix.
 
-## Code Style Guidelines
-
-**Ruff Configuration (pyproject.toml):**
-- Line length: 88 characters
-- Target Python: 3.11+
-- Quotes: double quotes for inline and docstrings
-- See pyproject.toml for full rule configuration
-
-**Imports (3 groups):** Standard library → Third-party → Local with fallback
+**Imports:** Standard library → Third-party → Local with fallback pattern:
 ```python
 try:
     from .utils import helper
 except ImportError:
     from agent_ng.utils import helper
 ```
-
 **Naming:** Classes PascalCase, functions/variables snake_case, constants UPPER_SNAKE, private prefix `_`
-**Line Limit:** Maximum 88 characters per line
-**Imports always on top**, consistent formatting, produce flawless code
 
 ## Research & Planning
 
@@ -135,6 +126,10 @@ except ImportError:
 - `pytest>=8.4.2` - Testing
 - `tiktoken>=0.12.0` - Token counting
 
+## Related Instruction Files
+
+- **Cursor rules:** `.cursor/rules/cmw-platform-agent.mdc` - Code style and framework guidelines
+
 ## Commit Guidelines
 
 - Only create commits when explicitly asked
@@ -157,12 +152,6 @@ except ImportError:
 - Use `.env` files for local config, never commit secrets
 - Progress reports to `docs/**/progress_reports/` with `YYYYMMDD_` prefix
 - Documentation files to `docs/` folder
-
-## Python References
-
-- PEP 8: https://peps.python.org/pep-0008/
-- PEP 257: https://peps.python.org/pep-0257/
-- Google Style: https://google.github.io/styleguide/pyguide.html
 
 ---
 
