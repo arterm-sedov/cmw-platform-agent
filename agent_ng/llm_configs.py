@@ -131,6 +131,13 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": True
                 },
                 {
+                    "model": "anthropic/claude-sonnet-4.6",
+                    "token_limit": 1000000,
+                    "max_tokens": 64000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
                     "model": "deepseek/deepseek-chat-v3.1:free",
                     "token_limit": 131000,
                     "max_tokens": 32768,
@@ -271,6 +278,13 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": True
                 },
                 {
+                    "model": "qwen/qwen3.6-plus",
+                    "token_limit": 1000000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
                     "model": "qwen/qwen3-coder:free",
                     "token_limit": 262144,
                     "max_tokens": 4096,
@@ -316,6 +330,20 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "model": "x-ai/grok-4-fast:free",
                     "token_limit": 2000000,
                     "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "x-ai/grok-4.20",
+                    "token_limit": 2000000,
+                    "max_tokens": 30000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "x-ai/grok-4.1-fast",
+                    "token_limit": 2000000,
+                    "max_tokens": 30000,
                     "temperature": 0,
                     "force_tools": True
                 },
