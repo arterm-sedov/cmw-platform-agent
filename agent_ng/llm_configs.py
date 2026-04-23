@@ -163,20 +163,25 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             max_history=20,
             tool_support=True,
             force_tools=False,
+            vision_support=True,  # OpenRouter supports VL models
+            video_support=True,   # Some models support video
+            audio_support=True,   # Some models support audio
             models=[
                 {
                     "model": "anthropic/claude-sonnet-4.5",
                     "token_limit": 1000000,
                     "max_tokens": 64000,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
+                    "vision_support": True
                 },
                 {
                     "model": "anthropic/claude-sonnet-4.6",
                     "token_limit": 1000000,
                     "max_tokens": 64000,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
+                    "vision_support": True
                 },
                 {
                     "model": "deepseek/deepseek-chat-v3.1:free",
