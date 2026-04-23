@@ -340,7 +340,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": True,
                     "vision_support": True,
                     "video_support": True,
-                    "audio_support": True
+                    "audio_support": False  # OpenRouter doesn't support audio for Gemini
                 },
                 {
                     "model": "google/gemini-3.1-flash-lite-preview",
@@ -371,6 +371,16 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "vision_support": True,
                     "video_support": True,
                     "audio_support": True
+                },
+                {
+                    "model": "xiaomi/mimo-v2.5",
+                    "token_limit": 1000000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": False,  # OpenRouter: text-only
+                    "video_support": False,   # OpenRouter: text-only
+                    "audio_support": False    # OpenRouter: text-only
                 },
                 {
                     "model": "qwen/qwen3-coder:free",

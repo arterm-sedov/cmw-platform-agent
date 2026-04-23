@@ -6,7 +6,7 @@ import base64
 import requests
 
 video_path = r'E:\Downloads\video_2026-02-10_16-56-58.mp4'
-api_key = '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'
+api_key = 'XXX'
 
 print('Reading video...')
 with open(video_path, 'rb') as f:

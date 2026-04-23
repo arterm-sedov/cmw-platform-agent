@@ -80,7 +80,17 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
         if not self.available:
             raise RuntimeError("Gemini SDK not available")
 
-        # Get media path
+        # Check for YouTube URL (Gemini supports direct YouTube URLs)
+        if vision_input.video_url:
+            video_url = vision_input.video_url
+            if 'youtube.com' in video_url or 'youtu.be' in video_url:
+                return {
+                    "youtube_url": video_url,
+                    "prompt": vision_input.prompt,
+                    "media_type": vision_input.media_type
+                }
+
+        # Get media path for file upload
         media_path = None
         if vision_input.image_path:
             media_path = vision_input.image_path
@@ -90,7 +100,7 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
             media_path = vision_input.audio_path
 
         if not media_path:
-            raise ValueError("No media path provided")
+            raise ValueError("No media path or YouTube URL provided")
 
         return {
             "media_path": media_path,
@@ -129,10 +139,32 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
 
         # Format input
         formatted = self.format_input(vision_input)
-        media_path = formatted["media_path"]
         prompt = formatted["prompt"]
 
         try:
+            # Handle YouTube URLs directly (no upload needed)
+            if "youtube_url" in formatted:
+                youtube_url = formatted["youtube_url"]
+
+                # Create content with YouTube URL and prompt
+                contents = self.types.Content(
+                    parts=[
+                        self.types.Part(file_data=self.types.FileData(file_uri=youtube_url)),
+                        self.types.Part(text=prompt)
+                    ]
+                )
+
+                # Generate response
+                response = client.models.generate_content(
+                    model=model,
+                    contents=contents
+                )
+
+                return response.text
+
+            # Handle file uploads
+            media_path = formatted["media_path"]
+
             # Upload file to Gemini
             uploaded_file = client.files.upload(file=media_path)
 
