@@ -261,7 +261,7 @@ class StatsTab:
                 f"{compression_block}"
             )
         except Exception as e:
-            return f"{self._get_translation('error_loading_stats')}: {e!s}"
+            return f"{self._get_translation('error_loading_stats')}: {str(e)}"
 
 
     # Stats handler methods

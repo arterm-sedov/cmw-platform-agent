@@ -1,16 +1,18 @@
 """
 Tests for understand_video tool with VisionToolManager
 """
-import pytest
-import tempfile
 from pathlib import Path
+import sys
+import tempfile
 from unittest.mock import Mock, patch
 
-import sys
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Import the underlying function, not the @tool decorated version
 from tools import tools
+
 understand_video = tools.understand_video.func  # Get the actual function
 
 
@@ -20,15 +22,15 @@ class TestUnderstandVideo:
     def test_understand_video_with_file_path(self):
         """Test analyzing video from file path"""
         # Create temp video file (just a placeholder)
-        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as f:
-            f.write(b'fake video data')
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+            f.write(b"fake video data")
             video_path = f.name
 
         try:
             mock_agent = Mock()
             mock_agent.file_registry = {Path(video_path).name: video_path}
 
-            with patch('agent_ng.vision_tool_manager.VisionToolManager.analyze_video') as mock_analyze:
+            with patch("agent_ng.vision_tool_manager.VisionToolManager.analyze_video") as mock_analyze:
                 mock_analyze.return_value = "This video shows a person walking"
 
                 result = understand_video(
@@ -50,15 +52,15 @@ class TestUnderstandVideo:
         """Test analyzing video from URL"""
         mock_agent = Mock()
 
-        with patch('tools.file_utils.FileUtils.resolve_file_reference') as mock_resolve:
-            with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as f:
-                f.write(b'fake video')
+        with patch("tools.file_utils.FileUtils.resolve_file_reference") as mock_resolve:
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+                f.write(b"fake video")
                 temp_path = f.name
 
             try:
                 mock_resolve.return_value = temp_path
 
-                with patch('agent_ng.vision_tool_manager.VisionToolManager.analyze_video') as mock_analyze:
+                with patch("agent_ng.vision_tool_manager.VisionToolManager.analyze_video") as mock_analyze:
                     mock_analyze.return_value = "Video analysis result"
 
                     result = understand_video(
@@ -79,7 +81,7 @@ class TestUnderstandVideo:
         """Test error handling when file not found"""
         mock_agent = Mock()
 
-        with patch('tools.file_utils.FileUtils.resolve_file_reference') as mock_resolve:
+        with patch("tools.file_utils.FileUtils.resolve_file_reference") as mock_resolve:
             mock_resolve.return_value = None
 
             result = understand_video(
@@ -94,15 +96,15 @@ class TestUnderstandVideo:
 
     def test_understand_video_with_system_prompt(self):
         """Test with custom system prompt"""
-        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as f:
-            f.write(b'fake video')
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+            f.write(b"fake video")
             video_path = f.name
 
         try:
             mock_agent = Mock()
             mock_agent.file_registry = {Path(video_path).name: video_path}
 
-            with patch('agent_ng.vision_tool_manager.VisionToolManager.analyze_video') as mock_analyze:
+            with patch("agent_ng.vision_tool_manager.VisionToolManager.analyze_video") as mock_analyze:
                 mock_analyze.return_value = "Detailed video analysis"
 
                 result = understand_video(
@@ -122,15 +124,15 @@ class TestUnderstandVideo:
 
     def test_understand_video_with_timestamps(self):
         """Test video analysis with start/end timestamps"""
-        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as f:
-            f.write(b'fake video')
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+            f.write(b"fake video")
             video_path = f.name
 
         try:
             mock_agent = Mock()
             mock_agent.file_registry = {Path(video_path).name: video_path}
 
-            with patch('agent_ng.vision_tool_manager.VisionToolManager.analyze_video') as mock_analyze:
+            with patch("agent_ng.vision_tool_manager.VisionToolManager.analyze_video") as mock_analyze:
                 mock_analyze.return_value = "Video segment analysis"
 
                 result = understand_video(
@@ -157,7 +159,7 @@ class TestUnderstandVideoIntegration:
     def test_real_video_analysis(self):
         """Test with real API call (requires OPENROUTER_API_KEY)"""
         import os
-        if not os.getenv('OPENROUTER_API_KEY'):
+        if not os.getenv("OPENROUTER_API_KEY"):
             pytest.skip("OPENROUTER_API_KEY not set")
 
         # Would need a real test video file
