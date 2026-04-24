@@ -144,14 +144,6 @@ except ImportError:
     GEMINI_AVAILABLE = False
     print("Warning: Google Gemini not available. Install with: pip install google-genai")
 
-# MarkItDown for Office documents and HTML text extraction
-try:
-    from markitdown import MarkItDown
-    MARKITDOWN_AVAILABLE = True
-except ImportError:
-    MARKITDOWN_AVAILABLE = False
-    print("Warning: markitdown not available. Install with: pip install markitdown[docx,xlsx,pptx]")
-
 # ========== GEMINI HELPER FUNCTIONS ==========
 def _get_gemini_client():
     """
@@ -830,8 +822,8 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
 
     The tool automatically:
     - Detects file encoding and handles multiple encodings (UTF-8, Latin-1, CP1252, ISO-8859-1)
-    - Resolves filenames to full file paths via agent's file registry
-    - Downloads files from URLs automatically
+    - Resolves filenames to full file paths
+    - Downloads files from URLs
     - Provides file metadata (name, size, encoding) in results
 
     Args:
@@ -845,6 +837,8 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
         str: The text content of the file with metadata, or an error message if reading fails
     """
     from .file_utils import FileUtils
+    from .local_path_text import read_local_path_to_plain_text
+
     file_path = FileUtils.resolve_file_reference(file_reference, agent)
     if not file_path:
         return FileUtils.create_tool_response("read_text_based_file", error=f"File not found: {file_reference}")
@@ -852,85 +846,24 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
     if not file_info.exists:
         return FileUtils.create_tool_response("read_text_based_file", error=file_info.error)
 
-    if file_info.extension == '.pdf':
-        try:
-            from .pdf_utils import PDFUtils
-            if not PDFUtils.is_available():
-                return FileUtils.create_tool_response("read_text_based_file", error="PyMuPDF not available. Install with: pip install pymupdf", file_info=file_info)
-            pdf_result = PDFUtils.extract_text_from_pdf(file_path, use_markdown=True)
-            if not pdf_result.success:
-                return FileUtils.create_tool_response("read_text_based_file", error=pdf_result.error_message, file_info=file_info)
-            display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
-            size_str = FileUtils.format_file_size(file_info.size)
-            content = pdf_result.text_content
-            result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
-            return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
-        except Exception as e:
-            return FileUtils.create_tool_response("read_text_based_file", error=f"Error processing PDF: {str(e)}", file_info=file_info)
+    content, read_err, enc = read_local_path_to_plain_text(
+        file_path, read_html_as_markdown=read_html_as_markdown, _file_info=file_info
+    )
+    if read_err:
+        return FileUtils.create_tool_response("read_text_based_file", error=read_err, file_info=file_info)
 
-    if file_info.extension in ('.docx', '.xlsx', '.pptx', '.html'):
-        if not MARKITDOWN_AVAILABLE:
-            return FileUtils.create_tool_response(
-                "read_text_based_file",
-                error="markitdown not available. Install with: pip install markitdown[docx,xlsx,pptx]",
-                file_info=file_info
-            )
-        try:
-            md = MarkItDown()
-            result = md.convert(file_path)
-            content = result.text_content
-            if not content or not content.strip():
-                return FileUtils.create_tool_response(
-                    "read_text_based_file",
-                    error=f"No text content found in {file_info.extension} file",
-                    file_info=file_info
-                )
-
-            display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
-            size_str = FileUtils.format_file_size(file_info.size)
-
-            if file_info.extension == '.html' and not read_html_as_markdown:
-                raw_result = FileUtils.read_text_file(file_path)
-                if raw_result.success:
-                    content = raw_result.content
-                    result_text = f"File: {display_name} ({size_str}, raw HTML)\n\nContent:\n{content}"
-                else:
-                    return FileUtils.create_tool_response(
-                        "read_text_based_file",
-                        error=f"Could not read HTML as raw text: {raw_result.error}",
-                        file_info=file_info
-                    )
-            else:
-                if file_info.extension == '.html':
-                    result_text = f"File: {display_name} ({size_str}, converted to Markdown)\n\nContent:\n{content}"
-                else:
-                    result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
-
-            return FileUtils.create_tool_response(
-                "read_text_based_file",
-                result=result_text,
-                file_info=file_info
-            )
-        except Exception as e:
-            return FileUtils.create_tool_response(
-                "read_text_based_file",
-                error=f"Error processing {file_info.extension}: {str(e)}",
-                file_info=file_info
-            )
-
-    result = FileUtils.read_text_file(file_path)
-    if not result.success:
-        return FileUtils.create_tool_response("read_text_based_file", error=result.error)
-
-    file_info = result.file_info
-    content = result.content
-    encoding = result.encoding
+    display_name = file_reference if file_reference.startswith(("http://", "https://", "ftp://")) else file_reference
     size_str = FileUtils.format_file_size(file_info.size)
-    display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
-    if encoding != 'utf-8':
-        result_text = f"File: {display_name} ({size_str}, {encoding} encoding)\n\nContent:\n{content}"
+    extl = (file_info.extension or "").lower()
+    if extl == ".html" and read_html_as_markdown:
+        header = f"File: {display_name} ({size_str}, converted to Markdown)"
+    elif extl == ".html" and not read_html_as_markdown:
+        header = f"File: {display_name} ({size_str}, raw HTML)"
+    elif enc and enc != "utf-8":
+        header = f"File: {display_name} ({size_str}, {enc} encoding)"
     else:
-        result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
+        header = f"File: {display_name} ({size_str})"
+    result_text = f"{header}\n\nContent:\n{content}"
     return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
 
 # ========== PANDAS QUERY/PIPELINE HELPERS ==========

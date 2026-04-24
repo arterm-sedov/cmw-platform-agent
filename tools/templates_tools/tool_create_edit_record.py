@@ -1,11 +1,14 @@
-from typing import Any  # noqa: I001
+from __future__ import annotations
+
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from typing import Any
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from tools import requests_
+from tools.platform_record_document import extract_platform_document_id
 
 ATTRIBUTE_LIST_ENDPOINT = "webapi/Attribute/List"
 RECORD_ENDPOINT = "webapi/Record"
@@ -104,10 +107,12 @@ def _coerce_scalar_value(attr_type: str, value: Any) -> Any:
     # Leave empty string as-is
     if value == "":
         return value
+    if t == "document":
+        eid = extract_platform_document_id(value)
+        return eid if eid is not None else ""
     # String-like types → str
     stringish = {
         "string",
-        "document",
         "image",
         "drawing",
         "record",
@@ -169,7 +174,7 @@ def create_edit_record(
 
     - Sets the provided values.
     - Default values are controlled by the Comindware Platform.
-    - Does not set system attributes. 
+    - Does not set system attributes.
     - Sets "_color" attribute as it's user-editable even though it's a system attribute.
     - Fetches the template's attribute list to get type information for proper coercion.
     - Applies type-aware coercion to provided values based on attribute metadata.
@@ -186,7 +191,7 @@ def create_edit_record(
     template_global_alias = f"Template@{application_system_name}.{template_system_name}"
 
     # 1) Fetch attribute list to know all attribute system names
-    attrs_resp = requests_._get_request(  # noqa: SLF001
+    attrs_resp = requests_._get_request(
         f"{ATTRIBUTE_LIST_ENDPOINT}/{template_global_alias}"
     )
 
@@ -222,17 +227,16 @@ def create_edit_record(
             if coerced is not None and coerced != "":
                 body[key] = coerced
 
-
     # 3) Choose endpoint/method and execute without stripping empty strings
     op = str(operation or "").strip().lower()
     if op == "create":
         endpoint = f"{RECORD_ENDPOINT}/{template_global_alias}"
-        result = requests_._post_request(body, endpoint)  # noqa: SLF001
+        result = requests_._post_request(body, endpoint)
         return _normalize_upsert_result(result, record_id)
 
     if op == "edit":
         endpoint = f"{RECORD_ENDPOINT}/{record_id}"
-        result = requests_._put_request(body, endpoint)  # noqa: SLF001
+        result = requests_._put_request(body, endpoint)
         return _normalize_upsert_result(result, record_id)
 
     return {
@@ -243,7 +247,9 @@ def create_edit_record(
     }
 
 
-def _normalize_upsert_result(result: dict[str, Any], provided_record_id: str | None = None) -> dict[str, Any]:
+def _normalize_upsert_result(
+    result: dict[str, Any], provided_record_id: str | None = None
+) -> dict[str, Any]:
     """Normalize upsert result to standard format with record_id extraction."""
     if not result.get("success", False):
         return {
@@ -264,7 +270,7 @@ def _normalize_upsert_result(result: dict[str, Any], provided_record_id: str | N
         # WebApiResponse[System.String] - record ID is in the "response" field
         record_id = raw_response.get("response")
 
-    # For edit operations, if we can't extract from response, 
+    # For edit operations, if we can't extract from response,
     # use the provided record_id that was used in the request
     if record_id is None and provided_record_id:
         record_id = provided_record_id
@@ -280,6 +286,7 @@ def _normalize_upsert_result(result: dict[str, Any], provided_record_id: str | N
 if __name__ == "__main__":
     # Example local smoke run (requires env/config)
     from datetime import datetime
+
     results = create_edit_record.invoke(
         {
             "operation": "create",
