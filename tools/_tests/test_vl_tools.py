@@ -3,16 +3,19 @@ Tests for VL-powered tools (analyze_image_ai, understand_video, understand_audio
 
 Following TDD principles - test behavior, not implementation
 """
-import pytest
-import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
 
 # Import the tools we'll be testing
 import sys
+import tempfile
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from tools import tools
+
 analyze_image_ai = tools.analyze_image_ai.func  # Get the actual function
 
 
@@ -22,9 +25,9 @@ class TestAnalyzeImageAI:
     def test_analyze_image_ai_with_file_path(self):
         """Test analyzing image from file path"""
         # Create temp image
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             from PIL import Image
-            img = Image.new('RGB', (100, 100), color='red')
+            img = Image.new("RGB", (100, 100), color="red")
             img.save(f.name)
             image_path = f.name
 
@@ -81,9 +84,9 @@ class TestAnalyzeImageAI:
 
     def test_analyze_image_ai_fast_mode(self):
         """Test default analysis"""
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             from PIL import Image
-            img = Image.new('RGB', (100, 100), color='green')
+            img = Image.new("RGB", (100, 100), color="green")
             img.save(f.name)
             image_path = f.name
 
@@ -108,9 +111,9 @@ class TestAnalyzeImageAI:
 
     def test_analyze_image_ai_quality_mode(self):
         """Test analysis with system prompt"""
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             from PIL import Image
-            img = Image.new('RGB', (100, 100), color='yellow')
+            img = Image.new("RGB", (100, 100), color="yellow")
             img.save(f.name)
             image_path = f.name
 
@@ -138,7 +141,7 @@ class TestAnalyzeImageAI:
         """Test error handling when file not found"""
         mock_agent = Mock()
 
-        with patch('tools.file_utils.FileUtils.resolve_file_reference') as mock_resolve:
+        with patch("tools.file_utils.FileUtils.resolve_file_reference") as mock_resolve:
             # Mock file not found
             mock_resolve.return_value = None
 
@@ -156,7 +159,7 @@ class TestAnalyzeImageAI:
     def test_analyze_image_ai_invalid_image(self):
         """Test error handling with invalid image file"""
         # Create temp non-image file
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False, mode='w') as f:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False, mode="w") as f:
             f.write("not an image")
             file_path = f.name
 
@@ -179,9 +182,9 @@ class TestAnalyzeImageAI:
 
     def test_analyze_image_ai_with_system_prompt(self):
         """Test with custom system prompt"""
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             from PIL import Image
-            img = Image.new('RGB', (100, 100), color='purple')
+            img = Image.new("RGB", (100, 100), color="purple")
             img.save(f.name)
             image_path = f.name
 
@@ -212,7 +215,7 @@ class TestAnalyzeImageAIIntegration:
     def test_real_image_analysis(self):
         """Test with real API call (requires OPENROUTER_API_KEY)"""
         import os
-        if not os.getenv('OPENROUTER_API_KEY'):
+        if not os.getenv("OPENROUTER_API_KEY"):
             pytest.skip("OPENROUTER_API_KEY not set")
 
         # Use test image from experiments

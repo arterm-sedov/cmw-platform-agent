@@ -255,7 +255,7 @@ class ConfigTab:
         except Exception as e:
             logging.getLogger(__name__).exception("Save to browser state failed")
             with suppress(Exception):
-                message = self._get_translation("config_save_error") + "\n\n" + f"{e!s}"
+                message = self._get_translation("config_save_error") + "\n\n" + f"{str(e)}"
                 gr.Warning(message)
             return current_state or {}
         else:
@@ -336,7 +336,7 @@ class ConfigTab:
         except Exception as e:
             logging.getLogger(__name__).exception("Load from browser state failed")
             with suppress(Exception):
-                message = self._get_translation("config_load_error") + "\n\n" + f"{e!s}"
+                message = self._get_translation("config_load_error") + "\n\n" + f"{str(e)}"
                 gr.Warning(message)
             return (
                 gr.update(),
@@ -363,7 +363,7 @@ class ConfigTab:
             logging.getLogger(__name__).exception("Clear browser storage failed")
             with suppress(Exception):
                 base = self._get_translation("config_clear_error")
-                details = f"{e!s}"
+                details = f"{str(e)}"
                 gr.Warning(base + "\n\n" + details)
             # Return original state if clear failed
             return state or {}, gr.update(), gr.update(), gr.update()
