@@ -471,6 +471,29 @@ class FileUtils:
         return None
 
     @staticmethod
+    def read_file_reference_bytes(
+        file_reference: str, agent=None
+    ) -> tuple[Optional[bytes], Optional[str], Optional[str]]:
+        """
+        Resolve a file reference to a local path and read its bytes.
+
+        Returns:
+            (data, error, resolved_path): On success, ``data`` is set and
+            ``error`` is None; ``resolved_path`` is the file used (for basenames).
+            On failure, ``data`` and ``resolved_path`` are None.
+        """
+        path = FileUtils.resolve_file_reference(file_reference, agent)
+        if not path:
+            return None, f"Could not resolve file reference: {file_reference!r}", None
+        if not os.path.isfile(path):
+            return None, f"Not a file: {path!r}", None
+        try:
+            data = Path(path).read_bytes()
+        except OSError as e:
+            return None, f"Failed to read file: {e!s}", None
+        return data, None, path
+
+    @staticmethod
     def resolve_file_path(original_filename: str, agent=None) -> str:
         """
         Resolve original filename to full file path using agent's file registry.

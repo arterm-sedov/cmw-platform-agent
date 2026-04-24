@@ -1,9 +1,8 @@
-"""Template/record document tools: read fields, load files for analysis, upload attachments."""
+"""Record tools for **document** attributes: read attribute values, load stored files, upload attachments."""
 
 from __future__ import annotations
 
 import base64
-import binascii
 import logging
 import os
 from pathlib import Path
@@ -13,6 +12,11 @@ from typing import Annotated, Any
 from langchain_core.tools import InjectedToolArg, tool
 from pydantic import BaseModel, Field, field_validator
 
+from tools.file_reference_tool_text import (
+    CHAT_FILE_REFERENCE_DESCRIPTION,
+    CHAT_FILE_REFERENCE_RESULT_HINT,
+)
+from tools.file_utils import FileUtils
 from tools.platform_record_document import (
     display_filename_for_registry,
     fetch_record_field_values,
@@ -23,6 +27,18 @@ from tools.platform_record_document import (
 )
 
 logger = logging.getLogger(__name__)
+
+# LangChain ``description=`` for :func:`fetch_record_document_file` (not f-strings: must be a real
+# string at decoration time; shares only the result hint with the image tool).
+_FETCH_RECORD_DOCUMENT_FILE_DESCRIPTION = (
+    "Load a file that is **already stored** on a **document** attribute of a **record** so it "
+    "can be read or passed along like a user attachment.\n\n"
+    + CHAT_FILE_REFERENCE_RESULT_HINT
+    + "\n\nThe result also includes **``document_id``** (platform id of the file).\n\n"
+    "If the **attribute** is **multivalue** (more than one file can be stored), set "
+    "**``multivalue_index``** to pick one file to load (0-based; list order, often newest first "
+    "in the app)."
+)
 
 
 class GetRecordFieldValuesSchema(BaseModel):
@@ -50,28 +66,26 @@ def get_record_field_values(
     record_id: str, attribute_system_names: list[str]
 ) -> dict[str, Any]:
     """
-    Read selected attribute values for a record (by system name).
+    Get current values of one or more **attributes** on a **record** (by system name).
 
-    Use to see what is stored on the record, including document attribute ids, before
-    loading or attaching files.
+    Call this before **fetching** a document or **image** file, **attaching** a new file, or
+    any step that must know what is already stored.
     """
     return fetch_record_field_values(record_id, attribute_system_names)
 
 
-@tool("fetch_record_document_file", return_direct=False)
+@tool(
+    "fetch_record_document_file",
+    return_direct=False,
+    description=_FETCH_RECORD_DOCUMENT_FILE_DESCRIPTION,
+)
 def fetch_record_document_file(
     record_id: str,
     document_attribute_system_name: str,
     multivalue_index: int = 0,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
-    """
-    Load a file from a record's document attribute into the session like a chat attachment.
-    On success, `file_reference` is the logical file name to pass into file tools (same as an
-    upload; from GetDocument: API field ``title`` is the stored filename, plus ``extension``).
-    ``display_filename`` in the result is that full name. Multiple files: use ``multivalue_index``
-    (0-based; platform order, often newest first).
-    """
+    """Load a stored document file; see the tool **description** for what **``file_reference``** is."""
     record_id = record_id.strip() if isinstance(record_id, str) else ""
     document_attribute_system_name = (
         document_attribute_system_name.strip()
@@ -134,7 +148,7 @@ def fetch_record_document_file(
         }
     # :func:`get_document_content` encodes raw ``/Content`` bytes; CMW test runs used non-empty files.
     raw = base64.b64decode(b64c, validate=False)
-    # Local temp name uses the same suffix as the logical filename (``title``+``extension`` on the model).
+    # Temp file suffix matches the file name (including extension) from the model.
     tmp_suffix = Path(display).suffix
     try:
         fd, tpath = tempfile.mkstemp(suffix=tmp_suffix)
@@ -148,12 +162,11 @@ def fetch_record_document_file(
             "document_id": doc_id,
         }
 
-    content_transport_filename = dres.get("filename")
-    logical = display
-    # With agent: LLM only sees the session file name (like chat); paths stay in registry.
+    # register_file uses the product file name (``display``), not the id+suffix from
+    # :func:`get_document_content` (``dres["filename"]``).
     if agent is not None and callable(getattr(agent, "register_file", None)):
         try:
-            agent.register_file(logical, tpath)
+            agent.register_file(display, tpath)
         except Exception as e:
             logger.warning("register_file failed: %s", e)
             try:
@@ -162,18 +175,15 @@ def fetch_record_document_file(
                 logger.debug("temp cleanup after register failure: %s", oe)
             return {
                 "success": False,
-                "error": f"register_file failed: {e!s}",
+                "error": f"register_file failed: {str(e)}",
                 "file_reference": None,
                 "document_id": doc_id,
             }
         return {
             "success": True,
             "error": None,
-            "file_reference": logical,
+            "file_reference": display,
             "document_id": doc_id,
-            "display_filename": display,
-            "content_fileName": content_transport_filename,
-            "message": "Use file_reference as the attachment name for follow-up file tools.",
         }
     # No agent (tests/headless): path resolution only; normal chat agent always has agent.
     return {
@@ -182,31 +192,41 @@ def fetch_record_document_file(
         "file_reference": os.path.abspath(tpath),
         "document_id": doc_id,
         "display_filename": display,
-        "content_fileName": content_transport_filename,
-        "message": "Headless: file_reference is a local path for tooling without a session.",
     }
 
 
 class AttachFileToRecordDocumentSchema(BaseModel):
     record_id: str = Field(description="Record id to attach the file to.")
     attribute_system_name: str = Field(
-        description="System name of the document attribute.",
+        description="System name of the **document** attribute in the record template.",
     )
-    file_name: str = Field(description="Original file name (e.g. report.pdf).")
-    file_base64: str = Field(
-        description="File contents as base64 (not a data: URL; raw base64).",
+    file_reference: str = Field(
+        description=CHAT_FILE_REFERENCE_DESCRIPTION,
+    )
+    file_name: str | None = Field(
+        default=None,
+        description="File name in the app (e.g. report.pdf). Defaults to the resolved file's base name.",
     )
     replace: bool = Field(
         default=True,
         description="If true, replace an existing file on a single-value attribute.",
     )
 
-    @field_validator("record_id", "attribute_system_name", "file_name", mode="before")
+    @field_validator("record_id", "attribute_system_name", "file_reference", mode="before")
     @classmethod
     def strip_req(cls, v: Any) -> str:
         if not isinstance(v, str) or not v.strip():
             msg = "must be a non-empty string"
             raise ValueError(msg)
+        return v.strip()
+
+    @field_validator("file_name", mode="before")
+    @classmethod
+    def opt_file_name(cls, v: Any) -> str | None:
+        if v is None:
+            return None
+        if not isinstance(v, str) or not v.strip():
+            return None
         return v.strip()
 
 
@@ -218,28 +238,38 @@ class AttachFileToRecordDocumentSchema(BaseModel):
 def attach_file_to_record_document_attribute(
     record_id: str,
     attribute_system_name: str,
-    file_name: str,
-    file_base64: str,
+    file_reference: str,
+    file_name: str | None = None,
     replace: bool = True,
+    agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
     """
-    Upload or replace a file on a record's document attribute. Supply the file name
-    and content as base64. Use this when the user or workflow needs a new file stored
-    on the record.
+    **Upload** or **replace** a file on a **document** attribute of a **record** using
+    **``file_reference``** (see the parameter **description**). On a **single-value**
+    **attribute**, **``replace``** overwrites the only stored file. **``file_name``** is optional; omit
+    it to keep the same name as the file in **``file_reference``**. The result includes **``success``**,
+    **``status_code``**, **``error``**, and **``raw_response``** from the platform.
     """
-    try:
-        raw = base64.b64decode(file_base64, validate=False)
-    except (ValueError, binascii.Error) as e:
+    raw, rerr, rpath = FileUtils.read_file_reference_bytes(file_reference, agent)
+    if rerr is not None or raw is None or not rpath:
         return {
             "success": False,
             "status_code": 400,
-            "error": f"Invalid base64: {e!s}",
+            "error": rerr or "Failed to read file for upload",
+            "raw_response": None,
+        }
+    display_name = file_name or os.path.basename(rpath)
+    if not display_name:
+        return {
+            "success": False,
+            "status_code": 400,
+            "error": "Could not determine a file name for the upload",
             "raw_response": None,
         }
     res = set_object_document(
         record_id,
         attribute_system_name,
-        file_name,
+        display_name,
         raw,
         replace=replace,
     )
