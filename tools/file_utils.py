@@ -4,11 +4,14 @@ Modular file handling utilities for tools.
 Provides abstracted, reusable functions for common file operations.
 """
 
-import os
 import json
-from typing import Optional, Dict, Any, List
+import mimetypes
+import os
+import re
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
+
 
 class FileInfo(BaseModel):
     """Pydantic model for file information."""
@@ -457,6 +460,9 @@ class FileUtils:
                 logger.error(f"Error type: {type(e).__name__}")
                 # Re-raise the exception to get more details
                 raise
+
+        if os.path.isabs(file_reference) and os.path.isfile(file_reference):
+            return file_reference
 
         # It's a filename - resolve using agent's file registry
         if agent and hasattr(agent, 'get_file_path'):
