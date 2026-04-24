@@ -33,9 +33,11 @@ from tools import requests_
 GET_PROPERTY_VALUES = "api/public/system/TeamNetwork/ObjectService/GetPropertyValues"
 SET_OBJECT_DOCUMENT = "api/public/system/TeamNetwork/DocumentService/SetObjectDocument"
 
+
 def document_content_get_path(document_id: str) -> str:
     """``GET`` ``webapi/Document/{id}/Content`` (raw body via :func:`requests_._get_url_binary`)."""
     return f"webapi/Document/{document_id}/Content"
+
 
 def extract_platform_document_id(value: Any) -> str | None:
     """
@@ -103,6 +105,69 @@ def fetch_record_field_values(
         "data": {record_id: row},
         "error": None,
     }
+
+
+def resolve_id_from_record_property(
+    record_id: str,
+    attribute_system_name: str,
+    multivalue_index: int,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """
+    Return the stored file / media id for a single property (document, image, etc.).
+
+    Uses the same GetPropertyValues row shape as the UI: value may be a string id, ``{"id": ...}``,
+    or a list for multivalue attributes. The API may key the row with a different casing than
+    ``attribute_system_name``; lookup is case-insensitive.
+
+    On failure, return (error_dict, None). On success, return (None, id string).
+    """
+    g = fetch_record_field_values(record_id, [attribute_system_name])
+    if not g.get("success"):
+        return (
+            {
+                "success": False,
+                "error": g.get("error") or "Failed to read record",
+            },
+            None,
+        )
+    data = (g.get("data") or {}).get(record_id) or {}
+    raw_val = data.get(attribute_system_name)
+    if raw_val is None and isinstance(data, dict):
+        for k, v in data.items():
+            if k.lower() == attribute_system_name.lower():
+                raw_val = v
+                break
+    if raw_val in (None, ""):
+        return (
+            {
+                "success": False,
+                "error": "Attribute is empty or missing on this record.",
+            },
+            None,
+        )
+    if isinstance(raw_val, list):
+        if multivalue_index >= len(raw_val):
+            return (
+                {
+                    "success": False,
+                    "error": (
+                        f"multivalue_index {multivalue_index} out of range "
+                        f"(len={len(raw_val)})."
+                    ),
+                },
+                None,
+            )
+        raw_val = raw_val[multivalue_index]
+    ref = extract_platform_document_id(raw_val)
+    if not ref:
+        return (
+            {
+                "success": False,
+                "error": "Could not resolve a file id from the attribute value.",
+            },
+            None,
+        )
+    return (None, ref)
 
 
 def get_document_model(document_id: str) -> dict[str, Any]:
@@ -259,5 +324,6 @@ __all__ = [
     "fetch_record_field_values",
     "get_document_content",
     "get_document_model",
+    "resolve_id_from_record_property",
     "set_object_document",
 ]

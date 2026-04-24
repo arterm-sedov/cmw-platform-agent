@@ -52,7 +52,7 @@ class UpsertRecordSchema(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def validate_edit_requires_id(self) -> "UpsertRecordSchema":
+    def validate_edit_requires_id(self) -> UpsertRecordSchema:
         op = str(self.operation or "").strip().lower()
         if op in {"редактировать", "edit"} and not (
             self.record_id and str(self.record_id).strip()
@@ -107,13 +107,12 @@ def _coerce_scalar_value(attr_type: str, value: Any) -> Any:
     # Leave empty string as-is
     if value == "":
         return value
-    if t == "document":
+    if t in ("document", "image"):
         eid = extract_platform_document_id(value)
         return eid if eid is not None else ""
     # String-like types → str
     stringish = {
         "string",
-        "image",
         "drawing",
         "record",
         "role",

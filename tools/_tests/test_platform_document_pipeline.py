@@ -21,14 +21,21 @@ from tools.platform_record_document import (
     fetch_record_field_values,
     get_document_content,
     get_document_model,
+    resolve_id_from_record_property,
     set_object_document,
     unwrap_webapi_payload,
 )
-from tools.templates_tools.tool_create_edit_record import _coerce_scalar_value
-from tools.templates_tools.tool_record_document import (
-    _document_id_for_attribute,
-    fetch_record_document_file,
+from tools.platform_record_image import (
+    WEBAPI_IMAGE_CREATE,
+    create_image_file,
+    display_filename_for_image_model,
+    extract_created_id,
+    get_image_file_payload,
+    image_get_path,
 )
+from tools.templates_tools.tool_create_edit_record import _coerce_scalar_value
+from tools.templates_tools.tool_record_document import fetch_record_document_file
+from tools.templates_tools.tool_record_image import fetch_record_image_file
 from tools.tools import read_text_based_file
 
 
@@ -174,16 +181,16 @@ class TestGetDocumentContent:
         assert "Content" in document_content_get_path("x")
 
 
-class TestDocumentIdForAttribute:
-    """``_document_id_for_attribute`` is the only path ``fetch_record_document_file`` uses to get an id."""
+class TestResolveIdFromRecordProperty:
+    """Used by :func:`fetch_record_document_file` and :func:`fetch_record_image_file`."""
 
     def test_resolves_property_value_by_exact_key(self) -> None:
         rid = "rec-a"
         with patch(
-            "tools.templates_tools.tool_record_document.fetch_record_field_values",
+            "tools.platform_record_document.fetch_record_field_values",
             return_value={"success": True, "data": {rid: {"FileAttr": "doc-1"}}},
         ):
-            err, did = _document_id_for_attribute(rid, "FileAttr", 0)
+            err, did = resolve_id_from_record_property(rid, "FileAttr", 0)
         assert err is None
         assert did == "doc-1"
 
@@ -191,43 +198,43 @@ class TestDocumentIdForAttribute:
         """GetPropertyValues may return keys that do not match the requested name byte-for-byte."""
         rid = "rec-b"
         with patch(
-            "tools.templates_tools.tool_record_document.fetch_record_field_values",
+            "tools.platform_record_document.fetch_record_field_values",
             return_value={"success": True, "data": {rid: {"MyDocAttr": {"id": "d-x"}}}},
         ):
-            err, did = _document_id_for_attribute(rid, "mydocattr", 0)
+            err, did = resolve_id_from_record_property(rid, "mydocattr", 0)
         assert err is None
         assert did == "d-x"
 
     def test_multivalue_list_index(self) -> None:
         rid = "rec-c"
         with patch(
-            "tools.templates_tools.tool_record_document.fetch_record_field_values",
+            "tools.platform_record_document.fetch_record_field_values",
             return_value={
                 "success": True,
                 "data": {rid: {"F": ["a", "b"]}},
             },
         ):
-            err, did = _document_id_for_attribute(rid, "F", 1)
+            err, did = resolve_id_from_record_property(rid, "F", 1)
         assert err is None
         assert did == "b"
 
     def test_multivalue_index_out_of_range(self) -> None:
         rid = "rec-d"
         with patch(
-            "tools.templates_tools.tool_record_document.fetch_record_field_values",
+            "tools.platform_record_document.fetch_record_field_values",
             return_value={"success": True, "data": {rid: {"F": ["only"]}}},
         ):
-            err, _ = _document_id_for_attribute(rid, "F", 1)
+            err, _ = resolve_id_from_record_property(rid, "F", 1)
         assert err is not None
         assert err.get("success") is False
         assert "multivalue" in (err.get("error") or "").lower()
 
     def test_get_property_values_failure(self) -> None:
         with patch(
-            "tools.templates_tools.tool_record_document.fetch_record_field_values",
+            "tools.platform_record_document.fetch_record_field_values",
             return_value={"success": False, "error": "nope"},
         ):
-            err, did = _document_id_for_attribute("r", "F", 0)
+            err, did = resolve_id_from_record_property("r", "F", 0)
         assert err is not None
         assert did is None
 
@@ -255,6 +262,11 @@ class TestCoerceDocument:
         assert _coerce_scalar_value("Document", "  id1  ") == "id1"
 
 
+class TestCoerceImage:
+    def test_coerce_image_dict_to_id(self) -> None:
+        assert _coerce_scalar_value("image", {"id": "i9"}) == "i9"
+
+
 class TestReadLocalPathPlainText:
     def test_txt_file(self, tmp_path: Path) -> None:
         f = tmp_path / "a.txt"
@@ -272,8 +284,8 @@ class TestFetchRecordDocumentFile:
         b64s = base64.b64encode(body).decode("ascii")
         with (
             patch(
-                "tools.templates_tools.tool_record_document.fetch_record_field_values",
-                return_value={"success": True, "data": {rid: {"DocAttr": "d-7"}}},
+                "tools.templates_tools.tool_record_document.resolve_id_from_record_property",
+                return_value=(None, "d-7"),
             ),
             patch(
                 "tools.templates_tools.tool_record_document.get_document_model",
@@ -334,8 +346,8 @@ class TestFetchRecordDocumentFile:
         ag = _Agent()
         with (
             patch(
-                "tools.templates_tools.tool_record_document.fetch_record_field_values",
-                return_value={"success": True, "data": {rid: {"Doc": "d-99"}}},
+                "tools.templates_tools.tool_record_document.resolve_id_from_record_property",
+                return_value=(None, "d-99"),
             ),
             patch(
                 "tools.templates_tools.tool_record_document.get_document_model",
@@ -379,3 +391,83 @@ class TestFetchRecordDocumentFile:
             if os.path.isfile(pth):
                 with contextlib.suppress(OSError):
                     os.unlink(pth)
+
+
+class TestImageHttpHelpers:
+    def test_image_get_path_has_id_query(self) -> None:
+        s = image_get_path("x-y")
+        assert "webapi/Image" in s
+        assert "imageId" in s
+
+    def test_create_image_posts(self) -> None:
+        with patch("tools.platform_record_image.requests_._post_request") as p:
+            p.return_value = {
+                "success": True,
+                "raw_response": {"response": "new-img-id"},
+            }
+            out = create_image_file("a.png", b"ab")
+        assert out.get("success") is True
+        body, path = p.call_args[0]
+        assert path == WEBAPI_IMAGE_CREATE
+        assert body["name"] == "a.png"
+        assert "content" in body
+
+    def test_extract_created_id(self) -> None:
+        assert (
+            extract_created_id(
+                {
+                    "success": True,
+                    "raw_response": {"response": "z1"},
+                }
+            )
+            == "z1"
+        )
+
+    def test_display_name_and_payload(self) -> None:
+        m = {"name": "p.png", "format": "PNG", "content": "QUJD"}
+        assert display_filename_for_image_model(m) == "p.png"
+        p = get_image_file_payload("i1", image_model=m)
+        assert p.get("success") is True
+        assert p.get("content") == "QUJD"
+        assert p.get("filename") == "i1.png"
+
+
+class TestFetchRecordImageFile:
+    def test_no_agent_writes_bytes(self) -> None:
+        rid = "r1"
+        b64c = base64.b64encode(b"img-bytes").decode("ascii")
+        with (
+            patch(
+                "tools.templates_tools.tool_record_image.resolve_id_from_record_property",
+                return_value=(None, "img-1"),
+            ),
+            patch(
+                "tools.templates_tools.tool_record_image.get_image_model",
+                return_value={
+                    "success": True,
+                    "model": {
+                        "name": "f.png",
+                        "format": "png",
+                        "content": b64c,
+                    },
+                },
+            ),
+        ):
+            out = fetch_record_image_file.invoke(
+                {
+                    "record_id": rid,
+                    "image_attribute_system_name": "ImAttr",
+                    "multivalue_index": 0,
+                    "agent": None,
+                }
+            )
+        assert out.get("success") is True
+        ref = out.get("file_reference")
+        assert isinstance(ref, str)
+        assert os.path.isabs(ref)
+        try:
+            with open(ref, "rb") as f:
+                assert f.read() == b"img-bytes"
+        finally:
+            if isinstance(ref, str) and os.path.isfile(ref):
+                os.unlink(ref)

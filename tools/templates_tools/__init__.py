@@ -14,6 +14,10 @@ from tools.templates_tools.tool_record_document import (
     fetch_record_document_file,
     get_record_field_values,
 )
+from tools.templates_tools.tool_record_image import (
+    attach_file_to_record_image_attribute,
+    fetch_record_image_file,
+)
 from tools.templates_tools.tools_button import (
     archive_unarchive_button,
     edit_or_create_button,
@@ -36,6 +40,7 @@ from tools.templates_tools.tools_toolbar import (
 __all__ = [
     "archive_unarchive_button",
     "attach_file_to_record_document_attribute",
+    "attach_file_to_record_image_attribute",
     "create_edit_record",
     "edit_or_create_button",
     "edit_or_create_dataset",
@@ -43,6 +48,7 @@ __all__ = [
     "edit_or_create_record_template",
     "edit_or_create_toolbar",
     "fetch_record_document_file",
+    "fetch_record_image_file",
     "get_button",
     "get_dataset",
     "get_form",
