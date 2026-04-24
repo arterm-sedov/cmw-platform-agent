@@ -1,9 +1,8 @@
-"""Template/record **image** tools: read image id from a property, load bytes, upload new image."""
+"""Record tools for **image** attributes: load stored images, upload new ones (same pattern as document tools)."""
 
 from __future__ import annotations
 
 import base64
-import binascii
 import logging
 import os
 from pathlib import Path
@@ -13,6 +12,11 @@ from typing import Annotated, Any
 from langchain_core.tools import InjectedToolArg, tool
 from pydantic import BaseModel, Field, field_validator
 
+from tools.file_reference_tool_text import (
+    CHAT_FILE_REFERENCE_DESCRIPTION,
+    CHAT_FILE_REFERENCE_RESULT_HINT,
+)
+from tools.file_utils import FileUtils
 from tools.platform_record_document import resolve_id_from_record_property
 from tools.platform_record_image import (
     create_image_file,
@@ -25,19 +29,29 @@ from tools.platform_record_image import (
 
 logger = logging.getLogger(__name__)
 
+_FETCH_RECORD_IMAGE_FILE_DESCRIPTION = (
+    "Load an **image** that is **already stored** on an **image** attribute of a **record** so it "
+    "can be read or sent to a vision or file tool like a user attachment.\n\n"
+    + CHAT_FILE_REFERENCE_RESULT_HINT
+    + "\n\nThe result also includes **``image_id``** (platform id of the image).\n\n"
+    "If the **attribute** is **multivalue** (more than one file can be stored), set "
+    "**``multivalue_index``** to pick one image (0-based; list order, often newest first in the "
+    "app)."
+)
 
-@tool("fetch_record_image_file", return_direct=False)
+
+@tool(
+    "fetch_record_image_file",
+    return_direct=False,
+    description=_FETCH_RECORD_IMAGE_FILE_DESCRIPTION,
+)
 def fetch_record_image_file(
     record_id: str,
     image_attribute_system_name: str,
     multivalue_index: int = 0,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
-    """
-    Load an image from a record's **image** attribute into the session like a chat attachment.
-    Values are image ids; bytes come from ``GET /webapi/Image`` (not raw ``/Content`` like documents).
-    ``display_filename`` uses the API ``name`` or ``image.{format}``. Multivalue: ``multivalue_index``.
-    """
+    """Load a stored image; see the tool **description** for what **``file_reference``** is."""
     record_id = record_id.strip() if isinstance(record_id, str) else ""
     image_attribute_system_name = (
         image_attribute_system_name.strip()
@@ -110,11 +124,9 @@ def fetch_record_image_file(
             "image_id": img_id,
         }
 
-    content_transport_filename = pres.get("filename")
-    logical = display
     if agent is not None and callable(getattr(agent, "register_file", None)):
         try:
-            agent.register_file(logical, tpath)
+            agent.register_file(display, tpath)
         except Exception as e:
             logger.warning("register_file failed: %s", e)
             try:
@@ -130,11 +142,8 @@ def fetch_record_image_file(
         return {
             "success": True,
             "error": None,
-            "file_reference": logical,
+            "file_reference": display,
             "image_id": img_id,
-            "display_filename": display,
-            "content_fileName": content_transport_filename,
-            "message": "Use file_reference as the attachment name for follow-up file tools.",
         }
     return {
         "success": True,
@@ -142,27 +151,37 @@ def fetch_record_image_file(
         "file_reference": os.path.abspath(tpath),
         "image_id": img_id,
         "display_filename": display,
-        "content_fileName": content_transport_filename,
-        "message": "Headless: file_reference is a local path for tooling without a session.",
     }
 
 
 class AttachImageToRecordSchema(BaseModel):
-    record_id: str = Field(description="Record id to attach the image to.")
+    record_id: str = Field(description="Which record to update (record id).")
     attribute_system_name: str = Field(
-        description="System name of the image attribute.",
+        description="System name of the image attribute in the record template.",
     )
-    file_name: str = Field(description="Original file name (e.g. photo.png).")
-    file_base64: str = Field(
-        description="File contents as base64 (not a data: URL; raw base64).",
+    file_reference: str = Field(
+        description=CHAT_FILE_REFERENCE_DESCRIPTION,
+    )
+    file_name: str | None = Field(
+        default=None,
+        description="Name in the app (e.g. photo.png). Defaults to the resolved file's base name.",
     )
 
-    @field_validator("record_id", "attribute_system_name", "file_name", mode="before")
+    @field_validator("record_id", "attribute_system_name", "file_reference", mode="before")
     @classmethod
     def strip_req(cls, v: Any) -> str:
         if not isinstance(v, str) or not v.strip():
             msg = "must be a non-empty string"
             raise ValueError(msg)
+        return v.strip()
+
+    @field_validator("file_name", mode="before")
+    @classmethod
+    def opt_file_name(cls, v: Any) -> str | None:
+        if v is None:
+            return None
+        if not isinstance(v, str) or not v.strip():
+            return None
         return v.strip()
 
 
@@ -174,24 +193,36 @@ class AttachImageToRecordSchema(BaseModel):
 def attach_file_to_record_image_attribute(
     record_id: str,
     attribute_system_name: str,
-    file_name: str,
-    file_base64: str,
+    file_reference: str,
+    file_name: str | None = None,
+    agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
     """
-    Upload an image file to a record's **image** attribute: ``POST /webapi/Image/Create``,
-    then ``PUT /webapi/Record/{id}`` with the new image id (no TeamNetwork ``SetObject…`` for image).
+    **Upload** a new **image** onto an **image** **attribute** of a **record** using
+    **``file_reference``** (see the parameter **description**).     **``file_name``** is optional; omit
+    it to keep the same name as the file in **``file_reference``**. On a **single-value** **attribute**, the new
+    image **replaces** the previous one. The result includes **``success``**, platform
+    **``raw_response``** / **``error``**, and **``image_id``** for the new image.
     """
-    try:
-        raw = base64.b64decode(file_base64, validate=False)
-    except (ValueError, binascii.Error) as e:
+    raw, rerr, rpath = FileUtils.read_file_reference_bytes(file_reference, agent)
+    if rerr is not None or raw is None or not rpath:
         return {
             "success": False,
             "status_code": 400,
-            "error": f"Invalid base64: {str(e)}",
+            "error": rerr or "Failed to read file for upload",
             "raw_response": None,
             "image_id": None,
         }
-    cres = create_image_file(file_name, raw)
+    display_name = file_name or os.path.basename(rpath)
+    if not display_name:
+        return {
+            "success": False,
+            "status_code": 400,
+            "error": "Could not determine a file name for the upload",
+            "raw_response": None,
+            "image_id": None,
+        }
+    cres = create_image_file(display_name, raw)
     new_id = extract_created_id(cres)
     if not new_id:
         return {

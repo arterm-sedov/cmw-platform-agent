@@ -17,3 +17,5 @@ docs/cmw_admin_pages.md
 .agents/skills/cmw-platform/SKILL.md.backup_20260422
 .opencode/plans/20260423_browser_automation_implementation_plan.md.backup
 .browser-states/
+.playwright-cli/**
+.playwright-mcp/**

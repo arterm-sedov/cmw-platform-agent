@@ -1,12 +1,19 @@
 """
-Agentic + direct-API live harness: FacilityManagement / MaintenancePlans / Document.
+Agentic + direct-API live **harness** — **``Document``** + **``Image``** on a **sandbox** app/template.
+
+**``.env``** must set **``CMW_INTEGRATION_APP``** and **``CMW_INTEGRATION_TEMPLATE``** (system
+names; not committed in the repo). Optional: **``CMW_INTEGRATION_DOCUMENT_ATTR``** (defaults to
+**``Document``**).
 
 - ``get_llm_manager().get_tools()`` must expose the same @tool s as the running agent.
 - **Direct (same HTTP as tools use):** ``get_document_model`` + ``get_document_content`` on
   each document id (no agent).
-- **Tool path (what the agent uses):** ``fetch_record_document_file`` + ``read_text_based_file`` —
-  re-reads the record and calls the same GetDocument/Content stack internally; compare
-  ``display`` vs the direct model ``title``+``extension`` line.
+- **Tool path (what the agent uses):** ``fetch_record_document_file`` + ``read_text_based_file``;
+  and ``attach_file_to_record_*_attribute`` with ``file_reference`` = absolute local path (or
+  chat file handle with an agent).
+- **Image:** ``attach_file_to_record_image_attribute`` + ``fetch_record_image_file``;
+  **``CMW_INTEGRATION_IMAGE_ATTR``** (default **``IntegrationTestImage``** via setdefault, see
+  ``integration_test_env``) / ``ensure_harness_image_attribute`` / ``edit_or_create_image_attribute``.
 
   python tools/_tests/harness_document_attribute_matrix.py
 """
@@ -29,8 +36,29 @@ from dotenv import load_dotenv
 
 load_dotenv(_REPO / ".env")
 
-from agent_ng.llm_manager import get_llm_manager
+from tools._tests.cmw_integration_harness import ensure_harness_image_attribute
+from tools._tests.integration_test_env import (
+    CMW_INTEGRATION_IMAGE_ATTR,
+    DEFAULT_INTEGRATION_IMAGE_ATTR_SYSTEM_NAME,
+    integration_app_and_template,
+    integration_document_attr_system_name,
+)
 
+os.environ.setdefault(
+    CMW_INTEGRATION_IMAGE_ATTR,
+    DEFAULT_INTEGRATION_IMAGE_ATTR_SYSTEM_NAME,
+)
+
+_TARGET = integration_app_and_template()
+if not _TARGET:
+    print(
+        "harness: set CMW_INTEGRATION_APP and CMW_INTEGRATION_TEMPLATE in .env, then re-run."
+    )
+    raise SystemExit(0)
+APP, TPL = _TARGET
+DOC_SYS = integration_document_attr_system_name()
+
+from agent_ng.llm_manager import get_llm_manager
 from tools.attributes_tools.tool_get_attribute import get_attribute
 from tools.attributes_tools.tools_document_attribute import (
     edit_or_create_document_attribute,
@@ -43,36 +71,35 @@ from tools.platform_record_document import (
     get_document_content,
     get_document_model,
 )
+from tools.platform_record_image import get_image_model
 from tools.templates_tools.tool_create_edit_record import create_edit_record
 from tools.templates_tools.tool_record_document import (
     attach_file_to_record_document_attribute,
     fetch_record_document_file,
 )
+from tools.templates_tools.tool_record_image import (
+    attach_file_to_record_image_attribute,
+    fetch_record_image_file,
+)
 from tools.tools import read_text_based_file
 
-APP = "FacilityManagement"
-TPL = "MaintenancePlans"
-DOC_SYS = "Document"
-
-# Fixed matrix (all must exist on disk) — user-provided set for MaintenancePlans / Document
-FILE_PATHS: list[Path] = [
-    Path(
-        r"c:\OneDrive\Documents\Вакансия Технический писатель (английский язык) в Москве, "
-        r"работа в компании Comindware (вакансия в архиве c 20 мая 2021).pdf"
-    ),
-    Path(r"c:\OneDrive\Documents\CMW_Copilot_20250920_184805.md"),
-    Path(r"c:\OneDrive\Documents\gradio-screen-recording-2025-09-09T21-02-37.mp4"),
-    Path(r"c:\OneDrive\Documents\Вопросы Wildberries.docx"),
+# Document **multivalue** matrix (all must exist on disk).
+DOCUMENT_FILE_PATHS: list[Path] = [
+    Path(r"c:\OneDrive\Documents\Якшин cv Ai Architect.pdf"),
+    Path(r"c:\OneDrive\Documents\NDA_WhiteLine_filled_partial.docx"),
     Path(r"c:\OneDrive\Music\tni.mp3"),
-    Path(r"C:\OneDrive\Pictures\photo_2024-06-30_05-25-12.jpg"),
 ]
+# Image attribute upload (JPG) — not mixed into Document attribute in this run.
+IMAGE_FILE_PATH = Path(r"C:\OneDrive\Pictures\photo_2024-06-30_05-25-12.jpg")
 
 
 def _registry_check() -> None:
     names = {t.name for t in get_llm_manager().get_tools()}
     for req in (
         "attach_file_to_record_document_attribute",
+        "attach_file_to_record_image_attribute",
         "fetch_record_document_file",
+        "fetch_record_image_file",
         "create_edit_record",
         "edit_or_create_document_attribute",
         "get_attribute",
@@ -81,6 +108,68 @@ def _registry_check() -> None:
             msg = f"missing tool in LLMManager registry: {req}"
             raise RuntimeError(msg)
     print("harness: LLMManager tool set OK.")
+
+
+def _image_harness() -> int:
+    if not IMAGE_FILE_PATH.is_file():
+        print("SKIP image: file not found:", IMAGE_FILE_PATH)
+        return 0
+    try:
+        img_sys = ensure_harness_image_attribute()
+    except RuntimeError as e:
+        print("image attribute setup failed:", e)
+        return 1
+    print("\n--- image: attach + fetch ---")
+    print("  using image attribute system name:", repr(img_sys))
+    cr = create_edit_record.invoke(
+        {
+            "operation": "create",
+            "application_system_name": APP,
+            "template_system_name": TPL,
+            "values": {},
+        }
+    )
+    if not cr.get("success"):
+        print("  create record failed:", cr)
+        return 1
+    rid = str(cr["record_id"])
+    up = attach_file_to_record_image_attribute.invoke(
+        {
+            "record_id": rid,
+            "attribute_system_name": img_sys,
+            "file_reference": str(IMAGE_FILE_PATH.resolve()),
+        }
+    )
+    print("  attach:", up.get("success"), up.get("error") or "")
+    if not up.get("success"):
+        return 1
+    fet = fetch_record_image_file.invoke(
+        {
+            "record_id": rid,
+            "image_attribute_system_name": img_sys,
+            "multivalue_index": 0,
+            "agent": None,
+        }
+    )
+    if not fet.get("success"):
+        print("  fetch image failed:", fet)
+        return 1
+    ref = fet.get("file_reference")
+    iid = fet.get("image_id")
+    g = get_image_model(iid) if iid else {"success": False}
+    c_b64 = (g.get("model") or {}).get("content") if g.get("success") else None
+    raw = (
+        base64.b64decode(str(c_b64), validate=False)[:4]
+        if isinstance(c_b64, str) and c_b64
+        else b""
+    )
+    jpg_hdr = raw.startswith(b"\xff\xd8\xff")
+    ref_s = str(ref) if ref is not None else ""
+    print(
+        f"  image_id={iid!r}  file_reference_is_abs={os.path.isabs(ref_s)}  "
+        f"GetImage JPEG header ok={jpg_hdr}  file_reference={ref_s!r}",
+    )
+    return 0
 
 
 def _row_document_field(row: dict) -> list[Any]:
@@ -135,9 +224,9 @@ def _local_preview(p: Path, max_c: int = 320) -> str:
 
 def main() -> int:
     _registry_check()
-    files = [p for p in FILE_PATHS if p.is_file()]
-    if len(files) != len(FILE_PATHS):
-        for p in FILE_PATHS:
+    files = [p for p in DOCUMENT_FILE_PATHS if p.is_file()]
+    if len(files) != len(DOCUMENT_FILE_PATHS):
+        for p in DOCUMENT_FILE_PATHS:
             if not p.is_file():
                 print("MISSING:", p)
         return 1
@@ -180,13 +269,12 @@ def main() -> int:
     print("record_id:", rid)
 
     for i, p in enumerate(files):
-        b64 = base64.standard_b64encode(p.read_bytes()).decode("ascii")
         ar = attach_file_to_record_document_attribute.invoke(
             {
                 "record_id": rid,
                 "attribute_system_name": DOC_SYS,
+                "file_reference": str(p.resolve()),
                 "file_name": p.name,
-                "file_base64": b64,
                 "replace": i == 0,
             }
         )
@@ -241,10 +329,11 @@ def main() -> int:
         tlen = len(str(rtxt or ""))
         print(
             f"  [idx {i}] {p.name!r}  local≈{len(loc)} chars  register_ok={reg.get('success')}  "
-            f"read_len={tlen}  display={reg.get('display_filename')!r}  "
-            f"content_fileName={reg.get('content_fileName')!r}  ref=abs"
+            f"read_len={tlen}  display={reg.get('display_filename')!r}  ref=abs"
         )
-    print("done.")
+    print("document harness done.")
+    if _image_harness() != 0:
+        return 1
     return 0
 
 
