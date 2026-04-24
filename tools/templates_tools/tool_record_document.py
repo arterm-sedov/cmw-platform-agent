@@ -15,10 +15,10 @@ from pydantic import BaseModel, Field, field_validator
 
 from tools.platform_record_document import (
     display_filename_for_registry,
-    extract_platform_document_id,
     fetch_record_field_values,
     get_document_content,
     get_document_model,
+    resolve_id_from_record_property,
     set_object_document,
 )
 
@@ -58,70 +58,6 @@ def get_record_field_values(
     return fetch_record_field_values(record_id, attribute_system_names)
 
 
-def _document_id_for_attribute(
-    record_id: str,
-    document_attribute_system_name: str,
-    multivalue_index: int,
-) -> tuple[dict[str, Any] | None, str | None]:
-    """
-    Read one document id from GetPropertyValues for ``document_attribute_system_name``.
-
-    **Production use:** :func:`fetch_record_document_file` only. The API row may key the
-    property by a different string casing than the template system name, so a case-insensitive
-    lookup is used. Multivalue document attributes are lists; ``multivalue_index`` picks the
-    element. Values are a plain id string or ``{"id": "..."}``; :func:`extract_platform_document_id`
-    matches both.
-    On failure, return (error_dict, None). On success, return (None, document_id).
-    """
-    g = fetch_record_field_values(record_id, [document_attribute_system_name])
-    if not g.get("success"):
-        return (
-            {
-                "success": False,
-                "error": g.get("error") or "Failed to read record",
-            },
-            None,
-        )
-    data = (g.get("data") or {}).get(record_id) or {}
-    raw_val = data.get(document_attribute_system_name)
-    if raw_val is None and isinstance(data, dict):
-        for k, v in data.items():
-            if k.lower() == document_attribute_system_name.lower():
-                raw_val = v
-                break
-    if raw_val in (None, ""):
-        return (
-            {
-                "success": False,
-                "error": "Document attribute is empty or missing on this record.",
-            },
-            None,
-        )
-    if isinstance(raw_val, list):
-        if multivalue_index >= len(raw_val):
-            return (
-                {
-                    "success": False,
-                    "error": (
-                        f"multivalue_index {multivalue_index} out of range "
-                        f"(len={len(raw_val)})."
-                    ),
-                },
-                None,
-            )
-        raw_val = raw_val[multivalue_index]
-    doc_id = extract_platform_document_id(raw_val)
-    if not doc_id:
-        return (
-            {
-                "success": False,
-                "error": "Could not resolve a document id from the attribute value.",
-            },
-            None,
-        )
-    return (None, doc_id)
-
-
 @tool("fetch_record_document_file", return_direct=False)
 def fetch_record_document_file(
     record_id: str,
@@ -149,7 +85,7 @@ def fetch_record_document_file(
             "file_reference": None,
             "document_id": None,
         }
-    err, doc_id = _document_id_for_attribute(
+    err, doc_id = resolve_id_from_record_property(
         record_id, document_attribute_system_name, multivalue_index
     )
     if err is not None:
