@@ -793,7 +793,12 @@ def arxiv_search(input: str) -> str:
         })
 # ========== FILE/DATA TOOLS ==========
 @tool
-def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True, agent=None) -> str:
+def read_text_based_file(
+    file_reference: str,
+    read_html_as_markdown: bool = True,
+    extract_images: bool = False,
+    agent=None,
+) -> str:
     """
     Read text-based files and return content as text.
     This is the general-purpose text file reader for most formats.
@@ -814,6 +819,12 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
       and improve readability. Set to False only when you need the raw HTML structure
       (e.g., extracting specific tags, attributes, CSS, or JavaScript).
 
+    Image extraction options:
+    - extract_images (bool, default=False): For PDF and Office documents. If True,
+      extracts embedded images and includes them in the response. Images are saved
+      to temporary files and can be referenced in future turns. Set to True only
+      when you need the images - saves tokens and processing time when False.
+
     XLSX/Excel: When to use this tool vs analyze_excel_file?
     - read_text_based_file: Use for simple text extraction - reads Excel content as Markdown
       tables. Good for understanding document structure and reading text content.
@@ -831,6 +842,8 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
         read_html_as_markdown (bool): For HTML files. If True (default), converts HTML to
             Markdown for token efficiency and readability. Set False only when raw HTML
             structure is needed.
+        extract_images (bool): For PDF/Office files. If True, extracts embedded images
+            along with text. Default False (backward compatible).
         agent: Agent instance for file resolution (injected automatically)
 
     Returns:
@@ -848,7 +861,7 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
         return FileUtils.create_tool_response("read_text_based_file", error=file_info.error)
 
     content, read_err, enc = read_local_path_to_plain_text(
-        file_path, read_html_as_markdown=read_html_as_markdown, _file_info=file_info
+        file_path, read_html_as_markdown=read_html_as_markdown, extract_images=extract_images, _file_info=file_info
     )
     if read_err:
         return FileUtils.create_tool_response(

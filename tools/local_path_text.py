@@ -17,6 +17,7 @@ def read_local_path_to_plain_text(
     file_path: str,
     *,
     read_html_as_markdown: bool = True,
+    extract_images: bool = False,
     _file_info: FileInfo | None = None,
 ) -> tuple[str, str | None, str | None]:
     """
@@ -25,6 +26,7 @@ def read_local_path_to_plain_text(
     Args:
         file_path: Absolute path to the file.
         read_html_as_markdown: Convert HTML to Markdown (default True).
+        extract_images: Extract embedded images from PDF/Office (default False).
         _file_info: Pre-computed FileInfo to avoid a redundant stat call.
 
     Returns:
@@ -82,6 +84,7 @@ def read_local_path_to_plain_text(
 
     if ext == ".pdf":
         try:
+            from tools.asset_extractor import extract_assets  # noqa: PLC0415
             from tools.pdf_utils import PDFUtils  # noqa: PLC0415
 
             if not PDFUtils.is_available():
@@ -90,10 +93,17 @@ def read_local_path_to_plain_text(
                     "PyMuPDF not available. Install with: pip install pymupdf",
                     None,
                 )
-            pdf_result = PDFUtils.extract_text_from_pdf(file_path, use_markdown=True)
-            if not pdf_result.success:
-                return "", pdf_result.error_message or "PDF extraction failed", None
-            return pdf_result.text_content, None, None
+            if extract_images:
+                asset_result = extract_assets(file_path, extract_images=True)
+                if not asset_result.success:
+                    return "", asset_result.error_message or "PDF extraction failed", None
+                content = asset_result.markdown_content or asset_result.text_content
+            else:
+                pdf_result = PDFUtils.extract_text_from_pdf(file_path, use_markdown=True)
+                if not pdf_result.success:
+                    return "", pdf_result.error_message or "PDF extraction failed", None
+                content = pdf_result.text_content
+            return content, None, None
         except Exception as e:
             return "", f"Error processing PDF: {e!s}", None
 
@@ -125,11 +135,18 @@ def read_local_path_to_plain_text(
                 None,
             )
         try:
-            md = MarkItDown()
-            result = md.convert(file_path)
-            content = result.text_content
-            if not content or not str(content).strip():
-                return "", f"No text content found in {ext} file", None
+            if extract_images:
+                from tools.asset_extractor import extract_assets  # noqa: PLC0415
+                asset_result = extract_assets(file_path, extract_images=True)
+                if not asset_result.success:
+                    return "", asset_result.error_message or f"{ext} extraction failed", None
+                content = asset_result.markdown_content or asset_result.text_content
+            else:
+                md = MarkItDown()
+                result = md.convert(file_path)
+                content = result.text_content
+                if not content or not str(content).strip():
+                    return "", f"No text content found in {ext} file", None
             if ext == ".html" and not read_html_as_markdown:
                 raw = FileUtils.read_text_file(file_path)
                 if raw.success and raw.content is not None:
