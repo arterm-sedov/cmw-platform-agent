@@ -2,27 +2,31 @@
 # Dependencies are included
 
 import base64
+import cmath
 import io
 import json
+import logging
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
 import uuid
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import requests
 
+logger = logging.getLogger(__name__)
+
 # Check if we're running on Hugging Face Spaces
 HF_SPACES = os.environ.get("SPACE_ID") is not None
-import cmath
-import re
-import time
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 from pydantic import BaseModel, Field, field_validator
@@ -887,9 +891,33 @@ def read_text_based_file(
     result_text = f"{header}\n\nContent:\n{content}"
 
     extra = {}
-    if image_paths:
+    if image_paths and agent is not None:
+        registered_names = []
+        base_name = Path(ref).stem
+        for idx, abs_path in enumerate(image_paths):
+            try:
+                logical_name = f"{base_name}_image_{idx + 1}{Path(abs_path).suffix}"
+                agent.register_file(logical_name, abs_path)
+                registered_names.append(logical_name)
+                logger.debug("Registered extracted image: %s -> %s", logical_name, abs_path)
+            except Exception as reg_err:
+                logger.warning("Failed to register image %s: %s", abs_path, reg_err)
+        if registered_names:
+            extra["image_paths"] = registered_names
+    elif image_paths:
         extra["image_paths"] = image_paths
-    if markdown_path:
+
+    if markdown_path and agent is not None:
+        try:
+            md_name = f"{Path(ref).stem}_extracted.md"
+            agent.register_file(md_name, markdown_path)
+            extra["markdown_path"] = md_name
+            logger.debug("Registered markdown: %s -> %s", md_name, markdown_path)
+        except Exception as reg_err:
+            logger.warning("Failed to register markdown: %s", reg_err)
+            if markdown_path:
+                extra["markdown_path"] = markdown_path
+    elif markdown_path:
         extra["markdown_path"] = markdown_path
 
     return FileUtils.create_tool_response(
