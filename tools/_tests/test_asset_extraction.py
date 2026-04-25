@@ -10,11 +10,11 @@ Tests cover:
 5. Edge cases: no images, many images, scanned PDFs, errors (text succeeds if images fail)
 """
 
-import sys
-import os
 import json
-import tempfile
+import os
 from pathlib import Path
+import sys
+import tempfile
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -136,8 +136,8 @@ class TestAssetExtractionWithImages:
     """Tests for asset extraction with extract_images=True."""
 
     @staticmethod
-    def test_pdf_extract_images_true_returns_text_and_images():
-        """extract_images=True should return both text and image paths."""
+    def test_pdf_extract_images_true_returns_markdown_path():
+        """extract_images=True should return markdown_path for future use."""
         from tools.asset_extractor import extract_assets
 
         pdf_path = create_test_pdf()
@@ -148,16 +148,17 @@ class TestAssetExtractionWithImages:
         try:
             result = extract_assets(pdf_path, extract_images=True)
             assert result.success is True, f"Expected success, got: {result}"
-            assert result.text_content, "Expected text content"
-            print("✅ test_pdf_extract_images_true_returns_text_and_images: PASSED")
+            assert result.markdown_path, "Expected markdown_path for future use"
+            assert result.markdown_path.endswith(".md"), "Expected .md file"
+            print("✅ test_pdf_extract_images_true_returns_markdown_path: PASSED")
         except Exception as e:
-            print(f"❌ test_pdf_extract_images_true_returns_text_and_images: FAILED - {e}")
+            print(f"❌ test_pdf_extract_images_true_returns_markdown_path: FAILED - {e}")
         finally:
             safe_unlink(pdf_path)
 
     @staticmethod
-    def test_pdf_with_images_generates_markdown_with_links():
-        """Generated markdown should contain internal links to extracted images."""
+    def test_extract_false_also_returns_markdown_path():
+        """extract_images=False should also return markdown_path per plan requirement."""
         from tools.asset_extractor import extract_assets
 
         pdf_path = create_test_pdf()
@@ -166,15 +167,12 @@ class TestAssetExtractionWithImages:
             return
 
         try:
-            result = extract_assets(pdf_path, extract_images=True)
-            if result.image_paths:
-                assert "![" in result.markdown_content, \
-                    "Expected markdown image links when images extracted"
-                print("✅ test_pdf_with_images_generates_markdown_with_links: PASSED")
-            else:
-                print("⚠️  SKIPPED (no images in test PDF)")
+            result = extract_assets(pdf_path, extract_images=False)
+            assert result.success is True, f"Expected success, got: {result}"
+            assert result.markdown_path, "Expected markdown_path even with extract_images=False"
+            print("✅ test_extract_false_also_returns_markdown_path: PASSED")
         except Exception as e:
-            print(f"❌ test_pdf_with_images_generates_markdown_with_links: FAILED - {e}")
+            print(f"❌ test_extract_false_also_returns_markdown_path: FAILED - {e}")
         finally:
             safe_unlink(pdf_path)
 

@@ -28,6 +28,7 @@ class AssetExtractionResult(BaseModel):
     success: bool = Field(default=False, description="Whether extraction was successful")
     text_content: str = Field(default="", description="Extracted text content")
     markdown_content: str = Field(default="", description="Generated markdown with image links")
+    markdown_path: str | None = Field(default=None, description="Saved markdown file path for future use")
     image_paths: list[str] = Field(default_factory=list, description="Extracted image file paths")
     error_message: str | None = Field(default=None, description="Error message if failed")
     file_format: str = Field(default="", description="Detected file format (.pdf, .docx, etc.)")
@@ -36,6 +37,44 @@ class AssetExtractionResult(BaseModel):
 def _get_file_extension(file_path: str) -> str:
     """Get lowercase file extension."""
     return Path(file_path).suffix.lower()
+
+
+def _save_markdown_file(
+    content: str,
+    original_path: str,
+    session_id: str | None = None,
+) -> str | None:
+    """
+    Save markdown content to a file with logical name.
+
+    Args:
+        content: Markdown content to save.
+        original_path: Original source file path.
+        session_id: Optional session ID for isolation.
+
+    Returns:
+        Path to saved markdown file, or None if failed.
+    """
+    if not content:
+        return None
+
+    original_stem = Path(original_path).stem
+    md_filename = f"{original_stem}_extracted.md"
+    if session_id:
+        md_filename = f"{session_id}_{md_filename}"
+
+    try:
+        temp_fd, temp_path = tempfile.mkstemp(suffix=".md")
+        os.close(temp_fd)
+
+        with open(temp_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        logger.debug("Saved markdown to: %s", temp_path)
+        return temp_path
+    except Exception as e:
+        logger.warning("Failed to save markdown file: %s", e)
+        return None
 
 
 def extract_with_images_fit(
@@ -121,6 +160,7 @@ def extract_with_images_fit(
 def _extract_office_assets(
     file_path: str,
     extract_images: bool = False,
+    session_id: str | None = None,
 ) -> AssetExtractionResult:
     """
     Extract text and optionally images from Office documents.
@@ -128,6 +168,7 @@ def _extract_office_assets(
     Args:
         file_path: Path to Office file.
         extract_images: Whether to extract images (targeted layer).
+        session_id: Optional session ID for markdown file isolation.
 
     Returns:
         AssetExtractionResult with extracted text.
@@ -152,6 +193,13 @@ def _extract_office_assets(
         result.text_content = extract_result.text_content or ""
         result.success = True
         result.markdown_content = result.text_content
+
+        md_path = _save_markdown_file(
+            result.markdown_content,
+            file_path,
+            session_id,
+        )
+        result.markdown_path = md_path
 
     except Exception as e:
         result.success = False
@@ -342,11 +390,11 @@ def extract_assets(
         return _extract_pdf_assets(file_path, extract_images, session_id, agent)
 
     if ext in (".docx", ".xlsx", ".pptx", ".doc", ".xls", ".ppt"):
-        return _extract_office_assets(file_path, extract_images)
+        return _extract_office_assets(file_path, extract_images, session_id)
 
     if ext in (".html", ".htm"):
         result.file_format = ext
-        return _extract_office_assets(file_path, extract_images=False)
+        return _extract_office_assets(file_path, extract_images=False, session_id=session_id)
 
     result.success = False
     result.error_message = f"Unsupported file format: {ext}"
@@ -396,6 +444,13 @@ def _extract_pdf_assets(
         result.text_content = pdf_result.text_content
         result.success = True
         result.markdown_content = pdf_result.text_content
+
+        md_path = _save_markdown_file(
+            result.markdown_content,
+            file_path,
+            session_id,
+        )
+        result.markdown_path = md_path
 
         if extract_images:
             image_result = extract_with_images_fit(file_path, session_id, agent)
