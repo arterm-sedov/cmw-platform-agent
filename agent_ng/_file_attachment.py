@@ -162,8 +162,24 @@ def build_file_bubbles_for_role(
     ]
 
 
+def is_file_bubble(message: dict[str, Any]) -> bool:
+    """Return True when *message* is a Gradio file-rendering bubble.
+
+    File bubbles have ``content`` as a dict (``{"path": …, "alt_text": …}``)
+    rather than a string. They are Gradio UI-only instructions and must be
+    stripped out before any code iterates history for LLM input, token
+    counting, or download-as-text serialization.
+
+    Usage::
+
+        history_for_llm = [m for m in working_history if not is_file_bubble(m)]
+    """
+    return isinstance(message.get("content"), dict)
+
+
 __all__ = [
     "build_file_attachment",
     "build_file_bubbles",
     "build_file_bubbles_for_role",
+    "is_file_bubble",
 ]

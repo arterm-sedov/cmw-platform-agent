@@ -1593,9 +1593,12 @@ class ChatTab(QuickActionsMixin):
         # Handle the actual format from the debug output
         for i, message in enumerate(history, 1):
             if isinstance(message, dict):
-                role = message.get("role", "unknown")
+                # Skip file-bubble messages (content is a dict, not text).
                 content = message.get("content", "")
+                if not isinstance(content, str):
+                    continue
 
+                role = message.get("role", "unknown")
                 if role == "user":
                     markdown_content += f"## User Message {i}\n\n"
                     markdown_content += f"{content}\n\n"
