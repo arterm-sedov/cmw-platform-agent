@@ -365,16 +365,19 @@ class CmwAgent:
             str: Full path to the file, or None if not found
         """
         registry_key = (self.session_id, original_filename)
+        logger.info(
+            ">>> get_file_path lookup: filename='%s', key=%s, registry size=%d",
+            original_filename, registry_key, len(self.file_registry),
+        )
 
         if registry_key in self.file_registry:
             full_path = self.file_registry[registry_key]
+            logger.info(">>> get_file_path FOUND in registry: '%s' -> '%s'", original_filename, full_path)
             if os.path.exists(full_path):
                 return full_path
-            logger.warning(
-                "Registered file no longer exists: %s -> %s",
-                original_filename, full_path,
-            )
+            logger.warning(">>> get_file_path registry entry exists but file MISSING: %s", full_path)
 
+        logger.info(">>> get_file_path returning None for: %s", original_filename)
         return None
 
     def register_file(self, original_filename: str, file_path: str) -> None:
@@ -405,7 +408,7 @@ class CmwAgent:
             # Register the unique file path in session-isolated registry
             registry_key = (self.session_id, original_filename)
             self.file_registry[registry_key] = unique_file_path
-            logger.debug(
+            logger.info(
                 "Registered file: %s -> %s", original_filename, unique_file_path,
             )
 

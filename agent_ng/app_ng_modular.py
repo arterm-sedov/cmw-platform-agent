@@ -97,6 +97,9 @@ except ImportError:
         def build_file_bubbles(_att):  # type: ignore[no-redef]
             return []
 
+# Import image URL rewriter for LLM inline image references
+from agent_ng._image_url_rewriter import rewrite_llm_inline_images
+
 try:
     from tools.file_utils import FileUtils as _FileUtils
     _GRADIO_CACHE_DIR = _FileUtils.get_gradio_cache_path()
@@ -882,6 +885,9 @@ class NextGenApp:
                                 content_to_add = "\n\n" + content_to_add
 
                         response_content += content_to_add
+
+                        # Rewrite LLM-generated inline image references to Gradio-servable URLs
+                        response_content = rewrite_llm_inline_images(response_content, user_agent)
 
                         # Update or create assistant message
                         if (
