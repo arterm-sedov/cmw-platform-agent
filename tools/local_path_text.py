@@ -109,7 +109,7 @@ def read_local_path_to_plain_text(
                 markdown_path = None
             return content, None, None, image_paths, markdown_path
         except Exception as e:
-            return "", f"Error processing PDF: {e!s}", None
+            return "", f"Error processing PDF: {e!s}", None, [], None
 
     if ext == ".bin":
         # Opaque filename from a server (e.g. content-disposition); avoid reading bytes as text.
