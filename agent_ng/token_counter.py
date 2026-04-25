@@ -670,6 +670,24 @@ class ConversationTokenTracker:
             return None
         return self.track_llm_response(response, messages)
 
+    def add_tool_cost(self, amount: float) -> None:
+        """Accumulate an out-of-band tool cost into conversation totals.
+
+        Called for tools that make their own API calls (e.g. image generation
+        via direct HTTP) and report cost in their result dict. The amount is
+        added to the same ``session_cost`` and ``conversation_cost``
+        accumulators used by the LLM, so all cost displays — the per-turn
+        stats bubble, the sidebar token budget widget, and the Stats tab —
+        reflect the true total without any extra wiring.
+
+        Args:
+            amount: Cost in USD. Silently ignored when non-positive.
+        """
+        if not amount or amount <= 0:
+            return
+        self.session_cost += amount
+        self.conversation_cost += amount
+
     def _extract_current_request(
         self, messages: list[BaseMessage]
     ) -> list[BaseMessage]:
