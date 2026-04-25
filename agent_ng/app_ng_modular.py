@@ -88,6 +88,22 @@ except ImportError:
         def set_current_session_id(_session_id):  # type: ignore[no-redef]
             return None
 
+try:
+    from agent_ng._file_attachment import build_file_bubbles
+except ImportError:
+    try:
+        from ._file_attachment import build_file_bubbles  # type: ignore[no-redef]
+    except Exception:  # pragma: no cover
+        def build_file_bubbles(_att):  # type: ignore[no-redef]
+            return []
+
+try:
+    from tools.file_utils import FileUtils as _FileUtils
+    _GRADIO_CACHE_DIR = _FileUtils.get_gradio_cache_path()
+except Exception:  # pragma: no cover
+    import tempfile
+    _GRADIO_CACHE_DIR = tempfile.gettempdir()
+
 # Try absolute imports first (works from root directory)
 try:
     from langsmith import traceable
@@ -814,6 +830,12 @@ class NextGenApp:
                             "metadata": {"title": tool_title},
                         }
                         working_history.append(tool_message)
+
+                        # If the tool registered a file, append an inline
+                        # preview bubble + caption directly in the chat.
+                        file_att = metadata.get("file_attachment") if metadata else None
+                        working_history.extend(build_file_bubbles(file_att))
+
                         yield working_history, ""
 
                     elif event_type == "content":
@@ -1733,6 +1755,10 @@ def main():
         server_port=port,
         show_error=True,
         show_api=True,  # Enable API documentation for Hugging Face Spaces
+        # Allow Gradio's /file= endpoint to serve session-registered files
+        # (generated images, extracted assets, etc.) from the cache dir.
+        # Required when GRADIO_TEMP_DIR is set to a non-default path.
+        allowed_paths=[_GRADIO_CACHE_DIR],
     )
 
 
