@@ -13,23 +13,25 @@ if TYPE_CHECKING:
 
 from tools import requests_
 from tools.local_path_text import read_local_path_to_plain_text
+from tools.cmw_webapi import (
+    extract_created_id,
+    extract_platform_document_id,
+    unwrap_webapi_payload,
+)
 from tools.platform_record_document import (
     SET_OBJECT_DOCUMENT,
     display_filename_for_registry,
     document_content_get_path,
-    extract_platform_document_id,
     fetch_record_field_values,
     get_document_content,
     get_document_model,
     resolve_id_from_record_property,
     set_object_document,
-    unwrap_webapi_payload,
 )
 from tools.platform_record_image import (
     WEBAPI_IMAGE_CREATE,
     create_image_file,
     display_filename_for_image_model,
-    extract_created_id,
     get_image_file_payload,
     image_get_path,
 )

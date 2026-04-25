@@ -21,15 +21,16 @@ name ending in that suffix (not sniffed, not from the server). On the CMW test t
 from __future__ import annotations
 
 import base64
-import binascii
 import mimetypes
-import tempfile
 from typing import Any
 
 from tools import requests_
+from tools.cmw_webapi import extract_platform_document_id, unwrap_webapi_payload
 
 # TeamNetwork + webapi paths (relative to server base; no leading slash). Only this module
 # builds the bodies for them; :mod:`tools.requests_` is transport.
+# Response parsing (unwrap, ID extraction) is now in shared :mod:`tools.cmw_webapi`
+# to eliminate duplication and cross-module imports.
 GET_PROPERTY_VALUES = "api/public/system/TeamNetwork/ObjectService/GetPropertyValues"
 SET_OBJECT_DOCUMENT = "api/public/system/TeamNetwork/DocumentService/SetObjectDocument"
 
@@ -37,32 +38,6 @@ SET_OBJECT_DOCUMENT = "api/public/system/TeamNetwork/DocumentService/SetObjectDo
 def document_content_get_path(document_id: str) -> str:
     """``GET`` ``webapi/Document/{id}/Content`` (raw body via :func:`requests_._get_url_binary`)."""
     return f"webapi/Document/{document_id}/Content"
-
-
-def extract_platform_document_id(value: Any) -> str | None:
-    """
-    Return the platform document id from an attribute value.
-
-    Accepts a plain id string, or a reference dict containing ``id`` (CMW style).
-    """
-    if value is None or value == "":
-        return None
-    if isinstance(value, dict):
-        raw = value.get("id")
-        if raw is None or raw == "":
-            return None
-        return str(raw).strip() or None
-    if isinstance(value, str):
-        s = value.strip()
-        return s or None
-    return str(value).strip() or None
-
-
-def unwrap_webapi_payload(raw: Any) -> Any:
-    """Unwrap ``{"response": X}`` from WebApi-style JSON."""
-    if isinstance(raw, dict) and "response" in raw:
-        return raw["response"]
-    return raw
 
 
 def fetch_record_field_values(
@@ -276,24 +251,9 @@ def get_document_content(
     }
 
 
-def b64_to_temp_file(b64: str, suffix: str) -> tuple[str, str | None]:
-    """
-    Write a base64 file body (any type) to a temp file. Returns (path, error).
-
-    ``suffix`` should include a dot (e.g. ``.pdf``, ``.docx``).
-    """
-    try:
-        data = base64.b64decode(b64, validate=False)
-    except (binascii.Error, ValueError) as e:
-        return "", f"Invalid base64 document content: {e!s}"
-    suf = suffix if suffix.startswith(".") else f".{suffix}"
-    try:
-        fd, path = tempfile.mkstemp(suffix=suf)
-        with open(fd, "wb") as f:
-            f.write(data)
-    except OSError as e:
-        return "", str(e)
-    return path, None
+# b64_to_temp_file has been extracted to tools.file_utils.FileUtils.b64_to_temp_file(b64, suffix, context="document")
+# This removes duplication with the image module and tool layer. See FileUtils for the unified, lean implementation.
+# Callers should import from FileUtils (or keep re-export if needed for backward compat).
 
 
 def set_object_document(
@@ -321,7 +281,6 @@ __all__ = [
     "GET_PROPERTY_VALUES",
     "SET_OBJECT_DOCUMENT",
     "_extension_suffix_from_model",
-    "b64_to_temp_file",
     "display_filename_for_registry",
     "document_content_get_path",
     "extract_platform_document_id",
