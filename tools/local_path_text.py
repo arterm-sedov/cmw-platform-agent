@@ -19,7 +19,7 @@ def read_local_path_to_plain_text(
     read_html_as_markdown: bool = True,
     extract_images: bool = False,
     _file_info: FileInfo | None = None,
-) -> tuple[str, str | None, str | None]:
+) -> tuple[str, str | None, str | None, list[str], str | None]:
     """
     Extract human-readable text from a local file.
 
@@ -30,26 +30,26 @@ def read_local_path_to_plain_text(
         _file_info: Pre-computed FileInfo to avoid a redundant stat call.
 
     Returns:
-        (text, error, encoding) — encoding is set only for plain text reads.
+        (text, error, encoding, image_paths, markdown_path)
     """
     file_info = _file_info if _file_info is not None else FileUtils.get_file_info(file_path)
     if not file_info.exists:
-        return "", file_info.error or "File not found", None
+        return "", file_info.error or "File not found", None, [], None
 
     ext = (file_info.extension or "").lower()
 
     if ext in (".md", ".markdown"):
         result = FileUtils.read_text_file(file_path)
         if not result.success:
-            return "", result.error or "Markdown read failed", None
-        return result.content or "", None, result.encoding
+            return "", result.error or "Markdown read failed", None, [], None
+        return result.content or "", None, result.encoding, [], None
 
     if ext in (".mp4", ".webm", ".mkv", ".mov", ".m4v"):
         return (
             "",
             "Video: not converted to text here. In chat, attach the file for a "
             "multimodal/vision model or a transcript tool.",
-            None,
+            None, [], None,
         )
 
     if ext in (".mp3", ".m4a", ".wav", ".flac", ".ogg", ".opus", ".aac"):
@@ -57,7 +57,7 @@ def read_local_path_to_plain_text(
             "",
             "Audio: not transcribed here; use speech-to-text or a multimodal model if the "
             "chat stack supports it.",
-            None,
+            None, [], None,
         )
 
     if ext in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif"):
@@ -66,21 +66,21 @@ def read_local_path_to_plain_text(
                 "",
                 "Image: install markitdown to try extraction; in chat, attach the image for a "
                 "vision-capable model.",
-                None,
+                None, [], None,
             )
         try:
             md = MarkItDown()
             result = md.convert(file_path)
             t = (result.text_content or "").strip()
             if t:
-                return str(result.text_content), None, None
+                return str(result.text_content), None, None, [], None
             return (
                 "[Image: no text layer; use vision/chat image attachment to describe the file.]",
                 None,
                 None,
             )
         except Exception as e:
-            return "", f"Error processing image: {e!s}", None
+            return "", f"Error processing image: {e!s}", None, [], None
 
     if ext == ".pdf":
         try:
@@ -96,14 +96,18 @@ def read_local_path_to_plain_text(
             if extract_images:
                 asset_result = extract_assets(file_path, extract_images=True)
                 if not asset_result.success:
-                    return "", asset_result.error_message or "PDF extraction failed", None
+                    return "", asset_result.error_message or "PDF extraction failed", None, [], None
                 content = asset_result.markdown_content or asset_result.text_content
+                image_paths = asset_result.image_paths
+                markdown_path = asset_result.markdown_path
             else:
                 pdf_result = PDFUtils.extract_text_from_pdf(file_path, use_markdown=True)
                 if not pdf_result.success:
-                    return "", pdf_result.error_message or "PDF extraction failed", None
+                    return "", pdf_result.error_message or "PDF extraction failed", None, [], None
                 content = pdf_result.text_content
-            return content, None, None
+                image_paths = []
+                markdown_path = None
+            return content, None, None, image_paths, markdown_path
         except Exception as e:
             return "", f"Error processing PDF: {e!s}", None
 
@@ -113,7 +117,7 @@ def read_local_path_to_plain_text(
             with open(file_path, "rb") as f:
                 head = f.read(32)
         except OSError as e:
-            return "", str(e), None
+            return "", str(e), None, [], None
         if len(head) >= 12 and head[4:8] == b"ftyp":
             return (
                 "",
@@ -132,29 +136,33 @@ def read_local_path_to_plain_text(
             return (
                 "",
                 "markitdown not available. Install with: pip install markitdown[docx,xlsx,pptx]",
-                None,
+                None, [], None,
             )
         try:
             if extract_images:
                 from tools.asset_extractor import extract_assets  # noqa: PLC0415
                 asset_result = extract_assets(file_path, extract_images=True)
                 if not asset_result.success:
-                    return "", asset_result.error_message or f"{ext} extraction failed", None
+                    return "", asset_result.error_message or f"{ext} extraction failed", None, [], None
                 content = asset_result.markdown_content or asset_result.text_content
+                image_paths = asset_result.image_paths
+                markdown_path = asset_result.markdown_path
             else:
                 md = MarkItDown()
                 result = md.convert(file_path)
                 content = result.text_content
                 if not content or not str(content).strip():
-                    return "", f"No text content found in {ext} file", None
+                    return "", f"No text content found in {ext} file", None, [], None
+                image_paths = []
+                markdown_path = None
             if ext == ".html" and not read_html_as_markdown:
                 raw = FileUtils.read_text_file(file_path)
                 if raw.success and raw.content is not None:
-                    return raw.content, None, raw.encoding
-                return "", raw.error or "Could not read HTML as raw text", None
-            return str(content), None, None
+                    return raw.content, None, raw.encoding, [], None
+                return "", raw.error or "Could not read HTML as raw text", None, [], None
+            return str(content), None, None, image_paths, markdown_path
         except Exception as e:
-            return "", f"Error processing {ext}: {e!s}", None
+            return "", f"Error processing {ext}: {e!s}", None, [], None
 
     result = FileUtils.read_text_file(file_path)
     if not result.success:
