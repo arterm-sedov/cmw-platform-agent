@@ -31,6 +31,7 @@ select = ["E", "W", "F", "I", "N", "UP", "YTT", "ANN", "S", "BLE", "FBT", "B", "
 # Ignore specific rules that conflict with LangChain/Gradio/HuggingFace/Langfuse/Langsmith patterns
 ignore = [
     "S101",    # Use of assert (common in LangChain tests)
+    "S112",    # try-except-continue (used for skipping malformed assets)
     "PLR0913", # Too many arguments (LangChain tools often have many params)
     "PLR0912", # Too many branches (complex LangChain logic)
     "PLR0915", # Too many statements (LangChain chains can be long)
