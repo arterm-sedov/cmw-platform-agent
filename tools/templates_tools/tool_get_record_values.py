@@ -18,7 +18,10 @@ class GetRecordValuesSchema(BaseModel):
     record_id: str = Field(description="Record id to read.")
     attribute_system_names: list[str] = Field(
         min_length=1,
-        description="Attribute system names to return (any types the platform exposes).",
+        description=(
+            "At least one attribute system name. GetPropertyValues with an empty list does not "
+            "return all fields on the platform (typically only id); list_attributes first if needed."
+        ),
     )
 
     @field_validator("record_id", mode="before")
