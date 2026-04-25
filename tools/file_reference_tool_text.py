@@ -2,7 +2,7 @@
 Shared copy for the **``file_reference``** parameter, reused by record **document** and **image** tools.
 
 Only phrasing that applies in more than one module lives here; tool-specific @tool ``description=``
-strings are next to that tool in ``tool_record_document`` / ``tool_record_image``.
+strings are next to that tool in ``tool_record_document`` / ``tool_record_image``; generic field reads: ``tool_get_record_values`` (``get_record_values``).
 """
 
 # Pydantic ``Field(description=...)`` for **file_reference** (e.g. **attach** tools).

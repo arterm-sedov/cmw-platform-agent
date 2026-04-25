@@ -93,6 +93,49 @@ class FileUtils:
             )
 
     @staticmethod
+    def file_info_for_tool_response(physical: FileInfo, logical_ref: str) -> FileInfo:
+        """
+        Build **FileInfo** for :meth:`create_tool_response` (``ToolResponse.file_info`` in JSON).
+        The model must not see on-disk temp names: **name** is only the **logical** reference
+        (upload name, path the user sent, or full **http(s)/ftp** URL) — **never** *physical* ``name``
+        from :func:`get_file_info`. We still use the **FileInfo** type for schema consistency,
+        not “legacy” — the wire format is a structured object, not a loose dict.
+
+        If *logical_ref* is empty, **name** is **None** (we do not fall back to ``physical.name``).
+        """
+        r = (logical_ref or "").strip()
+        return FileInfo(
+            exists=physical.exists,
+            path=None,
+            name=r or None,
+            size=physical.size,
+            extension=physical.extension,
+            error=physical.error,
+        )
+
+    @staticmethod
+    def upload_basename_from_reference(file_reference: str) -> str | None:
+        """
+        **fileName** for CMW upload: basename from **file_reference** only (chat/registry
+        name, absolute local path, or **http(s)/ftp** URL path) — not from the resolved
+        temp path, so a **Gradio** cache name is never used as the product filename.
+        """
+        ref = (file_reference or "").strip()
+        if not ref:
+            return None
+        rlow = ref.lower()
+        if rlow.startswith(("http://", "https://", "ftp://")):
+            from urllib.parse import unquote, urlparse
+
+            path = unquote(urlparse(ref).path) or ""
+            b = os.path.basename(path) if path else ""
+            return b or None
+        if os.path.isabs(ref):
+            b = os.path.basename(ref)
+            return b or None
+        return os.path.basename(ref) or None
+
+    @staticmethod
     def read_text_file(file_path: str, encodings: List[str] = None) -> TextFileResult:
         """
         Read text file with multiple encoding fallback and Pydantic validation.
@@ -170,10 +213,19 @@ class FileUtils:
             )
 
     @staticmethod
-    def create_tool_response(tool_name: str, result: str = None, error: str = None, 
-                           file_info: FileInfo = None, extra: Dict[str, Any] = None) -> str:
-        """Create standardized tool response JSON with Pydantic validation."""
-        # Sanitize file_info to remove full paths
+    def create_tool_response(
+        tool_name: str,
+        result: str = None,
+        error: str = None,
+        file_info: FileInfo = None,
+        extra: Dict[str, Any] = None,
+    ) -> str:
+        """Create standardized tool response JSON with Pydantic validation.
+
+        For chat-uploaded files, pass *file_info* from
+        :meth:`file_info_for_tool_response` so ``file_info.name`` in JSON is
+        the **registered file reference**, not a temp *gradio* basename.
+        """
         if file_info:
             # Create a sanitized copy without the full path
             sanitized_file_info = FileInfo(
@@ -473,25 +525,25 @@ class FileUtils:
     @staticmethod
     def read_file_reference_bytes(
         file_reference: str, agent=None
-    ) -> tuple[Optional[bytes], Optional[str], Optional[str]]:
+    ) -> tuple[Optional[bytes], Optional[str]]:
         """
         Resolve a file reference to a local path and read its bytes.
 
         Returns:
-            (data, error, resolved_path): On success, ``data`` is set and
-            ``error`` is None; ``resolved_path`` is the file used (for basenames).
-            On failure, ``data`` and ``resolved_path`` are None.
+            ``(data, error)`` — on success *error* is ``None``; on failure *data* is
+            ``None`` and *error* is a message. The resolved on-disk path is an
+            implementation detail and is not returned.
         """
         path = FileUtils.resolve_file_reference(file_reference, agent)
         if not path:
-            return None, f"Could not resolve file reference: {file_reference!r}", None
+            return None, f"Could not resolve file reference: {file_reference!r}"
         if not os.path.isfile(path):
-            return None, f"Not a file: {path!r}", None
+            return None, f"Not a file: {path!r}"
         try:
             data = Path(path).read_bytes()
         except OSError as e:
-            return None, f"Failed to read file: {e!s}", None
-        return data, None, path
+            return None, f"Failed to read file: {e!s}"
+        return data, None
 
     @staticmethod
     def resolve_file_path(original_filename: str, agent=None) -> str:

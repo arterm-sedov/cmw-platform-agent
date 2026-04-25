@@ -835,9 +835,10 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
     from .file_utils import FileUtils
     from .local_path_text import read_local_path_to_plain_text
 
-    file_path = FileUtils.resolve_file_reference(file_reference, agent)
+    ref = (file_reference or "").strip()
+    file_path = FileUtils.resolve_file_reference(ref, agent)
     if not file_path:
-        return FileUtils.create_tool_response("read_text_based_file", error=f"File not found: {file_reference}")
+        return FileUtils.create_tool_response("read_text_based_file", error=f"File not found: {ref}")
     file_info = FileUtils.get_file_info(file_path)
     if not file_info.exists:
         return FileUtils.create_tool_response("read_text_based_file", error=file_info.error)
@@ -846,9 +847,13 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
         file_path, read_html_as_markdown=read_html_as_markdown, _file_info=file_info
     )
     if read_err:
-        return FileUtils.create_tool_response("read_text_based_file", error=read_err, file_info=file_info)
+        return FileUtils.create_tool_response(
+            "read_text_based_file",
+            error=read_err,
+            file_info=FileUtils.file_info_for_tool_response(file_info, ref),
+        )
 
-    display_name = file_reference if file_reference.startswith(("http://", "https://", "ftp://")) else file_reference
+    display_name = ref
     size_str = FileUtils.format_file_size(file_info.size)
     extl = (file_info.extension or "").lower()
     if extl == ".html" and read_html_as_markdown:
@@ -860,7 +865,11 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
     else:
         header = f"File: {display_name} ({size_str})"
     result_text = f"{header}\n\nContent:\n{content}"
-    return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
+    return FileUtils.create_tool_response(
+        "read_text_based_file",
+        result=result_text,
+        file_info=FileUtils.file_info_for_tool_response(file_info, ref),
+    )
 
 # ========== PANDAS QUERY/PIPELINE HELPERS ==========
 def _safe_to_markdown(df: pd.DataFrame, max_rows: int = 10, max_cols: int = 20) -> str:
