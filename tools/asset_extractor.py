@@ -101,9 +101,10 @@ def extract_with_images_fit(
         return result
 
     try:
-        import fitz  # PyMuPDF
         import warnings
+
         warnings.filterwarnings("ignore")
+        import fitz  # PyMuPDF
     except ImportError as e:
         result.success = False
         result.error_message = f"PyMuPDF not available: {e}"
@@ -117,7 +118,7 @@ def extract_with_images_fit(
             page = doc[page_num]
             images = page.get_images(full=True)
 
-            for img_index, img in enumerate(images):
+            for _img_index, img in enumerate(images):
                 xref = img[0]
 
                 if xref <= 0 or xref > 2400:
@@ -238,15 +239,12 @@ def _extract_office_images(file_path: str) -> list[str]:
 
 
 def _extract_docx_images(file_path: str) -> list[str]:
-    """Extract images from DOCX using python-docx."""
+    """Extract images from DOCX using python-docx or zipfile fallback."""
     image_paths: list[str] = []
 
     try:
         from docx import Document
-    except ImportError:
-        return image_paths
 
-    try:
         doc = Document(file_path)
 
         for rel in doc.part.rels.values():
@@ -268,9 +266,48 @@ def _extract_docx_images(file_path: str) -> list[str]:
 
                 image_paths.append(temp_path)
 
-        logger.debug("Extracted %d images from DOCX", len(image_paths))
+        logger.debug("Extracted %d images from DOCX via python-docx", len(image_paths))
+    except ImportError:
+        image_paths = _extract_docx_images_zipfile(file_path)
     except Exception:
-        pass
+        image_paths = _extract_docx_images_zipfile(file_path)
+
+    return image_paths
+
+
+def _extract_docx_images_zipfile(file_path: str) -> list[str]:
+    """Extract images from DOCX using zipfile (no python-docx dependency)."""
+    import zipfile
+
+    image_paths: list[str] = []
+
+    try:
+        with zipfile.ZipFile(file_path, "r") as zf:
+            media_files = [f for f in zf.namelist() if f.startswith("word/media/")]
+
+            for media_file in media_files:
+                try:
+                    image_data = zf.read(media_file)
+                    if not image_data:
+                        continue
+
+                    ext = media_file.rsplit(".", 1)[-1].lower()
+                    if ext == "jpeg":
+                        ext = "jpg"
+
+                    temp_fd, temp_path = tempfile.mkstemp(suffix=f".{ext}")
+                    os.close(temp_fd)
+
+                    with open(temp_path, "wb") as f:
+                        f.write(image_data)
+
+                    image_paths.append(temp_path)
+                except Exception:  # skip malformed images
+                    continue
+
+            logger.debug("Extracted %d images from DOCX via zipfile", len(image_paths))
+    except Exception as e:
+        logger.debug("DOCX zipfile extraction failed: %s", e)
 
     return image_paths
 
@@ -304,8 +341,8 @@ def _extract_pptx_images(file_path: str) -> list[str]:
                     image_paths.append(temp_path)
 
         logger.debug("Extracted %d images from PPTX", len(image_paths))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("PPTX image extraction failed: %s", e)
 
     return image_paths
 
@@ -335,8 +372,8 @@ def _extract_xlsx_images(file_path: str) -> list[str]:
                 image_paths.append(temp_path)
 
         logger.debug("Extracted %d images from XLSX", len(image_paths))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("XLSX image extraction failed: %s", e)
 
     return image_paths
 
