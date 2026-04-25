@@ -50,6 +50,14 @@ from agent_ng._file_attachment import (
     build_file_bubbles_for_role,
     is_file_bubble,
 )
+from agent_ng.token_counter import (
+    ConversationTokenTracker,
+    convert_chat_history_to_messages,
+)
+
+# Fixture path — hard-coded for tests only; not a real runtime path.
+_FIXTURE_PNG = "/tmp/x.png"  # noqa: S108
+_FIXTURE_BEAR = "/tmp/bear.png"  # noqa: S108
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -353,7 +361,10 @@ class TestIsFileBubble:
     (token_counter, token_budget, download-as-markdown) can skip them."""
 
     def test_dict_content_is_file_bubble(self) -> None:
-        msg = {"role": "assistant", "content": {"path": "/tmp/x.png", "alt_text": "x.png"}}
+        msg = {
+            "role": "assistant",
+            "content": {"path": _FIXTURE_PNG, "alt_text": "x.png"},
+        }
         assert is_file_bubble(msg) is True
 
     def test_string_content_is_not_file_bubble(self) -> None:
@@ -380,12 +391,13 @@ class TestTokenCounterSkipsFileBubbles:
     that doesn't support image input (the exact error the user reported)."""
 
     def test_file_bubble_skipped_entirely(self) -> None:
-        from agent_ng.token_counter import convert_chat_history_to_messages
-
         history = [
             {"role": "user", "content": "Сгенерируй медведя"},
             # file bubble — should be skipped
-            {"role": "assistant", "content": {"path": "/tmp/bear.png", "alt_text": "bear.png"}},
+            {
+                "role": "assistant",
+                "content": {"path": _FIXTURE_BEAR, "alt_text": "bear.png"},
+            },
             # caption — string, should be included
             {"role": "assistant", "content": "📎 bear.png — 1.9 MB"},
             {"role": "assistant", "content": "Готово! 🐻"},
@@ -400,12 +412,13 @@ class TestTokenCounterSkipsFileBubbles:
             )
 
     def test_mixed_history_correct_count(self) -> None:
-        from agent_ng.token_counter import convert_chat_history_to_messages
-
         history = [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi"},
-            {"role": "assistant", "content": {"path": "/tmp/x.png", "alt_text": "x.png"}},
+            {
+                "role": "assistant",
+                "content": {"path": _FIXTURE_PNG, "alt_text": "x.png"},
+            },
             {"role": "assistant", "content": "📎 x.png — 500 KB"},
             {"role": "assistant", "content": "Here's your image."},
         ]
@@ -420,21 +433,20 @@ class TestTokenCounterSkipsFileBubbles:
 class TestAddToolCost:
     """TokenCounter.add_tool_cost() feeds session and conversation totals."""
 
-    def _make_tracker(self):
-        """Minimal tracker with zeroed cost accumulators."""
-        from unittest.mock import MagicMock
-        from agent_ng.token_counter import TokenCounter
+    def _make_tracker(self) -> ConversationTokenTracker:
+        """Minimal tracker with zeroed cost accumulators.
 
-        # TokenCounter needs pricing; bypass the full LLMManager init.
-        tc = TokenCounter.__new__(TokenCounter)
+        ``ConversationTokenTracker`` is the class used at runtime
+        (via ``agent.token_tracker``). Bypass its full init to avoid
+        needing an LLMManager / pricing config.
+        """
+        tc = ConversationTokenTracker.__new__(ConversationTokenTracker)
         tc.session_cost = 0.0
         tc.conversation_cost = 0.0
-        tc._turn_cost = None
+        tc._turn_cost = None  # noqa: SLF001 — test-only state seeding
         return tc
 
     def test_positive_amount_added_to_both_accumulators(self) -> None:
-        from agent_ng.token_counter import TokenCounter
-
         tc = self._make_tracker()
         tc.add_tool_cost(0.067)
 
@@ -445,28 +457,24 @@ class TestAddToolCost:
         tc = self._make_tracker()
         tc.add_tool_cost(0.067)
         tc.add_tool_cost(0.030)
-
         assert abs(tc.session_cost - 0.097) < 1e-9
         assert abs(tc.conversation_cost - 0.097) < 1e-9
 
     def test_zero_ignored(self) -> None:
         tc = self._make_tracker()
         tc.add_tool_cost(0.0)
-
         assert tc.session_cost == 0.0
         assert tc.conversation_cost == 0.0
 
     def test_negative_ignored(self) -> None:
         tc = self._make_tracker()
         tc.add_tool_cost(-1.0)
-
         assert tc.session_cost == 0.0
         assert tc.conversation_cost == 0.0
 
     def test_none_ignored(self) -> None:
         tc = self._make_tracker()
         tc.add_tool_cost(None)  # type: ignore[arg-type]
-
         assert tc.session_cost == 0.0
         assert tc.conversation_cost == 0.0
 
@@ -475,7 +483,7 @@ class TestToolCostExtractedFromToolResult:
     """The streaming layer extracts 'cost' from a tool result dict into
     tool_end event metadata as 'tool_cost'."""
 
-    def _extract_tool_cost(self, tool_result) -> float | None:
+    def _extract_tool_cost(self, tool_result: Any) -> float | None:
         """Replicate the extraction logic from native_langchain_streaming.py."""
         _raw = (
             tool_result.get("cost")
