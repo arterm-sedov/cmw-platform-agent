@@ -10,7 +10,7 @@ import tempfile
 from typing import Annotated, Any
 
 from langchain_core.tools import InjectedToolArg, tool
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from tools.file_reference_tool_text import (
     CHAT_FILE_REFERENCE_DESCRIPTION,
@@ -51,7 +51,7 @@ def fetch_record_image_file(
     multivalue_index: int = 0,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
-    """Load a stored image; see the tool **description** for what **``file_reference``** is."""
+    """Load a stored image; see the tool description for file_reference."""
     record_id = record_id.strip() if isinstance(record_id, str) else ""
     image_attribute_system_name = (
         image_attribute_system_name.strip()
@@ -155,6 +155,9 @@ def fetch_record_image_file(
 
 
 class AttachImageToRecordSchema(BaseModel):
+    # Same as :class:`AttachFileToRecordDocumentSchema` (agent on schema + arbitrary_types_allowed).
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     record_id: str = Field(description="Which record to update (record id).")
     attribute_system_name: str = Field(
         description="System name of the image attribute in the record template.",
@@ -162,9 +165,9 @@ class AttachImageToRecordSchema(BaseModel):
     file_reference: str = Field(
         description=CHAT_FILE_REFERENCE_DESCRIPTION,
     )
-    file_name: str | None = Field(
+    agent: Annotated[Any | None, InjectedToolArg] = Field(
         default=None,
-        description="Name in the app (e.g. photo.png). Defaults to the resolved file's base name.",
+        description="Session agent for chat file registry; injected by the app, not the LLM.",
     )
 
     @field_validator("record_id", "attribute_system_name", "file_reference", mode="before")
@@ -173,15 +176,6 @@ class AttachImageToRecordSchema(BaseModel):
         if not isinstance(v, str) or not v.strip():
             msg = "must be a non-empty string"
             raise ValueError(msg)
-        return v.strip()
-
-    @field_validator("file_name", mode="before")
-    @classmethod
-    def opt_file_name(cls, v: Any) -> str | None:
-        if v is None:
-            return None
-        if not isinstance(v, str) or not v.strip():
-            return None
         return v.strip()
 
 
@@ -194,18 +188,14 @@ def attach_file_to_record_image_attribute(
     record_id: str,
     attribute_system_name: str,
     file_reference: str,
-    file_name: str | None = None,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
     """
-    **Upload** a new **image** onto an **image** **attribute** of a **record** using
-    **``file_reference``** (see the parameter **description**).     **``file_name``** is optional; omit
-    it to keep the same name as the file in **``file_reference``**. On a **single-value** **attribute**, the new
-    image **replaces** the previous one. The result includes **``success``**, platform
-    **``raw_response``** / **``error``**, and **``image_id``** for the new image.
+    Upload an image to a record image attribute (file_reference). The stored filename comes from
+    the path or URL basename. Returns success, status_code, error, raw_response, image_id.
     """
-    raw, rerr, rpath = FileUtils.read_file_reference_bytes(file_reference, agent)
-    if rerr is not None or raw is None or not rpath:
+    raw, rerr = FileUtils.read_file_reference_bytes(file_reference, agent)
+    if rerr is not None or raw is None:
         return {
             "success": False,
             "status_code": 400,
@@ -213,7 +203,7 @@ def attach_file_to_record_image_attribute(
             "raw_response": None,
             "image_id": None,
         }
-    display_name = file_name or os.path.basename(rpath)
+    display_name = FileUtils.upload_basename_from_reference(file_reference)
     if not display_name:
         return {
             "success": False,

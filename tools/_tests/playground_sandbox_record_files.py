@@ -140,13 +140,12 @@ def _write_temps() -> dict[str, Path]:
     return out
 
 
-def _attach_doc(rid: str, doc: str, path: Path, *, name: str, replace: bool) -> bool:
+def _attach_doc(rid: str, doc: str, path: Path, *, replace: bool) -> bool:
     r = attach_file_to_record_document_attribute.invoke(
         {
             "record_id": rid,
             "attribute_system_name": doc,
             "file_reference": str(path.resolve()),
-            "file_name": name,
             "replace": replace,
         }
     )
@@ -154,7 +153,7 @@ def _attach_doc(rid: str, doc: str, path: Path, *, name: str, replace: bool) -> 
     if ok:
         _p(
             "document attached",
-            name,
+            path.name,
             "replace=",
             replace,
             "→",
@@ -235,11 +234,11 @@ def main() -> int:
     r1 = str(cr1["record_id"])
     _p("record 1 (document playground)", r1)
 
-    if not _attach_doc(r1, doc, tmp["note_txt"], name="play_note.txt", replace=True):
+    if not _attach_doc(r1, doc, tmp["note_txt"], replace=True):
         return 1
-    if not _attach_doc(r1, doc, tmp["tiny_pdf"], name="play_tiny.pdf", replace=True):
+    if not _attach_doc(r1, doc, tmp["tiny_pdf"], replace=True):
         return 1
-    if not _attach_doc(r1, doc, tmp["note_md"], name="play_note.md", replace=True):
+    if not _attach_doc(r1, doc, tmp["note_md"], replace=True):
         return 1
     fdoc = fetch_record_document_file.invoke(
         {
@@ -255,13 +254,13 @@ def main() -> int:
         _p("fetch_record_document_file", fdoc.get("error", fdoc))
 
     if args.video and args.video.is_file():
-        if not _attach_doc(r1, doc, args.video, name=args.video.name, replace=True):
+        if not _attach_doc(r1, doc, args.video, replace=True):
             return 1
     else:
         _p("skip --video: not set or not a file (pass a small .mp4 to test)")
 
     if args.audio and args.audio.is_file():
-        if not _attach_doc(r1, doc, args.audio, name=args.audio.name, replace=True):
+        if not _attach_doc(r1, doc, args.audio, replace=True):
             return 1
     else:
         _p("skip --audio: not set (pass an .mp3 to test as **document** binary)")

@@ -7,12 +7,12 @@ and listing template attributes.
 
 # Import all tool functions
 from tools.templates_tools.tool_create_edit_record import create_edit_record
+from tools.templates_tools.tool_get_record_values import get_record_values
 from tools.templates_tools.tool_list_attributes import list_attributes
 from tools.templates_tools.tool_list_records import list_template_records
 from tools.templates_tools.tool_record_document import (
     attach_file_to_record_document_attribute,
     fetch_record_document_file,
-    get_record_field_values,
 )
 from tools.templates_tools.tool_record_image import (
     attach_file_to_record_image_attribute,
@@ -52,7 +52,7 @@ __all__ = [
     "get_button",
     "get_dataset",
     "get_form",
-    "get_record_field_values",
+    "get_record_values",
     "get_toolbar",
     "list_attributes",
     "list_buttons",

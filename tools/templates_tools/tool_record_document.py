@@ -1,4 +1,4 @@
-"""Record tools for **document** attributes: read attribute values, load stored files, upload attachments."""
+"""Record tools for document attributes: fetch stored files, upload attachments. For generic field reads, see tool_get_record_values."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import tempfile
 from typing import Annotated, Any
 
 from langchain_core.tools import InjectedToolArg, tool
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from tools.file_reference_tool_text import (
     CHAT_FILE_REFERENCE_DESCRIPTION,
@@ -19,7 +19,6 @@ from tools.file_reference_tool_text import (
 from tools.file_utils import FileUtils
 from tools.platform_record_document import (
     display_filename_for_registry,
-    fetch_record_field_values,
     get_document_content,
     get_document_model,
     resolve_id_from_record_property,
@@ -41,39 +40,6 @@ _FETCH_RECORD_DOCUMENT_FILE_DESCRIPTION = (
 )
 
 
-class GetRecordFieldValuesSchema(BaseModel):
-    record_id: str = Field(description="Record id (UUID) to read.")
-    attribute_system_names: list[str] = Field(
-        min_length=1,
-        description="List of attribute system names to return.",
-    )
-
-    @field_validator("record_id", mode="before")
-    @classmethod
-    def strip_rid(cls, v: Any) -> str:
-        if not isinstance(v, str) or not v.strip():
-            msg = "record_id must be a non-empty string"
-            raise ValueError(msg)
-        return v.strip()
-
-
-@tool(
-    "get_record_field_values",
-    return_direct=False,
-    args_schema=GetRecordFieldValuesSchema,
-)
-def get_record_field_values(
-    record_id: str, attribute_system_names: list[str]
-) -> dict[str, Any]:
-    """
-    Get current values of one or more **attributes** on a **record** (by system name).
-
-    Call this before **fetching** a document or **image** file, **attaching** a new file, or
-    any step that must know what is already stored.
-    """
-    return fetch_record_field_values(record_id, attribute_system_names)
-
-
 @tool(
     "fetch_record_document_file",
     return_direct=False,
@@ -85,7 +51,7 @@ def fetch_record_document_file(
     multivalue_index: int = 0,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
-    """Load a stored document file; see the tool **description** for what **``file_reference``** is."""
+    """Load a stored document file; see the tool description for file_reference."""
     record_id = record_id.strip() if isinstance(record_id, str) else ""
     document_attribute_system_name = (
         document_attribute_system_name.strip()
@@ -196,20 +162,27 @@ def fetch_record_document_file(
 
 
 class AttachFileToRecordDocumentSchema(BaseModel):
+    # ``agent`` must be a model field (InjectedToolArg) so LangChain _parse_input keeps it;
+    # plain @tool tools infer args and do not need this. arbitrary_types_allowed: live agent object.
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     record_id: str = Field(description="Record id to attach the file to.")
     attribute_system_name: str = Field(
-        description="System name of the **document** attribute in the record template.",
+        description="System name of the document attribute in the record template.",
     )
     file_reference: str = Field(
         description=CHAT_FILE_REFERENCE_DESCRIPTION,
     )
-    file_name: str | None = Field(
-        default=None,
-        description="File name in the app (e.g. report.pdf). Defaults to the resolved file's base name.",
-    )
     replace: bool = Field(
         default=True,
-        description="If true, replace an existing file on a single-value attribute.",
+        description=(
+            "true = replace (default), false = add. false only changes behavior for multivalue "
+            "document attributes; single-file attributes still end up with one file."
+        ),
+    )
+    agent: Annotated[Any | None, InjectedToolArg] = Field(
+        default=None,
+        description="Session agent for chat file registry; injected by the app, not the LLM.",
     )
 
     @field_validator("record_id", "attribute_system_name", "file_reference", mode="before")
@@ -218,15 +191,6 @@ class AttachFileToRecordDocumentSchema(BaseModel):
         if not isinstance(v, str) or not v.strip():
             msg = "must be a non-empty string"
             raise ValueError(msg)
-        return v.strip()
-
-    @field_validator("file_name", mode="before")
-    @classmethod
-    def opt_file_name(cls, v: Any) -> str | None:
-        if v is None:
-            return None
-        if not isinstance(v, str) or not v.strip():
-            return None
         return v.strip()
 
 
@@ -239,26 +203,22 @@ def attach_file_to_record_document_attribute(
     record_id: str,
     attribute_system_name: str,
     file_reference: str,
-    file_name: str | None = None,
     replace: bool = True,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
     """
-    **Upload** or **replace** a file on a **document** attribute of a **record** using
-    **``file_reference``** (see the parameter **description**). On a **single-value**
-    **attribute**, **``replace``** overwrites the only stored file. **``file_name``** is optional; omit
-    it to keep the same name as the file in **``file_reference``**. The result includes **``success``**,
-    **``status_code``**, **``error``**, and **``raw_response``** from the platform.
+    Upload a file to a document attribute (file_reference). The stored filename is the path or URL
+    basename. Returns success, status_code, error, raw_response.
     """
-    raw, rerr, rpath = FileUtils.read_file_reference_bytes(file_reference, agent)
-    if rerr is not None or raw is None or not rpath:
+    raw, rerr = FileUtils.read_file_reference_bytes(file_reference, agent)
+    if rerr is not None or raw is None:
         return {
             "success": False,
             "status_code": 400,
             "error": rerr or "Failed to read file for upload",
             "raw_response": None,
         }
-    display_name = file_name or os.path.basename(rpath)
+    display_name = FileUtils.upload_basename_from_reference(file_reference)
     if not display_name:
         return {
             "success": False,

@@ -104,7 +104,6 @@ def test_new_record_document_model_matches_upload(tmp_path: Path) -> None:
             "record_id": rid,
             "attribute_system_name": doc,
             "file_reference": str(tiny),
-            "file_name": "api_probe.txt",
             "replace": True,
         }
     )
@@ -135,7 +134,6 @@ def test_fetch_record_document_file_after_attach_roundtrip(tmp_path: Path) -> No
             "record_id": rid,
             "attribute_system_name": doc,
             "file_reference": str(tiny.resolve()),
-            "file_name": "fetch_probe.md",
             "replace": True,
         }
     )
@@ -207,7 +205,6 @@ def test_document_get_model_re_read_by_record_id_after_attach(tmp_path: Path) ->
             "record_id": rid,
             "attribute_system_name": doc,
             "file_reference": str(f.resolve()),
-            "file_name": "reread_persisted.txt",
             "replace": True,
         }
     )

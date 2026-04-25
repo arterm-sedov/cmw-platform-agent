@@ -274,7 +274,6 @@ def main() -> int:
                 "record_id": rid,
                 "attribute_system_name": DOC_SYS,
                 "file_reference": str(p.resolve()),
-                "file_name": p.name,
                 "replace": i == 0,
             }
         )
