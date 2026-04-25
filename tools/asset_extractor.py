@@ -275,15 +275,25 @@ def _extract_docx_images(file_path: str) -> list[str]:
     return image_paths
 
 
-def _extract_docx_images_zipfile(file_path: str) -> list[str]:
-    """Extract images from DOCX using zipfile (no python-docx dependency)."""
+def _extract_office_images_zipfile(file_path: str, media_prefix: str) -> list[str]:
+    """
+    Extract images from Office documents using zipfile (generic, reusable).
+
+    Args:
+        file_path: Path to Office file (.docx, .pptx, .xlsx)
+        media_prefix: Media folder prefix ("word/", "ppt/", "xl/")
+
+    Returns:
+        List of extracted image file paths.
+    """
     import zipfile
 
     image_paths: list[str] = []
+    valid_extensions = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff", ".tif"}
 
     try:
         with zipfile.ZipFile(file_path, "r") as zf:
-            media_files = [f for f in zf.namelist() if f.startswith("word/media/")]
+            media_files = [f for f in zf.namelist() if f.startswith(media_prefix)]
 
             for media_file in media_files:
                 try:
@@ -294,6 +304,8 @@ def _extract_docx_images_zipfile(file_path: str) -> list[str]:
                     ext = media_file.rsplit(".", 1)[-1].lower()
                     if ext == "jpeg":
                         ext = "jpg"
+                    if ext not in valid_extensions:
+                        ext = "png"
 
                     temp_fd, temp_path = tempfile.mkstemp(suffix=f".{ext}")
                     os.close(temp_fd)
@@ -305,21 +317,36 @@ def _extract_docx_images_zipfile(file_path: str) -> list[str]:
                 except Exception:  # skip malformed images
                     continue
 
-            logger.debug("Extracted %d images from DOCX via zipfile", len(image_paths))
+            logger.debug("Extracted %d images from %s via zipfile", len(image_paths), media_prefix)
     except Exception as e:
-        logger.debug("DOCX zipfile extraction failed: %s", e)
+        logger.debug("Office zipfile extraction failed for %s: %s", media_prefix, e)
 
     return image_paths
 
 
+def _extract_docx_images_zipfile(file_path: str) -> list[str]:
+    """Extract images from DOCX using zipfile (no python-docx dependency)."""
+    return _extract_office_images_zipfile(file_path, "word/media/")
+
+
+def _extract_pptx_images_zipfile(file_path: str) -> list[str]:
+    """Extract images from PPTX using zipfile (no python-pptx dependency)."""
+    return _extract_office_images_zipfile(file_path, "ppt/media/")
+
+
+def _extract_xlsx_images_zipfile(file_path: str) -> list[str]:
+    """Extract images from XLSX using zipfile (no openpyxl dependency)."""
+    return _extract_office_images_zipfile(file_path, "xl/media/")
+
+
 def _extract_pptx_images(file_path: str) -> list[str]:
-    """Extract images from PPTX using python-pptx."""
+    """Extract images from PPTX using python-pptx or zipfile fallback."""
     image_paths: list[str] = []
 
     try:
         from pptx import Presentation
     except ImportError:
-        return image_paths
+        return _extract_pptx_images_zipfile(file_path)
 
     try:
         prs = Presentation(file_path)
@@ -340,21 +367,22 @@ def _extract_pptx_images(file_path: str) -> list[str]:
 
                     image_paths.append(temp_path)
 
-        logger.debug("Extracted %d images from PPTX", len(image_paths))
+        logger.debug("Extracted %d images from PPTX via python-pptx", len(image_paths))
     except Exception as e:
-        logger.debug("PPTX image extraction failed: %s", e)
+        logger.debug("PPTX python-pptx failed, trying zipfile: %s", e)
+        image_paths = _extract_pptx_images_zipfile(file_path)
 
     return image_paths
 
 
 def _extract_xlsx_images(file_path: str) -> list[str]:
-    """Extract images from XLSX using openpyxl."""
+    """Extract images from XLSX using openpyxl or zipfile fallback."""
     image_paths: list[str] = []
 
     try:
         from openpyxl import load_workbook
     except ImportError:
-        return image_paths
+        return _extract_xlsx_images_zipfile(file_path)
 
     try:
         wb = load_workbook(file_path, keep_links=False)
@@ -371,9 +399,10 @@ def _extract_xlsx_images(file_path: str) -> list[str]:
 
                 image_paths.append(temp_path)
 
-        logger.debug("Extracted %d images from XLSX", len(image_paths))
+        logger.debug("Extracted %d images from XLSX via openpyxl", len(image_paths))
     except Exception as e:
-        logger.debug("XLSX image extraction failed: %s", e)
+        logger.debug("XLSX openpyxl failed, trying zipfile: %s", e)
+        image_paths = _extract_xlsx_images_zipfile(file_path)
 
     return image_paths
 
