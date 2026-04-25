@@ -9,14 +9,12 @@ the new image id (string). A record image attribute stores that id; read bytes v
 from __future__ import annotations
 
 import base64
-import binascii
 import mimetypes
-import tempfile
 from typing import Any
 import urllib.parse
 
 from tools import requests_
-from tools.platform_record_document import unwrap_webapi_payload
+from tools.cmw_webapi import extract_created_id, unwrap_webapi_payload
 
 # Relative to server base (same convention as :mod:`tools.platform_record_document`).
 WEBAPI_IMAGE = "webapi/Image"
@@ -108,23 +106,9 @@ def _suffix_for_display_name(display: str, model: dict[str, Any]) -> str:
     return f".{fmt.lower()}"
 
 
-def extract_created_id(result: dict[str, Any]) -> str | None:
-    """New image or document id from a ``webapi/…/Create``-style JSON response."""
-    if not result.get("success"):
-        return None
-    raw = result.get("raw_response")
-    if isinstance(raw, str) and raw.strip():
-        return raw.strip()
-    if not isinstance(raw, dict):
-        return None
-    inner = unwrap_webapi_payload(raw)
-    if isinstance(inner, str) and inner.strip():
-        return inner.strip()
-    if isinstance(inner, dict):
-        s = inner.get("response")
-        if isinstance(s, str) and s.strip():
-            return s.strip()
-    return None
+# extract_created_id moved to tools.cmw_webapi (shared with document flows and tests).
+# extract_platform_document_id and unwrap_webapi_payload also moved there to eliminate
+# cross-import from platform_record_document.
 
 
 def create_image_file(file_name: str, file_bytes: bytes) -> dict[str, Any]:
@@ -152,26 +136,14 @@ def put_record_image_attribute_value(
     )
 
 
-def b64_to_temp_image_file(b64: str, suffix: str) -> tuple[str, str | None]:
-    """Write base64 image body to a temp file (suffix includes a dot, e.g. ``.png``)."""
-    try:
-        data = base64.b64decode(b64, validate=False)
-    except (binascii.Error, ValueError) as e:
-        return "", f"Invalid base64: {str(e)}"
-    suf = suffix if suffix.startswith(".") else f".{suffix}"
-    try:
-        fd, path = tempfile.mkstemp(suffix=suf)
-        with open(fd, "wb") as f:
-            f.write(data)
-    except OSError as e:
-        return "", str(e)
-    return path, None
+# b64_to_temp_image_file has been extracted to tools.file_utils.FileUtils.b64_to_temp_file(b64, suffix, context="image")
+# This removes the near-identical duplicate with the document module. Use the shared helper.
+# The image module no longer imports unwrap_webapi_payload from platform_record_document (moved to cmw_webapi.py next).
 
 
 __all__ = [
     "WEBAPI_IMAGE",
     "WEBAPI_IMAGE_CREATE",
-    "b64_to_temp_image_file",
     "create_image_file",
     "display_filename_for_image_model",
     "extract_created_id",
