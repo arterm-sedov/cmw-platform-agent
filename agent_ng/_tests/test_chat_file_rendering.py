@@ -48,6 +48,7 @@ from agent_ng._file_attachment import (
     build_file_attachment,
     build_file_bubbles,
     build_file_bubbles_for_role,
+    is_file_bubble,
 )
 
 if TYPE_CHECKING:
@@ -341,3 +342,72 @@ class TestUserSideFileRendering:
         }
         bubbles = build_file_bubbles_for_role(att, role="user")
         assert bubbles == []
+
+
+# ---------------------------------------------------------------------------#
+# Unit: is_file_bubble filter                                               #
+# ---------------------------------------------------------------------------#
+
+class TestIsFileBubble:
+    """Guards that file-bubble messages are correctly identified so callers
+    (token_counter, token_budget, download-as-markdown) can skip them."""
+
+    def test_dict_content_is_file_bubble(self) -> None:
+        msg = {"role": "assistant", "content": {"path": "/tmp/x.png", "alt_text": "x.png"}}
+        assert is_file_bubble(msg) is True
+
+    def test_string_content_is_not_file_bubble(self) -> None:
+        assert is_file_bubble({"role": "assistant", "content": "Готово! 🐻"}) is False
+
+    def test_empty_string_content_is_not_file_bubble(self) -> None:
+        assert is_file_bubble({"role": "assistant", "content": ""}) is False
+
+    def test_none_content_is_not_file_bubble(self) -> None:
+        # None is falsy but not a dict — should not be treated as a file bubble.
+        assert is_file_bubble({"role": "assistant", "content": None}) is False
+
+    def test_missing_content_is_not_file_bubble(self) -> None:
+        assert is_file_bubble({"role": "user"}) is False
+
+
+# ---------------------------------------------------------------------------#
+# Regression: token_counter must not pass dict content to HumanMessage     #
+# ---------------------------------------------------------------------------#
+
+class TestTokenCounterSkipsFileBubbles:
+    """Regression guard: convert_chat_history_to_messages must skip file
+    bubbles so the LLM never receives a vision-formatted message for a model
+    that doesn't support image input (the exact error the user reported)."""
+
+    def test_file_bubble_skipped_entirely(self) -> None:
+        from agent_ng.token_counter import convert_chat_history_to_messages
+
+        history = [
+            {"role": "user", "content": "Сгенерируй медведя"},
+            # file bubble — should be skipped
+            {"role": "assistant", "content": {"path": "/tmp/bear.png", "alt_text": "bear.png"}},
+            # caption — string, should be included
+            {"role": "assistant", "content": "📎 bear.png — 1.9 MB"},
+            {"role": "assistant", "content": "Готово! 🐻"},
+        ]
+        messages = convert_chat_history_to_messages(history)
+
+        # 3 string messages, 0 dict messages
+        assert len(messages) == 3
+        for m in messages:
+            assert isinstance(m.content, str), (
+                f"content must be str, got {type(m.content)}: {m.content!r}"
+            )
+
+    def test_mixed_history_correct_count(self) -> None:
+        from agent_ng.token_counter import convert_chat_history_to_messages
+
+        history = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
+            {"role": "assistant", "content": {"path": "/tmp/x.png", "alt_text": "x.png"}},
+            {"role": "assistant", "content": "📎 x.png — 500 KB"},
+            {"role": "assistant", "content": "Here's your image."},
+        ]
+        messages = convert_chat_history_to_messages(history)
+        assert len(messages) == 4  # dict bubble skipped, 4 string messages remain

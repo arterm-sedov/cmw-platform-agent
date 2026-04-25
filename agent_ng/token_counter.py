@@ -1230,9 +1230,15 @@ def convert_chat_history_to_messages(
     messages = []
 
     for msg in history:
-        role = msg.get("role", "user")
+        # Skip Gradio file-rendering bubbles — their content is a dict
+        # {"path": …, "alt_text": …}, not LLM text. Passing a dict to
+        # HumanMessage would be interpreted as a vision message and fail
+        # on non-vision models.
         content = msg.get("content", "")
+        if not isinstance(content, str):
+            continue
 
+        role = msg.get("role", "user")
         if role == "user":
             messages.append(HumanMessage(content=content))
         elif role == "assistant":
