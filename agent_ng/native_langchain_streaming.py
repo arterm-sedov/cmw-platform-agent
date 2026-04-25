@@ -929,6 +929,21 @@ class NativeLangChainStreaming:
                                         tool_result, agent
                                     )
 
+                                    # Extract optional out-of-band tool cost
+                                    # (e.g. image generation via direct HTTP).
+                                    # Only numeric, positive values are trusted.
+                                    _raw_cost = (
+                                        tool_result.get("cost")
+                                        if isinstance(tool_result, dict)
+                                        else None
+                                    )
+                                    tool_cost: float | None = (
+                                        float(_raw_cost)
+                                        if isinstance(_raw_cost, (int, float))
+                                        and _raw_cost > 0
+                                        else None
+                                    )
+
                                     yield StreamingEvent(
                                         event_type="tool_end",
                                         content=f"\n{self._get_call_count_message(duplicate_count, language)}\n\n{self._get_result_message(str(safe_tool_result), language)}",
@@ -941,6 +956,7 @@ class NativeLangChainStreaming:
                                                 tool_name, language
                                             ),
                                             "file_attachment": file_att,
+                                            "tool_cost": tool_cost,
                                         },
                                     )
 

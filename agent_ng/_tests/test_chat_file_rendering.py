@@ -411,3 +411,103 @@ class TestTokenCounterSkipsFileBubbles:
         ]
         messages = convert_chat_history_to_messages(history)
         assert len(messages) == 4  # dict bubble skipped, 4 string messages remain
+
+
+# ---------------------------------------------------------------------------#
+# Tool cost accumulation                                                    #
+# ---------------------------------------------------------------------------#
+
+class TestAddToolCost:
+    """TokenCounter.add_tool_cost() feeds session and conversation totals."""
+
+    def _make_tracker(self):
+        """Minimal tracker with zeroed cost accumulators."""
+        from unittest.mock import MagicMock
+        from agent_ng.token_counter import TokenCounter
+
+        # TokenCounter needs pricing; bypass the full LLMManager init.
+        tc = TokenCounter.__new__(TokenCounter)
+        tc.session_cost = 0.0
+        tc.conversation_cost = 0.0
+        tc._turn_cost = None
+        return tc
+
+    def test_positive_amount_added_to_both_accumulators(self) -> None:
+        from agent_ng.token_counter import TokenCounter
+
+        tc = self._make_tracker()
+        tc.add_tool_cost(0.067)
+
+        assert abs(tc.session_cost - 0.067) < 1e-9
+        assert abs(tc.conversation_cost - 0.067) < 1e-9
+
+    def test_multiple_calls_accumulate(self) -> None:
+        tc = self._make_tracker()
+        tc.add_tool_cost(0.067)
+        tc.add_tool_cost(0.030)
+
+        assert abs(tc.session_cost - 0.097) < 1e-9
+        assert abs(tc.conversation_cost - 0.097) < 1e-9
+
+    def test_zero_ignored(self) -> None:
+        tc = self._make_tracker()
+        tc.add_tool_cost(0.0)
+
+        assert tc.session_cost == 0.0
+        assert tc.conversation_cost == 0.0
+
+    def test_negative_ignored(self) -> None:
+        tc = self._make_tracker()
+        tc.add_tool_cost(-1.0)
+
+        assert tc.session_cost == 0.0
+        assert tc.conversation_cost == 0.0
+
+    def test_none_ignored(self) -> None:
+        tc = self._make_tracker()
+        tc.add_tool_cost(None)  # type: ignore[arg-type]
+
+        assert tc.session_cost == 0.0
+        assert tc.conversation_cost == 0.0
+
+
+class TestToolCostExtractedFromToolResult:
+    """The streaming layer extracts 'cost' from a tool result dict into
+    tool_end event metadata as 'tool_cost'."""
+
+    def _extract_tool_cost(self, tool_result) -> float | None:
+        """Replicate the extraction logic from native_langchain_streaming.py."""
+        _raw = (
+            tool_result.get("cost")
+            if isinstance(tool_result, dict)
+            else None
+        )
+        return (
+            float(_raw)
+            if isinstance(_raw, (int, float)) and _raw > 0
+            else None
+        )
+
+    def test_image_result_cost_extracted(self) -> None:
+        result = {"success": True, "file_reference": "x.png", "cost": 0.067}
+        assert abs(self._extract_tool_cost(result) - 0.067) < 1e-9
+
+    def test_zero_cost_returns_none(self) -> None:
+        assert self._extract_tool_cost({"success": True, "cost": 0.0}) is None
+
+    def test_negative_cost_returns_none(self) -> None:
+        assert self._extract_tool_cost({"success": True, "cost": -1.0}) is None
+
+    def test_missing_cost_returns_none(self) -> None:
+        assert self._extract_tool_cost({"success": True}) is None
+
+    def test_string_cost_returns_none(self) -> None:
+        assert self._extract_tool_cost({"success": True, "cost": "0.067"}) is None
+
+    def test_non_dict_result_returns_none(self) -> None:
+        assert self._extract_tool_cost("just text") is None
+        assert self._extract_tool_cost(None) is None
+
+    def test_integer_cost_accepted(self) -> None:
+        """Integer cost (e.g. 1) should be accepted and converted to float."""
+        assert self._extract_tool_cost({"success": True, "cost": 1}) == 1.0

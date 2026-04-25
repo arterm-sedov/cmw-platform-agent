@@ -661,6 +661,10 @@ class NextGenApp:
             )
 
             # Initialize response
+            # Per-turn accumulator for tool costs (e.g. image generation).
+            # Added to session/conversation totals via add_tool_cost() and
+            # displayed alongside LLM cost in the stats bubble.
+            tool_costs_this_turn: float = 0.0
 
             # Add user message to history
             working_history = history + [
@@ -835,6 +839,19 @@ class NextGenApp:
                         # preview bubble + caption directly in the chat.
                         file_att = metadata.get("file_attachment") if metadata else None
                         working_history.extend(build_file_bubbles(file_att))
+
+                        # Accumulate any out-of-band tool cost (e.g. image
+                        # generation). Feeds session_cost / conversation_cost
+                        # so every cost display reflects the true total.
+                        tc = metadata.get("tool_cost") if metadata else None
+                        if tc and isinstance(tc, (int, float)) and tc > 0:
+                            tool_costs_this_turn += tc
+                            if (
+                                user_agent
+                                and hasattr(user_agent, "token_tracker")
+                                and user_agent.token_tracker
+                            ):
+                                user_agent.token_tracker.add_tool_cost(tc)
 
                         yield working_history, ""
 
@@ -1023,6 +1040,25 @@ class NextGenApp:
 
             # Add token statistics as a separate metadata block
             if token_displays:
+                # Add total cost for this turn (LLM + any tool costs combined).
+                # _turn_cost covers the LLM; tool_costs_this_turn covers tools
+                # that make their own API calls (e.g. image generation).
+                try:
+                    if user_agent and hasattr(user_agent, "token_tracker"):
+                        llm_cost = getattr(
+                            user_agent.token_tracker, "_turn_cost", None
+                        )
+                        llm_cost = float(llm_cost) if llm_cost else 0.0
+                    else:
+                        llm_cost = 0.0
+                    total_cost = llm_cost + tool_costs_this_turn
+                    if total_cost > 0:
+                        token_displays.append(
+                            f"Стоимость: ${total_cost:.4f}"
+                        )
+                except Exception:
+                    pass  # Never let cost display break the stats bubble
+
                 # Add execution time to the token display
                 token_displays.append(
                     format_translation(
