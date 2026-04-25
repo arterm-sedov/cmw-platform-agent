@@ -72,6 +72,10 @@ def fetch_record_field_values(
     """
     Load selected attribute values for a record (TeamNetwork GetPropertyValues).
 
+    **Empty** ``propertiesByAlias`` (``attribute_system_names == []``) is not a “return all
+    fields” mode: on a live tenant, the row often contains only ``id`` (and no template
+    attributes). Pass explicit system names (e.g. from **list_attributes**).
+
     Returns:
         success, data: ``{ record_id: { attr_alias: value, ... } }`` or error.
     """
