@@ -1,34 +1,36 @@
 # tools.py - Consolidated tools
 # Dependencies are included
 
-import os
+import base64
 import io
 import json
-import uuid
-import base64
+import os
 import shutil
-import requests
-import tempfile
-import urllib.parse
-import numpy as np
-import pandas as pd
+import sqlite3
 import subprocess
 import sys
-import sqlite3
+import tempfile
+import urllib.parse
+import uuid
+
+import numpy as np
+import pandas as pd
+import requests
 
 # Check if we're running on Hugging Face Spaces
-HF_SPACES = os.environ.get('SPACE_ID') is not None
+HF_SPACES = os.environ.get("SPACE_ID") is not None
 import cmath
-import time
 import re
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
-from typing import Any, Dict, List, Optional, Union, Tuple, Literal
+import time
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 from pydantic import BaseModel, Field, field_validator
 
 # Try to import matplotlib, but make it optional
 try:
     import matplotlib
-    matplotlib.use('Agg')  # Use non-interactive backend
+    matplotlib.use("Agg")  # Use non-interactive backend
     import matplotlib.pyplot as plt
     MATPLOTLIB_AVAILABLE = True
 except (ImportError, Exception) as e:
@@ -39,46 +41,50 @@ except (ImportError, Exception) as e:
 # Always import the tool decorator - it's essential
 from langchain_core.tools import tool
 
+from .applications_tools.tool_list_applications import list_applications
+
+# Applications tools
+from .applications_tools.tool_list_templates import list_templates
+from .attributes_tools.tool_archive_or_unarchive_attribute import (
+    archive_or_unarchive_attribute,
+)
+
+# Attributes tools - Utility functions
+from .attributes_tools.tool_delete_attribute import delete_attribute
+from .attributes_tools.tool_get_attribute import get_attribute
+from .attributes_tools.tools_account_attribute import edit_or_create_account_attribute
+from .attributes_tools.tools_boolean_attribute import edit_or_create_boolean_attribute
+
+# Attributes tools - Other attribute types
+from .attributes_tools.tools_datetime_attribute import (
+    edit_or_create_date_time_attribute,
+)
+from .attributes_tools.tools_decimal_attribute import edit_or_create_numeric_attribute
+from .attributes_tools.tools_document_attribute import edit_or_create_document_attribute
+from .attributes_tools.tools_drawing_attribute import edit_or_create_drawing_attribute
+from .attributes_tools.tools_duration_attribute import edit_or_create_duration_attribute
+from .attributes_tools.tools_enum_attribute import edit_or_create_enum_attribute
+from .attributes_tools.tools_image_attribute import edit_or_create_image_attribute
+from .attributes_tools.tools_record_attribute import edit_or_create_record_attribute
+from .attributes_tools.tools_role_attribute import edit_or_create_role_attribute
+
+# Attributes tools - Text attributes
+from .attributes_tools.tools_text_attribute import edit_or_create_text_attribute
+
+# Datetime tool
+from .get_datetime import get_current_datetime
+
 # Expose Comindware Platform tools from all directories
 # Templates tools
 from .templates_tools.tool_list_attributes import list_attributes
 from .templates_tools.tool_list_records import list_template_records
 
-# Applications tools
-from .applications_tools.tool_list_templates import list_templates
-from .applications_tools.tool_list_applications import list_applications
-
 # Templates tools
 from .templates_tools.tools_record_template import edit_or_create_record_template
-
-# Attributes tools - Text attributes
-from .attributes_tools.tools_text_attribute import edit_or_create_text_attribute
-
-# Attributes tools - Other attribute types
-from .attributes_tools.tools_datetime_attribute import edit_or_create_date_time_attribute
-from .attributes_tools.tools_decimal_attribute import edit_or_create_numeric_attribute
-from .attributes_tools.tools_record_attribute import edit_or_create_record_attribute
-from .attributes_tools.tools_image_attribute import edit_or_create_image_attribute
-from .attributes_tools.tools_drawing_attribute import edit_or_create_drawing_attribute
-from .attributes_tools.tools_document_attribute import edit_or_create_document_attribute
-from .attributes_tools.tools_duration_attribute import edit_or_create_duration_attribute
-from .attributes_tools.tools_account_attribute import edit_or_create_account_attribute
-from .attributes_tools.tools_boolean_attribute import edit_or_create_boolean_attribute
-from .attributes_tools.tools_role_attribute import edit_or_create_role_attribute
-from .attributes_tools.tools_enum_attribute import edit_or_create_enum_attribute
-
-# Attributes tools - Utility functions
-from .attributes_tools.tool_delete_attribute import delete_attribute
 
 # Transfer tools
 from .transfer_tools.tool_export_application import export_application
 from .transfer_tools.tool_import_application import import_application
-from .attributes_tools.tool_archive_or_unarchive_attribute import archive_or_unarchive_attribute
-from .attributes_tools.tool_get_attribute import get_attribute
-
-# Datetime tool
-from .get_datetime import get_current_datetime
-
 # Global configuration for search tools
 SEARCH_LIMIT = 5  # Maximum number of results for all search tools (Tavily, Wikipedia, Arxiv)
 
@@ -249,14 +255,14 @@ class CodeInterpreter:
     """
     def __init__(self, allowed_modules=None, max_execution_time=30, working_directory=None):
         self.allowed_modules = allowed_modules or [
-            "numpy", "pandas", "matplotlib", "scipy", "sklearn", 
+            "numpy", "pandas", "matplotlib", "scipy", "sklearn",
             "math", "random", "statistics", "datetime", "collections",
             "itertools", "functools", "operator", "re", "json",
             "sympy", "networkx", "nltk", "PIL",
             "cmath", "uuid", "tempfile", "requests", "urllib"
         ]
         self.max_execution_time = max_execution_time
-        self.working_directory = working_directory or os.path.join(os.getcwd()) 
+        self.working_directory = working_directory or os.path.join(os.getcwd())
         if not os.path.exists(self.working_directory):
             os.makedirs(self.working_directory)
         # Use global imports that are already available
@@ -270,7 +276,7 @@ class CodeInterpreter:
         if MATPLOTLIB_AVAILABLE:
             self.globals["plt"] = plt
         self.temp_sqlite_db = os.path.join(tempfile.gettempdir(), "code_exec.db")
-    def execute_code(self, code: str, language: str = "python") -> Dict[str, Any]:
+    def execute_code(self, code: str, language: str = "python") -> dict[str, Any]:
         """
         Execute code in the specified language with safety controls.
         Args:
@@ -294,7 +300,7 @@ class CodeInterpreter:
                 return {"status": "error", "stderr": f"Unsupported language: {language}"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    def _execute_python(self, code: str) -> Dict[str, Any]:
+    def _execute_python(self, code: str) -> dict[str, Any]:
         """Execute Python code with safety controls."""
         try:
             # Capture stdout and stderr
@@ -310,7 +316,7 @@ class CodeInterpreter:
             try:
                 # Create a copy of globals for this execution
                 local_globals = self.globals.copy()
-                local_globals['__name__'] = '__main__'
+                local_globals["__name__"] = "__main__"
                 # Execute the code
                 exec(code, local_globals)
                 # Get captured output
@@ -325,7 +331,7 @@ class CodeInterpreter:
                         dataframes.append({
                             "name": name,
                             "shape": value.shape,
-                            "head": value.head().to_dict('records')
+                            "head": value.head().to_dict("records")
                         })
                 if dataframes:
                     result["dataframes"] = dataframes
@@ -356,16 +362,16 @@ class CodeInterpreter:
                 stderr_buffer.close()
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    def _execute_bash(self, code: str) -> Dict[str, Any]:
+    def _execute_bash(self, code: str) -> dict[str, Any]:
         """Execute Bash code."""
         if HF_SPACES:
             return {"status": "error", "stderr": "Bash execution not available on Hugging Face Spaces"}
         try:
             result = subprocess.run(
-                code, 
-                shell=True, 
-                capture_output=True, 
-                text=True, 
+                code,
+                check=False, shell=True,
+                capture_output=True,
+                text=True,
                 timeout=self.max_execution_time
             )
             return {
@@ -378,7 +384,7 @@ class CodeInterpreter:
             return {"status": "error", "stderr": "Execution timed out"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    def _execute_sql(self, code: str) -> Dict[str, Any]:
+    def _execute_sql(self, code: str) -> dict[str, Any]:
         """Execute SQL code using SQLite."""
         try:
             conn = sqlite3.connect(self.temp_sqlite_db)
@@ -386,7 +392,7 @@ class CodeInterpreter:
             # Execute SQL
             cursor.execute(code)
             # Fetch results if it's a SELECT
-            if code.strip().upper().startswith('SELECT'):
+            if code.strip().upper().startswith("SELECT"):
                 results = cursor.fetchall()
                 columns = [description[0] for description in cursor.description]
                 result = {"status": "success", "results": results, "columns": columns}
@@ -397,19 +403,19 @@ class CodeInterpreter:
             return result
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    def _execute_c(self, code: str) -> Dict[str, Any]:
+    def _execute_c(self, code: str) -> dict[str, Any]:
         """Execute C code by compiling and running."""
         if HF_SPACES:
             return {"status": "error", "stderr": "C code execution not available on Hugging Face Spaces"}
         try:
             # Create temporary C file
             c_file = os.path.join(self.working_directory, "temp_code.c")
-            with open(c_file, 'w') as f:
+            with open(c_file, "w") as f:
                 f.write(code)
             # Compile
             compile_result = subprocess.run(
                 ["gcc", "-o", os.path.join(self.working_directory, "temp_program"), c_file],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True
             )
             if compile_result.returncode != 0:
@@ -417,7 +423,7 @@ class CodeInterpreter:
             # Run
             run_result = subprocess.run(
                 [os.path.join(self.working_directory, "temp_program")],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True,
                 timeout=self.max_execution_time
             )
@@ -431,19 +437,19 @@ class CodeInterpreter:
             return {"status": "error", "stderr": "Execution timed out"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    def _execute_java(self, code: str) -> Dict[str, Any]:
+    def _execute_java(self, code: str) -> dict[str, Any]:
         """Execute Java code by compiling and running."""
         if HF_SPACES:
             return {"status": "error", "stderr": "Java code execution not available on Hugging Face Spaces"}
         try:
             # Create temporary Java file
             java_file = os.path.join(self.working_directory, "TempCode.java")
-            with open(java_file, 'w') as f:
+            with open(java_file, "w") as f:
                 f.write(code)
             # Compile
             compile_result = subprocess.run(
                 ["javac", java_file],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True
             )
             if compile_result.returncode != 0:
@@ -451,7 +457,7 @@ class CodeInterpreter:
             # Run
             run_result = subprocess.run(
                 ["java", "-cp", self.working_directory, "TempCode"],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True,
                 timeout=self.max_execution_time
             )
@@ -489,7 +495,7 @@ def execute_code_multilang(code_reference: str, language: str = "python", agent=
     supported_languages = ["python", "bash", "sql", "c", "java"]
     if final_language not in supported_languages:
         return FileUtils.create_tool_response(
-            "execute_code_multilang", 
+            "execute_code_multilang",
             error=f"❌ Unsupported language: {final_language}. Supported languages are: {', '.join(supported_languages)}"
         )
 
@@ -860,7 +866,7 @@ def read_text_based_file(
     if not file_info.exists:
         return FileUtils.create_tool_response("read_text_based_file", error=file_info.error)
 
-    content, read_err, enc = read_local_path_to_plain_text(
+    content, read_err, enc, image_paths, markdown_path = read_local_path_to_plain_text(
         file_path, read_html_as_markdown=read_html_as_markdown, extract_images=extract_images, _file_info=file_info
     )
     if read_err:
@@ -882,10 +888,18 @@ def read_text_based_file(
     else:
         header = f"File: {display_name} ({size_str})"
     result_text = f"{header}\n\nContent:\n{content}"
+
+    extra = {}
+    if image_paths:
+        extra["image_paths"] = image_paths
+    if markdown_path:
+        extra["markdown_path"] = markdown_path
+
     return FileUtils.create_tool_response(
         "read_text_based_file",
         result=result_text,
         file_info=FileUtils.file_info_for_tool_response(file_info, ref),
+        extra=extra if extra else None,
     )
 
 # ========== PANDAS QUERY/PIPELINE HELPERS ==========
@@ -899,11 +913,11 @@ def _safe_to_markdown(df: pd.DataFrame, max_rows: int = 10, max_cols: int = 20) 
         return preview_df.to_string(index=False)
 
 
-def _dataframe_schema(df: pd.DataFrame) -> Dict[str, str]:
+def _dataframe_schema(df: pd.DataFrame) -> dict[str, str]:
     return {str(col): str(dtype) for col, dtype in df.dtypes.items()}
 
 
-def _truncate_records(df: pd.DataFrame, max_rows: int = 100, max_cols: int = 50, max_cell_chars: int = 500) -> List[Dict[str, Any]]:
+def _truncate_records(df: pd.DataFrame, max_rows: int = 100, max_cols: int = 50, max_cell_chars: int = 500) -> list[dict[str, Any]]:
     limited = df.head(max_rows)
     if max_cols is not None:
         limited = limited.iloc[:, :max_cols]
@@ -918,7 +932,7 @@ def _truncate_records(df: pd.DataFrame, max_rows: int = 100, max_cols: int = 50,
     return [{k: _truncate_val(v) for k, v in row.items()} for row in limited.to_dict(orient="records")]
 
 
-_ALLOWED_OPS: Dict[str, Literal["df_method", "special"]] = {
+_ALLOWED_OPS: dict[str, Literal["df_method", "special"]] = {
     "query": "df_method",
     "assign": "df_method",
     "rename": "df_method",
@@ -951,7 +965,7 @@ def _coerce_tabular(obj: Any, step_name: str) -> pd.DataFrame:
     return pd.DataFrame(obj)
 
 
-def _dispatch_pipeline(df: pd.DataFrame, steps: List[Dict[str, Any]]) -> pd.DataFrame:
+def _dispatch_pipeline(df: pd.DataFrame, steps: list[dict[str, Any]]) -> pd.DataFrame:
     current = df
     for i, step in enumerate(steps):
         if not isinstance(step, dict):
@@ -987,12 +1001,12 @@ def _dispatch_pipeline(df: pd.DataFrame, steps: List[Dict[str, Any]]) -> pd.Data
 
 def _apply_pandas_query(
     df: pd.DataFrame,
-    query: Optional[str],
-    preview_opts: Optional[Dict[str, Any]] = None,
-    plot_opts: Optional[Dict[str, Any]] = None,
-) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    query: str | None,
+    preview_opts: dict[str, Any] | None = None,
+    plot_opts: dict[str, Any] | None = None,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
     preview = preview_opts or {"rows": 10, "cols": 20, "include_schema": True}
-    plots: List[str] = []
+    plots: list[str] = []
     original_shape = tuple(df.shape)
 
     transformed = df
@@ -1046,7 +1060,7 @@ def _apply_pandas_query(
 
     table_markdown = _safe_to_markdown(transformed, rows, cols)
     table_records = _truncate_records(transformed, max_rows=min(rows, 1000), max_cols=min(cols, 100))
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "original_shape": original_shape,
         "shape": tuple(transformed.shape),
         "table_markdown": table_markdown,
@@ -1187,7 +1201,7 @@ def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
         try:
             df = pd.read_excel(file_path)
             columns = list(df.columns)
-            head = df.head().to_dict('records')
+            head = df.head().to_dict("records")
             error_details = f"Error analyzing Excel file: {str(e)}\nColumns: {columns}\nHead: {head}"
         except Exception as inner_e:
             error_details = f"Error analyzing Excel file: {str(e)}\nAdditionally, failed to read columns/head: {str(inner_e)}"
@@ -1291,8 +1305,8 @@ def analyze_image_ai(
     from .file_utils import FileUtils
 
     try:
-        from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.vision_input import VisionInput
+        from agent_ng.vision_tool_manager import VisionToolManager
 
         lowered_ref = file_reference.strip().lower()
         is_direct_url = lowered_ref.startswith("http://") or lowered_ref.startswith(
@@ -1310,11 +1324,24 @@ def analyze_image_ai(
                     "analyze_image_ai",
                     error=f"File not found: {file_reference}",
                 )
+
+            if file_path.lower().endswith(".pdf"):
+                return FileUtils.create_tool_response(
+                    "analyze_image_ai",
+                    error="PDF files cannot be analyzed directly as images. "
+                    "Most vision models don't support PDFs natively. "
+                    "To analyze visual PDF content:\n"
+                    "1. First: read_text_based_file(file_reference='DOC.pdf', extract_images=True)\n"
+                    "   - This extracts images from PDF pages\n"
+                    "2. Then: analyze the extracted images individually\n"
+                    "   - Use analyze_image_ai for each extracted image path",
+                )
+
             vision_input = VisionInput(prompt=prompt, image_path=file_path)
 
         # Initialize VisionToolManager
         import os
-        os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
+        os.environ["OPENROUTER_FETCH_PRICING_AT_STARTUP"] = "false"
         manager = VisionToolManager()
 
         # Analyze image
@@ -1337,15 +1364,15 @@ def analyze_image_ai(
         )
 
 class TransformImageParams(BaseModel):
-    width: Optional[int] = Field(None, description="New width for resize operation")
-    height: Optional[int] = Field(None, description="New height for resize operation")
-    angle: Optional[int] = Field(None, description="Rotation angle in degrees")
-    direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Flip direction")
-    radius: Optional[float] = Field(None, description="Blur radius")
-    factor: Optional[float] = Field(None, description="Enhancement factor for brightness/contrast")
+    width: int | None = Field(None, description="New width for resize operation")
+    height: int | None = Field(None, description="New height for resize operation")
+    angle: int | None = Field(None, description="Rotation angle in degrees")
+    direction: Literal["horizontal", "vertical"] | None = Field(None, description="Flip direction")
+    radius: float | None = Field(None, description="Blur radius")
+    factor: float | None = Field(None, description="Enhancement factor for brightness/contrast")
 
 @tool(args_schema=TransformImageParams)
-def transform_image(image_base64: str, operation: str, params: Optional[Dict[str, Any]] = None) -> str:
+def transform_image(image_base64: str, operation: str, params: dict[str, Any] | None = None) -> str:
     """
     Transform an image using various operations like resize, rotate, filter, etc.
 
@@ -1407,16 +1434,16 @@ def transform_image(image_base64: str, operation: str, params: Optional[Dict[str
         }, indent=2)
 
 class DrawOnImageParams(BaseModel):
-    text: Optional[str] = Field(None, description="Text to draw")
-    position: Optional[List[int]] = Field(None, description="Text position [x, y]")
-    color: Optional[str] = Field(None, description="Color name (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
-    size: Optional[int] = Field(None, description="Font size for text")
-    coords: Optional[List[int]] = Field(None, description="Rectangle coordinates [x1, y1, x2, y2]")
-    center: Optional[List[int]] = Field(None, description="Circle center [x, y]")
-    radius: Optional[int] = Field(None, description="Circle radius")
-    start: Optional[List[int]] = Field(None, description="Line start [x, y]")
-    end: Optional[List[int]] = Field(None, description="Line end [x, y]")
-    width: Optional[int] = Field(None, description="Stroke width")
+    text: str | None = Field(None, description="Text to draw")
+    position: list[int] | None = Field(None, description="Text position [x, y]")
+    color: str | None = Field(None, description="Color name (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
+    size: int | None = Field(None, description="Font size for text")
+    coords: list[int] | None = Field(None, description="Rectangle coordinates [x1, y1, x2, y2]")
+    center: list[int] | None = Field(None, description="Circle center [x, y]")
+    radius: int | None = Field(None, description="Circle radius")
+    start: list[int] | None = Field(None, description="Line start [x, y]")
+    end: list[int] | None = Field(None, description="Line end [x, y]")
+    width: int | None = Field(None, description="Stroke width")
 
 @tool(args_schema=DrawOnImageParams)
 def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParams) -> str:
@@ -1469,7 +1496,7 @@ def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParam
             radius = params.radius or 30
             color = parse_color(params.color) or "blue"
             width = params.width or 2
-            bbox = [center[0] - radius, center[1] - radius, 
+            bbox = [center[0] - radius, center[1] - radius,
                    center[0] + radius, center[1] + radius]
             draw.ellipse(bbox, outline=color, width=width)
         elif drawing_type == "line":
@@ -1502,20 +1529,20 @@ class GenerateSimpleImageParams(BaseModel):
     image_type: str = Field(..., description="Type of image to generate: 'solid', 'gradient', 'checkerboard', 'noise'")
     width: int = Field(500, description="Width of the generated image")
     height: int = Field(500, description="Height of the generated image")
-    color: Optional[str] = Field(None, description="Solid color for 'solid' type (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
-    start_color: Optional[List[int]] = Field(None, description="Gradient start color [r, g, b]")
-    end_color: Optional[List[int]] = Field(None, description="Gradient end color [r, g, b]")
-    direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Gradient direction ('horizontal' or 'vertical')")
-    square_size: Optional[int] = Field(None, description="Square size for checkerboard")
-    color1: Optional[str] = Field(None, description="First color for checkerboard")
-    color2: Optional[str] = Field(None, description="Second color for checkerboard")
+    color: str | None = Field(None, description="Solid color for 'solid' type (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
+    start_color: list[int] | None = Field(None, description="Gradient start color [r, g, b]")
+    end_color: list[int] | None = Field(None, description="Gradient end color [r, g, b]")
+    direction: Literal["horizontal", "vertical"] | None = Field(None, description="Gradient direction ('horizontal' or 'vertical')")
+    square_size: int | None = Field(None, description="Square size for checkerboard")
+    color1: str | None = Field(None, description="First color for checkerboard")
+    color2: str | None = Field(None, description="Second color for checkerboard")
 
 @tool(args_schema=GenerateSimpleImageParams)
-def generate_simple_image(image_type: str, width: int = 500, height: int = 500, 
-                         color: Optional[str] = None, start_color: Optional[List[int]] = None,
-                         end_color: Optional[List[int]] = None, direction: Optional[str] = None,
-                         square_size: Optional[int] = None, color1: Optional[str] = None,
-                         color2: Optional[str] = None) -> str:
+def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
+                         color: str | None = None, start_color: list[int] | None = None,
+                         end_color: list[int] | None = None, direction: str | None = None,
+                         square_size: int | None = None, color1: str | None = None,
+                         color2: str | None = None) -> str:
     """
     Generate simple images like gradients, solid colors, checkerboard, or noise patterns.
 
@@ -1602,14 +1629,14 @@ def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
         }, indent=2)
 
 class CombineImagesParams(BaseModel):
-    spacing: Optional[int] = Field(None, description="Spacing between images in pixels")
-    background_color: Optional[str] = Field(None, description="Background color for collage (e.g., 'white', 'black') or RGB string (e.g., '255,255,255')")
-    blend_mode: Optional[str] = Field(None, description="Blend mode for blending operations")
-    opacity: Optional[float] = Field(None, description="Opacity for overlay operations (0.0-1.0)")
+    spacing: int | None = Field(None, description="Spacing between images in pixels")
+    background_color: str | None = Field(None, description="Background color for collage (e.g., 'white', 'black') or RGB string (e.g., '255,255,255')")
+    blend_mode: str | None = Field(None, description="Blend mode for blending operations")
+    opacity: float | None = Field(None, description="Opacity for overlay operations (0.0-1.0)")
 
 @tool(args_schema=CombineImagesParams)
-def combine_images(images_base64: List[str], operation: str, 
-                  params: Optional[CombineImagesParams] = None) -> str:
+def combine_images(images_base64: list[str], operation: str,
+                  params: CombineImagesParams | None = None) -> str:
     """
     Combine multiple images using various operations (collage, stack, blend, horizontal, vertical, overlay, etc.).
 
@@ -1727,8 +1754,8 @@ def understand_video(file_reference: str, prompt: str, system_prompt: str = None
     from .file_utils import FileUtils
 
     try:
-        from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.vision_input import VisionInput
+        from agent_ng.vision_tool_manager import VisionToolManager
 
         # Handle direct URLs without forcing local download first
         lowered_ref = file_reference.strip().lower()
@@ -1754,7 +1781,7 @@ def understand_video(file_reference: str, prompt: str, system_prompt: str = None
 
         # Initialize VisionToolManager
         import os
-        os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
+        os.environ["OPENROUTER_FETCH_PRICING_AT_STARTUP"] = "false"
         manager = VisionToolManager()
 
         # Analyze video using URL-aware manager routing
@@ -1800,8 +1827,8 @@ def understand_audio(file_reference: str, prompt: str, system_prompt: str = None
     from .file_utils import FileUtils
 
     try:
-        from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.vision_input import VisionInput
+        from agent_ng.vision_tool_manager import VisionToolManager
 
         # Resolve file reference to full path
         file_path = FileUtils.resolve_file_reference(file_reference, agent)
@@ -1819,7 +1846,7 @@ def understand_audio(file_reference: str, prompt: str, system_prompt: str = None
 
         # Initialize VisionToolManager
         import os
-        os.environ['OPENROUTER_FETCH_PRICING_AT_STARTUP'] = 'false'
+        os.environ["OPENROUTER_FETCH_PRICING_AT_STARTUP"] = "false"
         manager = VisionToolManager()
 
         # Analyze audio
@@ -1906,16 +1933,16 @@ class SubmitAnswerSchema(BaseModel):
         le=1.0,
         description="Confidence level from 0.0 to 1.0 (default: 1.0)"
     )
-    sources: Optional[List[str]] = Field(
+    sources: list[str] | None = Field(
         default=None,
         description="List of sources or tools used to generate this answer"
     )
-    reasoning: Optional[str] = Field(
+    reasoning: str | None = Field(
         default=None,
         description="Brief explanation of the reasoning process"
     )
 
-    @field_validator('sources')
+    @field_validator("sources")
     @classmethod
     def validate_sources(cls, v):
         if v is not None and len(v) == 0:
@@ -1941,26 +1968,26 @@ class SubmitIntermediateStepSchema(BaseModel):
         default="in_progress",
         description="Current status of this step"
     )
-    data: Optional[Dict[str, Any]] = Field(
+    data: dict[str, Any] | None = Field(
         default=None,
         description="Optional dictionary containing relevant data, findings, or results from this step"
     )
-    next_steps: Optional[List[str]] = Field(
+    next_steps: list[str] | None = Field(
         default=None,
         description="Optional list of planned next steps or actions"
     )
-    confidence: Optional[float] = Field(
+    confidence: float | None = Field(
         default=None,
         ge=0.0,
         le=1.0,
         description="Optional confidence level from 0.0 to 1.0 for this step's results"
     )
-    issues: Optional[List[str]] = Field(
+    issues: list[str] | None = Field(
         default=None,
         description="Optional list of issues, concerns, or limitations encountered"
     )
 
-    @field_validator('next_steps', 'issues')
+    @field_validator("next_steps", "issues")
     @classmethod
     def validate_lists(cls, v):
         if v is not None and len(v) == 0:
@@ -1976,7 +2003,7 @@ class SubmitAnswerResult(BaseModel):
     success: bool
     status_code: int = Field(default=200)
     raw_response: dict | str | None = Field(default=None)
-    error: Optional[str] = Field(default=None)
+    error: str | None = Field(default=None)
 
 class SubmitIntermediateStepResult(BaseModel):
     """
@@ -1987,12 +2014,12 @@ class SubmitIntermediateStepResult(BaseModel):
     success: bool
     status_code: int = Field(default=200)
     raw_response: dict | str | None = Field(default=None)
-    error: Optional[str] = Field(default=None)
+    error: str | None = Field(default=None)
 
 # ========== TOOL FUNCTIONS ==========
 
 @tool("submit_answer", return_direct=False, args_schema=SubmitAnswerSchema)
-def submit_answer(answer: str, confidence: float = 1.0, sources: List[str] = None, reasoning: str = None) -> Dict[str, Any]:
+def submit_answer(answer: str, confidence: float = 1.0, sources: list[str] = None, reasoning: str = None) -> dict[str, Any]:
     """
     Submit a final answer using Schema-Guided Reasoning (SGR).
     This tool forces the LLM to explicitly state its conclusion rather than leaving it implicit.
@@ -2025,9 +2052,9 @@ def submit_answer(answer: str, confidence: float = 1.0, sources: List[str] = Non
         }
 
 @tool("submit_intermediate_step", return_direct=False, args_schema=SubmitIntermediateStepSchema)
-def submit_intermediate_step(step_name: str, description: str, status: str = "in_progress", 
-                           data: Dict[str, Any] = None, next_steps: List[str] = None, 
-                           confidence: float = None, issues: List[str] = None) -> Dict[str, Any]:
+def submit_intermediate_step(step_name: str, description: str, status: str = "in_progress",
+                           data: dict[str, Any] = None, next_steps: list[str] = None,
+                           confidence: float = None, issues: list[str] = None) -> dict[str, Any]:
     """
     Submit an intermediate reasoning step using Schema-Guided Reasoning (SGR).
     Use this tool to document intermediate steps in your reasoning process, 
