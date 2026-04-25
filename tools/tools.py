@@ -3,10 +3,12 @@
 
 import base64
 import cmath
+from datetime import datetime
 import io
 import json
 import logging
 import os
+from pathlib import Path
 import re
 import shutil
 import sqlite3
@@ -14,10 +16,9 @@ import subprocess
 import sys
 import tempfile
 import time
+from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
 import urllib.parse
 import uuid
-from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 HF_SPACES = os.environ.get("SPACE_ID") is not None
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Try to import matplotlib, but make it optional
 try:
@@ -43,7 +44,23 @@ except (ImportError, Exception) as e:
     print(f"Warning: matplotlib not available: {e}")
 
 # Always import the tool decorator - it's essential
-from langchain_core.tools import tool
+from langchain_core.tools import InjectedToolArg, tool
+
+# Image generation engine (backed by the provider registry in
+# agent_ng.image_providers). The tool only knows the engine facade and the
+# default-model hint accessor — never the active model slug or provider.
+try:
+    from agent_ng.image_engine import ImageEngine
+    from agent_ng.image_models import get_default_prompt_style_hint
+except ImportError:  # pragma: no cover
+    ImageEngine = None  # type: ignore[assignment,misc]
+    get_default_prompt_style_hint = None  # type: ignore[assignment]
+
+# Session-aware current_session_id (ContextVar fallback when agent not injected)
+try:
+    from agent_ng.session_manager import get_current_session_id
+except ImportError:  # pragma: no cover
+    get_current_session_id = None  # type: ignore[assignment]
 
 from .applications_tools.tool_list_applications import list_applications
 
@@ -1553,108 +1570,249 @@ def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParam
             "error": str(e)
         }, indent=2)
 
-class GenerateSimpleImageParams(BaseModel):
-    image_type: str = Field(..., description="Type of image to generate: 'solid', 'gradient', 'checkerboard', 'noise'")
-    width: int = Field(500, description="Width of the generated image")
-    height: int = Field(500, description="Height of the generated image")
-    color: str | None = Field(None, description="Solid color for 'solid' type (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
-    start_color: list[int] | None = Field(None, description="Gradient start color [r, g, b]")
-    end_color: list[int] | None = Field(None, description="Gradient end color [r, g, b]")
-    direction: Literal["horizontal", "vertical"] | None = Field(None, description="Gradient direction ('horizontal' or 'vertical')")
-    square_size: int | None = Field(None, description="Square size for checkerboard")
-    color1: str | None = Field(None, description="First color for checkerboard")
-    color2: str | None = Field(None, description="Second color for checkerboard")
+# ------------------------------------------------------------------------- #
+# AI image generation (OpenRouter)                                           #
+# ------------------------------------------------------------------------- #
 
-@tool(args_schema=GenerateSimpleImageParams)
-def generate_simple_image(image_type: str, width: int = 500, height: int = 500,
-                         color: str | None = None, start_color: list[int] | None = None,
-                         end_color: list[int] | None = None, direction: str | None = None,
-                         square_size: int | None = None, color1: str | None = None,
-                         color2: str | None = None) -> str:
+# Root for session-isolated image outputs. Patched in tests. Matches the
+# convention established by ``tools/file_utils.py::save_base64_to_file``.
+_IMAGE_OUTPUT_ROOT = ".gradio/sessions"
+
+
+def _build_generate_ai_image_description() -> str:
+    """Compose the LLM-facing tool description.
+
+    Includes the active model's prompt-style hint (never the slug or
+    vendor) so the calling LLM can adapt prompt craft to the configured
+    backend.
     """
-    Generate simple images like gradients, solid colors, checkerboard, or noise patterns.
+    body = (
+        "Create a new image from a text description.\n\n"
+        "Use this when the user asks for an illustration, icon, "
+        "diagram, business infographic, logo, banner, social-media "
+        "graphic, or any other visual that does not yet exist. The "
+        "generated image comes back as a chat attachment reference "
+        "that you can pass to other tools (for example, to attach the "
+        "image to a record, analyze it, or transform it).\n\n"
+        "`aspect_ratio` lets you request a specific shape (for example "
+        "`16:9` for a banner, `9:16` for a mobile story, `1:1` for a "
+        "square icon). `image_size` lets you request a resolution tier "
+        "(`1K` for small/fast, `2K` for sharper details, `4K` for "
+        "print-quality). Only set these when the composition really "
+        "depends on shape or size.\n\n"
+        "Returns a structured result containing the image reference "
+        "and the generation cost. If the call fails, the result "
+        "contains an `error` message explaining why — simplify the "
+        "prompt and try again."
+    )
+    if get_default_prompt_style_hint is None:
+        return body
+    hint = get_default_prompt_style_hint()
+    if not hint:
+        return body
+    return f"{body}\n\nActive image generator profile: {hint}"
 
-    Args:
-        image_type (str): The type of image to generate.
-        width (int): The width of the generated image.
-        height (int): The height of the generated image.
-        params (Dict[str, Any], optional): Additional parameters for image generation.
 
-    Returns:
-        str: JSON string with the generated image as base64 or error message.
+_GENERATE_AI_IMAGE_DESCRIPTION = _build_generate_ai_image_description()
+
+
+class GenerateAIImageParams(BaseModel):
+    """Parameters for the `generate_ai_image` tool.
+
+    Deliberately does not expose model selection to the LLM — the active
+    model is an operations-level decision controlled by the
+    ``IMAGE_GEN_DEFAULT_MODEL`` environment variable (see
+    :mod:`agent_ng.image_models`).
     """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    prompt: str = Field(
+        ...,
+        description=(
+            "Natural-language description of the image to create. Spell "
+            "out any text that must appear in the picture exactly as it "
+            "should be rendered."
+        ),
+    )
+    aspect_ratio: str | None = Field(
+        None,
+        description=(
+            "Optional desired shape of the image, written as 'W:H' "
+            "(for example '1:1' for a square icon, '16:9' for a banner, "
+            "'9:16' for a mobile story)."
+        ),
+    )
+    image_size: Literal["1K", "2K", "4K"] | None = Field(
+        None,
+        description=(
+            "Optional resolution tier: '1K' for small/fast, '2K' for "
+            "sharper details, '4K' for print-quality."
+        ),
+    )
+    agent: Annotated[Any | None, InjectedToolArg] = Field(
+        default=None,
+        description="Runtime-injected; not supplied by the LLM.",
+    )
+
+
+@tool(
+    "generate_ai_image",
+    args_schema=GenerateAIImageParams,
+    description=_GENERATE_AI_IMAGE_DESCRIPTION,
+)
+def generate_ai_image(
+    prompt: str,
+    aspect_ratio: str | None = None,
+    image_size: str | None = None,
+    agent: Annotated[Any | None, InjectedToolArg] = None,
+) -> dict[str, Any]:
+    """Create a new image from a text description.
+
+    The image generator is chosen by the deployment (via
+    ``IMAGE_GEN_DEFAULT_MODEL``); the calling LLM only decides on the
+    prompt, aspect ratio and size.
+
+    Returns a structured result. On success it includes a
+    ``file_reference`` (an attachment name usable by other chat tools),
+    the ``cost`` in USD, the output ``mime_type`` and ``size_bytes``. On
+    failure it includes an ``error`` string and no attachment.
+    """
+    if ImageEngine is None:
+        return {
+            "success": False,
+            "error": "Image generation engine is not available.",
+            "file_reference": None,
+            "cost": None,
+        }
+
     try:
-        if image_type == "solid":
-            color_str = color or "255,255,255"
-            # Parse color string to RGB tuple
-            if "," in color_str and color_str.replace(",", "").replace(" ", "").isdigit():
-                try:
-                    rgb_values = [int(x.strip()) for x in color_str.split(",")]
-                    if len(rgb_values) == 3 and all(0 <= v <= 255 for v in rgb_values):
-                        color = tuple(rgb_values)
-                    else:
-                        color = (255, 255, 255)
-                except ValueError:
-                    color = (255, 255, 255)
-            else:
-                # Try as color name, fallback to white
-                try:
-                    color = color_str
-                except:
-                    color = (255, 255, 255)
-            img = Image.new("RGB", (width, height), color)
-        elif image_type == "gradient":
-            start_color = start_color or [255, 0, 0]
-            end_color = end_color or [0, 0, 255]
-            direction = direction or "horizontal"
-            img = Image.new("RGB", (width, height))
-            draw = ImageDraw.Draw(img)
-            if direction == "horizontal":
-                for x in range(width):
-                    r = int(start_color[0] + (end_color[0] - start_color[0]) * x / width)
-                    g = int(start_color[1] + (end_color[1] - start_color[1]) * x / width)
-                    b = int(start_color[2] + (end_color[2] - start_color[2]) * x / width)
-                    draw.line([(x, 0), (x, height)], fill=(r, g, b))
-            else:
-                for y in range(height):
-                    r = int(start_color[0] + (end_color[0] - start_color[0]) * y / height)
-                    g = int(start_color[1] + (end_color[1] - start_color[1]) * y / height)
-                    b = int(start_color[2] + (end_color[2] - start_color[2]) * y / height)
-                    draw.line([(0, y), (width, y)], fill=(r, g, b))
-        elif image_type == "noise":
-            noise_array = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
-            img = Image.fromarray(noise_array, "RGB")
-        elif image_type == "checkerboard":
-            square_size = square_size or 50
-            color1 = color1 or "white"
-            color2 = color2 or "black"
-            img = Image.new("RGB", (width, height))
-            for y in range(0, height, square_size):
-                for x in range(0, width, square_size):
-                    color = color1 if ((x // square_size) + (y // square_size)) % 2 == 0 else color2
-                    for dy in range(square_size):
-                        for dx in range(square_size):
-                            if x + dx < width and y + dy < height:
-                                img.putpixel((x + dx, y + dy), color)
-        else:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "generate_simple_image",
-                "error": f"Unsupported image_type {image_type}"
-            }, indent=2)
-        result_path = save_image(img)
-        result_base64 = encode_image(result_path)
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "generate_simple_image",
-            "generated_image": result_base64
-        }, indent=2)
-    except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "generate_simple_image",
-            "error": str(e)
-        }, indent=2)
+        engine = ImageEngine()
+    except ValueError as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+            "file_reference": None,
+            "cost": None,
+        }
+
+    result = engine.generate(
+        prompt=prompt,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
+    )
+
+    if not result.success or result.image_bytes is None:
+        return {
+            "success": False,
+            "error": result.error or "image generation failed",
+            "file_reference": None,
+            "cost": result.cost,
+        }
+
+    # Resolve session id: prefer the injected agent, fall back to ContextVar.
+    session_id: str | None = getattr(agent, "session_id", None) if agent else None
+    if not session_id and get_current_session_id is not None:
+        session_id = get_current_session_id()
+
+    # Write bytes to disk — either into a session dir (preferred) or mkstemp.
+    ext = _extension_for_mime(result.mime_type)
+    display_name = _make_display_name(ext)
+
+    try:
+        disk_path = _write_image_bytes(
+            image_bytes=result.image_bytes,
+            display_name=display_name,
+            session_id=session_id,
+        )
+    except OSError as exc:
+        return {
+            "success": False,
+            "error": f"Failed to write image bytes: {exc}",
+            "file_reference": None,
+            "cost": result.cost,
+        }
+
+    # Register with the agent if we have one.
+    if agent is not None and callable(getattr(agent, "register_file", None)):
+        try:
+            agent.register_file(display_name, disk_path)
+        except Exception as exc:
+            logger.warning("register_file failed for %s: %s", display_name, exc)
+            try:
+                os.unlink(disk_path)
+            except OSError as oe:
+                logger.debug("temp cleanup after register failure: %s", oe)
+            return {
+                "success": False,
+                "error": f"register_file failed: {exc}",
+                "file_reference": None,
+                "cost": result.cost,
+            }
+        file_reference = display_name
+    else:
+        file_reference = os.path.abspath(disk_path)
+
+    return {
+        "success": True,
+        "error": None,
+        "file_reference": file_reference,
+        "cost": result.cost,
+        "mime_type": result.mime_type,
+        "size_bytes": len(result.image_bytes),
+    }
+
+
+# ---- helpers for generate_ai_image -------------------------------------- #
+
+
+def _extension_for_mime(mime: str | None) -> str:
+    """Map a MIME type to a canonical file extension (falls back to .png)."""
+    mapping = {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+    }
+    return mapping.get((mime or "").lower(), ".png")
+
+
+def _make_display_name(ext: str) -> str:
+    """Compose a unique, human-readable filename for a generated image."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"llm_image_{timestamp}_{uuid.uuid4().hex[:8]}{ext}"
+
+
+def _write_image_bytes(
+    image_bytes: bytes,
+    display_name: str,
+    session_id: str | None,
+) -> str:
+    """Persist ``image_bytes`` and return the absolute on-disk path.
+
+    When ``session_id`` is truthy, files go under
+    ``{_IMAGE_OUTPUT_ROOT}/{session_id}/``; otherwise a ``tempfile.mkstemp``
+    path is used.
+    """
+    if session_id:
+        session_dir = Path(_IMAGE_OUTPUT_ROOT) / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        path = session_dir / display_name
+        path.write_bytes(image_bytes)
+        return str(path)
+    fd, tmp = tempfile.mkstemp(suffix=Path(display_name).suffix)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(image_bytes)
+    except OSError:
+        # Best-effort cleanup of the partial temp file; then re-raise.
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    return tmp
 
 class CombineImagesParams(BaseModel):
     spacing: int | None = Field(None, description="Spacing between images in pixels")
