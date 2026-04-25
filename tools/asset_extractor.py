@@ -102,6 +102,8 @@ def extract_with_images_fit(
 
     try:
         import fitz  # PyMuPDF
+        import warnings
+        warnings.filterwarnings("ignore")
     except ImportError as e:
         result.success = False
         result.error_message = f"PyMuPDF not available: {e}"
@@ -117,20 +119,22 @@ def extract_with_images_fit(
 
             for img_index, img in enumerate(images):
                 xref = img[0]
-                base_image = doc.extract_image(xref)
-                image_ext = base_image.get("ext", "png")
-                image_data = base_image.get("image")
 
-                if not image_data:
+                if xref <= 0 or xref > 2400:
+                    logger.debug("Skipping invalid xref %d", xref)
                     continue
 
-                original_stem = Path(file_path).stem
-                image_filename = f"{original_stem}_p{page_num + 1}_img{img_index + 1}.{image_ext}"
+                try:
+                    base_image = doc.extract_image(xref)
+                    image_data = base_image.get("image")
+                    if not image_data:
+                        logger.debug("No image data for xref %d", xref)
+                        continue
+                    image_ext = base_image.get("ext", "png")
+                except Exception as img_error:
+                    logger.debug("Failed to extract xref %d: %s", xref, img_error)
+                    continue
 
-                if session_id and agent:
-                    image_filename = f"{session_id}_{image_filename}"
-
-                temp_fd, temp_path = None
                 try:
                     import tempfile
 
@@ -141,9 +145,10 @@ def extract_with_images_fit(
                         f.write(image_data)
 
                     image_paths.append(temp_path)
+                    logger.debug("Extracted image: %s", temp_path)
 
                 except Exception as img_error:
-                    logger.warning("Failed to extract image: %s", img_error)
+                    logger.warning("Failed to save image: %s", img_error)
                     continue
 
         result.image_paths = image_paths
