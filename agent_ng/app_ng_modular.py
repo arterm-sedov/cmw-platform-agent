@@ -65,9 +65,12 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 # Set LangChain verbose mode using new pattern (suppresses deprecation warning)
 try:
     from langchain.globals import set_verbose
+
     set_verbose(False)  # Set to True for debugging if needed
 except ImportError:
-    logging.debug("langchain.globals.set_verbose not available (older LangChain version)")
+    logging.debug(
+        "langchain.globals.set_verbose not available (older LangChain version)"
+    )
 
 # Add current directory to path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -85,8 +88,10 @@ except ImportError:
     try:
         from .session_manager import set_current_session_id
     except Exception:  # pragma: no cover - ultimate fallback
+
         def set_current_session_id(_session_id):  # type: ignore[no-redef]
             return None
+
 
 try:
     from agent_ng._file_attachment import build_file_bubbles
@@ -94,17 +99,21 @@ except ImportError:
     try:
         from ._file_attachment import build_file_bubbles  # type: ignore[no-redef]
     except Exception:  # pragma: no cover
+
         def build_file_bubbles(_att):  # type: ignore[no-redef]
             return []
+
 
 # Import image URL rewriter for LLM inline image references
 from agent_ng._image_url_rewriter import rewrite_llm_inline_images
 
 try:
     from tools.file_utils import FileUtils as _FileUtils
+
     _GRADIO_CACHE_DIR = _FileUtils.get_gradio_cache_path()
 except Exception:  # pragma: no cover
     import tempfile
+
     _GRADIO_CACHE_DIR = tempfile.gettempdir()
 
 # Try absolute imports first (works from root directory)
@@ -196,7 +205,9 @@ class NextGenApp:
             self.concurrency_config = get_concurrency_config()
             self.queue_manager = create_queue_manager(self.concurrency_config)
             _logger.debug(f"Queue manager created: {self.queue_manager is not None}")
-            _logger.debug(f"Queue manager has config: {hasattr(self.queue_manager, 'config') if self.queue_manager else False}")
+            _logger.debug(
+                f"Queue manager has config: {hasattr(self.queue_manager, 'config') if self.queue_manager else False}"
+            )
         except ImportError:
             # Fallback for when running as script
             from concurrency_config import get_concurrency_config
@@ -204,8 +215,12 @@ class NextGenApp:
 
             self.concurrency_config = get_concurrency_config()
             self.queue_manager = create_queue_manager(self.concurrency_config)
-            _logger.debug(f"Queue manager created (fallback): {self.queue_manager is not None}")
-            _logger.debug(f"Queue manager has config: {hasattr(self.queue_manager, 'config') if self.queue_manager else False}")
+            _logger.debug(
+                f"Queue manager created (fallback): {self.queue_manager is not None}"
+            )
+            _logger.debug(
+                f"Queue manager has config: {hasattr(self.queue_manager, 'config') if self.queue_manager else False}"
+            )
 
         # Session Management - Clean modular approach
         try:
@@ -295,7 +310,6 @@ class NextGenApp:
             self._stream_loop = None
             self._stream_loop_thread = None
 
-
         self._stream_loop = asyncio.new_event_loop()
 
         def _run_loop_forever():
@@ -309,6 +323,7 @@ class NextGenApp:
 
     def _submit_stream_task(self, message, history, request, out_queue):
         """Submit the async streaming producer to the background loop and feed results into out_queue."""
+
         async def _producer():
             try:
                 async for result in self.stream_chat_with_agent(
@@ -576,7 +591,9 @@ class NextGenApp:
                 try:
                     self.session_manager.set_status(session_id, rendered)
                 except Exception as e:
-                    logging.debug(f"Failed to set session status to ready for session {session_id}: {e}")
+                    logging.debug(
+                        f"Failed to set session status to ready for session {session_id}: {e}"
+                    )
 
         # Reduce UI churn with a small cache
         last = self._progress_cache.get(session_id)
@@ -758,7 +775,9 @@ class NextGenApp:
                                 # Stop processing to hide stop button and enable download UI
                                 self.stop_processing(session_id)
                         except Exception as e:
-                            logging.warning(f"Failed to stop processing on early finish for session {session_id}: {e}")
+                            logging.warning(
+                                f"Failed to stop processing on early finish for session {session_id}: {e}"
+                            )
                         yield working_history, ""
 
                     elif event_type == "completion":
@@ -887,7 +906,9 @@ class NextGenApp:
                         response_content += content_to_add
 
                         # Rewrite LLM-generated inline image references to Gradio-servable URLs
-                        response_content = rewrite_llm_inline_images(response_content, user_agent)
+                        response_content = rewrite_llm_inline_images(
+                            response_content, user_agent
+                        )
 
                         # Update or create assistant message
                         if (
@@ -1051,16 +1072,18 @@ class NextGenApp:
                 # that make their own API calls (e.g. image generation).
                 try:
                     if user_agent and hasattr(user_agent, "token_tracker"):
-                        llm_cost = getattr(
-                            user_agent.token_tracker, "_turn_cost", None
-                        )
+                        llm_cost = getattr(user_agent.token_tracker, "_turn_cost", None)
                         llm_cost = float(llm_cost) if llm_cost else 0.0
                     else:
                         llm_cost = 0.0
                     total_cost = llm_cost + tool_costs_this_turn
                     if total_cost > 0:
                         token_displays.append(
-                            f"Стоимость: ${total_cost:.4f}"
+                            format_translation(
+                                "turn_cost",
+                                self.language,
+                                cost=f"${total_cost:.4f}",
+                            )
                         )
                 except Exception:
                     pass  # Never let cost display break the stats bubble
@@ -1369,10 +1392,12 @@ class NextGenApp:
 
         # Configure queue manager BEFORE creating interface to ensure it's available to tabs
         try:
-            if hasattr(self, 'queue_manager') and self.queue_manager:
+            if hasattr(self, "queue_manager") and self.queue_manager:
                 _logger.info("Configuring queue manager before interface creation...")
                 _logger.debug(f"Queue manager type: {type(self.queue_manager)}")
-                _logger.debug(f"Queue manager has config: {hasattr(self.queue_manager, 'config')}")
+                _logger.debug(
+                    f"Queue manager has config: {hasattr(self.queue_manager, 'config')}"
+                )
                 # Create a temporary demo to configure the queue manager
                 with gr.Blocks() as temp_demo:
                     pass
@@ -1394,7 +1419,13 @@ class NextGenApp:
 
         # Add a minimal server-side API endpoint to ask a question and get final answer
         # This uses the same session isolation as the UI and returns only the last assistant text
-        def _api_ask(question: str, username: str = None, password: str = None, base_url: str = None, session_id: str = None) -> str:
+        def _api_ask(
+            question: str,
+            username: str = None,
+            password: str = None,
+            base_url: str = None,
+            session_id: str = None,
+        ) -> str:
             _logger.info(f"🔗 API /ask called with question: {question[:50]}...")
 
             # Use provided session_id or generate a new one
@@ -1417,7 +1448,9 @@ class NextGenApp:
 
                 if config:
                     set_session_config(session_id, config)
-                    _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
+                    _logger.debug(
+                        f"API: Set session config for {session_id}: {list(config.keys())}"
+                    )
 
             # Get user agent with session configuration
             user_agent = self.get_user_agent(session_id)
@@ -1451,11 +1484,19 @@ class NextGenApp:
                 _logger.error(f"API /ask error: {e}")
                 return f"❌ {e}"
 
-            _logger.info(f"API /ask: Returning response (length: {len(response_content)})")
+            _logger.info(
+                f"API /ask: Returning response (length: {len(response_content)})"
+            )
             return response_content
 
         # Streaming endpoint: yields incremental content for cURL/Client streaming
-        def _api_ask_stream(question: str, username: str = None, password: str = None, base_url: str = None, session_id: str = None):
+        def _api_ask_stream(
+            question: str,
+            username: str = None,
+            password: str = None,
+            base_url: str = None,
+            session_id: str = None,
+        ):
             _logger.info(f"🔗 API /ask_stream called with question: {question[:50]}...")
 
             # Use provided session_id or generate a new one
@@ -1479,7 +1520,9 @@ class NextGenApp:
 
                 if config:
                     set_session_config(session_id, config)
-                    _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
+                    _logger.debug(
+                        f"API: Set session config for {session_id}: {list(config.keys())}"
+                    )
 
             cumulative = ""
 
@@ -1544,12 +1587,17 @@ class NextGenApp:
             _base_url = gr.Textbox(label="base_url", visible=False)
             _session_id = gr.Textbox(label="session_id", type="password", visible=False)
             _out = gr.Textbox(label="answer", visible=False)
-            #_in.submit(_api_ask, inputs=[_in, _username, _password, _base_url, _session_id], outputs=_out, api_name="ask")
-            _in.submit(_api_ask_stream, inputs=[_in, _username, _password, _base_url, _session_id], outputs=_out, api_name="ask_stream")
+            # _in.submit(_api_ask, inputs=[_in, _username, _password, _base_url, _session_id], outputs=_out, api_name="ask")
+            _in.submit(
+                _api_ask_stream,
+                inputs=[_in, _username, _password, _base_url, _session_id],
+                outputs=_out,
+                api_name="ask_stream",
+            )
 
             # Use gr.api() to register API endpoints without fake UI elements
             gr.api(_api_ask, api_name="ask")
-            #gr.api(_api_ask_stream, api_name="ask_stream")
+            # gr.api(_api_ask_stream, api_name="ask_stream")
 
         # Configure concurrency and queuing AFTER registering named endpoints
         self.queue_manager.configure_queue(demo)
