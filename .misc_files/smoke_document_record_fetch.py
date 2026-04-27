@@ -1,29 +1,28 @@
-"""One-off: FacilityManagement / MaintenancePlans / record — document fetch smoke (delete after use)."""
-
-from __future__ import annotations
+"""One-off: CustomerPortal / ServiceRequests / record — document fetch smoke (delete after use)."""
 
 import os
 import sys
+from pathlib import Path
+
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
 
-# repo root
-_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
+load_dotenv()
 
-load_dotenv(os.path.join(_ROOT, ".env"))
+from tools import requests_
 
-from tools.platform_record_document import (  # noqa: E402
-    extract_platform_document_id,
-    fetch_record_field_values,
-    get_document_content,
-    get_document_model,
-)
-from tools.templates_tools.tool_list_attributes import list_attributes  # noqa: E402
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
-APP = "FacilityManagement"
-TPL = "MaintenancePlans"
+# IMPORTANT: Update these values to match your test environment
+# These are example values - replace with actual system names from your platform
+
+APP = "CustomerPortal"
+TPL = "ServiceRequests"
 RECORD_ID = "4738"
 
 

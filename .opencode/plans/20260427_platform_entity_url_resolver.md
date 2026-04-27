@@ -417,7 +417,7 @@ def resolve_entity(
             "resolved": [
                 {
                     "entity_type": str,
-                    "internal_id": str,
+                    "id": str,
                     "system_name": str,
                     "application_system_name": str,
                     "api_endpoint": str,
