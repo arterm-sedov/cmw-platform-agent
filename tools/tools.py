@@ -106,6 +106,9 @@ from .templates_tools.tools_record_template import edit_or_create_record_templat
 # Transfer tools
 from .transfer_tools.tool_export_application import export_application
 from .transfer_tools.tool_import_application import import_application
+# NOTE: Browser automation tools (tools/browser_tools.py, agent_ng/browser_session.py)
+# are intentionally NOT bound to the agent. They are kept for external/standalone use.
+# See .agents/skills/cmw-platform/SKILL.md section "Browser Automation"
 # Global configuration for search tools
 SEARCH_LIMIT = 5  # Maximum number of results for all search tools (Tavily, Wikipedia, Arxiv)
 
