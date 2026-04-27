@@ -19,3 +19,4 @@ docs/cmw_admin_pages.md
 .browser-states/
 .playwright-cli/**
 .playwright-mcp/**
+.playwright-cli/**

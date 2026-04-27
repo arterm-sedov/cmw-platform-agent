@@ -25,14 +25,17 @@ All four are configured in `~/.config/opencode/opencode.json`. Full guidance + d
 
 **Critical:** Use human-readable terms, never expose API terms to LLMs:
 
-| API Term | LLM-Friendly | Notes |
-|----------|--------------|-------|
+| API Term | Human-Friendly | Notes |
+|----------|---------------|-------|
 | alias | system name | Entity identifier |
 | instance | record | Data entry |
 | user command | button | UI action |
 | container | template | Application/template |
 | property | attribute | Field/column |
 | dataset | table | List view |
+| solution | application | Business application |
+| scheme | process diagram | Visual workflow |
+| trigger | scenario | Automation logic |
 
 ### Workflow
 
@@ -367,21 +370,21 @@ CMW Platform is a Single Page Application. Always use `wait_for` text or `networ
 
 **Entity ID Prefix Registry:**
 
-| Prefix | Entity Type | Resolution Method |
-|--------|-------------|-------------------|
-| `oa.{N}` | Record Template | `TemplateService/List` (Type: Record) |
-| `pa.{N}` | Process Template | `TemplateService/List` (Type: Process) |
-| `ra.{N}` | Role Template | `TemplateService/List` (Type: Role) |
-| `os.{N}` | OrgStructure Template | `TemplateService/List` (Type: OrgStructure) |
-| `sln.{N}` | Solution/Application | Match `solution` field in TemplateService results |
-| `event.{N}` | Button (UserCommand) | List candidates via `UserCommand/List` |
-| `form.{N}` / `card.{N}` | Form | List candidates via `Form/List` |
-| `tb.{N}` | Toolbar | List candidates via `Toolbar/List` |
-| `lst.{N}` / `ds.{N}` | Dataset | List candidates via `Dataset/List` |
-| `diagram.{N}` | Diagram | `Process/DiagramService/ResolveDiagram` |
-| `role.{N}` | Role | `TemplateService/List` (Type: Role) |
-| `workspace.{N}` | Workspace | Metadata only (no known API) |
-| Plain `{N}` | Record | `GET webapi/Record/{recordId}` |
+| Prefix | Entity Type (Human-Friendly) | API Term | Resolution Method |
+|--------|---------------------------|----------|-------------------|
+| `oa.{N}` | Template (Record) | RecordTemplate | `TemplateService/List` (Type: Record) |
+| `pa.{N}` | Process Template | ProcessTemplate | `TemplateService/List` (Type: Process) |
+| `ra.{N}` | Template (Role) | RoleTemplate | `TemplateService/List` (Type: Role) |
+| `os.{N}` | Template (OrgStructure) | OrgStructureTemplate | `TemplateService/List` (Type: OrgStructure) |
+| `sln.{N}` | Application | Solution | Match `solution` field in TemplateService results |
+| `event.{N}` | Button | UserCommand | List candidates via `UserCommand/List` |
+| `form.{N}` / `card.{N}` | Form | Form | List candidates via `Form/List` |
+| `tb.{N}` | Toolbar | Toolbar | List candidates via `Toolbar/List` |
+| `lst.{N}` / `ds.{N}` | Dataset (Table) | Dataset | List candidates via `Dataset/List` |
+| `diagram.{N}` | Process Diagram | Diagram | `Process/DiagramService/ResolveDiagram` |
+| `role.{N}` | Role | Role | `TemplateService/List` (Type: Role) |
+| `workspace.{N}` | Workspace | Workspace | Metadata only (no known API) |
+| Plain `{N}` | Record | Record | `GET webapi/Record/{recordId}` |
 
 **⚠️ Critical API Finding:** TemplateService/List is the ONLY endpoint that maps internal IDs (`oa.*`, `pa.*`, etc.) to system names + application context. For buttons/forms/toolbars/datasets, internal IDs are NOT exposed by any API — use `resolve_entity` tool to list candidates and match by name/context.
 
@@ -423,7 +426,7 @@ result = resolve_entity.invoke({
             "internal_id": "oa.193",
             "system_name": "MaintenancePlans",
             "application_system_name": "FacilityManagement",
-            "solution_id": "sln.23",
+            "application_id": "sln.23",
             "api_endpoint": "webapi/RecordTemplate/FacilityManagement/MaintenancePlans",
             "full_data": { ... }
         },
@@ -546,6 +549,35 @@ result = resolve_entity.invoke({
 | Modal dialog blocks clicks | Push-notification / permissions popup | `press Escape` or `handle_dialog` |
 | Login form not detected | Login page is localized | Use `ref=` from snapshot, not text/placeholder |
 | `agent-browser` "spawn ENOENT" | CLI not on PATH / Node not found in WSL | Use Windows PowerShell, or `npm i -g agent-browser` |
+
+### Browser Automation Lessons from Platform Testing
+
+**Login flow:**
+- Login page URL: `https://host/Home/Login/?returnUrl=/`
+- Fields: "E-mail address or username" (textbox), "Password" (textbox), "Log in" (button)
+- After login: redirects to `#desktop/` (dashboard)
+- Page title changes from "Comindware Platform" to app-specific title
+
+**Navigation via hash:**
+- `playwright-cli eval "() => { window.location.hash = '#path/here'; }"` works for SPA navigation
+- After hash change: always `snapshot` to get fresh refs
+- Page title updates to reflect current context (e.g., "Управление объектами недвижимости > Шаблоны > Планы техобслуживания > Кнопки")
+
+**Admin panel structure:**
+- Solution admin: `#solutions/sln.{N}/Administration`
+- Template admin: `#RecordType/oa.{N}/Administration`
+- Template operations (buttons): `#RecordType/oa.{N}/Operations`
+- Templates list: `#solutions/sln.{N}/templates/showall/...`
+
+**UI localization:**
+- Russian UI shows Russian labels (e.g., "Приложение", "Шаблоны", "Кнопки")
+- Use `ref=` from snapshot for reliable element targeting, not text labels
+- Navigation sidebar has collapsible sections with submenu items
+
+**Snapshot best practices:**
+- After any navigation (hash change, click), always re-snapshot
+- Refs are invalidated immediately after DOM changes
+- Use `playwright-cli snapshot` to get the YAML tree with `[ref=eN]` identifiers
 
 ### Best Practices
 

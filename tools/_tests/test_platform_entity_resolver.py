@@ -30,21 +30,21 @@ class TestParseSolutionsUrl:
     def test_solution_administration(self):
         parsed = _parse_url("#solutions/sln.23/Administration")
         assert parsed.page_type == "solutions"
-        assert ParsedEntity("Solution", "sln.23") in parsed.entities
+        assert ParsedEntity("Application", "sln.23") in parsed.entities
 
     def test_solution_diagram_list(self):
         parsed = _parse_url("#solutions/sln.35/DiagramList/showAll")
         assert parsed.page_type == "solutions"
-        assert ParsedEntity("Solution", "sln.35") in parsed.entities
+        assert ParsedEntity("Application", "sln.35") in parsed.entities
 
     def test_solution_roles(self):
         parsed = _parse_url("#solutions/sln.23/roles")
         assert parsed.page_type == "solutions"
-        assert ParsedEntity("Solution", "sln.23") in parsed.entities
+        assert ParsedEntity("Application", "sln.23") in parsed.entities
 
     def test_solution_role_privileges(self):
         parsed = _parse_url("#solutions/sln.23/roles/role.83/privileges")
-        assert ParsedEntity("Solution", "sln.23") in parsed.entities
+        assert ParsedEntity("Application", "sln.23") in parsed.entities
         assert ParsedEntity("Role", "role.83") in parsed.entities
 
     def test_solution_workspaces(self):
@@ -54,7 +54,7 @@ class TestParseSolutionsUrl:
 
     def test_solution_workspace(self):
         parsed = _parse_url("#solutions/sln.2/Workspaces/workspace.41")
-        assert ParsedEntity("Solution", "sln.2") in parsed.entities
+        assert ParsedEntity("Application", "sln.2") in parsed.entities
         assert ParsedEntity("Workspace", "workspace.41") in parsed.entities
 
     def test_solution_templates_with_dataset_filter(self):
@@ -65,10 +65,10 @@ class TestParseSolutionsUrl:
             "%26f%3D((cmw.container.dataset.solutionColumnDS%20eq%20sln.7)"
             "%20and%20(cmw.container.dataset.solutionColumnDS%20eq%20sln.23))"
         )
-        assert ParsedEntity("Solution", "sln.23") in parsed.entities
+        assert ParsedEntity("Application", "sln.23") in parsed.entities
         # sln.* IDs from query filter params
         solution_ids = [
-            e.entity_id for e in parsed.entities if e.entity_type == "Solution"
+            e.entity_id for e in parsed.entities if e.entity_type == "Application"
         ]
         assert "sln.7" in solution_ids
         assert "sln.23" in solution_ids
@@ -181,7 +181,7 @@ class TestParseProcessTemplateUrl:
         parsed = _parse_url("#ProcessTemplate/pa.77/Designer/Revision/diagram.315")
         assert parsed.page_type == "ProcessTemplate"
         assert ParsedEntity("ProcessTemplate", "pa.77") in parsed.entities
-        assert ParsedEntity("Diagram", "diagram.315") in parsed.entities
+        assert ParsedEntity("ProcessDiagram", "diagram.315") in parsed.entities
 
     def test_process_template_lists(self):
         parsed = _parse_url("#ProcessTemplate/pa.77/Lists/")
@@ -335,7 +335,7 @@ class TestParseRawId:
 
     def test_raw_solution_id(self):
         parsed = _parse_url("sln.23")
-        assert ParsedEntity("Solution", "sln.23") in parsed.entities
+        assert ParsedEntity("Application", "sln.23") in parsed.entities
 
     def test_raw_button_id(self):
         parsed = _parse_url("event.15199")
@@ -355,7 +355,7 @@ class TestParseRawId:
 
     def test_raw_diagram_id(self):
         parsed = _parse_url("diagram.315")
-        assert ParsedEntity("Diagram", "diagram.315") in parsed.entities
+        assert ParsedEntity("ProcessDiagram", "diagram.315") in parsed.entities
 
     def test_raw_role_id(self):
         parsed = _parse_url("role.83")
@@ -404,4 +404,4 @@ class TestParseEdgeCases:
         )
         assert ParsedEntity("Template", "oa.3") in parsed.entities
         assert ParsedEntity("Dataset", "lst.81") in parsed.entities
-        assert ParsedEntity("Solution", "sln.23") in parsed.entities
+        assert ParsedEntity("Application", "sln.23") in parsed.entities
