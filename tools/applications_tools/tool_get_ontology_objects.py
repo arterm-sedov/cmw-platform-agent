@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+
 import requests
 
 from ..tool_utils import *
@@ -29,7 +30,9 @@ TYPE_PREDICATE_MAPPING: dict[str, dict[str, str]] = {
     "Card": {"alias": "cmw.alias"},
     "Cart": {"alias": "cmw.cart.alias"},
     "Trigger": {"alias": "cmw.trigger.alias"},
-    "Routes": {"name": "cmw.procedure.name"},
+    "Routes": {"alias": "cmw.procedure.name"},
+    "Role": {"alias": "cmw.role.alias", "aliasProperty": "cmw.role.aliasProperty"},
+    "WidgetConfig": {"alias": "cmw.form.alias"},
 }
 
 TYPE_PREFIX_MAPPING: dict[str, list[str]] = {
@@ -47,6 +50,8 @@ TYPE_PREFIX_MAPPING: dict[str, list[str]] = {
     "OrgStructureTemplate": ["os."],
     "Cart": ["cart."],
     "Trigger": ["trigger."],
+    "Role": ["role."],
+    "WidgetConfig": ["fw."],
 }
 
 DEFAULT_PARAMETER = "alias"
@@ -93,6 +98,46 @@ def get_type_by_prefix(item_id: str, type_prefixes: dict[str, list[str]]) -> str
             if item_id.startswith(prefix):
                 return obj_type
     return None
+
+
+def get_axioms_by_predicate(object_id: str, predicate: str) -> list[str]:
+    """
+    Call /Base/OntologyService/GetAxiomsByPredicate to resolve property values.
+    
+    Used for Role objects where cmw.role.aliasProperty contains an attribute ID
+    that needs to be resolved to get the actual alias value.
+    
+    Example:
+        Request: {"id": "role.2", "predicate": "op.2"}
+        Response: ["Администратор"]
+    
+    Args:
+        object_id: Object ID (e.g., "role.2")
+        predicate: Predicate/attribute ID (e.g., "op.2")
+    
+    Returns:
+        List of values, empty list on error
+    """
+    cfg = requests_._load_server_config()
+    base_url = cfg.base_url.rstrip("/")
+    headers = requests_._basic_headers()
+
+    endpoint = f"{base_url}/api/public/system/Base/OntologyService/GetAxiomsByPredicate"
+
+    request_body = {
+        "id": object_id,
+        "predicate": predicate
+    }
+
+    try:
+        resp = requests.post(endpoint, headers=headers, json=request_body, timeout=cfg.timeout)
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) > 0:
+                return data
+        return []
+    except Exception:
+        return []
 
 
 @tool("get_ontology_objects", return_direct=False, args_schema=GetOntologyObjectsSchema)
@@ -146,6 +191,105 @@ def get_ontology_objects(
             errors[obj_type] = f"Parameter '{parameter}' not available for {obj_type}. Available: {list(type_mapping.keys())}"
             continue
 
+        # Special handling for Role type with both alias and aliasProperty
+        if obj_type == "Role" and parameter == "alias":
+            # Query cmw.role.alias
+            predicate_alias = type_mapping["alias"]
+            request_body_alias: dict[str, Any] = {
+                "predicate": predicate_alias,
+                "min": min_count,
+                "max": max_count,
+            }
+
+            try:
+                resp = requests.post(endpoint, headers=headers, json=request_body_alias, timeout=cfg.timeout)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if isinstance(data, list):
+                        for item in data:
+                            if isinstance(item, dict):
+                                item_id = item.get("key", "") or item.get("id", "")
+                                clean_id = extract_id(item_id)
+                                system_name = extract_system_name(item)
+                                raw_results.append({
+                                    "id": clean_id,
+                                    "systemName": system_name,
+                                    "original_type": obj_type,
+                                })
+                            elif isinstance(item, str):
+                                clean_id = extract_id(item)
+                                raw_results.append({
+                                    "id": clean_id,
+                                    "systemName": clean_id,
+                                    "original_type": obj_type,
+                                })
+                    elif isinstance(data, dict):
+                        items = data.get("items", []) or data.get("data", []) or data.get("results", [])
+                        for item in items:
+                            if isinstance(item, dict):
+                                item_id = item.get("key", "") or item.get("id", "")
+                                clean_id = extract_id(item_id)
+                                system_name = extract_system_name(item)
+                                raw_results.append({
+                                    "id": clean_id,
+                                    "systemName": system_name,
+                                    "original_type": obj_type,
+                                })
+                            elif isinstance(item, str):
+                                clean_id = extract_id(item)
+                                raw_results.append({
+                                    "id": clean_id,
+                                    "systemName": clean_id,
+                                    "original_type": obj_type,
+                                })
+            except requests.RequestException as e:
+                errors[f"{obj_type}_alias"] = str(e)
+            except Exception as e:
+                errors[f"{obj_type}_alias"] = f"Parse error: {e}"
+
+            # Query cmw.role.aliasProperty
+            predicate_alias_property = type_mapping["aliasProperty"]
+            request_body_alias_property: dict[str, Any] = {
+                "predicate": predicate_alias_property,
+                "min": min_count,
+                "max": max_count,
+            }
+
+            try:
+                resp = requests.post(endpoint, headers=headers, json=request_body_alias_property, timeout=cfg.timeout)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    items_to_process = []
+
+                    if isinstance(data, list):
+                        items_to_process = data
+                    elif isinstance(data, dict):
+                        items_to_process = data.get("items", []) or data.get("data", []) or data.get("results", [])
+
+                    for item in items_to_process:
+                        if isinstance(item, dict):
+                            item_id = item.get("key", "") or item.get("id", "")
+                            clean_id = extract_id(item_id)
+                            attribute_id = extract_system_name(item)
+
+                            if attribute_id:
+                                # Resolve alias via GetAxiomsByPredicate
+                                resolved_values = get_axioms_by_predicate(clean_id, attribute_id)
+                                if resolved_values:
+                                    raw_results.append({
+                                        "id": clean_id,
+                                        "systemName": resolved_values[0],
+                                        "original_type": obj_type,
+                                    })
+                                # Skip if resolution failed (as per requirements)
+            except requests.RequestException as e:
+                errors[f"{obj_type}_aliasProperty"] = str(e)
+            except Exception as e:
+                errors[f"{obj_type}_aliasProperty"] = f"Parse error: {e}"
+
+            continue
+
+        # Standard handling for all other types
         predicate = type_mapping[parameter]
 
         request_body: dict[str, Any] = {

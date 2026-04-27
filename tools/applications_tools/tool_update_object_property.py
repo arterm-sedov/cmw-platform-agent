@@ -28,6 +28,8 @@ TYPE_PREDICATE_MAPPING: dict[str, str] = {
     "Card": "cmw.alias",
     "Cart": "cmw.cart.alias",
     "Trigger": "cmw.trigger.alias",
+    "Role": "cmw.role.alias",
+    "WidgetConfig": "cmw.form.alias",
 }
 
 

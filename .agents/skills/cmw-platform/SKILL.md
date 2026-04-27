@@ -603,137 +603,368 @@ CMW Platform uses hash-based routing (SPA). All admin pages verified by browser 
 
 ---
 
-## 6. Localization
+## 6. Localization (System Names)
 
-Russian→English translation workflow for Comindware Platform.
+Localization workflow for renaming system names (aliases) in Comindware Platform applications. This is a **multi-step interactive process** requiring user confirmation at each phase.
 
-### Step 1: Get Object IDs by Type
+### Phase Overview
 
-For CTF-based localization, first retrieve all object IDs using `get_ontology_objects`:
+| Phase | Action | Show Table | User Confirm |
+|-------|--------|------------|--------------|
+| 1 | Export CTF (if not provided) | — | — |
+| 2 | Collect aliases from JSON, tag by object type | **Yes** | — |
+| 3 | Verify IDs via get_ontology_objects | **Yes** | — |
+| 4 | Analyze Expression fields, suggest suffixes | **Yes** | **Yes** |
+| 5 | Rename via update_object_property | **Yes** | **Yes** |
+| 6 | Ask user to restart platform | — | **Yes** |
+| 7 | Re-export CTF | — | — |
+| 8 | Replace dangerous aliases in JSON | **Yes** | — |
+| 9 | Import modified CTF | — | **Yes** |
+
+**Table columns:** `type`, `systemName`, `jsonPath`, `id`, `renamedSystemName`
+
+### Step-by-Step Workflow
+
+#### Phase 1: Export CTF
+
+```python
+from tools.transfer_tools.tool_export_application import export_application
+
+result = export_application.invoke({
+    "application_system_name": "my_app",
+    "save_to_file": True,
+})
+if result["success"]:
+    ctf_path = result["ctf_file_path"]
+```
+
+#### Phase 2: Collect Aliases from JSON
+
+Traverse the exported JSON folder. For each file, extract `"Alias"` values and tag with the **object type inferred from the parent folder name**:
+
+```
+RecordTemplates/ → RecordTemplate
+ProcessTemplates/ → ProcessTemplate
+Datasets/ → Dataset
+Forms/ → Form
+Toolbars/ → Toolbar
+UserCommands/ → UserCommand
+Attributes/ → Attribute
+Workspaces/ → Workspace
+Pages/ → Page
+Roles/ → RoleTemplate
+Accounts/ → AccountTemplate
+```
+
+Build a lookup dict: `{alias: {"type": obj_type, "json_path": path}}`.
+
+**Show table to user:**
+
+| type | systemName | jsonPath | id | renamedSystemName |
+|------|------------|----------|----|-------------------|
+| Form | MyForm | Forms/MyForm.json#$.GlobalAlias.Alias | — | — |
+| RecordTemplate | MyRecord | RecordTemplates/MyRecord.json#$.GlobalAlias.Alias | — | — |
+| ... | ... | ... | ... | ... |
+
+#### Phase 3: Verify Aliases via get_ontology_objects
 
 ```python
 from tools.applications_tools.tool_get_ontology_objects import get_ontology_objects
 
 result = get_ontology_objects.invoke({
-    "application_system_name": "supportTest",
-    "types": ["RecordTemplate", "ProcessTemplate", "RoleTemplate", "AccountTemplate",
-              "Dataset", "Form", "Toolbar", "UserCommand", "Card", "Cart", "Trigger"],
+    "application_system_name": "my_app",
+    "types": ["RecordTemplate", "ProcessTemplate", "Dataset", "Form", "Toolbar", "UserCommand", "Attribute", "Workspace", "Page"],
     "parameter": "alias",
     "min_count": 1,
     "max_count": 10000,
 })
-
-if result["success"]:
-    print(f"Found {result['total_count']} objects")
-    for obj in result["data"]:
-        print(f"  - {obj['type']}: {obj['id']}")
 ```
 
-**Returns:**
+Compare results with Phase 2 aliases. **Only include aliases found in platform** — silently exclude aliases not matched. Build verified dict: `{alias: object_id}`.
+
+**Show table to user (id column now filled):**
+
+| type | systemName | jsonPath | id | renamedSystemName |
+|------|------------|----------|----|-------------------|
+| Form | MyForm | Forms/MyForm.json#$.GlobalAlias.Alias | form.338 | — |
+| RecordTemplate | MyRecord | RecordTemplates/MyRecord.json#$.GlobalAlias.Alias | container.42 | — |
+| ... | ... | ... | ... | ... |
+
+#### Phase 4: Analyze Expression Fields
+
+Scan all JSON files for `"Expression"` fields containing alias references **outside of `"Alias"` context**.
 
 ```python
-{
-    "success": true,
-    "data": [
-        {"type": "RecordTemplate", "id": "oa.230", "systemName": "oa.230"},
-        {"type": "ProcessTemplate", "id": "pa.1", "systemName": "pa.1"},
-        {"type": "Dataset", "id": "lst.558", "systemName": "lst.558"},
-        {"type": "Form", "id": "form.2024", "systemName": "form.2024"},
-        {"type": "Toolbar", "id": "tb.4465", "systemName": "tb.4465"},
-        {"type": "UserCommand", "id": "event.7029", "systemName": "event.7029"},
-        {"type": "Card", "id": "card.xxx", "systemName": "card.xxx"},
-        ...
-    ],
-    "errors": {},
-    "total_count": 20085
-}
+import re
+
+def check_dangerous_aliases(json_folder: str, aliases: set[str]) -> dict[str, bool]:
+    dangerous = {a: False for a in aliases}
+    for json_file in Path(json_folder).rglob("*.json"):
+        content = open(json_file).read()
+        for alias in aliases:
+            if dangerous[alias]:
+                continue
+            pattern = r'"Expression"\s*:\s*"[^"]*' + re.escape(alias) + r'[^"]*"'
+            if re.search(pattern, content):
+                dangerous[alias] = True
+    return dangerous
 ```
 
-**Supported types:**
+Assign suffixes and **show complete table to user:**
 
-| Type | Predicate | ID Prefix |
-|------|-----------|-----------|
-| RecordTemplate | cmw.container.alias | oa. |
-| ProcessTemplate | cmw.container.alias | pa. |
-| RoleTemplate | cmw.container.alias | ra. |
-| AccountTemplate | cmw.container.alias | aa. |
-| OrgStructureTemplate | cmw.container.alias | os. |
-| MessageTemplate | cmw.message.type.alias | msgt. |
-| Workspace | cmw.alias | workspace. |
-| Page | cmw.desktopPage.alias | - |
-| Attribute | cmw.object.alias | - |
-| Dataset | cmw.alias | lst. |
-| Toolbar | cmw.alias | tb. |
-| Form | cmw.alias | form. |
-| UserCommand | cmw.alias | event. |
-| Card | cmw.alias | card. |
-| Cart | cmw.cart.alias | cart. |
-| Trigger | cmw.trigger.alias | trigger. |
-| Routes | cmw.procedure.name | - |
+| type | systemName | jsonPath | id | renamedSystemName |
+|------|------------|----------|----|-------------------|
+| Form | MyForm | Forms/MyForm.json#$.GlobalAlias.Alias | form.338 | MyForm_calc |
+| RecordTemplate | MyRecord | RecordTemplates/MyRecord.json#$.GlobalAlias.Alias | container.42 | MyRecord_sv |
+| ... | ... | ... | ... | ... |
 
-**Notes:**
-- Results are filtered by ID prefix to match correct types
-- Duplicate IDs are removed
-- MessageTemplate: only IDs starting with `msgt.` are included
+- `type` — object type from folder name
+- `systemName` — original alias from JSON
+- `jsonPath` — path to the JSON file with JSONPath to the alias field
+- `id` — platform object ID (from get_ontology_objects)
+- `renamedSystemName` — new alias with suffix (`_calc` for dangerous, `_sv` for safe)
 
-### Step 2: Update Object Properties
+| Category | Suffix | Meaning |
+|----------|--------|---------|
+| **Dangerous** | `_calc` (default) | Mentioned in Expression — rename to `{alias}{suffix}` everywhere (e.g. `MyAlias_calc`) |
+| **Safe** | `_sv` (default) | Only in `GlobalAlias.Alias` context — rename to `{alias}{suffix}` (e.g. `MyAlias_sv`) |
 
-Use `update_object_property` to rename display names:
+**Show table to user and ask to confirm** the rename plan before proceeding.
+
+#### Phase 5: Apply Renames via update_object_property
 
 ```python
 from tools.applications_tools.tool_update_object_property import update_object_property
 
-result = update_object_property.invoke({
-    "object_id": "form.338",
-    "object_type": "Form",
-    "new_value": "MigrationForm",
-})
+for alias, new_alias in rename_map.items():
+    object_id = verified_aliases[alias]
+    object_type = TYPE_MAPPING[alias_type]
 
-if result["success"]:
-    print(f"Updated {result['object_id']}: {result['predicate']} = {result['new_value']}")
+    result = update_object_property.invoke({
+        "object_id": object_id,
+        "object_type": object_type,
+        "new_value": new_alias,
+    })
 ```
 
-**Important:** Alias values must be without spaces (use CamelCase or underscores).
+**Important:** Alias values must be without spaces — use CamelCase or underscores (e.g. `myAlias_calc`, `anotherOne_sv`).
 
-**Supported types and predicates:**
+**Show table to user** with rename results:
 
-| Type | Predicate |
-|------|-----------|
-| RecordTemplate | cmw.container.alias |
-| ProcessTemplate | cmw.container.alias |
-| RoleTemplate | cmw.container.alias |
-| AccountTemplate | cmw.container.alias |
-| OrgStructureTemplate | cmw.container.alias |
-| MessageTemplate | cmw.message.type.alias |
-| Workspace | cmw.alias |
-| Page | cmw.desktopPage.alias |
-| Attribute | cmw.object.alias |
-| Dataset | cmw.alias |
-| Toolbar | cmw.alias |
-| Form | cmw.alias |
-| UserCommand | cmw.alias |
-| Card | cmw.alias |
-| Cart | cmw.cart.alias |
-| Trigger | cmw.trigger.alias |
+| type | systemName | jsonPath | id | renamedSystemName | status |
+|------|------------|----------|----|-------------------|--------|
+| Form | MyForm | Forms/MyForm.json#$.GlobalAlias.Alias | form.338 | MyForm_calc | ✅ renamed |
+| RecordTemplate | MyRecord | RecordTemplates/MyRecord.json#$.GlobalAlias.Alias | container.42 | MyRecord_sv | ✅ renamed |
+| ... | ... | ... | ... | ... | ... |
 
-### Step 3-4: Export/Import CTF for Localization
+**Show table and ask user to confirm** before proceeding to restart.
 
-```bash
-# Export app to CTF
-python .agents/skills/cmw-platform/scripts/harvest_strings.py \
-    "path/to/Workspaces" --output harvested.json
+#### Phase 6: Request Platform Restart
 
-# Build translation dict
-python .agents/skills/cmw-platform/scripts/build_translations.py \
-    harvested.json --output translations.json
+Inform the user:
+> "System names have been renamed. Please restart the Comindware Platform service now. Once restarted, confirm to proceed with re-export."
 
-# Apply translations
-python .agents/skills/cmw-platform/scripts/apply_translations.py \
-    "path/to/Workspaces" translations.json
+**Wait for user confirmation** that restart is complete.
 
-# Update CSV reference
-python .agents/skills/cmw-platform/scripts/update_csv.py \
-    translations.json translations.csv
+#### Phase 7: Re-Export CTF
+
+```python
+result = export_application.invoke({
+    "application_system_name": "my_app",
+    "save_to_file": True,
+})
+```
+
+#### Phase 8: Replace Dangerous Aliases in JSON
+
+In the newly exported JSON files, replace all occurrences of **dangerous** aliases (in both `Alias` and `Expression` fields) with their new suffixed names:
+
+```python
+for alias, new_alias in dangerous_renames.items():
+    safe_pattern = re.escape(alias)
+    for json_file in Path(json_folder).rglob("*.json"):
+        content = open(json_file).read()
+        # Replace in alias field
+        content = re.sub(r'"Alias"\s*:\s*"' + safe_pattern + r'"', '"Alias": "' + new_alias + '"', content)
+        # Replace in expression field
+        content = re.sub(r'"Expression"\s*:\s*"[^"]*' + safe_pattern + r'[^"]*"',
+                        lambda m: m.group(0).replace(alias, new_alias), content)
+        open(json_file, "w").write(content)
+```
+
+**Important:** Only dangerous aliases are replaced. Safe aliases remain untouched in JSON (their rename is only in platform).
+
+**Show table to user** with updated jsonPath (if changed):
+
+| type | systemName | jsonPath | id | renamedSystemName | jsonUpdated |
+|------|------------|----------|----|-------------------|-------------|
+| Form | MyForm | Forms/MyForm.json#$.GlobalAlias.Alias | form.338 | MyForm_calc | ✅ |
+| RecordTemplate | MyRecord | RecordTemplates/MyRecord.json#$.GlobalAlias.Alias | container.42 | MyRecord_sv | — |
+| ... | ... | ... | ... | ... | ... |
+
+#### Phase 9: Import Modified CTF (Update Existing)
+
+```python
+from tools.transfer_tools.tool_import_application import import_application
+
+result = import_application.invoke({
+    "application_system_name": "my_app",
+    "ctf_file_path": "/path/to/modified_ctf.ctf",
+    "update_existing": True,
+})
+```
+
+**Use `update_existing: True`** to update the existing application by system name, not create a new one.
+
+Save the final table to files:
+
+```python
+import json
+from pathlib import Path
+
+# Save as JSON
+table_data = [
+    {"type": "Form", "systemName": "MyForm", "jsonPath": "Forms/MyForm.json#$.GlobalAlias.Alias", "id": "form.338", "renamedSystemName": "MyForm_calc"},
+    {"type": "RecordTemplate", "systemName": "MyRecord", "jsonPath": "RecordTemplates/MyRecord.json#$.GlobalAlias.Alias", "id": "container.42", "renamedSystemName": "MyRecord_sv"},
+]
+
+output_dir = Path("/path/to/output")
+(output_dir / "localization_table.json").write_text(json.dumps(table_data, indent=2))
+
+# Save as Markdown
+md_lines = ["| type | systemName | jsonPath | id | renamedSystemName |",
+           "|------|------------|----------|----|-------------------|"]
+for row in table_data:
+    md_lines.append(f"| {row['type']} | {row['systemName']} | {row['jsonPath']} | {row['id']} | {row['renamedSystemName']} |")
+(output_dir / "localization_table.md").write_text("\n".join(md_lines))
+```
+
+**Show final table and ask user to confirm** before importing.
+
+### Type-Folder Mapping Reference
+
+```python
+TYPE_FOLDER_MAPPING = {
+    "RecordTemplate": "RecordTemplates",
+    "ProcessTemplate": "ProcessTemplates",
+    "RoleTemplate": "Roles",
+    "AccountTemplate": "Accounts",
+    "OrgStructureTemplate": "OrgStructure",
+    "MessageTemplate": "MessageTemplates",
+    "Workspace": "Workspaces",
+    "Page": "Pages",
+    "Attribute": "Attributes",
+    "Dataset": "Datasets",
+    "Toolbar": "Toolbars",
+    "Form": "Forms",
+    "UserCommand": "UserCommands",
+    "Card": "Cards",
+    "Cart": "Carts",
+    "Trigger": "Triggers",
+    "Role": "Roles",
+    "WidgetConfig": "WidgetConfigs",
+}
+
+TYPE_PREDICATE_MAPPING = {
+    "RecordTemplate": "cmw.container.alias",
+    "ProcessTemplate": "cmw.container.alias",
+    "RoleTemplate": "cmw.container.alias",
+    "AccountTemplate": "cmw.container.alias",
+    "OrgStructureTemplate": "cmw.container.alias",
+    "MessageTemplate": "cmw.message.type.alias",
+    "Workspace": "cmw.alias",
+    "Page": "cmw.desktopPage.alias",
+    "Attribute": "cmw.object.alias",
+    "Dataset": "cmw.alias",
+    "Toolbar": "cmw.alias",
+    "Form": "cmw.alias",
+    "UserCommand": "cmw.alias",
+    "Card": "cmw.alias",
+    "Cart": "cmw.cart.alias",
+    "Trigger": "cmw.trigger.alias",
+    "Role": "cmw.role.alias",
+    "WidgetConfig": "cmw.form.alias",
+}
+
+# For Role objects with aliasProperty:
+# - Role type supports both "cmw.role.alias" (direct) and "cmw.role.aliasProperty" (indirect)
+# - When cmw.role.aliasProperty is present, it contains an attribute ID (e.g., "op.2")
+# - Use GetAxiomsByPredicate endpoint to resolve: {"id": "role.2", "predicate": "op.2"}
+# - Response returns the actual alias value: ["Администратор"]
+# - ID prefix for Role objects: "role."
+# - ID prefix for WidgetConfig objects: "fw."
+```
+
+### tool_localize - Localization Tool
+
+The `tool_localize` (function name: `localize_aliases`) provides automated localization workflow for collecting and tracking aliases and display names.
+
+**Capabilities:**
+- Collect aliases (system names) from CTF JSON
+- Collect display names (Name property) from CTF JSON
+- Verify aliases via API (GetWithMultipleValues)
+- Track both in localization workflow
+- Generate reports with aliases and/or display names
+- Apply alias renames via API (OntologyService/AddStatement)
+
+**Important Notes:**
+- Both alias and displayName collection are optional (can be enabled/disabled independently)
+- Aliases are applied via API (step 6 in workflow)
+- DisplayNames are applied via CTF import (step 10 in workflow)
+- DisplayNames are NOT verified via API (CTF-based workflow)
+
+**Parameters:**
+- `collect_aliases`: bool (default: True) - Collect alias data (system names)
+- `collect_display_names`: bool (default: True) - Collect displayName data (Name property)
+- `dry_run`: bool (default: True) - Preview changes without applying
+- `dangerous_suffix`: str (default: "_calc") - Suffix for dangerous aliases
+- `safe_suffix`: str (default: "_sv") - Suffix for safe aliases
+
+**Usage Examples:**
+
+```python
+from tools.localization_tools.tool_localize import localize_aliases
+
+# Collect both aliases and display names (default)
+result = localize_aliases.invoke({
+    "application_system_name": "MyApp",
+    "json_folder": "/path/to/ctf",
+    "collect_aliases": True,
+    "collect_display_names": True,
+    "dry_run": True
+})
+
+# Collect only aliases
+result = localize_aliases.invoke({
+    "application_system_name": "MyApp",
+    "json_folder": "/path/to/ctf",
+    "collect_aliases": True,
+    "collect_display_names": False
+})
+
+# Collect only display names
+result = localize_aliases.invoke({
+    "application_system_name": "MyApp",
+    "json_folder": "/path/to/ctf",
+    "collect_aliases": False,
+    "collect_display_names": True
+})
+```
+
+**Return Structure:**
+```python
+{
+    "success": bool,
+    "aliases_collected": int,           # Count of aliases collected
+    "display_names_collected": int,     # Count of display names collected
+    "aliases_verified": int,            # Count of aliases verified via API
+    "aliases_missing": list,            # Aliases not found in platform
+    "dangerous_aliases": list,          # Aliases used in expressions
+    "safe_aliases": list,               # Aliases only in alias fields
+    "collect_aliases": bool,            # What was collected
+    "collect_display_names": bool,      # What was collected
+    "errors": list
+}
 ```
 
 → See also: [references/localization.md](references/localization.md)

@@ -44,6 +44,11 @@ class ImportApplicationSchema(BaseModel):
         description="Path to a local CTF file. If provided, CTF data will be read from it. "
                     "RU: Путь к CTF файлу",
     )
+    update_existing: bool = Field(
+        default=False,
+        description="If True, update/replace existing application with same name. "
+                    "If False, create as new application with ApplyNew policy.",
+    )
 
     @field_validator("application_system_name", mode="before")
     @classmethod

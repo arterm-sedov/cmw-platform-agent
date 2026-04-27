@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from ..requests_ import _check_response_for_errors
 from ..requests_models import HTTPResponse
@@ -15,6 +16,7 @@ def import_application(
     application_system_name: str,
     ctf_data: str | None = None,
     ctf_file_path: str | None = None,
+    update_existing: bool = False,
 ) -> dict[str, Any]:
     """
     Import a CMW Platform application from CTF (Comindware Transfer Format).
@@ -28,6 +30,8 @@ def import_application(
         ctf_data: Base64-encoded CTF data. Required if ctf_file_path not provided.
         ctf_file_path: Path to a local CTF file. If provided, CTF data will be read from it.
                       Takes precedence over ctf_data if both are provided.
+        update_existing: If True, update/replace existing application.
+                         If False, create as new application with ApplyNew policy.
 
     Returns:
         dict: {
@@ -67,14 +71,12 @@ def import_application(
             "error": "No file ID returned from upload",
         }
 
-    return _execute_import(application_system_name, file_id)
+    return _execute_import(application_system_name, file_id, update_existing)
 
 
 def _upload_ctf(ctf_data: str) -> dict[str, Any]:
     """Upload CTF data and return file ID. Sends base64 string as JSON body."""
     import base64
-    import os
-
     import requests
 
     base_url = os.environ.get("CMW_BASE_URL", "").rstrip("/")
@@ -94,13 +96,7 @@ def _upload_ctf(ctf_data: str) -> dict[str, Any]:
     url = f"{base_url}/webapi/Transfer/Upload"
 
     try:
-        response = requests.post(
-            url,
-            headers=headers,
-            json=ctf_data,
-            timeout=60,
-        )
-        response.raise_for_status()
+        response = requests.post(url, headers=headers, json=ctf_data, timeout=60)
     except requests.exceptions.RequestException as e:
         return {
             "success": False,
@@ -149,12 +145,13 @@ def _upload_ctf(ctf_data: str) -> dict[str, Any]:
 
 
 def _execute_import(
-    application_system_name: str, file_id: str
+    application_system_name: str,
+    file_id: str,
+    update_existing: bool = False,
 ) -> dict[str, Any]:
     """Execute the import operation using file ID."""
-    endpoint = (
-        f"{TRANSFER_ENDPOINT}/{application_system_name}/{file_id}/true/ApplyNew"
-    )
+    policy = "ApplyChanges" if update_existing else "ApplyNew"
+    endpoint = f"{TRANSFER_ENDPOINT}/{application_system_name}/{file_id}/true/{policy}"
 
     try:
         result = requests_._post_request({}, endpoint)
@@ -176,9 +173,7 @@ def _execute_import(
     raw_response = result.get("raw_response", {})
     response_data = raw_response if isinstance(raw_response, dict) else {}
     response_inner = response_data.get("response", response_data)
-    validation_errors: list[dict[str, Any]] | None = (
-        response_inner.get("validationErrors") or response_inner.get("errors")
-    )
+    validation_errors = response_inner.get("validationErrors") or response_inner.get("errors")
 
     return {
         "success": True,

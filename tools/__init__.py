@@ -34,6 +34,7 @@ from .get_datetime import get_current_datetime
 from . import (
     applications_tools,
     attributes_tools,
+    localization_tools,
     models,
     requests_,
     templates_tools,
@@ -186,4 +187,7 @@ __all__ = [
 
     # Enum attributes
     "edit_or_create_enum_attribute",
+
+    # Localization tools
+    "localize_aliases",
 ]
