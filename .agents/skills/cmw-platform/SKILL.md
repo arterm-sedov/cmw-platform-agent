@@ -32,10 +32,14 @@ All four are configured in `~/.config/opencode/opencode.json`. Full guidance + d
 | user command | button | UI action |
 | container | template | Application/template |
 | property | attribute | Field/column |
-| dataset | table | List view |
+| dataset | table | List view. Also called список or list by users |
+| list | table | Table view in template |
 | solution | application | Business application |
 | scheme | process diagram | Visual workflow |
 | trigger | scenario | Automation logic |
+| workspace | navigation section | Navigation section |
+| card | card view | Card view for a table (not a form) |
+| task | task | User task |
 
 ### Workflow
 
@@ -372,19 +376,21 @@ CMW Platform is a Single Page Application. Always use `wait_for` text or `networ
 
 | Prefix | Entity Type (Human-Friendly) | API Term | Resolution Method |
 |--------|---------------------------|----------|-------------------|
-| `oa.{N}` | Template (Record) | RecordTemplate | `TemplateService/List` (Type: Record) |
-| `pa.{N}` | Process Template | ProcessTemplate | `TemplateService/List` (Type: Process) |
-| `ra.{N}` | Template (Role) | RoleTemplate | `TemplateService/List` (Type: Role) |
-| `os.{N}` | Template (OrgStructure) | OrgStructureTemplate | `TemplateService/List` (Type: OrgStructure) |
+| `oa.{N}` | Record template | RecordTemplate | `TemplateService/List` (Type: Record) |
+| `pa.{N}` | Process template | ProcessTemplate | `TemplateService/List` (Type: Process) |
+| `ra.{N}` | Role template | RoleTemplate | `TemplateService/List` (Type: Role) |
+| `os.{N}` | Organizational unit template | OrgStructureTemplate | `TemplateService/List` (Type: OrgStructure) |
 | `sln.{N}` | Application | Solution | Match `solution` field in TemplateService results |
 | `event.{N}` | Button | UserCommand | List candidates via `UserCommand/List` |
-| `form.{N}` / `card.{N}` | Form | Form | List candidates via `Form/List` |
+| `form.{N}` | Form | Form | List candidates via `Form/List` |
+| `card.{N}` | Card view | Card | List candidates via `Form/List` |
 | `tb.{N}` | Toolbar | Toolbar | List candidates via `Toolbar/List` |
-| `lst.{N}` / `ds.{N}` | Dataset (Table) | Dataset | List candidates via `Dataset/List` |
-| `diagram.{N}` | Process Diagram | Diagram | `Process/DiagramService/ResolveDiagram` |
+| `lst.{N}` / `ds.{N}` | Table | Dataset | List candidates via `Dataset/List` |
+| `diagram.{N}` | Process diagram | Diagram | `Process/DiagramService/ResolveDiagram` |
 | `role.{N}` | Role | Role | `TemplateService/List` (Type: Role) |
-| `workspace.{N}` | Workspace | Workspace | Metadata only (no known API) |
+| `workspace.{N}` | Navigation section | Workspace | Metadata only (no known API) |
 | Plain `{N}` | Record | Record | `GET webapi/Record/{recordId}` |
+| Plain `{N}` (task page) | Task | Task | `POST TeamNetwork/UserTaskService/Get` |
 
 **⚠️ Critical API Finding:** TemplateService/List is the ONLY endpoint that maps internal IDs (`oa.*`, `pa.*`, etc.) to system names + application context. For buttons/forms/toolbars/datasets, internal IDs are NOT exposed by any API — use `resolve_entity` tool to list candidates and match by name/context.
 
@@ -499,42 +505,62 @@ result = resolve_entity.invoke({
 | Solution Workspace | `#solutions/sln.{N}/Workspaces/workspace.{M}` | Solution + Workspace |
 | Dashboard | `#desktop/` | None |
 
-**Record Template Views (`oa.{N}`, `ra.{N}`, `os.{N}`):**
+**Record Template Views (`oa.{N}`):**
 | Page | URL | Entities |
 |------|-----|----------|
-| Administration | `#RecordType/oa.{N}/Administration` | Template |
-| Context | `#RecordType/oa.{N}/Context` | Template |
-| Forms | `#RecordType/oa.{N}/Forms` | Template |
-| Form | `#RecordType/oa.{N}/Forms/form.{M}` | Template + Form |
-| Operations | `#RecordType/oa.{N}/Operations` | Template |
-| Operation | `#RecordType/oa.{N}/Operation/event.{M}` | Template + Button |
-| Toolbar | `#RecordType/oa.{N}/Toolbar/` | Template |
-| Toolbar Settings | `#RecordType/oa.{N}/Toolbar/Settings/tb.{M}` | Template + Toolbar |
-| Card | `#RecordType/oa.{N}/Card/` | Template |
-| Card Settings | `#RecordType/oa.{N}/Card/Settings/card.{M}` | Template + Form |
-| Lists | `#RecordType/oa.{N}/Lists/` | Template |
-| List | `#RecordType/oa.{N}/Lists/lst.{M}` | Template + Dataset |
-| CSV Export | `#RecordType/oa.{N}/csv` | Template |
-| Security | `#RecordType/oa.{N}/Security` | Template |
-| Document Templates | `#RecordType/oa.{N}/DocumentsTemplates` | Template |
+| Administration | `#RecordType/oa.{N}/Administration` | Record template |
+| Context | `#RecordType/oa.{N}/Context` | Record template |
+| Forms | `#RecordType/oa.{N}/Forms` | Record template |
+| Form | `#RecordType/oa.{N}/Forms/form.{M}` | Record template + Form |
+| Operations | `#RecordType/oa.{N}/Operations` | Record template |
+| Operation | `#RecordType/oa.{N}/Operation/event.{M}` | Record template + Button |
+| Toolbar | `#RecordType/oa.{N}/Toolbar/` | Record template |
+| Toolbar Settings | `#RecordType/oa.{N}/Toolbar/Settings/tb.{M}` | Record template + Toolbar |
+| Card view | `#RecordType/oa.{N}/Card/` | Record template |
+| Card Settings | `#RecordType/oa.{N}/Card/Settings/card.{M}` | Record template + Card view |
+| Tables | `#RecordType/oa.{N}/Lists/` | Record template |
+| Table | `#RecordType/oa.{N}/Lists/lst.{M}` | Record template + Table |
+| CSV Export | `#RecordType/oa.{N}/csv` | Record template |
+| Security | `#RecordType/oa.{N}/Security` | Record template |
+| Document Templates | `#RecordType/oa.{N}/DocumentsTemplates` | Record template |
+
+**Role Template Views (`ra.{N}`):**
+| Page | URL | Entities |
+|------|-----|----------|
+| Administration | `#RecordType/ra.{N}/Administration` | Role template |
+| Context | `#RecordType/ra.{N}/Context` | Role template |
+| Toolbar | `#RecordType/ra.{N}/Toolbar/` | Role template |
+
+**Organizational Unit Template Views (`os.{N}`):**
+| Page | URL | Entities |
+|------|-----|----------|
+| Administration | `#RecordType/os.{N}/Administration` | Organizational unit template |
+| Context | `#RecordType/os.{N}/Context` | Organizational unit template |
+| Toolbar | `#RecordType/os.{N}/Toolbar/` | Organizational unit template |
 
 **Process Template Views (`pa.{N}`):**
 | Page | URL | Entities |
 |------|-----|----------|
-| Designer Diagram | `#ProcessTemplate/pa.{N}/Designer/Revision/diagram.{M}` | Process + Diagram |
-| Lists | `#ProcessTemplate/pa.{N}/Lists/` | Process |
-| List | `#ProcessTemplate/pa.{N}/Lists/lst.{M}` | Process + Dataset |
-| Toolbar | `#ProcessTemplate/pa.{N}/Toolbar/tb.{M}` | Process + Toolbar |
-| Operation | `#ProcessTemplate/pa.{N}/Operation/event.{M}` | Process + Button |
+| Designer Diagram | `#ProcessTemplate/pa.{N}/Designer/Revision/diagram.{M}` | Process template + Process diagram |
+| Tables | `#ProcessTemplate/pa.{N}/Lists/` | Process template |
+| Table | `#ProcessTemplate/pa.{N}/Lists/lst.{M}` | Process template + Table |
+| Toolbar | `#ProcessTemplate/pa.{N}/Toolbar/tb.{M}` | Process template + Toolbar |
+| Operation | `#ProcessTemplate/pa.{N}/Operation/event.{M}` | Process template + Button |
 
 **Data & Form Views:**
 | Page | URL | Entities |
 |------|-----|----------|
-| Data view | `#data/oa.{N}/lst.{M}/...` | Template + Dataset (+ query params) |
-| Form view | `#form/oa.{N}/form.{M}/{recordId}` | Template + Form + Record |
-| App data list | `#app/{App}/list/{Tpl}` | App + Template |
-| App record view | `#app/{App}/view/{Tpl}/{recordId}` | App + Template + Record |
+| Data view | `#data/oa.{N}/lst.{M}/...` | Record template + Table (+ query params) |
+| Form view | `#form/oa.{N}/form.{M}/{recordId}` | Record template + Form + Record |
+| App data list | `#app/{App}/list/{Tpl}` | Application + Record template |
+| App record view | `#app/{App}/view/{Tpl}/{recordId}` | Application + Record template + Record |
 | Entity resolver | `#Resolver/{id}` | Single entity |
+
+**Task Views:**
+| Page | URL | Entities |
+|------|-----|----------|
+| Task | `#task/{taskId}` | Task (plain numeric ID) |
+| My Tasks | `#myTasks/...` | Tasks list page (no specific entity IDs) |
 
 **Naming convention:** PascalCase (e.g. `#Settings/Applications`), with one camelCase exception: `#Settings/globalSecurity`.
 
