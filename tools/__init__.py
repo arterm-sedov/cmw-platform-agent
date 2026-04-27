@@ -35,6 +35,7 @@ from . import (
     applications_tools,
     attributes_tools,
     models,
+    platform_entity_resolver,
     requests_,
     templates_tools,
     tool_utils,
@@ -48,6 +49,7 @@ from .applications_tools import (
     list_applications,
     list_templates,
 )
+from .platform_entity_resolver import resolve_entity
 from .attributes_tools import (
     archive_or_unarchive_attribute,
     # General operations
@@ -186,4 +188,8 @@ __all__ = [
 
     # Enum attributes
     "edit_or_create_enum_attribute",
+
+    # Platform entity resolver
+    "resolve_entity",
+    "platform_entity_resolver",
 ]
