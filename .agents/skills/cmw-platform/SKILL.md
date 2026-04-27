@@ -731,6 +731,12 @@ edit_or_create_button.invoke({
 - Invalid kinds (e.g., "Test") are rejected with clear error messages
 - All 29 API enum values are validated
 
+**Edit Behavior:**
+- `kind` parameter is optional in edit operations
+- If omitted, the existing kind is preserved
+- If provided, the kind is updated (even if changing to UserEvent)
+- Always verify changes via `get_button` API, not just the UI (UI may cache stale values)
+
 ### List and Edit Datasets
 
 ```python
