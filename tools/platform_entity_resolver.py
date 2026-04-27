@@ -9,7 +9,7 @@ Usage:
     from tools.platform_entity_resolver import resolve_entity
 
     result = resolve_entity.invoke({
-        "url_or_id": "https://bububu.bau.cbap.ru/#RecordType/oa.193/Operation/event.15199",
+        "url_or_id": "https://host/#RecordType/oa.193/Operation/event.15199",
         "fetch_full": True,
     })
 """

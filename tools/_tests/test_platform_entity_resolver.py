@@ -11,7 +11,7 @@ from tools.platform_entity_resolver import ParsedEntity, _parse_url
 
 class TestParseDesktopUrl:
     def test_desktop_url_no_entities(self):
-        parsed = _parse_url("https://bububu.bau.cbap.ru/#desktop/")
+        parsed = _parse_url("https://platform.example.com/#desktop/")
         assert parsed.page_type == "desktop"
         assert parsed.entities == []
 
@@ -351,20 +351,20 @@ class TestParseResolverUrl:
 class TestParseFullUrl:
     def test_full_url_with_base(self):
         parsed = _parse_url(
-            "https://bububu.bau.cbap.ru/#RecordType/oa.3/Operation/event.454"
+            "https://platform.example.com/#RecordType/oa.3/Operation/event.454"
         )
         assert parsed.page_type == "RecordType"
         assert ParsedEntity("Template", "oa.3") in parsed.entities
         assert ParsedEntity("Button", "event.454") in parsed.entities
 
     def test_full_url_desktop(self):
-        parsed = _parse_url("https://bububu.bau.cbap.ru/#desktop/")
+        parsed = _parse_url("https://platform.example.com/#desktop/")
         assert parsed.page_type == "desktop"
         assert parsed.entities == []
 
     def test_full_url_data_view(self):
         parsed = _parse_url(
-            "https://bububu.bau.cbap.ru/#data/oa.3/lst.81/sk%3D0%26t%3D50"
+            "https://platform.example.com/#data/oa.3/lst.81/sk%3D0%26t%3D50"
         )
         assert ParsedEntity("Template", "oa.3") in parsed.entities
         assert ParsedEntity("Table", "lst.81") in parsed.entities
@@ -436,7 +436,7 @@ class TestParseEdgeCases:
         assert parsed.entities == []
 
     def test_url_without_hash(self):
-        parsed = _parse_url("https://bububu.bau.cbap.ru/")
+        parsed = _parse_url("https://platform.example.com/")
         assert parsed.page_type == "unknown"
         assert parsed.entities == []
 

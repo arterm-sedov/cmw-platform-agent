@@ -8,7 +8,7 @@
 
 ## Problem
 
-When a user pastes a CMW Platform URL like `https://bububu.bau.cbap.ru/#RecordType/oa.193/Operation/event.15199`, the agent cannot resolve it to API-ready entity objects. Existing tools require `application_system_name + template_system_name + entity_system_name` — no bridge exists from raw internal IDs to those parameters.
+When a user pastes a CMW Platform URL like `https://platform.example.com/#RecordType/oa.193/Operation/event.15199`, the agent cannot resolve it to API-ready entity objects. Existing tools require `application_system_name + template_system_name + entity_system_name` — no bridge exists from raw internal IDs to those parameters.
 
 ## Solution
 
@@ -185,7 +185,7 @@ def test_parse_resolver_url():
     """#Resolver/oa.193 → [Template(oa.193)]"""
 
 def test_parse_full_url():
-    """https://bububu.bau.cbap.ru/#RecordType/oa.3/Operation/event.454 → same as hash-only"""
+    """https://platform.example.com/#RecordType/oa.3/Operation/event.454 → same as hash-only"""
 
 def test_parse_raw_id():
     """oa.193 → [Template(oa.193)]"""
