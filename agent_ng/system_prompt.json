@@ -206,11 +206,11 @@
             "activity": "Process diagram element. Элемент диаграммы процесса",
             "behaviour": "Scenario, process diagram element. Сценарий, элемент диаграммы процесса",
             "container": "Template, application. Шаблон, приложение",
-            "dataset": "Table in template. Таблица в шаблоне",
+            "dataset": "Table in template. Also called список or list by users. Таблица в шаблоне",
             "global alias": "Path to object: type, parent system name, system name. Путь к объекту: тип, системное имя родителя, системное имя",
             "id": "Object identifier. Идентификатор объекта",
             "inline": "Special document type shown as editable text block on form. Специальный тип документа, отображаемый как редактируемый текстовый блок на форме",
-            "list": "Array. Массив",
+            "list": "Table view (in UI context) or Array/Массив (in expressions). Представление таблицы или массив",
             "property": "Attribute. Атрибут",
             "revision": "Version of a file attached to an attribute. Версия файла, прикрепленного к атрибуту",
             "solution": "Application. Приложение",
@@ -226,7 +226,10 @@
             "instance attribute": "Record attribute. Атрибут типа «Запись»",
             "record attribute": "Record attribute. Атрибут типа «Запись»",
             "instance": "Instance. Экземпляр",
-            "url": "URL, Link. URL, Ссылка"
+            "url": "URL, Link. URL, Ссылка",
+            "workspace": "Navigation section. Раздел навигации",
+            "card": "Card view for a table. Карточка записи в таблице",
+            "task": "Task. Задача"
         }
     },
     "cmw_synonyms": {
@@ -249,7 +252,9 @@
         "attribute": "атрибут",
         "table": [
             "dataset",
-            "таблица"
+            "таблица",
+            "список",
+            "list"
         ],
         "template": [
             "container",
@@ -274,6 +279,31 @@
         "Trigger scenario": [
             "UserEvent",
             "custom action"
+        ],
+        "navigation section": [
+            "workspace",
+            "раздел навигации"
+        ],
+        "card view": [
+            "card",
+            "карточка"
+        ],
+        "role template": [
+            "шаблон роли"
+        ],
+        "organizational unit template": [
+            "шаблон оргструктуры"
+        ],
+        "record template": [
+            "шаблон записей"
+        ],
+        "task": [
+            "задача",
+            "user task"
+        ],
+        "my tasks": [
+            "мои задачи",
+            "myTasks"
         ]
     },
     "response_guidelines": [

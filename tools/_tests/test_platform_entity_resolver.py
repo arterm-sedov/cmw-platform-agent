@@ -55,7 +55,7 @@ class TestParseSolutionsUrl:
     def test_solution_workspace(self):
         parsed = _parse_url("#solutions/sln.2/Workspaces/workspace.41")
         assert ParsedEntity("Application", "sln.2") in parsed.entities
-        assert ParsedEntity("Workspace", "workspace.41") in parsed.entities
+        assert ParsedEntity("NavigationSection", "workspace.41") in parsed.entities
 
     def test_solution_templates_with_dataset_filter(self):
         parsed = _parse_url(
@@ -122,7 +122,7 @@ class TestParseRecordTypeUrl:
     def test_record_type_card_settings(self):
         parsed = _parse_url("#RecordType/oa.3/Card/Settings/card.148")
         assert ParsedEntity("Template", "oa.3") in parsed.entities
-        assert ParsedEntity("Form", "card.148") in parsed.entities
+        assert ParsedEntity("Card", "card.148") in parsed.entities
 
     def test_record_type_lists(self):
         parsed = _parse_url("#RecordType/oa.3/Lists/")
@@ -131,7 +131,7 @@ class TestParseRecordTypeUrl:
     def test_record_type_lists_lst(self):
         parsed = _parse_url("#RecordType/oa.3/Lists/lst.81")
         assert ParsedEntity("Template", "oa.3") in parsed.entities
-        assert ParsedEntity("Dataset", "lst.81") in parsed.entities
+        assert ParsedEntity("Table", "lst.81") in parsed.entities
 
     def test_record_type_csv(self):
         parsed = _parse_url("#RecordType/oa.3/csv")
@@ -190,7 +190,7 @@ class TestParseProcessTemplateUrl:
     def test_process_template_lists_lst(self):
         parsed = _parse_url("#ProcessTemplate/pa.77/Lists/lst.2741")
         assert ParsedEntity("ProcessTemplate", "pa.77") in parsed.entities
-        assert ParsedEntity("Dataset", "lst.2741") in parsed.entities
+        assert ParsedEntity("Table", "lst.2741") in parsed.entities
 
     def test_process_template_toolbar(self):
         parsed = _parse_url("#ProcessTemplate/pa.77/Toolbar/tb.8215")
@@ -209,17 +209,15 @@ class TestParseDataViewUrl:
             "#data/oa.26/lst.137/s%3Dds.5615%20Asc%20false%26sk%3D0%26t%3D50"
         )
         assert ParsedEntity("Template", "oa.26") in parsed.entities
-        assert ParsedEntity("Dataset", "lst.137") in parsed.entities
+        assert ParsedEntity("Table", "lst.137") in parsed.entities
         # ds.* from query params
-        dataset_ids = [
-            e.entity_id for e in parsed.entities if e.entity_type == "Dataset"
-        ]
+        dataset_ids = [e.entity_id for e in parsed.entities if e.entity_type == "Table"]
         assert "ds.5615" in dataset_ids
 
     def test_data_view_simple(self):
         parsed = _parse_url("#data/oa.163/lst.1097/sk%3D0%26t%3D50")
         assert ParsedEntity("Template", "oa.163") in parsed.entities
-        assert ParsedEntity("Dataset", "lst.1097") in parsed.entities
+        assert ParsedEntity("Table", "lst.1097") in parsed.entities
 
 
 class TestParseFormViewUrl:
@@ -248,6 +246,62 @@ class TestParseSettingsUrl:
     def test_settings_groups(self):
         parsed = _parse_url("#Settings/Groups")
         assert parsed.page_type == "Settings"
+        assert parsed.entities == []
+
+    def test_settings_support_channels(self):
+        parsed = _parse_url("#Settings/support/channels")
+        assert parsed.page_type == "Settings"
+        assert parsed.entities == []
+
+    def test_settings_support_routes(self):
+        parsed = _parse_url("#Settings/support/routes")
+        assert parsed.page_type == "Settings"
+        assert parsed.entities == []
+
+    def test_settings_global_security(self):
+        parsed = _parse_url("#Settings/globalSecurity")
+        assert parsed.page_type == "Settings"
+        assert parsed.entities == []
+
+    def test_settings_global_security_role(self):
+        parsed = _parse_url("#Settings/globalSecurity/role.9/privileges")
+        assert parsed.page_type == "Settings"
+        assert ParsedEntity("Role", "role.9") in parsed.entities
+
+    def test_settings_global_security_role_no_privileges(self):
+        parsed = _parse_url("#Settings/globalSecurity/role.9")
+        assert ParsedEntity("Role", "role.9") in parsed.entities
+
+    def test_settings_global_security_role_by_name(self):
+        parsed = _parse_url(
+            "#Settings/globalSecurity/cmw.role.SysInfrastructureAdminRole/privileges"
+        )
+        # System name role reference — not an internal ID, skip
+        assert parsed.page_type == "Settings"
+
+
+class TestParseTaskUrl:
+    def test_task_by_id(self):
+        parsed = _parse_url("#task/10586571")
+        assert parsed.page_type == "task"
+        assert ParsedEntity("Task", "10586571") in parsed.entities
+
+    def test_task_full_url(self):
+        parsed = _parse_url("https://support.comindware.ru/#task/10586571")
+        assert parsed.page_type == "task"
+        assert ParsedEntity("Task", "10586571") in parsed.entities
+
+    def test_my_tasks_list(self):
+        parsed = _parse_url("#myTasks/cmw.dataset.myActiveTasksDataset/sk%3D0&t%3D50")
+        assert parsed.page_type == "myTasks"
+        assert parsed.entities == []
+
+    def test_my_tasks_full_url(self):
+        parsed = _parse_url(
+            "https://support.comindware.ru/#myTasks/cmw.dataset.myActiveTasksDataset/sk%3D0&t%3D50"
+        )
+        assert parsed.page_type == "myTasks"
+        assert parsed.entities == []
         assert parsed.entities == []
 
     def test_settings_support_channels(self):
@@ -313,7 +367,7 @@ class TestParseFullUrl:
             "https://bububu.bau.cbap.ru/#data/oa.3/lst.81/sk%3D0%26t%3D50"
         )
         assert ParsedEntity("Template", "oa.3") in parsed.entities
-        assert ParsedEntity("Dataset", "lst.81") in parsed.entities
+        assert ParsedEntity("Table", "lst.81") in parsed.entities
 
 
 class TestParseRawId:
@@ -351,7 +405,7 @@ class TestParseRawId:
 
     def test_raw_list_id(self):
         parsed = _parse_url("lst.81")
-        assert ParsedEntity("Dataset", "lst.81") in parsed.entities
+        assert ParsedEntity("Table", "lst.81") in parsed.entities
 
     def test_raw_diagram_id(self):
         parsed = _parse_url("diagram.315")
@@ -363,7 +417,7 @@ class TestParseRawId:
 
     def test_raw_workspace_id(self):
         parsed = _parse_url("workspace.41")
-        assert ParsedEntity("Workspace", "workspace.41") in parsed.entities
+        assert ParsedEntity("NavigationSection", "workspace.41") in parsed.entities
 
     def test_raw_record_id(self):
         parsed = _parse_url("15199")
@@ -395,7 +449,7 @@ class TestParseEdgeCases:
         parsed = _parse_url("#RecordType/oa.3/Lists/lst.81")
         assert len(parsed.entities) == 2
         assert ParsedEntity("Template", "oa.3") in parsed.entities
-        assert ParsedEntity("Dataset", "lst.81") in parsed.entities
+        assert ParsedEntity("Table", "lst.81") in parsed.entities
 
     def test_complex_data_view_multiple_datasets(self):
         parsed = _parse_url(
@@ -403,5 +457,5 @@ class TestParseEdgeCases:
             "%26f%3D(cmw.container.dataset.solutionColumnDS%20eq%20sln.23)"
         )
         assert ParsedEntity("Template", "oa.3") in parsed.entities
-        assert ParsedEntity("Dataset", "lst.81") in parsed.entities
+        assert ParsedEntity("Table", "lst.81") in parsed.entities
         assert ParsedEntity("Application", "sln.23") in parsed.entities

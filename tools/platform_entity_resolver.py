@@ -67,13 +67,13 @@ _ID_PREFIX_MAP: dict[str, str] = {
     "sln": "Application",  # API: solution → human: application
     "event": "Button",  # API: user command → human: button
     "form": "Form",
-    "card": "Form",
+    "card": "Card",
     "tb": "Toolbar",
-    "lst": "Dataset",
-    "ds": "Dataset",
+    "lst": "Table",
+    "ds": "Table",
     "diagram": "ProcessDiagram",  # API: diagram/scheme → human: process diagram
     "role": "Role",
-    "workspace": "Workspace",
+    "workspace": "NavigationSection",  # API: workspace → human: navigation section
 }
 
 # Compiled regex: matches prefix.number pattern (e.g., "oa.193", "event.454")
@@ -180,6 +180,15 @@ def _parse_url(url_or_id: str) -> ParsedUrl:
         # Last segment may be a record ID
         if len(segments) >= 4 and segments[3].isdigit():
             entities.append(ParsedEntity("Record", segments[3]))
+
+    # Task and myTasks page patterns
+    if page_type == "task":
+        segments = path_part.split("/")
+        if len(segments) >= 2 and segments[1].isdigit():
+            entities.append(ParsedEntity("Task", segments[1]))
+
+    if page_type == "myTasks":
+        pass  # No specific entity IDs, just page type
 
     # Deduplicate entities
     seen = set()
@@ -778,17 +787,47 @@ def resolve_entity(
                     }
                 )
 
-            elif etype == "Workspace":
+            elif etype == "Task":
+                task_data = None
+                task_error = None
+                if fetch_full:
+                    try:
+                        task_result = requests_._post_request(
+                            eid,
+                            "api/public/system/TeamNetwork/UserTaskService/Get",
+                        )
+                        if task_result.get("success"):
+                            task_data = task_result.get("raw_response")
+                        else:
+                            task_error = task_result.get("error")
+                    except Exception as e:
+                        task_error = str(e)
+
                 resolved.append(
                     {
-                        "entity_type": "Workspace",
+                        "entity_type": "Task",
+                        "internal_id": eid,
+                        "full_data": task_data,
+                        "system_name": None,
+                        "application_system_name": None,
+                        "api_endpoint": "api/public/system/TeamNetwork/UserTaskService/Get",
+                        "candidates": None,
+                        "note": task_error
+                        or "Task resolved by ID. Full data available if UserTaskService is accessible.",
+                    }
+                )
+
+            elif etype == "NavigationSection":
+                resolved.append(
+                    {
+                        "entity_type": "NavigationSection",
                         "internal_id": eid,
                         "full_data": None,
                         "system_name": None,
                         "application_system_name": None,
                         "api_endpoint": None,
                         "candidates": None,
-                        "note": "Workspace API endpoint not yet documented.",
+                        "note": "Navigation section (workspace) — no direct API endpoint.",
                     }
                 )
 
