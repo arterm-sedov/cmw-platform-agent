@@ -184,6 +184,11 @@ def edit_or_create_toolbar(
     For edit operations, automatically fetches current schema and merges missing fields.
     Items (buttons) can be added/updated by providing their button system names.
 
+    Toolbar-Dataset Linking:
+    - Set is_default_for_lists=True to make this toolbar the default for ALL datasets in the template
+    - Set is_default_for_lists=False to make it dataset-specific (link via dataset's toolbar_system_name)
+    - Datasets link to toolbars via their toolbar_system_name parameter in edit_or_create_dataset
+
     Returns:
         dict: {
             "success": bool - True if the toolbar was created or edited successfully

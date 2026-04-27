@@ -7,7 +7,15 @@ description: Use when working with Comindware Platform — connecting to platfor
 
 Enables autonomous interaction with Comindware Platform using tools from the agent's `tools/` directory.
 
-**NEW:** Browser automation capabilities for UI-only features and visual verification.
+**Browser Use:** Browser automation for UI-only features and visual verification.
+
+**Four browser options available out-of-the-box:**
+- **agent-browser MCP** — tool-based, token-efficient, Chrome-only. Best for agent workflows.
+- **playwright MCP** — tool-based, cross-browser, rich snapshots with element refs. Best for complex UI and debugging (headed by default).
+- **agent-browser CLI** — shell command, persistent sessions, Chrome-only. Best for standalone PowerShell scripts with session reuse.
+- **playwright-cli** — shell command, cross-browser, advanced features (PDF, network, tracing). Best for cross-browser testing scripts.
+
+All four are configured in `~/.config/opencode/opencode.json`. Full guidance + decision matrix in Section 2 below.
 
 ---
 
@@ -35,6 +43,20 @@ Always follow: `Intent → Plan → Validate → Execute → Result`
 - Check for duplicate calls before invoking
 - Transform results to human-readable format (never raw JSON)
 - Validate required context before execution
+
+### Browser Automation vs API
+
+**When to use Browser Automation:**
+- UI-only features (visual configuration, drag-and-drop)
+- Visual verification (screenshots, layout validation)
+- Features not available via API
+- Complex multi-step UI workflows
+
+**When to use API:**
+- Data operations (CRUD on records)
+- Bulk operations
+- Programmatic access
+- Performance-critical tasks
 
 ### Tool Invocation Pattern
 
@@ -76,7 +98,352 @@ This is NOT optional. Violating this rule has caused data loss before.
 
 ---
 
-## 2. Exploration
+## 2. Browser Automation
+
+Browser automation enables UI-only features, visual verification, and workflows not exposed via API. The agent supports **four interchangeable browser options**: two MCPs and two CLIs. Pick the one that matches the task.
+
+### Four Browser Options
+
+| Option | Access | Best For | Headed Mode |
+|--------|--------|----------|-------------|
+| **agent-browser MCP** | Tool calls | AI agent workflows, token-efficient actions, Chrome-only | `AGENT_BROWSER_HEADED=1` env |
+| **playwright MCP** | Tool calls | Cross-browser (Chrome/Firefox/WebKit), form filling, rich snapshots, debugging | `--headed` flag (default in MCP) |
+| **agent-browser CLI** | Shell/PowerShell | Scripted batch automation, persistent sessions, local dev | `--headed` flag |
+| **playwright-cli** | Shell/PowerShell | Cross-browser CLI, advanced features (PDF, network, tracing), no session persistence | `--headed` flag |
+
+All four are configured in `~/.config/opencode/opencode.json` and available out-of-the-box.
+
+### Decision Guide
+
+**Use agent-browser MCP when:**
+- Running inside an agent conversation and token budget matters (~5.7x more efficient than Playwright)
+- Chrome-only is fine
+- Workflow is action-driven (click → navigate → click)
+
+**Use playwright MCP when:**
+- Need Firefox/WebKit/mobile emulation
+- Need rich accessibility snapshots with element refs (`e1`, `e2`, ...)
+- Need advanced features: `fill_form`, multi-field forms, network interception, tracing
+- Debugging UI issues visually (headed mode is default in the MCP)
+- Working with complex SPAs where auto-waiting helps
+
+**Use agent-browser CLI when:**
+- Writing standalone scripts (PowerShell/Bash) outside the agent
+- Need persistent named sessions across multiple shell invocations
+- Batch scraping/automation pipelines
+- Running in CI or scheduled jobs
+- Chrome-only is acceptable
+
+**Use playwright-cli when:**
+- Writing standalone scripts that need cross-browser support
+- Need advanced CLI features: PDF export, network inspection, console logs, tracing
+- Don't need session persistence (each invocation is isolated)
+- Want full Playwright feature set from the command line
+
+→ See also: [browser-switch skill](file:///C:/Users/ased/.agents/skills/browser-switch/skills/browser-switch/SKILL.md), [agent-browser skill](file:///C:/Users/ased/.agents/skills/agent-browser/SKILL.md), [playwright-cli skill](file:///C:/Users/ased/.config/opencode/skills/playwright/SKILL.md)
+
+### When to Use Browser vs API
+
+| Operation | Use API | Use Browser |
+|-----------|---------|-------------|
+| List records | ✅ Fast, structured | ❌ Slow, parsing needed |
+| Create/edit attributes | ✅ Direct, reliable | ❌ Complex UI navigation |
+| Visual workflow designer | ❌ No API | ✅ UI-only feature |
+| Admin panel configuration | ⚠️ Limited API | ✅ Full access |
+| Verify UI changes | ❌ Can't see UI | ✅ Screenshots |
+| Extract UI table data | ⚠️ If no API | ✅ Fallback option |
+
+### Option 1: agent-browser MCP (preferred for agent workflows)
+
+Configured as MCP `agent-browser` in `opencode.json`. Tool names exposed to the agent are prefixed `agent-browser_browser_*`:
+
+```
+agent-browser_browser_new_session    — create isolated session
+agent-browser_browser_navigate       — open a URL
+agent-browser_browser_snapshot       — get accessibility tree with @e1, @e2 refs
+agent-browser_browser_click          — click by selector or ref
+agent-browser_browser_fill           — fill input
+agent-browser_browser_type           — type char-by-char (triggers JS handlers)
+agent-browser_browser_press          — press keyboard key
+agent-browser_browser_screenshot     — capture PNG
+agent-browser_browser_evaluate       — run JS in page context
+agent-browser_browser_wait_for_selector / wait_for_navigation
+agent-browser_browser_get_text / get_html / get_url / get_title
+agent-browser_browser_set_cookies / get_cookies
+agent-browser_browser_close_session
+```
+
+Typical flow (agent calls these as tools, not Python):
+
+```
+1. browser_new_session { viewport: {width:1920, height:1080} }
+2. browser_navigate { url: "https://platform/..." }
+3. browser_snapshot  → returns refs @e1, @e2, ...
+4. browser_click { selector: "@e5" }
+5. browser_fill { selector: "@e8", value: "text" }
+6. browser_screenshot { path: "cmw-platform-workspace/step1.png" }
+7. browser_close_session { sessionId: "..." }
+```
+
+**Headed mode (user can watch / intervene):**
+```powershell
+$env:AGENT_BROWSER_HEADED = "1"   # then restart opencode
+```
+
+### Option 2: playwright MCP (best for visual work & cross-browser)
+
+Configured as MCP `playwright` in `opencode.json`. Tool names are prefixed `playwright_browser_*`. This MCP runs **headed by default**, making it ideal when the user wants to watch the automation and intervene.
+
+Key tools (use these names in tool calls):
+
+```
+playwright_browser_navigate          — open URL
+playwright_browser_snapshot          — rich accessibility snapshot with refs (use THIS, not screenshot, to act)
+playwright_browser_click             — click by ref (e.g., ref="e21")
+playwright_browser_fill_form         — fill MULTIPLE fields at once (powerful!)
+playwright_browser_type              — type into a single field
+playwright_browser_press_key         — keyboard input
+playwright_browser_select_option     — dropdowns
+playwright_browser_take_screenshot   — PNG/JPEG, optionally full-page
+playwright_browser_evaluate          — run JS on page or element
+playwright_browser_wait_for          — wait for text / time
+playwright_browser_tabs              — list/new/close/select tabs
+playwright_browser_network_requests  — inspect network
+playwright_browser_console_messages  — collect console logs
+playwright_browser_handle_dialog     — accept/dismiss native dialogs
+playwright_browser_navigate_back / resize / close
+```
+
+**Two-step interaction pattern (mandatory):**
+1. `playwright_browser_snapshot` → returns YAML tree with `[ref=eN]` identifiers
+2. Use that `ref` in `click`/`type`/`fill_form`
+
+```yaml
+# Example snapshot excerpt:
+- textbox "E-mail or username" [ref=e14]
+- textbox "Password" [ref=e20]
+- button "Log in" [ref=e21]
+```
+
+Then:
+```
+playwright_browser_fill_form {
+  fields: [
+    { name: "Username", ref: "e14", type: "textbox", value: "bobragent" },
+    { name: "Password", ref: "e20", type: "textbox", value: "***" }
+  ]
+}
+playwright_browser_click { ref: "e21", element: "Log in button" }
+```
+
+**⚠️ Ref lifecycle:** Refs invalidate after any navigation or DOM change. Always re-snapshot after clicking a link, submitting a form, or opening a modal.
+
+**Screenshot vs Snapshot:** Use `snapshot` to act on elements (gives refs). Use `take_screenshot` only for visual verification or reporting — it does NOT return refs.
+
+### Option 3: agent-browser CLI (for standalone scripts)
+
+The CLI is available in the shell as `agent-browser`. Full command reference is in the [agent-browser skill](file:///C:/Users/ased/.agents/skills/agent-browser/SKILL.md).
+
+**PowerShell examples** (this project uses PowerShell, not bash):
+
+```powershell
+# Basic navigation + snapshot + action
+agent-browser open "https://bububu.bau.cbap.ru/"
+agent-browser wait --load networkidle
+agent-browser snapshot -i
+agent-browser fill @e14 "bobragent"
+agent-browser fill @e20 "$env:CMW_PASSWORD"
+agent-browser click @e21
+agent-browser screenshot "cmw-platform-workspace/logged_in.png"
+agent-browser close
+
+# Headed mode (user can watch)
+agent-browser --headed open "https://bububu.bau.cbap.ru/"
+
+# Named persistent session (survives across shell invocations)
+agent-browser --session-name cmw-admin open "https://bububu.bau.cbap.ru/"
+# ... login once ...
+agent-browser --session-name cmw-admin close   # state auto-saved
+# Later:
+agent-browser --session-name cmw-admin open "https://bububu.bau.cbap.ru/#Settings/Administration"
+
+# Chain commands (& not && in PowerShell pipelines; use ; for simple chaining)
+agent-browser open "https://example.com"; agent-browser wait --load networkidle; agent-browser screenshot out.png
+
+# Get cdp url to connect playwright to the same Chrome
+agent-browser get cdp-url
+```
+
+**Auth vault (credentials stay encrypted, never in shell history):**
+```powershell
+$env:CMW_PASSWORD | agent-browser auth save cmw --url "https://bububu.bau.cbap.ru/" --username bobragent --password-stdin
+agent-browser auth login cmw
+```
+
+### Credentials: Always from .env
+
+**Never hardcode credentials in scripts.** Load them from `.env` the same way `agent_ng` does:
+
+```python
+from dotenv import load_dotenv
+import os
+load_dotenv()
+base_url = os.environ["CMW_BASE_URL"]
+username = os.environ["CMW_LOGIN"]
+password = os.environ["CMW_PASSWORD"]
+```
+
+PowerShell:
+```powershell
+# python-dotenv reads .env automatically in Python scripts.
+# For PowerShell-only scripts, load .env lines into env vars:
+Get-Content .env | Where-Object { $_ -match '^\s*[^#].*=' } | ForEach-Object {
+  $name, $value = $_ -split '=', 2
+  [Environment]::SetEnvironmentVariable($name.Trim(), $value.Trim(), 'Process')
+}
+agent-browser open $env:CMW_BASE_URL
+```
+
+### Option 4: playwright-cli (for cross-browser scripts)
+
+The CLI is available in the shell as `playwright-cli`. Full command reference is in the [playwright-cli skill](file:///C:/Users/ased/.config/opencode/skills/playwright/SKILL.md).
+
+**PowerShell examples** (this project uses PowerShell, not bash):
+
+```powershell
+# Basic navigation + snapshot + action
+playwright-cli open "https://bububu.bau.cbap.ru/"
+playwright-cli snapshot
+playwright-cli click e14
+playwright-cli fill e14 "bobragent"
+playwright-cli fill e20 "$env:CMW_PASSWORD"
+playwright-cli click e21
+playwright-cli screenshot page.png
+playwright-cli close
+
+# Headed mode (user can watch)
+playwright-cli --headed open "https://bububu.bau.cbap.ru/"
+
+# Cross-browser testing
+playwright-cli --browser firefox open "https://bububu.bau.cbap.ru/"
+playwright-cli --browser webkit open "https://bububu.bau.cbap.ru/"
+
+# Advanced features
+playwright-cli pdf --filename report.pdf
+playwright-cli network-requests
+playwright-cli console-messages
+playwright-cli eval "document.title"
+playwright-cli eval "el => el.textContent" e5
+
+# Tabs
+playwright-cli tab-list
+playwright-cli tab-new "https://example.com"
+playwright-cli tab-select 2
+playwright-cli tab-close
+
+# Wait patterns
+playwright-cli wait --text "Administration"
+playwright-cli wait --time 2000
+```
+
+**Key differences from agent-browser CLI:**
+- **No session persistence** — each invocation is isolated (no `--session-name`)
+- **Cross-browser** — `--browser chrome|firefox|webkit`
+- **More features** — PDF export, network inspection, console logs, tracing
+- **Ref format** — uses `e1`, `e2` (no `@` prefix)
+
+### Standalone Python browser utilities (NOT agent tools)
+
+The repo also ships standalone Playwright wrappers in `tools/browser_tools.py` and `agent_ng/browser_session.py`. **These are intentionally NOT bound to the agent's tool list** — they are for external scripts only. The agent should use the MCPs above.
+
+```python
+# Only for scripts in docs/progress_reports/**, never inside agent flow
+from tools.browser_tools import navigate_to_page, click_element, take_screenshot
+```
+
+### CMW Platform URL Patterns (SPA hash routing)
+
+CMW Platform is a Single Page Application. Always use `wait_for` text or `networkidle` after navigation.
+
+**Architecture:**
+| Page | URL |
+|------|-----|
+| Applications | `#Settings/Applications` |
+| Navigation Sections | `#Settings/NavigationSections` |
+| Templates | `#Settings/Templates` |
+| Diagrams | `#Settings/Diagrams` |
+| Functions | `#Settings/Functions` |
+| Data Transfer Paths | `#Settings/DataTransferPaths` |
+
+**Account Administration:**
+| Page | URL |
+|------|-----|
+| Accounts | `#Settings/Accounts` |
+| Groups | `#Settings/Groups` |
+| System Roles | `#Settings/Roles` |
+| Permissions Audit | `#Settings/PermissionsAudit` |
+| Substitutions | `#Settings/Substitutions` |
+| Registration and Login | `#Settings/RegistrationAndLogin` |
+
+**Infrastructure:**
+| Page | URL |
+|------|-----|
+| Monitoring | `#Settings/Monitoring` |
+| Event Logs | `#Settings/EventLogs` |
+| Licensing | `#Settings/Licensing` |
+| Backup | `#Settings/Backup` |
+| Connections | `#Settings/Connections` |
+| Performance | `#Settings/Performance` |
+| Logging Configuration | `#Settings/LoggingConfiguration` |
+| Global Configuration | `#Settings/GlobalConfiguration` |
+| Adapters | `#Settings/Adapters` |
+| Authentication Keys | `#Settings/AuthenticationKeys` |
+
+**Corporate Architecture:**
+| Page | URL |
+|------|-----|
+| Org Structure | `#Settings/OrgStructure` |
+| Processes | `#Settings/Processes` |
+| Version Management | `#Settings/VersionManagement` |
+
+**Other:**
+| Page | URL |
+|------|-----|
+| Administration (hub) | `#Settings/Administration` |
+| Global Security | `#Settings/globalSecurity` |
+| Solutions | `#solutions` |
+| Dashboard | `#desktop/` |
+| Application data | `#app/{AppSystemName}/list/{TemplateSystemName}` |
+| Record view | `#app/{AppSystemName}/view/{TemplateSystemName}/{recordId}` |
+
+**Naming convention:** PascalCase (e.g. `#Settings/Applications`), with one camelCase exception: `#Settings/globalSecurity`.
+
+### Troubleshooting
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| "Element not found" after click | Refs invalidated by navigation | Re-run `snapshot` before next action |
+| Timeout on SPA load | Content loads after networkidle | Add `wait_for { text: "Expected text" }` |
+| "Session expired" | Cookie TTL passed | Re-login; consider using saved state file |
+| Screenshot shows old content | Action ran before render completed | `wait_for` text or use `networkidle` |
+| Modal dialog blocks clicks | Push-notification / permissions popup | `press Escape` or `handle_dialog` |
+| Login form not detected | Login page is localized | Use `ref=` from snapshot, not text/placeholder |
+| `agent-browser` "spawn ENOENT" | CLI not on PATH / Node not found in WSL | Use Windows PowerShell, or `npm i -g agent-browser` |
+
+### Best Practices
+
+1. **Snapshot → Act → Re-snapshot** after any DOM-changing action
+2. **Save before edit** — always screenshot or export current UI state before making destructive changes
+3. **Session isolation** — use unique `session_name` / `sessionId` per workflow to avoid cross-contamination
+4. **Headed for debugging, headless for automation** — flip the mode based on the task
+5. **Credentials from `.env`** — never commit or hardcode (see Credentials section above)
+6. **PowerShell, not bash** — this project runs on Windows; avoid `&&`, `cat`, `grep`; use `;`, `Get-Content`, `Select-String`
+
+→ See also: [references/browser_automation.md](references/browser_automation.md)
+
+---
+
+## 3. Exploration
 
 Explore application structure systematically.
 
@@ -119,7 +486,7 @@ python .agents/skills/cmw-platform/scripts/explore_templates.py \
 
 ---
 
-## 3. Data Operations
+## 4. Data Operations
 
 ### Query Records with Filters
 
@@ -187,7 +554,7 @@ def fetch_all(app_name: str, template: str, page_size: int = 100):
 
 ---
 
-## 4. UI Components
+## 5. UI Components
 
 Datasets, Toolbars, and Buttons are **separate API entities** with different endpoints:
 
@@ -253,6 +620,32 @@ edit_or_create_button.invoke({
 
 **⚠️ Toolbar Item Names Override Button Names:** Toolbar items have their own `name` field that overrides the button's display name.
 
+### Create-Kind Buttons
+
+For buttons with `kind='Create'`, you **MUST** specify `create_form` (and optionally `create_template`):
+
+```python
+edit_or_create_button.invoke({
+    "operation": "edit",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "button_system_name": "<button>",
+    "name": "Create New Record",
+    "kind": "Create",
+    "context": "Record",  # or "List" depending on where button appears
+    "create_form": "defaultForm",  # REQUIRED for Create buttons
+    "create_template": "<target_template>",  # Optional, defaults to current template
+})
+```
+
+**Key requirements:**
+- `create_form` is **mandatory** for `kind='Create'` buttons
+- `context` must match where the button appears (`"Record"` for record forms, `"List"` for list toolbars)
+- `create_template` defaults to the current template if omitted
+- The API builds `relatedAction.formGlobalAlias` from these parameters
+
+**⚠️ UI Cache Issue:** The platform UI may display stale context values (e.g., `#List` instead of `Record`) even after successful API updates. Always verify via `get_button` API call, not the UI. Hard refresh (Ctrl+F5) or clearing browser cache may be required to see correct values in the UI.
+
 ### List and Edit Datasets
 
 ```python
@@ -277,6 +670,12 @@ edit_or_create_dataset.invoke({
 })
 ```
 
+**Toolbar-Dataset Linking:**
+- Datasets link to toolbars via the `toolbar_system_name` parameter
+- Toolbars link back to datasets via `IsDefaultForLists` flag (set on the toolbar)
+- When a toolbar has `IsDefaultForLists: true`, it becomes the default for all datasets in that template
+- To make a toolbar dataset-specific, set `IsDefaultForLists: false` and link it explicitly via the dataset's `toolbar_system_name`
+
 ### Edit Form Widgets
 
 ```python
@@ -300,261 +699,6 @@ edit_or_create_form.invoke({
 ```
 
 → See also: [references/tool_inventory.md](references/tool_inventory.md)
-
----
-
-## 5. Browser Automation (NEW)
-
-**Use browser automation when:**
-- API endpoints don't cover the feature
-- Need visual verification of changes
-- Working with workflow designers or visual editors
-- Testing actual user workflows
-- Debugging UI issues
-
-### When to Use Browser vs API
-
-| Operation | Use API | Use Browser |
-|-----------|---------|-------------|
-| List records | ✅ Fast, structured | ❌ Slow, parsing needed |
-| Create/edit attributes | ✅ Direct, reliable | ❌ Complex UI navigation |
-| Visual workflow designer | ❌ No API | ✅ UI-only feature |
-| Admin panel configuration | ⚠️ Limited API | ✅ Full access |
-| Verify UI changes | ❌ Can't see UI | ✅ Screenshots |
-| Extract UI table data | ⚠️ If no API | ✅ Fallback option |
-
-### Browser Login
-
-```python
-from tools.browser_tools.tool_browser_login import browser_login
-
-result = browser_login.invoke({
-    "base_url": "https://platform.example.com/",
-    "username": "user",
-    "password": "pass",
-    "session_id": "user-session-123"
-})
-
-if result["success"]:
-    print(f"Logged in, extracted {result['cookies_extracted']} cookies")
-    print(f"Screenshot: {result['screenshot']}")
-```
-
-**What it does:**
-1. Opens platform in browser
-2. Fills login form
-3. Extracts session cookies
-4. Injects cookies into HTTP session (enables API calls)
-5. Saves browser state for reuse
-
-### Navigate to Admin Pages
-
-```python
-from tools.browser_tools.tool_browser_navigate import browser_navigate
-
-result = browser_navigate.invoke({
-    "url": "#Settings/Administration",  # Hash fragment for SPA
-    "wait_for_text": "Administration",  # Wait for content
-    "session_id": "user-session-123"
-})
-
-if result["success"]:
-    print(f"Current URL: {result['current_url']}")
-    print(f"Snapshot:\n{result['snapshot']}")
-    print(f"Screenshot: {result['screenshot']}")
-```
-
-**SPA Navigation Notes:**
-- CMW Platform is a Single Page Application
-- Content loads dynamically after URL changes
-- Always use `wait_for_text` for reliable content detection
-- Additional 2-second buffer added automatically
-
-### Interact with UI Elements
-
-```python
-from tools.browser_tools.tool_browser_interact import browser_interact
-
-# Click a button
-result = browser_interact.invoke({
-    "action": "click",
-    "element_ref": "@e5",  # From snapshot
-    "session_id": "user-session-123"
-})
-
-# Fill a form field
-result = browser_interact.invoke({
-    "action": "fill",
-    "element_ref": "@e8",
-    "value": "New Value",
-    "session_id": "user-session-123"
-})
-
-# Select dropdown option
-result = browser_interact.invoke({
-    "action": "select",
-    "element_ref": "@e12",
-    "value": "option-value",
-    "session_id": "user-session-123"
-})
-```
-
-**Element Refs:**
-- Get refs from `browser_navigate` snapshot
-- Refs are like `@e1`, `@e2`, `@e3`
-- Refs invalidate after page changes (re-snapshot)
-
-### Extract Data from UI
-
-```python
-from tools.browser_tools.tool_browser_extract import browser_extract
-
-result = browser_extract.invoke({
-    "element_ref": "@e10",  # Table or grid element
-    "extraction_type": "table",
-    "session_id": "user-session-123"
-})
-
-if result["success"]:
-    data = result["data"]  # Structured JSON/CSV
-    print(f"Extracted {len(data)} rows")
-```
-
-### Visual Verification
-
-```python
-from tools.browser_tools.tool_browser_screenshot import browser_screenshot
-
-# Full page screenshot
-result = browser_screenshot.invoke({
-    "session_id": "user-session-123"
-})
-
-# Element screenshot
-result = browser_screenshot.invoke({
-    "element_ref": "@e5",
-    "session_id": "user-session-123"
-})
-
-# Annotated screenshot (shows all refs)
-result = browser_screenshot.invoke({
-    "annotate": True,
-    "session_id": "user-session-123"
-})
-
-print(f"Screenshot saved: {result['screenshot_path']}")
-```
-
-### Advanced: Execute Raw Commands
-
-```python
-from tools.browser_tools.tool_browser_execute import browser_execute
-
-result = browser_execute.invoke({
-    "commands": [
-        "open https://platform.example.com/#Settings/Administration",
-        "wait --load networkidle",
-        "wait --text 'Administration'",
-        "snapshot -i",
-        "screenshot administration.png"
-    ],
-    "session_id": "user-session-123"
-})
-
-for cmd_result in result["results"]:
-    print(f"{cmd_result['command']}: {cmd_result['success']}")
-```
-
-### Browser Session Management
-
-**Automatic:**
-- Sessions isolated per user (via `session_id`)
-- State saved automatically after operations
-- Sessions restored on next use
-- Auto-cleanup after timeout (default: 1 hour)
-
-**Manual:**
-```python
-from tools.browser_tools.browser_session_manager import BrowserSessionManager
-
-# Cleanup specific session
-BrowserSessionManager.cleanup_session("user-session-123")
-
-# Cleanup all sessions
-BrowserSessionManager.cleanup_all()
-```
-
-### Known URL Patterns
-
-CMW Platform uses hash-based routing (SPA). All admin pages verified by browser exploration:
-
-**Appearance:**
-| Page | URL Pattern |
-|------|-------------|
-| Themes | `#Settings/Theme` |
-| Login/Registration Design | `#Settings/LoginDesign` |
-
-**Architecture:**
-| Page | URL Pattern |
-|------|-------------|
-| Applications | `#Settings/Applications` |
-| Navigation Sections | `#Settings/NavigationSections` |
-| Templates | `#Settings/Templates` |
-| Diagrams | `#Settings/Diagrams` |
-| Functions | `#Settings/Functions` |
-| Data Transfer Paths | `#Settings/DataTransferPaths` |
-
-**Account Administration:**
-| Page | URL Pattern |
-|------|-------------|
-| Accounts | `#Settings/Accounts` |
-| Groups | `#Settings/Groups` |
-| System Roles | `#Settings/Roles` |
-| Permissions Audit | `#Settings/PermissionsAudit` |
-| Substitutions | `#Settings/Substitutions` |
-| Registration and Login | `#Settings/RegistrationAndLogin` |
-
-**Infrastructure:**
-| Page | URL Pattern |
-|------|-------------|
-| Monitoring | `#Settings/Monitoring` |
-| Event Logs | `#Settings/EventLogs` |
-| Licensing | `#Settings/Licensing` |
-| Backup | `#Settings/Backup` |
-| Connections | `#Settings/Connections` |
-| Performance | `#Settings/Performance` |
-| Logging Configuration | `#Settings/LoggingConfiguration` |
-| Global Configuration | `#Settings/GlobalConfiguration` |
-| Adapters | `#Settings/Adapters` |
-| Authentication Keys | `#Settings/AuthenticationKeys` |
-
-**Corporate Architecture:**
-| Page | URL Pattern |
-|------|-------------|
-| Org Structure | `#Settings/OrgStructure` |
-| Processes | `#Settings/Processes` |
-| Version Management | `#Settings/VersionManagement` |
-
-**Other:**
-| Page | URL Pattern |
-|------|-------------|
-| Administration (hub) | `#Settings/Administration` |
-| Global Security | `#Settings/globalSecurity` |
-| Solutions | `#solutions` |
-| Dashboard | `#desktop/` |
-
-**Naming convention:** PascalCase (`#Settings/Applications`), one camelCase exception (`#Settings/globalSecurity`).
-
-### Browser Troubleshooting
-
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| "Element not found" | Refs invalidated | Re-snapshot after page changes |
-| "Timeout waiting for content" | SPA loading slow | Increase wait time or use `wait --text` |
-| "Session expired" | Inactivity timeout | Re-login with `browser_login` |
-| "Screenshot shows old content" | Snapshot taken too early | Add `wait_for_text` parameter |
-
-→ See also: [references/browser_automation.md](references/browser_automation.md)
 
 ---
 
@@ -651,8 +795,11 @@ Exit code 0 = pass, 1 = fail.
 | [references/errors.md](references/errors.md) | Error handling playbook |
 | [references/workflow_sequences.md](references/workflow_sequences.md) | Reusable code patterns |
 | [references/localization.md](references/localization.md) | Russian→English translation guide |
-| [references/browser_automation.md](references/browser_automation.md) | **NEW:** Browser automation guide |
+| [references/browser_automation.md](references/browser_automation.md) | Browser automation guide |
+| [browser-switch skill](file:///C:/Users/ased/.agents/skills/browser-switch/skills/browser-switch/SKILL.md) | Decide between agent-browser and Playwright |
+| [agent-browser skill](file:///C:/Users/ased/.agents/skills/agent-browser/SKILL.md) | Full agent-browser CLI reference |
+| [playwright-cli skill](file:///C:/Users/ased/.config/opencode/skills/playwright/SKILL.md) | Playwright CLI reference |
 
 ---
 
-*End of SKILL.md - Updated 2026-04-22 with browser automation capabilities*
+*End of SKILL.md - Updated 2026-04-27: unified browser automation section covering agent-browser MCP, playwright MCP, and agent-browser CLI*

@@ -103,6 +103,33 @@ from .templates_tools.tool_list_records import list_template_records
 # Templates tools
 from .templates_tools.tools_record_template import edit_or_create_record_template
 
+# Attributes tools - Text attributes
+from .attributes_tools.tools_text_attribute import edit_or_create_text_attribute
+
+# Attributes tools - Other attribute types
+from .attributes_tools.tools_datetime_attribute import edit_or_create_date_time_attribute
+from .attributes_tools.tools_decimal_attribute import edit_or_create_numeric_attribute
+from .attributes_tools.tools_record_attribute import edit_or_create_record_attribute
+from .attributes_tools.tools_image_attribute import edit_or_create_image_attribute
+from .attributes_tools.tools_drawing_attribute import edit_or_create_drawing_attribute
+from .attributes_tools.tools_document_attribute import edit_or_create_document_attribute
+from .attributes_tools.tools_duration_attribute import edit_or_create_duration_attribute
+from .attributes_tools.tools_account_attribute import edit_or_create_account_attribute
+from .attributes_tools.tools_boolean_attribute import edit_or_create_boolean_attribute
+from .attributes_tools.tools_role_attribute import edit_or_create_role_attribute
+from .attributes_tools.tools_enum_attribute import edit_or_create_enum_attribute
+
+# Attributes tools - Utility functions
+from .attributes_tools.tool_delete_attribute import delete_attribute
+from .attributes_tools.tool_archive_or_unarchive_attribute import archive_or_unarchive_attribute
+from .attributes_tools.tool_get_attribute import get_attribute
+
+# Datetime tool
+from .get_datetime import get_current_datetime
+
+# NOTE: Browser automation tools (tools/browser_tools.py, agent_ng/browser_session.py)
+# are intentionally NOT bound to the agent. They are kept for external/standalone use.
+# See .agents/skills/cmw-platform/SKILL.md section "Browser Automation"
 # Global configuration for search tools
 SEARCH_LIMIT = 5  # Maximum number of results for all search tools (Tavily, Wikipedia, Arxiv)
 
