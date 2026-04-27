@@ -18,3 +18,4 @@ docs/cmw_admin_pages.md
 .opencode/plans/20260423_browser_automation_implementation_plan.md.backup
 .browser-states/
 .playwright-mcp/**
+.playwright-cli/**

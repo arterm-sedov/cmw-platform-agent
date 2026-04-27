@@ -56,7 +56,7 @@ class ParsedUrl:
 
 
 # ---------------------------------------------------------------------------
-# ID prefix → entity type mapping
+# ID prefix → entity type mapping (human-friendly terms per system_prompt.json)
 # ---------------------------------------------------------------------------
 
 _ID_PREFIX_MAP: dict[str, str] = {
@@ -64,14 +64,14 @@ _ID_PREFIX_MAP: dict[str, str] = {
     "pa": "ProcessTemplate",
     "ra": "Template",
     "os": "Template",
-    "sln": "Solution",
-    "event": "Button",
+    "sln": "Application",  # API: solution → human: application
+    "event": "Button",  # API: user command → human: button
     "form": "Form",
     "card": "Form",
     "tb": "Toolbar",
     "lst": "Dataset",
     "ds": "Dataset",
-    "diagram": "Diagram",
+    "diagram": "ProcessDiagram",  # API: diagram/scheme → human: process diagram
     "role": "Role",
     "workspace": "Workspace",
 }
@@ -607,21 +607,21 @@ def resolve_entity(
                 "note": "No entity IDs found in URL. This may be a settings or landing page.",
             }
 
-        # Step 2: Collect template IDs and solution IDs, then resolve templates
+        # Step 2: Collect template IDs and application IDs, then resolve templates
         template_ids = [
             e.entity_id
             for e in parsed.entities
             if e.entity_type in ("Template", "ProcessTemplate")
         ]
-        solution_ids = [
-            e.entity_id for e in parsed.entities if e.entity_type == "Solution"
+        application_ids = [
+            e.entity_id for e in parsed.entities if e.entity_type == "Application"
         ]
 
-        # Always fetch templates if we have solution IDs (need cache for app mapping)
+        # Always fetch templates if we have application IDs (need cache for app mapping)
         # or template IDs (need cache for resolution)
-        need_template_cache = bool(template_ids) or bool(solution_ids)
+        need_template_cache = bool(template_ids) or bool(application_ids)
         template_cache = (
-            _resolve_templates(template_ids, fetch_all_types=bool(solution_ids))
+            _resolve_templates(template_ids, fetch_all_types=bool(application_ids))
             if need_template_cache
             else {}
         )
@@ -673,12 +673,12 @@ def resolve_entity(
                 }
                 resolved.append(resolved_entry)
 
-            elif etype == "Solution":
+            elif etype == "Application":
                 solution_data = _resolve_solutions([eid], template_cache)
                 sol_info = solution_data.get(eid, {})
                 resolved.append(
                     {
-                        "entity_type": "Solution",
+                        "entity_type": "Application",
                         "internal_id": eid,
                         "system_name": sol_info.get("solutionName"),
                         "application_system_name": None,
@@ -763,7 +763,7 @@ def resolve_entity(
                 diagram_data = _resolve_diagram(eid) if fetch_full else {}
                 resolved.append(
                     {
-                        "entity_type": "Diagram",
+                        "entity_type": "ProcessDiagram",
                         "internal_id": eid,
                         "full_data": diagram_data.get("diagram_data")
                         if fetch_full
