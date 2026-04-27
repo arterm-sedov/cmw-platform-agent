@@ -230,15 +230,15 @@ class TestParseFormViewUrl:
 
 class TestParseAppViewUrl:
     def test_app_list(self):
-        parsed = _parse_url("#app/FacilityManagement/list/MaintenancePlans")
+        parsed = _parse_url("#app/CustomerPortal/list/ServiceRequests")
         assert parsed.page_type == "app"
-        assert ParsedEntity("App", "FacilityManagement") in parsed.entities
-        assert ParsedEntity("Template", "MaintenancePlans") in parsed.entities
+        assert ParsedEntity("App", "CustomerPortal") in parsed.entities
+        assert ParsedEntity("Template", "ServiceRequests") in parsed.entities
 
-    def test_app_view_with_record(self):
-        parsed = _parse_url("#app/FacilityManagement/view/MaintenancePlans/15199")
-        assert ParsedEntity("App", "FacilityManagement") in parsed.entities
-        assert ParsedEntity("Template", "MaintenancePlans") in parsed.entities
+    def test_parse_app_record_view(self):
+        parsed = _parse_url("#app/CustomerPortal/view/ServiceRequests/15199")
+        assert ParsedEntity("App", "CustomerPortal") in parsed.entities
+        assert ParsedEntity("Template", "ServiceRequests") in parsed.entities
         assert ParsedEntity("Record", "15199") in parsed.entities
 
 

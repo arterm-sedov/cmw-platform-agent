@@ -392,17 +392,16 @@ CMW Platform is a Single Page Application. Always use `wait_for` text or `networ
 | Plain `{N}` | Record | Record | `GET webapi/Record/{recordId}` |
 | Plain `{N}` (task page) | Task | Task | `POST TeamNetwork/UserTaskService/Get` |
 
-**⚠️ Critical API Finding:** TemplateService/List is the ONLY endpoint that maps internal IDs (`oa.*`, `pa.*`, etc.) to system names + application context. For buttons/forms/toolbars/datasets, internal IDs are NOT exposed by any API — use `resolve_entity` tool to list candidates and match by name/context.
+**⚠️ Universal Resolution via GetAxioms:** All entity IDs (templates, buttons, forms, toolbars, datasets, cards, roles) are resolved uniformly via `OntologyService/GetAxioms`. This endpoint returns `cmw.alias` / `cmw.container.alias` (system name), `cmw.object.name` (display name), and container context for application derivation.
 
-**URL Resolution Tool:** Use `resolve_entity` to parse any CMW Platform URL and get API-ready entity objects:
+**URL Resolution Tool:** Use `resolve_entity` to parse any CMW Platform URL or entity ID and get system names for use with other tools:
 
 ```python
 from tools.platform_entity_resolver import resolve_entity
 
 # Full URL with template + button
 result = resolve_entity.invoke({
-    "url_or_id": "https://host/#RecordType/oa.193/Operation/event.15199",
-    "fetch_full": True,
+    "url_or_id": "https://host/#RecordType/oa.193/Operation/event.15199"
 })
 
 # Raw entity ID
@@ -410,42 +409,45 @@ result = resolve_entity.invoke({"url_or_id": "oa.193"})
 
 # Process template with diagram
 result = resolve_entity.invoke({
-    "url_or_id": "#ProcessTemplate/pa.77/Designer/Revision/diagram.315",
+    "url_or_id": "#ProcessTemplate/pa.77/Designer/Revision/diagram.315"
 })
 ```
 
-**Output structure:**
+**Output structure (agent uses system_name + application_system_name with tools):**
 ```json
 {
-    "success": True,
-    "url_parsed": {
-        "original": "...",
-        "page_type": "RecordType",
-        "entities_found": [
-            {"type": "Template", "id": "oa.193"},
-            {"type": "Button", "id": "event.15199"}
-        ]
-    },
+    "success": true,
     "resolved": [
         {
             "entity_type": "Template",
-            "internal_id": "oa.193",
-            "system_name": "MaintenancePlans",
-            "application_system_name": "FacilityManagement",
-            "application_id": "sln.23",
-            "api_endpoint": "webapi/RecordTemplate/FacilityManagement/MaintenancePlans",
-            "full_data": { ... }
+            "id": "oa.193",
+            "system_name": "ServiceRequests",
+            "application_system_name": "CustomerPortal",
+            "name": "Service Requests"
         },
         {
             "entity_type": "Button",
-            "internal_id": "event.15199",
-            "candidates": [
-                {"system_name": "schedule_maintenance", "name": "...", "kind": "UserEvent", ...}
-            ],
-            "note": "Internal entity IDs not exposed by API. Match by name/context."
+            "id": "event.15199",
+            "system_name": "approve_request",
+            "application_system_name": "CustomerPortal",
+            "name": "Approve Request",
+            "kind": "Trigger scenario"
         }
     ]
 }
+```
+
+**Agent workflow after URL resolution:**
+```python
+# User pastes: https://host/#RecordType/oa.193/Operation/event.15199
+# Agent calls resolve_entity, then uses system names with other tools:
+
+edit_or_create_button.invoke({
+    "application_system_name": "CustomerPortal",
+    "template_system_name": "ServiceRequests",
+    "button_system_name": "approve_request",
+    "name": "Updated Button Name"
+})
 ```
 
 **Architecture — Settings Pages:**

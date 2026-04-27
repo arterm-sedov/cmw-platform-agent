@@ -1,31 +1,63 @@
 """
-Platform Entity URL Resolver Tool for CMW Platform agent_ng.
+Platform Entity URL Resolver - Universal GetAxioms-based resolver for CMW Platform.
 
-Parses CMW Platform URLs to extract entity IDs, resolves template IDs to
-application + system names via TemplateService, and fetches full entity data
-for buttons, forms, toolbars, datasets, and diagrams.
+Parses CMW Platform URLs (hash-based SPA routing) and resolves entity IDs to
+system names via OntologyService/GetAxioms. Returns system_name and
+application_system_name that agent_ng can use with other tools.
+
+Key Features:
+- Recursive GetAxioms resolution with caching
+- Extracts cmw.alias / cmw.container.alias → system_name
+- Extracts cmw.solution.alias → application_system_name
+- No API endpoints (agent uses tools, not direct API calls)
 
 Usage:
     from tools.platform_entity_resolver import resolve_entity
 
+    # Full URL with template + button
     result = resolve_entity.invoke({
-        "url_or_id": "https://host/#RecordType/oa.193/Operation/event.15199",
-        "fetch_full": True,
+        "url_or_id": "https://host/#RecordType/oa.193/Operation/event.15199"
     })
+
+    # Single entity ID
+    result = resolve_entity.invoke({"url_or_id": "oa.193"})
+    result = resolve_entity.invoke({"url_or_id": "event.15199"})
+
+Output (agent_ng can use system_name + application_system_name with tools):
+    {
+        "success": True,
+        "resolved": [
+            {
+                "entity_type": "Template",
+                "id": "oa.193",
+                "system_name": "ServiceRequests",
+                "application_system_name": "CustomerPortal",
+                "name": "Service Requests"
+            },
+            {
+                "entity_type": "Button",
+                "id": "event.15199",
+                "system_name": "approve_request",
+                "application_system_name": "CustomerPortal",
+                "name": "Approve Request",
+                "kind": "Trigger scenario"
+            }
+        ]
+    }
 """
 
 import ast
 from dataclasses import dataclass, field
 import logging
+import os
 import re
-from typing import TYPE_CHECKING, Any
+from typing import Any
 import urllib.parse
 
-if TYPE_CHECKING:
-    from types import ModuleType
-
+from dotenv import load_dotenv
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+import requests
 
 from tools import requests_
 
@@ -356,31 +388,30 @@ def _resolve_templates(
     return all_templates
 
 
-def _resolve_solutions(
-    solution_ids: list[str],
-    template_cache: dict[str, dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    """
-    Resolve solution IDs by matching against template cache.
-
-    Args:
-        solution_ids: List of solution IDs (e.g., ["sln.23"]).
-        template_cache: Cache from _resolve_templates.
-
-    Returns:
-        Dict mapping solution ID to resolved data.
-    """
-    solutions: dict[str, dict[str, Any]] = {}
-    for sid in solution_ids:
-        for tpl in template_cache.values():
-            if tpl.get("solution") == sid:
-                solutions[sid] = {
-                    "id": sid,
-                    "solutionName": tpl.get("solutionName", ""),
-                    "solution": sid,
-                }
-                break
-    return solutions
+def _resolve_templates_single(template_id: str) -> dict[str, Any]:
+    """Resolve a single template ID via TemplateService/List."""
+    prefix = template_id.split(".")[0]
+    type_map = {"oa": "Record", "pa": "Process", "ra": "Role", "os": "OrgStructure"}
+    tpl_type = type_map.get(prefix)
+    if not tpl_type:
+        return {}
+    result = requests_._post_request({"Type": tpl_type}, _TEMPLATE_SERVICE_ENDPOINT)
+    if not result.get("success"):
+        return {}
+    raw = result.get("raw_response", "")
+    if isinstance(raw, str):
+        try:
+            items = ast.literal_eval(raw)
+        except (ValueError, SyntaxError):
+            return {}
+    elif isinstance(raw, list):
+        items = raw
+    else:
+        return {}
+    for item in items:
+        if isinstance(item, dict) and item.get("id") == template_id:
+            return item
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -479,6 +510,136 @@ def _get_api_entity_type(entity_type: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Internal ID resolver via GetAxioms
+# ---------------------------------------------------------------------------
+
+
+def _resolve_entity_id(entity_id: str, _cache: dict[str, dict] | None = None) -> dict[str, Any]:
+    """
+    Resolve any entity ID via OntologyService/GetAxioms.
+
+    Recursively resolves container → solution chain to get full context.
+    Uses cache to avoid duplicate GetAxioms calls for same ID.
+
+    Returns cmw.alias, cmw.object.name, container, solution, app_alias, and
+    type-specific fields (cmw.eventTrigger.kind for buttons).
+    """
+    if _cache is None:
+        _cache = {}
+
+    if entity_id in _cache:
+        return _cache[entity_id]
+
+    load_dotenv()
+    base_url = os.environ.get("CMW_BASE_URL", "")
+    if not base_url:
+        return {"success": False, "note": "CMW_BASE_URL not configured"}
+
+    url = f"{base_url}/api/public/system/Base/OntologyService/GetAxioms"
+    try:
+        session = requests.Session()
+        session.auth = (
+            os.environ.get("CMW_LOGIN", ""),
+            os.environ.get("CMW_PASSWORD", ""),
+        )
+        response = session.post(
+            url,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            data=entity_id,
+            timeout=30,
+        )
+        if response.status_code != 200:
+            result = {"success": False, "note": f"HTTP {response.status_code}"}
+            _cache[entity_id] = result
+            return result
+        data = response.json()
+    except Exception as e:
+        result = {"success": False, "note": str(e)}
+        _cache[entity_id] = result
+        return result
+
+    if not data:
+        result = {"success": False, "note": "Empty response"}
+        _cache[entity_id] = result
+        return result
+
+    alias = (data.get("cmw.alias") or data.get("cmw.container.alias") or data.get("cmw.solution.alias") or [""])[0]
+    name = (
+        data.get("cmw.object.name")
+        or data.get("cmw.eventTrigger.name")
+        or data.get("cmw.container.alias")
+        or data.get("cmw.solution.name")
+        or [""]
+    )[0]
+    container = (
+        data.get("cmw.eventTrigger.container") or data.get("cmw.form.container") or [""]
+    )[0]
+    solution = (data.get("cmw.solution") or [""])[0]
+    rdf_type = (data.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type") or [""])[0]
+    kind_raw = (data.get("cmw.eventTrigger.kind") or [""])[0]
+    kind = None
+    if kind_raw:
+        kind = kind_raw.replace("cmw.eventTrigger.", "")
+        kind = {
+            "UserEvent": "Trigger scenario",
+            "Create": "Create",
+            "Edit": "Edit",
+            "Delete": "Delete",
+            "Archive": "Archive",
+            "Unarchive": "Unarchive",
+            "StartProcess": "Start process",
+            "StartCase": "Start case",
+            "CompleteTask": "Complete task",
+            "ReassignTask": "Reassign task",
+            "Defer": "Defer",
+            "Accept": "Accept",
+            "Uncomplete": "Uncomplete",
+            "Follow": "Follow",
+            "Unfollow": "Unfollow",
+            "Exclude": "Exclude",
+            "Include": "Include",
+            "Script": "Script",
+            "Cancel": "Cancel",
+            "EditDiagram": "Edit diagram",
+            "CreateRelated": "Create related",
+            "ExportObject": "Export object",
+            "ExportList": "Export list",
+            "CreateToken": "Create token",
+            "RetryTokens": "Retry tokens",
+            "Migrate": "Migrate",
+            "StartLinkedCase": "Start linked case",
+            "StartLinkedProcess": "Start linked process",
+        }.get(kind, kind)
+
+    # Recursively resolve container → solution chain to get app alias
+    app_alias = None
+    if solution:
+        sol_result = _resolve_entity_id(solution, _cache)
+        if sol_result["success"]:
+            app_alias = sol_result["alias"]
+    elif container:
+        cont_result = _resolve_entity_id(container, _cache)
+        if cont_result["success"] and cont_result.get("solution"):
+            sol_result = _resolve_entity_id(cont_result["solution"], _cache)
+            if sol_result["success"]:
+                app_alias = sol_result["alias"]
+
+    result = {
+        "success": True,
+        "alias": alias or None,
+        "name": name or None,
+        "container": container or None,
+        "solution": solution or None,
+        "app_alias": app_alias,
+        "rdf_type": rdf_type,
+        "kind": kind,
+        "raw": data,
+    }
+    _cache[id] = result
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Diagram resolver
 # ---------------------------------------------------------------------------
 
@@ -536,18 +697,18 @@ class ResolveEntitySchema(BaseModel):
     url_or_id: str = Field(
         description=(
             "CMW Platform URL or entity ID to resolve. "
-            "Examples: "
-            "'https://host/#RecordType/oa.3/Operation/event.454', "
-            "'oa.193', '#Resolver/event.15199'. "
-            "RU: URL платформы или ID сущности"
+            "Returns system_name and application_system_name for use with other tools. "
+            "Examples: 'https://host/#RecordType/oa.3/Operation/event.454', "
+            "'oa.193', 'event.15199', '#Resolver/event.15199'. "
+            "RU: URL платформы или ID сущности для получения системных имён"
         ),
     )
     fetch_full: bool = Field(
         default=True,
         description=(
-            "Fetch full entity data from API. "
-            "Set False to get only resolved metadata. "
-            "RU: Загружать полные данные сущности"
+            "Include full raw data from GetAxioms in response. "
+            "Default True. Set False for minimal output. "
+            "RU: Включить полные данные из GetAxioms"
         ),
     )
 
@@ -558,11 +719,32 @@ def resolve_entity(
     fetch_full: bool = True,
 ) -> dict[str, Any]:
     """
-    Resolve a CMW Platform URL or entity ID to API-ready entity objects.
+    Resolve CMW Platform URL or entity ID to system names for use with other tools.
 
-    Parses the URL to extract all entity IDs, resolves template IDs to
-    application + system names via TemplateService, and fetches full entity
-    data for buttons, forms, toolbars, datasets, and diagrams.
+    When user pastes a platform URL, this tool extracts entity IDs and resolves them
+    via GetAxioms to get system_name and application_system_name. Agent can then use
+    these names with edit_or_create_* tools.
+
+    Examples:
+        User: "Edit this button https://host/#RecordType/oa.193/Operation/event.15199"
+
+        Agent calls: resolve_entity(url_or_id="...")
+
+        Returns: {
+            "resolved": [
+                {"entity_type": "Template", "system_name": "ServiceRequests",
+                 "application_system_name": "CustomerPortal"},
+                {"entity_type": "Button", "system_name": "approve_request",
+                 "application_system_name": "CustomerPortal", "kind": "Trigger scenario"}
+            ]
+        }
+
+        Agent then calls: edit_or_create_button(
+            application_system_name="CustomerPortal",
+            template_system_name="ServiceRequests",
+            button_system_name="approve_request",
+            ...
+        )
 
     Returns:
         dict: {
@@ -576,14 +758,14 @@ def resolve_entity(
             },
             "resolved": [
                 {
-                    "entity_type": str,
-                    "internal_id": str,
-                    "system_name": str,
-                    "application_system_name": str|None,
-                    "api_endpoint": str|None,
-                    "full_data": dict|None,
-                    "candidates": list|None,
-                    "note": str|None,
+                    "entity_type": str,  # Template, Button, Form, Toolbar, Dataset, etc.
+                    "id": str,  # oa.193, event.15199, etc.
+                    "system_name": str,  # ServiceRequests, approve_request
+                    "application_system_name": str|None,  # CustomerPortal
+                    "name": str,  # Display name (Планы техобслуживания)
+                    "kind": str|None,  # Button kind (Trigger scenario, Create, etc.)
+                    "full_data": dict|None,  # Raw GetAxioms response if fetch_full=True
+                    "note": str|None,  # Error message if resolution failed
                 },
                 ...
             ]
@@ -616,271 +798,49 @@ def resolve_entity(
                 "note": "No entity IDs found in URL. This may be a settings or landing page.",
             }
 
-        # Step 2: Collect template IDs and application IDs, then resolve templates
-        template_ids = [
-            e.entity_id
-            for e in parsed.entities
-            if e.entity_type in ("Template", "ProcessTemplate")
-        ]
-        application_ids = [
-            e.entity_id for e in parsed.entities if e.entity_type == "Application"
-        ]
-
-        # Always fetch templates if we have application IDs (need cache for app mapping)
-        # or template IDs (need cache for resolution)
-        need_template_cache = bool(template_ids) or bool(application_ids)
-        template_cache = (
-            _resolve_templates(template_ids, fetch_all_types=bool(application_ids))
-            if need_template_cache
-            else {}
-        )
-
-        # Step 3: Build resolved entities
+# Step 2: Resolve all entities via GetAxioms (with shared cache)
         resolved: list[dict[str, Any]] = []
-        parent_context: dict[str, str] = {}  # app + template from resolved templates
+        parent_context: dict[str, str] = {}
+        cache: dict[str, dict] = {}
 
         for entity in parsed.entities:
             eid = entity.entity_id
+            ax = _resolve_entity_id(eid, cache)
+
+            if not ax["success"]:
+                resolved.append({
+                    "entity_type": entity.entity_type,
+                    "id": eid,
+                    "system_name": None,
+                    "application_system_name": None,
+                    "name": None,
+                    "note": ax.get("note"),
+                })
+                continue
+
+            alias = ax["alias"]
+            name = ax["name"]
+            app = ax["app_alias"] or parent_context.get("app", "")
+
+            # Update parent context for subsequent entities
+            if app and alias:
+                parent_context["app"] = app
+                if ax["container"]:
+                    cont_ax = cache.get(ax["container"])
+                    if cont_ax and cont_ax.get("alias"):
+                        parent_context["template"] = cont_ax["alias"]
+
             etype = entity.entity_type
 
-            if etype in ("Template", "ProcessTemplate"):
-                tpl_data = template_cache.get(eid, {})
-                alias = tpl_data.get("alias", "")
-                solution = tpl_data.get("solution", "")
-                solution_name = tpl_data.get("solutionName", "")
-
-                # Determine app system name from solution
-                app_name = (
-                    _find_app_for_solution(solution, template_cache) if solution else ""
-                )
-
-                if alias and app_name:
-                    parent_context["app"] = app_name
-                    parent_context["template"] = alias
-
-                api_endpoint = None
-                if alias:
-                    api_type = (
-                        "RecordTemplate" if etype == "Template" else "ProcessTemplate"
-                    )
-                    api_endpoint = (
-                        f"webapi/{api_type}/{app_name}/{alias}" if app_name else None
-                    )
-
-                resolved_entry: dict[str, Any] = {
-                    "entity_type": "Template" if etype == "ProcessTemplate" else etype,
-                    "internal_id": eid,
-                    "system_name": alias or None,
-                    "application_system_name": app_name or None,
-                    "solution_id": solution or None,
-                    "solution_name": solution_name or None,
-                    "name": tpl_data.get("name"),
-                    "api_endpoint": api_endpoint,
-                    "full_data": tpl_data if fetch_full and tpl_data else None,
-                    "candidates": None,
-                    "note": None,
-                }
-                resolved.append(resolved_entry)
-
-            elif etype == "Application":
-                solution_data = _resolve_solutions([eid], template_cache)
-                sol_info = solution_data.get(eid, {})
-                resolved.append(
-                    {
-                        "entity_type": "Application",
-                        "internal_id": eid,
-                        "system_name": sol_info.get("solutionName"),
-                        "application_system_name": None,
-                        "api_endpoint": "webapi/Solution",
-                        "full_data": sol_info if fetch_full and sol_info else None,
-                        "candidates": None,
-                        "note": None,
-                    }
-                )
-
-            elif etype == "Role":
-                # Try to find in template cache (Role templates)
-                role_data = template_cache.get(eid, {})
-                alias = role_data.get("alias", "")
-                solution = role_data.get("solution", "")
-                app_name = (
-                    _find_app_for_solution(solution, template_cache) if solution else ""
-                )
-
-                if alias and app_name:
-                    api_endpoint = f"webapi/RoleTemplate/{app_name}/{alias}"
-                else:
-                    api_endpoint = None
-
-                resolved.append(
-                    {
-                        "entity_type": "Role",
-                        "internal_id": eid,
-                        "system_name": alias or None,
-                        "application_system_name": app_name or None,
-                        "api_endpoint": api_endpoint,
-                        "full_data": role_data if fetch_full and role_data else None,
-                        "candidates": None,
-                        "note": None
-                        if alias
-                        else "Role ID not found in template cache.",
-                    }
-                )
-
-            elif etype in ("Button", "Form", "Toolbar", "Dataset"):
-                # Need parent context to list candidates
-                app = parent_context.get("app", "")
-                tpl = parent_context.get("template", "")
-
-                if app and tpl:
-                    candidates = (
-                        _list_entity_candidates(etype, app, tpl) if fetch_full else []
-                    )
-                    resolved.append(
-                        {
-                            "entity_type": etype,
-                            "internal_id": eid,
-                            "candidates": candidates,
-                            "note": (
-                                "Internal entity IDs are not exposed by the API. "
-                                "Match by name, system_name, or context from the URL."
-                            ),
-                            "full_data": None,
-                            "system_name": None,
-                            "application_system_name": app,
-                            "api_endpoint": (
-                                f"webapi/{_get_api_entity_type(etype)}/"
-                                f"{app}/{_get_api_entity_type(etype)}@{tpl}.<system_name>"
-                            ),
-                        }
-                    )
-                else:
-                    resolved.append(
-                        {
-                            "entity_type": etype,
-                            "internal_id": eid,
-                            "candidates": None,
-                            "note": "Cannot list candidates: no parent template context in URL.",
-                            "full_data": None,
-                            "system_name": None,
-                            "application_system_name": None,
-                            "api_endpoint": None,
-                        }
-                    )
-
-            elif etype == "Diagram":
-                diagram_data = _resolve_diagram(eid) if fetch_full else {}
-                resolved.append(
-                    {
-                        "entity_type": "ProcessDiagram",
-                        "internal_id": eid,
-                        "full_data": diagram_data.get("diagram_data")
-                        if fetch_full
-                        else None,
-                        "system_name": None,
-                        "application_system_name": parent_context.get("app"),
-                        "api_endpoint": "api/public/system/Process/DiagramService/ResolveDiagram",
-                        "candidates": None,
-                        "note": diagram_data.get("error")
-                        if not diagram_data.get("success")
-                        else None,
-                    }
-                )
-
-            elif etype == "Task":
-                task_data = None
-                task_error = None
-                if fetch_full:
-                    try:
-                        task_result = requests_._post_request(
-                            eid,
-                            "api/public/system/TeamNetwork/UserTaskService/Get",
-                        )
-                        if task_result.get("success"):
-                            task_data = task_result.get("raw_response")
-                        else:
-                            task_error = task_result.get("error")
-                    except Exception as e:
-                        task_error = str(e)
-
-                resolved.append(
-                    {
-                        "entity_type": "Task",
-                        "internal_id": eid,
-                        "full_data": task_data,
-                        "system_name": None,
-                        "application_system_name": None,
-                        "api_endpoint": "api/public/system/TeamNetwork/UserTaskService/Get",
-                        "candidates": None,
-                        "note": task_error
-                        or "Task resolved by ID. Full data available if UserTaskService is accessible.",
-                    }
-                )
-
-            elif etype == "NavigationSection":
-                resolved.append(
-                    {
-                        "entity_type": "NavigationSection",
-                        "internal_id": eid,
-                        "full_data": None,
-                        "system_name": None,
-                        "application_system_name": None,
-                        "api_endpoint": None,
-                        "candidates": None,
-                        "note": "Navigation section (workspace) — no direct API endpoint.",
-                    }
-                )
-
-            elif etype == "Record":
-                record_endpoint = f"webapi/Record/{eid}"
-                record_data = None
-                record_error = None
-                if fetch_full:
-                    try:
-                        rec_result = requests_._get_request(record_endpoint)
-                        if rec_result.get("success"):
-                            raw = rec_result.get("raw_response")
-                            if isinstance(raw, dict):
-                                resp = raw.get("response", {})
-                                if isinstance(resp, dict) and resp.get("success"):
-                                    record_data = resp
-                                else:
-                                    record_error = (
-                                        resp.get("error", {}).get("message")
-                                        if isinstance(resp.get("error"), dict)
-                                        else str(resp.get("error", ""))
-                                    )
-                        else:
-                            record_error = rec_result.get("error")
-                    except Exception as e:
-                        record_error = str(e)
-
-                resolved.append(
-                    {
-                        "entity_type": "Record",
-                        "internal_id": eid,
-                        "full_data": record_data,
-                        "system_name": None,
-                        "application_system_name": parent_context.get("app"),
-                        "api_endpoint": record_endpoint,
-                        "candidates": None,
-                        "note": record_error,
-                    }
-                )
-
-            elif etype == "App":
-                resolved.append(
-                    {
-                        "entity_type": "App",
-                        "internal_id": eid,
-                        "system_name": eid,
-                        "application_system_name": eid,
-                        "api_endpoint": "webapi/Solution",
-                        "full_data": None,
-                        "candidates": None,
-                        "note": "App identified by system name. Use list_applications to get details.",
-                    }
-                )
+            resolved.append({
+                "entity_type": etype,
+                "id": eid,
+                "system_name": alias,
+                "application_system_name": app or None,
+                "name": name,
+                "kind": ax.get("kind") if etype == "Button" else None,
+                "full_data": ax.get("raw") if fetch_full else None,
+            })
 
         return {
             "success": True,
