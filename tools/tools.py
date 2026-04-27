@@ -96,6 +96,9 @@ from .attributes_tools.tools_text_attribute import edit_or_create_text_attribute
 from .get_datetime import get_current_datetime
 
 # Expose Comindware Platform tools from all directories
+# Platform entity URL resolver
+from .platform_entity_resolver import resolve_entity
+
 # Templates tools
 from .templates_tools.tool_list_attributes import list_attributes
 from .templates_tools.tool_list_records import list_template_records

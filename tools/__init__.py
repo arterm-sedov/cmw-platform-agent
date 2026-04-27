@@ -36,6 +36,7 @@ from . import (
     attributes_tools,
     localization_tools,
     models,
+    platform_entity_resolver,
     requests_,
     templates_tools,
     tool_utils,
@@ -49,6 +50,8 @@ from .applications_tools import (
     list_applications,
     list_templates,
 )
+from .localization_tools import localize_aliases
+from .platform_entity_resolver import resolve_entity
 from .attributes_tools import (
     archive_or_unarchive_attribute,
     # General operations
@@ -190,4 +193,8 @@ __all__ = [
 
     # Localization tools
     "localize_aliases",
+
+    # Platform entity resolver
+    "resolve_entity",
+    "platform_entity_resolver",
 ]

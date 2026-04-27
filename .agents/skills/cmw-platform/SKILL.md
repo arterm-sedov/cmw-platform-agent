@@ -365,7 +365,81 @@ from tools.browser_tools import navigate_to_page, click_element, take_screenshot
 
 CMW Platform is a Single Page Application. Always use `wait_for` text or `networkidle` after navigation.
 
-**Architecture:**
+**Entity ID Prefix Registry:**
+
+| Prefix | Entity Type | Resolution Method |
+|--------|-------------|-------------------|
+| `oa.{N}` | Record Template | `TemplateService/List` (Type: Record) |
+| `pa.{N}` | Process Template | `TemplateService/List` (Type: Process) |
+| `ra.{N}` | Role Template | `TemplateService/List` (Type: Role) |
+| `os.{N}` | OrgStructure Template | `TemplateService/List` (Type: OrgStructure) |
+| `sln.{N}` | Solution/Application | Match `solution` field in TemplateService results |
+| `event.{N}` | Button (UserCommand) | List candidates via `UserCommand/List` |
+| `form.{N}` / `card.{N}` | Form | List candidates via `Form/List` |
+| `tb.{N}` | Toolbar | List candidates via `Toolbar/List` |
+| `lst.{N}` / `ds.{N}` | Dataset | List candidates via `Dataset/List` |
+| `diagram.{N}` | Diagram | `Process/DiagramService/ResolveDiagram` |
+| `role.{N}` | Role | `TemplateService/List` (Type: Role) |
+| `workspace.{N}` | Workspace | Metadata only (no known API) |
+| Plain `{N}` | Record | `GET webapi/Record/{recordId}` |
+
+**⚠️ Critical API Finding:** TemplateService/List is the ONLY endpoint that maps internal IDs (`oa.*`, `pa.*`, etc.) to system names + application context. For buttons/forms/toolbars/datasets, internal IDs are NOT exposed by any API — use `resolve_entity` tool to list candidates and match by name/context.
+
+**URL Resolution Tool:** Use `resolve_entity` to parse any CMW Platform URL and get API-ready entity objects:
+
+```python
+from tools.platform_entity_resolver import resolve_entity
+
+# Full URL with template + button
+result = resolve_entity.invoke({
+    "url_or_id": "https://host/#RecordType/oa.193/Operation/event.15199",
+    "fetch_full": True,
+})
+
+# Raw entity ID
+result = resolve_entity.invoke({"url_or_id": "oa.193"})
+
+# Process template with diagram
+result = resolve_entity.invoke({
+    "url_or_id": "#ProcessTemplate/pa.77/Designer/Revision/diagram.315",
+})
+```
+
+**Output structure:**
+```json
+{
+    "success": True,
+    "url_parsed": {
+        "original": "...",
+        "page_type": "RecordType",
+        "entities_found": [
+            {"type": "Template", "id": "oa.193"},
+            {"type": "Button", "id": "event.15199"}
+        ]
+    },
+    "resolved": [
+        {
+            "entity_type": "Template",
+            "internal_id": "oa.193",
+            "system_name": "MaintenancePlans",
+            "application_system_name": "FacilityManagement",
+            "solution_id": "sln.23",
+            "api_endpoint": "webapi/RecordTemplate/FacilityManagement/MaintenancePlans",
+            "full_data": { ... }
+        },
+        {
+            "entity_type": "Button",
+            "internal_id": "event.15199",
+            "candidates": [
+                {"system_name": "schedule_maintenance", "name": "...", "kind": "UserEvent", ...}
+            ],
+            "note": "Internal entity IDs not exposed by API. Match by name/context."
+        }
+    ]
+}
+```
+
+**Architecture — Settings Pages:**
 | Page | URL |
 |------|-----|
 | Applications | `#Settings/Applications` |
@@ -406,15 +480,58 @@ CMW Platform is a Single Page Application. Always use `wait_for` text or `networ
 | Processes | `#Settings/Processes` |
 | Version Management | `#Settings/VersionManagement` |
 
-**Other:**
-| Page | URL |
-|------|-----|
-| Administration (hub) | `#Settings/Administration` |
-| Global Security | `#Settings/globalSecurity` |
-| Solutions | `#solutions` |
-| Dashboard | `#desktop/` |
-| Application data | `#app/{AppSystemName}/list/{TemplateSystemName}` |
-| Record view | `#app/{AppSystemName}/view/{TemplateSystemName}/{recordId}` |
+**Solutions & Entity Views:**
+| Page | URL | Entities |
+|------|-----|----------|
+| Administration (hub) | `#Settings/Administration` | None |
+| Global Security | `#Settings/globalSecurity` | None |
+| Global Security Role | `#Settings/globalSecurity/role.{N}` | Role |
+| Global Security Privileges | `#Settings/globalSecurity/role.{N}/privileges` | Role |
+| Solutions | `#solutions` | None |
+| Solution Admin | `#solutions/sln.{N}/Administration` | Solution |
+| Solution Diagrams | `#solutions/sln.{N}/DiagramList/showAll` | Solution |
+| Solution Roles | `#solutions/sln.{N}/roles` | Solution |
+| Solution Role | `#solutions/sln.{N}/roles/role.{M}` | Solution + Role |
+| Solution Workspaces | `#solutions/Workspaces` | None |
+| Solution Workspace | `#solutions/sln.{N}/Workspaces/workspace.{M}` | Solution + Workspace |
+| Dashboard | `#desktop/` | None |
+
+**Record Template Views (`oa.{N}`, `ra.{N}`, `os.{N}`):**
+| Page | URL | Entities |
+|------|-----|----------|
+| Administration | `#RecordType/oa.{N}/Administration` | Template |
+| Context | `#RecordType/oa.{N}/Context` | Template |
+| Forms | `#RecordType/oa.{N}/Forms` | Template |
+| Form | `#RecordType/oa.{N}/Forms/form.{M}` | Template + Form |
+| Operations | `#RecordType/oa.{N}/Operations` | Template |
+| Operation | `#RecordType/oa.{N}/Operation/event.{M}` | Template + Button |
+| Toolbar | `#RecordType/oa.{N}/Toolbar/` | Template |
+| Toolbar Settings | `#RecordType/oa.{N}/Toolbar/Settings/tb.{M}` | Template + Toolbar |
+| Card | `#RecordType/oa.{N}/Card/` | Template |
+| Card Settings | `#RecordType/oa.{N}/Card/Settings/card.{M}` | Template + Form |
+| Lists | `#RecordType/oa.{N}/Lists/` | Template |
+| List | `#RecordType/oa.{N}/Lists/lst.{M}` | Template + Dataset |
+| CSV Export | `#RecordType/oa.{N}/csv` | Template |
+| Security | `#RecordType/oa.{N}/Security` | Template |
+| Document Templates | `#RecordType/oa.{N}/DocumentsTemplates` | Template |
+
+**Process Template Views (`pa.{N}`):**
+| Page | URL | Entities |
+|------|-----|----------|
+| Designer Diagram | `#ProcessTemplate/pa.{N}/Designer/Revision/diagram.{M}` | Process + Diagram |
+| Lists | `#ProcessTemplate/pa.{N}/Lists/` | Process |
+| List | `#ProcessTemplate/pa.{N}/Lists/lst.{M}` | Process + Dataset |
+| Toolbar | `#ProcessTemplate/pa.{N}/Toolbar/tb.{M}` | Process + Toolbar |
+| Operation | `#ProcessTemplate/pa.{N}/Operation/event.{M}` | Process + Button |
+
+**Data & Form Views:**
+| Page | URL | Entities |
+|------|-----|----------|
+| Data view | `#data/oa.{N}/lst.{M}/...` | Template + Dataset (+ query params) |
+| Form view | `#form/oa.{N}/form.{M}/{recordId}` | Template + Form + Record |
+| App data list | `#app/{App}/list/{Tpl}` | App + Template |
+| App record view | `#app/{App}/view/{Tpl}/{recordId}` | App + Template + Record |
+| Entity resolver | `#Resolver/{id}` | Single entity |
 
 **Naming convention:** PascalCase (e.g. `#Settings/Applications`), with one camelCase exception: `#Settings/globalSecurity`.
 
