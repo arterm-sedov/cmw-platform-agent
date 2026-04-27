@@ -652,47 +652,49 @@ CMW Platform supports 29 button action types. The tool accepts LLM-friendly term
 
 **Common Button Kinds:**
 
-| LLM Term | API Term | Description |
-|----------|----------|-------------|
-| Trigger scenario | UserEvent | Execute custom scenario (default) |
-| Create | Create | Create new record (requires `create_form`) |
-| Edit | Edit | Edit existing record |
-| Delete | Delete | Delete record |
-| Archive | Archive | Archive record |
-| Unarchive | Unarchive | Restore archived record |
-| Script | Script | Execute script |
+| LLM Term | API Term | Description | Russian (RU) |
+|----------|----------|-------------|--------------|
+| Trigger scenario | UserEvent | Execute custom scenario (default) | Вызвать событие «Нажата кнопка» |
+| Create | Create | Create new record (requires `create_form`) | Создать |
+| Edit | Edit | Edit existing record | Редактировать |
+| Delete | Delete | Delete record | Удалить |
+| Archive | Archive | Archive record | Архивировать |
+| Unarchive | Unarchive | Restore archived record | Разархивировать |
+| Script | Script | Execute C# script | С# скрипт |
 
 **All 29 Valid Button Kinds:**
 
-1. **Undefined** - No specific action
-2. **Create** - Create new record (requires `create_form` parameter)
-3. **Edit** - Edit existing record
-4. **Delete** - Delete record
-5. **Archive** - Archive record
-6. **Unarchive** - Restore archived record
-7. **ExportObject** - Export single object
-8. **ExportList** - Export list of objects
-9. **CreateRelated** - Create related record
-10. **CreateToken** - Create token
-11. **RetryTokens** - Retry tokens
-12. **Migrate** - Migrate data
-13. **StartCase** - Start case
-14. **StartLinkedCase** - Start linked case
-15. **StartProcess** - Start process
-16. **StartLinkedProcess** - Start linked process
-17. **CompleteTask** - Complete task
-18. **ReassignTask** - Reassign task
-19. **Defer** - Defer action
-20. **Accept** - Accept action
-21. **Uncomplete** - Mark as incomplete
-22. **Follow** - Follow record
-23. **Unfollow** - Unfollow record
-24. **Exclude** - Exclude from list
-25. **Include** - Include in list
-26. **Script** - Execute script
-27. **Cancel** - Cancel action
-28. **EditDiagram** - Edit diagram
-29. **UserEvent** - Execute custom scenario (use "Trigger scenario" in tool calls)
+| # | API Term | English | Russian (RU) |
+|---|----------|---------|--------------|
+| 1 | Undefined | No specific action | - |
+| 2 | Create | Create new record (requires `create_form`) | Создать |
+| 3 | Edit | Edit existing record | Редактировать |
+| 4 | Delete | Delete record | Удалить |
+| 5 | Archive | Archive record | Архивировать |
+| 6 | Unarchive | Restore archived record | Разархивировать |
+| 7 | ExportObject | Export single object | Экспорт записи |
+| 8 | ExportList | Export list of objects | Экспорт таблицы |
+| 9 | CreateRelated | Create related record | Создать связанную запись |
+| 10 | CreateToken | Create token | Создать токен |
+| 11 | RetryTokens | Retry tokens | Перезапустить токены |
+| 12 | Migrate | Migrate data | Мигрировать |
+| 13 | StartCase | Start case | - |
+| 14 | StartLinkedCase | Start linked case | - |
+| 15 | StartProcess | Start process | Запустить процесс |
+| 16 | StartLinkedProcess | Start linked process | Запустить процесс по связанному шаблону |
+| 17 | CompleteTask | Complete task | Завершить задачу |
+| 18 | ReassignTask | Reassign task | Переназначить |
+| 19 | Defer | Defer action | Отложить выполнение |
+| 20 | Accept | Accept action | Принять |
+| 21 | Uncomplete | Mark as incomplete | Открыть заново |
+| 22 | Follow | Follow record | Привязать к шаблону |
+| 23 | Unfollow | Unfollow record | Отвязать от шаблону |
+| 24 | Exclude | Exclude from list | - |
+| 25 | Include | Include in list | - |
+| 26 | Script | Execute C# script | С# скрипт |
+| 27 | Cancel | Cancel action | Остановить процесс |
+| 28 | EditDiagram | Edit diagram | - |
+| 29 | UserEvent | Execute custom scenario (use "Trigger scenario") | Вызвать событие «Нажата кнопка» |
 
 **Usage Examples:**
 
