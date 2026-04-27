@@ -30,7 +30,7 @@ class EditOrCreateButtonSchema(CommonButtonFields):
         default=None,
         description="Description of what the button does.",
     )
-    kind: str = Field(
+    kind: str | None = Field(
         default="Trigger scenario",
         description=(
             "Button action type. Common values:\n"
@@ -283,7 +283,7 @@ def edit_or_create_button(
     button_system_name: str,
     name: str | None = None,
     description: str | None = None,
-    kind: str = "Trigger scenario",
+    kind: str | None = None,
     context: str | None = None,
     multiplicity: str = "OneByOne",
     result_type: str = "DataChange",
@@ -325,6 +325,9 @@ def edit_or_create_button(
     # Resolve effective context: explicit value, or "Record" for new buttons
     effective_context = context if context is not None else "Record"
 
+    # Resolve effective kind: explicit value, or "UserEvent" (from "Trigger scenario" default)
+    effective_kind = kind if kind is not None else "UserEvent"
+
     # Build relatedAction for Create-kind buttons
     def _build_related_action(tmpl: str, form: str) -> dict[str, Any]:
         return {
@@ -343,7 +346,7 @@ def edit_or_create_button(
         },
         "context": effective_context,
         "multiplicity": multiplicity,
-        "kind": kind,
+        "kind": effective_kind,
         "resultType": result_type,
         "isPrepare": is_prepare,
         "skipValidation": skip_validation,
@@ -365,9 +368,8 @@ def edit_or_create_button(
                 current["name"] = name
             if description is not None:
                 current["description"] = description
-            # Only update kind if it's not the default UserEvent
-            # (UserEvent is the default after validator mapping from "Trigger scenario")
-            if kind != "UserEvent":
+            # Update kind if explicitly provided (not None)
+            if kind is not None:
                 current["kind"] = kind
             if has_confirmation:
                 current["isConfirmationActive"] = has_confirmation
