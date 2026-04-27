@@ -32,7 +32,22 @@ class EditOrCreateButtonSchema(CommonButtonFields):
     )
     kind: str = Field(
         default="Trigger scenario",
-        description="Button action: Trigger scenario (triggers scenario on click), Create, Edit, Delete, Archive, Unarchive, Test. Default: Trigger scenario",
+        description=(
+            "Button action type. Common values:\n"
+            "- 'Trigger scenario' (default): Execute custom scenario (maps to UserEvent)\n"
+            "- 'Create': Create new record\n"
+            "- 'Edit': Edit existing record\n"
+            "- 'Delete': Delete record\n"
+            "- 'Archive': Archive record\n"
+            "- 'Unarchive': Restore archived record\n"
+            "- 'Script': Execute script\n"
+            "\n"
+            "Advanced kinds: ExportObject, ExportList, CreateRelated, StartCase, "
+            "StartProcess, CompleteTask, ReassignTask, Defer, Accept, Follow, "
+            "Unfollow, Exclude, Include, Cancel, EditDiagram, and more.\n"
+            "\n"
+            "See skill documentation for complete list of 29 valid kinds."
+        ),
     )
     context: str | None = Field(
         default=None,
@@ -99,6 +114,116 @@ class EditOrCreateButtonSchema(CommonButtonFields):
             }
             return mapping.get(v, v)
         return v
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _normalize_kind(cls, v: Any) -> Any:
+        """
+        Normalize button kind values.
+
+        Maps LLM-friendly terms to API enum values.
+        Validates against the 29 valid kind values from CMW Platform API.
+
+        LLM-Friendly Mappings:
+        - "Trigger scenario" → "UserEvent" (custom scenario execution)
+        - "trigger_scenario" → "UserEvent" (snake_case variant)
+
+        All 29 API enum values pass through unchanged (case-insensitive).
+
+        Raises:
+            ValueError: If kind is not in valid enum or mappings
+        """
+        if v is None:
+            return v
+
+        if not isinstance(v, str):
+            return v
+
+        # Normalize for comparison (lowercase, no spaces/underscores)
+        v_normalized = v.strip().lower().replace(" ", "").replace("_", "")
+
+        # LLM-friendly → API term mappings (all lowercase, no spaces/underscores)
+        llm_to_api = {
+            "triggerscenario": "UserEvent",
+            "userevent": "UserEvent",
+            "create": "Create",
+            "edit": "Edit",
+            "delete": "Delete",
+            "archive": "Archive",
+            "unarchive": "Unarchive",
+            "exportobject": "ExportObject",
+            "exportlist": "ExportList",
+            "createrelated": "CreateRelated",
+            "createtoken": "CreateToken",
+            "retrytokens": "RetryTokens",
+            "migrate": "Migrate",
+            "startcase": "StartCase",
+            "startlinkedcase": "StartLinkedCase",
+            "startprocess": "StartProcess",
+            "startlinkedprocess": "StartLinkedProcess",
+            "completetask": "CompleteTask",
+            "reassigntask": "ReassignTask",
+            "defer": "Defer",
+            "accept": "Accept",
+            "uncomplete": "Uncomplete",
+            "follow": "Follow",
+            "unfollow": "Unfollow",
+            "exclude": "Exclude",
+            "include": "Include",
+            "script": "Script",
+            "cancel": "Cancel",
+            "editdiagram": "EditDiagram",
+            "undefined": "Undefined",
+        }
+
+        # Try mapping first
+        if v_normalized in llm_to_api:
+            return llm_to_api[v_normalized]
+
+        # If exact match to API enum (case-sensitive), pass through
+        valid_api_kinds = {
+            "Undefined",
+            "Create",
+            "Edit",
+            "Delete",
+            "Archive",
+            "Unarchive",
+            "ExportObject",
+            "ExportList",
+            "CreateRelated",
+            "CreateToken",
+            "RetryTokens",
+            "Migrate",
+            "StartCase",
+            "StartLinkedCase",
+            "StartProcess",
+            "StartLinkedProcess",
+            "CompleteTask",
+            "ReassignTask",
+            "Defer",
+            "Accept",
+            "Uncomplete",
+            "Follow",
+            "Unfollow",
+            "Exclude",
+            "Include",
+            "Script",
+            "Cancel",
+            "EditDiagram",
+            "UserEvent",
+        }
+
+        if v in valid_api_kinds:
+            return v
+
+        # Invalid kind
+        valid_kinds_str = ", ".join(sorted(valid_api_kinds))
+        msg = (
+            f"Invalid button kind: '{v}'. "
+            f"Use 'Trigger scenario' for custom scenarios, or one of: "
+            f"{valid_kinds_str}"
+        )
+        raise ValueError(msg)
 
     @model_validator(mode="after")
     def _validate_create_required_fields(self) -> "EditOrCreateButtonSchema":
@@ -240,7 +365,9 @@ def edit_or_create_button(
                 current["name"] = name
             if description is not None:
                 current["description"] = description
-            if kind != "Trigger scenario":
+            # Only update kind if it's not the default UserEvent
+            # (UserEvent is the default after validator mapping from "Trigger scenario")
+            if kind != "UserEvent":
                 current["kind"] = kind
             if has_confirmation:
                 current["isConfirmationActive"] = has_confirmation
