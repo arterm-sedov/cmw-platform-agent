@@ -255,7 +255,7 @@ The CLI is available in the shell as `agent-browser`. Full command reference is 
 
 ```powershell
 # Basic navigation + snapshot + action
-agent-browser open "https://bububu.bau.cbap.ru/"
+agent-browser open "https://your-platform.example.com/"
 agent-browser wait --load networkidle
 agent-browser snapshot -i
 agent-browser fill @e14 "bobragent"
@@ -265,14 +265,14 @@ agent-browser screenshot "cmw-platform-workspace/logged_in.png"
 agent-browser close
 
 # Headed mode (user can watch)
-agent-browser --headed open "https://bububu.bau.cbap.ru/"
+agent-browser --headed open "https://your-platform.example.com/"
 
 # Named persistent session (survives across shell invocations)
-agent-browser --session-name cmw-admin open "https://bububu.bau.cbap.ru/"
+agent-browser --session-name cmw-admin open "https://your-platform.example.com/"
 # ... login once ...
 agent-browser --session-name cmw-admin close   # state auto-saved
 # Later:
-agent-browser --session-name cmw-admin open "https://bububu.bau.cbap.ru/#Settings/Administration"
+agent-browser --session-name cmw-admin open "https://your-platform.example.com/#Settings/Administration"
 
 # Chain commands (& not && in PowerShell pipelines; use ; for simple chaining)
 agent-browser open "https://example.com"; agent-browser wait --load networkidle; agent-browser screenshot out.png
@@ -283,7 +283,7 @@ agent-browser get cdp-url
 
 **Auth vault (credentials stay encrypted, never in shell history):**
 ```powershell
-$env:CMW_PASSWORD | agent-browser auth save cmw --url "https://bububu.bau.cbap.ru/" --username bobragent --password-stdin
+$env:CMW_PASSWORD | agent-browser auth save cmw --url "https://your-platform.example.com/" --username bobragent --password-stdin
 agent-browser auth login cmw
 ```
 
@@ -319,7 +319,7 @@ The CLI is available in the shell as `playwright-cli`. Full command reference is
 
 ```powershell
 # Basic navigation + snapshot + action
-playwright-cli open "https://bububu.bau.cbap.ru/"
+playwright-cli open "https://your-platform.example.com/"
 playwright-cli snapshot
 playwright-cli click e14
 playwright-cli fill e14 "bobragent"
@@ -329,11 +329,11 @@ playwright-cli screenshot page.png
 playwright-cli close
 
 # Headed mode (user can watch)
-playwright-cli --headed open "https://bububu.bau.cbap.ru/"
+playwright-cli --headed open "https://your-platform.example.com/"
 
 # Cross-browser testing
-playwright-cli --browser firefox open "https://bububu.bau.cbap.ru/"
-playwright-cli --browser webkit open "https://bububu.bau.cbap.ru/"
+playwright-cli --browser firefox open "https://your-platform.example.com/"
+playwright-cli --browser webkit open "https://your-platform.example.com/"
 
 # Advanced features
 playwright-cli pdf --filename report.pdf
