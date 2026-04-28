@@ -77,13 +77,16 @@ def get_platform_entity_url(
     - Navigation sections / workspaces (workspace.*)
     - Records (plain numeric IDs)
     - Process diagrams (diagram.*)
+    - Scenarios / triggers
 
     Non-resolvable (modal-only, no standalone URL):
-    - Attributes (op.*) — opened within template editor
-    - Groups — opened within template editor
+    - Attributes (op.*)
+    - Groups
+    - Communication routes
+    - Connections
 
-    system_name lookup: works for templates, applications, and roles only.
-    For child entities (buttons, forms, toolbars, tables), provide entity_id.
+    system_name lookup: works for resolvable entities that have a system name.
+    If multiple matches found, all are returned for review.
 
     Usage:
         # By entity ID (fastest, works for all resolvable types)
