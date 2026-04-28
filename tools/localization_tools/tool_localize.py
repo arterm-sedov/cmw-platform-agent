@@ -1,20 +1,24 @@
 # tool_localize.py - Localization workflow for system names (aliases) and display names
 from __future__ import annotations
 
+import base64
 import json
 import os
-import re
 from pathlib import Path
+import re
 from typing import Any
 
+from dotenv import load_dotenv
 import requests
+
+from tools.transfer_tools.tool_export_application import export_application
 
 try:
     from langchain_core.tools import tool
     from pydantic import BaseModel, Field
 except ImportError:
-    from tools.tool_utils import tool
     from tools.models import BaseModel, Field
+    from tools.tool_utils import tool
 
 
 TYPE_FOLDER_MAPPING: dict[str, str] = {
@@ -99,7 +103,7 @@ class LocalizeSchema(BaseModel):
 def collect_aliases_from_json_folder(
     folder_path: str,
     collect_aliases: bool = True,
-    collect_display_names: bool = True
+    collect_display_names: bool = True,
 ) -> list[dict[str, Any]]:
     """
     Collect aliases and/or display names from JSON folder.
@@ -112,13 +116,12 @@ def collect_aliases_from_json_folder(
     Returns:
         List of objects with collected data
     """
-    results = []
+    results: list[dict[str, Any]] = []
     path = Path(folder_path)
 
     for json_file in path.rglob("*.json"):
         try:
-            with open(json_file, "r", encoding="utf-8") as f:
-                content = f.read()
+            content = json_file.read_text(encoding="utf-8")
         except Exception:
             continue
 
@@ -163,14 +166,14 @@ def collect_aliases_from_json_folder(
 
 EXPRESSION_KEYS = {"Expression", "Code", "ValueExpression", "ValidationScript"}
 
+
 def check_aliases_in_json_folder(folder_path: str, aliases: set[str]) -> dict[str, bool]:
-    mentions = {alias: False for alias in aliases}
+    mentions = dict.fromkeys(aliases, False)
     path = Path(folder_path)
 
     for json_file in path.rglob("*.json"):
         try:
-            with open(json_file, "r", encoding="utf-8") as f:
-                content = f.read()
+            content = json_file.read_text(encoding="utf-8")
         except Exception:
             continue
 
@@ -178,18 +181,17 @@ def check_aliases_in_json_folder(folder_path: str, aliases: set[str]) -> dict[st
             if mentions[alias]:
                 continue
 
-            safe_alias = re.escape(alias)
-
             for key in EXPRESSION_KEYS:
                 expression_pattern = rf'"{key}"\s*:\s*"[^"]*{re.escape(alias)}[^"]*"'
                 if re.search(expression_pattern, content):
                     mentions[alias] = True
                     break
 
+    return mentions
+
 
 def get_config() -> dict[str, Any]:
     try:
-        from dotenv import load_dotenv
         load_dotenv()
         return {
             "base_url": os.environ.get("CMW_BASE_URL", "").strip(),
@@ -207,7 +209,6 @@ def get_config() -> dict[str, Any]:
 
 
 def get_headers() -> dict[str, str]:
-    import base64
     cfg = get_config()
     credentials = base64.b64encode(f"{cfg['login']}:{cfg['password']}".encode("ascii")).decode("ascii")
     return {
@@ -283,7 +284,6 @@ def localize_aliases(
 
     if not ctf_file_path and application_system_name:
         try:
-            from tools.transfer_tools.tool_export_application import export_application
             export_result = export_application.invoke({
                 "application_system_name": application_system_name,
                 "save_to_file": True,
@@ -363,11 +363,13 @@ def localize_aliases(
     results["verified_aliases"] = verified_aliases
     results["aliases_verified"] = len(verified_aliases)
 
-    missing = []
+    missing: list[dict[str, str]] = []
     for obj_type, type_aliases in aliases_by_type.items():
-        for alias in type_aliases:
-            if alias not in verified_aliases:
-                missing.append({"alias": alias, "type": obj_type})
+        missing.extend(
+            {"alias": alias, "type": obj_type}
+            for alias in type_aliases
+            if alias not in verified_aliases
+        )
 
     results["aliases_missing"] = missing
 
@@ -382,7 +384,7 @@ def localize_aliases(
 
     for item in results["aliases"]:
         alias = item["alias"]
-        if alias in mentions and mentions[alias]:
+        if mentions.get(alias):
             dangerous.append({
                 "alias": alias,
                 "type": item["type"],
@@ -443,7 +445,6 @@ def localize_aliases(
         new_ctf_path = None
         if renamed:
             try:
-                from tools.transfer_tools.tool_export_application import export_application
                 export_result = export_application.invoke({
                     "application_system_name": application_system_name,
                     "save_to_file": True,
@@ -459,22 +460,20 @@ def localize_aliases(
             safe_alias = re.escape(alias)
             patterns = [
                 r'"\s*' + safe_alias + r'\s*"',
-                r'\$\{' + safe_alias + r'\}',
-                r'->\{' + safe_alias + r'\}',
+                r"\$\{" + safe_alias + r"\}",
+                r"->\{" + safe_alias + r"\}",
             ]
 
             for json_file in Path(json_folder).rglob("*.json"):
                 try:
-                    with open(json_file, "r", encoding="utf-8") as f:
-                        content = f.read()
+                    content = json_file.read_text(encoding="utf-8")
 
                     original_content = content
                     for pattern in patterns:
                         content = re.sub(pattern, '"' + new_alias + '"', content)
 
                     if content != original_content:
-                        with open(json_file, "w", encoding="utf-8") as f:
-                            f.write(content)
+                        json_file.write_text(content, encoding="utf-8")
                         json_updated += 1
                 except Exception:
                     continue
@@ -493,14 +492,3 @@ def localize_aliases(
             results["import_command"] = "Export new CTF failed, cannot provide import command."
 
     return results
-
-
-if __name__ == "__main__":
-    result = localize_aliases.invoke({
-        "application_system_name": "supportTest",
-        "json_folder": "/tmp/cmw-workspaces",
-        "dangerous_suffix": "_calc",
-        "safe_suffix": "_sv",
-        "dry_run": True,
-    })
-    print(json.dumps(result, indent=2, ensure_ascii=False))
