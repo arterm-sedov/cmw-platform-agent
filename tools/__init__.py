@@ -28,8 +28,6 @@ except Exception:
     pass
 
 # Tools - Standalone tools
-from .get_datetime import get_current_datetime
-
 # Import all tool modules
 from . import (
     applications_tools,
@@ -50,8 +48,6 @@ from .applications_tools import (
     list_applications,
     list_templates,
 )
-from .localization_tools import localize_aliases
-from .platform_entity_resolver import resolve_entity
 from .attributes_tools import (
     archive_or_unarchive_attribute,
     # General operations
@@ -82,26 +78,29 @@ from .attributes_tools import (
     edit_or_create_text_attribute,
     get_attribute,
 )
+from .get_datetime import get_current_datetime
+from .localization_tools import localize_aliases
+from .platform_entity_resolver import resolve_entity
 from .templates_tools import (
     # Button tools
     archive_unarchive_button,
     edit_or_create_button,
-    # Form tools
-    edit_or_create_form,
     # Dataset tools
     edit_or_create_dataset,
-    get_dataset,
-    list_datasets,
+    # Form tools
+    edit_or_create_form,
     # Record template
     edit_or_create_record_template,
     # Toolbar tools
     edit_or_create_toolbar,
     get_button,
+    get_dataset,
     get_form,
     get_toolbar,
     # General operations
     list_attributes,
     list_buttons,
+    list_datasets,
     list_forms,
     list_toolbars,
 )
@@ -193,7 +192,6 @@ __all__ = [
 
     # Localization tools
     "localize_aliases",
-
     # Platform entity resolver
     "resolve_entity",
     "platform_entity_resolver",

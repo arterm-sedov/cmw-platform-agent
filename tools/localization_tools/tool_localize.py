@@ -103,12 +103,12 @@ def collect_aliases_from_json_folder(
 ) -> list[dict[str, Any]]:
     """
     Collect aliases and/or display names from JSON folder.
-    
+
     Args:
         folder_path: Path to CTF JSON folder
         collect_aliases: If True, collect alias data (system names)
         collect_display_names: If True, collect display name data (Name property)
-    
+
     Returns:
         List of objects with collected data
     """
@@ -230,15 +230,15 @@ def localize_aliases(
 ) -> dict[str, Any]:
     """
     Localization workflow for system names (aliases) and display names.
-    
+
     Collects aliases and/or display names from CTF JSON files, verifies them,
     and prepares localization data according to schema.json structure.
-    
+
     Collection is optional:
     - collect_aliases=True: Collect and track alias data (system names)
     - collect_display_names=True: Collect and track displayName data (Name property)
     - Both can be enabled/disabled independently
-    
+
     Workflow integration:
     - Aliases are applied via API (OntologyService/AddStatement)
     - DisplayNames are applied via CTF import (not API)
@@ -300,11 +300,11 @@ def localize_aliases(
         collect_aliases=collect_aliases,
         collect_display_names=collect_display_names
     )
-    
+
     # Count collected items by source
     alias_items = [item for item in results["aliases"] if item.get("source") == "alias"]
     name_items = [item for item in results["aliases"] if item.get("source") == "name"]
-    
+
     results["aliases_collected"] = len(alias_items)
     results["display_names_collected"] = len(name_items)
 
