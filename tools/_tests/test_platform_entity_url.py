@@ -260,8 +260,8 @@ class TestSystemNameLookup:
             assert len(result["matches"]) == 1
             assert result["matches"][0]["application"] == "CustomerPortal"
 
-    def test_system_name_no_match_returns_empty_matches(self):
-        """Unknown system name returns success with empty matches."""
+    def test_system_name_no_match_returns_error(self):
+        """Unknown system name returns error with helpful message."""
         with (
             patch("tools.requests_._load_server_config") as mock_cfg,
             patch("tools.applications_tools.tool_platform_entity_url.requests_._post_request") as mock_post,
@@ -273,8 +273,8 @@ class TestSystemNameLookup:
 
             result = get_platform_entity_url.invoke({"system_name": "nonexistent_alias"})
 
-            assert result["success"] is True
-            assert result["matches"] == []
+            assert result["success"] is False
+            assert "no entity found" in result["error"].lower()
 
     def test_system_name_empty_string_returns_error(self):
         """Empty system_name returns error."""

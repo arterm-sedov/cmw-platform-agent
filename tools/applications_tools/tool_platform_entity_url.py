@@ -21,7 +21,7 @@ class GetPlatformEntityUrlSchema(BaseModel):
         default=None,
         description=(
             "Platform entity ID to resolve. "
-            "Examples: 'oa.193', 'event.15199', 'sln.13', 'rec.12345'. "
+            "Examples: 'oa.193', 'event.15199', 'sln.13', '12345' (record). "
             "RU: ID сущности платформы для получения URL"
         ),
     )
@@ -29,6 +29,8 @@ class GetPlatformEntityUrlSchema(BaseModel):
         default=None,
         description=(
             "System name of the entity to look up across all applications. "
+            "Works for templates, applications, and roles. "
+            "For attributes, buttons, forms, datasets, toolbars — use entity_id instead. "
             "Examples: 'ServiceRequests', 'approve_request'. "
             "RU: Системное имя сущности для поиска"
         ),
@@ -59,15 +61,37 @@ def get_platform_entity_url(
     """
     Get a #Resolver URL for a platform entity by ID or system name.
 
-    Resolves entity IDs via GetAxioms or looks up by system name across all
-    applications. Returns entity metadata (type, name, parent, application)
-    alongside the URL.
+    Resolves entity IDs via GetAxioms (works for all entity types) or looks
+    up by system name across all applications. Returns entity metadata
+    (type, name, parent, application) alongside the URL.
+
+    Resolvable entities (have standalone #Resolver/{id} pages):
+    - Templates (oa.*, pa.*, ra.*, os.*)
+    - Applications (sln.*)
+    - Buttons (event.*)
+    - Toolbars (tb.*)
+    - Cards (card.*)
+    - Forms (form.*)
+    - Tables (lst.*, ds.*)
+    - Roles (role.*)
+    - Navigation sections / workspaces (workspace.*)
+    - Records (plain numeric IDs)
+    - Process diagrams (diagram.*)
+
+    Non-resolvable (modal-only, no standalone URL):
+    - Attributes (op.*) — opened within template editor
+    - Groups — opened within template editor
+
+    system_name lookup: works for templates, applications, and roles only.
+    For child entities (buttons, forms, toolbars, tables), provide entity_id.
 
     Usage:
-        # By entity ID (fastest)
+        # By entity ID (fastest, works for all resolvable types)
         get_platform_entity_url.invoke({"entity_id": "oa.193"})
+        get_platform_entity_url.invoke({"entity_id": "event.15199"})
+        get_platform_entity_url.invoke({"entity_id": "12345"})  # record
 
-        # By system name (searches all apps)
+        # By system name (templates, apps, roles only)
         get_platform_entity_url.invoke({"system_name": "ServiceRequests"})
 
         # By system name filtered by application
@@ -175,6 +199,13 @@ def _resolve_by_name(
             "parent_system_name": parent,
             "application": app_alias,
         })
+
+    if not matches:
+        return _error(
+            f"No entity found with system_name '{system_name}'"
+            + (f" in application '{application}'" if application else "")
+            + ". For attributes, buttons, forms, datasets, toolbars — use entity_id instead."
+        )
 
     return {
         "success": True,

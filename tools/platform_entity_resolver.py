@@ -106,6 +106,7 @@ _ID_PREFIX_MAP: dict[str, str] = {
     "diagram": "ProcessDiagram",  # API: diagram/scheme → human: process diagram
     "role": "Role",
     "workspace": "NavigationSection",  # API: workspace → human: navigation section
+    "op": "Attribute",  # API: property → human: attribute
 }
 
 # Compiled regex: matches prefix.number pattern (e.g., "oa.193", "event.454")
