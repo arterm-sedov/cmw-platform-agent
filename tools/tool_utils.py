@@ -283,13 +283,6 @@ ENTITY_TYPE_MAPPING = {
     "application": [None, APPLICATION_RESPONSE_MAPPING],
 }
 
-GET_URL_TYPE_MAPPING = {
-    "Record Template": "Record",
-    "Application": "Undefined",
-    "Role Template": "Role",
-    "Process Template": "Process",
-    "Organizational Structure Template": "OrgStructure",
-}
 
 
 def remove_values(obj: Any, exclude_values: set[Any] = None) -> Any:
