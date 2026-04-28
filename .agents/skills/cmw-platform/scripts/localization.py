@@ -70,7 +70,7 @@ FOLDER_TYPE_MAP = {v: k for k, v in TYPE_FOLDER_MAP.items()}
 
 SUB_TYPES = {"Attributes", "Datasets", "Forms", "Toolbars", "UserCommands"}
 
-EXPRESSION_KEYS = {"Expression", "Calculation", "DefaultExpression"}
+EXPRESSION_KEYS = {"Expression", "Code", "ValueExpression", "ValidationScript", "Calculation", "DefaultExpression"}
 
 SYSTEM_ALIASES = {
     "create", "edit", "delete", "archive", "deleteRole",
@@ -200,6 +200,11 @@ def collect_objects(base: Path, app_name: str) -> list[dict]:
         """Infer object type from folder structure and GlobalAlias."""
         parts = Path(folder_prefix).parts if folder_prefix else []
         if parts:
+            # Check immediate parent folder first (for nested objects)
+            immediate_parent = parts[-1] if parts else ""
+            if immediate_parent in SUB_TYPES:
+                return immediate_parent[:-1] if immediate_parent.endswith("s") else immediate_parent
+            # Fall back to first folder
             first_folder = parts[0]
             if first_folder in FOLDER_TYPE_MAP:
                 return FOLDER_TYPE_MAP[first_folder]
@@ -286,7 +291,7 @@ def analyze_dangerous(objects: list[dict], extract_dir: Path, app_name: str) -> 
         if alias in dangerous:
             suffix_map[alias] = "_calc"
         else:
-            suffix_map[alias] = "_calc"
+            suffix_map[alias] = "_sv"
 
     return suffix_map
 
@@ -302,26 +307,76 @@ def generate_tr_file(objects: list[dict], extract_dir: Path, app_name: str, ts: 
 
 
 def generate_report(objects: list[dict], ts: str, app_name: str, step_name: str) -> Path:
-    """Generate human-readable markdown report."""
+    """Generate human-readable markdown report with expressions."""
+    dangerous = [o for o in objects if o.get("aliasRenamed", "").endswith("_calc")]
+    safe = [o for o in objects if o.get("aliasRenamed", "").endswith("_sv")]
+
     lines = [
         f"# Localization Report: {app_name} - {step_name}",
         f"**Generated:** {ts}",
         f"**Total Objects:** {len(objects)}",
+        f"**Dangerous (_calc):** {len(dangerous)}",
+        f"**Safe (_sv):** {len(safe)}",
         "",
-        "## Objects",
+        "## Summary by Type",
         "",
-        "| # | Type | ID | aliasOriginal | aliasRenamed | displayNameOriginal |",
-        "|---|------|----|---------------|--------------|---------------------|",
+        "| Type | Total | Dangerous | Safe |",
+        "|------|-------|------------|------|",
     ]
 
-    for i, obj in enumerate(objects, 1):
-        alias_orig = obj.get("aliasOriginal", "")
-        alias_renamed = obj.get("aliasRenamed", "")
-        display_orig = obj.get("displayNameOriginal", "")
-        obj_id = obj.get("id", "")
-        obj_type = obj.get("type", "")
+    from collections import defaultdict
+    type_stats = defaultdict(lambda: {"total": 0, "dangerous": 0, "safe": 0})
+    for obj in objects:
+        t = obj["type"]
+        type_stats[t]["total"] += 1
+        if obj.get("aliasRenamed", "").endswith("_calc"):
+            type_stats[t]["dangerous"] += 1
+        else:
+            type_stats[t]["safe"] += 1
 
-        lines.append(f"| {i} | {obj_type} | {obj_id} | `{alias_orig}` | {alias_renamed} | {display_orig} |")
+    for t in sorted(type_stats.keys()):
+        s = type_stats[t]
+        lines.append(f"| {t} | {s['total']} | {s['dangerous']} | {s['safe']} |")
+
+    lines.extend(["", "---", "", "## Dangerous Aliases (with expressions)"])
+
+    for i, obj in enumerate(dangerous, 1):
+        lines.append(f"### {i}. {obj['aliasOriginal']} → {obj['aliasRenamed']}")
+        lines.append(f"- **Type:** {obj['type']}")
+        lines.append(f"- **Object ID:** {obj['id']}")
+        lines.append(f"- **Display Name:** {obj.get('displayNameOriginal', 'N/A')}")
+        lines.append(f"- **JSON Path:** `{obj.get('jsonPathOriginal', 'N/A')}`")
+        expressions = obj.get("expressions", [])
+        if expressions:
+            lines.append(f"- **Expressions ({len(expressions)}):**")
+            for expr in expressions[:5]:
+                lines.append(f"  - `{expr.get('jsonPathOriginal', 'unknown')}`")
+                expr_text = expr.get('expressionOriginal', '')[:150]
+                lines.append(f"    ```")
+                lines.append(f"    {expr_text}...")
+                lines.append(f"    ```")
+        lines.append("")
+
+    lines.extend(["", "---", "", "## Safe Aliases (sample)"])
+    lines.append("")
+    lines.append("| # | System Name | Display Name | Type | Renamed |")
+    lines.append("|---|-------------|-------------|------|---------|")
+    for i, obj in enumerate(safe[:100], 1):
+        display = obj.get('displayNameOriginal', 'N/A')[:40]
+        lines.append(f"| {i} | `{obj['aliasOriginal']}` | {display} | {obj['type']} | {obj['aliasRenamed']} |")
+
+    if len(safe) > 100:
+        lines.append(f"")
+        lines.append(f"... and {len(safe) - 100} more safe aliases.")
+
+    lines.extend(["", "---", "", "## Complete Object List"])
+    lines.append("")
+    lines.append("| Type | System Name | Display Name | ID | Renamed | Category |")
+    lines.append("|------|-------------|-------------|----|---------|-----------|")
+    for obj in objects:
+        display = obj.get('displayNameOriginal', 'N/A')[:40]
+        category = "Dangerous" if obj.get('aliasRenamed', '').endswith("_calc") else "Safe"
+        lines.append(f"| {obj['type']} | {obj['aliasOriginal']} | {display} | {obj['id']} | {obj['aliasRenamed']} | {category} |")
 
     report_text = "\n".join(lines)
     report_path = Path("/tmp/cmw-transfer") / f"{ts}_{app_name}_{step_name.replace(' ', '_')}.md"
@@ -346,9 +401,15 @@ def load_tr_file(tr_file: Path) -> tuple[list[dict], str]:
 
 
 def save_tr_file(tr_file: Path, objects: list[dict]):
-    """Save _tr file with current state."""
-    with open(tr_file, "w", encoding="utf-8") as f:
+    """Save _tr file with current state using atomic write."""
+    import tempfile
+    # Write to temp file first
+    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.tmp') as f:
         json.dump(objects, f, indent=2, ensure_ascii=False)
+        temp_path = f.name
+    # Atomic rename
+    import os
+    os.replace(temp_path, tr_file)
 
 
 def interactive_translate(tr_file: Path, objects: list[dict], resume_from: str = ""):
@@ -405,8 +466,8 @@ def interactive_translate(tr_file: Path, objects: list[dict], resume_from: str =
     print(f"\n=== Translation Complete ===")
 
 
-def apply_renames(objects: list[dict], app_name: str) -> tuple[int, int]:
-    """Apply aliasRenamed via API."""
+def apply_renames(objects: list[dict], app_name: str, tr_file: Path = None) -> tuple[int, int]:
+    """Apply aliasRenamed via API with progress tracking and state saving."""
     type_map = {
         "RecordTemplate": "RecordTemplate",
         "ProcessTemplate": "ProcessTemplate",
@@ -422,13 +483,25 @@ def apply_renames(objects: list[dict], app_name: str) -> tuple[int, int]:
         "Toolbar": "Toolbar",
         "UserCommand": "UserCommand",
         "WidgetConfig": "WidgetConfig",
+        "MessageTemplate": "MessageTemplate",
+        "Trigger": "Trigger",
+        "Cart": "Cart",
+        "OrgStructure": "OrgStructure",
     }
 
     success = 0
     failed = 0
+    total = len(objects)
+    batch_num = 0
+    batch_size = 100
 
     for i, obj in enumerate(objects):
         if not obj.get("id") or not obj.get("aliasRenamed"):
+            continue
+
+        # Skip already successfully renamed
+        if obj.get("renameStatus") == "success":
+            success += 1
             continue
 
         obj_type = obj["type"]
@@ -442,15 +515,28 @@ def apply_renames(objects: list[dict], app_name: str) -> tuple[int, int]:
             "new_value": obj["aliasRenamed"],
         })
 
+        # Update status in JSON
+        obj["renameStatus"] = "success" if result.get("success") else "failed"
+        obj["renameTimestamp"] = datetime.now().isoformat()
+
         if result.get("success"):
             success += 1
         else:
             failed += 1
 
-        if (i + 1) % 50 == 0:
-            print(f"  Progress: {i + 1}/{len(objects)} | Success: {success}, Failed: {failed}")
+        # Save state after each batch
+        if tr_file and (i + 1) % batch_size == 0:
+            save_tr_file(tr_file, objects)
+            batch_num += 1
+            print(f"  Batch {batch_num}: Progress: {i + 1}/{total} | Success: {success}, Failed: {failed}")
+            print(f"  State saved. Run script again to continue if timeout occurs.")
 
         time.sleep(0.05)
+
+    # Final save
+    if tr_file:
+        save_tr_file(tr_file, objects)
+        print(f"  Final: {total}/{total} | Success: {success}, Failed: {failed}")
 
     return success, failed
 
@@ -488,16 +574,16 @@ def fix_expressions_in_ctf(objects: list[dict], extract_dir: Path, app_name: str
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Volga1 Localization Utility",
+        description="CMW Platform Localization Utility",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python localization.py --app Volga1
-  python localization.py --app Volga1 --step 5 --resume MyAlias
-  python localization.py --app Volga1 --apply-only
+  python localization.py --app MyApp
+  python localization.py --app MyApp --step 5 --resume MyAlias
+  python localization.py --app MyApp --apply-only
         """,
     )
-    parser.add_argument("--app", required=True, help="Application name (e.g., Volga1)")
+    parser.add_argument("--app", required=True, help="Application system name")
     parser.add_argument(
         "--step",
         type=int,
@@ -538,6 +624,13 @@ Examples:
 
     ts = get_timestamp()
     extract_dir = base_dir / f"{app_name}-extract"
+
+    # Look for existing _tr file if resuming
+    tr_dir = extract_dir / f"{app_name}_tr"
+    existing_tr_files = list(tr_dir.glob("*_tr.json")) if tr_dir.exists() else []
+    existing_tr_files.extend(list(base_dir.glob(f"*_{app_name}_tr.json")))
+    existing_tr_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
     tr_file = base_dir / f"{ts}_{app_name}_tr.json"
 
     print(f"=== Localization: {app_name} [{ts}] ===")
@@ -585,7 +678,7 @@ Examples:
             suffix_map = analyze_dangerous(objects, extract_dir, app_name)
             for obj in objects:
                 if not obj.get("aliasRenamed"):
-                    suffix = suffix_map.get(obj["aliasOriginal"], "_calc")
+                    suffix = suffix_map.get(obj["aliasOriginal"], "_sv")
                     obj["aliasRenamed"] = f"{obj['aliasOriginal']}{suffix}"
 
         if args.step <= 4:
@@ -599,11 +692,15 @@ Examples:
         print(f"  python localization.py --app {app_name} --step 5 --resume <alias>")
         return
 
-    if args.step <= 5 and tr_file.exists():
+    # Use existing _tr file if available, otherwise use new one
+    active_tr_file = existing_tr_files[0] if existing_tr_files else tr_file
+
+    if args.step <= 5 and active_tr_file.exists():
         print(f"\n[{ts}] Step 5: Interactive translation...")
-        objects, last_alias = load_tr_file(tr_file)
+        print(f"  Using: {active_tr_file}")
+        objects, last_alias = load_tr_file(active_tr_file)
         resume_from = args.resume if args.resume else (last_alias if args.step == 5 else "")
-        interactive_translate(tr_file, objects, resume_from)
+        interactive_translate(active_tr_file, objects, resume_from)
 
         print(f"\n[{ts}] Step 5a: Generating jsonPathRenamed and report...")
         for obj in objects:
@@ -615,20 +712,30 @@ Examples:
                             obj["aliasOriginal"], obj["aliasRenamed"]
                         )
                         expr["jsonPathRenamed"] = expr["jsonPathOriginal"]
-        save_tr_file(tr_file, objects)
+        save_tr_file(active_tr_file, objects)
         generate_report(objects, ts, app_name, "JSON translated")
 
-    if args.step <= 6 and tr_file.exists():
+    if args.step <= 6 and active_tr_file.exists():
         print(f"\n[{ts}] Step 6: Applying renames...")
-        objects, _ = load_tr_file(tr_file)
-        objects = [o for o in objects if o.get("id") and o.get("aliasRenamed")]
-        success, failed = apply_renames(objects, app_name)
+        objects, _ = load_tr_file(active_tr_file)
+
+        # Filter: only objects with id and aliasRenamed
+        pending = [o for o in objects if o.get("id") and o.get("aliasRenamed")]
+
+        # Skip already successfully renamed (resume support)
+        pending = [o for o in pending if o.get("renameStatus") != "success"]
+
+        print(f"  Total: {len([o for o in objects if o.get('id') and o.get('aliasRenamed')])}")
+        print(f"  Pending: {len(pending)}")
+
+        success, failed = apply_renames(objects, app_name, active_tr_file)  # Pass FULL list
         print(f"  Applied: {success} success, {failed} failed")
+        print(f"  State saved to: {active_tr_file}")
 
     if args.step <= 7:
         print(f"\n[{ts}] Step 7: Restart required")
         print("  Aliases have been renamed. Please restart the platform now.")
-        print(f"  After restart, run: python localization.py --app {app_rename} --step 8")
+        print(f"  After restart, run: python localization.py --app {app_name} --step 8")
         return
 
     if args.step <= 8:
@@ -640,7 +747,7 @@ Examples:
 
     if args.step <= 9:
         print(f"\n[{ts}] Step 9: Fixing expressions...")
-        objects, _ = load_tr_file(tr_file)
+        objects, _ = load_tr_file(active_tr_file)
         fix_expressions_in_ctf(objects, extract_dir, app_name)
         print(f"  Expressions fixed in CTF")
 

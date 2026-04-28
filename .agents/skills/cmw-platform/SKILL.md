@@ -697,6 +697,8 @@ Scan all JSON files for `"Expression"` fields containing alias references **outs
 ```python
 import re
 
+EXPRESSION_KEYS = {"Expression", "Code", "ValueExpression", "ValidationScript"}
+
 def check_dangerous_aliases(json_folder: str, aliases: set[str]) -> dict[str, bool]:
     dangerous = {a: False for a in aliases}
     for json_file in Path(json_folder).rglob("*.json"):
@@ -704,9 +706,11 @@ def check_dangerous_aliases(json_folder: str, aliases: set[str]) -> dict[str, bo
         for alias in aliases:
             if dangerous[alias]:
                 continue
-            pattern = r'"Expression"\s*:\s*"[^"]*' + re.escape(alias) + r'[^"]*"'
-            if re.search(pattern, content):
-                dangerous[alias] = True
+            for key in EXPRESSION_KEYS:
+                pattern = rf'"{key}"\s*:\s*"[^"]*{re.escape(alias)}[^"]*"'
+                if re.search(pattern, content):
+                    dangerous[alias] = True
+                    break
     return dangerous
 ```
 
@@ -784,11 +788,10 @@ for alias, new_alias in dangerous_renames.items():
     safe_pattern = re.escape(alias)
     for json_file in Path(json_folder).rglob("*.json"):
         content = open(json_file).read()
-        # Replace in alias field
         content = re.sub(r'"Alias"\s*:\s*"' + safe_pattern + r'"', '"Alias": "' + new_alias + '"', content)
-        # Replace in expression field
-        content = re.sub(r'"Expression"\s*:\s*"[^"]*' + safe_pattern + r'[^"]*"',
-                        lambda m: m.group(0).replace(alias, new_alias), content)
+        for key in EXPRESSION_KEYS:
+            content = re.sub(rf'"{key}"\s*:\s*"[^"]*{safe_pattern}[^"]*"',
+                            lambda m: m.group(0).replace(alias, new_alias), content)
         open(json_file, "w").write(content)
 ```
 

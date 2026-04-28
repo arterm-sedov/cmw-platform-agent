@@ -161,6 +161,8 @@ def collect_aliases_from_json_folder(
     return results
 
 
+EXPRESSION_KEYS = {"Expression", "Code", "ValueExpression", "ValidationScript"}
+
 def check_aliases_in_json_folder(folder_path: str, aliases: set[str]) -> dict[str, bool]:
     mentions = {alias: False for alias in aliases}
     path = Path(folder_path)
@@ -178,11 +180,11 @@ def check_aliases_in_json_folder(folder_path: str, aliases: set[str]) -> dict[st
 
             safe_alias = re.escape(alias)
 
-            expression_pattern = r'"Expression"\s*:\s*"[^"]*' + safe_alias + r'[^"]*"'
-            if re.search(expression_pattern, content):
-                mentions[alias] = True
-
-    return mentions
+            for key in EXPRESSION_KEYS:
+                expression_pattern = rf'"{key}"\s*:\s*"[^"]*{re.escape(alias)}[^"]*"'
+                if re.search(expression_pattern, content):
+                    mentions[alias] = True
+                    break
 
 
 def get_config() -> dict[str, Any]:
