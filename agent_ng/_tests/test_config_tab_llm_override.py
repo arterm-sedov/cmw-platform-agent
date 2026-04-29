@@ -134,17 +134,22 @@ def test_session_data_uses_llm_override():
 
 
 def test_config_auto_load_on_startup():
-    """Test that UIManager wires config auto-load on startup"""
+    """Test that UIManager does NOT wire demo.load() for config
+    (avoids race with BrowserState async localStorage read)."""
     from agent_ng.ui_manager import UIManager
     import inspect
 
     source = inspect.getsource(UIManager._setup_auto_refresh)
 
-    assert "configtab_tab" in source, "UIManager doesn't reference configtab_tab"
-    assert "_load_from_state" in source, "UIManager doesn't wire _load_from_state"
-    assert "config_state" in source, "UIManager doesn't reference config_state"
+    # Comment explaining the race condition should be present
+    assert "BrowserState" in source, "UIManager should mention BrowserState"
+    assert "localStorage" in source, "UIManager should mention localStorage"
+    # Must NOT wire demo.load() specifically for config auto-load
+    assert "configtab_tab" not in source, (
+        "UIManager must not reference configtab_tab in _setup_auto_refresh"
+    )
 
-    print("✅ UIManager auto-loads browser config on startup")
+    print("✅ UIManager avoids demo.load() race for config auto-load")
 
 
 def main():
