@@ -210,8 +210,8 @@ class NextGenApp:
             )
         except ImportError:
             # Fallback for when running as script
-            from concurrency_config import get_concurrency_config
-            from queue_manager import create_queue_manager
+            from agent_ng.concurrency_config import get_concurrency_config
+            from agent_ng.queue_manager import create_queue_manager
 
             self.concurrency_config = get_concurrency_config()
             self.queue_manager = create_queue_manager(self.concurrency_config)
@@ -227,7 +227,7 @@ class NextGenApp:
             from .session_manager import SessionManager
         except ImportError:
             # Fallback for when running as script
-            from session_manager import SessionManager
+            from agent_ng.session_manager import SessionManager
         self.session_manager = SessionManager(language)
 
         # Create i18n instance for the specified language
@@ -242,7 +242,7 @@ class NextGenApp:
             from .debug_streamer import set_session_context
         except ImportError:
             # Fallback for when running as script
-            from debug_streamer import set_session_context
+            from agent_ng.debug_streamer import set_session_context
         self.set_session_context = set_session_context
         # self.chat_interface = get_chat_interface("app_ng")  # Dead code - never used
 

@@ -20,41 +20,45 @@ Key Modules:
 """
 
 # LangChain agent classes and functions
-from .langchain_agent import CmwAgent as NextGenAgent, ChatMessage
+# Error handling
+from .error_handler import ErrorHandler, ErrorInfo, ErrorType, get_error_handler
+
+# Unified key resolution
+from .key_resolution import get_api_key, get_provider_api_key
+from .langchain_agent import ChatMessage
+from .langchain_agent import CmwAgent as NextGenAgent
 
 # App interface - import only when needed to avoid circular imports
 # from .app_ng import NextGenApp, get_demo, main
-
 # LLM management
-from .llm_manager import LLMManager, LLMProvider, LLMConfig, LLMInstance, get_llm_manager
-
-# Error handling
-from .error_handler import ErrorHandler, ErrorInfo, ErrorType, get_error_handler
+from .llm_manager import (
+    LLMConfig,
+    LLMInstance,
+    LLMManager,
+    LLMProvider,
+    get_llm_manager,
+)
 
 # Note: Global agent instances have been removed in favor of session-specific agents
 # Use SessionManager.get_session_agent(session_id) to get agent instances
 
 __all__ = [
-
     # LangChain agent
-    'NextGenAgent',
-    'ChatMessage',
-
+    "NextGenAgent",
+    "ChatMessage",
     # App interface - commented out to avoid circular imports
     # 'NextGenApp',
     # 'get_demo',
     # 'main',
-
     # LLM management
-    'LLMManager',
-    'LLMProvider',
-    'LLMConfig',
-    'LLMInstance',
-    'get_llm_manager',
-
+    "LLMManager",
+    "LLMProvider",
+    "LLMConfig",
+    "LLMInstance",
+    "get_llm_manager",
     # Error handling
-    'ErrorHandler',
-    'ErrorInfo',
-    'ErrorType',
-    'get_error_handler'
+    "ErrorHandler",
+    "ErrorInfo",
+    "ErrorType",
+    "get_error_handler",
 ]

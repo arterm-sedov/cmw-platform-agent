@@ -70,6 +70,8 @@ class ConfigTab:
                     self.components["platform_url"],
                     self.components["username"],
                     self.components["password"],
+                    self.components["llm_provider_override"],
+                    self.components["llm_api_key_override"],
                 ],
             )(self._load_from_state)
 
@@ -82,6 +84,8 @@ class ConfigTab:
         """Create the configuration form with consistent styling"""
 
         url_init, login_init, password_init = "", "", ""
+        llm_provider_init = ""
+        llm_api_key_init = ""
 
         # Config state in browser localStorage (shared across tabs in same browser)
         self.components["config_state"] = gr.BrowserState(
@@ -89,6 +93,8 @@ class ConfigTab:
                 "url": url_init,
                 "username": login_init,
                 "password": password_init,
+                "llm_provider_override": llm_provider_init,
+                "llm_api_key_override": llm_api_key_init,
             },
             storage_key="cmw_config_v1",
         )
@@ -129,6 +135,33 @@ class ConfigTab:
                 show_copy_button=False,
             )
 
+            gr.Markdown("---")
+            gr.Markdown("**LLM API Key Override** (optional)")
+
+            llm_providers = [
+                "gemini",
+                "groq",
+                "huggingface",
+                "openrouter",
+                "mistral",
+                "gigachat",
+            ]
+            self.components["llm_provider_override"] = gr.Dropdown(
+                label="Provider (leave empty to use default from env)",
+                choices=["", *llm_providers],
+                value=llm_provider_init,
+            )
+
+            self.components["llm_api_key_override"] = gr.Textbox(
+                label="API Key (leave empty to use default from env)",
+                type="password",
+                value=llm_api_key_init,
+                lines=1,
+                max_lines=1,
+                show_copy_button=False,
+                placeholder="sk-...",
+            )
+
             with gr.Row(equal_height=True):
                 self.components["save_btn"] = gr.Button(
                     self._get_translation("config_save_button"),
@@ -160,6 +193,8 @@ class ConfigTab:
                 self.components["platform_url"],
                 self.components["username"],
                 self.components["password"],
+                self.components["llm_provider_override"],
+                self.components["llm_api_key_override"],
                 self.components["config_state"],
             ],
             outputs=[self.components["config_state"]],
@@ -173,6 +208,8 @@ class ConfigTab:
                 self.components["platform_url"],
                 self.components["username"],
                 self.components["password"],
+                self.components["llm_provider_override"],
+                self.components["llm_api_key_override"],
             ],
         )
 
@@ -185,6 +222,8 @@ class ConfigTab:
                 self.components["platform_url"],
                 self.components["username"],
                 self.components["password"],
+                self.components["llm_provider_override"],
+                self.components["llm_api_key_override"],
             ],
         )
 
@@ -194,6 +233,8 @@ class ConfigTab:
         url: str,
         username: str,
         password: str,
+        llm_provider_override: str,
+        llm_api_key_override: str,
         current_state: dict | None,
         request: gr.Request | None = None,
     ) -> dict:
@@ -202,12 +243,16 @@ class ConfigTab:
             url = (url or "").strip()
             username = (username or "").strip()
             password = (password or "").strip()
+            llm_provider_override = (llm_provider_override or "").strip()
+            llm_api_key_override = (llm_api_key_override or "").strip()
 
             # Prepare new state dict
             new_state = {
                 "url": url,
                 "username": username,
                 "password": password,
+                "llm_provider_override": llm_provider_override,
+                "llm_api_key_override": llm_api_key_override,
             }
 
             # Determine accurate session id
@@ -255,7 +300,9 @@ class ConfigTab:
         except Exception as e:
             logging.getLogger(__name__).exception("Save to browser state failed")
             with suppress(Exception):
-                message = self._get_translation("config_save_error") + "\n\n" + f"{str(e)}"
+                message = (
+                    self._get_translation("config_save_error") + "\n\n" + f"{str(e)}"
+                )
                 gr.Warning(message)
             return current_state or {}
         else:
@@ -263,7 +310,7 @@ class ConfigTab:
 
     def _load_from_state(
         self, state: Any, request: gr.Request | None = None
-    ) -> tuple[Any, Any, Any]:
+    ) -> tuple[Any, Any, Any, Any, Any]:
         """Load values from browser state only and update fields."""
         try:
             # Normalize state across gradio versions (may come as tuple or dict)
@@ -273,10 +320,21 @@ class ConfigTab:
                 state = {}
 
             # If state has non-empty values, use them
-            if any(state.get(k) for k in ("url", "username", "password")):
+            if any(
+                state.get(k)
+                for k in (
+                    "url",
+                    "username",
+                    "password",
+                    "llm_provider_override",
+                    "llm_api_key_override",
+                )
+            ):
                 url = state.get("url", "") or ""
                 login = state.get("username", "") or ""
                 pwd = state.get("password", "") or ""
+                llm_provider = state.get("llm_provider_override", "") or ""
+                llm_api_key = state.get("llm_api_key_override", "") or ""
                 # Also propagate BrowserState snapshot into per-session store
                 # for backend
                 try:
@@ -306,7 +364,13 @@ class ConfigTab:
                     if session_id:
                         set_session_config(
                             session_id,
-                            {"url": url, "username": login, "password": pwd},
+                            {
+                                "url": url,
+                                "username": login,
+                                "password": pwd,
+                                "llm_provider_override": llm_provider,
+                                "llm_api_key_override": llm_api_key,
+                            },
                         )
                         logging.getLogger(__name__).debug(
                             (
@@ -325,6 +389,7 @@ class ConfigTab:
                     )
             else:
                 url, login, pwd = "", "", ""
+                llm_provider, llm_api_key = "", ""
 
             with suppress(Exception):
                 gr.Info(self._get_translation("config_load_success"))
@@ -332,13 +397,19 @@ class ConfigTab:
                 gr.update(value=url),
                 gr.update(value=login),
                 gr.update(value=pwd),
+                gr.update(value=llm_provider),
+                gr.update(value=llm_api_key),
             )
         except Exception as e:
             logging.getLogger(__name__).exception("Load from browser state failed")
             with suppress(Exception):
-                message = self._get_translation("config_load_error") + "\n\n" + f"{str(e)}"
+                message = (
+                    self._get_translation("config_load_error") + "\n\n" + f"{str(e)}"
+                )
                 gr.Warning(message)
             return (
+                gr.update(),
+                gr.update(),
                 gr.update(),
                 gr.update(),
                 gr.update(),
@@ -346,15 +417,25 @@ class ConfigTab:
 
     # Removed .env loading: rely solely on browser state
 
-    def _clear_browser_storage(self, state: Any) -> tuple[dict, Any, Any, Any]:
+    def _clear_browser_storage(
+        self, state: Any
+    ) -> tuple[dict, Any, Any, Any, Any, Any]:
         """Clear browser-persisted state and reset input fields."""
         try:
-            new_state: dict = {}
+            new_state: dict = {
+                "url": "",
+                "username": "",
+                "password": "",
+                "llm_provider_override": "",
+                "llm_api_key_override": "",
+            }
 
             with suppress(Exception):
                 gr.Info(self._get_translation("config_clear_success"))
             return (
                 new_state,
+                gr.update(value=""),
+                gr.update(value=""),
                 gr.update(value=""),
                 gr.update(value=""),
                 gr.update(value=""),
@@ -366,7 +447,14 @@ class ConfigTab:
                 details = f"{str(e)}"
                 gr.Warning(base + "\n\n" + details)
             # Return original state if clear failed
-            return state or {}, gr.update(), gr.update(), gr.update()
+            return (
+                state or {},
+                gr.update(),
+                gr.update(),
+                gr.update(),
+                gr.update(),
+                gr.update(),
+            )
 
     def set_main_app(self, main_app: Any) -> None:
         """Set reference to main app for future integration needs."""

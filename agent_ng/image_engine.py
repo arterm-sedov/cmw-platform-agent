@@ -31,6 +31,8 @@ try:
     from .image_models import get_default_model, get_model_config
     from .image_providers import ImageGenerationResult, ImageRequest, get_provider
     from .image_providers.openrouter import OpenRouterProvider
+    from .key_resolution import get_provider_api_key
+    from .session_manager import get_current_session_id
 except ImportError:  # pragma: no cover — fallback for script / test harnesses
     from agent_ng.image_models import (  # type: ignore[no-redef]
         get_default_model,
@@ -44,6 +46,8 @@ except ImportError:  # pragma: no cover — fallback for script / test harnesses
     from agent_ng.image_providers.openrouter import (  # type: ignore[no-redef]
         OpenRouterProvider,
     )
+    from agent_ng.key_resolution import get_provider_api_key
+    from agent_ng.session_manager import get_current_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -71,17 +75,19 @@ class ImageEngine:
         api_key: str | None = None,
         base_url: str | None = None,
         timeout: float = 120.0,
+        session_id: str | None = None,
     ) -> None:
-        # Resolve the effective OpenRouter key so we can (a) preserve the
-        # historical ``engine.api_key`` attribute contract and (b) fail
-        # fast at construction when the default provider is unusable.
-        effective_key = (
-            api_key if api_key is not None else os.getenv("OPENROUTER_API_KEY")
+        # Image gen ONLY supports OpenRouter models.
+        # Provider is hardcoded here; key is resolved via unified resolution.
+        effective_key = get_provider_api_key(
+            provider="openrouter",
+            override_key=api_key,
+            session_id=session_id or get_current_session_id(),
         )
         if not effective_key:
             msg = (
-                "OPENROUTER_API_KEY is required (pass api_key= or set the "
-                "environment variable)."
+                "OPENROUTER_API_KEY is required (pass api_key= or set "
+                "the environment variable)."
             )
             raise ValueError(msg)
 
@@ -147,5 +153,6 @@ class ImageEngine:
             image_size=image_size,
         )
         return provider.generate(request)
+
 
 __all__ = ["ImageEngine", "ImageGenerationResult"]

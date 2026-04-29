@@ -4,18 +4,22 @@ Gemini Direct Vision Adapter - Provider-specific implementation for Gemini Direc
 Handles multimodal inputs (image, video, audio) for Gemini models via Direct API
 """
 
-from typing import Dict, Any, Optional
 import base64
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 try:
-    from ..vision_input import VisionInput, MediaType
-    from ..vision_tool_manager import VisionProviderAdapter
+    from ..key_resolution import get_provider_api_key
     from ..llm_manager import LLMManager, LLMProvider
+    from ..session_manager import get_current_session_id
+    from ..vision_input import MediaType, VisionInput
+    from ..vision_tool_manager import VisionProviderAdapter
 except ImportError:
-    from agent_ng.vision_input import VisionInput, MediaType
-    from agent_ng.vision_tool_manager import VisionProviderAdapter
+    from agent_ng.key_resolution import get_provider_api_key
     from agent_ng.llm_manager import LLMManager, LLMProvider
+    from agent_ng.session_manager import get_current_session_id
+    from agent_ng.vision_input import MediaType, VisionInput
+    from agent_ng.vision_tool_manager import VisionProviderAdapter
 
 
 class GeminiDirectVisionAdapter(VisionProviderAdapter):
@@ -44,12 +48,15 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
         try:
             from google import genai
             from google.genai import types
+
             self.genai = genai
             self.types = types
             self.available = True
         except ImportError:
             self.available = False
-            print("Warning: google-genai not available. Install with: pip install google-genai")
+            print(
+                "Warning: google-genai not available. Install with: pip install google-genai"
+            )
 
     def supports_media_type(self, media_type: MediaType) -> bool:
         """
@@ -67,7 +74,7 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
         # Gemini supports all media types
         return media_type in [MediaType.IMAGE, MediaType.VIDEO, MediaType.AUDIO]
 
-    def format_input(self, vision_input: VisionInput) -> Dict[str, Any]:
+    def format_input(self, vision_input: VisionInput) -> dict[str, Any]:
         """
         Format VisionInput into Gemini Direct API format
 
@@ -83,11 +90,11 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
         # Check for YouTube URL (Gemini supports direct YouTube URLs)
         if vision_input.video_url:
             video_url = vision_input.video_url
-            if 'youtube.com' in video_url or 'youtu.be' in video_url:
+            if "youtube.com" in video_url or "youtu.be" in video_url:
                 return {
                     "youtube_url": video_url,
                     "prompt": vision_input.prompt,
-                    "media_type": vision_input.media_type
+                    "media_type": vision_input.media_type,
                 }
 
         # Get media path for file upload
@@ -105,10 +112,10 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
         return {
             "media_path": media_path,
             "prompt": vision_input.prompt,
-            "media_type": vision_input.media_type
+            "media_type": vision_input.media_type,
         }
 
-    def invoke(self, vision_input: VisionInput, model: Optional[str] = None) -> str:
+    def invoke(self, vision_input: VisionInput, model: str | None = None) -> str:
         """
         Invoke Gemini Direct model with vision input
 
@@ -125,9 +132,11 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
         if not self.available:
             raise RuntimeError("Gemini SDK not available")
 
-        # Get Gemini client
-        import os
-        gemini_key = os.getenv('GEMINI_KEY')
+        # Unified key resolution: session llm_provider_override → llm_api_key_override → env var
+        gemini_key = get_provider_api_key(
+            provider="gemini",
+            session_id=get_current_session_id(),
+        )
         if not gemini_key:
             raise RuntimeError("GEMINI_KEY not found in environment")
 
@@ -149,15 +158,16 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
                 # Create content with YouTube URL and prompt
                 contents = self.types.Content(
                     parts=[
-                        self.types.Part(file_data=self.types.FileData(file_uri=youtube_url)),
-                        self.types.Part(text=prompt)
+                        self.types.Part(
+                            file_data=self.types.FileData(file_uri=youtube_url)
+                        ),
+                        self.types.Part(text=prompt),
                     ]
                 )
 
                 # Generate response
                 response = client.models.generate_content(
-                    model=model,
-                    contents=contents
+                    model=model, contents=contents
                 )
 
                 return response.text
@@ -171,16 +181,15 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
             # Create content with file and prompt
             contents = self.types.Content(
                 parts=[
-                    self.types.Part(file_data=self.types.FileData(file_uri=uploaded_file.uri)),
-                    self.types.Part(text=prompt)
+                    self.types.Part(
+                        file_data=self.types.FileData(file_uri=uploaded_file.uri)
+                    ),
+                    self.types.Part(text=prompt),
                 ]
             )
 
             # Generate response
-            response = client.models.generate_content(
-                model=model,
-                contents=contents
-            )
+            response = client.models.generate_content(model=model, contents=contents)
 
             return response.text
 
