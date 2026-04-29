@@ -220,6 +220,28 @@ class UIManager:
                 outputs=[self.components["stats_display"]]
             )
 
+        # Auto-load browser config on startup
+        config_tab = self.components.get("configtab_tab")
+        if (
+            config_tab
+            and "config_state" in self.components
+            and hasattr(config_tab, "_load_from_state")
+        ):
+            demo.load(
+                fn=config_tab._load_from_state,
+                inputs=[self.components["config_state"]],
+                outputs=[
+                    self.components.get("platform_url"),
+                    self.components.get("username"),
+                    self.components.get("password"),
+                    self.components.get("llm_provider_override"),
+                    self.components.get("llm_api_key_override"),
+                ],
+            )
+            logging.getLogger(__name__).debug(
+                "✅ Config auto-load wired for startup"
+            )
+
         # Setup auto-refresh timers for real-time updates
         self._setup_auto_refresh_timers(demo, event_handlers)
 
