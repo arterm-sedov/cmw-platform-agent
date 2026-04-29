@@ -170,6 +170,10 @@ class ConfigTab:
                 placeholder="sk-...",
             )
 
+            gr.Markdown(
+                "*" + self._get_translation("config_llm_empty_means_default") + "*"
+            )
+
             with gr.Row(equal_height=True):
                 self.components["save_btn"] = gr.Button(
                     self._get_translation("config_save_button"),
