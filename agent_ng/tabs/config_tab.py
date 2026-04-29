@@ -62,9 +62,12 @@ class ConfigTab:
             # Wire events
             self._connect_events()
 
-            # Auto-load BrowserState into fields on render (and when it changes)
+            # Auto-load BrowserState into fields on tab select and state change
             gr.on(
-                triggers=[self.components["config_state"].change],
+                triggers=[
+                    tab.select,
+                    self.components["config_state"].change,
+                ],
                 inputs=[self.components["config_state"]],
                 outputs=[
                     self.components["platform_url"],
