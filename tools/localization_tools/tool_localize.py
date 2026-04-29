@@ -1,506 +1,497 @@
 # tool_localize.py - Localization workflow for system names (aliases) and display names
+# Orchestrates helper scripts via direct imports
+# Output format: {domain}_{app}_aliases.json, {domain}_{app}_aliases_tr.json
 from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import json
 import os
-import re
-from pathlib import Path
 from typing import Any
-
-import requests
 
 try:
     from langchain_core.tools import tool
     from pydantic import BaseModel, Field
 except ImportError:
-    from tools.tool_utils import tool
     from tools.models import BaseModel, Field
+    from tools.tool_utils import tool
+
+# ============================================================================
+# CONSTANTS
+# ============================================================================
+SCRIPTS_DIR = Path(__file__).parent.parent.parent / ".agents/skills/cmw-platform/scripts"
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+def run_via_import(script_name: str, args: list[str], description: str = "") -> None:
+    """Run a helper script via import + mocked sys.argv. Raises RuntimeError on failure."""
+    if description:
+        print(f"\n{'='*60}")
+        print(f"Running: {description}")
+        print(f"Command: {script_name} {' '.join(args[:3])} ...")
+        print(f"{'='*60}")
+
+    # Mock sys.argv
+    old_argv = sys.argv
+    sys.argv = [script_name] + args
+
+    try:
+        # Import and call main()
+        script_path = SCRIPTS_DIR / script_name
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(script_name.replace(".py", ""), script_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        exit_code = module.main()
+        if exit_code != 0:
+            raise RuntimeError(f"{script_name} failed (exit {exit_code})")
+    except Exception as e:
+        raise RuntimeError(f"{script_name} failed: {e}")
+    finally:
+        sys.argv = old_argv
 
 
-TYPE_FOLDER_MAPPING: dict[str, str] = {
-    "RecordTemplate": "RecordTemplates",
-    "ProcessTemplate": "ProcessTemplates",
-    "RoleTemplate": "Roles",
-    "AccountTemplate": "Accounts",
-    "OrgStructureTemplate": "OrgStructure",
-    "MessageTemplate": "MessageTemplates",
-    "Workspace": "Workspaces",
-    "Page": "Pages",
-    "Attribute": "Attributes",
-    "Dataset": "Datasets",
-    "Toolbar": "Toolbars",
-    "Form": "Forms",
-    "UserCommand": "UserCommands",
-    "Card": "Cards",
-    "Cart": "Carts",
-    "Trigger": "Triggers",
-    "Role": "Roles",
-    "WidgetConfig": "WidgetConfigs",
-}
-
-FOLDER_TYPE_MAPPING: dict[str, str] = {v: k for k, v in TYPE_FOLDER_MAPPING.items()}
-
-TYPE_PREDICATE_MAPPING: dict[str, str] = {
-    "RecordTemplate": "cmw.container.alias",
-    "ProcessTemplate": "cmw.container.alias",
-    "RoleTemplate": "cmw.container.alias",
-    "AccountTemplate": "cmw.container.alias",
-    "OrgStructureTemplate": "cmw.container.alias",
-    "MessageTemplate": "cmw.message.type.alias",
-    "Workspace": "cmw.alias",
-    "Page": "cmw.desktopPage.alias",
-    "Attribute": "cmw.object.alias",
-    "Dataset": "cmw.alias",
-    "Toolbar": "cmw.alias",
-    "Form": "cmw.alias",
-    "UserCommand": "cmw.alias",
-    "Card": "cmw.alias",
-    "Cart": "cmw.cart.alias",
-    "Trigger": "cmw.trigger.alias",
-    "Role": "cmw.role.alias",
-    "WidgetConfig": "cmw.form.alias",
-}
+def get_domain_from_config() -> str:
+    """Extract domain from config URL."""
+    try:
+        from tools.config import get_config
+        base_url = get_config().get("base_url", "")
+        from urllib.parse import urlparse
+        return urlparse(base_url).netloc.split('.')[0] or "cmw"
+    except Exception:
+        return "cmw"
 
 
-class LocalizeSchema(BaseModel):
-    ctf_file_path: str | None = Field(
-        default=None,
-        description="Path to CTF file. If not provided, will export from application."
-    )
-    application_system_name: str | None = Field(
-        default=None,
-        description="Application system name for export (required if ctf_file_path not provided)"
-    )
-    json_folder: str = Field(
-        description="Path to folder containing JSON files to analyze"
-    )
-    dangerous_suffix: str = Field(
-        default="_calc",
-        description="Suffix for dangerous system names (mentioned outside alias)"
-    )
-    safe_suffix: str = Field(
-        default="_sv",
-        description="Suffix for safe system names (only in alias)"
-    )
-    dry_run: bool = Field(
-        default=True,
-        description="If True, only analyze without making changes"
-    )
-    collect_aliases: bool = Field(
-        default=True,
-        description="If True, collect alias data (system names)"
-    )
-    collect_display_names: bool = Field(
-        default=True,
-        description="If True, collect display name data (Name property)"
-    )
-
-
-def collect_aliases_from_json_folder(
-    folder_path: str,
-    collect_aliases: bool = True,
-    collect_display_names: bool = True
-) -> list[dict[str, Any]]:
-    """
-    Collect aliases and/or display names from JSON folder.
-    
-    Args:
-        folder_path: Path to CTF JSON folder
-        collect_aliases: If True, collect alias data (system names)
-        collect_display_names: If True, collect display name data (Name property)
-    
-    Returns:
-        List of objects with collected data
-    """
-    results = []
-    path = Path(folder_path)
-
-    for json_file in path.rglob("*.json"):
+def load_resume_state(output_dir: str, app: str) -> dict | None:
+    """Load resume state for translation."""
+    state_file = Path(output_dir) / f"{app}_localize_resume.json"
+    if state_file.exists():
         try:
-            with open(json_file, "r", encoding="utf-8") as f:
-                content = f.read()
-        except Exception:
+            with open(state_file, encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return None
+    return None
+
+
+def save_resume_state(output_dir: str, app: str, last_alias: str, index: int):
+    """Save resume state."""
+    from datetime import datetime
+    state_file = Path(output_dir) / f"{app}_localize_resume.json"
+    state = {
+        "last_alias": last_alias,
+        "last_index": index,
+        "updated": datetime.now().isoformat(),
+    }
+    with open(state_file, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+
+
+def fix_expressions_in_memory(objects: list, dangerous_suffix: str = "_calc") -> int:
+    """Fix _calc aliases in expression fields in objects list (in memory only)."""
+    import re
+    fixed_count = 0
+
+    for obj in objects:
+        if not obj.get("expressions"):
             continue
 
-        obj_type = None
-        for ftype, fname in TYPE_FOLDER_MAPPING.items():
-            if fname in json_file.parts:
-                obj_type = ftype
-                break
-
-        relative_path = str(json_file.relative_to(path))
-
-        # Collect Alias fields (skip system prefixes)
-        if collect_aliases:
-            for match in re.finditer(r'"Alias"\s*:\s*"([^"]+)"', content):
-                alias = match.group(1)
-                if alias.startswith(("cmw.", "oa.", "pa.", "msgt.", "aa.", "ra.", "os.")):
-                    continue
-                results.append({
-                    "alias": alias,
-                    "type": obj_type,
-                    "json_path": relative_path + "#$.GlobalAlias.Alias",
-                    "source": "alias",
-                })
-
-        # Collect Name fields (display names) - skip if looks like system alias
-        if collect_display_names:
-            for match in re.finditer(r'"Name"\s*:\s*"([^"]+)"', content):
-                name = match.group(1)
-                if name.startswith(("oa.", "pa.", "msgt.", "aa.", "ra.", "os.", "form.", "tb.", "lst.", "event.", "card.", "trigger.", "workspace.")):
-                    continue
-                if len(name) < 2:
-                    continue
-                results.append({
-                    "alias": name,
-                    "type": obj_type,
-                    "json_path": relative_path + "#$.Name",
-                    "source": "name",
-                })
-
-    return results
-
-
-EXPRESSION_KEYS = {"Expression", "Code", "ValueExpression", "ValidationScript"}
-
-def check_aliases_in_json_folder(folder_path: str, aliases: set[str]) -> dict[str, bool]:
-    mentions = {alias: False for alias in aliases}
-    path = Path(folder_path)
-
-    for json_file in path.rglob("*.json"):
-        try:
-            with open(json_file, "r", encoding="utf-8") as f:
-                content = f.read()
-        except Exception:
+        alias_original = obj.get("aliasOriginal", "")
+        alias_renamed = obj.get("aliasRenamed", "")
+        if not alias_renamed or not alias_renamed.endswith(dangerous_suffix):
             continue
 
-        for alias in aliases:
-            if mentions[alias]:
+        for expr in obj.get("expressions", []):
+            orig_expr = expr.get("expressionOriginal", "")
+            if not orig_expr:
                 continue
 
-            safe_alias = re.escape(alias)
+            new_expr = orig_expr
+            safe_alias = re.escape(alias_original)
 
-            for key in EXPRESSION_KEYS:
-                expression_pattern = rf'"{key}"\s*:\s*"[^"]*{re.escape(alias)}[^"]*"'
-                if re.search(expression_pattern, content):
-                    mentions[alias] = True
-                    break
+            patterns = [
+                (r'"' + safe_alias + r'"', f'"{alias_renamed}"'),
+                (r"\$\{" + safe_alias + r"\}", f"${{{alias_renamed}}}"),
+                (r"->\{" + safe_alias + r"\}", f"->{{{alias_renamed}}}"),
+                (r"\{" + safe_alias + r"\}->", f"{{{alias_renamed}}}->"),
+            ]
 
+            for pattern, replacement in patterns:
+                new_expr = re.sub(pattern, replacement, new_expr)
 
-def get_config() -> dict[str, Any]:
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-        return {
-            "base_url": os.environ.get("CMW_BASE_URL", "").strip(),
-            "login": os.environ.get("CMW_LOGIN", "").strip(),
-            "password": os.environ.get("CMW_PASSWORD", "").strip(),
-            "timeout": int(os.environ.get("CMW_TIMEOUT", "30").strip()),
-        }
-    except Exception:
-        return {
-            "base_url": "",
-            "login": "",
-            "password": "",
-            "timeout": 30,
-        }
+            if new_expr != orig_expr:
+                expr["expressionRenamed"] = new_expr
+                fixed_count += 1
+
+    return fixed_count
 
 
-def get_headers() -> dict[str, str]:
-    import base64
-    cfg = get_config()
-    credentials = base64.b64encode(f"{cfg['login']}:{cfg['password']}".encode("ascii")).decode("ascii")
-    return {
-        "Authorization": f"Basic {credentials}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+def convert_to_schema_format(entries: list, domain: str, app: str, output_dir: str) -> str:
+    """Save entries to schema.json format file.
+    
+    Since tool_finalize.py now outputs in schema format directly,
+    this function just saves the entries to the expected filename.
+    """
+    output_file = Path(output_dir) / f"{domain}_{app}_aliases.json"
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(entries, f, indent=2, ensure_ascii=False)
+    return str(output_file)
+
+
+# ============================================================================
+# SCHEMA AND MAIN FUNCTION
+# ============================================================================
+class LocalizeSchema(BaseModel):
+    application_system_name: str = Field(description="Application system name")
+    json_folder: str = Field(description="Path to folder containing JSON files to analyze")
+    output_dir: str | None = Field(default=None, description="Path to save output files")
+    create_tr: bool = Field(default=False, description="Create _tr copy from original")
+    translate_one: str | None = Field(default=None, description="Translate single alias")
+    resume: bool = Field(default=False, description="Resume from last translated alias")
+    apply_renames: bool = Field(default=False, description="Apply renames to platform")
+    fix_expressions: bool = Field(default=False, description="Fix _calc aliases in expressions")
+    dry_run: bool = Field(default=True, description="If True, only analyze without making changes")
+    dangerous_suffix: str = Field(default="_calc", description="Suffix for dangerous system names")
+    safe_suffix: str = Field(default="_sv", description="Suffix for safe system names")
 
 
 @tool("localize_aliases", return_direct=False, args_schema=LocalizeSchema)
 def localize_aliases(
-    ctf_file_path: str | None = None,
-    application_system_name: str | None = None,
+    application_system_name: str = "",
     json_folder: str = "",
+    output_dir: str | None = None,
+    create_tr: bool = False,
+    translate_one: str | None = None,
+    resume: bool = False,
+    apply_renames: bool = False,
+    fix_expressions: bool = False,
+    dry_run: bool = True,
     dangerous_suffix: str = "_calc",
     safe_suffix: str = "_sv",
-    dry_run: bool = True,
-    collect_aliases: bool = True,
-    collect_display_names: bool = True,
 ) -> dict[str, Any]:
     """
     Localization workflow for system names (aliases) and display names.
-    
-    Collects aliases and/or display names from CTF JSON files, verifies them,
-    and prepares localization data according to schema.json structure.
-    
-    Collection is optional:
-    - collect_aliases=True: Collect and track alias data (system names)
-    - collect_display_names=True: Collect and track displayName data (Name property)
-    - Both can be enabled/disabled independently
-    
-    Workflow integration:
-    - Aliases are applied via API (OntologyService/AddStatement)
-    - DisplayNames are applied via CTF import (not API)
 
-    Workflow:
-    1. Export CTF if not provided
-    2. Collect aliases and/or display names from JSON files with their types
-    3. Verify aliases using get_ontology_objects tool (if collect_aliases=True)
-    4. Analyze aliases for dangerous mentions outside 'alias' field
-    5. Suggest suffixes for renaming
-    6. Rename aliases using update_object_property tool (if not dry_run)
-    7. Update JSON files with new aliases
+    Follows schema.json specification:
+    - Output files: {domain}_{app}_aliases.json and {domain}_{app}_aliases_tr.json
+    - Per-object structure with aliasOriginal, aliasRenamed, jsonPathOriginal, jsonPathRenamed, expressions
 
-    Args:
-        ctf_file_path: Path to CTF file (optional, will export if not provided)
-        application_system_name: Application system name (required if ctf not provided)
-        json_folder: Path to folder with JSON files
-        dangerous_suffix: Suffix for dangerous aliases (default: _calc)
-        safe_suffix: Suffix for safe aliases (default: _sv)
-        dry_run: If True, only analyze without changes (default: True)
-        collect_aliases: If True, collect alias data (default: True)
-        collect_display_names: If True, collect displayName data (default: True)
-
-    Returns:
-        dict with analysis results and rename report
+    Workflow (orchestrates helper scripts via import):
+    1. Extract aliases (tool_extract_aliases.py)
+    2. Collect platform data (tool_collect_platform.py)
+    3. Verify aliases (tool_verify_aliases.py per folder)
+    4. Find dangerous aliases (tool_find_dangerous.py)
+    5. Finalize (tool_finalize.py)
+    6. Convert to schema format
+    7. --create-tr: Copy to _tr, fix _calc aliases in expressions
+    8. --translate-one: Translate single alias, save state
+    9. --resume: Continue from last translated alias
+    10. --apply-renames: Rename on platform (apply_renames.py)
+    11. --fix-expressions: Fix _calc aliases in expressions
     """
+    from datetime import datetime
+
     results = {
         "success": True,
-        "ctf_exported": False,
-        "aliases_collected": 0,
-        "display_names_collected": 0,
-        "aliases_verified": 0,
-        "aliases_missing": [],
-        "dangerous_aliases": [],
-        "safe_aliases": [],
-        "renamed_aliases": [],
-        "json_updated": 0,
+        "phase": "started",
+        "actions": [],
         "errors": [],
-        "collect_aliases": collect_aliases,
-        "collect_display_names": collect_display_names,
     }
 
-    if not ctf_file_path and application_system_name:
-        try:
-            from tools.transfer_tools.tool_export_application import export_application
-            export_result = export_application.invoke({
-                "application_system_name": application_system_name,
-                "save_to_file": True,
-            })
-            if export_result.get("success"):
-                ctf_file_path = export_result.get("ctf_file_path")
-                results["ctf_exported"] = True
-                results["ctf_file_path"] = ctf_file_path
-        except Exception as e:
-            results["errors"].append(f"CTF export failed: {e}")
+    if not output_dir:
+        output_dir = json_folder
 
-    results["aliases"] = collect_aliases_from_json_folder(
-        json_folder,
-        collect_aliases=collect_aliases,
-        collect_display_names=collect_display_names
-    )
-    
-    # Count collected items by source
-    alias_items = [item for item in results["aliases"] if item.get("source") == "alias"]
-    name_items = [item for item in results["aliases"] if item.get("source") == "name"]
-    
-    results["aliases_collected"] = len(alias_items)
-    results["display_names_collected"] = len(name_items)
+    os.makedirs(output_dir, exist_ok=True)
 
-    aliases_by_type: dict[str, set[str]] = {}
-    for item in results["aliases"]:
-        # Only process alias items for verification if collect_aliases is True
-        if item.get("source") == "alias" and collect_aliases:
-            obj_type = item["type"] or "Unknown"
-            if obj_type not in aliases_by_type:
-                aliases_by_type[obj_type] = set()
-            aliases_by_type[obj_type].add(item["alias"])
+    extract_dir = str(Path(json_folder).parent)
 
-    verified_aliases: dict[str, str] = {}
-
-    # Only verify aliases if collect_aliases is True
-    if collect_aliases:
-        cfg = get_config()
-        base_url = cfg["base_url"].rstrip("/")
-        headers = get_headers()
-
-        for obj_type, type_aliases in aliases_by_type.items():
-            if obj_type not in TYPE_PREDICATE_MAPPING:
-                continue
-
-            predicate = TYPE_PREDICATE_MAPPING[obj_type]
-            endpoint = f"{base_url}/api/public/system/Base/OntologyService/GetWithMultipleValues"
-
-            request_body = {
-                "predicate": predicate,
-                "min": 1,
-                "max": 10000,
-            }
-
-            try:
-                resp = requests.post(endpoint, headers=headers, json=request_body, timeout=cfg["timeout"])
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if isinstance(data, list):
-                        for item in data:
-                            if isinstance(item, dict):
-                                key = item.get("key", "")
-                                value = item.get("value", [])
-                                if value and isinstance(value, list):
-                                    system_name = value[0]
-                                else:
-                                    match = re.match(r"^([\w.]+)\s*:\s*System\.String\[\]", key)
-                                    system_name = match.group(1) if match else key
-
-                                if system_name in type_aliases:
-                                    clean_id = re.match(r"^([\w.]+)\s*:\s*System\.String\[\]", key)
-                                    obj_id = clean_id.group(1) if clean_id else key
-                                    verified_aliases[system_name] = obj_id
-            except Exception as e:
-                results["errors"].append(f"Verification failed for {obj_type}: {e}")
-
-    results["verified_aliases"] = verified_aliases
-    results["aliases_verified"] = len(verified_aliases)
-
-    missing = []
-    for obj_type, type_aliases in aliases_by_type.items():
-        for alias in type_aliases:
-            if alias not in verified_aliases:
-                missing.append({"alias": alias, "type": obj_type})
-
-    results["aliases_missing"] = missing
-
-    all_aliases = set()
-    for type_aliases in aliases_by_type.values():
-        all_aliases.update(type_aliases)
-
-    mentions = check_aliases_in_json_folder(json_folder, all_aliases)
-
-    dangerous = []
-    safe = []
-
-    for item in results["aliases"]:
-        alias = item["alias"]
-        if alias in mentions and mentions[alias]:
-            dangerous.append({
-                "alias": alias,
-                "type": item["type"],
-                "new_alias": alias + dangerous_suffix,
-                "mentions_outside": True,
-            })
-        else:
-            safe.append({
-                "alias": alias,
-                "type": item["type"],
-                "new_alias": alias + safe_suffix,
-                "mentions_outside": False,
-            })
-
-    results["dangerous_aliases"] = dangerous
-    results["safe_aliases"] = safe
-    results["dangerous_count"] = len(dangerous)
-    results["safe_count"] = len(safe)
-
+    # ========================================================================
+    # STEPS 1-5: ORCHESTRATE HELPER SCRIPTS VIA IMPORT
+    # ========================================================================
     if not dry_run:
-        endpoint = f"{base_url}/api/public/system/Base/OntologyService/AddStatement"
+        try:
+            # Step 1: Extract aliases
+            run_via_import("tool_extract_aliases.py", [
+                "--app", application_system_name,
+                "--extract-dir", extract_dir,
+                "--output-dir", output_dir,
+            ], "Step 1: Extract Aliases")
 
-        renamed = []
-        for item in dangerous + safe:
-            alias = item["alias"]
-            new_alias = item["new_alias"]
-            obj_type = item["type"]
+            # Step 2: Collect platform data
+            run_via_import("tool_collect_platform.py", [
+                "--app", application_system_name,
+                "--output-dir", output_dir,
+                "--workers", "8",
+            ], "Step 2: Collect Platform Data")
 
-            if obj_type in TYPE_PREDICATE_MAPPING and alias in verified_aliases:
-                obj_id = verified_aliases[alias]
-                predicate = TYPE_PREDICATE_MAPPING[obj_type]
+            # Step 3: Verify aliases (per folder)
+            state_file = Path(output_dir) / f"{application_system_name}_extraction_state.json"
+            if state_file.exists():
+                with open(state_file) as f:
+                    folders = json.load(f).get("completed_folders", [])
+            else:
+                folders = [d.name for d in Path(json_folder).iterdir() if d.is_dir()]
 
-                request_body = {
-                    "subject": obj_id,
-                    "predicate": predicate,
-                    "value": new_alias,
-                }
+            for folder in folders:
+                vf = Path(output_dir) / f"{application_system_name}_{folder}_verified.json"
+                if not vf.exists():
+                    run_via_import("tool_verify_aliases.py", [
+                        "--app", application_system_name,
+                        "--folder", folder,
+                        "--output-dir", output_dir,
+                    ], f"Step 3: Verify {folder}")
 
-                try:
-                    resp = requests.post(endpoint, headers=headers, json=request_body, timeout=cfg["timeout"])
-                    renamed.append({
-                        "original": alias,
-                        "new": new_alias,
-                        "id": obj_id,
-                        "success": resp.status_code == 200,
-                    })
-                except Exception as e:
-                    renamed.append({
-                        "original": alias,
-                        "new": new_alias,
-                        "id": obj_id,
-                        "success": False,
-                        "error": str(e),
-                    })
+            # Step 4: Find dangerous aliases
+            run_via_import("tool_find_dangerous.py", [
+                "--app", application_system_name,
+                "--extract-dir", extract_dir,
+                "--output-dir", output_dir,
+                "--workers", "4",
+            ], "Step 4: Find Dangerous Aliases")
 
-        results["renamed_aliases"] = renamed
+            # Step 5: Finalize (merge + locking)
+            run_via_import("tool_finalize.py", [
+                "--app", application_system_name,
+                "--output-dir", output_dir,
+            ], "Step 5: Finalize")
 
-        new_ctf_path = None
-        if renamed:
-            try:
-                from tools.transfer_tools.tool_export_application import export_application
-                export_result = export_application.invoke({
-                    "application_system_name": application_system_name,
-                    "save_to_file": True,
-                })
-                if export_result.get("success"):
-                    new_ctf_path = export_result.get("ctf_file_path")
-                    results["new_ctf_path"] = new_ctf_path
-            except Exception as e:
-                results["errors"].append(f"Export new CTF failed: {e}")
+            # Step 6: Convert to schema format
+            verified_file = Path(output_dir) / f"{application_system_name}_verified_complete.json"
+            if verified_file.exists():
+                with open(verified_file) as f:
+                    entries = json.load(f)
 
-        json_updated = 0
-        for alias, new_alias in [(d["alias"], d["new_alias"]) for d in dangerous]:
-            safe_alias = re.escape(alias)
-            patterns = [
-                r'"\s*' + safe_alias + r'\s*"',
-                r'\$\{' + safe_alias + r'\}',
-                r'->\{' + safe_alias + r'\}',
-            ]
+                domain = get_domain_from_config()
+                output_path = convert_to_schema_format(entries, domain, application_system_name, output_dir)
 
-            for json_file in Path(json_folder).rglob("*.json"):
-                try:
-                    with open(json_file, "r", encoding="utf-8") as f:
-                        content = f.read()
+                results["output_file"] = output_path
+                results["total_entries"] = len(entries)
 
-                    original_content = content
-                    for pattern in patterns:
-                        content = re.sub(pattern, '"' + new_alias + '"', content)
+                locked = sum(1 for e in entries if e.get("aliasLocked"))
+                results["locked_entries"] = locked
+                results["actions"].append(f"Saved schema format: {output_path}")
 
-                    if content != original_content:
-                        with open(json_file, "w", encoding="utf-8") as f:
-                            f.write(content)
-                        json_updated += 1
-                except Exception:
-                    continue
+            # Load dangerous aliases count
+            dangerous_file = Path(output_dir) / f"{application_system_name}_dangerous_aliases.json"
+            if dangerous_file.exists():
+                with open(dangerous_file) as f:
+                    dangerous_data = json.load(f)
+                results["dangerous_count"] = len(dangerous_data.get("dangerous_aliases", []))
 
-        results["json_updated"] = json_updated
+        except RuntimeError as e:
+            results["success"] = False
+            results["errors"].append(str(e))
+            results["phase"] = "error"
+            return results
 
-        results["import_ctf_note"] = (
-            f"Renamed {len(renamed)} aliases, updated {json_updated} JSON files. "
-            "Import the new CTF to apply changes to the platform."
-        )
-        if new_ctf_path:
-            results["import_command"] = (
-                f'import_application.invoke({{"application_system_name": "{application_system_name}", "ctf_file_path": "{new_ctf_path}", "update_existing": true}})'
-            )
-        else:
-            results["import_command"] = "Export new CTF failed, cannot provide import command."
+    # ========================================================================
+    # STEP 7: CREATE TR (inline - lightweight JSON manipulation)
+    # ========================================================================
+    if create_tr:
+        results["phase"] = "create_tr"
+        domain = get_domain_from_config()
+        original_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases.json"
 
+        if not original_file.exists():
+            original_file = Path(output_dir) / f"{application_system_name}_verified_complete.json"
+
+        if not original_file.exists():
+            results["success"] = False
+            results["errors"].append("Original aliases file not found. Run without --create-tr first.")
+            return results
+
+        with open(original_file) as f:
+            original_data = json.load(f)
+
+        tr_data = []
+        for obj in original_data:
+            obj_copy = obj.copy()
+            is_dangerous = bool(obj_copy.get("expressions"))
+            suffix = dangerous_suffix if is_dangerous else safe_suffix
+            obj_copy["aliasRenamed"] = obj_copy.get("aliasOriginal", "") + suffix
+            obj_copy["jsonPathRenamed"] = obj_copy.get("jsonPathOriginal", [])[:]
+
+            for expr in obj_copy.get("expressions", []):
+                expr["jsonPathRenamed"] = expr.get("jsonPathOriginal", "")
+                orig_expr = expr.get("expressionOriginal", "")
+                alias_orig = obj.get("aliasOriginal", "")
+                alias_new = obj_copy["aliasRenamed"]
+                expr["expressionRenamed"] = orig_expr.replace(alias_orig, alias_new) if orig_expr else ""
+
+            tr_data.append(obj_copy)
+
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+        with open(tr_file, "w", encoding="utf-8") as f:
+            json.dump(tr_data, f, indent=2, ensure_ascii=False)
+
+        results["actions"].append(f"Created translation copy: {tr_file}")
+
+        if fix_expressions or create_tr:
+            fixed = fix_expressions_in_memory(tr_data, dangerous_suffix)
+            results["actions"].append(f"Fixed _calc aliases in {fixed} expressions (in memory)")
+
+            with open(tr_file, "w", encoding="utf-8") as f:
+                json.dump(tr_data, f, indent=2, ensure_ascii=False)
+
+            results["actions"].append(f"Updated translation file: {tr_file}")
+
+        results["phase"] = "complete"
+        return results
+
+    # ========================================================================
+    # STEP 8-9: TRANSLATE (inline - interactive)
+    # ========================================================================
+    if translate_one or resume:
+        results["phase"] = "translate"
+
+        domain = get_domain_from_config()
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+
+        if not tr_file.exists():
+            results["success"] = False
+            results["errors"].append("Translation file not found. Run with --create-tr first.")
+            return results
+
+        with open(tr_file) as f:
+            tr_data = json.load(f)
+
+        resume_state = load_resume_state(output_dir, application_system_name)
+        start_index = 0
+
+        if resume and resume_state:
+            start_index = resume_state.get("last_index", 0)
+            results["actions"].append(f"Resuming from index {start_index}")
+
+        target_index = start_index
+        if translate_one:
+            for i, obj in enumerate(tr_data):
+                if obj.get("aliasOriginal") == translate_one:
+                    target_index = i
+                    break
+
+        if target_index >= len(tr_data):
+            results["success"] = False
+            results["errors"].append(f"Alias {translate_one} not found in translation file")
+            return results
+
+        obj = tr_data[target_index]
+        alias_orig = obj.get("aliasOriginal", "")
+        alias_new = obj.get("aliasRenamed", "")
+
+        print(f"Alias {target_index + 1}/{len(tr_data)}: {alias_orig}")
+        print(f"  Type: {obj.get('type', '')}")
+        print(f"  ID: {obj.get('ids', [])}")
+        print(f"  Display Name: {obj.get('displayNameOriginal', '')}")
+        print(f"  Current aliasRenamed: {alias_new}")
+
+        if not alias_new:
+            suffix = dangerous_suffix if obj.get("expressions") else safe_suffix
+            new_alias = alias_orig + suffix
+            print(f"  Suggested: {new_alias}")
+            print("  Enter new aliasRenamed (or press Enter to accept suggested): ")
+
+            new_input = input("  > ")
+            if new_input.strip():
+                obj["aliasRenamed"] = new_input.strip()
+            else:
+                obj["aliasRenamed"] = new_alias
+
+            obj["jsonPathRenamed"] = obj.get("jsonPathOriginal", [])[:]
+
+            for expr in obj.get("expressions", []):
+                expr["jsonPathRenamed"] = expr.get("jsonPathOriginal", "")
+                orig_expr = expr.get("expressionOriginal", "")
+                expr["expressionRenamed"] = orig_expr.replace(alias_orig, obj["aliasRenamed"]) if orig_expr else ""
+
+            save_resume_state(output_dir, application_system_name, alias_orig, target_index)
+
+            results["actions"].append(f"Translated {alias_orig} -> {obj['aliasRenamed']}")
+
+        results["phase"] = "complete"
+        return results
+
+    # ========================================================================
+    # STEP 10: APPLY RENAMES (import)
+    # ========================================================================
+    if apply_renames:
+        results["phase"] = "apply_renames"
+
+        try:
+            run_via_import("apply_renames.py", [], "Apply Renames")
+            results["actions"].append("Applied renames to platform")
+        except RuntimeError as e:
+            results["success"] = False
+            results["errors"].append(str(e))
+
+        results["phase"] = "complete"
+        return results
+
+    # ========================================================================
+    # STEP 11: FIX EXPRESSIONS (inline)
+    # ========================================================================
+    if fix_expressions:
+        results["phase"] = "fix_expressions"
+
+        domain = get_domain_from_config()
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+
+        if not tr_file.exists():
+            results["success"] = False
+            results["errors"].append("Translation file not found.")
+            return results
+
+        with open(tr_file) as f:
+            tr_data = json.load(f)
+
+        fixed = fix_expressions_in_memory(tr_data, dangerous_suffix)
+        results["actions"].append(f"Fixed _calc aliases in {fixed} expressions (in memory)")
+
+        with open(tr_file, "w", encoding="utf-8") as f:
+            json.dump(tr_data, f, indent=2, ensure_ascii=False)
+
+        results["actions"].append(f"Updated translation file: {tr_file}")
+
+        results["phase"] = "complete"
+        return results
+
+    results["phase"] = "complete"
     return results
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Localization workflow for system names (schema.json format)")
+    parser.add_argument("--app", required=True, help="Application system name")
+    parser.add_argument("--json-folder", required=True, help="Path to folder with JSON files")
+    parser.add_argument("--output-dir", default=None, help="Path to save output files")
+    parser.add_argument("--create-tr", action="store_true", help="Create _tr copy from original")
+    parser.add_argument("--translate-one", metavar="ALIAS", help="Translate single alias")
+    parser.add_argument("--resume", action="store_true", help="Resume from last translated alias")
+    parser.add_argument("--apply-renames", action="store_true", help="Apply renames to platform")
+    parser.add_argument("--fix-expressions", action="store_true", help="Fix _calc aliases in expressions")
+    parser.add_argument("--no-dry-run", dest="dry_run", action="store_false", help="Actually perform changes (not just preview)")
+    parser.add_argument("--dangerous-suffix", default="_calc", help="Suffix for dangerous aliases")
+    parser.add_argument("--safe-suffix", default="_sv", help="Suffix for safe aliases")
+
+    args = parser.parse_args()
+
     result = localize_aliases.invoke({
-        "application_system_name": "supportTest",
-        "json_folder": "/tmp/cmw-workspaces",
-        "dangerous_suffix": "_calc",
-        "safe_suffix": "_sv",
-        "dry_run": True,
+        "application_system_name": args.app,
+        "json_folder": args.json_folder,
+        "output_dir": args.output_dir,
+        "create_tr": args.create_tr,
+        "translate_one": args.translate_one,
+        "resume": args.resume,
+        "apply_renames": args.apply_renames,
+        "fix_expressions": args.fix_expressions,
+        "dry_run": args.dry_run,
+        "dangerous_suffix": args.dangerous_suffix,
+        "safe_suffix": args.safe_suffix,
     })
     print(json.dumps(result, indent=2, ensure_ascii=False))

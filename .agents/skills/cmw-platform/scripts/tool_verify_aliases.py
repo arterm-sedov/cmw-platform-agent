@@ -17,12 +17,16 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-APP_DIR = Path(__file__).parent.parent.parent
+APP_DIR = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(APP_DIR))
 
 
 def verify_folder(folder_name: str, app_name: str, aliases_data: dict, cache: dict, output_dir: Path) -> tuple[list, list]:
-    """Verify aliases for a single folder."""
+    """Verify aliases for a single folder.
+
+    Every entry looks up ALL IDs from cache by (type, alias).
+    Same alias can have multiple IDs across different containers.
+    """
     verified = []
     skipped = []
 
@@ -33,22 +37,16 @@ def verify_folder(folder_name: str, app_name: str, aliases_data: dict, cache: di
         "SimplePage": "Page",
     }
 
-    seen = {}
-    for a in aliases_data.get("aliases", []):
-        key = (a["type"], a["alias"])
-        if key not in seen:
-            seen[key] = a
-
-    unique_aliases = list(seen.values())
-
-    for obj in unique_aliases:
+    for obj in aliases_data.get("aliases", []):
         obj_type = obj["type"]
         alias = obj["alias"]
+        parent_template = obj.get("parent_template", "")
         platform_type = TYPE_TO_PLATFORM.get(obj_type, obj_type)
 
         found_ids = []
+
         if platform_type in cache and alias in cache[platform_type]:
-            found_ids = [cache[platform_type][alias]["id"]]
+            found_ids = cache[platform_type][alias].get("ids", [])
 
         if not found_ids and obj_type in ("OrgStructureTemplate", "RoleTemplate"):
             if obj_type == "RoleTemplate":
@@ -57,11 +55,11 @@ def verify_folder(folder_name: str, app_name: str, aliases_data: dict, cache: di
                 candidates = [f"{app_name}_OrganizationalStructure", "systemSolution_OrganizationalStructure"]
             for prefixed_alias in candidates:
                 if platform_type in cache and prefixed_alias in cache[platform_type]:
-                    found_ids = [cache[platform_type][prefixed_alias]["id"]]
+                    found_ids = cache[platform_type][prefixed_alias].get("ids", [])
                     break
 
         if found_ids:
-            obj["id"] = found_ids
+            obj["ids"] = found_ids
             verified.append(obj)
         else:
             skipped.append(obj)

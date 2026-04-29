@@ -18,14 +18,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-APP_DIR = Path(__file__).parent.parent.parent
+APP_DIR = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(APP_DIR))
 
 from tools.applications_tools.tool_get_ontology_objects import get_ontology_objects
 
 
 def query_type(app_name: str, obj_type: str, max_count: int = 5000) -> tuple[str, dict]:
-    """Query platform for a single type. Returns (type, alias_to_id_map)."""
+    """Query platform for a single type. Returns (type, alias_to_ids_map).
+
+    Stores ALL IDs per alias (an alias can have multiple IDs across containers).
+    """
     result = get_ontology_objects.invoke({
         "application_system_name": app_name,
         "types": [obj_type],
@@ -40,7 +43,9 @@ def query_type(app_name: str, obj_type: str, max_count: int = 5000) -> tuple[str
             alias = obj.get("systemName", "")
             obj_id = obj.get("id", "")
             if alias and obj_id:
-                alias_map[alias] = {"id": obj_id, "systemName": alias}
+                if alias not in alias_map:
+                    alias_map[alias] = {"ids": [], "systemName": alias}
+                alias_map[alias]["ids"].append(obj_id)
 
     return obj_type, alias_map
 

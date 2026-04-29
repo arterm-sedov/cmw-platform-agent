@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
 
-APP_DIR = Path(__file__).parent.parent.parent
+APP_DIR = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(APP_DIR))
 
 from tools.applications_tools.tool_get_ontology_objects import get_ontology_objects
@@ -264,6 +264,15 @@ def process_folder(folder_name: str, app_dir: Path) -> tuple[list, int]:
     all_aliases = []
     file_count = 0
 
+    def extract_parent_template(json_path: str) -> str:
+        """Extract parent template name from JSON path.
+        Example: 'RecordTemplates/Schetchiki/Attributes/Year.json' -> 'Schetchiki'
+        """
+        parts = json_path.split("/")
+        if len(parts) >= 2:
+            return parts[1]
+        return ""
+
     def scan_folder(folder: Path):
         nonlocal file_count
         for item in folder.iterdir():
@@ -274,9 +283,11 @@ def process_folder(folder_name: str, app_dir: Path) -> tuple[list, int]:
                 try:
                     data = json.loads(item.read_text(encoding="utf-8"))
                     relative_path = str(item.relative_to(app_dir))
+                    parent_template = extract_parent_template(relative_path)
                     aliases = scan_json_recursive(data, relative_path)
                     for a in aliases:
                         a["json_file"] = relative_path
+                        a["parent_template"] = parent_template
                     all_aliases.extend(aliases)
                 except (json.JSONDecodeError, OSError):
                     pass
@@ -285,25 +296,34 @@ def process_folder(folder_name: str, app_dir: Path) -> tuple[list, int]:
     return all_aliases, file_count
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Step 1: Extract aliases per folder")
-    parser.add_argument("--app", required=True)
-    parser.add_argument("--extract-dir", default="/tmp/cmw-transfer/Volga-extract")
-    parser.add_argument("--output-dir", default="/tmp/cmw-transfer/Volga-extract/Volga_tr")
+def main(app: str = None, extract_dir: str = None, output_dir: str = None):
+    """Main function - can be called with parameters or CLI args."""
+    if app is None:
+        parser = argparse.ArgumentParser(description="Step 1: Extract aliases per folder")
+        parser.add_argument("--app", required=True)
+        parser.add_argument("--extract-dir", default="/tmp/cmw-transfer/Volga-extract")
+        parser.add_argument("--output-dir", default="/tmp/cmw-transfer/Volga-extract/Volga_tr")
+        args = parser.parse_args()
+        app = args.app
+        extract_dir = Path(args.extract_dir)
+        output_dir = Path(args.output_dir)
+    else:
+        extract_dir = Path(extract_dir)
+        output_dir = Path(output_dir)
 
-    args = parser.parse_args()
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    extract_dir = Path(args.extract_dir)
-    output_dir = Path(args.output_dir)
-    os.makedirs(output_dir, exist_ok=True)
+    print(f"=== Step 1: Extract Aliases for {app} ===")
+    print(f"Extract dir: {extract_dir}")
+    print(f"Output dir: {output_dir}")
 
-    app_dir = extract_dir / args.app
+    app_dir = extract_dir / app
     if not app_dir.exists():
         print(f"Error: {app_dir} not found")
         return 1
 
-    state_file = output_dir / f"{args.app}_extraction_state.json"
-    state = {"app": args.app, "completed_folders": [], "pending_folders": [], "last_updated": ""}
+    state_file = output_dir / f"{app}_extraction_state.json"
+    state = {"app": app, "completed_folders": [], "pending_folders": [], "last_updated": ""}
 
     if state_file.exists():
         try:
@@ -313,7 +333,6 @@ def main():
             pass
 
     all_folders = get_folders_to_process(app_dir)
-    print(f"=== Step 1: Extract Aliases for {args.app} ===")
     print(f"Found folders: {all_folders}")
 
     completed = set(state.get("completed_folders", []))
@@ -329,7 +348,7 @@ def main():
     total_files = 0
 
     for i, folder in enumerate(pending, 1):
-        output_file = output_dir / f"{args.app}_{folder}_aliases.json"
+        output_file = output_dir / f"{app}_{folder}_aliases.json"
 
         if output_file.exists():
             try:
@@ -351,12 +370,12 @@ def main():
         aliases, file_count = process_folder(folder, app_dir)
 
         output_data = {
-            "app": args.app,
+            "app": app,
             "folder": folder,
             "extracted_at": datetime.now().isoformat(),
             "count": len(aliases),
             "file_count": file_count,
-            "aliases": aliases
+            "aliases": aliases,
         }
 
         with open(output_file, "w", encoding="utf-8") as f:
