@@ -60,7 +60,7 @@ class ConfigTab:
             self._create_config_interface()
 
             # Wire events
-            self._connect_events()
+            self._connect_events(tab)
 
         logging.getLogger(__name__).info(
             "✅ ConfigTab: Successfully created with components and wiring"
@@ -200,7 +200,7 @@ class ConfigTab:
             # Status area (not used as output to avoid version mismatches)
             self.components["config_status_display"] = gr.Markdown("")
 
-    def _connect_events(self) -> None:
+    def _connect_events(self, tab: gr.TabItem) -> None:
         """Wire events for Save/Load configuration."""
         logging.getLogger(__name__).debug("🔗 ConfigTab: Connecting events...")
 
@@ -245,9 +245,10 @@ class ConfigTab:
             ],
         )
 
-        # Auto-load config when BrowserState changes (e.g., after reading
-        # localStorage). Fires when tab is first selected and BrowserState mounts.
-        self.components["config_state"].change(
+        # Auto-load config when user opens the Config tab.
+        # Use JS to read localStorage directly (avoids BrowserState timing issues).
+        # JS return value is passed as first input to _load_from_state.
+        tab.select(
             fn=self._load_from_state,
             inputs=[self.components["config_state"]],
             outputs=[
@@ -257,6 +258,17 @@ class ConfigTab:
                 self.components["llm_provider_override"],
                 self.components["llm_api_key_override"],
             ],
+            js="""
+            function() {
+                try {
+                    const raw = localStorage.getItem('cmw_config_v1');
+                    if (raw) {
+                        return JSON.parse(raw);
+                    }
+                } catch (e) {}
+                return null;
+            }
+            """,
         )
 
     # Event handlers
@@ -341,12 +353,21 @@ class ConfigTab:
             return new_state
 
     def _load_from_state(
-        self, state: Any, request: gr.Request | None = None
+        self,
+        js_state: Any = None,
+        state: Any = None,
+        request: gr.Request | None = None,
     ) -> tuple[Any, Any, Any, Any, Any]:
-        """Load values from browser state and update fields."""
+        """Load values from browser state and update fields.
+
+        When called via tab.select with js=, js_state contains the
+        localStorage value directly (avoids BrowserState timing issues).
+        """
         try:
-            # Normalize state across gradio versions (may come as tuple or dict)
-            if isinstance(state, tuple) and len(state) > 0:
+            # Prefer JS localStorage value if available, else BrowserState
+            if isinstance(js_state, dict) and js_state.get("url"):
+                state = js_state
+            elif isinstance(state, tuple) and len(state) > 0:
                 state = state[0]
             if not isinstance(state, dict):
                 state = {}
