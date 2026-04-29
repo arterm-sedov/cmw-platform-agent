@@ -255,8 +255,9 @@ def get_folders_to_process(app_dir: Path) -> list[str]:
     return sorted(folders)
 
 
-def process_folder(folder_name: str, app_dir: Path) -> tuple[list, int]:
+def process_folder(folder_name: str, extract_dir: Path, app_name: str) -> tuple[list, int]:
     """Extract aliases from a single folder."""
+    app_dir = extract_dir / app_name
     folder_path = app_dir / folder_name
     if not folder_path.exists():
         return [], 0
@@ -266,11 +267,11 @@ def process_folder(folder_name: str, app_dir: Path) -> tuple[list, int]:
 
     def extract_parent_template(json_path: str) -> str:
         """Extract parent template name from JSON path.
-        Example: 'RecordTemplates/Schetchiki/Attributes/Year.json' -> 'Schetchiki'
+        Example: 'Volga/RecordTemplates/Schetchiki/Attributes/Year.json' -> 'Schetchiki'
         """
         parts = json_path.split("/")
         if len(parts) >= 2:
-            return parts[1]
+            return parts[-2] if parts[-1] == "" else parts[1]
         return ""
 
     def scan_folder(folder: Path):
@@ -282,7 +283,7 @@ def process_folder(folder_name: str, app_dir: Path) -> tuple[list, int]:
                 file_count += 1
                 try:
                     data = json.loads(item.read_text(encoding="utf-8"))
-                    relative_path = str(item.relative_to(app_dir))
+                    relative_path = str(item.relative_to(extract_dir))
                     parent_template = extract_parent_template(relative_path)
                     aliases = scan_json_recursive(data, relative_path)
                     for a in aliases:
@@ -316,15 +317,15 @@ def main(app: str = None, extract_dir: str = None, output_dir: str = None):
     if app is None:
         parser = argparse.ArgumentParser(description="Step 1: Extract aliases per folder")
         parser.add_argument("--app", required=True)
-        parser.add_argument("--extract-dir", default="/tmp/cmw-transfer/Volga-extract")
-        parser.add_argument("--output-dir", default="/tmp/cmw-transfer/Volga-extract/Volga_tr")
+        parser.add_argument("--extract-dir", default=None)
+        parser.add_argument("--output-dir", default=None)
         args = parser.parse_args()
         app = args.app
-        extract_dir = Path(args.extract_dir)
-        output_dir = Path(args.output_dir)
+        extract_dir = Path(args.extract_dir or f"/tmp/cmw-transfer/{app}")
+        output_dir = Path(args.output_dir or f"/tmp/cmw-transfer/{app}_tr")
     else:
-        extract_dir = Path(extract_dir)
-        output_dir = Path(output_dir)
+        extract_dir = Path(extract_dir or f"/tmp/cmw-transfer/{app}")
+        output_dir = Path(output_dir or f"/tmp/cmw-transfer/{app}_tr")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -382,7 +383,7 @@ def main(app: str = None, extract_dir: str = None, output_dir: str = None):
         print(f"[{i}/{len(pending)}] Processing {folder}...", end=" ", flush=True)
         start = time.time()
 
-        aliases, file_count = process_folder(folder, app_dir)
+        aliases, file_count = process_folder(folder, extract_dir, app)
 
         output_data = {
             "app": app,

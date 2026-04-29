@@ -27,14 +27,28 @@ APP_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(APP_DIR))
 
 
+def match_expressions_to_entry(entry_paths: list, dangerous_expressions: list) -> list:
+    """Match expressions to an entry based on jsonPathOriginal.
+    Expressions whose jsonPathOriginal starts with any of entry_paths belong to this entry.
+    """
+    matched = []
+    for expr in dangerous_expressions:
+        expr_path = expr.get("jsonPathOriginal", "")
+        for entry_path in entry_paths:
+            if expr_path.startswith(entry_path):
+                matched.append(expr)
+                break
+    return matched
+
+
 def main():
     parser = argparse.ArgumentParser(description="Step 5: Finalize verified aliases")
     parser.add_argument("--app", required=True)
-    parser.add_argument("--output-dir", default="/tmp/cmw-transfer/Volga-extract/Volga_tr")
+    parser.add_argument("--output-dir", default=None)
 
     args = parser.parse_args()
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir or f"/tmp/cmw-transfer/{args.app}_tr")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"=== Step 5: Finalize for {args.app} ===")
@@ -99,7 +113,7 @@ def main():
             json_path = []
 
         # Get expressions for this alias
-        expressions = [e for e in dangerous_expressions if e.get("alias", "") == alias]
+        expressions = match_expressions_to_entry(json_path, dangerous_expressions)
 
         # Check if dangerous
         is_dangerous = alias in dangerous
@@ -140,7 +154,7 @@ def main():
             json_path = []
 
         # Get expressions for this alias
-        expressions = [e for e in dangerous_expressions if e.get("alias", "") == alias]
+        expressions = match_expressions_to_entry(json_path, dangerous_expressions)
 
         is_dangerous = alias in dangerous
 

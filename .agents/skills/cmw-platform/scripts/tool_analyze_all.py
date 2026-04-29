@@ -36,13 +36,14 @@ def run_step(script_name: str, args: list, cwd: Path = None) -> int:
 def main():
     parser = argparse.ArgumentParser(description="Run all analysis steps sequentially")
     parser.add_argument("--app", required=True)
-    parser.add_argument("--extract-dir", default="/tmp/cmw-transfer/Volga-extract")
-    parser.add_argument("--output-dir", default="/tmp/cmw-transfer/Volga-extract/Volga_tr")
+    parser.add_argument("--extract-dir", default=None)
+    parser.add_argument("--output-dir", default=None)
 
     args = parser.parse_args()
 
-    extract_dir = Path(args.extract_dir)
-    output_dir = Path(args.output_dir)
+    extract_dir = Path(args.extract_dir or f"/tmp/cmw-transfer")
+    output_dir = Path(args.output_dir or f"/tmp/cmw-transfer/{args.app}_tr")
+    app_dir = extract_dir / args.app
     os.makedirs(output_dir, exist_ok=True)
 
     state_file = output_dir / f"{args.app}_master_state.json"

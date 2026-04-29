@@ -71,12 +71,12 @@ def main():
     parser = argparse.ArgumentParser(description="Step 3: Verify aliases per folder")
     parser.add_argument("--app", required=True)
     parser.add_argument("--folder", required=True)
-    parser.add_argument("--output-dir", default="/tmp/cmw-transfer/Volga-extract/Volga_tr")
+    parser.add_argument("--output-dir", default=None)
     parser.add_argument("--platform-cache", default=None)
 
     args = parser.parse_args()
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir or f"/tmp/cmw-transfer/{args.app}_tr")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if args.platform_cache:
