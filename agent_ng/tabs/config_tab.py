@@ -351,43 +351,13 @@ class ConfigTab:
     def _load_from_state(
         self, state: Any, request: gr.Request | None = None
     ) -> tuple[Any, Any, Any, Any, Any]:
-        """Load values from browser state only and update fields."""
+        """Load values from browser state and update fields."""
         try:
             # Normalize state across gradio versions (may come as tuple or dict)
             if isinstance(state, tuple) and len(state) > 0:
                 state = state[0]
             if not isinstance(state, dict):
                 state = {}
-
-            # Debug: log what we received so we can diagnose in the browser console
-            logging.getLogger(__name__).debug(
-                "ConfigTab._load_from_state received keys=%s",
-                list(state.keys()) if isinstance(state, dict) else type(state),
-            )
-
-            # If state is completely empty (default before localStorage read),
-            # do nothing — don't clear fields that may already have values.
-            has_any_value = any(
-                state.get(k)
-                for k in (
-                    "url",
-                    "username",
-                    "password",
-                    "llm_provider_override",
-                    "llm_api_key_override",
-                )
-            )
-            if not has_any_value:
-                logging.getLogger(__name__).debug(
-                    "ConfigTab._load_from_state: empty state, skipping"
-                )
-                return (
-                    gr.update(),
-                    gr.update(),
-                    gr.update(),
-                    gr.update(),
-                    gr.update(),
-                )
 
             url = state.get("url", "") or ""
             login = state.get("username", "") or ""
