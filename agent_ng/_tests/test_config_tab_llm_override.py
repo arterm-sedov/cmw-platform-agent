@@ -133,19 +133,24 @@ def test_session_data_uses_llm_override():
     print("✅ SessionData uses LLM override from session config")
 
 
-def test_config_auto_load_on_startup():
-    """Test that UIManager wires demo.load() for config auto-load."""
+def test_config_auto_load_on_tab_select():
+    """Test that config loads when tab is selected, not at app start."""
+    from agent_ng.tabs.config_tab import ConfigTab
     from agent_ng.ui_manager import UIManager
     import inspect
 
-    source = inspect.getsource(UIManager._setup_auto_refresh)
+    # ConfigTab should wire tab.select for loading
+    tab_source = inspect.getsource(ConfigTab.create_tab)
+    assert "tab.select" in tab_source, "ConfigTab doesn't wire tab.select"
+    assert "_load_from_state" in tab_source, "ConfigTab doesn't use _load_from_state"
 
-    assert "configtab_tab" in source, "UIManager doesn't reference configtab_tab"
-    assert "_load_from_state" in source, "UIManager doesn't wire _load_from_state"
-    assert "config_state" in source, "UIManager doesn't reference config_state"
-    assert "demo.load(" in source, "UIManager must wire demo.load() for config"
+    # UIManager should NOT wire demo.load() for config
+    ui_source = inspect.getsource(UIManager._setup_auto_refresh)
+    assert "configtab_tab" not in ui_source, (
+        "UIManager must not reference configtab_tab"
+    )
 
-    print("✅ UIManager auto-loads browser config on startup")
+    print("✅ Config loads on tab select, not at app start")
 
 
 def main():
@@ -160,7 +165,7 @@ def main():
         test_session_manager_has_llm_config,
         test_session_manager_clear_config,
         test_session_data_uses_llm_override,
-        test_config_auto_load_on_startup,
+        test_config_auto_load_on_tab_select,
     ]
 
     passed = 0

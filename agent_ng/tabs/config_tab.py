@@ -62,8 +62,8 @@ class ConfigTab:
             # Wire events
             self._connect_events()
 
-            # Auto-load BrowserState into fields on tab select and state change.
-            # Use explicit binding (not gr.on) for reliability with BrowserState.
+            # Auto-load BrowserState into fields when config tab is selected.
+            # Only loads if there is stored config in localStorage.
             config_state = self.components["config_state"]
             outputs = [
                 self.components["platform_url"],
@@ -74,11 +74,6 @@ class ConfigTab:
             ]
 
             tab.select(
-                fn=self._load_from_state,
-                inputs=[config_state],
-                outputs=outputs,
-            )
-            config_state.change(
                 fn=self._load_from_state,
                 inputs=[config_state],
                 outputs=outputs,
@@ -358,6 +353,26 @@ class ConfigTab:
                 state = state[0]
             if not isinstance(state, dict):
                 state = {}
+
+            # If no stored config, return no-ops — don't clear initial values
+            has_saved_config = any(
+                state.get(k)
+                for k in (
+                    "url",
+                    "username",
+                    "password",
+                    "llm_provider_override",
+                    "llm_api_key_override",
+                )
+            )
+            if not has_saved_config:
+                return (
+                    gr.update(),
+                    gr.update(),
+                    gr.update(),
+                    gr.update(),
+                    gr.update(),
+                )
 
             url = state.get("url", "") or ""
             login = state.get("username", "") or ""
