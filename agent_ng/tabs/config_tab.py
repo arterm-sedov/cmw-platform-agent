@@ -62,23 +62,6 @@ class ConfigTab:
             # Wire events
             self._connect_events()
 
-            # Auto-load BrowserState into fields when config tab is selected.
-            # Only loads if there is stored config in localStorage.
-            config_state = self.components["config_state"]
-            outputs = [
-                self.components["platform_url"],
-                self.components["username"],
-                self.components["password"],
-                self.components["llm_provider_override"],
-                self.components["llm_api_key_override"],
-            ]
-
-            tab.select(
-                fn=self._load_from_state,
-                inputs=[config_state],
-                outputs=outputs,
-            )
-
         logging.getLogger(__name__).info(
             "✅ ConfigTab: Successfully created with components and wiring"
         )
@@ -262,6 +245,20 @@ class ConfigTab:
             ],
         )
 
+        # Auto-load config when BrowserState changes (e.g., after reading
+        # localStorage). Fires when tab is first selected and BrowserState mounts.
+        self.components["config_state"].change(
+            fn=self._load_from_state,
+            inputs=[self.components["config_state"]],
+            outputs=[
+                self.components["platform_url"],
+                self.components["username"],
+                self.components["password"],
+                self.components["llm_provider_override"],
+                self.components["llm_api_key_override"],
+            ],
+        )
+
     # Event handlers
     def _save_to_state(
         self,
@@ -432,7 +429,8 @@ class ConfigTab:
                     )
             except Exception:
                 logging.getLogger(__name__).debug(
-                    "⚠️ ConfigTab.load -> failed to propagate BrowserState to session store",
+                    "ConfigTab.load -> failed to propagate BrowserState "
+                    "to session store",
                     exc_info=True,
                 )
 
