@@ -972,6 +972,67 @@ result = localize_aliases.invoke({
 
 → See also: [references/localization.md](references/localization.md)
 
+### Step Scripts - Modular Alias Analysis
+
+For large applications (5000+ CTF JSON files), use the step scripts for resumable, batched processing.
+
+**Location:** `.agents/skills/cmw-platform/scripts/tool_*.py`
+
+**Workflow:**
+
+| Step | Script | Purpose | Output |
+|------|--------|---------|--------|
+| 1 | `tool_extract_aliases.py` | Extract aliases per folder | `{app}_{folder}_aliases.json` |
+| 2 | `tool_collect_platform.py` | Query platform types (parallel) | `{app}_platform_cache.json` |
+| 3 | `tool_verify_aliases.py` | Verify aliases per folder | `{app}_{folder}_verified.json` |
+| 4 | `tool_find_dangerous.py` | Scan for expression patterns | `{app}_dangerous_aliases.json` |
+| 5 | `tool_finalize.py` | Merge and set aliasLocked | Final JSONs |
+
+**Usage:**
+```bash
+# Activate venv first
+source .venv/bin/activate
+
+# Run all steps
+python .agents/skills/cmw-platform/scripts/tool_analyze_all.py \
+    --app Volga \
+    --extract-dir /tmp/cmw-transfer/Volga-extract \
+    --output-dir /tmp/cmw-transfer/Volga-extract/Volga_tr
+
+# Or run individual steps
+python .agents/skills/cmw-platform/scripts/tool_extract_aliases.py --app Volga \
+    --extract-dir /tmp/cmw-transfer/Volga-extract \
+    --output-dir /tmp/cmw-transfer/Volga-extract/Volga_tr
+
+python .agents/skills/cmw-platform/scripts/tool_collect_platform.py --app Volga \
+    --output-dir /tmp/cmw-transfer/Volga-extract/Volga_tr
+
+python .agents/skills/cmw-platform/scripts/tool_verify_aliases.py --app Volga \
+    --folder RecordTemplates \
+    --output-dir /tmp/cmw-transfer/Volga-extract/Volga_tr
+
+python .agents/skills/cmw-platform/scripts/tool_find_dangerous.py --app Volga \
+    --extract-dir /tmp/cmw-transfer/Volga-extract \
+    --output-dir /tmp/cmw-transfer/Volga-extract/Volga_tr
+
+python .agents/skills/cmw-platform/scripts/tool_finalize.py --app Volga \
+    --output-dir /tmp/cmw-transfer/Volga-extract/Volga_tr
+```
+
+**Expression Patterns Detected:**
+- `${alias}` - variable reference
+- `->{alias}` - method call on alias
+- `{alias}->` - alias as method target
+- `"alias"` - string quoted alias
+
+**aliasLocked Logic:**
+- `true`: matches skip pattern, has displayName, NOT dangerous (safe to skip)
+- `false`: normal OR matches skip pattern BUT dangerous (will be renamed)
+
+**State Files:**
+- `{app}_extraction_state.json` - tracks completed folders
+- `{app}_dangerous_scan_state.json` - tracks scan progress (for resume)
+
 ---
 
 ## 7. Troubleshooting
