@@ -310,7 +310,7 @@ def extract_all_aliases_complete(base: Path, app_name: str) -> list[dict]:
                 file_count += 1
                 try:
                     data = json.loads(item.read_text(encoding="utf-8"))
-                    relative_path = str(item.relative_to(app_dir))
+                    relative_path = str(item.relative_to(base))
                     aliases = scan_json_recursive(data, relative_path)
                     for a in aliases:
                         a["json_file"] = relative_path
@@ -414,13 +414,13 @@ def verify_aliases(all_aliases: list[dict], app_name: str) -> tuple[list, list]:
 def main():
     parser = argparse.ArgumentParser(description="Complete alias extraction for localization")
     parser.add_argument("--app", required=True)
-    parser.add_argument("--extract-dir", default="/tmp/cmw-transfer/Volga-extract")
-    parser.add_argument("--output-dir", default="/tmp/cmw-transfer/Volga-extract/Volga_tr")
+    parser.add_argument("--extract-dir", default=None)
+    parser.add_argument("--output-dir", default=None)
 
     args = parser.parse_args()
 
-    extract_dir = Path(args.extract_dir)
-    output_dir = Path(args.output_dir)
+    extract_dir = Path(args.extract_dir or "/tmp/cmw-transfer")
+    output_dir = Path(args.output_dir or f"/tmp/cmw-transfer/{args.app}_tr")
     os.makedirs(output_dir, exist_ok=True)
 
     print(f"=== Complete Alias Extraction for: {args.app} ===")

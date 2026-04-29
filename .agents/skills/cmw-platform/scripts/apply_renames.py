@@ -111,8 +111,10 @@ def main(output_dir: str, reverse: bool = False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Apply or reverse localization renames")
-    parser.add_argument("--output-dir", default="/tmp/cmw-transfer/Volga-extract/Volga_tr", help="Directory with _verified_complete.json")
+    parser.add_argument("--app", required=True)
+    parser.add_argument("--output-dir", default=None, help="Directory with _verified_complete.json")
     parser.add_argument("--reverse", action="store_true", help="Reverse renames (renamed -> original)")
     args = parser.parse_args()
 
-    main(args.output_dir, args.reverse)
+    output_dir = args.output_dir or f"/tmp/cmw-transfer/{args.app}_tr"
+    main(output_dir, args.reverse)

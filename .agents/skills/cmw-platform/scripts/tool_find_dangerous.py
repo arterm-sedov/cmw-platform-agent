@@ -35,7 +35,7 @@ sys.path.insert(0, str(APP_DIR))
 EXPRESSION_KEYS = {"Expression", "Code", "ValueExpression", "ValidationScript", "Calculation", "DefaultExpression"}
 
 
-def scan_file(json_file, aliases_list, regexes, app_dir):
+def scan_file(json_file, aliases_list, regexes, extract_dir):
     """Scan a single file for dangerous aliases.
     Returns: dict of {alias: [{"jsonPathOriginal": path, "jsonPathRenamed": "", "expressionOriginal": text, "expressionRenamed": ""}]}
     """
@@ -55,8 +55,8 @@ def scan_file(json_file, aliases_list, regexes, app_dir):
     except json.JSONDecodeError:
         return result
 
-    # Get relative CTF path
-    rel_path = str(json_file.relative_to(app_dir))
+    # Get relative CTF path (relative to extract_dir to include app folder prefix)
+    rel_path = str(json_file.relative_to(extract_dir))
 
     def scan_expressions(obj, path=""):
         """Recursively scan for expression fields containing aliases."""
@@ -88,16 +88,16 @@ def scan_file(json_file, aliases_list, regexes, app_dir):
 def main():
     parser = argparse.ArgumentParser(description="Step 4: Find dangerous aliases")
     parser.add_argument("--app", required=True)
-    parser.add_argument("--extract-dir", default="/tmp/cmw-transfer/Volga-extract")
-    parser.add_argument("--output-dir", default="/tmp/cmw-transfer/Volga-extract/Volga_tr")
+    parser.add_argument("--extract-dir", default=None)
+    parser.add_argument("--output-dir", default=None)
     parser.add_argument("--workers", type=int, default=4)
 
     args = parser.parse_args()
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir or f"/tmp/cmw-transfer/{args.app}_tr")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    extract_dir = Path(args.extract_dir)
+    extract_dir = Path(args.extract_dir or f"/tmp/cmw-transfer/{args.app}")
     app_dir = extract_dir / args.app
     if not app_dir.exists():
         print(f"Error: {app_dir} not found")
@@ -170,7 +170,7 @@ def main():
     def process_batch(batch):
         batch_results = {}
         for f in batch:
-            result = scan_file(f, aliases_list, None, app_dir)
+            result = scan_file(f, aliases_list, None, extract_dir)
             for alias, expr_list in result.items():
                 if alias not in batch_results:
                     batch_results[alias] = []
@@ -214,7 +214,6 @@ def main():
     for alias in sorted(all_expressions.keys()):
         for expr in all_expressions[alias]:
             output_data["expressions"].append({
-                "alias": alias,
                 "jsonPathOriginal": expr["jsonPathOriginal"],
                 "jsonPathRenamed": "",
                 "expressionOriginal": expr["expressionOriginal"],

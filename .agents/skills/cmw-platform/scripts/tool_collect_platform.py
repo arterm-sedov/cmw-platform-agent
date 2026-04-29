@@ -53,12 +53,12 @@ def query_type(app_name: str, obj_type: str, max_count: int = 5000) -> tuple[str
 def main():
     parser = argparse.ArgumentParser(description="Step 2: Collect platform data in parallel")
     parser.add_argument("--app", required=True)
-    parser.add_argument("--output-dir", default="/tmp/cmw-transfer/Volga-extract/Volga_tr")
+    parser.add_argument("--output-dir", default=None)
     parser.add_argument("--workers", type=int, default=8)
 
     args = parser.parse_args()
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir or f"/tmp/cmw-transfer/{args.app}_tr")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     output_file = output_dir / f"{args.app}_platform_cache.json"
