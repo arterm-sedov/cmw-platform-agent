@@ -293,7 +293,22 @@ def process_folder(folder_name: str, app_dir: Path) -> tuple[list, int]:
                     pass
 
     scan_folder(folder_path)
-    return all_aliases, file_count
+
+    # Deduplicate by (parent_template, type, alias)
+    deduped = {}
+    for a in all_aliases:
+        key = (a.get("parent_template", ""), a.get("type"), a.get("alias"))
+        if key not in deduped:
+            deduped[key] = {
+                **a,
+                "jsonPathOriginal": [a.get("path", "")],
+            }
+        else:
+            deduped[key]["jsonPathOriginal"].append(a.get("path", ""))
+            if a.get("aliasLocked"):
+                deduped[key]["aliasLocked"] = True
+
+    return list(deduped.values()), file_count
 
 
 def main(app: str = None, extract_dir: str = None, output_dir: str = None):
