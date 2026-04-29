@@ -23,15 +23,16 @@ import asyncio
 from collections.abc import AsyncGenerator
 import json
 import logging
-from pathlib import Path
 import os
+from pathlib import Path
+from queue import Empty, Queue
+import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
-import threading
-from queue import Queue, Empty
-import gradio as gr
+
 from dotenv import load_dotenv
+import gradio as gr
 
 # Load .env early so Gradio picks up env settings
 load_dotenv()
@@ -173,11 +174,12 @@ except ImportError as e1:
             e1,
             e2,
         )
-        _logger.error(
+        _logger.exception(
             "Please check: 1) requirements_ng.txt installed 2) PYTHONPATH 3) circular imports 4) modules exist 5) working directory"
         )
+        msg = f"Failed to import required modules. Absolute: {e1}, Relative: {e2}"
         raise ImportError(
-            f"Failed to import required modules. Absolute: {e1}, Relative: {e2}"
+            msg
         )
 
 
@@ -250,7 +252,8 @@ class NextGenApp:
         try:
             self.ui_manager = get_ui_manager(language=language, i18n_instance=self.i18n)
             if not self.ui_manager:
-                raise ValueError("UI Manager not available")
+                msg = "UI Manager not available"
+                raise ValueError(msg)
         except Exception as e:
             _logger.exception("Failed to initialize UI Manager: %s", e)
             self.ui_manager = None
@@ -478,7 +481,7 @@ class NextGenApp:
 
             # Format provider/model information
             if len(provider_models) == 1:
-                providers_text = list(provider_models)[0]
+                providers_text = next(iter(provider_models))
                 total_models = 1
             else:
                 providers_text = ", ".join(sorted(provider_models))
@@ -687,10 +690,7 @@ class NextGenApp:
             tool_costs_this_turn: float = 0.0
 
             # Add user message to history
-            working_history = history + [
-                {"role": "user", "content": message},
-                {"role": "assistant", "content": ""},
-            ]
+            working_history = [*history, {"role": "user", "content": message}, {"role": "assistant", "content": ""}]
 
             # Get prompt token count for user message (will be displayed below assistant response)
             prompt_tokens = None
@@ -734,7 +734,7 @@ class NextGenApp:
                         content = event.get("content", "")
                         metadata = event.get("metadata", {})
                         # print(f"🔍 DEBUG: Processing event - type: {event_type}, content length: {len(str(content))}")
-                    except Exception as e:
+                    except Exception:
                         import traceback
 
                         # print(f"🔍 DEBUG: Error processing event: {e}")
@@ -960,7 +960,6 @@ class NextGenApp:
                 streaming_error_handled = True
                 # print(f"🔍 DEBUG: Set streaming_error_handled to True in streaming loop")
                 # Continue with the rest of the processing even if streaming fails
-                pass
 
             # Add API token count to final response
             # Add token counts below assistant response
@@ -1033,7 +1032,7 @@ class NextGenApp:
                     total_duplicates = 0
                     total_tool_calls = 0
 
-                    for tool_key, stats in dedup_stats.items():
+                    for _tool_key, stats in dedup_stats.items():
                         total_tool_calls += stats["total_calls"]
                         if stats["duplicates"] > 0:
                             dedup_summary.append(
@@ -1272,7 +1271,7 @@ class NextGenApp:
             # print("🔍 DEBUG: Triggering UI update...")
             # Store the update trigger - the UI will check this
             self._ui_update_needed = True
-        except Exception as e:
+        except Exception:
             # print(f"🔍 DEBUG: Error triggering UI update: {e}")
             pass
 
@@ -1297,7 +1296,7 @@ class NextGenApp:
             # This will be called when the agent is ready or after messages
             # The actual UI update will happen through Gradio's event system
             self._ui_update_needed = True
-        except Exception as e:
+        except Exception:
             # print(f"🔍 DEBUG: Error triggering UI update: {e}")
             pass
 
@@ -1309,7 +1308,7 @@ class NextGenApp:
 
             # print("🔍 DEBUG: UI refreshed after message completion (EVENT-DRIVEN)")
 
-        except Exception as e:
+        except Exception:
             # print(f"🔍 DEBUG: Error refreshing UI after message: {e}")
             pass
 
@@ -1317,7 +1316,8 @@ class NextGenApp:
         """Create the Gradio interface using UI Manager and modular tabs"""
         # Validate UI Manager
         if not self.ui_manager:
-            raise RuntimeError("UI Manager not available - cannot create interface")
+            msg = "UI Manager not available - cannot create interface"
+            raise RuntimeError(msg)
 
         # Create event handlers
         event_handlers = self._create_event_handlers()
@@ -1421,10 +1421,10 @@ class NextGenApp:
         # This uses the same session isolation as the UI and returns only the last assistant text
         def _api_ask(
             question: str,
-            username: str = None,
-            password: str = None,
-            base_url: str = None,
-            session_id: str = None,
+            username: str | None = None,
+            password: str | None = None,
+            base_url: str | None = None,
+            session_id: str | None = None,
         ) -> str:
             _logger.info(f"🔗 API /ask called with question: {question[:50]}...")
 
@@ -1481,7 +1481,7 @@ class NextGenApp:
                 loop.close()
 
             except Exception as e:
-                _logger.error(f"API /ask error: {e}")
+                _logger.exception(f"API /ask error: {e}")
                 return f"❌ {e}"
 
             _logger.info(
@@ -1492,10 +1492,10 @@ class NextGenApp:
         # Streaming endpoint: yields incremental content for cURL/Client streaming
         def _api_ask_stream(
             question: str,
-            username: str = None,
-            password: str = None,
-            base_url: str = None,
-            session_id: str = None,
+            username: str | None = None,
+            password: str | None = None,
+            base_url: str | None = None,
+            session_id: str | None = None,
         ):
             _logger.info(f"🔗 API /ask_stream called with question: {question[:50]}...")
 

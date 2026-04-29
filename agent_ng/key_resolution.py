@@ -7,17 +7,15 @@ Checks config tab override first, then falls back to environment variable.
 """
 
 import os
-from typing import Optional
 
 from agent_ng.session_manager import get_session_config
 
 
 def get_api_key(
     config_key: str,
-    override_key: Optional[str] = None,
-    session_id: Optional[str] = None,
-    provider: Optional[str] = None,
-) -> Optional[str]:
+    override_key: str | None = None,
+    session_id: str | None = None,
+) -> str | None:
     """
     Get API key with unified resolution.
 
@@ -30,7 +28,6 @@ def get_api_key(
         config_key: Environment variable name (e.g., "GEMINI_KEY")
         override_key: Direct override from caller (highest priority)
         session_id: Session ID to read session config from
-        provider: Provider name for context (optional)
 
     Returns:
         API key string or None if not found
@@ -52,10 +49,10 @@ def get_api_key(
 
 
 def get_provider_api_key(
-    provider: Optional[str] = None,
-    override_key: Optional[str] = None,
-    session_id: Optional[str] = None,
-) -> Optional[str]:
+    provider: str | None = None,
+    override_key: str | None = None,
+    session_id: str | None = None,
+) -> str | None:
     """
     Get API key for a specific provider using its config env var.
 
@@ -109,7 +106,7 @@ def get_provider_api_key(
     config_key = config.api_key_env
 
     # Resolve API key: override → session config → env var
-    final_key: Optional[str] = None
+    final_key: str | None = None
 
     # 1. Direct override (highest priority)
     if override_key:

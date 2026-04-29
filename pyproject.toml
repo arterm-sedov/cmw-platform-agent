@@ -56,6 +56,8 @@ ignore = [
     "TRY401",  # Redundant exception object in logging.exception (preferential style)
     "PTH",     # Path-related suggestions (os.path vs Path - both are valid)
     "DTZ005",  # datetime.now() without tz (intentionally using local timezone is okay)
+    "PLC0415", # Import not at top-level (required for fallback import pattern per AGENTS.md)
+    "TID252",  # Prefer absolute imports (relative imports used in fallback pattern)
 ]
 
 # Rules that should not be automatically fixed to prevent deletion of useful code

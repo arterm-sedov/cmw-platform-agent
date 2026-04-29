@@ -43,9 +43,13 @@ from .llm_manager import (
 # Use SessionManager.get_session_agent(session_id) to get agent instances
 
 __all__ = [
-    # LangChain agent
-    "NextGenAgent",
     "ChatMessage",
+    # Error handling
+    "ErrorHandler",
+    "ErrorInfo",
+    "ErrorType",
+    "LLMConfig",
+    "LLMInstance",
     # App interface - commented out to avoid circular imports
     # 'NextGenApp',
     # 'get_demo',
@@ -53,12 +57,8 @@ __all__ = [
     # LLM management
     "LLMManager",
     "LLMProvider",
-    "LLMConfig",
-    "LLMInstance",
-    "get_llm_manager",
-    # Error handling
-    "ErrorHandler",
-    "ErrorInfo",
-    "ErrorType",
+    # LangChain agent
+    "NextGenAgent",
     "get_error_handler",
+    "get_llm_manager",
 ]

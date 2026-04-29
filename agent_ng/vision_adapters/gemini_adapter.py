@@ -85,7 +85,8 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
             Dict with formatted input for Gemini API
         """
         if not self.available:
-            raise RuntimeError("Gemini SDK not available")
+            msg = "Gemini SDK not available"
+            raise RuntimeError(msg)
 
         # Check for YouTube URL (Gemini supports direct YouTube URLs)
         if vision_input.video_url:
@@ -107,7 +108,8 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
             media_path = vision_input.audio_path
 
         if not media_path:
-            raise ValueError("No media path or YouTube URL provided")
+            msg = "No media path or YouTube URL provided"
+            raise ValueError(msg)
 
         return {
             "media_path": media_path,
@@ -130,7 +132,8 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
             RuntimeError: If model invocation fails
         """
         if not self.available:
-            raise RuntimeError("Gemini SDK not available")
+            msg = "Gemini SDK not available"
+            raise RuntimeError(msg)
 
         # Unified key resolution: session llm_provider_override → llm_api_key_override → env var
         gemini_key = get_provider_api_key(
@@ -138,7 +141,8 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
             session_id=get_current_session_id(),
         )
         if not gemini_key:
-            raise RuntimeError("GEMINI_KEY not found in environment")
+            msg = "GEMINI_KEY not found in environment"
+            raise RuntimeError(msg)
 
         client = self.genai.Client(api_key=gemini_key)
 
@@ -194,4 +198,5 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
             return response.text
 
         except Exception as e:
-            raise RuntimeError(f"Gemini Direct API call failed: {e}")
+            msg = f"Gemini Direct API call failed: {e}"
+            raise RuntimeError(msg)
