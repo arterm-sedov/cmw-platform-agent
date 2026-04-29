@@ -234,6 +234,10 @@ RUSSIAN_TRANSLATIONS = {
         пределах текущего сеанса.
         """
     ),
+    # LLM override fields
+    "config_llm_section": "Переопределение LLM API (опционально)",
+    "config_llm_provider_label": "Провайдер (пусто = использовать значение по умолчанию из env)",
+    "config_llm_api_key_label": "Ключ API (пусто = использовать значение по умолчанию из env)",
     # Statistics labels
     "agent_status_section": "**Агент:**",
     "conversation_section": "**Диалог:**",
@@ -574,6 +578,10 @@ ENGLISH_TRANSLATIONS = {
         current session only.
         """
     ),
+    # LLM override fields
+    "config_llm_section": "LLM API Override (optional)",
+    "config_llm_provider_label": "Provider (leave empty to use default from env)",
+    "config_llm_api_key_label": "API Key (leave empty to use default from env)",
     # Statistics labels
     "agent_status_section": "**Agent:**",
     "conversation_section": "**Conversation:**",

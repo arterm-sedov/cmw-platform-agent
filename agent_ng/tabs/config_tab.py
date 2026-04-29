@@ -84,8 +84,16 @@ class ConfigTab:
         """Create the configuration form with consistent styling"""
 
         url_init, login_init, password_init = "", "", ""
-        llm_provider_init = ""
         llm_api_key_init = ""
+
+        # Default provider from env/config at startup
+        try:
+            from agent_ng.agent_config import get_llm_settings
+
+            llm_settings = get_llm_settings()
+            llm_provider_init = llm_settings.get("default_provider", "openrouter")
+        except ImportError:
+            llm_provider_init = os.environ.get("AGENT_PROVIDER", "openrouter")
 
         # Config state in browser localStorage (shared across tabs in same browser)
         self.components["config_state"] = gr.BrowserState(
@@ -136,7 +144,7 @@ class ConfigTab:
             )
 
             gr.Markdown("---")
-            gr.Markdown("**LLM API Key Override** (optional)")
+            gr.Markdown(f"**{self._get_translation('config_llm_section')}**")
 
             llm_providers = [
                 "gemini",
@@ -147,13 +155,13 @@ class ConfigTab:
                 "gigachat",
             ]
             self.components["llm_provider_override"] = gr.Dropdown(
-                label="Provider (leave empty to use default from env)",
+                label=self._get_translation("config_llm_provider_label"),
                 choices=["", *llm_providers],
                 value=llm_provider_init,
             )
 
             self.components["llm_api_key_override"] = gr.Textbox(
-                label="API Key (leave empty to use default from env)",
+                label=self._get_translation("config_llm_api_key_label"),
                 type="password",
                 value=llm_api_key_init,
                 lines=1,
