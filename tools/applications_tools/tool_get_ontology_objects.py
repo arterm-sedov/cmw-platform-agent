@@ -34,6 +34,9 @@ TYPE_PREDICATE_MAPPING: dict[str, dict[str, str]] = {
     "Routes": {"alias": "cmw.procedure.name"},
     "Role": {"alias": "cmw.role.alias", "aliasProperty": "cmw.role.aliasProperty"},
     "WidgetConfig": {"alias": "cmw.form.alias"},
+    "DesktopWidgetConfig": {"alias": "cmw.desktopPage.widget.config.alias"},
+    "ExportTemplate": {"alias": "cmw.alias"},
+    "DesktopComponent": {"alias": "cmw.desktopPage.component.alias"},
 }
 
 TYPE_PREFIX_MAPPING: dict[str, list[str]] = {
@@ -53,6 +56,9 @@ TYPE_PREFIX_MAPPING: dict[str, list[str]] = {
     "Trigger": ["trigger."],
     "Role": ["role."],
     "WidgetConfig": ["fw."],
+    "DesktopWidgetConfig": ["dwc."],
+    "ExportTemplate": ["exportTemplate."],
+    "DesktopComponent": ["component."],
 }
 
 DEFAULT_PARAMETER = "alias"
@@ -80,7 +86,7 @@ class GetOntologyObjectsSchema(BaseModel):
 
 
 def extract_id(item_id: str) -> str:
-    if match := re.match(r"^([\w.]+)\s*:\s*System\.String\[\]", item_id):
+    if match := re.match(r"^([\w.]+)\s*:", item_id):
         return match.group(1)
     return item_id
 
@@ -387,6 +393,57 @@ def get_ontology_objects(
         "errors": errors if errors else {},
         "total_count": len(results),
     }
+
+
+def get_references(
+    object_id: str = Field(..., description="Object ID to get references for"),
+    predicate: str = Field(..., description="Predicate to query (e.g., cmw.solution.cart)"),
+    application_system_name: str = Field(default="", description="Application system name"),
+) -> dict:
+    """
+    Get references for an object by predicate.
+
+    Used to verify object ownership (e.g., verify Cart belongs to a Solution).
+
+    Args:
+        object_id: Object ID (e.g., "cart.1")
+        predicate: Predicate to query (e.g., "cmw.solution.cart")
+        application_system_name: Optional application system name
+
+    Returns:
+        Dict with references, e.g., {"cmw.solution.cart": ["sln.1"]}
+    """
+    base_url = os.environ.get("CMW_BASE_URL", "")
+    if not base_url:
+        return {"success": False, "error": "CMW_BASE_URL not set"}
+
+    session = get_session()
+    url = f"{base_url}/api/public/system/Base/OntologyService/GetReferences"
+
+    payload = {
+        "id": object_id,
+        "predicate": predicate,
+    }
+
+    if application_system_name:
+        payload["applicationSystemName"] = application_system_name
+
+    try:
+        response = session.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+
+        return {
+            "success": True,
+            "data": data,
+            "status_code": response.status_code,
+        }
+    except requests.exceptions.RequestException as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "status_code": getattr(response, "status_code", 0) if hasattr(response, "status_code") else 0,
+        }
 
 
 if __name__ == "__main__":
