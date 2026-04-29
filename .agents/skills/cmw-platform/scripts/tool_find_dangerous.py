@@ -35,9 +35,9 @@ sys.path.insert(0, str(APP_DIR))
 EXPRESSION_KEYS = {"Expression", "Code", "ValueExpression", "ValidationScript", "Calculation", "DefaultExpression"}
 
 
-def scan_file(json_file, aliases_list, regexes):
+def scan_file(json_file, aliases_list, regexes, app_dir):
     """Scan a single file for dangerous aliases.
-    Returns: dict of {alias: [{"jsonPathOriginal": path, "expressionOriginal": text}]}
+    Returns: dict of {alias: [{"jsonPathOriginal": path, "jsonPathRenamed": "", "expressionOriginal": text, "expressionRenamed": ""}]}
     """
     result = {}
 
@@ -55,8 +55,8 @@ def scan_file(json_file, aliases_list, regexes):
     except json.JSONDecodeError:
         return result
 
-    # Get relative path
-    rel_path = str(json_file)
+    # Get relative CTF path
+    rel_path = str(json_file.relative_to(app_dir))
 
     def scan_expressions(obj, path=""):
         """Recursively scan for expression fields containing aliases."""
@@ -72,7 +72,9 @@ def scan_file(json_file, aliases_list, regexes):
                                 result[alias] = []
                             result[alias].append({
                                 "jsonPathOriginal": f"{rel_path}#{current_path}",
+                                "jsonPathRenamed": "",
                                 "expressionOriginal": value,
+                                "expressionRenamed": "",
                             })
                 scan_expressions(value, current_path)
         elif isinstance(obj, list):
@@ -168,7 +170,7 @@ def main():
     def process_batch(batch):
         batch_results = {}
         for f in batch:
-            result = scan_file(f, aliases_list, None)
+            result = scan_file(f, aliases_list, None, app_dir)
             for alias, expr_list in result.items():
                 if alias not in batch_results:
                     batch_results[alias] = []
@@ -214,7 +216,9 @@ def main():
             output_data["expressions"].append({
                 "alias": alias,
                 "jsonPathOriginal": expr["jsonPathOriginal"],
+                "jsonPathRenamed": "",
                 "expressionOriginal": expr["expressionOriginal"],
+                "expressionRenamed": "",
             })
 
     output_file = output_dir / f"{args.app}_dangerous_aliases.json"
