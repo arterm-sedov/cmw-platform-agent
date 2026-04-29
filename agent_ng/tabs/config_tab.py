@@ -86,10 +86,7 @@ class ConfigTab:
     def _create_config_interface(self) -> None:
         """Create the configuration form with consistent styling"""
 
-        url_init, login_init, password_init = "", "", ""
-        llm_api_key_init = ""
-
-        # Default provider from env/config at startup
+        # Default provider from env/config at startup (for dropdown initial value only)
         try:
             from agent_ng.agent_config import get_llm_settings
 
@@ -98,14 +95,17 @@ class ConfigTab:
         except ImportError:
             llm_provider_init = os.environ.get("AGENT_PROVIDER", "openrouter")
 
-        # Config state in browser localStorage (shared across tabs in same browser)
+        # BrowserState default MUST be all empty strings. Do NOT bake env defaults
+        # here — demo.load() fires before onMount() reads localStorage, so it
+        # receives the default value. If provider is pre-filled, has_any_value
+        # becomes True and url/username/password get cleared.
         self.components["config_state"] = gr.BrowserState(
             {
-                "url": url_init,
-                "username": login_init,
-                "password": password_init,
-                "llm_provider_override": llm_provider_init,
-                "llm_api_key_override": llm_api_key_init,
+                "url": "",
+                "username": "",
+                "password": "",
+                "llm_provider_override": "",
+                "llm_api_key_override": "",
             },
             storage_key="cmw_config_v1",
         )
