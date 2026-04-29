@@ -149,6 +149,7 @@ class ConfigTab:
             gr.Markdown("---")
             gr.Markdown(f"**{self._get_translation('config_llm_section')}**")
 
+            # Filter providers by env allowlist just like the model selector
             llm_providers = [
                 "gemini",
                 "groq",
@@ -157,10 +158,22 @@ class ConfigTab:
                 "mistral",
                 "gigachat",
             ]
+            try:
+                if (
+                    self.main_app
+                    and hasattr(self.main_app, "llm_manager")
+                    and self.main_app.llm_manager
+                ):
+                    available = self.main_app.llm_manager.get_available_providers()
+                    if available:
+                        llm_providers = sorted(available)
+            except Exception:
+                pass
+
             self.components["llm_provider_override"] = gr.Dropdown(
                 label=self._get_translation("config_llm_provider_label"),
                 choices=["", *llm_providers],
-                value=llm_provider_init,
+                value=llm_provider_init if llm_provider_init in llm_providers else "",
             )
 
             self.components["llm_api_key_override"] = gr.Textbox(
