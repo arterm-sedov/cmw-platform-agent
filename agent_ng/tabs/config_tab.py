@@ -62,21 +62,27 @@ class ConfigTab:
             # Wire events
             self._connect_events()
 
-            # Auto-load BrowserState into fields on tab select and state change
-            gr.on(
-                triggers=[
-                    tab.select,
-                    self.components["config_state"].change,
-                ],
-                inputs=[self.components["config_state"]],
-                outputs=[
-                    self.components["platform_url"],
-                    self.components["username"],
-                    self.components["password"],
-                    self.components["llm_provider_override"],
-                    self.components["llm_api_key_override"],
-                ],
-            )(self._load_from_state)
+            # Auto-load BrowserState into fields on tab select and state change.
+            # Use explicit binding (not gr.on) for reliability with BrowserState.
+            config_state = self.components["config_state"]
+            outputs = [
+                self.components["platform_url"],
+                self.components["username"],
+                self.components["password"],
+                self.components["llm_provider_override"],
+                self.components["llm_api_key_override"],
+            ]
+
+            tab.select(
+                fn=self._load_from_state,
+                inputs=[config_state],
+                outputs=outputs,
+            )
+            config_state.change(
+                fn=self._load_from_state,
+                inputs=[config_state],
+                outputs=outputs,
+            )
 
         logging.getLogger(__name__).info(
             "✅ ConfigTab: Successfully created with components and wiring"
@@ -109,6 +115,12 @@ class ConfigTab:
             },
             storage_key="cmw_config_v1",
         )
+
+        # Textbox initial values — always empty, BrowserState handles persistence
+        url_init = ""
+        login_init = ""
+        password_init = ""
+        llm_api_key_init = ""
 
         # Use the same card-like styling used elsewhere (model-card)
         with gr.Column(scale=1, min_width=400, elem_classes=["model-card"]):

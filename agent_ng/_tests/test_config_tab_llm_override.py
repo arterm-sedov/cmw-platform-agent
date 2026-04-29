@@ -134,22 +134,18 @@ def test_session_data_uses_llm_override():
 
 
 def test_config_auto_load_on_startup():
-    """Test that UIManager does NOT wire demo.load() for config auto-load
-    (avoids hang when BrowserState input is read before frontend mount)."""
+    """Test that UIManager wires demo.load() for config auto-load."""
     from agent_ng.ui_manager import UIManager
     import inspect
 
     source = inspect.getsource(UIManager._setup_auto_refresh)
 
-    # Should explain why in a comment
-    assert "onMount" in source, "UIManager should mention onMount()"
-    assert "BrowserState" in source, "UIManager should mention BrowserState"
-    # Must NOT wire demo.load() specifically for configtab_tab
-    assert "configtab_tab" not in source, (
-        "UIManager must not reference configtab_tab in _setup_auto_refresh"
-    )
+    assert "configtab_tab" in source, "UIManager doesn't reference configtab_tab"
+    assert "_load_from_state" in source, "UIManager doesn't wire _load_from_state"
+    assert "config_state" in source, "UIManager doesn't reference config_state"
+    assert "demo.load(" in source, "UIManager must wire demo.load() for config"
 
-    print("✅ UIManager avoids demo.load() hang for config auto-load")
+    print("✅ UIManager auto-loads browser config on startup")
 
 
 def main():
