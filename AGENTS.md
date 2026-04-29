@@ -41,7 +41,9 @@ Before any coding, changes or implementation:
 
 ```bash
 # Activate venv first (required)
+# Use the active/default Cursor terminal session first
 source .venv/bin/activate   # Linux/WSL
+.venv-ubuntu/bin/activate   # WSL/Linux (alternate venv)
 .venv\Scripts\Activate.ps1  # PowerShell
 
 # Run app
@@ -131,6 +133,10 @@ Before considering work complete:
 - Keep sections action-oriented: each section should clearly imply a decision or next step.
 - Documentation files go to `docs/`.
 - Progress reports go to `docs/**/progress_reports/` with `YYYYMMDD_` prefix.
+- Generate `YYYYMMDD` timestamps with native commands:
+  - PowerShell: `Get-Date -Format "yyyyMMdd"`
+  - Bash/WSL: `date +%Y%m%d`
+  - Python (with active venv): `python -c "from datetime import datetime; print(datetime.now().strftime('%Y%m%d'))"`
 
 ## Security & Secrets
 
@@ -143,6 +149,7 @@ Before considering work complete:
 ## Commit Guidelines
 
 - Only create commits when explicitly asked.
+- If asked to only draft commit text, generate the message but do not add files, stage, push, or commit.
 - Generate commit message text, but do NOT add files, stage, or push unless requested.
 - Keep messages concise, structured, and strictly relevant to changes.
 - Keep commit message length to the necessary minimum.
