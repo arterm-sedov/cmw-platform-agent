@@ -220,29 +220,8 @@ class UIManager:
                 outputs=[self.components["stats_display"]]
             )
 
-        # Auto-load browser config on startup.
-        # _load_from_state returns gr.update() (no-op) when state is empty,
-        # so if this fires before BrowserState reads localStorage, it's harmless.
-        config_tab = self.components.get("configtab_tab")
-        if (
-            config_tab
-            and "config_state" in self.components
-            and hasattr(config_tab, "_load_from_state")
-        ):
-            demo.load(
-                fn=config_tab._load_from_state,
-                inputs=[self.components["config_state"]],
-                outputs=[
-                    self.components.get("platform_url"),
-                    self.components.get("username"),
-                    self.components.get("password"),
-                    self.components.get("llm_provider_override"),
-                    self.components.get("llm_api_key_override"),
-                ],
-            )
-            logging.getLogger(__name__).debug(
-                "✅ Config auto-load wired for startup"
-            )
+        # Config auto-load is handled by tab.select in config_tab.py.
+        # No demo.load() needed — config loads when user opens the tab.
 
         # Setup auto-refresh timers for real-time updates
         self._setup_auto_refresh_timers(demo, event_handlers)
