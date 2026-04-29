@@ -18,7 +18,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-APP_DIR = Path(__file__).parent.parent.parent
+APP_DIR = Path(__file__).parent.parent.parent.parent.parent
 SCRIPTS_DIR = Path(__file__).parent
 
 

@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 """
-Step 5: Finalize
+Step 5: Finalize.
 
-Merges all folder verified files into complete output files.
-Sets aliasLocked flags:
-  - true: matches skip pattern, has displayName, NOT dangerous
-  - false: normal OR matches pattern but dangerous
+Merges all folder verified files into complete output in schema.json format:
 
-Usage:
-    python tool_finalize.py --app Volga --output-dir /path/to/output
+Output fields (schema.json compliant):
+  - type (str)
+  - ids (array of str)
+  - parent_template (str)
+  - aliasOriginal (str)
+  - aliasRenamed (str, empty by default)
+  - displayNameOriginal (str)
+  - displayNameRenamed (str, empty by default)
+  - jsonPathOriginal (array of str)
+  - jsonPathRenamed (array of str, empty by default)
+  - expressions (array of {jsonPathOriginal, jsonPathRenamed, expressionOriginal, expressionRenamed})
 """
 
 import argparse
 import json
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
 
 APP_DIR = Path(__file__).parent.parent.parent
@@ -34,6 +39,7 @@ def main():
 
     print(f"=== Step 5: Finalize for {args.app} ===")
 
+    # Load all verified/skipped files
     verified = []
     skipped = []
 
@@ -51,14 +57,19 @@ def main():
         except (json.JSONDecodeError, OSError) as e:
             print(f"  Warning: Failed to load {vf}: {e}")
 
+    # Load dangerous aliases
     dangerous_file = output_dir / f"{args.app}_dangerous_aliases.json"
     dangerous = set()
+    dangerous_expressions = []  # list of {alias, jsonPathOriginal, expressionOriginal}
+
     if dangerous_file.exists():
         try:
             with open(dangerous_file) as f:
                 dangerous_data = json.load(f)
             dangerous = set(dangerous_data.get("dangerous_aliases", []))
-            print(f"Loaded {len(dangerous)} dangerous aliases")
+            # Load expressions
+            dangerous_expressions = dangerous_data.get("expressions", [])
+            print(f"Loaded {len(dangerous)} dangerous aliases with {len(dangerous_expressions)} expressions")
         except (json.JSONDecodeError, OSError) as e:
             print(f"  Warning: Failed to load dangerous file: {e}")
     else:
@@ -66,48 +77,116 @@ def main():
 
     print(f"\nUpdating aliasLocked flags...")
 
-    updated_locked = 0
-    updated_unlocked = 0
-
+    # Process verified entries - map to schema format
+    schema_verified = []
     for obj in verified:
-        if obj.get("aliasLocked") and obj["alias"] in dangerous:
-            obj["aliasLocked"] = False
-            updated_unlocked += 1
-        elif obj.get("aliasLocked") and obj["alias"] not in dangerous:
-            pass
+        alias = obj.get("alias", obj.get("aliasOriginal", ""))
+        display_name = obj.get("displayName", obj.get("displayNameOriginal", ""))
+        parent_template = obj.get("parent_template", "")
+
+        # Get ids (handle both "ids" and "id")
+        obj_ids = obj.get("ids", obj.get("id", []))
+        if isinstance(obj_ids, str):
+            obj_ids = [obj_ids]
+        elif not isinstance(obj_ids, list):
+            obj_ids = []
+
+        # Get jsonPathOriginal (handle both field names)
+        json_path = obj.get("jsonPathOriginal", obj.get("path", obj.get("json_file", "")))
+        if isinstance(json_path, str):
+            json_path = [json_path] if json_path else []
+        elif not isinstance(json_path, list):
+            json_path = []
+
+        # Get expressions for this alias
+        expressions = [e for e in dangerous_expressions if e.get("alias", "") == alias]
+
+        # Check if dangerous
+        is_dangerous = alias in dangerous
+
+        # aliasLocked logic for verified entries
+        alias_locked = obj.get("aliasLocked", False)
+        if alias_locked and is_dangerous:
+            alias_locked = False  # Unlock dangerous aliases
+
+        schema_obj = {
+            "type": obj.get("type", ""),
+            "ids": obj_ids,
+            "parent_template": parent_template,
+            "aliasOriginal": alias,
+            "aliasRenamed": "",
+            "displayNameOriginal": display_name,
+            "displayNameRenamed": "",
+            "jsonPathOriginal": json_path,
+            "jsonPathRenamed": [],
+            "expressions": expressions,
+            "aliasLocked": alias_locked,
+        }
+
+        schema_verified.append(schema_obj)
+
+    # Process skipped entries with new logic
+    schema_skipped = []
+    for obj in skipped:
+        alias = obj.get("alias", obj.get("aliasOriginal", ""))
+        display_name = obj.get("displayName", obj.get("displayNameOriginal", ""))
+        parent_template = obj.get("parent_template", "")
+
+        # Get jsonPathOriginal
+        json_path = obj.get("jsonPathOriginal", obj.get("path", obj.get("json_file", "")))
+        if isinstance(json_path, str):
+            json_path = [json_path] if json_path else []
+        elif not isinstance(json_path, list):
+            json_path = []
+
+        # Get expressions for this alias
+        expressions = [e for e in dangerous_expressions if e.get("alias", "") == alias]
+
+        is_dangerous = alias in dangerous
+
+        if is_dangerous:
+            # Skipped but dangerous - unlock for rename
+            alias_locked = False
+        elif display_name:
+            # Has displayName - lock for rename
+            alias_locked = True
         else:
-            pass
+            # No displayName - allow rename
+            alias_locked = False
 
-    verified_locked = [v for v in verified if v.get("aliasLocked")]
-    verified_normal = [v for v in verified if not v.get("aliasLocked")]
+        schema_obj = {
+            "type": obj.get("type", ""),
+            "ids": [],
+            "parent_template": parent_template,
+            "aliasOriginal": alias,
+            "aliasRenamed": "",
+            "displayNameOriginal": display_name,
+            "displayNameRenamed": "",
+            "jsonPathOriginal": json_path,
+            "jsonPathRenamed": [],
+            "expressions": expressions,
+            "aliasLocked": alias_locked,
+        }
 
-    skipped_locked = [s for s in skipped if s.get("aliasLocked")]
-    skipped_normal = [s for s in skipped if not s.get("aliasLocked")]
+        schema_skipped.append(schema_obj)
 
-    print(f"Verified: {len(verified)} total")
-    print(f"  aliasLocked=true (safe to skip): {len(verified_locked)}")
+    # Merge all entries
+    all_entries = schema_verified + schema_skipped
+
+    verified_locked = [v for v in all_entries if v.get("aliasLocked")]
+    verified_normal = [v for v in all_entries if not v.get("aliasLocked")]
+
+    print(f"\nTotal entries: {len(all_entries)}")
+    print(f"  aliasLocked=true (will skip): {len(verified_locked)}")
     print(f"  aliasLocked=false (will rename): {len(verified_normal)}")
 
-    print(f"\nSkipped (not in platform): {len(skipped)} total")
-    print(f"  aliasLocked=true (matched pattern): {len(skipped_locked)}")
-    print(f"  aliasLocked=false (no match): {len(skipped_normal)}")
-
+    # Output single file in schema format
     verified_file = output_dir / f"{args.app}_verified_complete.json"
     with open(verified_file, "w", encoding="utf-8") as f:
-        json.dump(verified, f, indent=2, ensure_ascii=False)
+        json.dump(all_entries, f, indent=2, ensure_ascii=False)
 
-    skipped_locked_file = output_dir / f"{args.app}_skipped_locked.json"
-    with open(skipped_locked_file, "w", encoding="utf-8") as f:
-        json.dump(skipped_locked, f, indent=2, ensure_ascii=False)
-
-    skipped_complete_file = output_dir / f"{args.app}_skipped_complete.json"
-    with open(skipped_complete_file, "w", encoding="utf-8") as f:
-        json.dump(skipped_normal, f, indent=2, ensure_ascii=False)
-
-    print(f"\n=== Final Output Files ===")
-    print(f"Verified: {verified_file} ({len(verified)} objects)")
-    print(f"Skipped locked: {skipped_locked_file} ({len(skipped_locked)} objects)")
-    print(f"Skipped complete: {skipped_complete_file} ({len(skipped_normal)} objects)")
+    print(f"\n=== Final Output ===")
+    print(f"Verified complete: {verified_file} ({len(all_entries)} objects)")
 
     return 0
 

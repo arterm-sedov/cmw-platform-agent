@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from collections import Counter, defaultdict
 
-APP_DIR = Path(__file__).parent.parent.parent
+APP_DIR = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(APP_DIR))
 
 from tools.applications_tools.tool_get_ontology_objects import get_ontology_objects
