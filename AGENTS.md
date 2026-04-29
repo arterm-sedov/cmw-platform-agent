@@ -2,6 +2,36 @@
 
 Repo-specific guidance for this LangChain + Gradio Python 3.11+ project.
 
+## Planning
+
+Before any coding, changes or implementation:
+
+- Do a deep codebase research.
+- Do a deep web research.
+- Write a concise plan **file**:
+    - actionable
+    - detailed
+    - TDD
+    - step-by-step tasks
+    - checkpoints
+    - expected verification commands
+    - follows best practices in TDD, SDD, Python, 12-factor agents and software
+
+## Common Engineering Baseline
+
+Use these rules:
+
+- Follow SDD for scope/contract clarity and TDD for behavior-first implementation.
+- Keep code: lean, DRY, modular, and non-breaking, brilliant, abstract, minimal, genius.
+- Follow best practices in TDD, SDD, Gradio, and LangChain implementations.
+- Prefer Pythonic solutions: clarity over cleverness, explicit data contracts, strong typing.
+- For LangChain see LangChain docs, repo and source code for reference, prefer LCEL/runnables, typed tool schemas, and streaming-safe patterns.
+- For Gradio see Gradio's docs, repo and source code for reference, follow best practices, keep state/event flow explicit and UI logic separated from domain logic.
+- Test behavior, not implementation details.
+- Validate external data and avoid silent exception handling (`except: pass` is forbidden).
+- Run lint and relevant tests for modified areas before completion.
+- Never hardcode secrets; use environment variables and `.env.example` placeholders only.
+
 ## Dev Commands
 
 ```bash
@@ -91,6 +121,21 @@ except ImportError:
 - Cover edge cases: boundary conditions, missing data, invalid inputs
 - Location: `agent_ng/_tests/` or relevant `cwd/_tests`
 - Do not test irrelevant patterns (internal state, singletons, framework internals)
+- Keep tests DRY with parametrization when validating the same behavior across multiple configs/models
+- Prefer integration tests for endpoint-level behavior; use pytest markers to separate slow/integration suites:
+  - `python -m pytest -m "not slow"` for fast unit checks
+  - `python -m pytest -m integration` for integration checks
+- When multiple endpoints share the same computation contract, add tests that verify equivalent outcomes
+
+## Verification Checklist
+
+Before considering work complete:
+
+1. Run `ruff check` on modified files
+2. Run relevant tests (unit/integration as applicable)
+3. Confirm no user-facing regressions (non-breaking behavior)
+4. Ensure shared logic remains DRY (extract helpers for repeated blocks)
+5. Update docs/README when behavior, workflows, or commands changed
 
 ## CMW Platform Terminology
 
@@ -150,8 +195,16 @@ except ImportError:
 - Tests go to `agent_ng/_tests/` or relevant `cwd/_tests`
 - Module docstrings with key features and usage examples
 - Use `.env` files for local config, never commit secrets
+- Never commit `.env`; use `.env.example` with placeholders only
+- Never commit or include in any code or docs: any passwords, secrets, keys, real personal, business or entity names, use agnostic synthetic neutral placeholders for for any sensitive information. Load any secrets via load dotenv in tests and code. Never hardcode any sensitive information.
 - Progress reports to `docs/**/progress_reports/` with `YYYYMMDD_` prefix
 - Documentation files to `docs/` folder
+
+## Documentation Hygiene
+
+- Use clear heading hierarchy (single H1 per file)
+- Add a blank line after headings and before lists in Markdown
+- Keep sections action-oriented: each section should clearly imply a decision or next step
 
 ---
 
