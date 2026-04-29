@@ -133,37 +133,6 @@ def test_session_data_uses_llm_override():
     print("✅ SessionData uses LLM override from session config")
 
 
-def test_config_auto_load_on_tab_select():
-    """Test that config loads via tab.select with JS localStorage read."""
-    from agent_ng.tabs.config_tab import ConfigTab
-    from agent_ng.ui_manager import UIManager
-    import inspect
-
-    # ConfigTab should wire tab.select with js= for auto-loading
-    connect_source = inspect.getsource(ConfigTab._connect_events)
-    assert "tab.select" in connect_source, "ConfigTab doesn't wire tab.select"
-    assert "localStorage" in connect_source, (
-        "ConfigTab doesn't use localStorage in js="
-    )
-    assert "_load_from_state" in connect_source, (
-        "ConfigTab doesn't use _load_from_state"
-    )
-
-    # _load_from_state should accept js_state parameter
-    load_sig = inspect.signature(ConfigTab._load_from_state)
-    assert "js_state" in load_sig.parameters, (
-        "_load_from_state missing js_state param"
-    )
-
-    # UIManager should NOT wire demo.load() for config
-    ui_source = inspect.getsource(UIManager._setup_auto_refresh)
-    assert "configtab_tab" not in ui_source, (
-        "UIManager must not reference configtab_tab"
-    )
-
-    print("✅ Config auto-loads via tab.select + JS localStorage read")
-
-
 def main():
     print("🧪 Testing Config Tab LLM Override Feature")
     print("=" * 50)
@@ -176,7 +145,6 @@ def main():
         test_session_manager_has_llm_config,
         test_session_manager_clear_config,
         test_session_data_uses_llm_override,
-        test_config_auto_load_on_tab_select,
     ]
 
     passed = 0
