@@ -34,6 +34,7 @@ Before any coding, changes or implementation:
     - **DRY:** 2+ uses -> extract to helper, super dry, super lean.
 - For LangChain see LangChain docs, repo and source code for reference, prefer LCEL/runnables, typed tool schemas, and streaming-safe patterns.
 - For Gradio see Gradio's docs, repo and source code for reference, follow best practices, keep state/event flow explicit and UI logic separated from domain logic.
+- Validate external data and avoid silent exception handling (`except: pass` is forbidden).
 - Run lint and relevant tests for modified areas before completion.
 - Never hardcode secrets; use environment variables and `.env.example` placeholders only.
 
@@ -115,6 +116,9 @@ except ImportError:
   - `python -m pytest -m "not slow"` for fast unit checks.
   - `python -m pytest -m integration` for integration checks.
 - When multiple endpoints share the same computation contract, add tests that verify equivalent outcomes.
+- References:
+  - https://google.github.io/googletest/primer.html
+  - https://www.ibm.com/think/insights/unit-testing-best-practices
 
 ## Verification Checklist
 
@@ -129,6 +133,9 @@ Before considering work complete:
 ## Documentation Guidelines
 
 - Use clear heading hierarchy (single H1 per file).
+- Front-load conclusions and recommendations.
+- Use actionable, chunked sections (avoid walls of text).
+- Keep source traceability for claims (inline citation where relevant).
 - Add a blank line after headings and before lists in Markdown.
 - Keep sections action-oriented: each section should clearly imply a decision or next step.
 - Documentation files go to `docs/`.
@@ -172,15 +179,27 @@ Before considering work complete:
 
 ## 12-Factor App Principles
 
-Apply 12-factor agent/software principles where practical:
+Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agents:
 
-- Config in environment variables, not hardcoded.
-- Clear build/release/run separation.
-- Prefer stateless processes and externalized backing services.
-- Logs as event streams.
+- One codebase, many deploys.
+- Declare dependencies explicitly.
+- Keep config in environment variables, not hardcoded.
+- Treat backing services as attached resources.
+- Separate build, release, and run stages.
+- Prefer stateless processes with session state in backing services.
+- Export services via port binding where applicable.
+- Scale via the process model where applicable.
+- Optimize disposability (fast startup, graceful shutdown).
 - Keep dev/prod parity.
+- Treat logs as event streams.
+- Run admin tasks as one-off processes.
 
 ## Repo-Specific Details
+
+### Agent Behavior
+
+- Reanalyze changes twice for introduced issues.
+- Compact/summarize working context proactively during long sessions.
 
 ### CMW Platform Terminology
 
@@ -211,10 +230,6 @@ Apply 12-factor agent/software principles where practical:
 
 - Source of truth: `requirements.txt` (versions may change over time).
 - Key packages to be aware of: `langchain`, `gradio`, `pydantic`, `ruff`, `pytest`, `tiktoken`.
-
-## Related Instruction Files
-
-- `.cursor/rules/cmw-platform-agent.mdc` - Code style and framework guidelines.
 
 ---
 
