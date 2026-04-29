@@ -1,0 +1,58 @@
+=== Volga Localization Report ===
+Generated: 2026-04-29T12:10:33.325737
+Total objects: 155
+
+## RecordTemplate: 137
+## ProcessTemplate: 15
+## RoleTemplate: 1
+## AccountTemplate: 2
+  - RecordTemplate: Otdely (['oa.119']) - Отделы
+  - RecordTemplate: Schetchiki (['oa.73']) - Счетчики
+  - RecordTemplate: FinReport (['oa.8']) - Финансовый отчет
+  - RecordTemplate: ServiceCatalog (['oa.35']) - Каталог услуг УК
+  - RecordTemplate: Inventarizatsiya (['oa.60']) - Инвентаризация ОС
+  - RecordTemplate: PPRSettings (['oa.33']) - PPRSettings
+  - RecordTemplate: SLA (['oa.51']) - SLA
+  - RecordTemplate: Resheniyaposobytiyu (['oa.109']) - Решения по событию
+  - RecordTemplate: Bystryessylki (['oa.41']) - Быстрые ссылки
+  - RecordTemplate: TipyPPR (['oa.67']) - Типы ППР
+  - RecordTemplate: Obkhody (['oa.124']) - Обходы
+  - RecordTemplate: Etazhi (['oa.133']) - Этажи
+  - RecordTemplate: Pokazateli (['oa.115']) - Показатели
+  - RecordTemplate: RenterHistory (['oa.15']) - История отношений с арендатором
+  - RecordTemplate: Znacheniyapokazateley (['oa.79']) - Значения показателей
+  - RecordTemplate: ProprtyMarking (['oa.40']) - Маркировка имущества
+  - RecordTemplate: LotConditionsForDeals (['oa.1']) - Условия по лотам в договорах
+  - RecordTemplate: Tekhprotsesspodvg (['oa.72']) - Тех. процесс по двг
+  - RecordTemplate: Istoriaobrabotkizayavki (['oa.29']) - История обработки заявки
+  - RecordTemplate: Processtypes (['oa.26']) - Типы процессов
+  - RecordTemplate: Medtechnics (['oa.22']) - Медицинская техника
+  - RecordTemplate: CoworkingBookingHistory (['oa.37']) - История бронирования мест в коворкинге
+  - RecordTemplate: PeriodyTO (['oa.68']) - Периоды ТО
+  - RecordTemplate: Dogovory (['oa.136']) - Договоры
+  - RecordTemplate: FinType (['oa.7']) - Тип финансового показателя
+  - RecordTemplate: Otvetstvennyepotipamzayavki (['oa.118']) - Ответственные по работе с заявками
+  - RecordTemplate: Zapuskitekhnicheskogoprotsessapotaymeru (['oa.82']) - Запуски технического процесса по таймеру
+  - RecordTemplate: Statusysobytiy (['oa.97']) - Статусы заявок
+  - RecordTemplate: Periodtypes (['oa.23']) - Типы периодичности ТО
+  - RecordTemplate: Vidrabochegomesta (['oa.74']) - Вид рабочего места
+  - RecordTemplate: PokazatelidlyaTO (['oa.66']) - Операции для ТО
+  - RecordTemplate: Servisnayakompaniya (['oa.106']) - Сервисная компания
+  - RecordTemplate: Rabocheemesto (['oa.112']) - Рабочие места
+  - RecordTemplate: Sektor (['oa.108']) - Сектора
+  - RecordTemplate: ZagruzkapoPPR (['oa.49']) - Загрузка по ППР
+  - RecordTemplate: Tipyispolzovaniyarabochegomesta (['oa.75']) - Типы использования рабочего места
+  - RecordTemplate: Statusyzapisipokazateley (['oa.95']) - Статусы записи показателей
+  - RecordTemplate: StatusSLA (['oa.50']) - Статус SLA
+  - RecordTemplate: Tipysostoyaniyimuschestva (['oa.46']) - Типы состояний имущества
+  - RecordTemplate: Kontragenty (['oa.128']) - Контрагенты
+  - RecordTemplate: Tekhnologicheskayakartauborki (['oa.61']) - Технологическая карта уборки
+  - RecordTemplate: Planypogodam (['oa.117']) - Планы по годам
+  - RecordTemplate: Tekhnicheskiesistemy (['oa.93']) - Технические системы
+  - RecordTemplate: Sobytiya (['oa.104']) - Заявки
+  - RecordTemplate: Zapisipokazateley (['oa.83']) - Записи показателей
+  - RecordTemplate: Tipyoborudovaniya (['oa.92']) - Типы оборудования
+  - RecordTemplate: DocsActs (['oa.14']) - Документы Акты
+  - RecordTemplate: Tipyznacheniy (['oa.88']) - Типы значений
+  - RecordTemplate: TechTemlateDeals (['oa.12']) - Технический шаблон для договорной работы
+  - RecordTemplate: Maps (['oa.2']) - Объекты на карте

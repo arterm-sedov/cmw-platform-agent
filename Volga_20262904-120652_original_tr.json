@@ -1,0 +1,2637 @@
+{
+  "objects": [
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.119"
+      ],
+      "aliasOriginal": "Otdely",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0442\u0434\u0435\u043b\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Otdely/Otdely.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.73"
+      ],
+      "aliasOriginal": "Schetchiki",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0447\u0435\u0442\u0447\u0438\u043a\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Schetchiki/Schetchiki.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.8"
+      ],
+      "aliasOriginal": "FinReport",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0424\u0438\u043d\u0430\u043d\u0441\u043e\u0432\u044b\u0439 \u043e\u0442\u0447\u0435\u0442",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/FinReport/FinReport.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.35"
+      ],
+      "aliasOriginal": "ServiceCatalog",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041a\u0430\u0442\u0430\u043b\u043e\u0433 \u0443\u0441\u043b\u0443\u0433 \u0423\u041a",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/ServiceCatalog/ServiceCatalog.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.60"
+      ],
+      "aliasOriginal": "Inventarizatsiya",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u0438\u0437\u0430\u0446\u0438\u044f \u041e\u0421",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Inventarizatsiya/Inventarizatsiya.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.33"
+      ],
+      "aliasOriginal": "PPRSettings",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "PPRSettings",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/PPRSettings/PPRSettings.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.51"
+      ],
+      "aliasOriginal": "SLA",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "SLA",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/SLA/SLA.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.109"
+      ],
+      "aliasOriginal": "Resheniyaposobytiyu",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0420\u0435\u0448\u0435\u043d\u0438\u044f \u043f\u043e \u0441\u043e\u0431\u044b\u0442\u0438\u044e",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Resheniyaposobytiyu/Resheniyaposobytiyu.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.41"
+      ],
+      "aliasOriginal": "Bystryessylki",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0411\u044b\u0441\u0442\u0440\u044b\u0435 \u0441\u0441\u044b\u043b\u043a\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Bystryessylki/Bystryessylki.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.67"
+      ],
+      "aliasOriginal": "TipyPPR",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u041f\u041f\u0420",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/TipyPPR/TipyPPR.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.124"
+      ],
+      "aliasOriginal": "Obkhody",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0431\u0445\u043e\u0434\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Obkhody/Obkhody.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.133"
+      ],
+      "aliasOriginal": "Etazhi",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u042d\u0442\u0430\u0436\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Etazhi/Etazhi.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.115"
+      ],
+      "aliasOriginal": "Pokazateli",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Pokazateli/Pokazateli.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.15"
+      ],
+      "aliasOriginal": "RenterHistory",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u043e\u0442\u043d\u043e\u0448\u0435\u043d\u0438\u0439 \u0441 \u0430\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440\u043e\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/RenterHistory/RenterHistory.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.79"
+      ],
+      "aliasOriginal": "Znacheniyapokazateley",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u044f \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u0435\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Znacheniyapokazateley/Znacheniyapokazateley.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.40"
+      ],
+      "aliasOriginal": "ProprtyMarking",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041c\u0430\u0440\u043a\u0438\u0440\u043e\u0432\u043a\u0430 \u0438\u043c\u0443\u0449\u0435\u0441\u0442\u0432\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/ProprtyMarking/ProprtyMarking.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.1"
+      ],
+      "aliasOriginal": "LotConditionsForDeals",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0423\u0441\u043b\u043e\u0432\u0438\u044f \u043f\u043e \u043b\u043e\u0442\u0430\u043c \u0432 \u0434\u043e\u0433\u043e\u0432\u043e\u0440\u0430\u0445",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/LotConditionsForDeals/LotConditionsForDeals.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.72"
+      ],
+      "aliasOriginal": "Tekhprotsesspodvg",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0435\u0445. \u043f\u0440\u043e\u0446\u0435\u0441\u0441 \u043f\u043e \u0434\u0432\u0433",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tekhprotsesspodvg/Tekhprotsesspodvg.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.29"
+      ],
+      "aliasOriginal": "Istoriaobrabotkizayavki",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0438 \u0437\u0430\u044f\u0432\u043a\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Istoriaobrabotkizayavki/Istoriaobrabotkizayavki.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.26"
+      ],
+      "aliasOriginal": "Processtypes",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u043f\u0440\u043e\u0446\u0435\u0441\u0441\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Processtypes/Processtypes.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.22"
+      ],
+      "aliasOriginal": "Medtechnics",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041c\u0435\u0434\u0438\u0446\u0438\u043d\u0441\u043a\u0430\u044f \u0442\u0435\u0445\u043d\u0438\u043a\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Medtechnics/Medtechnics.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.37"
+      ],
+      "aliasOriginal": "CoworkingBookingHistory",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u0431\u0440\u043e\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f \u043c\u0435\u0441\u0442 \u0432 \u043a\u043e\u0432\u043e\u0440\u043a\u0438\u043d\u0433\u0435",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/CoworkingBookingHistory/CoworkingBookingHistory.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.68"
+      ],
+      "aliasOriginal": "PeriodyTO",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u0435\u0440\u0438\u043e\u0434\u044b \u0422\u041e",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/PeriodyTO/PeriodyTO.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.136"
+      ],
+      "aliasOriginal": "Dogovory",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0414\u043e\u0433\u043e\u0432\u043e\u0440\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Dogovory/Dogovory.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.7"
+      ],
+      "aliasOriginal": "FinType",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f \u0444\u0438\u043d\u0430\u043d\u0441\u043e\u0432\u043e\u0433\u043e \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u044f",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/FinType/FinType.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.118"
+      ],
+      "aliasOriginal": "Otvetstvennyepotipamzayavki",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u043f\u043e \u0440\u0430\u0431\u043e\u0442\u0435 \u0441 \u0437\u0430\u044f\u0432\u043a\u0430\u043c\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Otvetstvennyepotipamzayavki/Otvetstvennyepotipamzayavki.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.82"
+      ],
+      "aliasOriginal": "Zapuskitekhnicheskogoprotsessapotaymeru",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0417\u0430\u043f\u0443\u0441\u043a\u0438 \u0442\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u043e\u0433\u043e \u043f\u0440\u043e\u0446\u0435\u0441\u0441\u0430 \u043f\u043e \u0442\u0430\u0439\u043c\u0435\u0440\u0443",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Zapuskitekhnicheskogoprotsessapotaymeru/Zapuskitekhnicheskogoprotsessapotaymeru.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.97"
+      ],
+      "aliasOriginal": "Statusysobytiy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441\u044b \u0437\u0430\u044f\u0432\u043e\u043a",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusysobytiy/Statusysobytiy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.23"
+      ],
+      "aliasOriginal": "Periodtypes",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u043f\u0435\u0440\u0438\u043e\u0434\u0438\u0447\u043d\u043e\u0441\u0442\u0438 \u0422\u041e",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Periodtypes/Periodtypes.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.74"
+      ],
+      "aliasOriginal": "Vidrabochegomesta",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0412\u0438\u0434 \u0440\u0430\u0431\u043e\u0447\u0435\u0433\u043e \u043c\u0435\u0441\u0442\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Vidrabochegomesta/Vidrabochegomesta.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.66"
+      ],
+      "aliasOriginal": "PokazatelidlyaTO",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u043f\u0435\u0440\u0430\u0446\u0438\u0438 \u0434\u043b\u044f \u0422\u041e",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/PokazatelidlyaTO/PokazatelidlyaTO.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.106"
+      ],
+      "aliasOriginal": "Servisnayakompaniya",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0435\u0440\u0432\u0438\u0441\u043d\u0430\u044f \u043a\u043e\u043c\u043f\u0430\u043d\u0438\u044f",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Servisnayakompaniya/Servisnayakompaniya.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.112"
+      ],
+      "aliasOriginal": "Rabocheemesto",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0420\u0430\u0431\u043e\u0447\u0438\u0435 \u043c\u0435\u0441\u0442\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Rabocheemesto/Rabocheemesto.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.108"
+      ],
+      "aliasOriginal": "Sektor",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0435\u043a\u0442\u043e\u0440\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Sektor/Sektor.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.49"
+      ],
+      "aliasOriginal": "ZagruzkapoPPR",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043f\u043e \u041f\u041f\u0420",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/ZagruzkapoPPR/ZagruzkapoPPR.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.75"
+      ],
+      "aliasOriginal": "Tipyispolzovaniyarabochegomesta",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u044f \u0440\u0430\u0431\u043e\u0447\u0435\u0433\u043e \u043c\u0435\u0441\u0442\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tipyispolzovaniyarabochegomesta/Tipyispolzovaniyarabochegomesta.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.95"
+      ],
+      "aliasOriginal": "Statusyzapisipokazateley",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441\u044b \u0437\u0430\u043f\u0438\u0441\u0438 \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u0435\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusyzapisipokazateley/Statusyzapisipokazateley.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.50"
+      ],
+      "aliasOriginal": "StatusSLA",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441 SLA",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/StatusSLA/StatusSLA.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.46"
+      ],
+      "aliasOriginal": "Tipysostoyaniyimuschestva",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0439 \u0438\u043c\u0443\u0449\u0435\u0441\u0442\u0432\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tipysostoyaniyimuschestva/Tipysostoyaniyimuschestva.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.128"
+      ],
+      "aliasOriginal": "Kontragenty",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Kontragenty/Kontragenty.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.61"
+      ],
+      "aliasOriginal": "Tekhnologicheskayakartauborki",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0435\u0445\u043d\u043e\u043b\u043e\u0433\u0438\u0447\u0435\u0441\u043a\u0430\u044f \u043a\u0430\u0440\u0442\u0430 \u0443\u0431\u043e\u0440\u043a\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tekhnologicheskayakartauborki/Tekhnologicheskayakartauborki.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.117"
+      ],
+      "aliasOriginal": "Planypogodam",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u043b\u0430\u043d\u044b \u043f\u043e \u0433\u043e\u0434\u0430\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Planypogodam/Planypogodam.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.93"
+      ],
+      "aliasOriginal": "Tekhnicheskiesistemy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u0441\u0438\u0441\u0442\u0435\u043c\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tekhnicheskiesistemy/Tekhnicheskiesistemy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.104"
+      ],
+      "aliasOriginal": "Sobytiya",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0417\u0430\u044f\u0432\u043a\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Sobytiya/Sobytiya.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.83"
+      ],
+      "aliasOriginal": "Zapisipokazateley",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0417\u0430\u043f\u0438\u0441\u0438 \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u0435\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Zapisipokazateley/Zapisipokazateley.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.92"
+      ],
+      "aliasOriginal": "Tipyoborudovaniya",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u043e\u0431\u043e\u0440\u0443\u0434\u043e\u0432\u0430\u043d\u0438\u044f",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tipyoborudovaniya/Tipyoborudovaniya.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.14"
+      ],
+      "aliasOriginal": "DocsActs",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u0410\u043a\u0442\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/DocsActs/DocsActs.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.88"
+      ],
+      "aliasOriginal": "Tipyznacheniy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tipyznacheniy/Tipyznacheniy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.12"
+      ],
+      "aliasOriginal": "TechTemlateDeals",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u0448\u0430\u0431\u043b\u043e\u043d \u0434\u043b\u044f \u0434\u043e\u0433\u043e\u0432\u043e\u0440\u043d\u043e\u0439 \u0440\u0430\u0431\u043e\u0442\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/TechTemlateDeals/TechTemlateDeals.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.2"
+      ],
+      "aliasOriginal": "Maps",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0431\u044a\u0435\u043a\u0442\u044b \u043d\u0430 \u043a\u0430\u0440\u0442\u0435",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Maps/Maps.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.90"
+      ],
+      "aliasOriginal": "Tipyrabot",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u0440\u0430\u0431\u043e\u0442",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tipyrabot/Tipyrabot.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.48"
+      ],
+      "aliasOriginal": "Imuschestvo",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u043c\u0443\u0449\u0435\u0441\u0442\u0432\u043e",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Imuschestvo/Imuschestvo.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.30"
+      ],
+      "aliasOriginal": "SAPnumber",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "SAPnumber",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/SAPnumber/SAPnumber.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.80"
+      ],
+      "aliasOriginal": "Zdaniya",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0417\u0434\u0430\u043d\u0438\u044f",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Zdaniya/Zdaniya.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.85"
+      ],
+      "aliasOriginal": "Uborkipomescheniy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0423\u0431\u043e\u0440\u043a\u0438 \u043f\u043e\u043c\u0435\u0449\u0435\u043d\u0438\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Uborkipomescheniy/Uborkipomescheniy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.57"
+      ],
+      "aliasOriginal": "Marshrutyuborok",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041c\u0430\u0440\u0448\u0440\u0443\u0442\u044b \u0443\u0431\u043e\u0440\u043e\u043a",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Marshrutyuborok/Marshrutyuborok.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.126"
+      ],
+      "aliasOriginal": "Materialyporabotam",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b \u043f\u043e \u0440\u0430\u0431\u043e\u0442\u0430\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Materialyporabotam/Materialyporabotam.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "role.9"
+      ],
+      "aliasOriginal": "Arendator",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0410\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Arendator/Arendator.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.3"
+      ],
+      "aliasOriginal": "DebtReport",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0442\u0447\u0435\u0442 \u043f\u043e \u0434\u043e\u043b\u0436\u043d\u0438\u043a\u0430\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/DebtReport/DebtReport.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.99"
+      ],
+      "aliasOriginal": "Statusypomescheniy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441\u044b \u043f\u043e\u043c\u0435\u0449\u0435\u043d\u0438\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusypomescheniy/Statusypomescheniy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.17"
+      ],
+      "aliasOriginal": "\u0412\u043e\u043f\u0440\u043e\u0441\u044b\u0434\u043b\u044f\u0430\u043d\u043a\u0435\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0412\u043e\u043f\u0440\u043e\u0441\u044b \u0434\u043b\u044f \u0430\u043d\u043a\u0435\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/\u0412\u043e\u043f\u0440\u043e\u0441\u044b\u0434\u043b\u044f\u0430\u043d\u043a\u0435\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f/\u0412\u043e\u043f\u0440\u043e\u0441\u044b\u0434\u043b\u044f\u0430\u043d\u043a\u0435\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.20"
+      ],
+      "aliasOriginal": "Clients",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041a\u043b\u0438\u0435\u043d\u0442\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Clients/Clients.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.10"
+      ],
+      "aliasOriginal": "PaimentHistory",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u0440\u0430\u0431\u043e\u0442\u044b \u0441\u043e \u0441\u0447\u0435\u0442\u043e\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/PaimentHistory/PaimentHistory.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.78"
+      ],
+      "aliasOriginal": "Podrazdelenierabochegomesta",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u043e\u0434\u0440\u0430\u0437\u0434\u0435\u043b\u0435\u043d\u0438\u0435 \u0440\u0430\u0431\u043e\u0447\u0435\u0433\u043e \u043c\u0435\u0441\u0442\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Podrazdelenierabochegomesta/Podrazdelenierabochegomesta.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.89"
+      ],
+      "aliasOriginal": "Tipysobytiy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u0437\u0430\u044f\u0432\u043e\u043a",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tipysobytiy/Tipysobytiy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.43"
+      ],
+      "aliasOriginal": "Statusostatkamatrialov",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441 \u043e\u0441\u0442\u0430\u0442\u043a\u0430 \u043c\u0430\u0442\u0440\u0438\u0430\u043b\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusostatkamatrialov/Statusostatkamatrialov.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.13"
+      ],
+      "aliasOriginal": "RentLots",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041b\u043e\u0442\u044b \u0430\u0440\u0435\u043d\u0434\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/RentLots/RentLots.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.131"
+      ],
+      "aliasOriginal": "Infrastruktura",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u043d\u0444\u0440\u0430\u0441\u0442\u0440\u0443\u043a\u0442\u0443\u0440\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Infrastruktura/Infrastruktura.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.77"
+      ],
+      "aliasOriginal": "Raspolozhenierabochegomesta",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0420\u0430\u0441\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u0440\u0430\u0431\u043e\u0447\u0435\u0433\u043e \u043c\u0435\u0441\u0442\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Raspolozhenierabochegomesta/Raspolozhenierabochegomesta.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.132"
+      ],
+      "aliasOriginal": "Funktsiyarabochegomesta",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0424\u0443\u043d\u043a\u0446\u0438\u044f \u0440\u0430\u0431\u043e\u0447\u0435\u0433\u043e \u043c\u0435\u0441\u0442\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Funktsiyarabochegomesta/Funktsiyarabochegomesta.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.113"
+      ],
+      "aliasOriginal": "Prioritety",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u0440\u0438\u043e\u0440\u0438\u0442\u0435\u0442\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Prioritety/Prioritety.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.34"
+      ],
+      "aliasOriginal": "\u041d\u043e\u0432\u043e\u0441\u0442\u0438",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041d\u043e\u0432\u043e\u0441\u0442\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/\u041d\u043e\u0432\u043e\u0441\u0442\u0438/\u041d\u043e\u0432\u043e\u0441\u0442\u0438.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.96"
+      ],
+      "aliasOriginal": "Statusytochekobkhoda",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441\u044b \u0442\u043e\u0447\u0435\u043a \u043e\u0431\u0445\u043e\u0434\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusytochekobkhoda/Statusytochekobkhoda.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.98"
+      ],
+      "aliasOriginal": "Statusyrabot",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441\u044b \u0440\u0430\u0431\u043e\u0442",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusyrabot/Statusyrabot.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.45"
+      ],
+      "aliasOriginal": "Upravlenieimuschestvom",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u0438\u043c\u0443\u0449\u0435\u0441\u0442\u0432\u043e\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Upravlenieimuschestvom/Upravlenieimuschestvom.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.110"
+      ],
+      "aliasOriginal": "Reglament",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Reglament/Reglament.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.107"
+      ],
+      "aliasOriginal": "Servis",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0435\u0440\u0432\u0438\u0441",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Servis/Servis.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.32"
+      ],
+      "aliasOriginal": "Years",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "Years",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Years/Years.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.103"
+      ],
+      "aliasOriginal": "Sostoyaniya",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u044f",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Sostoyaniya/Sostoyaniya.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.52"
+      ],
+      "aliasOriginal": "Kategoriiarendy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438 \u0430\u0440\u0435\u043d\u0434\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Kategoriiarendy/Kategoriiarendy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.44"
+      ],
+      "aliasOriginal": "Tipyoperatsiysimuschestvom",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0439 \u0441 \u0438\u043c\u0443\u0449\u0435\u0441\u0442\u0432\u043e\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tipyoperatsiysimuschestvom/Tipyoperatsiysimuschestvom.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.58"
+      ],
+      "aliasOriginal": "VypolnenieoperatsiyTO",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u0435 \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0439 \u0422\u041e",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/VypolnenieoperatsiyTO/VypolnenieoperatsiyTO.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.53"
+      ],
+      "aliasOriginal": "Tipyschetov",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u0441\u0447\u0435\u0442\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tipyschetov/Tipyschetov.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.116"
+      ],
+      "aliasOriginal": "Planypootvetstvennympogodam",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u043b\u0430\u043d\u044b \u043f\u043e \u043e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u043c \u043f\u043e \u0433\u043e\u0434\u0430\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Planypootvetstvennympogodam/Planypootvetstvennympogodam.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.121"
+      ],
+      "aliasOriginal": "Otchet",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0442\u0447\u0435\u0442",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Otchet/Otchet.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.81"
+      ],
+      "aliasOriginal": "Zayavkana",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0417\u0430\u044f\u0432\u043a\u0430 \u043d\u0430 \u043f\u0440\u043e\u043f\u0443\u0441\u043a",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Zayavkana/Zayavkana.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.59"
+      ],
+      "aliasOriginal": "ProvedenieTO",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u0440\u043e\u0432\u0435\u0434\u0435\u043d\u0438\u0435 \u0422\u041e",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/ProvedenieTO/ProvedenieTO.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.69"
+      ],
+      "aliasOriginal": "PlanyPPR",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u043b\u0430\u043d\u044b \u041f\u041f\u0420",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/PlanyPPR/PlanyPPR.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.31"
+      ],
+      "aliasOriginal": "Exploitationcosts",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0420\u0430\u0441\u0445\u043e\u0434\u044b \u043d\u0430 \u044d\u043a\u0441\u043f\u043b\u0443\u0430\u0442\u0430\u0446\u0438\u044e",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Exploitationcosts/Exploitationcosts.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.86"
+      ],
+      "aliasOriginal": "Tovarnayagruppa",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u043e\u0432\u0430\u0440\u043d\u0430\u044f \u0433\u0440\u0443\u043f\u043f\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tovarnayagruppa/Tovarnayagruppa.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.125"
+      ],
+      "aliasOriginal": "Obekty",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041d\u0435\u0434\u0432\u0438\u0436\u0438\u043c\u043e\u0441\u0442\u044c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Obekty/Obekty.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.84"
+      ],
+      "aliasOriginal": "Vidypomescheniy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0412\u0438\u0434\u044b \u043f\u043e\u043c\u0435\u0449\u0435\u043d\u0438\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Vidypomescheniy/Vidypomescheniy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.39"
+      ],
+      "aliasOriginal": "Coworking",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041a\u043e\u0432\u043e\u0440\u043a\u0438\u043d\u0433",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Coworking/Coworking.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.135"
+      ],
+      "aliasOriginal": "Edinitsyizmereniya",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0415\u0434\u0438\u043d\u0438\u0446\u044b \u0438\u0437\u043c\u0435\u0440\u0435\u043d\u0438\u044f \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u0435\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Edinitsyizmereniya/Edinitsyizmereniya.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.24"
+      ],
+      "aliasOriginal": "Reshenieporabote",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0420\u0435\u0448\u0435\u043d\u0438\u0435 \u043f\u043e \u0440\u0430\u0431\u043e\u0442\u0435",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Reshenieporabote/Reshenieporabote.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.65"
+      ],
+      "aliasOriginal": "Istoriyapokazaniyschetchikov",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u0438\u0439 \u0441\u0447\u0435\u0442\u0447\u0438\u043a\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Istoriyapokazaniyschetchikov/Istoriyapokazaniyschetchikov.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.9"
+      ],
+      "aliasOriginal": "LotRentHistory",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u0430\u0440\u0435\u043d\u0434\u044b \u043b\u043e\u0442\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/LotRentHistory/LotRentHistory.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.122"
+      ],
+      "aliasOriginal": "Operatsii",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u043f\u0435\u0440\u0430\u0446\u0438\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Operatsii/Operatsii.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.16"
+      ],
+      "aliasOriginal": "\u0422\u0438\u043f\u044b\u0432\u043e\u043f\u0440\u043e\u0441\u043e\u0432",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u0432\u043e\u043f\u0440\u043e\u0441\u043e\u0432 \u0430\u043d\u043a\u0435\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/\u0422\u0438\u043f\u044b\u0432\u043e\u043f\u0440\u043e\u0441\u043e\u0432/\u0422\u0438\u043f\u044b\u0432\u043e\u043f\u0440\u043e\u0441\u043e\u0432.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.114"
+      ],
+      "aliasOriginal": "Pomescheniya",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u043e\u043c\u0435\u0449\u0435\u043d\u0438\u044f",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Pomescheniya/Pomescheniya.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.62"
+      ],
+      "aliasOriginal": "Istoriyazakupokmaterialov",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u0437\u0430\u043a\u0443\u043f\u043e\u043a \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Istoriyazakupokmaterialov/Istoriyazakupokmaterialov.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.54"
+      ],
+      "aliasOriginal": "Statusyschetovioplat",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441\u044b \u0441\u0447\u0435\u0442\u043e\u0432 \u0438 \u043e\u043f\u043b\u0430\u0442",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusyschetovioplat/Statusyschetovioplat.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "trigger.1144"
+      ],
+      "aliasOriginal": "Istoriyaizmeneniyamaterialov",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Istoriyaizmeneniyamaterialov/Istoriyaizmeneniyamaterialov.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.76"
+      ],
+      "aliasOriginal": "Statusyrabochegomesta",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441\u044b \u0440\u0430\u0431\u043e\u0447\u0435\u0433\u043e \u043c\u0435\u0441\u0442\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusyrabochegomesta/Statusyrabochegomesta.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.19"
+      ],
+      "aliasOriginal": "ChecksEngines",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u0438 \u0440\u0430\u0431\u043e\u0442\u044b \u043e\u0431\u043e\u0440\u0443\u0434\u043e\u0432\u0430\u043d\u0438\u044f",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/ChecksEngines/ChecksEngines.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.94"
+      ],
+      "aliasOriginal": "Tekhnicheskiepodsistemy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u043f\u043e\u0434\u0441\u0438\u0441\u0442\u0435\u043c\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tekhnicheskiepodsistemy/Tekhnicheskiepodsistemy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.134"
+      ],
+      "aliasOriginal": "Edinitsyizmereniyamaterialov",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0415\u0434\u0438\u043d\u0438\u0446\u044b \u0438\u0437\u043c\u0435\u0440\u0435\u043d\u0438\u044f \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Edinitsyizmereniyamaterialov/Edinitsyizmereniyamaterialov.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.21"
+      ],
+      "aliasOriginal": "Timeslots",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0412\u0440\u0435\u043c\u0435\u043d\u043d\u044b\u0435 \u0441\u043b\u043e\u0442\u044b \u0434\u043b\u044f \u0431\u0440\u043e\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Timeslots/Timeslots.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.70"
+      ],
+      "aliasOriginal": "Marshrutyobkhodov",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041c\u0430\u0440\u0448\u0440\u0443\u0442\u044b \u043e\u0431\u0445\u043e\u0434\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Marshrutyobkhodov/Marshrutyobkhodov.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.18"
+      ],
+      "aliasOriginal": "\u0428\u0430\u0431\u043b\u043e\u043d\u0434\u043b\u044f\u043e\u043f\u0440\u043e\u0441\u043e\u0432",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0428\u0430\u0431\u043b\u043e\u043d \u0434\u043b\u044f \u043e\u043f\u0440\u043e\u0441\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/\u0428\u0430\u0431\u043b\u043e\u043d\u0434\u043b\u044f\u043e\u043f\u0440\u043e\u0441\u043e\u0432/\u0428\u0430\u0431\u043b\u043e\u043d\u0434\u043b\u044f\u043e\u043f\u0440\u043e\u0441\u043e\u0432.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.28"
+      ],
+      "aliasOriginal": "\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c\u0441\u043e\u0431\u044b\u0442\u0438\u0439",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c\u0441\u043e\u0431\u044b\u0442\u0438\u0439/\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c\u0441\u043e\u0431\u044b\u0442\u0438\u0439.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.120"
+      ],
+      "aliasOriginal": "Otchyoty",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0442\u0447\u0451\u0442\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Otchyoty/Otchyoty.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.25"
+      ],
+      "aliasOriginal": "Rabotypozayavkam",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0420\u0430\u0431\u043e\u0442\u044b \u043f\u043e \u0437\u0430\u044f\u0432\u043a\u0430\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Rabotypozayavkam/Rabotypozayavkam.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.137"
+      ],
+      "aliasOriginal": "Dlyadiagramm",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0414\u043b\u044f \u0434\u0438\u0430\u0433\u0440\u0430\u043c\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Dlyadiagramm/Dlyadiagramm.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.87"
+      ],
+      "aliasOriginal": "Tochkiobkhodov",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u043e\u0447\u043a\u0438 \u043e\u0431\u0445\u043e\u0434\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tochkiobkhodov/Tochkiobkhodov.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.123"
+      ],
+      "aliasOriginal": "Oborudovanie",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0431\u043e\u0440\u0443\u0434\u043e\u0432\u0430\u043d\u0438\u0435",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Oborudovanie/Oborudovanie.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.111"
+      ],
+      "aliasOriginal": "Raboty",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0420\u0430\u0431\u043e\u0442\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Raboty/Raboty.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.100"
+      ],
+      "aliasOriginal": "Statusyoborudovaniya",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441\u044b \u043e\u0431\u043e\u0440\u0443\u0434\u043e\u0432\u0430\u043d\u0438\u044f",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusyoborudovaniya/Statusyoborudovaniya.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.55"
+      ],
+      "aliasOriginal": "Schetaioplaty",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0447\u0435\u0442\u0430 \u0438 \u043e\u043f\u043b\u0430\u0442\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Schetaioplaty/Schetaioplaty.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.36"
+      ],
+      "aliasOriginal": "ApartOwners",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0416\u0438\u0442\u0435\u043b\u0438 \u0416\u041a",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/ApartOwners/ApartOwners.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.63"
+      ],
+      "aliasOriginal": "Zayavkinazakupkumaterialov",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0417\u0430\u044f\u0432\u043a\u0438 \u043d\u0430 \u0437\u0430\u043a\u0443\u043f\u043a\u0443 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Zayavkinazakupkumaterialov/Zayavkinazakupkumaterialov.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.6"
+      ],
+      "aliasOriginal": "ChargesForUtilities",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041d\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u044f \u043a\u043e\u043c\u043c\u0443\u043d\u0430\u043b\u044c\u043d\u044b\u0445 \u0443\u0441\u043b\u0443\u0433",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/ChargesForUtilities/ChargesForUtilities.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.27"
+      ],
+      "aliasOriginal": "PPRreports",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u0442\u043e\u0433\u0438 \u041f\u041f\u0420 \u0434\u043b\u044f \u043e\u0442\u0447\u0435\u0442\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/PPRreports/PPRreports.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.64"
+      ],
+      "aliasOriginal": "TipSchetchika",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f \u0421\u0447\u0435\u0442\u0447\u0438\u043a\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/TipSchetchika/TipSchetchika.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.130"
+      ],
+      "aliasOriginal": "Istochnikisobytiy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u0438 \u0437\u0430\u044f\u0432\u043e\u043a",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Istochnikisobytiy/Istochnikisobytiy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.101"
+      ],
+      "aliasOriginal": "Statusyobkhoda",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441\u044b \u043e\u0431\u0445\u043e\u0434\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusyobkhoda/Statusyobkhoda.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.4"
+      ],
+      "aliasOriginal": "Demo\u0434\u043b\u044f\u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f\u043a\u043e\u043c\u043c\u0443\u043d\u0430\u043b\u044c\u043d\u044b\u0445\u0441\u0447\u0435\u0442\u043e\u0432",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "Demo \u0434\u043b\u044f \u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f \u043a\u043e\u043c\u043c\u0443\u043d\u0430\u043b\u044c\u043d\u044b\u0445 \u0441\u0447\u0435\u0442\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Demo\u0434\u043b\u044f\u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f\u043a\u043e\u043c\u043c\u0443\u043d\u0430\u043b\u044c\u043d\u044b\u0445\u0441\u0447\u0435\u0442\u043e\u0432/Demo\u0434\u043b\u044f\u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f\u043a\u043e\u043c\u043c\u0443\u043d\u0430\u043b\u044c\u043d\u044b\u0445\u0441\u0447\u0435\u0442\u043e\u0432.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.105"
+      ],
+      "aliasOriginal": "Sklady",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u043a\u043b\u0430\u0434\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Sklady/Sklady.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.56"
+      ],
+      "aliasOriginal": "Tochkimarshrutauborok",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u043e\u0447\u043a\u0438 \u043c\u0430\u0440\u0448\u0440\u0443\u0442\u0430 \u0443\u0431\u043e\u0440\u043e\u043a",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tochkimarshrutauborok/Tochkimarshrutauborok.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.11"
+      ],
+      "aliasOriginal": "\u041e\u0442\u0447\u0435\u0442\u043f\u043e\u0441\u0447\u0435\u0442\u0430\u043c",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0442\u0447\u0435\u0442 \u043f\u043e \u0441\u0447\u0435\u0442\u0430\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/\u041e\u0442\u0447\u0435\u0442\u043f\u043e\u0441\u0447\u0435\u0442\u0430\u043c/\u041e\u0442\u0447\u0435\u0442\u043f\u043e\u0441\u0447\u0435\u0442\u0430\u043c.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.38"
+      ],
+      "aliasOriginal": "BookingStatus",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441\u044b \u0431\u0440\u043e\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/BookingStatus/BookingStatus.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.47"
+      ],
+      "aliasOriginal": "Tipyimuschestva",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u0438\u043c\u0443\u0449\u0435\u0441\u0442\u0432\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tipyimuschestva/Tipyimuschestva.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.5"
+      ],
+      "aliasOriginal": "FacilitiesTypes",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u043a\u043e\u043c\u043c\u0443\u043d\u0430\u043b\u044c\u043d\u044b\u0445 \u0443\u0441\u043b\u0443\u0433",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/FacilitiesTypes/FacilitiesTypes.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.91"
+      ],
+      "aliasOriginal": "Tipypokazaniy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0438\u043f\u044b \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u0435\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Tipypokazaniy/Tipypokazaniy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.42"
+      ],
+      "aliasOriginal": "Statusuborki",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441 \u0443\u0431\u043e\u0440\u043a\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusuborki/Statusuborki.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.102"
+      ],
+      "aliasOriginal": "Statusydogovorov",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u0442\u0430\u0442\u0443\u0441\u044b \u0434\u043e\u0433\u043e\u0432\u043e\u0440\u043e\u0432",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Statusydogovorov/Statusydogovorov.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RecordTemplate",
+      "ids": [
+        "oa.127"
+      ],
+      "aliasOriginal": "Materialy",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RecordTemplates/Materialy/Materialy.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.13"
+      ],
+      "aliasOriginal": "Obrabotkasobytiya",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0430 \u0437\u0430\u044f\u0432\u043a\u0438 Basic",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/Obrabotkasobytiya/Obrabotkasobytiya.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.8"
+      ],
+      "aliasOriginal": "TekhprotsessDWG",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u043f\u0440\u043e\u0446\u0435\u0441\u0441 \u0434\u043b\u044f DWG-\u0434\u0438\u0430\u0433\u0440\u0430\u043c\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/TekhprotsessDWG/TekhprotsessDWG.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.14"
+      ],
+      "aliasOriginal": "Ezhegodnoeplanirovaniepootvetstvennym",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0415\u0436\u0435\u0433\u043e\u0434\u043d\u043e\u0435 \u043f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u043f\u043e \u043e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u043c",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/Ezhegodnoeplanirovaniepootvetstvennym/Ezhegodnoeplanirovaniepootvetstvennym.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.3"
+      ],
+      "aliasOriginal": "DaylyProcessTech",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0422\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u043f\u0440\u043e\u0446\u0435\u0441\u0441 \u043f\u043e \u0442\u0430\u0439\u043c\u0435\u0440\u0443",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/DaylyProcessTech/DaylyProcessTech.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.15"
+      ],
+      "aliasOriginal": "Ezhegodnoeplanirovanie",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0415\u0436\u0435\u0433\u043e\u0434\u043d\u043e\u0435 \u043f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/Ezhegodnoeplanirovanie/Ezhegodnoeplanirovanie.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.7"
+      ],
+      "aliasOriginal": "ProcessingMulti",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0430 \u0437\u0430\u044f\u0432\u043a\u0438 Multi",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/ProcessingMulti/ProcessingMulti.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.1"
+      ],
+      "aliasOriginal": "\u041f\u0440\u043e\u0446\u0435\u0441\u0441\u0440\u0430\u0441\u0442\u043e\u0440\u0436\u0435\u043d\u0438\u044f\u0434\u043e\u0433\u043e\u0432\u043e\u0440\u0430",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u0440\u043e\u0446\u0435\u0441\u0441 \u0440\u0430\u0441\u0442\u043e\u0440\u0436\u0435\u043d\u0438\u044f \u0434\u043e\u0433\u043e\u0432\u043e\u0440\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/\u041f\u0440\u043e\u0446\u0435\u0441\u0441\u0440\u0430\u0441\u0442\u043e\u0440\u0436\u0435\u043d\u0438\u044f\u0434\u043e\u0433\u043e\u0432\u043e\u0440\u0430/\u041f\u0440\u043e\u0446\u0435\u0441\u0441\u0440\u0430\u0441\u0442\u043e\u0440\u0436\u0435\u043d\u0438\u044f\u0434\u043e\u0433\u043e\u0432\u043e\u0440\u0430.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.4"
+      ],
+      "aliasOriginal": "ProcessForDeals",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u0440\u043e\u0446\u0435\u0441\u0441 \u043f\u0440\u043e\u0434\u043b\u0435\u043d\u0438\u044f \u0434\u043e\u0433\u043e\u0432\u043e\u0440\u0430",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/ProcessForDeals/ProcessForDeals.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.10"
+      ],
+      "aliasOriginal": "Tekhnicheskiyprotsesspotaymeru",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0415\u0436\u0435\u0434\u043d\u0435\u0432\u043d\u044b\u0439 \u0442\u0435\u0445\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u043f\u0440\u043e\u0446\u0435\u0441\u0441 \u043f\u043e \u0442\u0430\u0439\u043c\u0435\u0440\u0443",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/Tekhnicheskiyprotsesspotaymeru/Tekhnicheskiyprotsesspotaymeru.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.11"
+      ],
+      "aliasOriginal": "Planovyeraboty",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041f\u043b\u0430\u043d\u043e\u0432\u044b\u0435 \u0440\u0430\u0431\u043e\u0442\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/Planovyeraboty/Planovyeraboty.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.6"
+      ],
+      "aliasOriginal": "Vypolnenierabotypozayavke",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u0435 \u0440\u0430\u0431\u043e\u0442\u044b \u043f\u043e \u0437\u0430\u044f\u0432\u043a\u0435",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/Vypolnenierabotypozayavke/Vypolnenierabotypozayavke.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.9"
+      ],
+      "aliasOriginal": "Vypolnenieraboty",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u0435 \u0440\u0430\u0431\u043e\u0442\u044b",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/Vypolnenieraboty/Vypolnenieraboty.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.5"
+      ],
+      "aliasOriginal": "SendPush",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 Push-\u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/SendPush/SendPush.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.2"
+      ],
+      "aliasOriginal": "InvoiceReminder",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0435 \u0430\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440\u0443 \u043e \u043d\u0435\u043e\u043f\u043b\u0430\u0447\u0435\u043d\u043d\u044b\u0445 \u0441\u0447\u0435\u0442\u0430\u0445",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/InvoiceReminder/InvoiceReminder.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "ProcessTemplate",
+      "ids": [
+        "pa.12"
+      ],
+      "aliasOriginal": "Obrabotkizayavkinadopusk",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0430 \u0437\u0430\u044f\u0432\u043a\u0438 \u043d\u0430 \u0434\u043e\u043f\u0443\u0441\u043a",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "ProcessTemplates/Obrabotkizayavkinadopusk/Obrabotkizayavkinadopusk.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "RoleTemplate",
+      "ids": [],
+      "aliasOriginal": "RoleTemplate",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a \u0440\u043e\u043b\u0435\u0439",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "RoleTemplates/RoleTemplate/RoleTemplate.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "AccountTemplate",
+      "ids": [
+        "aa.1"
+      ],
+      "aliasOriginal": "ApartmentOwners",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0416\u0438\u0442\u0435\u043b\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "AccountTemplates/ApartmentOwners/ApartmentOwners.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    },
+    {
+      "type": "AccountTemplate",
+      "ids": [
+        "op.1509"
+      ],
+      "aliasOriginal": "Sotrudniki",
+      "aliasRenamed": "",
+      "commentsAlias": "",
+      "displayNameOriginal": "\u0421\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a\u0438",
+      "displayNameRenamed": "",
+      "jsonPathOriginal": [
+        "AccountTemplates/Sotrudniki/Sotrudniki.json"
+      ],
+      "jsonPathRenamed": [],
+      "expressions": [],
+      "commentsExpressions": ""
+    }
+  ]
+}
