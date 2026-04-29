@@ -260,30 +260,58 @@ def verify_aliases(objects: list[dict], app_name: str) -> list[dict]:
 
 
 def analyze_dangerous(objects: list[dict], extract_dir: Path, app_name: str) -> dict:
-    """Analyze aliases used in expressions, return {alias: suffix}."""
+    """Analyze aliases used in expressions across ALL JSON files at ALL nesting levels.
+
+    Uses optimized combined regex patterns for speed.
+    """
     base = extract_dir / app_name
-    all_aliases = {o["aliasOriginal"] for o in objects}
+    all_aliases = list({o["aliasOriginal"] for o in objects})
     dangerous = set()
 
-    for folder in ["RecordTemplates", "ProcessTemplates"]:
-        folder_path = base / folder
-        if not folder_path.exists():
+    print("  Building combined patterns...")
+    pattern_start = time.time()
+
+    p1 = r"\$\{(" + "|".join(re.escape(a) for a in all_aliases) + r")\}"
+    p2 = r"\->\{(" + "|".join(re.escape(a) for a in all_aliases) + r")\}"
+    p3 = r"\{(" + "|".join(re.escape(a) for a in all_aliases) + r")\}->"
+    p4 = r"\"" + "|".join(re.escape(a) for a in all_aliases) + r"\""
+
+    regex1 = re.compile(p1)
+    regex2 = re.compile(p2)
+    regex3 = re.compile(p3)
+    regex4 = re.compile(p4)
+
+    print(f"  Patterns compiled in {time.time() - pattern_start:.1f}s")
+
+    files_with_expressions = []
+    for json_file in base.rglob("*.json"):
+        try:
+            content = json_file.read_text(encoding="utf-8")
+            if any(kw in content for kw in EXPRESSION_KEYS):
+                files_with_expressions.append(json_file)
+        except (OSError, UnicodeDecodeError):
             continue
 
-        for json_file in folder_path.rglob("*.json"):
-            try:
-                content = json_file.read_text()
-                data = json.loads(content)
-            except (json.JSONDecodeError, OSError):
-                continue
+    print(f"  Found {len(files_with_expressions)} files with expression content")
 
-            for kw in EXPRESSION_KEYS:
-                if kw not in data:
-                    continue
-                expr = str(data[kw])
-                for alias in all_aliases:
-                    if alias in expr and re.search(rf'\b{re.escape(alias)}\b', expr):
-                        dangerous.add(alias)
+    def scan_expressions(obj):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if key in EXPRESSION_KEYS and isinstance(value, str):
+                    for regex in [regex1, regex2, regex3, regex4]:
+                        for match in regex.findall(value):
+                            dangerous.add(match)
+                scan_expressions(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                scan_expressions(item)
+
+    for json_file in files_with_expressions:
+        try:
+            data = json.loads(json_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        scan_expressions(data)
 
     suffix_map = {}
     for obj in objects:
