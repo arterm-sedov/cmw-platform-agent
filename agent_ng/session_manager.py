@@ -297,6 +297,7 @@ class SessionData:
             # Use override provider
             try:
                 provider_enum = LLMProvider(llm_provider_override.lower())
+                model_index = 0
             except ValueError:
                 logging.getLogger(__name__).warning(
                     f"Invalid LLM provider override: {llm_provider_override}, using default"
