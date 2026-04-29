@@ -347,8 +347,15 @@ class ConfigTab:
             if not isinstance(state, dict):
                 state = {}
 
-            # If state has non-empty values, use them
-            if any(
+            # Debug: log what we received so we can diagnose in the browser console
+            logging.getLogger(__name__).debug(
+                "ConfigTab._load_from_state received keys=%s",
+                list(state.keys()) if isinstance(state, dict) else type(state),
+            )
+
+            # If state is completely empty (default before localStorage read),
+            # do nothing — don't clear fields that may already have values.
+            has_any_value = any(
                 state.get(k)
                 for k in (
                     "url",
@@ -357,67 +364,80 @@ class ConfigTab:
                     "llm_provider_override",
                     "llm_api_key_override",
                 )
-            ):
-                url = state.get("url", "") or ""
-                login = state.get("username", "") or ""
-                pwd = state.get("password", "") or ""
-                llm_provider = state.get("llm_provider_override", "") or ""
-                llm_api_key = state.get("llm_api_key_override", "") or ""
-                # Also propagate BrowserState snapshot into per-session store
-                # for backend
+            )
+            if not has_any_value:
+                logging.getLogger(__name__).debug(
+                    "ConfigTab._load_from_state: empty state, skipping"
+                )
+                return (
+                    gr.update(),
+                    gr.update(),
+                    gr.update(),
+                    gr.update(),
+                    gr.update(),
+                )
+
+            url = state.get("url", "") or ""
+            login = state.get("username", "") or ""
+            pwd = state.get("password", "") or ""
+            llm_provider = state.get("llm_provider_override", "") or ""
+            llm_api_key = state.get("llm_api_key_override", "") or ""
+
+            logging.getLogger(__name__).debug(
+                "ConfigTab._load_from_state: url_present=%s user_len=%s pwd_len=%s "
+                "provider=%s key_len=%s",
+                bool(url),
+                len(login),
+                len(pwd),
+                llm_provider,
+                len(llm_api_key),
+            )
+
+            # Also propagate BrowserState snapshot into per-session store for backend
+            try:
+                session_id = None
                 try:
-                    session_id = None
-                    try:
-                        if (
-                            request
-                            and hasattr(request, "session_hash")
-                            and request.session_hash
-                        ):
-                            session_id = f"gradio_{request.session_hash}"
-                    except Exception:
-                        session_id = None
-
-                    if not session_id and (
-                        self.main_app
-                        and hasattr(self.main_app, "session_manager")
-                        and hasattr(
-                            self.main_app.session_manager,
-                            "get_last_active_session_id",
-                        )
+                    if (
+                        request
+                        and hasattr(request, "session_hash")
+                        and request.session_hash
                     ):
-                        session_id = (
-                            self.main_app.session_manager.get_last_active_session_id()  # type: ignore[attr-defined]
-                        )
-
-                    if session_id:
-                        set_session_config(
-                            session_id,
-                            {
-                                "url": url,
-                                "username": login,
-                                "password": pwd,
-                                "llm_provider_override": llm_provider,
-                                "llm_api_key_override": llm_api_key,
-                            },
-                        )
-                        logging.getLogger(__name__).debug(
-                            (
-                                "🔄 ConfigTab.load -> propagated "
-                                "BrowserState to session=%s"
-                            ),
-                            session_id,
-                        )
+                        session_id = f"gradio_{request.session_hash}"
                 except Exception:
-                    logging.getLogger(__name__).debug(
-                        (
-                            "⚠️ ConfigTab.load -> failed to propagate "
-                            "BrowserState to session store"
-                        ),
-                        exc_info=True,
+                    session_id = None
+
+                if not session_id and (
+                    self.main_app
+                    and hasattr(self.main_app, "session_manager")
+                    and hasattr(
+                        self.main_app.session_manager,
+                        "get_last_active_session_id",
                     )
-            else:
-                url, login, pwd = "", "", ""
-                llm_provider, llm_api_key = "", ""
+                ):
+                    session_id = (
+                        self.main_app.session_manager.get_last_active_session_id()  # type: ignore[attr-defined]
+                    )
+
+                if session_id:
+                    set_session_config(
+                        session_id,
+                        {
+                            "url": url,
+                            "username": login,
+                            "password": pwd,
+                            "llm_provider_override": llm_provider,
+                            "llm_api_key_override": llm_api_key,
+                        },
+                    )
+                    logging.getLogger(__name__).debug(
+                        "🔄 ConfigTab.load -> propagated BrowserState to session=%s",
+                        session_id,
+                    )
+            except Exception:
+                logging.getLogger(__name__).debug(
+                    "⚠️ ConfigTab.load -> failed to propagate BrowserState to session store",
+                    exc_info=True,
+                )
 
             with suppress(Exception):
                 gr.Info(self._get_translation("config_load_success"))
