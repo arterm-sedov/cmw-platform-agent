@@ -62,21 +62,27 @@ class ConfigTab:
             # Wire events
             self._connect_events()
 
-            # Auto-load BrowserState into fields on tab select and state change
-            gr.on(
-                triggers=[
-                    tab.select,
-                    self.components["config_state"].change,
-                ],
-                inputs=[self.components["config_state"]],
-                outputs=[
-                    self.components["platform_url"],
-                    self.components["username"],
-                    self.components["password"],
-                    self.components["llm_provider_override"],
-                    self.components["llm_api_key_override"],
-                ],
-            )(self._load_from_state)
+            # Auto-load BrowserState into fields on tab select and state change.
+            # Use explicit binding (not gr.on) for reliability with BrowserState.
+            config_state = self.components["config_state"]
+            outputs = [
+                self.components["platform_url"],
+                self.components["username"],
+                self.components["password"],
+                self.components["llm_provider_override"],
+                self.components["llm_api_key_override"],
+            ]
+
+            tab.select(
+                fn=self._load_from_state,
+                inputs=[config_state],
+                outputs=outputs,
+            )
+            config_state.change(
+                fn=self._load_from_state,
+                inputs=[config_state],
+                outputs=outputs,
+            )
 
         logging.getLogger(__name__).info(
             "✅ ConfigTab: Successfully created with components and wiring"
@@ -86,10 +92,7 @@ class ConfigTab:
     def _create_config_interface(self) -> None:
         """Create the configuration form with consistent styling"""
 
-        url_init, login_init, password_init = "", "", ""
-        llm_api_key_init = ""
-
-        # Default provider from env/config at startup
+        # Default provider from env/config at startup (for dropdown initial value only)
         try:
             from agent_ng.agent_config import get_llm_settings
 
@@ -98,17 +101,26 @@ class ConfigTab:
         except ImportError:
             llm_provider_init = os.environ.get("AGENT_PROVIDER", "openrouter")
 
-        # Config state in browser localStorage (shared across tabs in same browser)
+        # BrowserState default MUST be all empty strings. Do NOT bake env defaults
+        # here — demo.load() fires before onMount() reads localStorage, so it
+        # receives the default value. If provider is pre-filled, has_any_value
+        # becomes True and url/username/password get cleared.
         self.components["config_state"] = gr.BrowserState(
             {
-                "url": url_init,
-                "username": login_init,
-                "password": password_init,
-                "llm_provider_override": llm_provider_init,
-                "llm_api_key_override": llm_api_key_init,
+                "url": "",
+                "username": "",
+                "password": "",
+                "llm_provider_override": "",
+                "llm_api_key_override": "",
             },
             storage_key="cmw_config_v1",
         )
+
+        # Textbox initial values — always empty, BrowserState handles persistence
+        url_init = ""
+        login_init = ""
+        password_init = ""
+        llm_api_key_init = ""
 
         # Use the same card-like styling used elsewhere (model-card)
         with gr.Column(scale=1, min_width=400, elem_classes=["model-card"]):
@@ -347,8 +359,15 @@ class ConfigTab:
             if not isinstance(state, dict):
                 state = {}
 
-            # If state has non-empty values, use them
-            if any(
+            # Debug: log what we received so we can diagnose in the browser console
+            logging.getLogger(__name__).debug(
+                "ConfigTab._load_from_state received keys=%s",
+                list(state.keys()) if isinstance(state, dict) else type(state),
+            )
+
+            # If state is completely empty (default before localStorage read),
+            # do nothing — don't clear fields that may already have values.
+            has_any_value = any(
                 state.get(k)
                 for k in (
                     "url",
@@ -357,67 +376,80 @@ class ConfigTab:
                     "llm_provider_override",
                     "llm_api_key_override",
                 )
-            ):
-                url = state.get("url", "") or ""
-                login = state.get("username", "") or ""
-                pwd = state.get("password", "") or ""
-                llm_provider = state.get("llm_provider_override", "") or ""
-                llm_api_key = state.get("llm_api_key_override", "") or ""
-                # Also propagate BrowserState snapshot into per-session store
-                # for backend
+            )
+            if not has_any_value:
+                logging.getLogger(__name__).debug(
+                    "ConfigTab._load_from_state: empty state, skipping"
+                )
+                return (
+                    gr.update(),
+                    gr.update(),
+                    gr.update(),
+                    gr.update(),
+                    gr.update(),
+                )
+
+            url = state.get("url", "") or ""
+            login = state.get("username", "") or ""
+            pwd = state.get("password", "") or ""
+            llm_provider = state.get("llm_provider_override", "") or ""
+            llm_api_key = state.get("llm_api_key_override", "") or ""
+
+            logging.getLogger(__name__).debug(
+                "ConfigTab._load_from_state: url_present=%s user_len=%s pwd_len=%s "
+                "provider=%s key_len=%s",
+                bool(url),
+                len(login),
+                len(pwd),
+                llm_provider,
+                len(llm_api_key),
+            )
+
+            # Also propagate BrowserState snapshot into per-session store for backend
+            try:
+                session_id = None
                 try:
-                    session_id = None
-                    try:
-                        if (
-                            request
-                            and hasattr(request, "session_hash")
-                            and request.session_hash
-                        ):
-                            session_id = f"gradio_{request.session_hash}"
-                    except Exception:
-                        session_id = None
-
-                    if not session_id and (
-                        self.main_app
-                        and hasattr(self.main_app, "session_manager")
-                        and hasattr(
-                            self.main_app.session_manager,
-                            "get_last_active_session_id",
-                        )
+                    if (
+                        request
+                        and hasattr(request, "session_hash")
+                        and request.session_hash
                     ):
-                        session_id = (
-                            self.main_app.session_manager.get_last_active_session_id()  # type: ignore[attr-defined]
-                        )
-
-                    if session_id:
-                        set_session_config(
-                            session_id,
-                            {
-                                "url": url,
-                                "username": login,
-                                "password": pwd,
-                                "llm_provider_override": llm_provider,
-                                "llm_api_key_override": llm_api_key,
-                            },
-                        )
-                        logging.getLogger(__name__).debug(
-                            (
-                                "🔄 ConfigTab.load -> propagated "
-                                "BrowserState to session=%s"
-                            ),
-                            session_id,
-                        )
+                        session_id = f"gradio_{request.session_hash}"
                 except Exception:
-                    logging.getLogger(__name__).debug(
-                        (
-                            "⚠️ ConfigTab.load -> failed to propagate "
-                            "BrowserState to session store"
-                        ),
-                        exc_info=True,
+                    session_id = None
+
+                if not session_id and (
+                    self.main_app
+                    and hasattr(self.main_app, "session_manager")
+                    and hasattr(
+                        self.main_app.session_manager,
+                        "get_last_active_session_id",
                     )
-            else:
-                url, login, pwd = "", "", ""
-                llm_provider, llm_api_key = "", ""
+                ):
+                    session_id = (
+                        self.main_app.session_manager.get_last_active_session_id()  # type: ignore[attr-defined]
+                    )
+
+                if session_id:
+                    set_session_config(
+                        session_id,
+                        {
+                            "url": url,
+                            "username": login,
+                            "password": pwd,
+                            "llm_provider_override": llm_provider,
+                            "llm_api_key_override": llm_api_key,
+                        },
+                    )
+                    logging.getLogger(__name__).debug(
+                        "🔄 ConfigTab.load -> propagated BrowserState to session=%s",
+                        session_id,
+                    )
+            except Exception:
+                logging.getLogger(__name__).debug(
+                    "⚠️ ConfigTab.load -> failed to propagate BrowserState to session store",
+                    exc_info=True,
+                )
 
             with suppress(Exception):
                 gr.Info(self._get_translation("config_load_success"))
