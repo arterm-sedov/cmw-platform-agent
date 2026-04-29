@@ -274,28 +274,11 @@ class ConfigTab:
             }
 
             # Determine accurate session id
-            session_id = None
-            try:
-                if (
-                    request
-                    and hasattr(request, "session_hash")
-                    and request.session_hash
-                ):
-                    session_id = f"gradio_{request.session_hash}"
-            except Exception:
-                session_id = None
-
-            if not session_id and (
-                self.main_app
-                and hasattr(self.main_app, "session_manager")
-                and hasattr(self.main_app.session_manager, "get_last_active_session_id")
-            ):
-                session_id = (
-                    self.main_app.session_manager.get_last_active_session_id()  # type: ignore[attr-defined]
-                )
+            session_id = self._resolve_session_id(request)
 
             if session_id:
                 set_session_config(session_id, new_state)
+                self._reinitialize_session_llm(session_id)
                 try:
                     masked = {
                         "url_present": bool(url),
@@ -375,28 +358,7 @@ class ConfigTab:
 
             # Also propagate BrowserState snapshot into per-session store for backend
             try:
-                session_id = None
-                try:
-                    if (
-                        request
-                        and hasattr(request, "session_hash")
-                        and request.session_hash
-                    ):
-                        session_id = f"gradio_{request.session_hash}"
-                except Exception:
-                    session_id = None
-
-                if not session_id and (
-                    self.main_app
-                    and hasattr(self.main_app, "session_manager")
-                    and hasattr(
-                        self.main_app.session_manager,
-                        "get_last_active_session_id",
-                    )
-                ):
-                    session_id = (
-                        self.main_app.session_manager.get_last_active_session_id()  # type: ignore[attr-defined]
-                    )
+                session_id = self._resolve_session_id(request)
 
                 if session_id:
                     set_session_config(
@@ -409,6 +371,7 @@ class ConfigTab:
                             "llm_api_key_override": llm_api_key,
                         },
                     )
+                    self._reinitialize_session_llm(session_id)
                     logging.getLogger(__name__).debug(
                         "🔄 ConfigTab.load -> propagated BrowserState to session=%s",
                         session_id,
@@ -488,6 +451,46 @@ class ConfigTab:
     def set_main_app(self, main_app: Any) -> None:
         """Set reference to main app for future integration needs."""
         self.main_app = main_app
+
+    def _reinitialize_session_llm(self, session_id: str) -> None:
+        """Re-initialize session LLM instance to pick up updated config."""
+        try:
+            if (
+                self.main_app
+                and hasattr(self.main_app, "session_manager")
+                and self.main_app.session_manager
+            ):
+                session_data = self.main_app.session_manager.get_session_data(
+                    session_id
+                )
+                if session_data and hasattr(session_data, "_initialize_session_agent"):
+                    session_data._initialize_session_agent()  # noqa: SLF001
+                    logging.getLogger(__name__).debug(
+                        "🔄 ConfigTab -> re-initialized session LLM for %s",
+                        session_id,
+                    )
+        except Exception:
+            logging.getLogger(__name__).debug(
+                "ConfigTab -> failed to re-initialize session LLM",
+                exc_info=True,
+            )
+
+    def _resolve_session_id(self, request: gr.Request | None) -> str | None:
+        """Resolve session ID from request or main app fallback."""
+        try:
+            if request and hasattr(request, "session_hash") and request.session_hash:
+                return f"gradio_{request.session_hash}"
+        except Exception:
+            pass
+
+        if (
+            self.main_app
+            and hasattr(self.main_app, "session_manager")
+            and hasattr(self.main_app.session_manager, "get_last_active_session_id")
+        ):
+            return self.main_app.session_manager.get_last_active_session_id()  # type: ignore[attr-defined]
+
+        return None
 
     def get_components(self) -> dict[str, Any]:
         """Return created components."""
