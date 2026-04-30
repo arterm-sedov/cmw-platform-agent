@@ -22,6 +22,11 @@ import os
 import sys
 from typing import Any
 
+try:
+    from ._file_attachment import build_file_attachment
+except ImportError:
+    from agent_ng._file_attachment import build_file_attachment  # type: ignore[no-redef]
+
 # LangChain imports
 from langchain_core.messages import (
     AIMessage,
@@ -918,6 +923,27 @@ class NativeLangChainStreaming:
                                         else "Tool execution returned no result"
                                     )
 
+                                    # Resolve any file the tool registered so
+                                    # the app layer can render it inline.
+                                    file_att = build_file_attachment(
+                                        tool_result, agent
+                                    )
+
+                                    # Extract optional out-of-band tool cost
+                                    # (e.g. image generation via direct HTTP).
+                                    # Only numeric, positive values are trusted.
+                                    _raw_cost = (
+                                        tool_result.get("cost")
+                                        if isinstance(tool_result, dict)
+                                        else None
+                                    )
+                                    tool_cost: float | None = (
+                                        float(_raw_cost)
+                                        if isinstance(_raw_cost, (int, float))
+                                        and _raw_cost > 0
+                                        else None
+                                    )
+
                                     yield StreamingEvent(
                                         event_type="tool_end",
                                         content=f"\n{self._get_call_count_message(duplicate_count, language)}\n\n{self._get_result_message(str(safe_tool_result), language)}",
@@ -929,6 +955,8 @@ class NativeLangChainStreaming:
                                             "title": self._get_tool_called_message(
                                                 tool_name, language
                                             ),
+                                            "file_attachment": file_att,
+                                            "tool_cost": tool_cost,
                                         },
                                     )
 

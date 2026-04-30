@@ -40,6 +40,15 @@ from agent_ng.token_budget import (
 )
 from tools.file_utils import FileUtils
 
+try:
+    from agent_ng._file_attachment import build_file_bubbles_for_role
+except ImportError:
+    try:
+        from .._file_attachment import build_file_bubbles_for_role  # type: ignore[no-redef]
+    except Exception:  # pragma: no cover
+        def build_file_bubbles_for_role(_att, role="user"):  # type: ignore[no-redef]
+            return []
+
 from .sidebar import QuickActionsMixin
 
 
@@ -1385,6 +1394,32 @@ class ChatTab(QuickActionsMixin):
                 file_info += ", ".join(file_list) + "]"
                 message += file_info
 
+                # Prepend an inline preview bubble for each uploaded file so
+                # it appears in the chat history visually (not just as text).
+                # build_file_bubbles_for_role returns [] for missing files so
+                # no guard needed — safe to call unconditionally.
+                for file in files:
+                    fpath = (
+                        file.get("path", "") if isinstance(file, dict) else str(file)
+                    )
+                    fname = (
+                        file.get("orig_name") or os.path.basename(fpath)
+                        if isinstance(file, dict)
+                        else os.path.basename(fpath)
+                    )
+                    if fpath and os.path.isfile(fpath):
+                        att = {
+                            "path": str(Path(fpath).resolve()),
+                            "display_name": fname or os.path.basename(fpath),
+                            "size_bytes": (
+                                os.path.getsize(fpath)
+                                if os.path.exists(fpath)
+                                else 0
+                            ),
+                        }
+                        history = list(history or [])
+                        history.extend(build_file_bubbles_for_role(att, role="user"))
+
                 logging.getLogger(__name__).debug(
                     "Registered %d files: %s", len(current_files), current_files,
                 )
@@ -1558,9 +1593,12 @@ class ChatTab(QuickActionsMixin):
         # Handle the actual format from the debug output
         for i, message in enumerate(history, 1):
             if isinstance(message, dict):
-                role = message.get("role", "unknown")
+                # Skip file-bubble messages (content is a dict, not text).
                 content = message.get("content", "")
+                if not isinstance(content, str):
+                    continue
 
+                role = message.get("role", "unknown")
                 if role == "user":
                     markdown_content += f"## User Message {i}\n\n"
                     markdown_content += f"{content}\n\n"

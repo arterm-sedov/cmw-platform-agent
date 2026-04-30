@@ -220,6 +220,9 @@ class UIManager:
                 outputs=[self.components["stats_display"]]
             )
 
+        # Config auto-load is handled by tab.select in config_tab.py.
+        # No demo.load() needed — config loads when user opens the tab.
+
         # Setup auto-refresh timers for real-time updates
         self._setup_auto_refresh_timers(demo, event_handlers)
 

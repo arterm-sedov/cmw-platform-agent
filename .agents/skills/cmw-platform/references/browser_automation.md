@@ -78,18 +78,43 @@ browser_interact.invoke({
 
 ### Login Flow
 
-**Correct URL:** Platform auto-redirects to `/Home/Login/` when unauthenticated.
+**Correct URL:** Platform auto-redirects to `/Home/Login/?returnUrl=/` when unauthenticated.
 
-**Form Structure (from POC):**
-- Username field: `@e8` (textbox "E-mail address or username")
-- Password field: `@e9` (textbox "••••••••••")
-- Submit button: `@e2` (button "Log in")
+**Form Structure:**
+- Username field: textbox "E-mail address or username"
+- Password field: textbox "••••••••••" (password field)
+- Submit button: button "Log in"
 
-**Success Indicator:** URL changes from `/Home/Login/` to `/#desktop/`
+**Success Indicator:** 
+- URL changes from `/Home/Login/?returnUrl=/` to `/#desktop/`
+- Page title changes from "Comindware Platform" to app-specific title (e.g., "Рабочий стол")
+
+**Credentials:** Always load from `.env` file:
+```python
+from dotenv import load_dotenv
+import os
+load_dotenv()
+username = os.environ["CMW_LOGIN"]
+password = os.environ["CMW_PASSWORD"]
+```
 
 ### SPA Navigation
 
-CMW Platform is a Single Page Application with hash-based routing:
+CMW Platform is a Single Page Application with hash-based routing.
+
+**Hash Navigation via JavaScript:**
+```javascript
+// playwright-cli or agent-browser eval
+window.location.hash = '#RecordType/oa.193/Administration';
+```
+
+**After hash change:** Always re-snapshot to get fresh element refs. Page title updates to reflect current context.
+
+**Example title progression:**
+- Login: "Comindware Platform"
+- Dashboard: "Рабочий стол"
+- Template admin: "Управление объектами недвижимости > Шаблоны > Планы техобслуживания > Свойства"
+- Template operations: "Управление объектами недвижимости > Шаблоны > Планы техобслуживания > Кнопки"
 
 | Page | URL | Wait Indicator |
 |------|-----|----------------|
@@ -98,8 +123,16 @@ CMW Platform is a Single Page Application with hash-based routing:
 | Global Security | `/#Settings/globalSecurity` | "Security" |
 | Groups | `/#Settings/Groups` | "Группы" |
 | Solutions | `/#solutions` | "Solutions" |
+| Solution Admin | `/#solutions/sln.23/Administration` | "Приложение" |
+| Template Admin | `/#RecordType/oa.193/Administration` | Template name in breadcrumb |
+| Template Operations | `/#RecordType/oa.193/Operations` | "Кнопки" |
+| Templates List | `/#solutions/sln.23/templates/showall/...` | "Шаблоны" |
 
 **Critical:** Always use `wait_for_text` parameter for SPA pages. Content loads dynamically after URL change.
+
+**UI Localization:** Russian UI shows Russian labels (e.g., "Приложение", "Шаблоны", "Кнопки"). Use `ref=` from snapshot for reliable element targeting, not text labels.
+
+**Navigation Sidebar:** Has collapsible sections with submenu items. After clicking navigation items, always re-snapshot.
 
 ### Navigation Pattern
 

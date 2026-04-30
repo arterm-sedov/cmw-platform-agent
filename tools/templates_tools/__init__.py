@@ -7,19 +7,16 @@ and listing template attributes.
 
 # Import all tool functions
 from tools.templates_tools.tool_create_edit_record import create_edit_record
+from tools.templates_tools.tool_get_record_values import get_record_values
 from tools.templates_tools.tool_list_attributes import list_attributes
 from tools.templates_tools.tool_list_records import list_template_records
-from tools.templates_tools.tools_form import edit_or_create_form, get_form, list_forms
-from tools.templates_tools.tools_dataset import (
-    edit_or_create_dataset,
-    get_dataset,
-    list_datasets,
+from tools.templates_tools.tool_record_document import (
+    attach_file_to_record_document_attribute,
+    fetch_record_document_file,
 )
-from tools.templates_tools.tools_record_template import edit_or_create_record_template
-from tools.templates_tools.tools_toolbar import (
-    edit_or_create_toolbar,
-    get_toolbar,
-    list_toolbars,
+from tools.templates_tools.tool_record_image import (
+    attach_file_to_record_image_attribute,
+    fetch_record_image_file,
 )
 from tools.templates_tools.tools_button import (
     archive_unarchive_button,
@@ -27,18 +24,35 @@ from tools.templates_tools.tools_button import (
     get_button,
     list_buttons,
 )
+from tools.templates_tools.tools_dataset import (
+    edit_or_create_dataset,
+    get_dataset,
+    list_datasets,
+)
+from tools.templates_tools.tools_form import edit_or_create_form, get_form, list_forms
+from tools.templates_tools.tools_record_template import edit_or_create_record_template
+from tools.templates_tools.tools_toolbar import (
+    edit_or_create_toolbar,
+    get_toolbar,
+    list_toolbars,
+)
 
 __all__ = [
     "archive_unarchive_button",
+    "attach_file_to_record_document_attribute",
+    "attach_file_to_record_image_attribute",
     "create_edit_record",
     "edit_or_create_button",
     "edit_or_create_dataset",
     "edit_or_create_form",
     "edit_or_create_record_template",
     "edit_or_create_toolbar",
+    "fetch_record_document_file",
+    "fetch_record_image_file",
     "get_button",
     "get_dataset",
     "get_form",
+    "get_record_values",
     "get_toolbar",
     "list_attributes",
     "list_buttons",

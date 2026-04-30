@@ -1,34 +1,41 @@
 # tools.py - Consolidated tools
 # Dependencies are included
 
-import os
+import base64
+import cmath
+from datetime import datetime
 import io
 import json
-import uuid
-import base64
+import logging
+import os
+from pathlib import Path
+import re
 import shutil
-import requests
-import tempfile
-import urllib.parse
-import numpy as np
-import pandas as pd
+import sqlite3
 import subprocess
 import sys
-import sqlite3
+import tempfile
+import time
+from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
+import urllib.parse
+import uuid
+
+import numpy as np
+import pandas as pd
+import requests
+
+logger = logging.getLogger(__name__)
 
 # Check if we're running on Hugging Face Spaces
-HF_SPACES = os.environ.get('SPACE_ID') is not None
-import cmath
-import time
-import re
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
-from typing import Any, Dict, List, Optional, Union, Tuple, Literal
-from pydantic import BaseModel, Field, field_validator
+HF_SPACES = os.environ.get("SPACE_ID") is not None
+
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Try to import matplotlib, but make it optional
 try:
     import matplotlib
-    matplotlib.use('Agg')  # Use non-interactive backend
+    matplotlib.use("Agg")  # Use non-interactive backend
     import matplotlib.pyplot as plt
     MATPLOTLIB_AVAILABLE = True
 except (ImportError, Exception) as e:
@@ -36,57 +43,75 @@ except (ImportError, Exception) as e:
     plt = None
     print(f"Warning: matplotlib not available: {e}")
 
-# Try to import pytesseract for OCR
-try:
-    import pytesseract
-    PYTESSERACT_AVAILABLE = True
-except ImportError:
-    PYTESSERACT_AVAILABLE = False
-    pytesseract = None
-
 # Always import the tool decorator - it's essential
-from langchain_core.tools import tool
+from langchain_core.tools import InjectedToolArg, tool
 
-# Expose Comindware Platform tools from all directories
-# Templates tools
-from .templates_tools.tool_list_attributes import list_attributes
-from .templates_tools.tool_list_records import list_template_records
+# Image generation engine (backed by the provider registry in
+# agent_ng.image_providers). The tool only knows the engine facade and the
+# default-model hint accessor — never the active model slug or provider.
+try:
+    from agent_ng.image_engine import ImageEngine
+    from agent_ng.image_models import get_default_prompt_style_hint
+except ImportError:  # pragma: no cover
+    ImageEngine = None  # type: ignore[assignment,misc]
+    get_default_prompt_style_hint = None  # type: ignore[assignment]
+
+# Session-aware current_session_id (ContextVar fallback when agent not injected)
+try:
+    from agent_ng.session_manager import get_current_session_id
+except ImportError:  # pragma: no cover
+    get_current_session_id = None  # type: ignore[assignment]
+
+from .applications_tools.tool_list_applications import list_applications
 
 # Applications tools
 from .applications_tools.tool_list_templates import list_templates
-from .applications_tools.tool_list_applications import list_applications
+from .attributes_tools.tool_archive_or_unarchive_attribute import (
+    archive_or_unarchive_attribute,
+)
 
-# Templates tools
-from .templates_tools.tools_record_template import edit_or_create_record_template
+# Attributes tools - Utility functions
+from .attributes_tools.tool_delete_attribute import delete_attribute
+from .attributes_tools.tool_get_attribute import get_attribute
+from .attributes_tools.tools_account_attribute import edit_or_create_account_attribute
+from .attributes_tools.tools_boolean_attribute import edit_or_create_boolean_attribute
+
+# Attributes tools - Other attribute types
+from .attributes_tools.tools_datetime_attribute import (
+    edit_or_create_date_time_attribute,
+)
+from .attributes_tools.tools_decimal_attribute import edit_or_create_numeric_attribute
+from .attributes_tools.tools_document_attribute import edit_or_create_document_attribute
+from .attributes_tools.tools_drawing_attribute import edit_or_create_drawing_attribute
+from .attributes_tools.tools_duration_attribute import edit_or_create_duration_attribute
+from .attributes_tools.tools_enum_attribute import edit_or_create_enum_attribute
+from .attributes_tools.tools_image_attribute import edit_or_create_image_attribute
+from .attributes_tools.tools_record_attribute import edit_or_create_record_attribute
+from .attributes_tools.tools_role_attribute import edit_or_create_role_attribute
 
 # Attributes tools - Text attributes
 from .attributes_tools.tools_text_attribute import edit_or_create_text_attribute
 
-# Attributes tools - Other attribute types
-from .attributes_tools.tools_datetime_attribute import edit_or_create_date_time_attribute
-from .attributes_tools.tools_decimal_attribute import edit_or_create_numeric_attribute
-from .attributes_tools.tools_record_attribute import edit_or_create_record_attribute
-from .attributes_tools.tools_image_attribute import edit_or_create_image_attribute
-from .attributes_tools.tools_drawing_attribute import edit_or_create_drawing_attribute
-from .attributes_tools.tools_document_attribute import edit_or_create_document_attribute
-from .attributes_tools.tools_duration_attribute import edit_or_create_duration_attribute
-from .attributes_tools.tools_account_attribute import edit_or_create_account_attribute
-from .attributes_tools.tools_boolean_attribute import edit_or_create_boolean_attribute
-from .attributes_tools.tools_role_attribute import edit_or_create_role_attribute
-from .attributes_tools.tools_enum_attribute import edit_or_create_enum_attribute
+# Datetime tool
+from .get_datetime import get_current_datetime
 
-# Attributes tools - Utility functions
-from .attributes_tools.tool_delete_attribute import delete_attribute
+# Expose Comindware Platform tools from all directories
+# Platform entity URL resolver
+from .platform_entity_resolver import resolve_entity
+
+# Templates tools
+from .templates_tools.tool_list_attributes import list_attributes
+from .templates_tools.tool_list_records import list_template_records
+
+# Templates tools
+from .templates_tools.tools_record_template import edit_or_create_record_template
 
 # Transfer tools
 from .transfer_tools.tool_export_application import export_application
 from .transfer_tools.tool_import_application import import_application
-from .attributes_tools.tool_archive_or_unarchive_attribute import archive_or_unarchive_attribute
-from .attributes_tools.tool_get_attribute import get_attribute
-
-# Datetime tool
-from .get_datetime import get_current_datetime
-
+# NOTE: Browser automation tools (tools/browser_tools.py, agent_ng/browser_session.py)
+# are intentionally NOT bound to the agent. They are kept for external/standalone use.
+# See .agents/skills/cmw-platform/SKILL.md section "Browser Automation"
 # Global configuration for search tools
 SEARCH_LIMIT = 5  # Maximum number of results for all search tools (Tavily, Wikipedia, Arxiv)
 
@@ -136,13 +161,12 @@ except ImportError:
     ARXIVLOADER_AVAILABLE = False
     print("Warning: ArxivLoader not available. Install with: pip install langchain-community")
 
-# Try to import Exa for AI-powered answers
+# Optional: Exa deep research (web_search_deep_research_exa_ai returns a clear JSON error if exa-py is missing)
 try:
     from exa_py import Exa
     EXA_AVAILABLE = True
 except ImportError:
     EXA_AVAILABLE = False
-    print("Warning: Exa not available. Install with: pip install exa-py")
 
 # Google Gemini imports for video/audio understanding
 try:
@@ -152,14 +176,6 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
     print("Warning: Google Gemini not available. Install with: pip install google-genai")
-
-# MarkItDown for Office documents and HTML text extraction
-try:
-    from markitdown import MarkItDown
-    MARKITDOWN_AVAILABLE = True
-except ImportError:
-    MARKITDOWN_AVAILABLE = False
-    print("Warning: markitdown not available. Install with: pip install markitdown[docx,xlsx,pptx]")
 
 # ========== GEMINI HELPER FUNCTIONS ==========
 def _get_gemini_client():
@@ -266,14 +282,14 @@ class CodeInterpreter:
     """
     def __init__(self, allowed_modules=None, max_execution_time=30, working_directory=None):
         self.allowed_modules = allowed_modules or [
-            "numpy", "pandas", "matplotlib", "scipy", "sklearn", 
+            "numpy", "pandas", "matplotlib", "scipy", "sklearn",
             "math", "random", "statistics", "datetime", "collections",
             "itertools", "functools", "operator", "re", "json",
-            "sympy", "networkx", "nltk", "PIL", "pytesseract", 
+            "sympy", "networkx", "nltk", "PIL",
             "cmath", "uuid", "tempfile", "requests", "urllib"
         ]
         self.max_execution_time = max_execution_time
-        self.working_directory = working_directory or os.path.join(os.getcwd()) 
+        self.working_directory = working_directory or os.path.join(os.getcwd())
         if not os.path.exists(self.working_directory):
             os.makedirs(self.working_directory)
         # Use global imports that are already available
@@ -287,7 +303,7 @@ class CodeInterpreter:
         if MATPLOTLIB_AVAILABLE:
             self.globals["plt"] = plt
         self.temp_sqlite_db = os.path.join(tempfile.gettempdir(), "code_exec.db")
-    def execute_code(self, code: str, language: str = "python") -> Dict[str, Any]:
+    def execute_code(self, code: str, language: str = "python") -> dict[str, Any]:
         """
         Execute code in the specified language with safety controls.
         Args:
@@ -311,7 +327,7 @@ class CodeInterpreter:
                 return {"status": "error", "stderr": f"Unsupported language: {language}"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    def _execute_python(self, code: str) -> Dict[str, Any]:
+    def _execute_python(self, code: str) -> dict[str, Any]:
         """Execute Python code with safety controls."""
         try:
             # Capture stdout and stderr
@@ -327,7 +343,7 @@ class CodeInterpreter:
             try:
                 # Create a copy of globals for this execution
                 local_globals = self.globals.copy()
-                local_globals['__name__'] = '__main__'
+                local_globals["__name__"] = "__main__"
                 # Execute the code
                 exec(code, local_globals)
                 # Get captured output
@@ -342,7 +358,7 @@ class CodeInterpreter:
                         dataframes.append({
                             "name": name,
                             "shape": value.shape,
-                            "head": value.head().to_dict('records')
+                            "head": value.head().to_dict("records")
                         })
                 if dataframes:
                     result["dataframes"] = dataframes
@@ -373,16 +389,16 @@ class CodeInterpreter:
                 stderr_buffer.close()
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    def _execute_bash(self, code: str) -> Dict[str, Any]:
+    def _execute_bash(self, code: str) -> dict[str, Any]:
         """Execute Bash code."""
         if HF_SPACES:
             return {"status": "error", "stderr": "Bash execution not available on Hugging Face Spaces"}
         try:
             result = subprocess.run(
-                code, 
-                shell=True, 
-                capture_output=True, 
-                text=True, 
+                code,
+                check=False, shell=True,
+                capture_output=True,
+                text=True,
                 timeout=self.max_execution_time
             )
             return {
@@ -395,7 +411,7 @@ class CodeInterpreter:
             return {"status": "error", "stderr": "Execution timed out"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    def _execute_sql(self, code: str) -> Dict[str, Any]:
+    def _execute_sql(self, code: str) -> dict[str, Any]:
         """Execute SQL code using SQLite."""
         try:
             conn = sqlite3.connect(self.temp_sqlite_db)
@@ -403,7 +419,7 @@ class CodeInterpreter:
             # Execute SQL
             cursor.execute(code)
             # Fetch results if it's a SELECT
-            if code.strip().upper().startswith('SELECT'):
+            if code.strip().upper().startswith("SELECT"):
                 results = cursor.fetchall()
                 columns = [description[0] for description in cursor.description]
                 result = {"status": "success", "results": results, "columns": columns}
@@ -414,19 +430,19 @@ class CodeInterpreter:
             return result
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    def _execute_c(self, code: str) -> Dict[str, Any]:
+    def _execute_c(self, code: str) -> dict[str, Any]:
         """Execute C code by compiling and running."""
         if HF_SPACES:
             return {"status": "error", "stderr": "C code execution not available on Hugging Face Spaces"}
         try:
             # Create temporary C file
             c_file = os.path.join(self.working_directory, "temp_code.c")
-            with open(c_file, 'w') as f:
+            with open(c_file, "w") as f:
                 f.write(code)
             # Compile
             compile_result = subprocess.run(
                 ["gcc", "-o", os.path.join(self.working_directory, "temp_program"), c_file],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True
             )
             if compile_result.returncode != 0:
@@ -434,7 +450,7 @@ class CodeInterpreter:
             # Run
             run_result = subprocess.run(
                 [os.path.join(self.working_directory, "temp_program")],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True,
                 timeout=self.max_execution_time
             )
@@ -448,19 +464,19 @@ class CodeInterpreter:
             return {"status": "error", "stderr": "Execution timed out"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
-    def _execute_java(self, code: str) -> Dict[str, Any]:
+    def _execute_java(self, code: str) -> dict[str, Any]:
         """Execute Java code by compiling and running."""
         if HF_SPACES:
             return {"status": "error", "stderr": "Java code execution not available on Hugging Face Spaces"}
         try:
             # Create temporary Java file
             java_file = os.path.join(self.working_directory, "TempCode.java")
-            with open(java_file, 'w') as f:
+            with open(java_file, "w") as f:
                 f.write(code)
             # Compile
             compile_result = subprocess.run(
                 ["javac", java_file],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True
             )
             if compile_result.returncode != 0:
@@ -468,7 +484,7 @@ class CodeInterpreter:
             # Run
             run_result = subprocess.run(
                 ["java", "-cp", self.working_directory, "TempCode"],
-                capture_output=True,
+                check=False, capture_output=True,
                 text=True,
                 timeout=self.max_execution_time
             )
@@ -506,7 +522,7 @@ def execute_code_multilang(code_reference: str, language: str = "python", agent=
     supported_languages = ["python", "bash", "sql", "c", "java"]
     if final_language not in supported_languages:
         return FileUtils.create_tool_response(
-            "execute_code_multilang", 
+            "execute_code_multilang",
             error=f"❌ Unsupported language: {final_language}. Supported languages are: {', '.join(supported_languages)}"
         )
 
@@ -810,7 +826,12 @@ def arxiv_search(input: str) -> str:
         })
 # ========== FILE/DATA TOOLS ==========
 @tool
-def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True, agent=None) -> str:
+def read_text_based_file(
+    file_reference: str,
+    read_html_as_markdown: bool = True,
+    extract_images: bool = False,
+    agent=None,
+) -> str:
     """
     Read text-based files and return content as text.
     This is the general-purpose text file reader for most formats.
@@ -831,6 +852,12 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
       and improve readability. Set to False only when you need the raw HTML structure
       (e.g., extracting specific tags, attributes, CSS, or JavaScript).
 
+    Image extraction options:
+    - extract_images (bool, default=False): For PDF and Office documents. If True,
+      extracts embedded images and includes them in the response. Images are saved
+      to temporary files and can be referenced in future turns. Set to True only
+      when you need the images - saves tokens and processing time when False.
+
     XLSX/Excel: When to use this tool vs analyze_excel_file?
     - read_text_based_file: Use for simple text extraction - reads Excel content as Markdown
       tables. Good for understanding document structure and reading text content.
@@ -839,8 +866,8 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
 
     The tool automatically:
     - Detects file encoding and handles multiple encodings (UTF-8, Latin-1, CP1252, ISO-8859-1)
-    - Resolves filenames to full file paths via agent's file registry
-    - Downloads files from URLs automatically
+    - Resolves filenames to full file paths
+    - Downloads files from URLs
     - Provides file metadata (name, size, encoding) in results
 
     Args:
@@ -848,129 +875,83 @@ def read_text_based_file(file_reference: str, read_html_as_markdown: bool = True
         read_html_as_markdown (bool): For HTML files. If True (default), converts HTML to
             Markdown for token efficiency and readability. Set False only when raw HTML
             structure is needed.
+        extract_images (bool): For PDF/Office files. If True, extracts embedded images
+            along with text. Default False (backward compatible).
         agent: Agent instance for file resolution (injected automatically)
 
     Returns:
         str: The text content of the file with metadata, or an error message if reading fails
     """
     from .file_utils import FileUtils
-    file_path = FileUtils.resolve_file_reference(file_reference, agent)
+    from .local_path_text import read_local_path_to_plain_text
+
+    ref = (file_reference or "").strip()
+    file_path = FileUtils.resolve_file_reference(ref, agent)
     if not file_path:
-        return FileUtils.create_tool_response("read_text_based_file", error=f"File not found: {file_reference}")
+        return FileUtils.create_tool_response("read_text_based_file", error=f"File not found: {ref}")
     file_info = FileUtils.get_file_info(file_path)
     if not file_info.exists:
         return FileUtils.create_tool_response("read_text_based_file", error=file_info.error)
 
-    if file_info.extension == '.pdf':
-        try:
-            from .pdf_utils import PDFUtils
-            if not PDFUtils.is_available():
-                return FileUtils.create_tool_response("read_text_based_file", error="PyMuPDF not available. Install with: pip install pymupdf", file_info=file_info)
-            pdf_result = PDFUtils.extract_text_from_pdf(file_path, use_markdown=True)
-            if not pdf_result.success:
-                return FileUtils.create_tool_response("read_text_based_file", error=pdf_result.error_message, file_info=file_info)
-            display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
-            size_str = FileUtils.format_file_size(file_info.size)
-            content = pdf_result.text_content
-            result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
-            return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
-        except Exception as e:
-            return FileUtils.create_tool_response("read_text_based_file", error=f"Error processing PDF: {str(e)}", file_info=file_info)
+    content, read_err, enc, image_paths, markdown_path = read_local_path_to_plain_text(
+        file_path, read_html_as_markdown=read_html_as_markdown, extract_images=extract_images, _file_info=file_info
+    )
+    if read_err:
+        return FileUtils.create_tool_response(
+            "read_text_based_file",
+            error=read_err,
+            file_info=FileUtils.file_info_for_tool_response(file_info, ref),
+        )
 
-    if file_info.extension in ('.docx', '.xlsx', '.pptx', '.html'):
-        if not MARKITDOWN_AVAILABLE:
-            return FileUtils.create_tool_response(
-                "read_text_based_file",
-                error="markitdown not available. Install with: pip install markitdown[docx,xlsx,pptx]",
-                file_info=file_info
-            )
-        try:
-            md = MarkItDown()
-            result = md.convert(file_path)
-            content = result.text_content
-            if not content or not content.strip():
-                return FileUtils.create_tool_response(
-                    "read_text_based_file",
-                    error=f"No text content found in {file_info.extension} file",
-                    file_info=file_info
-                )
-
-            display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
-            size_str = FileUtils.format_file_size(file_info.size)
-
-            if file_info.extension == '.html' and not read_html_as_markdown:
-                raw_result = FileUtils.read_text_file(file_path)
-                if raw_result.success:
-                    content = raw_result.content
-                    result_text = f"File: {display_name} ({size_str}, raw HTML)\n\nContent:\n{content}"
-                else:
-                    return FileUtils.create_tool_response(
-                        "read_text_based_file",
-                        error=f"Could not read HTML as raw text: {raw_result.error}",
-                        file_info=file_info
-                    )
-            else:
-                if file_info.extension == '.html':
-                    result_text = f"File: {display_name} ({size_str}, converted to Markdown)\n\nContent:\n{content}"
-                else:
-                    result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
-
-            return FileUtils.create_tool_response(
-                "read_text_based_file",
-                result=result_text,
-                file_info=file_info
-            )
-        except Exception as e:
-            return FileUtils.create_tool_response(
-                "read_text_based_file",
-                error=f"Error processing {file_info.extension}: {str(e)}",
-                file_info=file_info
-            )
-
-    result = FileUtils.read_text_file(file_path)
-    if not result.success:
-        return FileUtils.create_tool_response("read_text_based_file", error=result.error)
-
-    file_info = result.file_info
-    content = result.content
-    encoding = result.encoding
+    display_name = ref
     size_str = FileUtils.format_file_size(file_info.size)
-    display_name = file_reference if file_reference.startswith(('http://', 'https://', 'ftp://')) else file_reference
-    if encoding != 'utf-8':
-        result_text = f"File: {display_name} ({size_str}, {encoding} encoding)\n\nContent:\n{content}"
+    extl = (file_info.extension or "").lower()
+    if extl == ".html" and read_html_as_markdown:
+        header = f"File: {display_name} ({size_str}, converted to Markdown)"
+    elif extl == ".html" and not read_html_as_markdown:
+        header = f"File: {display_name} ({size_str}, raw HTML)"
+    elif enc and enc != "utf-8":
+        header = f"File: {display_name} ({size_str}, {enc} encoding)"
     else:
-        result_text = f"File: {display_name} ({size_str})\n\nContent:\n{content}"
-    return FileUtils.create_tool_response("read_text_based_file", result=result_text, file_info=file_info)
+        header = f"File: {display_name} ({size_str})"
+    result_text = f"{header}\n\nContent:\n{content}"
 
-@tool
-def extract_text_from_image(file_reference: str, agent=None) -> str:
-    """
-    Extract text from an image file using OCR (pytesseract) and return the extracted text.
+    extra = {}
+    if image_paths and agent is not None:
+        registered_names = []
+        base_name = Path(ref).stem
+        for idx, abs_path in enumerate(image_paths):
+            try:
+                logical_name = f"{base_name}_image_{idx + 1}{Path(abs_path).suffix}"
+                agent.register_file(logical_name, abs_path)
+                registered_names.append(logical_name)
+                logger.debug("Registered extracted image: %s -> %s", logical_name, abs_path)
+            except Exception as reg_err:
+                logger.warning("Failed to register image %s: %s", abs_path, reg_err)
+        if registered_names:
+            extra["image_paths"] = registered_names
+    elif image_paths:
+        extra["image_paths"] = image_paths
 
-    Args:
-        file_reference (str): Original filename from user upload OR URL to download
-        agent: Agent instance for file resolution (injected automatically)
+    if markdown_path and agent is not None:
+        try:
+            md_name = f"{Path(ref).stem}_extracted.md"
+            agent.register_file(md_name, markdown_path)
+            extra["markdown_path"] = md_name
+            logger.debug("Registered markdown: %s -> %s", md_name, markdown_path)
+        except Exception as reg_err:
+            logger.warning("Failed to register markdown: %s", reg_err)
+            if markdown_path:
+                extra["markdown_path"] = markdown_path
+    elif markdown_path:
+        extra["markdown_path"] = markdown_path
 
-    Returns:
-        str: The extracted text, or an error message if extraction fails.
-    """
-    from .file_utils import FileUtils
-    try:
-        # Resolve file reference (filename or URL) to full path
-        file_path = FileUtils.resolve_file_reference(file_reference, agent)
-        if not file_path:
-            return FileUtils.create_tool_response("extract_text_from_image", error=f"File not found: {file_reference}")
-        image = Image.open(file_path)
-        if PYTESSERACT_AVAILABLE:
-            text = pytesseract.image_to_string(image)
-        else:
-            return FileUtils.create_tool_response(
-                "extract_text_from_image", 
-                error="OCR not available. Install with: pip install pytesseract"
-            )
-        return FileUtils.create_tool_response("extract_text_from_image", result=f"Extracted text from image:\n\n{text}")
-    except Exception as e:
-        return FileUtils.create_tool_response("extract_text_from_image", error=f"Error extracting text from image: {str(e)}")
+    return FileUtils.create_tool_response(
+        "read_text_based_file",
+        result=result_text,
+        file_info=FileUtils.file_info_for_tool_response(file_info, ref),
+        extra=extra if extra else None,
+    )
 
 # ========== PANDAS QUERY/PIPELINE HELPERS ==========
 def _safe_to_markdown(df: pd.DataFrame, max_rows: int = 10, max_cols: int = 20) -> str:
@@ -983,11 +964,11 @@ def _safe_to_markdown(df: pd.DataFrame, max_rows: int = 10, max_cols: int = 20) 
         return preview_df.to_string(index=False)
 
 
-def _dataframe_schema(df: pd.DataFrame) -> Dict[str, str]:
+def _dataframe_schema(df: pd.DataFrame) -> dict[str, str]:
     return {str(col): str(dtype) for col, dtype in df.dtypes.items()}
 
 
-def _truncate_records(df: pd.DataFrame, max_rows: int = 100, max_cols: int = 50, max_cell_chars: int = 500) -> List[Dict[str, Any]]:
+def _truncate_records(df: pd.DataFrame, max_rows: int = 100, max_cols: int = 50, max_cell_chars: int = 500) -> list[dict[str, Any]]:
     limited = df.head(max_rows)
     if max_cols is not None:
         limited = limited.iloc[:, :max_cols]
@@ -1002,7 +983,7 @@ def _truncate_records(df: pd.DataFrame, max_rows: int = 100, max_cols: int = 50,
     return [{k: _truncate_val(v) for k, v in row.items()} for row in limited.to_dict(orient="records")]
 
 
-_ALLOWED_OPS: Dict[str, Literal["df_method", "special"]] = {
+_ALLOWED_OPS: dict[str, Literal["df_method", "special"]] = {
     "query": "df_method",
     "assign": "df_method",
     "rename": "df_method",
@@ -1035,7 +1016,7 @@ def _coerce_tabular(obj: Any, step_name: str) -> pd.DataFrame:
     return pd.DataFrame(obj)
 
 
-def _dispatch_pipeline(df: pd.DataFrame, steps: List[Dict[str, Any]]) -> pd.DataFrame:
+def _dispatch_pipeline(df: pd.DataFrame, steps: list[dict[str, Any]]) -> pd.DataFrame:
     current = df
     for i, step in enumerate(steps):
         if not isinstance(step, dict):
@@ -1071,12 +1052,12 @@ def _dispatch_pipeline(df: pd.DataFrame, steps: List[Dict[str, Any]]) -> pd.Data
 
 def _apply_pandas_query(
     df: pd.DataFrame,
-    query: Optional[str],
-    preview_opts: Optional[Dict[str, Any]] = None,
-    plot_opts: Optional[Dict[str, Any]] = None,
-) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    query: str | None,
+    preview_opts: dict[str, Any] | None = None,
+    plot_opts: dict[str, Any] | None = None,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
     preview = preview_opts or {"rows": 10, "cols": 20, "include_schema": True}
-    plots: List[str] = []
+    plots: list[str] = []
     original_shape = tuple(df.shape)
 
     transformed = df
@@ -1130,7 +1111,7 @@ def _apply_pandas_query(
 
     table_markdown = _safe_to_markdown(transformed, rows, cols)
     table_records = _truncate_records(transformed, max_rows=min(rows, 1000), max_cols=min(cols, 100))
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "original_shape": original_shape,
         "shape": tuple(transformed.shape),
         "table_markdown": table_markdown,
@@ -1271,7 +1252,7 @@ def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
         try:
             df = pd.read_excel(file_path)
             columns = list(df.columns)
-            head = df.head().to_dict('records')
+            head = df.head().to_dict("records")
             error_details = f"Error analyzing Excel file: {str(e)}\nColumns: {columns}\nHead: {head}"
         except Exception as inner_e:
             error_details = f"Error analyzing Excel file: {str(e)}\nAdditionally, failed to read columns/head: {str(inner_e)}"
@@ -1281,7 +1262,18 @@ def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
 @tool
 def analyze_image(file_reference: str, agent=None) -> str:
     """
-    Analyze basic properties of an image (size, mode, color analysis, thumbnail preview) from a file reference.
+    LEGACY: Analyze basic properties of an image (size, mode, color analysis, thumbnail preview).
+
+    ⚠️ This is a primitive metadata parser that only extracts technical properties.
+    For AI-powered image understanding, use analyze_image_ai() instead.
+
+    This tool provides:
+    - Image dimensions and format
+    - Basic color analysis (average RGB, brightness, dominant color)
+    - Thumbnail generation
+
+    For semantic understanding (what's in the image, OCR, object detection, etc.),
+    use analyze_image_ai() which uses vision-language models.
 
     The tool automatically:
     - Resolves filenames to full file paths via agent's file registry
@@ -1331,16 +1323,107 @@ def analyze_image(file_reference: str, agent=None) -> str:
     except Exception as e:
         return FileUtils.create_tool_response("analyze_image", error=str(e))
 
+
+@tool
+def analyze_image_ai(
+    file_reference: str,
+    prompt: str,
+    system_prompt: str = None,
+    agent=None
+) -> str:
+    """
+    AI-powered image analysis using vision-language models.
+
+    This tool uses advanced vision-language models to understand image content semantically:
+    - Describe what's in the image
+    - Answer questions about the image
+    - Extract text (OCR with 100% accuracy)
+    - Identify objects, people, scenes
+    - Analyze charts, graphs, diagrams
+    - Read documents and forms
+
+    For basic metadata (dimensions, colors), use the legacy analyze_image() instead.
+
+    Args:
+        file_reference (str): Uploaded image filename, or a URL to an image.
+        prompt (str): Question or instruction about the image (e.g., "What's in this image?")
+        system_prompt (str, optional): System instruction for the model
+        agent: Agent instance for file resolution (injected automatically)
+
+    Returns:
+        str: JSON string with AI analysis result or error message
+    """
+    from .file_utils import FileUtils
+
+    try:
+        from agent_ng.vision_input import VisionInput
+        from agent_ng.vision_tool_manager import VisionToolManager
+
+        lowered_ref = file_reference.strip().lower()
+        is_direct_url = lowered_ref.startswith("http://") or lowered_ref.startswith(
+            "https://"
+        )
+        if is_direct_url:
+            vision_input = VisionInput(
+                prompt=prompt,
+                image_url=file_reference.strip(),
+            )
+        else:
+            file_path = FileUtils.resolve_file_reference(file_reference, agent)
+            if not file_path:
+                return FileUtils.create_tool_response(
+                    "analyze_image_ai",
+                    error=f"File not found: {file_reference}",
+                )
+
+            if file_path.lower().endswith(".pdf"):
+                return FileUtils.create_tool_response(
+                    "analyze_image_ai",
+                    error="PDF files cannot be analyzed directly as images. "
+                    "Most vision models don't support PDFs natively. "
+                    "To analyze visual PDF content:\n"
+                    "1. First: read_text_based_file(file_reference='DOC.pdf', extract_images=True)\n"
+                    "   - This extracts images from PDF pages\n"
+                    "2. Then: analyze the extracted images individually\n"
+                    "   - Use analyze_image_ai for each extracted image path",
+                )
+
+            vision_input = VisionInput(prompt=prompt, image_path=file_path)
+
+        # Initialize VisionToolManager
+        import os
+        os.environ["OPENROUTER_FETCH_PRICING_AT_STARTUP"] = "false"
+        manager = VisionToolManager()
+
+        # Analyze image
+        result = manager.analyze(vision_input)
+
+        # Return result
+        return FileUtils.create_tool_response(
+            "analyze_image_ai",
+            result=result,
+            extra={
+                "file": file_reference,
+                "model_used": manager.vl_model
+            }
+        )
+
+    except Exception as e:
+        return FileUtils.create_tool_response(
+            "analyze_image_ai",
+            error=f"Analysis failed: {str(e)}"
+        )
+
 class TransformImageParams(BaseModel):
-    width: Optional[int] = Field(None, description="New width for resize operation")
-    height: Optional[int] = Field(None, description="New height for resize operation")
-    angle: Optional[int] = Field(None, description="Rotation angle in degrees")
-    direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Flip direction")
-    radius: Optional[float] = Field(None, description="Blur radius")
-    factor: Optional[float] = Field(None, description="Enhancement factor for brightness/contrast")
+    width: int | None = Field(None, description="New width for resize operation")
+    height: int | None = Field(None, description="New height for resize operation")
+    angle: int | None = Field(None, description="Rotation angle in degrees")
+    direction: Literal["horizontal", "vertical"] | None = Field(None, description="Flip direction")
+    radius: float | None = Field(None, description="Blur radius")
+    factor: float | None = Field(None, description="Enhancement factor for brightness/contrast")
 
 @tool(args_schema=TransformImageParams)
-def transform_image(image_base64: str, operation: str, params: Optional[Dict[str, Any]] = None) -> str:
+def transform_image(image_base64: str, operation: str, params: dict[str, Any] | None = None) -> str:
     """
     Transform an image using various operations like resize, rotate, filter, etc.
 
@@ -1402,16 +1485,16 @@ def transform_image(image_base64: str, operation: str, params: Optional[Dict[str
         }, indent=2)
 
 class DrawOnImageParams(BaseModel):
-    text: Optional[str] = Field(None, description="Text to draw")
-    position: Optional[List[int]] = Field(None, description="Text position [x, y]")
-    color: Optional[str] = Field(None, description="Color name (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
-    size: Optional[int] = Field(None, description="Font size for text")
-    coords: Optional[List[int]] = Field(None, description="Rectangle coordinates [x1, y1, x2, y2]")
-    center: Optional[List[int]] = Field(None, description="Circle center [x, y]")
-    radius: Optional[int] = Field(None, description="Circle radius")
-    start: Optional[List[int]] = Field(None, description="Line start [x, y]")
-    end: Optional[List[int]] = Field(None, description="Line end [x, y]")
-    width: Optional[int] = Field(None, description="Stroke width")
+    text: str | None = Field(None, description="Text to draw")
+    position: list[int] | None = Field(None, description="Text position [x, y]")
+    color: str | None = Field(None, description="Color name (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
+    size: int | None = Field(None, description="Font size for text")
+    coords: list[int] | None = Field(None, description="Rectangle coordinates [x1, y1, x2, y2]")
+    center: list[int] | None = Field(None, description="Circle center [x, y]")
+    radius: int | None = Field(None, description="Circle radius")
+    start: list[int] | None = Field(None, description="Line start [x, y]")
+    end: list[int] | None = Field(None, description="Line end [x, y]")
+    width: int | None = Field(None, description="Stroke width")
 
 @tool(args_schema=DrawOnImageParams)
 def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParams) -> str:
@@ -1464,7 +1547,7 @@ def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParam
             radius = params.radius or 30
             color = parse_color(params.color) or "blue"
             width = params.width or 2
-            bbox = [center[0] - radius, center[1] - radius, 
+            bbox = [center[0] - radius, center[1] - radius,
                    center[0] + radius, center[1] + radius]
             draw.ellipse(bbox, outline=color, width=width)
         elif drawing_type == "line":
@@ -1493,118 +1576,259 @@ def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParam
             "error": str(e)
         }, indent=2)
 
-class GenerateSimpleImageParams(BaseModel):
-    image_type: str = Field(..., description="Type of image to generate: 'solid', 'gradient', 'checkerboard', 'noise'")
-    width: int = Field(500, description="Width of the generated image")
-    height: int = Field(500, description="Height of the generated image")
-    color: Optional[str] = Field(None, description="Solid color for 'solid' type (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
-    start_color: Optional[List[int]] = Field(None, description="Gradient start color [r, g, b]")
-    end_color: Optional[List[int]] = Field(None, description="Gradient end color [r, g, b]")
-    direction: Optional[Literal["horizontal", "vertical"]] = Field(None, description="Gradient direction ('horizontal' or 'vertical')")
-    square_size: Optional[int] = Field(None, description="Square size for checkerboard")
-    color1: Optional[str] = Field(None, description="First color for checkerboard")
-    color2: Optional[str] = Field(None, description="Second color for checkerboard")
+# ------------------------------------------------------------------------- #
+# AI image generation (OpenRouter)                                           #
+# ------------------------------------------------------------------------- #
 
-@tool(args_schema=GenerateSimpleImageParams)
-def generate_simple_image(image_type: str, width: int = 500, height: int = 500, 
-                         color: Optional[str] = None, start_color: Optional[List[int]] = None,
-                         end_color: Optional[List[int]] = None, direction: Optional[str] = None,
-                         square_size: Optional[int] = None, color1: Optional[str] = None,
-                         color2: Optional[str] = None) -> str:
+# Root for session-isolated image outputs. Patched in tests. Matches the
+# convention established by ``tools/file_utils.py::save_base64_to_file``.
+_IMAGE_OUTPUT_ROOT = ".gradio/sessions"
+
+
+def _build_generate_ai_image_description() -> str:
+    """Compose the LLM-facing tool description.
+
+    Includes the active model's prompt-style hint (never the slug or
+    vendor) so the calling LLM can adapt prompt craft to the configured
+    backend.
     """
-    Generate simple images like gradients, solid colors, checkerboard, or noise patterns.
+    body = (
+        "Create a new image from a text description.\n\n"
+        "Use this when the user asks for an illustration, icon, "
+        "diagram, business infographic, logo, banner, social-media "
+        "graphic, or any other visual that does not yet exist. The "
+        "generated image comes back as a chat attachment reference "
+        "that you can pass to other tools (for example, to attach the "
+        "image to a record, analyze it, or transform it).\n\n"
+        "`aspect_ratio` lets you request a specific shape (for example "
+        "`16:9` for a banner, `9:16` for a mobile story, `1:1` for a "
+        "square icon). `image_size` lets you request a resolution tier "
+        "(`1K` for small/fast, `2K` for sharper details, `4K` for "
+        "print-quality). Only set these when the composition really "
+        "depends on shape or size.\n\n"
+        "Returns a structured result containing the image reference "
+        "and the generation cost. If the call fails, the result "
+        "contains an `error` message explaining why — simplify the "
+        "prompt and try again."
+    )
+    if get_default_prompt_style_hint is None:
+        return body
+    hint = get_default_prompt_style_hint()
+    if not hint:
+        return body
+    return f"{body}\n\nActive image generator profile: {hint}"
 
-    Args:
-        image_type (str): The type of image to generate.
-        width (int): The width of the generated image.
-        height (int): The height of the generated image.
-        params (Dict[str, Any], optional): Additional parameters for image generation.
 
-    Returns:
-        str: JSON string with the generated image as base64 or error message.
+_GENERATE_AI_IMAGE_DESCRIPTION = _build_generate_ai_image_description()
+
+
+class GenerateAIImageParams(BaseModel):
+    """Parameters for the `generate_ai_image` tool.
+
+    Deliberately does not expose model selection to the LLM — the active
+    model is an operations-level decision controlled by the
+    ``IMAGE_GEN_DEFAULT_MODEL`` environment variable (see
+    :mod:`agent_ng.image_models`).
     """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    prompt: str = Field(
+        ...,
+        description=(
+            "Natural-language description of the image to create. Spell "
+            "out any text that must appear in the picture exactly as it "
+            "should be rendered."
+        ),
+    )
+    aspect_ratio: str | None = Field(
+        None,
+        description=(
+            "Optional desired shape of the image, written as 'W:H' "
+            "(for example '1:1' for a square icon, '16:9' for a banner, "
+            "'9:16' for a mobile story)."
+        ),
+    )
+    image_size: Literal["1K", "2K", "4K"] | None = Field(
+        None,
+        description=(
+            "Optional resolution tier: '1K' for small/fast, '2K' for "
+            "sharper details, '4K' for print-quality."
+        ),
+    )
+    agent: Annotated[Any | None, InjectedToolArg] = Field(
+        default=None,
+        description="Runtime-injected; not supplied by the LLM.",
+    )
+
+
+@tool(
+    "generate_ai_image",
+    args_schema=GenerateAIImageParams,
+    description=_GENERATE_AI_IMAGE_DESCRIPTION,
+)
+def generate_ai_image(
+    prompt: str,
+    aspect_ratio: str | None = None,
+    image_size: str | None = None,
+    agent: Annotated[Any | None, InjectedToolArg] = None,
+) -> dict[str, Any]:
+    """Create a new image from a text description.
+
+    The image generator is chosen by the deployment (via
+    ``IMAGE_GEN_DEFAULT_MODEL``); the calling LLM only decides on the
+    prompt, aspect ratio and size.
+
+    Returns a structured result. On success it includes a
+    ``file_reference`` (an attachment name usable by other chat tools),
+    the ``cost`` in USD, the output ``mime_type`` and ``size_bytes``. On
+    failure it includes an ``error`` string and no attachment.
+    """
+    if ImageEngine is None:
+        return {
+            "success": False,
+            "error": "Image generation engine is not available.",
+            "file_reference": None,
+            "cost": None,
+        }
+
     try:
-        if image_type == "solid":
-            color_str = color or "255,255,255"
-            # Parse color string to RGB tuple
-            if "," in color_str and color_str.replace(",", "").replace(" ", "").isdigit():
-                try:
-                    rgb_values = [int(x.strip()) for x in color_str.split(",")]
-                    if len(rgb_values) == 3 and all(0 <= v <= 255 for v in rgb_values):
-                        color = tuple(rgb_values)
-                    else:
-                        color = (255, 255, 255)
-                except ValueError:
-                    color = (255, 255, 255)
-            else:
-                # Try as color name, fallback to white
-                try:
-                    color = color_str
-                except:
-                    color = (255, 255, 255)
-            img = Image.new("RGB", (width, height), color)
-        elif image_type == "gradient":
-            start_color = start_color or [255, 0, 0]
-            end_color = end_color or [0, 0, 255]
-            direction = direction or "horizontal"
-            img = Image.new("RGB", (width, height))
-            draw = ImageDraw.Draw(img)
-            if direction == "horizontal":
-                for x in range(width):
-                    r = int(start_color[0] + (end_color[0] - start_color[0]) * x / width)
-                    g = int(start_color[1] + (end_color[1] - start_color[1]) * x / width)
-                    b = int(start_color[2] + (end_color[2] - start_color[2]) * x / width)
-                    draw.line([(x, 0), (x, height)], fill=(r, g, b))
-            else:
-                for y in range(height):
-                    r = int(start_color[0] + (end_color[0] - start_color[0]) * y / height)
-                    g = int(start_color[1] + (end_color[1] - start_color[1]) * y / height)
-                    b = int(start_color[2] + (end_color[2] - start_color[2]) * y / height)
-                    draw.line([(0, y), (width, y)], fill=(r, g, b))
-        elif image_type == "noise":
-            noise_array = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
-            img = Image.fromarray(noise_array, "RGB")
-        elif image_type == "checkerboard":
-            square_size = square_size or 50
-            color1 = color1 or "white"
-            color2 = color2 or "black"
-            img = Image.new("RGB", (width, height))
-            for y in range(0, height, square_size):
-                for x in range(0, width, square_size):
-                    color = color1 if ((x // square_size) + (y // square_size)) % 2 == 0 else color2
-                    for dy in range(square_size):
-                        for dx in range(square_size):
-                            if x + dx < width and y + dy < height:
-                                img.putpixel((x + dx, y + dy), color)
-        else:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "generate_simple_image",
-                "error": f"Unsupported image_type {image_type}"
-            }, indent=2)
-        result_path = save_image(img)
-        result_base64 = encode_image(result_path)
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "generate_simple_image",
-            "generated_image": result_base64
-        }, indent=2)
-    except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "generate_simple_image",
-            "error": str(e)
-        }, indent=2)
+        engine = ImageEngine()
+    except ValueError as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+            "file_reference": None,
+            "cost": None,
+        }
+
+    result = engine.generate(
+        prompt=prompt,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
+    )
+
+    if not result.success or result.image_bytes is None:
+        return {
+            "success": False,
+            "error": result.error or "image generation failed",
+            "file_reference": None,
+            "cost": result.cost,
+        }
+
+    # Resolve session id: prefer the injected agent, fall back to ContextVar.
+    session_id: str | None = getattr(agent, "session_id", None) if agent else None
+    if not session_id and get_current_session_id is not None:
+        session_id = get_current_session_id()
+
+    # Write bytes to disk — either into a session dir (preferred) or mkstemp.
+    ext = _extension_for_mime(result.mime_type)
+    display_name = _make_display_name(ext)
+
+    try:
+        disk_path = _write_image_bytes(
+            image_bytes=result.image_bytes,
+            display_name=display_name,
+            session_id=session_id,
+        )
+    except OSError as exc:
+        return {
+            "success": False,
+            "error": f"Failed to write image bytes: {exc}",
+            "file_reference": None,
+            "cost": result.cost,
+        }
+
+    # Register with the agent if we have one.
+    if agent is not None and callable(getattr(agent, "register_file", None)):
+        try:
+            agent.register_file(display_name, disk_path)
+        except Exception as exc:
+            logger.warning("register_file failed for %s: %s", display_name, exc)
+            try:
+                os.unlink(disk_path)
+            except OSError as oe:
+                logger.debug("temp cleanup after register failure: %s", oe)
+            return {
+                "success": False,
+                "error": f"register_file failed: {exc}",
+                "file_reference": None,
+                "cost": result.cost,
+            }
+        file_reference = display_name
+    else:
+        file_reference = os.path.abspath(disk_path)
+
+    return {
+        "success": True,
+        "error": None,
+        "file_reference": file_reference,
+        "cost": result.cost,
+        "mime_type": result.mime_type,
+        "size_bytes": len(result.image_bytes),
+    }
+
+
+# ---- helpers for generate_ai_image -------------------------------------- #
+
+
+def _extension_for_mime(mime: str | None) -> str:
+    """Map a MIME type to a canonical file extension (falls back to .png)."""
+    mapping = {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+    }
+    return mapping.get((mime or "").lower(), ".png")
+
+
+def _make_display_name(ext: str) -> str:
+    """Compose a unique, human-readable filename for a generated image."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"llm_image_{timestamp}_{uuid.uuid4().hex[:8]}{ext}"
+
+
+def _write_image_bytes(
+    image_bytes: bytes,
+    display_name: str,
+    session_id: str | None,
+) -> str:
+    """Persist ``image_bytes`` and return the absolute on-disk path.
+
+    When ``session_id`` is truthy, files go under
+    ``{_IMAGE_OUTPUT_ROOT}/{session_id}/``; otherwise a ``tempfile.mkstemp``
+    path is used.
+    """
+    if session_id:
+        session_dir = Path(_IMAGE_OUTPUT_ROOT) / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        path = session_dir / display_name
+        path.write_bytes(image_bytes)
+        return str(path)
+    fd, tmp = tempfile.mkstemp(suffix=Path(display_name).suffix)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(image_bytes)
+    except OSError:
+        # Best-effort cleanup of the partial temp file; then re-raise.
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    return tmp
 
 class CombineImagesParams(BaseModel):
-    spacing: Optional[int] = Field(None, description="Spacing between images in pixels")
-    background_color: Optional[str] = Field(None, description="Background color for collage (e.g., 'white', 'black') or RGB string (e.g., '255,255,255')")
-    blend_mode: Optional[str] = Field(None, description="Blend mode for blending operations")
-    opacity: Optional[float] = Field(None, description="Opacity for overlay operations (0.0-1.0)")
+    spacing: int | None = Field(None, description="Spacing between images in pixels")
+    background_color: str | None = Field(None, description="Background color for collage (e.g., 'white', 'black') or RGB string (e.g., '255,255,255')")
+    blend_mode: str | None = Field(None, description="Blend mode for blending operations")
+    opacity: float | None = Field(None, description="Opacity for overlay operations (0.0-1.0)")
 
 @tool(args_schema=CombineImagesParams)
-def combine_images(images_base64: List[str], operation: str, 
-                  params: Optional[CombineImagesParams] = None) -> str:
+def combine_images(images_base64: list[str], operation: str,
+                  params: CombineImagesParams | None = None) -> str:
     """
     Combine multiple images using various operations (collage, stack, blend, horizontal, vertical, overlay, etc.).
 
@@ -1693,298 +1917,149 @@ def combine_images(images_base64: List[str], operation: str,
 
 # ========== VIDEO/AUDIO UNDERSTANDING TOOLS ==========
 @tool
-def understand_video(file_reference: str, prompt: str, system_prompt: str = None, agent=None, 
+def understand_video(file_reference: str, prompt: str, system_prompt: str = None, agent=None,
                      start_time: str = None, end_time: str = None, fps: float = None) -> str:
     """
-    Analyze a video using Google Gemini's video understanding capabilities.
-    This tool can understand video content, extract information, answer questions,
-    and provide transcriptions with timestamps. Supports video clipping and custom frame rates.
-    Supports four input methods:
-    1. Uploaded video files - File size >20MB
-    2. Direct video URLs - File size >20MB
-    3. YouTube URLs - No size limit
-    4. Inline video data - For small videos <20MB
-    Advanced features:
-    - Video clipping: Specify start_time and end_time in MM:SS format (e.g., "02:30", "03:29")
-    - Custom frame rate: Set fps for different sampling rates (default: 1 FPS)
-    - Timestamp references: Use MM:SS format in prompts for specific video segments
+    Analyze a video using vision-language models (Gemini, Qwen).
+
+    This tool uses VisionToolManager for video understanding with multiple model options.
+    Automatically selects the best model based on video characteristics.
+
+    Supports:
+    - Uploaded video files
+    - Direct video URLs
+    - YouTube URLs (routed per VL_YOUTUBE_MODEL, VL_YOUTUBE_GEMINI_PROVIDER, VL_GEMINI_PROVIDER in .env)
+
     Args:
         file_reference (str): Original filename from user upload OR direct video URL 
-                             OR YouTube URL OR base64 encoded video data (<20MB)
+                             OR YouTube URL
         prompt (str): A question or request regarding the video content
-                        When referring to specific moments in a video within your prompt,
-                        use the MM:SS format (e.g., "01:15" for 1 minute and 15 seconds).
-        system_prompt (str, optional): System instruction
+        system_prompt (str, optional): System instruction (not used currently)
         agent: Agent instance for file resolution (injected automatically)
         start_time (str, optional): Start time for video clipping in MM:SS format (e.g., "02:30")
         end_time (str, optional): End time for video clipping in MM:SS format (e.g., "03:29")
-        fps (float, optional): Custom frame rate for video processing (default: 1 FPS).
-                               You might want to set low FPS (< 1) for long videos.
-                               This is especially useful for mostly static videos (e.g. lectures). 
-                               If you want to capture more details in rapidly changing visuals, 
-                               consider setting a higher FPS value.
+        fps (float, optional): Custom frame rate for video processing (default: 1 FPS)
+
     Returns:
         str: Analysis of the video content based on the prompt, or error message
     """
     from .file_utils import FileUtils
-    def create_video_metadata():
-        """Create video metadata for clipping and frame rate if specified."""
-        def time_to_seconds(time_str):
-            """Convert MM:SS or raw seconds to API-required seconds format with 's' suffix.
-            Examples:
-                "02:30" -> "150s"
-                "1:15" -> "75s"
-                "1250" -> "1250s"
-                "1250s" -> "1250s"
-            """
-            if not time_str:
-                return None
-            # If already has 's' suffix, return as-is
-            if time_str.endswith('s'):
-                return time_str
-            # Check if it's MM:SS format
-            if ':' in time_str:
-                parts = time_str.split(':')
-                if len(parts) == 2:
-                    minutes, seconds = parts
-                    total_seconds = int(minutes) * 60 + int(seconds)
-                    return f"{total_seconds}s"
-            # Assume it's already in seconds, add 's' suffix
-            return f"{time_str}s"
-        metadata = {}
-        if start_time:
-            metadata['start_offset'] = time_to_seconds(start_time)
-        if end_time:
-            metadata['end_offset'] = time_to_seconds(end_time)
-        if fps is not None:
-            metadata['fps'] = fps
-        return metadata if metadata else None
+
     try:
-        client = _get_gemini_client()
-        if not client:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_video",
-                "error": "Gemini client not available. Check GEMINI_KEY environment variable."
-            })
-        # Create video metadata if any advanced features are specified
-        video_metadata = create_video_metadata()
-        # Determine input type and handle accordingly
-        video_part = None
-        # Check if it's a YouTube URL (special handling)
-        if file_reference.startswith(('https://www.youtube.com/', 'https://youtube.com/', 
-                                     'https://youtu.be/', 'http://www.youtube.com/',
-                                     'http://youtube.com/', 'http://youtu.be/')):
-            # YouTube URL - pass directly to Gemini with optional metadata
-            if video_metadata:
-                video_part = types.Part(
-                    file_data=types.FileData(file_uri=file_reference),
-                    video_metadata=types.VideoMetadata(**video_metadata)
-                )
-            else:
-                video_part = types.Part(file_data=types.FileData(file_uri=file_reference))
+        from agent_ng.vision_input import VisionInput
+        from agent_ng.vision_tool_manager import VisionToolManager
+
+        # Handle direct URLs without forcing local download first
+        lowered_ref = file_reference.strip().lower()
+        is_direct_url = lowered_ref.startswith("http://") or lowered_ref.startswith("https://")
+        if is_direct_url:
+            vision_input = VisionInput(prompt=prompt, video_url=file_reference.strip())
+            file_path = None
         else:
-            # Try to resolve as file reference (uploaded file or regular URL)
-            resolved_path = FileUtils.resolve_file_reference(file_reference, agent)
-            if resolved_path:
-                # It's a file (uploaded or downloaded from URL)
-                try:
-                    uploaded_file = client.files.upload(file=resolved_path)
-                    if video_metadata:
-                        video_part = types.Part(
-                            file_data=types.FileData(file_uri=uploaded_file.uri),
-                            video_metadata=types.VideoMetadata(**video_metadata)
-                        )
-                    else:
-                        video_part = types.Part(file_data=types.FileData(file_uri=uploaded_file.uri))
-                except Exception as upload_error:
-                    return json.dumps({
-                        "type": "tool_response",
-                        "tool_name": "understand_video",
-                        "error": f"Error uploading video file to Gemini: {str(upload_error)}"
-                    })
-            else:
-                # Try inline video data for small files (<20MB)
-                try:
-                    # Decode base64 and use inline data (not temporary file)
-                    video_data = base64.b64decode(file_reference)
-                    # Check size limit (20MB = 20 * 1024 * 1024 bytes)
-                    if len(video_data) > 20 * 1024 * 1024:
-                        return json.dumps({
-                            "type": "tool_response",
-                            "tool_name": "understand_video",
-                            "error": "Video data too large for inline processing (>20MB). Please use file upload or URL instead."
-                        })
-                    # Use inline data for small videos with optional metadata
-                    if video_metadata:
-                        video_part = types.Part(
-                            inline_data=types.Blob(
-                                data=video_data,
-                                mime_type='video/mp4'  # Default to mp4, could be detected from file extension
-                            ),
-                            video_metadata=types.VideoMetadata(**video_metadata)
-                        )
-                    else:
-                        video_part = types.Part(
-                            inline_data=types.Blob(
-                                data=video_data,
-                                mime_type='video/mp4'  # Default to mp4, could be detected from file extension
-                            )
-                        )
-                except Exception as decode_error:
-                    return json.dumps({
-                        "type": "tool_response",
-                        "tool_name": "understand_video",
-                        "error": f"Error processing video data: {str(decode_error)}. Expected base64 encoded video data (<20MB), valid file path, YouTube URL, or direct video URL."
-                    })
-        # Don't embed system_prompt in user prompt - use API parameter instead
-        enhanced_prompt = prompt
-        # Generate content using the video
-        contents = types.Content(
-            parts=[
-                video_part,
-                types.Part(text=enhanced_prompt)
-            ]
+            # Resolve uploaded/local file reference
+            file_path = FileUtils.resolve_file_reference(file_reference, agent)
+            if not file_path:
+                return FileUtils.create_tool_response(
+                    "understand_video",
+                    error=f"File not found: {file_reference}"
+                )
+            vision_input = VisionInput(
+                prompt=prompt,
+                video_path=file_path
+            )
+
+        # Validate input
+        vision_input.validate()
+
+        # Initialize VisionToolManager
+        import os
+        os.environ["OPENROUTER_FETCH_PRICING_AT_STARTUP"] = "false"
+        manager = VisionToolManager()
+
+        # Analyze video using URL-aware manager routing
+        result = manager.analyze(vision_input)
+        selected_model = manager.get_model_for_input(vision_input)
+
+        # Return result
+        return FileUtils.create_tool_response(
+            "understand_video",
+            result=result,
+            extra={
+                "file": file_reference,
+                "model_used": selected_model
+            }
         )
-        # Create config with system_instruction if provided
-        config = None
-        if system_prompt:
-            config = types.GenerateContentConfig(
-                system_instruction=system_prompt
-            )
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=contents,
-                config=config
-            )
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_video",
-                "result": response.text
-            })
-        except Exception as e:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_video",
-                "error": f"Error in video understanding request: {str(e)}"
-            })
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "understand_video",
-            "error": f"Error understanding video: {str(e)}"
-        })
+        return FileUtils.create_tool_response(
+            "understand_video",
+            error=f"Video analysis failed: {str(e)}"
+        )
+
 
 @tool
-def understand_audio(file_reference: str, prompt: str, system_prompt: str = None, agent=None, 
+def understand_audio(file_reference: str, prompt: str, system_prompt: str = None, agent=None,
                      start_time: str = None, end_time: str = None) -> str:
     """
-    Analyze an audio file using Google Gemini's audio understanding capabilities.
-    This tool can transcribe audio, understand spoken content, and answer questions
-    about the audio content. Supports timestamp references in prompts (MM:SS format).
-    The audio file is uploaded to Gemini and then analyzed with the provided prompt.
+    Analyze an audio file using vision-language models (Gemini).
+
+    This tool uses VisionToolManager for audio understanding.
+    Automatically uses Gemini 2.5 Flash (only model with audio support).
+
     Args:
-        file_reference (str): Original filename from user upload OR URL to download OR base64 encoded audio data.
-        prompt (str): A question or request regarding the audio content.
-        system_prompt (str, optional): System instruction.
+        file_reference (str): Original filename from user upload OR URL to download
+        prompt (str): A question or request regarding the audio content
+        system_prompt (str, optional): System instruction (not used currently)
         agent: Agent instance for file resolution (injected automatically)
         start_time (str, optional): Start time reference in MM:SS format (e.g., "02:30")
         end_time (str, optional): End time reference in MM:SS format (e.g., "03:29")
+
     Returns:
-        str: Analysis of the audio content based on the prompt, or error message.
+        str: Analysis of the audio content based on the prompt, or error message
     """
     from .file_utils import FileUtils
+
     try:
-        client = _get_gemini_client()
-        if not client:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_audio",
-                "error": "Gemini client not available. Check GEMINI_KEY environment variable."
-            })
+        from agent_ng.vision_input import VisionInput
+        from agent_ng.vision_tool_manager import VisionToolManager
 
-        # First try to resolve as file reference (uploaded file or URL)
-        resolved_path = FileUtils.resolve_file_reference(file_reference, agent)
-
-        if resolved_path:
-            # It's a file (uploaded or downloaded from URL)
-            try:
-                mp3_file = client.files.upload(file=resolved_path)
-            except Exception as upload_error:
-                return json.dumps({
-                    "type": "tool_response",
-                    "tool_name": "understand_audio",
-                    "error": f"Error uploading audio file to Gemini: {str(upload_error)}"
-                })
-        else:
-            # Check if it looks like a URL that failed to download
-            if file_reference.startswith(('http://', 'https://', 'ftp://')):
-                return json.dumps({
-                    "type": "tool_response",
-                    "tool_name": "understand_audio",
-                    "error": f"Failed to download audio from URL: {file_reference}. Please check the URL is accessible and try again."
-                })
-
-            # Try base64 fallback
-            try:
-                # Decode base64 and create temporary file
-                audio_data = base64.b64decode(file_reference)
-                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
-                    temp_file.write(audio_data)
-                    temp_file_path = temp_file.name
-
-                try:
-                    mp3_file = client.files.upload(file=temp_file_path)
-                finally:
-                    # Clean up temporary file
-                    os.unlink(temp_file_path)
-            except Exception as decode_error:
-                return json.dumps({
-                    "type": "tool_response",
-                    "tool_name": "understand_audio",
-                    "error": f"Error processing audio data: {str(decode_error)}. Expected base64 encoded audio data, valid file path, or URL."
-                })
-        # Create enhanced prompt with timestamp references if provided
-        timestamp_instruction = ""
-        if start_time and end_time:
-            timestamp_instruction = f" Focus on the audio segment from {start_time} to {end_time}."
-        elif start_time:
-            timestamp_instruction = f" Focus on the audio segment starting from {start_time}."
-        elif end_time:
-            timestamp_instruction = f" Focus on the audio segment up to {end_time}."
-        # Build prompt with timestamp instructions only
-        enhanced_prompt = f"{prompt}\n\n{timestamp_instruction}"
-        contents = [enhanced_prompt, mp3_file]
-        # Create config with system_instruction if provided
-        config = None
-        if system_prompt:
-            config = types.GenerateContentConfig(
-                system_instruction=system_prompt
+        # Resolve file reference to full path
+        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        if not file_path:
+            return FileUtils.create_tool_response(
+                "understand_audio",
+                error=f"File not found: {file_reference}"
             )
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=contents,
-                config=config
-            )
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_audio",
-                "result": response.text
-            })
-        except Exception as e:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "understand_audio",
-                "error": f"Error in audio understanding request: {str(e)}"
-            })
+
+        # Create VisionInput
+        vision_input = VisionInput(
+            prompt=prompt,
+            audio_path=file_path
+        )
+
+        # Initialize VisionToolManager
+        import os
+        os.environ["OPENROUTER_FETCH_PRICING_AT_STARTUP"] = "false"
+        manager = VisionToolManager()
+
+        # Analyze audio
+        result = manager.analyze_audio(audio_path=file_path, prompt=prompt)
+
+        # Return result
+        return FileUtils.create_tool_response(
+            "understand_audio",
+            result=result,
+            extra={
+                "file": file_reference,
+                "model_used": manager.vl_audio_model
+            }
+        )
+
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "understand_audio",
-            "error": f"Error understanding audio: {str(e)}"
-        })
+        return FileUtils.create_tool_response(
+            "understand_audio",
+            error=f"Audio analysis failed: {str(e)}"
+        )
+
 
 @tool
 def web_search_deep_research_exa_ai(instructions: str) -> str:
@@ -1992,34 +2067,12 @@ def web_search_deep_research_exa_ai(instructions: str) -> str:
     Search the web and site content using deep research tool.
     Ask a query and get a well-researched answer with references.
     Can provide FINAL ANSWER candidate.
-    Ideal for research tasks on any topic that require fact searching.
-    Can find answers and reference about science, scholars, sports, events, books, films, movies, mems, citations, etc.
 
-    The tool researches a topic, verifies facts and outputs a structured answer.
-    It deeply crawls websites to find the right answer, results and links.
-    RESPONSE STRUCTURE:
-    The tool returns a structured response with the following format:
-    1. Task ID and Status
-    2. Original Instructions
-    3. Inferred Schema (JSON schema describing the response data structure)
-    4. Data (JSON object containing the answer according to the schema)
-    5. Citations (source references)
-    SCHEMA INFERENCE:
-    The tool automatically infers the appropriate schema based on your question.
-    For example, a schema might include:
-    - Person data: {"firstName", "lastName", "nationality", "year", etc.}
-    - Event data: {"event", "date", "location", "participants", etc.}
-    - Fact data: {"fact", "source", "context", etc.}
-    DATA EXTRACTION:
-    To extract the answer from the response:
-    1. Look for the "Data" section in the response
-    2. Parse the JSON object in the "Data" field  according to the schema
-    3. Extract the relevant fields based on your question
     Args:
-        instructions (str): Direct question or research instructions.
+        instructions: The prompt or query describing the research goal.
 
     Returns:
-        str: The research result as a structured JSON string with schema, data, and citations, or an error message.
+        The results of the deep research as a string.
     """
     if not EXA_AVAILABLE:
         return json.dumps({
@@ -2054,6 +2107,7 @@ def web_search_deep_research_exa_ai(instructions: str) -> str:
             "error": f"Error in Exa research: {str(e)}"
         })
 
+
 # ========== PYDANTIC SCHEMAS ==========
 
 class SubmitAnswerSchema(BaseModel):
@@ -2071,16 +2125,16 @@ class SubmitAnswerSchema(BaseModel):
         le=1.0,
         description="Confidence level from 0.0 to 1.0 (default: 1.0)"
     )
-    sources: Optional[List[str]] = Field(
+    sources: list[str] | None = Field(
         default=None,
         description="List of sources or tools used to generate this answer"
     )
-    reasoning: Optional[str] = Field(
+    reasoning: str | None = Field(
         default=None,
         description="Brief explanation of the reasoning process"
     )
 
-    @field_validator('sources')
+    @field_validator("sources")
     @classmethod
     def validate_sources(cls, v):
         if v is not None and len(v) == 0:
@@ -2106,26 +2160,26 @@ class SubmitIntermediateStepSchema(BaseModel):
         default="in_progress",
         description="Current status of this step"
     )
-    data: Optional[Dict[str, Any]] = Field(
+    data: dict[str, Any] | None = Field(
         default=None,
         description="Optional dictionary containing relevant data, findings, or results from this step"
     )
-    next_steps: Optional[List[str]] = Field(
+    next_steps: list[str] | None = Field(
         default=None,
         description="Optional list of planned next steps or actions"
     )
-    confidence: Optional[float] = Field(
+    confidence: float | None = Field(
         default=None,
         ge=0.0,
         le=1.0,
         description="Optional confidence level from 0.0 to 1.0 for this step's results"
     )
-    issues: Optional[List[str]] = Field(
+    issues: list[str] | None = Field(
         default=None,
         description="Optional list of issues, concerns, or limitations encountered"
     )
 
-    @field_validator('next_steps', 'issues')
+    @field_validator("next_steps", "issues")
     @classmethod
     def validate_lists(cls, v):
         if v is not None and len(v) == 0:
@@ -2141,7 +2195,7 @@ class SubmitAnswerResult(BaseModel):
     success: bool
     status_code: int = Field(default=200)
     raw_response: dict | str | None = Field(default=None)
-    error: Optional[str] = Field(default=None)
+    error: str | None = Field(default=None)
 
 class SubmitIntermediateStepResult(BaseModel):
     """
@@ -2152,12 +2206,12 @@ class SubmitIntermediateStepResult(BaseModel):
     success: bool
     status_code: int = Field(default=200)
     raw_response: dict | str | None = Field(default=None)
-    error: Optional[str] = Field(default=None)
+    error: str | None = Field(default=None)
 
 # ========== TOOL FUNCTIONS ==========
 
 @tool("submit_answer", return_direct=False, args_schema=SubmitAnswerSchema)
-def submit_answer(answer: str, confidence: float = 1.0, sources: List[str] = None, reasoning: str = None) -> Dict[str, Any]:
+def submit_answer(answer: str, confidence: float = 1.0, sources: list[str] = None, reasoning: str = None) -> dict[str, Any]:
     """
     Submit a final answer using Schema-Guided Reasoning (SGR).
     This tool forces the LLM to explicitly state its conclusion rather than leaving it implicit.
@@ -2190,9 +2244,9 @@ def submit_answer(answer: str, confidence: float = 1.0, sources: List[str] = Non
         }
 
 @tool("submit_intermediate_step", return_direct=False, args_schema=SubmitIntermediateStepSchema)
-def submit_intermediate_step(step_name: str, description: str, status: str = "in_progress", 
-                           data: Dict[str, Any] = None, next_steps: List[str] = None, 
-                           confidence: float = None, issues: List[str] = None) -> Dict[str, Any]:
+def submit_intermediate_step(step_name: str, description: str, status: str = "in_progress",
+                           data: dict[str, Any] = None, next_steps: list[str] = None,
+                           confidence: float = None, issues: list[str] = None) -> dict[str, Any]:
     """
     Submit an intermediate reasoning step using Schema-Guided Reasoning (SGR).
     Use this tool to document intermediate steps in your reasoning process, 

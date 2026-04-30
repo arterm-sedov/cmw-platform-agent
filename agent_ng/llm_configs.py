@@ -30,20 +30,61 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             api_key_env="GEMINI_KEY",
             max_history=25,
             tool_support=True,
-            force_tools=True,
+            force_tools=False,
+            vision_support=True,  # Gemini supports vision
+            video_support=True,   # Gemini supports video
+            audio_support=True,   # Gemini supports audio
             models=[
                 {
                     "model": "gemini-2.5-flash",
                     "token_limit": 1048576,
-                    "max_tokens": 65536,
-                    "temperature": 0
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
                 },
                 {
                     "model": "gemini-2.5-pro",
-                    "token_limit": 1048576,
-                    "max_tokens": 65536,
-                    "temperature": 0
+                    "token_limit": 2097152,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
                 },
+                {
+                    "model": "gemini-3.1-flash-lite-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                },
+                {
+                    "model": "gemini-3.1-pro-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                },
+                {
+                    "model": "gemini-3-flash-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                }
             ],
             enable_chunking=False
         ),
@@ -122,20 +163,25 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             max_history=20,
             tool_support=True,
             force_tools=False,
+            vision_support=True,  # OpenRouter supports VL models
+            video_support=True,   # Some models support video
+            audio_support=True,   # Some models support audio
             models=[
                 {
                     "model": "anthropic/claude-sonnet-4.5",
                     "token_limit": 1000000,
                     "max_tokens": 64000,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
+                    "vision_support": True
                 },
                 {
                     "model": "anthropic/claude-sonnet-4.6",
                     "token_limit": 1000000,
                     "max_tokens": 64000,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
+                    "vision_support": True
                 },
                 {
                     "model": "deepseek/deepseek-chat-v3.1:free",
@@ -282,7 +328,69 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "token_limit": 1000000,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True
+                },
+                {
+                    "model": "google/gemini-2.5-flash",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True,  # via input_audio (not audio_url); see OpenRouter audio guide
+                },
+                {
+                    "model": "google/gemini-3.1-flash-lite-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                },
+                {
+                    "model": "google/gemini-3.1-pro-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                },
+                {
+                    "model": "google/gemini-3-flash-preview",
+                    "token_limit": 1048576,
+                    "max_tokens": 8192,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True
+                },
+                {
+                    "model": "xiaomi/mimo-v2.5",
+                    "token_limit": 1000000,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": False,  # OpenRouter: text-only
+                    "video_support": False,   # OpenRouter: text-only
+                    "audio_support": False    # OpenRouter: text-only
+                },
+                {
+                    "model": "xiaomi/mimo-v2-omni",
+                    "token_limit": 262144,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True,
                 },
                 {
                     "model": "qwen/qwen3-coder:free",
@@ -335,6 +443,13 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                 },
                 {
                     "model": "x-ai/grok-4.20",
+                    "token_limit": 2000000,
+                    "max_tokens": 30000,
+                    "temperature": 0,
+                    "force_tools": True
+                },
+                {
+                    "model": "x-ai/grok-4.20-multi-agent",
                     "token_limit": 2000000,
                     "max_tokens": 30000,
                     "temperature": 0,

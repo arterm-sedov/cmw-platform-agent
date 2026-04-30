@@ -5,7 +5,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from tools import requests_
 from tools.models import AttributeResult, CommonButtonFields
-from tools.tool_utils import _fetch_entity, build_global_alias, execute_edit_or_create_operation
+from tools.tool_utils import (
+    _fetch_entity,
+    build_global_alias,
+    execute_edit_or_create_operation,
+)
 
 BUTTON_ENDPOINT = "webapi/UserCommand"
 
@@ -25,14 +29,47 @@ class EditOrCreateButtonSchema(CommonButtonFields):
     description: str | None = Field(
         default=None,
         description="Description of what the button does.",
-)
-    kind: str = Field(
-        default="Trigger scenario",
-        description="Button action: Trigger scenario (triggers scenario on click), Create, Edit, Delete, Archive, Unarchive, Test. Default: Trigger scenario",
     )
-    context: str = Field(
-        default="Record",
-        description="Execution context: Record, List, etc. Default: Record",
+    kind: str | None = Field(
+        default="Trigger scenario",
+        description=(
+            "Button action type. Default: 'Trigger scenario'. "
+            "RU: Тип операции кнопки. По умолчанию: 'Trigger scenario'.\n"
+            "Valid values:\n"
+            "- 'Trigger scenario': Execute custom scenario. RU: Вызвать событие «Нажата кнопка»\n"
+            "- 'Create': Create new record (requires create_form). RU: Создать\n"
+            "- 'Edit': Edit existing record. RU: Редактировать\n"
+            "- 'Delete': Delete record. RU: Удалить\n"
+            "- 'Archive': Archive record. RU: Архивировать\n"
+            "- 'Unarchive': Restore archived record. RU: Разархивировать\n"
+            "- 'Script': Execute C# script. RU: С# скрипт\n"
+            "- 'ExportObject': Export single record. RU: Экспорт записи\n"
+            "- 'ExportList': Export list of records. RU: Экспорт таблицы\n"
+            "- 'CreateRelated': Create related record. RU: Создать связанную запись\n"
+            "- 'CreateToken': Create token. RU: Создать токен\n"
+            "- 'RetryTokens': Retry tokens. RU: Перезапустить токены\n"
+            "- 'Migrate': Migrate data. RU: Мигрировать\n"
+            "- 'StartCase': Start case.\n"
+            "- 'StartLinkedCase': Start linked case.\n"
+            "- 'StartProcess': Start process. RU: Запустить процесс\n"
+            "- 'StartLinkedProcess': Start process from linked template. RU: Запустить процесс по связанному шаблону\n"
+            "- 'CompleteTask': Complete task. RU: Завершить задачу\n"
+            "- 'ReassignTask': Reassign task. RU: Переназначить\n"
+            "- 'Defer': Defer action. RU: Отложить выполнение\n"
+            "- 'Accept': Accept action. RU: Принять\n"
+            "- 'Uncomplete': Reopen completed item. RU: Открыть заново\n"
+            "- 'Follow': Link record to template. RU: Привязать к шаблону\n"
+            "- 'Unfollow': Unlink record from template. RU: Отвязать от шаблона\n"
+            "- 'Exclude': Exclude from list.\n"
+            "- 'Include': Include in list.\n"
+            "- 'Cancel': Stop process. RU: Остановить процесс\n"
+            "- 'EditDiagram': Edit diagram.\n"
+            "- 'Undefined': No specific action."
+        ),
+    )
+    context: str | None = Field(
+        default=None,
+        description="Execution context: Record, List, etc. Omit to keep existing value on edit.",
     )
     multiplicity: str = Field(
         default="OneByOne",
@@ -66,6 +103,21 @@ class EditOrCreateButtonSchema(CommonButtonFields):
         default=None,
         description="Related entity system name for buttons that operate on related records.",
     )
+    create_form: str | None = Field(
+        default=None,
+        description=(
+            "For kind='Create': system name of the form to open when creating a record. "
+            "Required for Create buttons. The template for the new record is taken from "
+            "related_entity if set, otherwise the current template. Example: 'defaultForm'."
+        ),
+    )
+    create_template: str | None = Field(
+        default=None,
+        description=(
+            "For kind='Create': system name of the template to create a record in. "
+            "Defaults to the current template if omitted."
+        ),
+    )
 
     @field_validator("operation", mode="before")
     @classmethod
@@ -80,6 +132,116 @@ class EditOrCreateButtonSchema(CommonButtonFields):
             }
             return mapping.get(v, v)
         return v
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _normalize_kind(cls, v: Any) -> Any:
+        """
+        Normalize button kind values.
+
+        Maps LLM-friendly terms to API enum values.
+        Validates against the 29 valid kind values from CMW Platform API.
+
+        LLM-Friendly Mappings:
+        - "Trigger scenario" → "UserEvent" (custom scenario execution)
+        - "trigger_scenario" → "UserEvent" (snake_case variant)
+
+        All 29 API enum values pass through unchanged (case-insensitive).
+
+        Raises:
+            ValueError: If kind is not in valid enum or mappings
+        """
+        if v is None:
+            return v
+
+        if not isinstance(v, str):
+            return v
+
+        # Normalize for comparison (lowercase, no spaces/underscores)
+        v_normalized = v.strip().lower().replace(" ", "").replace("_", "")
+
+        # LLM-friendly → API term mappings (all lowercase, no spaces/underscores)
+        llm_to_api = {
+            "triggerscenario": "UserEvent",
+            "userevent": "UserEvent",
+            "create": "Create",
+            "edit": "Edit",
+            "delete": "Delete",
+            "archive": "Archive",
+            "unarchive": "Unarchive",
+            "exportobject": "ExportObject",
+            "exportlist": "ExportList",
+            "createrelated": "CreateRelated",
+            "createtoken": "CreateToken",
+            "retrytokens": "RetryTokens",
+            "migrate": "Migrate",
+            "startcase": "StartCase",
+            "startlinkedcase": "StartLinkedCase",
+            "startprocess": "StartProcess",
+            "startlinkedprocess": "StartLinkedProcess",
+            "completetask": "CompleteTask",
+            "reassigntask": "ReassignTask",
+            "defer": "Defer",
+            "accept": "Accept",
+            "uncomplete": "Uncomplete",
+            "follow": "Follow",
+            "unfollow": "Unfollow",
+            "exclude": "Exclude",
+            "include": "Include",
+            "script": "Script",
+            "cancel": "Cancel",
+            "editdiagram": "EditDiagram",
+            "undefined": "Undefined",
+        }
+
+        # Try mapping first
+        if v_normalized in llm_to_api:
+            return llm_to_api[v_normalized]
+
+        # If exact match to API enum (case-sensitive), pass through
+        valid_api_kinds = {
+            "Undefined",
+            "Create",
+            "Edit",
+            "Delete",
+            "Archive",
+            "Unarchive",
+            "ExportObject",
+            "ExportList",
+            "CreateRelated",
+            "CreateToken",
+            "RetryTokens",
+            "Migrate",
+            "StartCase",
+            "StartLinkedCase",
+            "StartProcess",
+            "StartLinkedProcess",
+            "CompleteTask",
+            "ReassignTask",
+            "Defer",
+            "Accept",
+            "Uncomplete",
+            "Follow",
+            "Unfollow",
+            "Exclude",
+            "Include",
+            "Script",
+            "Cancel",
+            "EditDiagram",
+            "UserEvent",
+        }
+
+        if v in valid_api_kinds:
+            return v
+
+        # Invalid kind
+        valid_kinds_str = ", ".join(sorted(valid_api_kinds))
+        msg = (
+            f"Invalid button kind: '{v}'. "
+            f"Use 'Trigger scenario' for custom scenarios, or one of: "
+            f"{valid_kinds_str}"
+        )
+        raise ValueError(msg)
 
     @model_validator(mode="after")
     def _validate_create_required_fields(self) -> "EditOrCreateButtonSchema":
@@ -117,7 +279,9 @@ def get_button(
             "error": str|None - Error message if operation failed
         }
     """
-    result = _fetch_button(application_system_name, template_system_name, button_system_name)
+    result = _fetch_button(
+        application_system_name, template_system_name, button_system_name
+    )
     if result is None:
         return {
             "success": False,
@@ -137,8 +301,8 @@ def edit_or_create_button(
     button_system_name: str,
     name: str | None = None,
     description: str | None = None,
-    kind: str = "Trigger scenario",
-    context: str = "Record",
+    kind: str | None = None,
+    context: str | None = None,
     multiplicity: str = "OneByOne",
     result_type: str = "DataChange",
     is_prepare: bool = False,
@@ -147,19 +311,25 @@ def edit_or_create_button(
     is_confirmation_active: bool = False,
     navigation_target: str = "Undefined",
     related_entity: str | None = None,
+    create_form: str | None = None,
+    create_template: str | None = None,
 ) -> dict[str, Any]:
     r"""
     Create or edit a button for a template.
 
     For edit operations, automatically fetches current schema and merges missing fields.
     Editable button properties: name, description, kind, context, multiplicity,
-    result_type, is_prepare, skip_validation, has_confirmation, navigation_target, related_entity.
+    result_type, is_prepare, skip_validation, has_confirmation, navigation_target,
+    related_entity, create_form, create_template.
+
+    For kind='Create' buttons, you MUST supply create_form (e.g. 'defaultForm').
+    The API requires both a template and a form to be set; the template defaults to
+    the current one if create_template is omitted.
 
     WARNING:
-    - Changing options other than name and description is NOT DESIRABLE for most buttons
+    - context defaults to 'Record' on create, preserved on edit unless explicitly provided
     - Default platform buttons (create, edit, archive, delete) have predefined behavior
-    - Only name and description changes are recommended unless you specifically need other changes
-    - Other parameters may be ignored or cause unexpected behavior
+    - Only name and description changes are recommended for system buttons
 
     Returns:
         dict: {
@@ -170,15 +340,31 @@ def edit_or_create_button(
     """
     endpoint = f"{BUTTON_ENDPOINT}/{application_system_name}"
 
+    # Resolve effective context: explicit value, or "Record" for new buttons
+    effective_context = context if context is not None else "Record"
+
+    # Resolve effective kind: explicit value, or "UserEvent" (from "Trigger scenario" default)
+    effective_kind = kind if kind is not None else "UserEvent"
+
+    # Build relatedAction for Create-kind buttons
+    def _build_related_action(tmpl: str, form: str) -> dict[str, Any]:
+        return {
+            "containerGlobalAlias": {"type": "RecordTemplate", "alias": tmpl},
+            "templateGlobalAlias": {"type": "Undefined"},
+            "formGlobalAlias": {"type": "Form", "owner": tmpl, "alias": form},
+        }
+
     request_body: dict[str, Any] = {
-        "globalAlias": build_global_alias("UserCommand", template_system_name, button_system_name),
+        "globalAlias": build_global_alias(
+            "UserCommand", template_system_name, button_system_name
+        ),
         "container": {
             "type": "RecordTemplate",
             "alias": template_system_name,
         },
-        "context": context,
+        "context": effective_context,
         "multiplicity": multiplicity,
-        "kind": kind,
+        "kind": effective_kind,
         "resultType": result_type,
         "isPrepare": is_prepare,
         "skipValidation": skip_validation,
@@ -200,11 +386,13 @@ def edit_or_create_button(
                 current["name"] = name
             if description is not None:
                 current["description"] = description
-            if kind != "Trigger scenario":
+            # Update kind if explicitly provided (not None)
+            if kind is not None:
                 current["kind"] = kind
             if has_confirmation:
                 current["isConfirmationActive"] = has_confirmation
-            if context != "Record":
+            # Apply context whenever explicitly provided (not None)
+            if context is not None:
                 current["context"] = context
             if multiplicity != "OneByOne":
                 current["multiplicity"] = multiplicity
@@ -221,6 +409,9 @@ def edit_or_create_button(
                     "type": "RecordTemplate",
                     "alias": related_entity,
                 }
+            if create_form:
+                tmpl = create_template or template_system_name
+                current["relatedAction"] = _build_related_action(tmpl, create_form)
             request_body = current
 
         if (
@@ -228,7 +419,9 @@ def edit_or_create_button(
             and "owner" in request_body
             and "alias" in request_body
         ):
-            request_body["globalAlias"] = build_global_alias("UserCommand", request_body["owner"], request_body["alias"])
+            request_body["globalAlias"] = build_global_alias(
+                "UserCommand", request_body["owner"], request_body["alias"]
+            )
 
         return requests_._put_request(request_body, endpoint)
 
@@ -237,6 +430,9 @@ def edit_or_create_button(
             "type": "RecordTemplate",
             "alias": related_entity,
         }
+    if create_form:
+        tmpl = create_template or template_system_name
+        request_body["relatedAction"] = _build_related_action(tmpl, create_form)
 
     return execute_edit_or_create_operation(
         request_body=request_body,
@@ -345,9 +541,13 @@ def archive_unarchive_button(
     button_global_alias = f"UserCommand@{template_system_name}.{button_system_name}"
 
     if operation == "archive":
-        endpoint = f"{BUTTON_ENDPOINT}/{application_system_name}/{button_global_alias}/Disable"
+        endpoint = (
+            f"{BUTTON_ENDPOINT}/{application_system_name}/{button_global_alias}/Disable"
+        )
     elif operation == "unarchive":
-        endpoint = f"{BUTTON_ENDPOINT}/{application_system_name}/{button_global_alias}/Enable"
+        endpoint = (
+            f"{BUTTON_ENDPOINT}/{application_system_name}/{button_global_alias}/Enable"
+        )
     else:
         return {
             "success": False,

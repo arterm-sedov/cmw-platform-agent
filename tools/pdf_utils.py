@@ -5,7 +5,9 @@ Uses PyMuPDF4LLM - the best library for LLM processing.
 """
 
 import os
-from typing import Optional, List, Any
+import tempfile
+from typing import Any, List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -14,7 +16,7 @@ class PDFTextResult(BaseModel):
     success: bool = Field(description="Whether extraction was successful")
     text_content: str = Field(default="", description="Extracted text content")
     page_count: int = Field(default=0, description="Number of pages processed")
-    error_message: Optional[str] = Field(default=None, description="Error message if failed")
+    error_message: str | None = Field(default=None, description="Error message if failed")
 
 
 def _get_pymupdf4llm():
@@ -33,9 +35,9 @@ class PDFUtils:
     def is_pdf_file(file_path: str) -> bool:
         """Check if file is a valid PDF by examining header"""
         try:
-            return (os.path.exists(file_path) and 
-                   os.path.splitext(file_path)[1].lower() == '.pdf' and
-                   open(file_path, 'rb').read(8).startswith(b'%PDF'))
+            return (os.path.exists(file_path) and
+                   os.path.splitext(file_path)[1].lower() == ".pdf" and
+                   open(file_path, "rb").read(8).startswith(b"%PDF"))
         except Exception:
             return False
 
@@ -98,7 +100,7 @@ class PDFUtils:
             return ""
 
     @staticmethod
-    def get_page_chunks(file_path: str) -> List[dict]:
+    def get_page_chunks(file_path: str) -> list[dict]:
         """Get PDF content as page chunks using PyMuPDF4LLM"""
         if not PDFUtils.is_pdf_file(file_path) or not (pymupdf4llm := _get_pymupdf4llm()):
             return []
@@ -125,3 +127,87 @@ def extract_pdf_text(file_path: str) -> str:
 def is_pdf_file(file_path: str) -> bool:
     """Check if file is a PDF"""
     return PDFUtils.is_pdf_file(file_path)
+
+
+# Phase 1: PDF with Assets Extraction (per TDD plan)
+def extract_with_assets(
+    file_path: str,
+    extract_images: bool = False,
+    session_id: str | None = None,
+) -> tuple[str, list[str], str | None]:
+    """
+    Extract text and optionally images from PDF.
+
+    Args:
+        file_path: Path to PDF file.
+        extract_images: Whether to extract embedded images.
+        session_id: Optional session ID for isolated filenames.
+
+    Returns:
+        Tuple of (text_content, image_paths, error_message).
+    """
+    text_content = ""
+    image_paths: list[str] = []
+    error_message = None
+
+    if not PDFUtils.is_pdf_file(file_path):
+        return text_content, image_paths, "File is not a valid PDF"
+
+    pymupdf4llm = _get_pymupdf4llm()
+    if not pymupdf4llm:
+        return text_content, image_paths, "PyMuPDF4LLM not available"
+
+    try:
+        text_result = pymupdf4llm.to_markdown(
+            file_path,
+            detect_bg_color=True,
+            ignore_alpha=False,
+            ignore_images=True,
+            ignore_graphics=True,
+            margins=0,
+            page_chunks=False,
+        )
+        text_content = text_result or ""
+    except Exception as e:
+        return text_content, image_paths, f"Error extracting text: {e}"
+
+    if extract_images:
+        try:
+            import fitz  # noqa: PLC0415
+        except ImportError:
+            return text_content, image_paths, None
+
+        try:
+            doc = fitz.open(file_path)
+            original_stem = os.path.splitext(os.path.basename(file_path))[0]
+
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                images = page.get_images(full=True)
+
+                for img_index, img in enumerate(images):
+                    xref = img[0]
+                    base_image = doc.extract_image(xref)
+                    image_ext = base_image.get("ext", "png")
+                    image_data = base_image.get("image")
+
+                    if not image_data:
+                        continue
+
+                    image_filename = f"{original_stem}_p{page_num + 1}_img{img_index + 1}.{image_ext}"
+                    if session_id:
+                        image_filename = f"{session_id}_{image_filename}"
+
+                    temp_fd, temp_path = tempfile.mkstemp(suffix=f".{image_ext}")
+                    os.close(temp_fd)
+
+                    with open(temp_path, "wb") as f:
+                        f.write(image_data)
+
+                    image_paths.append(temp_path)
+
+            doc.close()
+        except Exception as e:
+            error_message = f"Warning: Image extraction failed: {e}"
+
+    return text_content, image_paths, error_message

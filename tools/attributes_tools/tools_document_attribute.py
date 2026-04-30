@@ -1,4 +1,5 @@
 from ..tool_utils import *
+import json
 
 ALLOWED_EXTENSIONS_LIST = [
     "TXT",
@@ -32,7 +33,7 @@ ALLOWED_EXTENSIONS_LIST = [
 ]
 
 ALLOWED_EXTENSIONS = Literal[tuple(ALLOWED_EXTENSIONS_LIST)]
-ALLOWED_EXTENSIONS_SET = set(ALLOWED_EXTENSIONS_LIST)
+ALLOWED_EXTENSIONS_SET = {e.lower() for e in ALLOWED_EXTENSIONS_LIST}
 
 
 class EditOrCreateDocumentAttributeSchema(CommonAttributeFields):
@@ -73,18 +74,25 @@ class EditOrCreateDocumentAttributeSchema(CommonAttributeFields):
         if v is None:
             return v
         if isinstance(v, str):
-            v = [x.strip() for x in v.split(",") if x.strip()]
+            stripped = v.strip()
+            if stripped.startswith("["):
+                try:
+                    v = json.loads(stripped)
+                except json.JSONDecodeError:
+                    pass
+            if isinstance(v, str):
+                v = [x.strip().strip('"').strip("'") for x in v.split(",") if x.strip()]
         if not isinstance(v, list):
             raise ValueError(
                 "file_extensions_filter must be a list or comma-separated strings"
             )
-        normalized = [str(ext).strip().lower() for ext in v]
+        normalized = [str(ext).strip().upper() for ext in v]
 
-        invalid = set(normalized) - ALLOWED_EXTENSIONS_SET
+        invalid = {e.lower() for e in normalized} - ALLOWED_EXTENSIONS_SET
         if invalid:
             raise ValueError(
                 f"Invalid file extensions: {sorted(invalid)}. "
-                f"Allowed: {sorted(ALLOWED_EXTENSIONS_SET)}"
+                f"Allowed: {sorted(ALLOWED_EXTENSIONS_LIST)}"
             )
         return normalized
 

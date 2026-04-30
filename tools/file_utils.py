@@ -4,51 +4,70 @@ Modular file handling utilities for tools.
 Provides abstracted, reusable functions for common file operations.
 """
 
-import os
+import base64
+import binascii
 import json
-from typing import Optional, Dict, Any, List
+import mimetypes
+import os
 from pathlib import Path
+import re
+import tempfile
+from typing import Any, Dict, List, Optional, Tuple
+
 from pydantic import BaseModel, Field, field_validator
+
 
 class FileInfo(BaseModel):
     """Pydantic model for file information."""
+
     exists: bool = Field(description="Whether the file exists and is accessible")
-    path: Optional[str] = Field(None, description="Full file path")
-    name: Optional[str] = Field(None, description="File name with extension")
+    path: str | None = Field(None, description="Full file path")
+    name: str | None = Field(None, description="File name with extension")
     size: int = Field(0, description="File size in bytes")
     extension: str = Field("", description="File extension (lowercase)")
-    error: Optional[str] = Field(None, description="Error message if file access failed")
+    error: str | None = Field(None, description="Error message if file access failed")
 
-    @field_validator('size')
+    @field_validator("size")
     @classmethod
     def validate_size(cls, v):
         if v < 0:
-            raise ValueError('File size cannot be negative')
+            raise ValueError("File size cannot be negative")
         return v
+
 
 class TextFileResult(BaseModel):
     """Pydantic model for text file reading results."""
+
     success: bool = Field(description="Whether the file was successfully read")
-    content: Optional[str] = Field(None, description="File content as text")
-    encoding: Optional[str] = Field(None, description="Encoding used to read the file")
-    file_info: Optional[FileInfo] = Field(None, description="File information")
-    error: Optional[str] = Field(None, description="Error message if reading failed")
+    content: str | None = Field(None, description="File content as text")
+    encoding: str | None = Field(None, description="Encoding used to read the file")
+    file_info: FileInfo | None = Field(None, description="File information")
+    error: str | None = Field(None, description="Error message if reading failed")
+
 
 class BinaryFileResult(BaseModel):
     """Pydantic model for binary file reading results."""
+
     success: bool = Field(description="Whether the file was successfully read")
-    content: Optional[str] = Field(None, description="Base64 encoded file content")
-    file_info: Optional[FileInfo] = Field(None, description="File information")
-    error: Optional[str] = Field(None, description="Error message if reading failed")
+    content: str | None = Field(None, description="Base64 encoded file content")
+    file_info: FileInfo | None = Field(None, description="File information")
+    error: str | None = Field(None, description="Error message if reading failed")
+
 
 class ToolResponse(BaseModel):
     """Pydantic model for standardized tool responses."""
+
     type: str = Field(default="tool_response", description="Response type identifier")
     tool_name: str = Field(description="Name of the tool that generated the response")
-    result: Optional[str] = Field(None, description="Tool result content")
-    error: Optional[str] = Field(None, description="Error message if tool failed")
-    file_info: Optional[FileInfo] = Field(None, description="File information if applicable")
-    extra: Optional[Dict[str, Any]] = Field(None, description="Optional structured payload for tool-specific data")
+    result: str | None = Field(None, description="Tool result content")
+    error: str | None = Field(None, description="Error message if tool failed")
+    file_info: FileInfo | None = Field(
+        None, description="File information if applicable"
+    )
+    extra: dict[str, Any] | None = Field(
+        None, description="Optional structured payload for tool-specific data"
+    )
+
 
 class FileUtils:
     """Utility class for common file operations."""
@@ -70,10 +89,7 @@ class FileUtils:
     def get_file_info(file_path: str) -> FileInfo:
         """Get comprehensive file information with Pydantic validation."""
         if not FileUtils.file_exists(file_path):
-            return FileInfo(
-                exists=False,
-                error=f"File not found: {file_path}"
-            )
+            return FileInfo(exists=False, error=f"File not found: {file_path}")
 
         try:
             return FileInfo(
@@ -81,16 +97,58 @@ class FileUtils:
                 path=file_path,
                 name=os.path.basename(file_path),
                 size=FileUtils.get_file_size(file_path),
-                extension=Path(file_path).suffix.lower()
+                extension=Path(file_path).suffix.lower(),
             )
         except Exception as e:
-            return FileInfo(
-                exists=False,
-                error=f"Error getting file info: {str(e)}"
-            )
+            return FileInfo(exists=False, error=f"Error getting file info: {str(e)}")
 
     @staticmethod
-    def read_text_file(file_path: str, encodings: List[str] = None) -> TextFileResult:
+    def file_info_for_tool_response(physical: FileInfo, logical_ref: str) -> FileInfo:
+        """
+        Build **FileInfo** for :meth:`create_tool_response` (``ToolResponse.file_info`` in JSON).
+        The model must not see on-disk temp names: **name** is only the **logical** reference
+        (upload name, path the user sent, or full **http(s)/ftp** URL) — **never** *physical* ``name``
+        from :func:`get_file_info`. We still use the **FileInfo** type for schema consistency,
+        not “legacy” — the wire format is a structured object, not a loose dict.
+
+        If *logical_ref* is empty, **name** is **None** (we do not fall back to ``physical.name``).
+        """
+        r = (logical_ref or "").strip()
+        return FileInfo(
+            exists=physical.exists,
+            path=None,
+            name=r or None,
+            size=physical.size,
+            extension=physical.extension,
+            error=physical.error,
+        )
+
+    @staticmethod
+    def upload_basename_from_reference(file_reference: str) -> str | None:
+        """
+        **fileName** for CMW upload: basename from **file_reference** only (chat/registry
+        name, absolute local path, or **http(s)/ftp** URL path) — not from the resolved
+        temp path, so a **Gradio** cache name is never used as the product filename.
+        """
+        ref = (file_reference or "").strip()
+        if not ref:
+            return None
+        rlow = ref.lower()
+        if rlow.startswith(("http://", "https://", "ftp://")):
+            from urllib.parse import unquote, urlparse
+
+            path = unquote(urlparse(ref).path) or ""
+            b = os.path.basename(path) if path else ""
+            return b or None
+        if os.path.isabs(ref):
+            b = os.path.basename(ref)
+            return b or None
+        return os.path.basename(ref) or None
+
+    @staticmethod
+    def read_text_file(
+        file_path: str, encodings: list[str] | None = None
+    ) -> TextFileResult:
         """
         Read text file with multiple encoding fallback and Pydantic validation.
 
@@ -102,26 +160,24 @@ class FileUtils:
             TextFileResult with validated content, encoding used, and metadata
         """
         if encodings is None:
-            encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+            encodings = ["utf-8", "latin-1", "cp1252", "iso-8859-1"]
 
         file_info = FileUtils.get_file_info(file_path)
         if not file_info.exists:
             return TextFileResult(
-                success=False,
-                error=file_info.error,
-                file_info=file_info
+                success=False, error=file_info.error, file_info=file_info
             )
 
         for encoding in encodings:
             try:
-                with open(file_path, 'r', encoding=encoding) as f:
+                with open(file_path, encoding=encoding) as f:
                     content = f.read()
 
                 return TextFileResult(
                     success=True,
                     content=content,
                     encoding=encoding,
-                    file_info=file_info
+                    file_info=file_info,
                 )
             except UnicodeDecodeError:
                 continue
@@ -129,13 +185,13 @@ class FileUtils:
                 return TextFileResult(
                     success=False,
                     error=f"Error reading file: {str(e)}",
-                    file_info=file_info
+                    file_info=file_info,
                 )
 
         return TextFileResult(
             success=False,
             error="File appears to be binary and cannot be read as text",
-            file_info=file_info
+            file_info=file_info,
         )
 
     @staticmethod
@@ -144,33 +200,41 @@ class FileUtils:
         file_info = FileUtils.get_file_info(file_path)
         if not file_info.exists:
             return BinaryFileResult(
-                success=False,
-                error=file_info.error,
-                file_info=file_info
+                success=False, error=file_info.error, file_info=file_info
             )
 
         try:
             import base64
-            with open(file_path, 'rb') as f:
+
+            with open(file_path, "rb") as f:
                 content = f.read()
 
             return BinaryFileResult(
                 success=True,
-                content=base64.b64encode(content).decode('utf-8'),
-                file_info=file_info
+                content=base64.b64encode(content).decode("utf-8"),
+                file_info=file_info,
             )
         except Exception as e:
             return BinaryFileResult(
                 success=False,
                 error=f"Error reading binary file: {str(e)}",
-                file_info=file_info
+                file_info=file_info,
             )
 
     @staticmethod
-    def create_tool_response(tool_name: str, result: str = None, error: str = None, 
-                           file_info: FileInfo = None, extra: Dict[str, Any] = None) -> str:
-        """Create standardized tool response JSON with Pydantic validation."""
-        # Sanitize file_info to remove full paths
+    def create_tool_response(
+        tool_name: str,
+        result: str | None = None,
+        error: str | None = None,
+        file_info: FileInfo = None,
+        extra: dict[str, Any] | None = None,
+    ) -> str:
+        """Create standardized tool response JSON with Pydantic validation.
+
+        For chat-uploaded files, pass *file_info* from
+        :meth:`file_info_for_tool_response` so ``file_info.name`` in JSON is
+        the **registered file reference**, not a temp *gradio* basename.
+        """
         if file_info:
             # Create a sanitized copy without the full path
             sanitized_file_info = FileInfo(
@@ -179,7 +243,7 @@ class FileUtils:
                 name=file_info.name,
                 size=file_info.size,
                 extension=file_info.extension,
-                error=file_info.error
+                error=file_info.error,
             )
         else:
             sanitized_file_info = None
@@ -189,7 +253,7 @@ class FileUtils:
             result=result,  # Full result, no truncation
             error=error,
             file_info=sanitized_file_info,
-            extra=extra
+            extra=extra,
         )
 
         return response.model_dump_json(indent=2)
@@ -224,17 +288,19 @@ class FileUtils:
         import base64
 
         if not FileUtils.file_exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
+            msg = f"File not found: {file_path}"
+            raise FileNotFoundError(msg)
 
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 file_content = f.read()
-            return base64.b64encode(file_content).decode('utf-8')
+            return base64.b64encode(file_content).decode("utf-8")
         except Exception as e:
-            raise IOError(f"Error reading file {file_path}: {str(e)}")
+            msg = f"Error reading file {file_path}: {str(e)}"
+            raise OSError(msg)
 
     @staticmethod
-    def download_file_to_path(url: str, target_path: str = None) -> str:
+    def download_file_to_path(url: str, target_path: str | None = None) -> str:
         """
         Download file from URL to local path.
 
@@ -249,25 +315,28 @@ class FileUtils:
             requests.RequestException: If download fails
             IOError: If file can't be written
         """
-        import requests
-        import tempfile
-        import os
         import logging
+        import os
+        import tempfile
         from urllib.parse import urlparse
+
+        import requests
 
         logger = logging.getLogger(__name__)
 
         try:
             # Add polite bot identification headers
             headers = {
-                'User-Agent': 'CMW-Platform-Agent/1.0 (+https://github.com/arterm-sedov/cmw-platform-agent) Mozilla/5.0'
+                "User-Agent": "CMW-Platform-Agent/1.0 (+https://github.com/arterm-sedov/cmw-platform-agent) Mozilla/5.0"
             }
 
             # First make a HEAD request to get Content-Type
             logger.info(f"Attempting to download from URL: {url}")
-            head_response = requests.head(url, headers=headers, timeout=30, allow_redirects=True)
+            head_response = requests.head(
+                url, headers=headers, timeout=30, allow_redirects=True
+            )
             head_response.raise_for_status()
-            content_type = head_response.headers.get('content-type', 'unknown')
+            content_type = head_response.headers.get("content-type", "unknown")
             logger.info(f"HEAD request successful, Content-Type: {content_type}")
 
             if target_path is None:
@@ -278,53 +347,49 @@ class FileUtils:
                 _, url_ext = os.path.splitext(filename)
 
                 # Get Content-Type header
-                content_type = head_response.headers.get('content-type', '').lower()
+                content_type = head_response.headers.get("content-type", "").lower()
 
                 # MIME type to extension mapping
                 mime_to_ext = {
                     # Documents
-                    'application/pdf': '.pdf',
-                    'application/msword': '.doc',
-                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
-                    'application/vnd.ms-excel': '.xls',
-                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
-                    'application/vnd.ms-powerpoint': '.ppt',
-                    'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
-                    'application/rtf': '.rtf',
-                    'application/zip': '.zip',
-                    'application/x-zip-compressed': '.zip',
-
+                    "application/pdf": ".pdf",
+                    "application/msword": ".doc",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+                    "application/vnd.ms-excel": ".xls",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+                    "application/vnd.ms-powerpoint": ".ppt",
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+                    "application/rtf": ".rtf",
+                    "application/zip": ".zip",
+                    "application/x-zip-compressed": ".zip",
                     # Text formats
-                    'text/plain': '.txt',
-                    'text/html': '.html',
-                    'text/css': '.css',
-                    'text/javascript': '.js',
-                    'text/csv': '.csv',
-                    'text/xml': '.xml',
-                    'application/json': '.json',
-                    'application/xml': '.xml',
-
+                    "text/plain": ".txt",
+                    "text/html": ".html",
+                    "text/css": ".css",
+                    "text/javascript": ".js",
+                    "text/csv": ".csv",
+                    "text/xml": ".xml",
+                    "application/json": ".json",
+                    "application/xml": ".xml",
                     # Images
-                    'image/jpeg': '.jpg',
-                    'image/jpg': '.jpg',
-                    'image/png': '.png',
-                    'image/gif': '.gif',
-                    'image/webp': '.webp',
-                    'image/svg+xml': '.svg',
-                    'image/bmp': '.bmp',
-                    'image/tiff': '.tiff',
-
+                    "image/jpeg": ".jpg",
+                    "image/jpg": ".jpg",
+                    "image/png": ".png",
+                    "image/gif": ".gif",
+                    "image/webp": ".webp",
+                    "image/svg+xml": ".svg",
+                    "image/bmp": ".bmp",
+                    "image/tiff": ".tiff",
                     # Audio
-                    'audio/mpeg': '.mp3',
-                    'audio/wav': '.wav',
-                    'audio/ogg': '.ogg',
-                    'audio/mp4': '.m4a',
-
+                    "audio/mpeg": ".mp3",
+                    "audio/wav": ".wav",
+                    "audio/ogg": ".ogg",
+                    "audio/mp4": ".m4a",
                     # Video
-                    'video/mp4': '.mp4',
-                    'video/avi': '.avi',
-                    'video/quicktime': '.mov',
-                    'video/x-msvideo': '.avi',
+                    "video/mp4": ".mp4",
+                    "video/avi": ".avi",
+                    "video/quicktime": ".mov",
+                    "video/x-msvideo": ".avi",
                 }
 
                 # Smart extension detection strategy:
@@ -363,7 +428,7 @@ class FileUtils:
                     ext = url_ext
                 else:
                     # No extension found
-                    ext = ''
+                    ext = ""
 
                 temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
                 target_path = temp_file.name
@@ -371,21 +436,25 @@ class FileUtils:
 
             # Now download the file
             logger.info(f"Starting download to: {target_path}")
-            response = requests.get(url, headers=headers, stream=True, timeout=60, allow_redirects=True)
+            response = requests.get(
+                url, headers=headers, stream=True, timeout=60, allow_redirects=True
+            )
             response.raise_for_status()
 
-            with open(target_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            with open(target_path, "wb") as f:
+                f.writelines(response.iter_content(chunk_size=8192))
 
             logger.info(f"Download completed successfully: {target_path}")
             return target_path
 
         except Exception as e:
-            raise IOError(f"Error downloading file from {url}: {str(e)}")
+            msg = f"Error downloading file from {url}: {str(e)}"
+            raise OSError(msg)
 
     @staticmethod
-    def generate_unique_filename(original_filename: str, session_id: str = "default") -> str:
+    def generate_unique_filename(
+        original_filename: str, session_id: str = "default"
+    ) -> str:
         """
         Generate a unique filename with timestamp and hash (no session prefix since we use session folders).
 
@@ -397,8 +466,8 @@ class FileUtils:
             str: Unique filename with timestamp and hash
         """
         import hashlib
-        import time
         from pathlib import Path
+        import time
 
         # Get file extension
         path_obj = Path(original_filename)
@@ -407,10 +476,14 @@ class FileUtils:
 
         # Generate timestamp and hash (include session_id for uniqueness across sessions)
         timestamp = str(int(time.time() * 1000))  # milliseconds
-        hash_suffix = hashlib.md5(f"{original_filename}{timestamp}{session_id}".encode()).hexdigest()[:8]
+        hash_suffix = hashlib.md5(
+            f"{original_filename}{timestamp}{session_id}".encode()
+        ).hexdigest()[:8]
 
         # Create unique filename with session ID for better uniqueness and clarity
-        unique_name = f"{session_id}_{name_without_ext}_{timestamp}_{hash_suffix}{extension}"
+        unique_name = (
+            f"{session_id}_{name_without_ext}_{timestamp}_{hash_suffix}{extension}"
+        )
 
         return unique_name
 
@@ -426,7 +499,7 @@ class FileUtils:
         import tempfile
 
         # Check if GRADIO_TEMP_DIR is set
-        gradio_temp = os.environ.get('GRADIO_TEMP_DIR')
+        gradio_temp = os.environ.get("GRADIO_TEMP_DIR")
         if gradio_temp:
             return gradio_temp
 
@@ -446,23 +519,50 @@ class FileUtils:
             str: Full path to the file, or None if not found
         """
         # Check if it's a URL
-        if file_reference.startswith(('http://', 'https://', 'ftp://')):
+        if file_reference.startswith(("http://", "https://", "ftp://")):
             try:
                 # Download URL to temp file
                 return FileUtils.download_file_to_path(file_reference)
             except Exception as e:
                 import logging
+
                 logger = logging.getLogger(__name__)
-                logger.error(f"Failed to download URL {file_reference}: {e}")
-                logger.error(f"Error type: {type(e).__name__}")
+                logger.exception(f"Failed to download URL {file_reference}: {e}")
+                logger.exception(f"Error type: {type(e).__name__}")
                 # Re-raise the exception to get more details
                 raise
 
+        if os.path.isabs(file_reference) and os.path.isfile(file_reference):
+            return file_reference
+
         # It's a filename - resolve using agent's file registry
-        if agent and hasattr(agent, 'get_file_path'):
+        if agent and hasattr(agent, "get_file_path"):
             return agent.get_file_path(file_reference)
 
         return None
+
+    @staticmethod
+    def read_file_reference_bytes(
+        file_reference: str, agent=None
+    ) -> tuple[bytes | None, str | None]:
+        """
+        Resolve a file reference to a local path and read its bytes.
+
+        Returns:
+            ``(data, error)`` — on success *error* is ``None``; on failure *data* is
+            ``None`` and *error* is a message. The resolved on-disk path is an
+            implementation detail and is not returned.
+        """
+        path = FileUtils.resolve_file_reference(file_reference, agent)
+        if not path:
+            return None, f"Could not resolve file reference: {file_reference!r}"
+        if not os.path.isfile(path):
+            return None, f"Not a file: {path!r}"
+        try:
+            data = Path(path).read_bytes()
+        except OSError as e:
+            return None, f"Failed to read file: {e!s}"
+        return data, None
 
     @staticmethod
     def resolve_file_path(original_filename: str, agent=None) -> str:
@@ -476,7 +576,7 @@ class FileUtils:
         Returns:
             str: Full path to the file, or None if not found
         """
-        if agent and hasattr(agent, 'get_file_path'):
+        if agent and hasattr(agent, "get_file_path"):
             return agent.get_file_path(original_filename)
 
         return None
@@ -494,20 +594,22 @@ class FileUtils:
             tuple: (code_content, detected_language)
         """
         # Check if it's a URL
-        if code_reference.startswith(('http://', 'https://', 'ftp://')):
+        if code_reference.startswith(("http://", "https://", "ftp://")):
             try:
                 file_path = FileUtils.download_file_to_path(code_reference)
                 result = FileUtils.read_text_file(file_path)
                 if not result.success:
-                    raise ValueError(f"Failed to read URL content: {result.error}")
+                    msg = f"Failed to read URL content: {result.error}"
+                    raise ValueError(msg)
                 language = FileUtils.detect_language_from_extension(file_path)
                 return result.content, language
             except Exception as e:
-                raise ValueError(f"Failed to download URL {code_reference}: {str(e)}")
+                msg = f"Failed to download URL {code_reference}: {str(e)}"
+                raise ValueError(msg)
 
         # Check if it's a file path (try to resolve via agent first, then direct path)
         file_path = None
-        if agent and hasattr(agent, 'get_file_path'):
+        if agent and hasattr(agent, "get_file_path"):
             file_path = agent.get_file_path(code_reference)
 
         if not file_path and os.path.exists(code_reference):
@@ -516,7 +618,8 @@ class FileUtils:
         if file_path and os.path.exists(file_path):
             result = FileUtils.read_text_file(file_path)
             if not result.success:
-                raise ValueError(f"Failed to read file: {result.error}")
+                msg = f"Failed to read file: {result.error}"
+                raise ValueError(msg)
             language = FileUtils.detect_language_from_extension(file_path)
             return result.content, language
 
@@ -527,34 +630,54 @@ class FileUtils:
     def detect_language_from_extension(file_path: str) -> str:
         """Detect programming language from file extension."""
         extension_map = {
-            '.py': 'python',
-            '.sh': 'bash', '.bash': 'bash',
-            '.sql': 'sql',
-            '.c': 'c', '.h': 'c',
-            '.java': 'java',
-            '.js': 'javascript',
-            '.ts': 'typescript',
-            '.rb': 'ruby',
-            '.go': 'go',
-            '.rs': 'rust',
-            '.cpp': 'cpp', '.cc': 'cpp', '.cxx': 'cpp',
-            '.cs': 'csharp',
-            '.php': 'php',
-            '.r': 'r',
-            '.m': 'matlab',
-            '.scala': 'scala',
-            '.kt': 'kotlin',
-            '.swift': 'swift'
+            ".py": "python",
+            ".sh": "bash",
+            ".bash": "bash",
+            ".sql": "sql",
+            ".c": "c",
+            ".h": "c",
+            ".java": "java",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".rb": "ruby",
+            ".go": "go",
+            ".rs": "rust",
+            ".cpp": "cpp",
+            ".cc": "cpp",
+            ".cxx": "cpp",
+            ".cs": "csharp",
+            ".php": "php",
+            ".r": "r",
+            ".m": "matlab",
+            ".scala": "scala",
+            ".kt": "kotlin",
+            ".swift": "swift",
         }
-        return extension_map.get(Path(file_path).suffix.lower(), 'python')
+        return extension_map.get(Path(file_path).suffix.lower(), "python")
 
     @staticmethod
     def is_text_file(file_path: str) -> bool:
         """Check if file is likely a text file based on extension."""
         text_extensions = {
-            '.txt', '.md', '.log', '.json', '.xml', '.yaml', '.yml', 
-            '.html', '.htm', '.css', '.js', '.py', '.sql', '.ini', 
-            '.cfg', '.conf', '.env', '.csv', '.tsv'
+            ".txt",
+            ".md",
+            ".log",
+            ".json",
+            ".xml",
+            ".yaml",
+            ".yml",
+            ".html",
+            ".htm",
+            ".css",
+            ".js",
+            ".py",
+            ".sql",
+            ".ini",
+            ".cfg",
+            ".conf",
+            ".env",
+            ".csv",
+            ".tsv",
         }
         return Path(file_path).suffix.lower() in text_extensions
 
@@ -562,35 +685,37 @@ class FileUtils:
     def is_image_file(file_path: str) -> bool:
         """Check if file is likely an image file based on extension."""
         image_extensions = {
-            '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp', '.svg'
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".bmp",
+            ".tiff",
+            ".webp",
+            ".svg",
         }
         return Path(file_path).suffix.lower() in image_extensions
 
     @staticmethod
     def is_audio_file(file_path: str) -> bool:
         """Check if file is likely an audio file based on extension."""
-        audio_extensions = {
-            '.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma'
-        }
+        audio_extensions = {".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".wma"}
         return Path(file_path).suffix.lower() in audio_extensions
 
     @staticmethod
     def is_video_file(file_path: str) -> bool:
         """Check if file is likely a video file based on extension."""
-        video_extensions = {
-            '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv'
-        }
+        video_extensions = {".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mkv"}
         return Path(file_path).suffix.lower() in video_extensions
 
     @staticmethod
     def is_pdf_file(file_path: str) -> bool:
         """Check if file is likely a PDF file based on extension."""
-        return Path(file_path).suffix.lower() == '.pdf'
+        return Path(file_path).suffix.lower() == ".pdf"
 
     @staticmethod
     def get_mime_type(file_path: str) -> str:
         """Get MIME type for a file based on extension and content."""
-        import mimetypes
 
         mime_type, _ = mimetypes.guess_type(file_path)
         if mime_type:
@@ -598,51 +723,58 @@ class FileUtils:
 
         ext = Path(file_path).suffix.lower()
         mime_map = {
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.gif': 'image/gif',
-            '.webp': 'image/webp',
-            '.svg': 'image/svg+xml',
-            '.tiff': 'image/tiff',
-            '.bmp': 'image/bmp',
-            '.mp4': 'video/mp4',
-            '.webm': 'video/webm',
-            '.avi': 'video/x-msvideo',
-            '.mov': 'video/quicktime',
-            '.wav': 'audio/wav',
-            '.mp3': 'audio/mpeg',
-            '.ogg': 'audio/ogg',
-            '.flac': 'audio/flac',
-            '.aac': 'audio/aac',
-            '.m4a': 'audio/mp4',
-            '.html': 'text/html',
-            '.htm': 'text/html',
-            '.json': 'application/json',
-            '.xml': 'application/xml',
-            '.pdf': 'application/pdf'
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".svg": "image/svg+xml",
+            ".tiff": "image/tiff",
+            ".bmp": "image/bmp",
+            ".mp4": "video/mp4",
+            ".webm": "video/webm",
+            ".avi": "video/x-msvideo",
+            ".mov": "video/quicktime",
+            ".wav": "audio/wav",
+            ".mp3": "audio/mpeg",
+            ".ogg": "audio/ogg",
+            ".flac": "audio/flac",
+            ".aac": "audio/aac",
+            ".m4a": "audio/mp4",
+            ".html": "text/html",
+            ".htm": "text/html",
+            ".json": "application/json",
+            ".xml": "application/xml",
+            ".pdf": "application/pdf",
         }
 
-        return mime_map.get(ext, 'application/octet-stream')
+        return mime_map.get(ext, "application/octet-stream")
 
     @staticmethod
     def detect_media_type(file_path: str) -> str:
         """Detect media type category for a file."""
         if FileUtils.is_image_file(file_path):
-            return 'image'
+            return "image"
         elif FileUtils.is_video_file(file_path):
-            return 'video'
+            return "video"
         elif FileUtils.is_audio_file(file_path):
-            return 'audio'
-        elif Path(file_path).suffix.lower() == '.html':
-            return 'html'
-        elif Path(file_path).suffix.lower() in ['.png', '.svg'] and 'plot' in file_path.lower():
-            return 'plot'
+            return "audio"
+        elif Path(file_path).suffix.lower() == ".html":
+            return "html"
+        elif (
+            Path(file_path).suffix.lower() in [".png", ".svg"]
+            and "plot" in file_path.lower()
+        ):
+            return "plot"
         else:
-            return 'unknown'
+            return "unknown"
 
     @staticmethod
-    def create_media_attachment(file_path: str, caption: str = None, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
+    def create_media_attachment(
+        file_path: str,
+        caption: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Create a media attachment dictionary for rich content.
 
@@ -655,10 +787,7 @@ class FileUtils:
             Dict with media attachment information
         """
         if not FileUtils.file_exists(file_path):
-            return {
-                "type": "error",
-                "error": f"File not found: {file_path}"
-            }
+            return {"type": "error", "error": f"File not found: {file_path}"}
 
         file_info = FileUtils.get_file_info(file_path)
         media_type = FileUtils.detect_media_type(file_path)
@@ -669,7 +798,7 @@ class FileUtils:
             "media_type": media_type,
             "file_path": file_path,
             "mime_type": mime_type,
-            "file_info": file_info.dict() if file_info else None
+            "file_info": file_info.dict() if file_info else None,
         }
 
         if caption:
@@ -681,8 +810,12 @@ class FileUtils:
         return attachment
 
     @staticmethod
-    def add_media_to_response(tool_response: Dict[str, Any], file_path: str, 
-                            caption: str = None, metadata: Dict[str, Any] = None) -> Dict[str, Any]:
+    def add_media_to_response(
+        tool_response: dict[str, Any],
+        file_path: str,
+        caption: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Add media attachment to an existing tool response.
 
@@ -698,13 +831,17 @@ class FileUtils:
         if "media_attachments" not in tool_response:
             tool_response["media_attachments"] = []
 
-        media_attachment = FileUtils.create_media_attachment(file_path, caption, metadata)
+        media_attachment = FileUtils.create_media_attachment(
+            file_path, caption, metadata
+        )
         tool_response["media_attachments"].append(media_attachment)
 
         return tool_response
 
     @staticmethod
-    def extract_media_from_response(tool_response: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def extract_media_from_response(
+        tool_response: dict[str, Any],
+    ) -> list[dict[str, Any]]:
         """
         Extract media attachments from a tool response.
 
@@ -723,7 +860,9 @@ class FileUtils:
             result = tool_response["result"]
             for key, value in result.items():
                 if isinstance(value, str) and FileUtils.file_exists(value):
-                    media_attachment = FileUtils.create_media_attachment(value, f"File: {key}")
+                    media_attachment = FileUtils.create_media_attachment(
+                        value, f"File: {key}"
+                    )
                     media_attachments.append(media_attachment)
 
         return media_attachments
@@ -733,20 +872,20 @@ class FileUtils:
         """Check if string contains base64 image data."""
         import base64
 
-        if data.startswith('data:image/'):
+        if data.startswith("data:image/"):
             return True
 
         if len(data) > 100:
             try:
-                clean_data = ''.join(data.split())
+                clean_data = "".join(data.split())
                 decoded = base64.b64decode(clean_data)
                 image_magic = [
-                    b'\x89PNG\r\n\x1a\n',
-                    b'\xff\xd8\xff',
-                    b'GIF87a',
-                    b'GIF89a',
-                    b'RIFF',
-                    b'BM'
+                    b"\x89PNG\r\n\x1a\n",
+                    b"\xff\xd8\xff",
+                    b"GIF87a",
+                    b"GIF89a",
+                    b"RIFF",
+                    b"BM",
                 ]
                 return any(decoded.startswith(magic) for magic in image_magic)
             except:
@@ -755,8 +894,12 @@ class FileUtils:
         return False
 
     @staticmethod
-    def save_base64_to_file(base64_data: str, output_path: str = None, 
-                          file_extension: str = None, session_id: str = None) -> str:
+    def save_base64_to_file(
+        base64_data: str,
+        output_path: str | None = None,
+        file_extension: str | None = None,
+        session_id: str | None = None,
+    ) -> str:
         """
         Save base64 data to a file.
 
@@ -770,20 +913,19 @@ class FileUtils:
             Path to the saved file
         """
         import base64
+        from datetime import datetime
         import tempfile
         import uuid
-        import mimetypes
-        from datetime import datetime
 
-        if base64_data.startswith('data:'):
-            header, data = base64_data.split(',', 1)
-            mime_type = header.split(':')[1].split(';')[0]
+        if base64_data.startswith("data:"):
+            header, data = base64_data.split(",", 1)
+            mime_type = header.split(":")[1].split(";")[0]
             if not file_extension:
-                file_extension = mimetypes.guess_extension(mime_type) or '.bin'
+                file_extension = mimetypes.guess_extension(mime_type) or ".bin"
         else:
             data = base64_data
             if not file_extension:
-                file_extension = '.bin'
+                file_extension = ".bin"
 
         if not output_path:
             if session_id:
@@ -798,12 +940,52 @@ class FileUtils:
                 os.close(temp_fd)
 
         decoded_data = base64.b64decode(data)
-        with open(output_path, 'wb') as f:
+        with open(output_path, "wb") as f:
             f.write(decoded_data)
         return output_path
 
     @staticmethod
-    def create_gallery_attachment(image_paths: List[str], captions: List[str] = None) -> Dict[str, Any]:
+    def b64_to_temp_file(
+        b64: str, suffix: str, context: str = ""
+    ) -> tuple[str, str | None]:
+        """
+        Decode base64 string and write to a temporary file using mkstemp.
+
+        Returns (temp_file_path, None) on success or ("", error_message) on failure.
+        Matches the exact contract and behavior of the previous b64_to_temp_* functions
+        from platform_record_document/image (DRY extraction).
+
+        The 'context' param customizes the error message (e.g. "document", "image").
+        Used by media record tools and tests. Temp files are NOT auto-cleaned here;
+        callers (tools) handle unlink on error or register with agent.
+        """
+        if not isinstance(b64, str) or not b64.strip():
+            ctx = context or "content"
+            return "", f"Invalid base64 {ctx}: empty or non-string input"
+
+        try:
+            data = base64.b64decode(b64, validate=False)
+        except (binascii.Error, ValueError) as e:
+            ctx = context or "content"
+            return "", f"Invalid base64 {ctx}: {e!s}"
+
+        suf = (
+            suffix
+            if isinstance(suffix, str) and suffix.startswith(".")
+            else f".{suffix or 'bin'}"
+        )
+        try:
+            fd, path = tempfile.mkstemp(suffix=suf)
+            with open(fd, "wb") as f:  # exact match to original platform impl
+                f.write(data)
+            return path, None
+        except OSError as e:
+            return "", str(e)
+
+    @staticmethod
+    def create_gallery_attachment(
+        image_paths: list[str], captions: list[str] | None = None
+    ) -> dict[str, Any]:
         """
         Create a gallery attachment for multiple images.
 
@@ -822,7 +1004,7 @@ class FileUtils:
             if FileUtils.file_exists(path) and FileUtils.is_image_file(path):
                 image_info = {
                     "path": path,
-                    "caption": captions[i] if captions and i < len(captions) else None
+                    "caption": captions[i] if captions and i < len(captions) else None,
                 }
                 valid_images.append(image_info)
 
@@ -833,5 +1015,5 @@ class FileUtils:
             "type": "gallery_attachment",
             "media_type": "gallery",
             "images": valid_images,
-            "count": len(valid_images)
+            "count": len(valid_images),
         }
