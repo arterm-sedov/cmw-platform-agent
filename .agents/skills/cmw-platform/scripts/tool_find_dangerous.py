@@ -114,20 +114,20 @@ def main():
         verified_aliases = set()
         for f in output_dir.glob(f"{args.app}_*_verified.json"):
             try:
-                with open(f) as fp:
+                with open(f, encoding="utf-8") as fp:
                     data = json.load(fp)
                 for v in data.get("verified", []):
                     alias = v.get("alias", v.get("aliasOriginal", ""))
                     if alias:
                         verified_aliases.add(alias)
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 continue
 
         if not verified_aliases:
             print("Error: No verified aliases found. Run Steps 1-3 first.")
             return 1
     else:
-        with open(verified_file) as f:
+        with open(verified_file, encoding="utf-8") as f:
             verified_data = json.load(f)
 
         # Handle both formats

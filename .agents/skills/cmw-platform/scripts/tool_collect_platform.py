@@ -97,11 +97,11 @@ def main():
     aliases_files = list(output_dir.glob(f"{args.app}_*_aliases.json"))
     for af in aliases_files:
         try:
-            with open(af) as f:
+            with open(af, encoding="utf-8") as f:
                 data = json.load(f)
             for obj in data.get("aliases", []):
                 unique_types.add(obj["type"])
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             continue
 
     types_list = sorted(unique_types)

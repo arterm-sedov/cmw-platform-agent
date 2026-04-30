@@ -89,7 +89,7 @@ def main():
         print("Run Step 2 first: python tool_collect_platform.py --app " + args.app)
         return 1
 
-    with open(cache_file) as f:
+    with open(cache_file, encoding="utf-8") as f:
         cache_data = json.load(f)
 
     cache = cache_data.get("cache", {})
@@ -100,7 +100,7 @@ def main():
         print(f"Run Step 1 first: python tool_extract_aliases.py --app {args.app}")
         return 1
 
-    with open(aliases_file) as f:
+    with open(aliases_file, encoding="utf-8") as f:
         aliases_data = json.load(f)
 
     output_file = output_dir / f"{args.app}_{args.folder}_verified.json"
@@ -109,7 +109,7 @@ def main():
 
     if output_file.exists():
         try:
-            with open(output_file) as f:
+            with open(output_file, encoding="utf-8") as f:
                 existing = json.load(f)
             if existing.get("folder") == args.folder and existing.get("verified"):
                 print(f"Already verified: {len(existing['verified'])} verified, {len(existing.get('skipped', []))} skipped")

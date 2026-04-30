@@ -62,7 +62,7 @@ def main():
 
     for vf in verified_files:
         try:
-            with open(vf) as f:
+            with open(vf, encoding="utf-8") as f:
                 data = json.load(f)
             folder = data.get("folder", vf.stem.replace(f"{args.app}_", "").replace("_verified", ""))
             print(f"  {folder}: {data.get('verified_count', 0)} verified, {data.get('skipped_count', 0)} skipped")
@@ -78,7 +78,7 @@ def main():
 
     if dangerous_file.exists():
         try:
-            with open(dangerous_file) as f:
+            with open(dangerous_file, encoding="utf-8") as f:
                 dangerous_data = json.load(f)
             dangerous = set(dangerous_data.get("dangerous_aliases", []))
             # Load expressions
