@@ -364,12 +364,18 @@ python .agents/skills/cmw-platform/scripts/update_csv.py \
 
 ```
 Application/
-├── RecordTemplates/     # Business entities (Attributes/, Forms/, Datasets/, UserCommands/, Toolbars/)
-├── WidgetConfigs/       # Dashboard widgets
-├── Workspaces/          # Role workspaces
-├── Roles/               # Role configurations
-├── Routes/              # Communication routes
-└── Pages/               # Pages
+├── RecordTemplates/          # Business entities
+│   └── TemplateName/         # One folder per template
+│       ├── Attributes/       # Field definitions
+│       ├── Forms/            # UI forms
+│       ├── Datasets/         # List views
+│       ├── UserCommands/     # Actions (Create, Edit, etc.)
+│       └── Toolbars/         # Button bars
+├── WidgetConfigs/            # Dashboard widgets
+├── Workspaces/               # Role workspaces
+├── Roles/                    # Role configurations
+├── Routes/                   # Communication routes
+└── Pages/                    # Pages
 ```
 
 ### CSV Format
