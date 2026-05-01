@@ -904,6 +904,102 @@ agent-browser open $env:CMW_BASE_URL
 from tools.browser_tools import navigate_to_page, click_element, take_screenshot
 ```
 
+## Browser Script Utilities
+
+### When to use this script
+
+Use `browser_session_util.py` only for session management tasks:
+
+- list saved browser sessions
+- save a named session manually
+- load a named session manually
+- clean up stale sessions
+
+For actual browser automation:
+
+- use MCP browser tools inside agent workflows
+- use `agent-browser` or `playwright-cli` directly for standalone scripts
+
+Do **not** treat `browser_session_util.py` as the main automation interface.
+
+### browser_session_util.py
+
+Location: `.agents/skills/cmw-platform/scripts/browser/browser_session_util.py`
+
+Purpose: manage saved browser sessions (`list`, `save`, `load`, `cleanup`).
+
+**Usage:**
+
+```bash
+python browser_session_util.py list
+python browser_session_util.py save --session-name my-session
+python browser_session_util.py load --session-name my-session
+python browser_session_util.py cleanup --session-name my-session
+```
+
+### Example workflow
+
+```bash
+# 1. Login using agent-browser directly
+agent-browser --session-name cmw-test open "https://platform.example.com/"
+agent-browser --session-name cmw-test wait --load networkidle
+agent-browser --session-name cmw-test find label "Email" fill "user@example.com"
+agent-browser --session-name cmw-test find label "Password" fill "password"
+agent-browser --session-name cmw-test find role button click --name "Log in"
+
+# 2. Navigate to admin page
+agent-browser --session-name cmw-test open "#Settings/Administration"
+agent-browser --session-name cmw-test wait --text "Administration"
+agent-browser --session-name cmw-test snapshot -i
+
+# 3. Session state is auto-saved with --session-name
+# 4. Inspect sessions with the utility
+python browser_session_util.py list
+
+# 5. Cleanup when done
+python browser_session_util.py cleanup --session-name cmw-test
+```
+
+### Direct agent-browser usage pattern
+
+```bash
+# Login pattern
+agent-browser --session-name <session> open "<base_url>"
+agent-browser --session-name <session> wait --load networkidle
+agent-browser --session-name <session> snapshot -i
+agent-browser --session-name <session> fill @e8 "<username>"
+agent-browser --session-name <session> fill @e9 "<password>"
+agent-browser --session-name <session> click @e2
+
+# Navigation pattern (CMW Platform URLs)
+agent-browser --session-name <session> open "#Settings/Administration"
+agent-browser --session-name <session> wait --load networkidle
+agent-browser --session-name <session> wait --text "Administration"
+agent-browser --session-name <session> wait 2000
+agent-browser --session-name <session> snapshot -i
+agent-browser --session-name <session> screenshot
+```
+
+### Integration notes
+
+Browser tools may invoke `agent-browser` via subprocess. Relevant code paths:
+- `tools/browser_tools/tool_browser_login.py`
+- `tools/browser_tools/tool_browser_navigate.py`
+- `tools/browser_tools/browser_session_manager.py`
+
+### Requirements
+
+- `agent-browser` CLI installed (`npm i -g agent-browser`)
+- Chrome/Chromium installed
+- `.env` file with CMW Platform credentials for manual testing
+
+### Notes
+
+- Sessions are isolated by `--session-name`
+- State is auto-saved/restored with `--session-name`
+- Use `browser_session_util.py` for debugging and manual cleanup
+- For actual automation, prefer `agent-browser` CLI directly or the MCP tools above
+
 ---
 
 ## CMW Platform URL Patterns (SPA Hash Routing)

@@ -229,13 +229,9 @@ for tmpl in templates["data"][:5]:
 
 ### Utility Script
 
-For batch exploration, use:
-```bash
-python .agents/skills/cmw-platform/scripts/explore_templates.py \
-    --app <app_name> --templates Template1,Template2
-```
+For batch exploration, use `explore_templates.py`.
 
-→ See also: [references/workflow_sequences.md](references/workflow_sequences.md)
+→ See also: [references/workflow_sequences.md](references/workflow_sequences.md) — ready-made scripts and usage patterns.
 
 ---
 
@@ -299,11 +295,12 @@ def fetch_all(app_name: str, template: str, page_size: int = 100):
 
 ### Utility Scripts
 
-- **Paginated query with filters:** `query_with_filter.py`
-- **Statistical analysis:** `analyze_stats.py`
-- **Batch attribute editing:** `batch_edit_attributes.py`
+For script-backed data operations, use:
+- `query_with_filter.py`
+- `analyze_stats.py`
+- `batch_edit_attributes.py`
 
-→ See also: [references/workflow_sequences.md](references/workflow_sequences.md)
+→ See also: [references/workflow_sequences.md](references/workflow_sequences.md) — ready-made scripts, batch edit workflow, and usage examples.
 
 ---
 
@@ -669,13 +666,10 @@ def retry_with_backoff(func, payload, max_retries=3, delay=1):
 
 ### Diagnostic Script
 
-```bash
-python .agents/skills/cmw-platform/scripts/diagnose_connection.py
-```
+Use `diagnose_connection.py` to verify platform connectivity.
+Exit code `0` = pass, `1` = fail.
 
-Exit code 0 = pass, 1 = fail.
-
-→ See also: [references/errors.md](references/errors.md)
+→ See also: [references/errors.md](references/errors.md) — diagnostic command and recovery guidance.
 
 ---
 
