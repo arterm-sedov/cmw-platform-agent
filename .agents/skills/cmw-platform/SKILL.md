@@ -41,6 +41,12 @@ All four are configured in `~/.config/opencode/opencode.json`. Full guidance + d
 | card | card view | Card view for a table (not a form) |
 | task | task | User task |
 
+### Guiding Principles
+
+Persist Context. Read Before Write. Idempotent Operations. Explicit Over Implicit.
+
+→ See also: [references/principles.md](references/principles.md)
+
 ### Workflow
 
 Always follow: `Intent → Plan → Validate → Execute → Result`
@@ -77,6 +83,12 @@ if not result["success"]:
 print(result["data"])
 ```
 
+### Knowledge Base
+
+When uncertain about platform behavior, use the `cmw_platform_knowledge-base` MCP `get_knowledge_base_articles` tool. Never use `ask_comindware`.
+
+→ See also: [references/knowledge_base.md](references/knowledge_base.md)
+
 ### Response Structure
 
 ```python
@@ -87,6 +99,12 @@ print(result["data"])
     "error": str|dict      # Error details if success=False
 }
 ```
+
+### System Prompt Alignment
+
+For platform ops, `agent_ng/system_prompt.json` is PRIMARY (agentic behavior); `AGENTS.md` is SECONDARY (project work).
+
+→ See also: [references/system_prompt_alignment.md](references/system_prompt_alignment.md)
 
 ### Save Before Edit
 
@@ -102,6 +120,7 @@ cp Step2_Schema_GET_AFTER.json cmw-platform-workspace/Step2_Schema_AFTER.json
 This is NOT optional. Violating this rule has caused data loss before.
 
 → See also: [references/tool_inventory.md](references/tool_inventory.md), [references/api_endpoints.md](references/api_endpoints.md)
+→ See also: [references/working_files.md](references/working_files.md) for the fetch-and-save pattern + file naming convention.
 
 ---
 
@@ -731,7 +750,7 @@ def fetch_all(app_name: str, template: str, page_size: int = 100):
 
 ---
 
-## 3.5. Import/Export Applications
+## 5. Import/Export Applications
 
 ### Export Application
 
@@ -776,7 +795,7 @@ result = import_application.invoke({
 
 ---
 
-## 4. UI Components
+## 6. UI Components
 
 Datasets, Toolbars, and Buttons are **separate API entities** with different endpoints:
 
@@ -820,6 +839,8 @@ edit_or_create_toolbar.invoke({
 
 **⚠️ Dataset-Specific Toolbars:** If a dataset shares a toolbar with other datasets, editing that toolbar affects ALL linked datasets. Create a NEW toolbar for dataset-specific buttons.
 
+→ See also: [references/workflow_sequences.md](references/workflow_sequences.md#dataset-specific-toolbars-3-step-workflow)
+
 ### List and Edit Buttons
 
 ```python
@@ -841,6 +862,8 @@ edit_or_create_button.invoke({
 ```
 
 **⚠️ Toolbar Item Names Override Button Names:** Toolbar items have their own `name` field that overrides the button's display name.
+
+→ See also: [references/workflow_sequences.md](references/workflow_sequences.md#toolbar-item-names-override-button-names)
 
 ### Create-Kind Buttons
 
@@ -1017,7 +1040,7 @@ edit_or_create_form.invoke({
 
 ---
 
-## 6. Localization (System Names)
+## 7. Localization (System Names)
 
 Localization workflow for renaming system names (aliases) in Comindware Platform applications. This is a **multi-step interactive process** requiring user confirmation at each phase.
 
@@ -1486,7 +1509,7 @@ python .agents/skills/cmw-platform/scripts/tool_finalize.py --app Volga \
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 ### Error Handling
 
@@ -1515,13 +1538,7 @@ def retry_with_backoff(func, payload, max_retries=3, delay=1):
 
 ### Safe Attribute Translation
 
-The edit_or_create tools have **smart partial update support**:
-
-| Operation | Behavior | Mechanism |
-|-----------|----------|----------|
-| **Create** | Requires ALL type-specific fields | Model validator raises error if missing |
-| **Edit - partial** | Missing fields fetched from API and merged | `tool_utils.py` patch fills gaps |
-| **Edit - explicit** | Provided fields override existing values | User intent respected |
+→ See also: [references/edit_or_create.md](references/edit_or_create.md) — required fields per type, per-tool validation rules, and partial-update mechanics.
 
 ### Diagnostic Script
 
@@ -1539,6 +1556,11 @@ Exit code 0 = pass, 1 = fail.
 
 | Document | Purpose |
 |---------|---------|
+| [references/principles.md](references/principles.md) | Guiding principles for all platform work |
+| [references/working_files.md](references/working_files.md) | Fetch-and-save pattern + workspace file naming |
+| [references/edit_or_create.md](references/edit_or_create.md) | `edit_or_create_*` validation, required fields, partial updates |
+| [references/knowledge_base.md](references/knowledge_base.md) | `get_knowledge_base_articles` MCP usage |
+| [references/system_prompt_alignment.md](references/system_prompt_alignment.md) | `system_prompt.json` vs `AGENTS.md` precedence |
 | [references/tool_inventory.md](references/tool_inventory.md) | Complete tool catalog with signatures |
 | [references/api_endpoints.md](references/api_endpoints.md) | HTTP endpoint reference |
 | [references/errors.md](references/errors.md) | Error handling playbook |
@@ -1551,8 +1573,4 @@ Exit code 0 = pass, 1 = fail.
 
 ---
 
-<<<<<<< HEAD
-*End of SKILL.md - Updated 2026-04-29 with localization workflow fixes*
-=======
-*End of SKILL.md - Updated 2026-04-27 with import/export application tools, unified browser automation guidance, and localization workflow updates*
->>>>>>> 8ad0b47587a708b13f67d95d8a6091138df87915
+*End of SKILL.md — Updated with relocated content references*

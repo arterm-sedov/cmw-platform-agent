@@ -56,6 +56,17 @@ from tools.<category>.<tool_file> import <tool_function>
   - `record_id` (optional): Required for edit operation
 - **Returns:** `{"success": bool, "record_id": str|None, "error": str|None}`
 
+### archive_unarchive_button
+- **Import:** `from tools.templates_tools.tools_button import archive_unarchive_button`
+- **Signature:** `archive_unarchive_button.invoke({...})`
+- **Parameters:**
+  - `operation` (required): `"archive"` or `"unarchive"`
+  - `application_system_name` (required): App system name
+  - `template_system_name` (required): Template system name
+  - `button_system_name` (required): Button system name
+- **Returns:** `{"success": bool, "status_code": int, "data": dict, "error": str|dict}`
+- **Note:** Only use on non-system buttons. System buttons (`create`, `edit`, `archive`, `delete`, `unarchive`) should not be archived.
+
 ## Attributes Tools
 
 Attribute tools are organized by type. Pattern:
@@ -125,3 +136,16 @@ result = list_template_records.invoke({"offset": 100, "limit": 100})
   - `ctf_file_path` (optional): Path to .ctf file (takes precedence over ctf_data)
 - **Returns:** `{"success": bool, "file_id": str, "validation_errors": list|null}`
 - **Note:** Import is a 2-step process (upload + execute). Use ctf_file_path for simplicity.
+
+## Knowledge Base Tools
+
+### get_knowledge_base_articles
+- **Server:** `cmw_platform_knowledge-base` MCP
+- **Signature:** `get_knowledge_base_articles.invoke({"query": str, "top_k": int})`
+- **Parameters:**
+  - `query` (required): Natural language search query about platform behavior
+  - `top_k` (optional): Number of articles to return (default: 5)
+- **Returns:** List of relevant documentation articles with titles and content
+- **Use when:** Uncertain about attribute types, API behavior, or platform best practices
+
+→ Full guidance and anti-patterns: [knowledge_base.md](knowledge_base.md)

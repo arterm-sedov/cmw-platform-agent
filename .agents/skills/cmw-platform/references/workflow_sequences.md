@@ -207,6 +207,8 @@ edit_or_create_numeric_attribute.invoke({
 | Edit - explicit None | None | Stripped → patch fills → **preserved** |
 | Create - missing | N/A | Validator error → **rejected** |
 
+→ Full validation rules, required fields per type, and System Buttons warning: [edit_or_create.md](edit_or_create.md)
+
 ## Ready-Made Scripts
 
 These scripts are in `scripts/` directory and can be run directly:
@@ -256,3 +258,147 @@ Any attribute field can be included. Fields not provided are preserved.
 ```
 
 Supported types: String, Text, Decimal, Enum, Record, DateTime, Document, Image, Duration, Account.
+
+## 8. Dataset-Specific Toolbars (3-step workflow)
+
+If a dataset shares a toolbar with other datasets, editing that toolbar will affect ALL linked datasets.
+To have buttons specific to ONE dataset only, create a dedicated toolbar and link it:
+
+```python
+from tools.templates_tools.tools_toolbar import edit_or_create_toolbar
+from tools.templates_tools.tools_dataset import edit_or_create_dataset
+
+# Step 1: Create toolbar
+edit_or_create_toolbar.invoke({
+    "operation": "create",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "toolbar_system_name": "<toolbar>",
+    "name": "<Name>"
+})
+
+# Step 2: Add items to toolbar
+edit_or_create_toolbar.invoke({
+    "operation": "edit",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "toolbar_system_name": "<toolbar>",
+    "items": [
+        {"button_system_name": "<button>", "display_name": "<Label>", "item_order": 0},
+    ]
+})
+
+# Step 3: Link toolbar to dataset
+edit_or_create_dataset.invoke({
+    "operation": "edit",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "dataset_system_name": "<dataset>",
+    "toolbar_system_name": "<toolbar>"
+})
+```
+
+## 9. Toolbar Item Names Override Button Names
+
+Toolbar items have their own `name` field that **overrides** the button's display name.
+To change a button's label as shown in a toolbar, edit the toolbar item — not the button.
+
+```python
+# WRONG: Editing button name won't affect toolbar display
+edit_or_create_button.invoke({
+    "operation": "edit",
+    "button_system_name": "<button>",
+    "name": "<Label>"
+})
+
+# CORRECT: Update the toolbar item's display_name
+edit_or_create_toolbar.invoke({
+    "operation": "edit",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "toolbar_system_name": "<toolbar>",
+    "items": [
+        {"button_system_name": "<button>", "display_name": "<Label>", "item_order": 0}
+    ]
+})
+```
+
+## 10. Archive / Unarchive Button
+
+```python
+from tools.templates_tools.tools_button import archive_unarchive_button
+
+# Archive a button
+archive_unarchive_button.invoke({
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "button_system_name": "<button>",
+    "operation": "archive"
+})
+
+# Unarchive a button
+archive_unarchive_button.invoke({
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "button_system_name": "<button>",
+    "operation": "unarchive"
+})
+```
+
+**⚠️ Do not archive system buttons** (`create`, `edit`, `archive`, `delete`, `unarchive`).
+
+## 11. Dataset Advanced Options
+
+### Column Edit Operations
+
+```python
+edit_or_create_dataset.invoke({
+    "operation": "edit",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "dataset_system_name": "<dataset>",
+    "columns": {
+        "<column>": {"Name": "<New Label>"},               # rename existing column
+        "<columnToHide>": {"isHidden": True},              # hide column from UI
+        "<columnToDelete>": {"_delete": True},             # delete column (also: null)
+        "<newColumn>": {                                    # add new column
+            "Name": "<Label>",
+            "propertyPath": [{"type": "Attribute", "owner": "<template>", "alias": "<attribute>"}]
+        }
+    }
+})
+```
+
+### Sorting and Grouping Options
+
+```python
+edit_or_create_dataset.invoke({
+    "operation": "edit",
+    "application_system_name": "<app>",
+    "template_system_name": "<template>",
+    "dataset_system_name": "<dataset>",
+    "is_default": True,            # set as default dataset
+    "show_disabled": False,        # hide disabled records
+    "sorting": [
+        {"propertyPath": [...], "direction": "Asc", "nullValuesOnTop": False}
+    ],
+    "grouping": [
+        {
+            "propertyPath": [...],
+            "name": "<GroupName>",
+            "direction": "Asc",
+            "level": 1,
+            "fields": [
+                {
+                    "propertyPath": [...],
+                    "aggregationMethod": "Count",  # Count|Sum|Min|Max|Avg
+                    "type": "Number",              # String|Number|Boolean|Record
+                    "format": "Undefined"
+                }
+            ]
+        }
+    ]
+})
+```
+
+**Note:** Add `fields` with `aggregationMethod` to enable totals/summary rows in grouping views.
