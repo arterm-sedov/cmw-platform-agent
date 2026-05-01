@@ -306,46 +306,13 @@ For script-backed data operations, use:
 
 ## 5. Import/Export Applications
 
-### Export Application
+Use import/export when you need to move an entire application in CTF form.
 
-Export an entire application (templates, attributes, workflows) to CTF format:
+- **Export** — create a CTF package for a full application
+- **Import** — upload and apply a CTF package to create or update an application
 
-```python
-from tools.transfer_tools.tool_export_application import export_application
-
-result = export_application.invoke({
-    "application_system_name": "my_app",
-    "save_to_file": True  # Saves .ctf file to /tmp/cmw-transfer/
-})
-if result["success"]:
-    print(f"CTF saved to: {result['ctf_file_path']}")
-    print(f"CTF data: {len(result['ctf_data'])} chars")
-```
-
-### Import Application
-
-Import an application from CTF format. The import is a 2-step process (upload + execute):
-
-```python
-from tools.transfer_tools.tool_import_application import import_application
-
-# Option 1: From exported CTF file path
-result = import_application.invoke({
-    "application_system_name": "new_app_name",
-    "ctf_file_path": "/tmp/cmw-transfer/my_app_abc123.ctf"
-})
-
-# Option 2: From Base64 CTF data directly
-result = import_application.invoke({
-    "application_system_name": "new_app_name",
-    "ctf_data": "SQBDA...<base64>..."
-})
-```
-
-**API Endpoints:**
-- Export: `GET /webapi/Transfer/{solutionAlias}`
-- Upload: `POST /webapi/Transfer/Upload`
-- Import: `POST /webapi/Transfer/{solutionAlias}/{fileId}/true/ApplyNew`
+→ See also: [references/import_export.md](references/import_export.md)
+→ See also: [references/api_endpoints.md](references/api_endpoints.md)
 
 ---
 
@@ -359,277 +326,34 @@ Datasets, Toolbars, and Buttons are **separate API entities** with different end
 | Toolbar | `get_toolbar` | `edit_or_create_toolbar` |
 | Button | `get_button` | `edit_or_create_button` |
 
-### List and Edit Toolbars
+Keep these core rules in mind:
+- **Create-kind buttons** require `create_form`
+- **Toolbar item names** override button display names
+- **Dataset-specific toolbars** should not be shared blindly across datasets
+- **Verify UI component edits via API**, not only via the UI, because the UI may cache stale state
 
-```python
-from tools.templates_tools.tools_toolbar import list_toolbars, get_toolbar, edit_or_create_toolbar
-
-toolbars = list_toolbars.invoke({
-    "application_system_name": "<app>",
-    "template_system_name": "<template>"
-})
-for tb in toolbars["data"]:
-    print(f"{tb['globalAlias']['alias']}: {tb['name']}")
-
-toolbar = get_toolbar.invoke({
-    "application_system_name": "<app>",
-    "template_system_name": "<template>",
-    "toolbar_system_name": "<toolbar>"
-})
-for item in toolbar.get("items", []):
-    print(f"  - {item['name']} ({item['action']['alias']})")
-
-edit_or_create_toolbar.invoke({
-    "operation": "edit",
-    "application_system_name": "<app>",
-    "template_system_name": "<template>",
-    "toolbar_system_name": "<toolbar>",
-    "name": "<New Name>",
-    "items": [
-        {"button_system_name": "create", "display_name": "<Label>", "item_order": 0},
-    ]
-})
-```
-
-**⚠️ Dataset-Specific Toolbars:** If a dataset shares a toolbar with other datasets, editing that toolbar affects ALL linked datasets. Create a NEW toolbar for dataset-specific buttons.
-
-→ See also: [references/workflow_sequences.md](references/workflow_sequences.md#8-dataset-specific-toolbars-3-step-workflow)
-
-### List and Edit Buttons
-
-```python
-from tools.templates_tools.tools_button import list_buttons, edit_or_create_button
-
-buttons = list_buttons.invoke({
-    "application_system_name": "<app>",
-    "template_system_name": "<template>"
-})
-
-edit_or_create_button.invoke({
-    "operation": "edit",
-    "application_system_name": "<app>",
-    "template_system_name": "<template>",
-    "button_system_name": "<button>",
-    "name": "<Name>",
-    "description": "<Description>"
-})
-```
-
-**⚠️ Toolbar Item Names Override Button Names:** Toolbar items have their own `name` field that overrides the button's display name.
-
-→ See also: [references/workflow_sequences.md](references/workflow_sequences.md#9-toolbar-item-names-override-button-names)
-
-### Create-Kind Buttons
-
-For buttons with `kind='Create'`, you **MUST** specify `create_form` (and optionally `create_template`):
-
-```python
-edit_or_create_button.invoke({
-    "operation": "edit",
-    "application_system_name": "<app>",
-    "template_system_name": "<template>",
-    "button_system_name": "<button>",
-    "name": "Create New Record",
-    "kind": "Create",
-    "context": "Record",  # or "List" depending on where button appears
-    "create_form": "defaultForm",  # REQUIRED for Create buttons
-    "create_template": "<target_template>",  # Optional, defaults to current template
-})
-```
-
-**Key requirements:**
-- `create_form` is **mandatory** for `kind='Create'` buttons
-- `context` must match where the button appears (`"Record"` for record forms, `"List"` for list toolbars)
-- `create_template` defaults to the current template if omitted
-- The API builds `relatedAction.formGlobalAlias` from these parameters
-
-**⚠️ UI Cache Issue:** The platform UI may display stale context values (e.g., `#List` instead of `Record`) even after successful API updates. Always verify via `get_button` API call, not the UI. Hard refresh (Ctrl+F5) or clearing browser cache may be required to see correct values in the UI.
-
-### Button Kinds (Action Types)
-
-CMW Platform supports 29 button action types. The tool accepts LLM-friendly terms and maps them to API values.
-
-**Common Button Kinds:**
-
-| LLM Term | API Term | Description | Russian (RU) |
-|----------|----------|-------------|--------------|
-| Trigger scenario | UserEvent | Execute custom scenario (default) | Вызвать событие «Нажата кнопка» |
-| Create | Create | Create new record (requires `create_form`) | Создать |
-| Edit | Edit | Edit existing record | Редактировать |
-| Delete | Delete | Delete record | Удалить |
-| Archive | Archive | Archive record | Архивировать |
-| Unarchive | Unarchive | Restore archived record | Разархивировать |
-| Script | Script | Execute C# script | С# скрипт |
-
-**All 29 Valid Button Kinds:**
-
-| # | API Term | English | Russian (RU) |
-|---|----------|---------|--------------|
-| 1 | Undefined | No specific action | - |
-| 2 | Create | Create new record (requires `create_form`) | Создать |
-| 3 | Edit | Edit existing record | Редактировать |
-| 4 | Delete | Delete record | Удалить |
-| 5 | Archive | Archive record | Архивировать |
-| 6 | Unarchive | Restore archived record | Разархивировать |
-| 7 | ExportObject | Export single object | Экспорт записи |
-| 8 | ExportList | Export list of objects | Экспорт таблицы |
-| 9 | CreateRelated | Create related record | Создать связанную запись |
-| 10 | CreateToken | Create token | Создать токен |
-| 11 | RetryTokens | Retry tokens | Перезапустить токены |
-| 12 | Migrate | Migrate data | Мигрировать |
-| 13 | StartCase | Start case | - |
-| 14 | StartLinkedCase | Start linked case | - |
-| 15 | StartProcess | Start process | Запустить процесс |
-| 16 | StartLinkedProcess | Start linked process | Запустить процесс по связанному шаблону |
-| 17 | CompleteTask | Complete task | Завершить задачу |
-| 18 | ReassignTask | Reassign task | Переназначить |
-| 19 | Defer | Defer action | Отложить выполнение |
-| 20 | Accept | Accept action | Принять |
-| 21 | Uncomplete | Mark as incomplete | Открыть заново |
-| 22 | Follow | Follow record | Привязать к шаблону |
-| 23 | Unfollow | Unfollow record | Отвязать от шаблону |
-| 24 | Exclude | Exclude from list | - |
-| 25 | Include | Include in list | - |
-| 26 | Script | Execute C# script | С# скрипт |
-| 27 | Cancel | Cancel action | Остановить процесс |
-| 28 | EditDiagram | Edit diagram | - |
-| 29 | UserEvent | Execute custom scenario (use "Trigger scenario") | Вызвать событие «Нажата кнопка» |
-
-**Usage Examples:**
-
-```python
-# Default: Trigger custom scenario
-edit_or_create_button.invoke({
-    "operation": "create",
-    "application_system_name": "FacilityManagement",
-    "template_system_name": "MaintenancePlans",
-    "button_system_name": "run_maintenance_check",
-    "name": "Run Maintenance Check",
-    "kind": "Trigger scenario",  # Maps to UserEvent in API
-})
-
-# Explicit API term also works
-edit_or_create_button.invoke({
-    "operation": "create",
-    "kind": "UserEvent",  # Direct API term
-})
-
-# Other common kinds
-edit_or_create_button.invoke({
-    "operation": "create",
-    "kind": "Archive",  # Archive button
-})
-
-# Case-insensitive variants work
-edit_or_create_button.invoke({
-    "operation": "create",
-    "kind": "trigger_scenario",  # Snake_case → UserEvent
-})
-```
-
-**Validation:**
-- The validator is case-insensitive and handles variants like `trigger_scenario`, `TRIGGER SCENARIO`
-- Invalid kinds (e.g., "Test") are rejected with clear error messages
-- All 29 API enum values are validated
-
-**Edit Behavior:**
-- `kind` parameter is optional in edit operations
-- If omitted, the existing kind is preserved
-- If provided, the kind is updated (even if changing to UserEvent)
-- Always verify changes via `get_button` API, not just the UI (UI may cache stale values)
-
-### List and Edit Datasets
-
-```python
-from tools.templates_tools.tools_dataset import list_datasets, get_dataset, edit_or_create_dataset
-
-datasets = list_datasets.invoke({
-    "application_system_name": "<app>",
-    "template_system_name": "<template>"
-})
-
-edit_or_create_dataset.invoke({
-    "operation": "edit",
-    "application_system_name": "<app>",
-    "template_system_name": "<template>",
-    "dataset_system_name": "<dataset>",
-    "name": "<New Name>",
-    "toolbar_system_name": "<toolbar>",
-    "columns": {
-        "<column>": {"Name": "<New Label>"},
-        "<columnToHide>": {"isHidden": True},
-    }
-})
-```
-
-**Toolbar-Dataset Linking:**
-- Datasets link to toolbars via the `toolbar_system_name` parameter
-- Toolbars link back to datasets via `IsDefaultForLists` flag (set on the toolbar)
-- When a toolbar has `IsDefaultForLists: true`, it becomes the default for all datasets in that template
-- To make a toolbar dataset-specific, set `IsDefaultForLists: false` and link it explicitly via the dataset's `toolbar_system_name`
-
-### Edit Form Widgets
-
-```python
-from tools.templates_tools.tools_form import get_form, edit_or_create_form
-
-form = get_form.invoke({
-    "application_system_name": "<app>",
-    "template_system_name": "<template>",
-    "form_system_name": "<form>"
-})
-
-edit_or_create_form.invoke({
-    "operation": "edit",
-    "application_system_name": "<app>",
-    "template_system_name": "<template>",
-    "form_system_name": "<form>",
-    "widgets": [
-        {"system_name": "<widget>", "label": "<New Label>"},
-    ]
-})
-```
-
+→ See also: [references/ui_components.md](references/ui_components.md)
 → See also: [references/tool_inventory.md](references/tool_inventory.md)
+→ See also: [references/workflow_sequences.md](references/workflow_sequences.md)
 
 ---
 
 ## 7. Localization (System Names)
 
-System-name (alias) rename workflow for Comindware Platform applications. Keep this section as the decision and phase map; use the reference files for the full 9-phase procedure and for RU→EN UI text translation.
+This skill supports **two different localization workflows**:
 
-### Phase Overview
+- **System-name (alias) rename** — rename platform aliases safely, including dangerous-vs-safe suffix handling
+- **RU→EN UI text translation** — translate user-facing labels and strings without changing system aliases
 
-| Phase | Action | Show Table | User Confirm |
-|-------|--------|------------|--------------|
-| 1 | Export CTF (if not provided) | — | — |
-| 2 | Collect aliases from JSON, tag by object type | **Yes** | — |
-| 3 | Verify IDs via get_ontology_objects | **Yes** | — |
-| 4 | Analyze Expression fields, suggest suffixes | **Yes** | **Yes** |
-| 5 | Rename via update_object_property | **Yes** | **Yes** |
-| 6 | Ask user to restart platform | — | **Yes** |
-| 7 | Re-export CTF | — | — |
-| 8 | Replace dangerous aliases in JSON | **Yes** | — |
-| 9 | Import modified CTF | — | **Yes** |
+For alias rename, use:
+- `export_application`
+- `get_ontology_objects`
+- `update_object_property`
+- `.agents/skills/cmw-platform/scripts/tool_*.py` for large apps
 
-**Table columns:** `type`, `systemName`, `jsonPath`, `id`, `renamedSystemName`
+→ See also: [references/localization_workflow.md](references/localization_workflow.md) — full 9-phase alias rename workflow, phase map, suffix rules, key tools, `tool_localize`, and step scripts.
 
-**Suffix rules:** `dangerous` aliases used in expressions usually get `_calc`; `safe` aliases used only in alias fields usually get `_sv`.
-
-### Key Tools
-
-| Purpose | Tool / Reference |
-|---------|------------------|
-| Export / re-export CTF | `export_application` |
-| Verify aliases in platform | `get_ontology_objects` |
-| Apply alias rename in platform | `update_object_property` |
-| Full alias-rename procedure | [references/localization_workflow.md](references/localization_workflow.md) |
-| RU→EN UI text translation workflow | [references/localization.md](references/localization.md) |
-| Large-app batched scripts | `.agents/skills/cmw-platform/scripts/tool_*.py` |
-
-→ See also: [references/localization_workflow.md](references/localization_workflow.md) — full 9-phase alias rename workflow, type/predicate mappings, `tool_localize`, step scripts, and workspace outputs.
-
-→ See also: [references/localization.md](references/localization.md) — Russian→English UI text translation guide (different workflow from alias rename).
+→ See also: [references/localization.md](references/localization.md) — Russian→English UI text translation guide.
 
 ---
 
@@ -684,6 +408,8 @@ Exit code `0` = pass, `1` = fail.
 | [references/system_prompt_alignment.md](references/system_prompt_alignment.md) | `system_prompt.json` vs `AGENTS.md` precedence |
 | [references/tool_inventory.md](references/tool_inventory.md) | Complete tool catalog with signatures |
 | [references/api_endpoints.md](references/api_endpoints.md) | HTTP endpoint reference |
+| [references/import_export.md](references/import_export.md) | Full import/export application reference |
+| [references/ui_components.md](references/ui_components.md) | Full UI components reference: toolbars, buttons, datasets, forms |
 | [references/errors.md](references/errors.md) | Error handling playbook |
 | [references/workflow_sequences.md](references/workflow_sequences.md) | Reusable code patterns |
 | [references/localization_workflow.md](references/localization_workflow.md) | Full 9-phase system-name (alias) rename workflow |

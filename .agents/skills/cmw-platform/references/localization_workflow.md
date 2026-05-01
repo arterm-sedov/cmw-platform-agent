@@ -3,7 +3,33 @@
 Full 9-phase workflow for renaming system names (aliases) in Comindware Platform applications.
 This is a **multi-step interactive process** — the agent must show tables and wait for user confirmation at Phases 4, 5, 6, and 9.
 
-→ Phase overview and key tools: [../SKILL.md §7](../SKILL.md)
+## Phase Overview
+
+| Phase | Action | Show Table | User Confirm |
+|-------|--------|------------|--------------|
+| 1 | Export CTF (if not provided) | — | — |
+| 2 | Collect aliases from JSON, tag by object type | **Yes** | — |
+| 3 | Verify IDs via get_ontology_objects | **Yes** | — |
+| 4 | Analyze Expression fields, suggest suffixes | **Yes** | **Yes** |
+| 5 | Rename via update_object_property | **Yes** | **Yes** |
+| 6 | Ask user to restart platform | — | **Yes** |
+| 7 | Re-export CTF | — | — |
+| 8 | Replace dangerous aliases in JSON | **Yes** | — |
+| 9 | Import modified CTF | — | **Yes** |
+
+**Table columns:** `type`, `systemName`, `jsonPath`, `id`, `renamedSystemName`
+
+**Suffix rules:** `dangerous` aliases used in expressions usually get `_calc`; `safe` aliases used only in alias fields usually get `_sv`.
+
+## Key Tools
+
+| Purpose | Tool / Reference |
+|---------|------------------|
+| Export / re-export CTF | `export_application` |
+| Verify aliases in platform | `get_ontology_objects` |
+| Apply alias rename in platform | `update_object_property` |
+| RU→EN UI text translation workflow | [localization.md](localization.md) |
+| Large-app batched scripts | `.agents/skills/cmw-platform/scripts/tool_*.py` |
 
 ---
 
