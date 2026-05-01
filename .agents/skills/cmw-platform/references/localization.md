@@ -232,6 +232,7 @@ Function: `localize_aliases`
 ```python
 from tools.localization_tools.tool_localize import localize_aliases
 
+# Collect both aliases and display names (default)
 result = localize_aliases.invoke({
     "application_system_name": "MyApp",
     "json_folder": "/path/to/ctf",
@@ -239,11 +240,45 @@ result = localize_aliases.invoke({
     "collect_display_names": True,
     "dry_run": True,
 })
-# Returns: aliases_collected, display_names_collected, aliases_verified,
-#          aliases_missing, dangerous_aliases, safe_aliases, errors
+
+# Aliases only
+result = localize_aliases.invoke({
+    "application_system_name": "MyApp",
+    "json_folder": "/path/to/ctf",
+    "collect_aliases": True,
+    "collect_display_names": False,
+})
+
+# Display names only
+result = localize_aliases.invoke({
+    "application_system_name": "MyApp",
+    "json_folder": "/path/to/ctf",
+    "collect_aliases": False,
+    "collect_display_names": True,
+})
 ```
 
-**Note:** Display names are applied via CTF import (Phase 9), not via API — they are not verified against the platform API.
+**Return structure:**
+
+```python
+{
+    "success": bool,
+    "aliases_collected": int,
+    "display_names_collected": int,
+    "aliases_verified": int,
+    "aliases_missing": list,     # aliases not found in platform
+    "dangerous_aliases": list,   # aliases used in expressions
+    "safe_aliases": list,        # aliases only in alias fields
+    "collect_aliases": bool,
+    "collect_display_names": bool,
+    "errors": list,
+}
+```
+
+**Important:**
+- Both alias and displayName collection are **optional and independent** — run one without the other as needed
+- Aliases are applied via API (Phase 5)
+- DisplayNames are applied via CTF import (Phase 9) and are NOT verified against the platform API
 
 ### Step Scripts — Large Application Workflow
 
@@ -285,12 +320,23 @@ python .agents/skills/cmw-platform/scripts/tool_finalize.py \
 
 ```json
 {
-  "type": "RecordTemplate", "ids": ["container.42"],
+  "type": "RecordTemplate",
+  "ids": ["container.42"],
   "parent_template": "Sotrudniki",
-  "aliasOriginal": "SomeAlias", "aliasRenamed": "",
-  "displayNameOriginal": "Some Display Name", "displayNameRenamed": "",
+  "aliasOriginal": "SomeAlias",
+  "aliasRenamed": "",
+  "displayNameOriginal": "Some Display Name",
+  "displayNameRenamed": "",
   "jsonPathOriginal": ["Volga/RecordTemplates/Sotrudniki/SomeAlias.json"],
-  "expressions": [{"jsonPathOriginal": "...", "expressionOriginal": "COUNT(from a in $SomeAlias ...)"}],
+  "jsonPathRenamed": [],
+  "expressions": [
+    {
+      "jsonPathOriginal": "Volga/RecordTemplates/Sotrudniki/Attributes/Count.json#Expression",
+      "jsonPathRenamed": "",
+      "expressionOriginal": "COUNT(from a in $SomeAlias where ...)",
+      "expressionRenamed": ""
+    }
+  ],
   "aliasLocked": false
 }
 ```
