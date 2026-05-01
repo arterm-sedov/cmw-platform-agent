@@ -839,7 +839,7 @@ edit_or_create_toolbar.invoke({
 
 **⚠️ Dataset-Specific Toolbars:** If a dataset shares a toolbar with other datasets, editing that toolbar affects ALL linked datasets. Create a NEW toolbar for dataset-specific buttons.
 
-→ See also: [references/workflow_sequences.md](references/workflow_sequences.md#dataset-specific-toolbars-3-step-workflow)
+→ See also: [references/workflow_sequences.md](references/workflow_sequences.md#8-dataset-specific-toolbars-3-step-workflow)
 
 ### List and Edit Buttons
 
@@ -863,7 +863,7 @@ edit_or_create_button.invoke({
 
 **⚠️ Toolbar Item Names Override Button Names:** Toolbar items have their own `name` field that overrides the button's display name.
 
-→ See also: [references/workflow_sequences.md](references/workflow_sequences.md#toolbar-item-names-override-button-names)
+→ See also: [references/workflow_sequences.md](references/workflow_sequences.md#9-toolbar-item-names-override-button-names)
 
 ### Create-Kind Buttons
 
