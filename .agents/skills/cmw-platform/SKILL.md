@@ -340,20 +340,14 @@ Keep these core rules in mind:
 
 ## 7. Localization (System Names)
 
-This skill supports **two different localization workflows**:
+Two distinct workflows — choose before starting:
 
-- **System-name (alias) rename** — rename platform aliases safely, including dangerous-vs-safe suffix handling
-- **RU→EN UI text translation** — translate user-facing labels and strings without changing system aliases
+| Goal | Workflow |
+|------|----------|
+| Rename system names / aliases | **Workflow A** — 9-phase process with platform restart and CTF round-trip |
+| Translate Russian UI strings to English | **Workflow B** — harvest → translate → apply → CSV |
 
-For alias rename, use:
-- `export_application`
-- `get_ontology_objects`
-- `update_object_property`
-- `.agents/skills/cmw-platform/scripts/tool_*.py` for large apps
-
-→ See also: [references/localization_workflow.md](references/localization_workflow.md) — full 9-phase alias rename workflow, phase map, suffix rules, key tools, `tool_localize`, and step scripts.
-
-→ See also: [references/localization.md](references/localization.md) — Russian→English UI text translation guide.
+→ See also: [references/localization.md](references/localization.md) — both workflows in full detail, phase map, suffix rules, `tool_localize`, step scripts, type/predicate mappings.
 
 ---
 
@@ -412,8 +406,7 @@ Exit code `0` = pass, `1` = fail.
 | [references/ui_components.md](references/ui_components.md) | Full UI components reference: toolbars, buttons, datasets, forms |
 | [references/errors.md](references/errors.md) | Error handling playbook |
 | [references/workflow_sequences.md](references/workflow_sequences.md) | Reusable code patterns |
-| [references/localization_workflow.md](references/localization_workflow.md) | Full 9-phase system-name (alias) rename workflow |
-| [references/localization.md](references/localization.md) | Russian→English UI text translation guide |
+| [references/localization.md](references/localization.md) | Both localization workflows: alias rename (9-phase) + RU→EN UI text translation |
 | [references/browser_automation.md](references/browser_automation.md) | Browser automation guide |
 | [browser-switch skill](file:///C:/Users/ased/.agents/skills/browser-switch/skills/browser-switch/SKILL.md) | Decide between agent-browser and Playwright |
 | [agent-browser skill](file:///C:/Users/ased/.agents/skills/agent-browser/SKILL.md) | Full agent-browser CLI reference |
