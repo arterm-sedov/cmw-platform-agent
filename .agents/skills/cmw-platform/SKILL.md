@@ -126,47 +126,16 @@ This is NOT optional. Violating this rule has caused data loss before.
 
 ## 2. Browser Automation
 
-Browser automation enables UI-only features, visual verification, and workflows not exposed via API. The agent supports **four interchangeable browser options**: two MCPs and two CLIs. Pick the one that matches the task.
-
-### Four Browser Options
-
-| Option | Access | Best For | Headed Mode |
-|--------|--------|----------|-------------|
-| **agent-browser MCP** | Tool calls | AI agent workflows, token-efficient actions, Chrome-only | `AGENT_BROWSER_HEADED=1` env |
-| **playwright MCP** | Tool calls | Cross-browser (Chrome/Firefox/WebKit), form filling, rich snapshots, debugging | `--headed` flag (default in MCP) |
-| **agent-browser CLI** | Shell/PowerShell | Scripted batch automation, persistent sessions, local dev | `--headed` flag |
-| **playwright-cli** | Shell/PowerShell | Cross-browser CLI, advanced features (PDF, network, tracing), no session persistence | `--headed` flag |
-
-All four are configured in `~/.config/opencode/opencode.json` and available out-of-the-box.
+Use browser automation when the operation is not available via API. All four options are pre-configured in `~/.config/opencode/opencode.json`.
 
 ### Decision Guide
 
-**Use agent-browser MCP when:**
-- Running inside an agent conversation and token budget matters (~5.7x more efficient than Playwright)
-- Chrome-only is fine
-- Workflow is action-driven (click → navigate → click)
-
-**Use playwright MCP when:**
-- Need Firefox/WebKit/mobile emulation
-- Need rich accessibility snapshots with element refs (`e1`, `e2`, ...)
-- Need advanced features: `fill_form`, multi-field forms, network interception, tracing
-- Debugging UI issues visually (headed mode is default in the MCP)
-- Working with complex SPAs where auto-waiting helps
-
-**Use agent-browser CLI when:**
-- Writing standalone scripts (PowerShell/Bash) outside the agent
-- Need persistent named sessions across multiple shell invocations
-- Batch scraping/automation pipelines
-- Running in CI or scheduled jobs
-- Chrome-only is acceptable
-
-**Use playwright-cli when:**
-- Writing standalone scripts that need cross-browser support
-- Need advanced CLI features: PDF export, network inspection, console logs, tracing
-- Don't need session persistence (each invocation is isolated)
-- Want full Playwright feature set from the command line
-
-→ See also: [browser-switch skill](file:///C:/Users/ased/.agents/skills/browser-switch/skills/browser-switch/SKILL.md), [agent-browser skill](file:///C:/Users/ased/.agents/skills/agent-browser/SKILL.md), [playwright-cli skill](file:///C:/Users/ased/.config/opencode/skills/playwright/SKILL.md)
+| Scenario | Use |
+|----------|-----|
+| Agent conversation, Chrome OK | **agent-browser MCP** — most token-efficient (~5.7× vs Playwright) |
+| Cross-browser / visual debugging / complex forms | **playwright MCP** — headed by default, rich `[ref=eN]` snapshots |
+| Standalone script, persistent sessions, Chrome OK | **agent-browser CLI** — named sessions survive shell restarts |
+| Standalone script, cross-browser, PDF / tracing | **playwright-cli** — no session persistence, full Playwright feature set |
 
 ### When to Use Browser vs API
 
@@ -179,463 +148,51 @@ All four are configured in `~/.config/opencode/opencode.json` and available out-
 | Verify UI changes | ❌ Can't see UI | ✅ Screenshots |
 | Extract UI table data | ⚠️ If no API | ✅ Fallback option |
 
-### Option 1: agent-browser MCP (preferred for agent workflows)
+### Quick Invocation Reference
 
-Configured as MCP `agent-browser` in `opencode.json`. Tool names exposed to the agent are prefixed `agent-browser_browser_*`:
-
-```
-agent-browser_browser_new_session    — create isolated session
-agent-browser_browser_navigate       — open a URL
-agent-browser_browser_snapshot       — get accessibility tree with @e1, @e2 refs
-agent-browser_browser_click          — click by selector or ref
-agent-browser_browser_fill           — fill input
-agent-browser_browser_type           — type char-by-char (triggers JS handlers)
-agent-browser_browser_press          — press keyboard key
-agent-browser_browser_screenshot     — capture PNG
-agent-browser_browser_evaluate       — run JS in page context
-agent-browser_browser_wait_for_selector / wait_for_navigation
-agent-browser_browser_get_text / get_html / get_url / get_title
-agent-browser_browser_set_cookies / get_cookies
-agent-browser_browser_close_session
-```
-
-Typical flow (agent calls these as tools, not Python):
+**agent-browser MCP** (tool calls in agent):
 
 ```
-1. browser_new_session { viewport: {width:1920, height:1080} }
-2. browser_navigate { url: "https://platform/..." }
-3. browser_snapshot  → returns refs @e1, @e2, ...
-4. browser_click { selector: "@e5" }
-5. browser_fill { selector: "@e8", value: "text" }
-6. browser_screenshot { path: "cmw-platform-workspace/step1.png" }
-7. browser_close_session { sessionId: "..." }
+browser_new_session → browser_navigate → browser_snapshot → browser_click / browser_fill → browser_screenshot → browser_close_session
 ```
 
-**Headed mode (user can watch / intervene):**
-```powershell
-$env:AGENT_BROWSER_HEADED = "1"   # then restart opencode
-```
-
-### Option 2: playwright MCP (best for visual work & cross-browser)
-
-Configured as MCP `playwright` in `opencode.json`. Tool names are prefixed `playwright_browser_*`. This MCP runs **headed by default**, making it ideal when the user wants to watch the automation and intervene.
-
-Key tools (use these names in tool calls):
+**playwright MCP** (tool calls in agent — headed by default):
 
 ```
-playwright_browser_navigate          — open URL
-playwright_browser_snapshot          — rich accessibility snapshot with refs (use THIS, not screenshot, to act)
-playwright_browser_click             — click by ref (e.g., ref="e21")
-playwright_browser_fill_form         — fill MULTIPLE fields at once (powerful!)
-playwright_browser_type              — type into a single field
-playwright_browser_press_key         — keyboard input
-playwright_browser_select_option     — dropdowns
-playwright_browser_take_screenshot   — PNG/JPEG, optionally full-page
-playwright_browser_evaluate          — run JS on page or element
-playwright_browser_wait_for          — wait for text / time
-playwright_browser_tabs              — list/new/close/select tabs
-playwright_browser_network_requests  — inspect network
-playwright_browser_console_messages  — collect console logs
-playwright_browser_handle_dialog     — accept/dismiss native dialogs
-playwright_browser_navigate_back / resize / close
+playwright_browser_navigate → playwright_browser_snapshot → playwright_browser_fill_form / playwright_browser_click → playwright_browser_take_screenshot
 ```
 
-**Two-step interaction pattern (mandatory):**
-1. `playwright_browser_snapshot` → returns YAML tree with `[ref=eN]` identifiers
-2. Use that `ref` in `click`/`type`/`fill_form`
+⚠️ Re-snapshot after every DOM-changing action — refs (`[ref=eN]`) invalidate on navigation.
 
-```yaml
-# Example snapshot excerpt:
-- textbox "E-mail or username" [ref=e14]
-- textbox "Password" [ref=e20]
-- button "Log in" [ref=e21]
-```
-
-Then:
-```
-playwright_browser_fill_form {
-  fields: [
-    { name: "Username", ref: "e14", type: "textbox", value: "bobragent" },
-    { name: "Password", ref: "e20", type: "textbox", value: "***" }
-  ]
-}
-playwright_browser_click { ref: "e21", element: "Log in button" }
-```
-
-**⚠️ Ref lifecycle:** Refs invalidate after any navigation or DOM change. Always re-snapshot after clicking a link, submitting a form, or opening a modal.
-
-**Screenshot vs Snapshot:** Use `snapshot` to act on elements (gives refs). Use `take_screenshot` only for visual verification or reporting — it does NOT return refs.
-
-### Option 3: agent-browser CLI (for standalone scripts)
-
-The CLI is available in the shell as `agent-browser`. Full command reference is in the [agent-browser skill](file:///C:/Users/ased/.agents/skills/agent-browser/SKILL.md).
-
-**PowerShell examples** (this project uses PowerShell, not bash):
+**agent-browser CLI** (PowerShell):
 
 ```powershell
-# Basic navigation + snapshot + action
-agent-browser open "https://your-platform.example.com/"
-agent-browser wait --load networkidle
-agent-browser snapshot -i
-agent-browser fill @e14 "bobragent"
-agent-browser fill @e20 "$env:CMW_PASSWORD"
-agent-browser click @e21
-agent-browser screenshot "cmw-platform-workspace/logged_in.png"
-agent-browser close
-
-# Headed mode (user can watch)
-agent-browser --headed open "https://your-platform.example.com/"
-
-# Named persistent session (survives across shell invocations)
-agent-browser --session-name cmw-admin open "https://your-platform.example.com/"
-# ... login once ...
-agent-browser --session-name cmw-admin close   # state auto-saved
-# Later:
-agent-browser --session-name cmw-admin open "https://your-platform.example.com/#Settings/Administration"
-
-# Chain commands (& not && in PowerShell pipelines; use ; for simple chaining)
-agent-browser open "https://example.com"; agent-browser wait --load networkidle; agent-browser screenshot out.png
-
-# Get cdp url to connect playwright to the same Chrome
-agent-browser get cdp-url
+agent-browser open "https://host/" ; agent-browser snapshot -i ; agent-browser fill @e14 "user" ; agent-browser screenshot out.png
 ```
 
-**Auth vault (credentials stay encrypted, never in shell history):**
-```powershell
-$env:CMW_PASSWORD | agent-browser auth save cmw --url "https://your-platform.example.com/" --username bobragent --password-stdin
-agent-browser auth login cmw
-```
-
-### Credentials: Always from .env
-
-**Never hardcode credentials in scripts.** Load them from `.env` the same way `agent_ng` does:
-
-```python
-from dotenv import load_dotenv
-import os
-load_dotenv()
-base_url = os.environ["CMW_BASE_URL"]
-username = os.environ["CMW_LOGIN"]
-password = os.environ["CMW_PASSWORD"]
-```
-
-PowerShell:
-```powershell
-# python-dotenv reads .env automatically in Python scripts.
-# For PowerShell-only scripts, load .env lines into env vars:
-Get-Content .env | Where-Object { $_ -match '^\s*[^#].*=' } | ForEach-Object {
-  $name, $value = $_ -split '=', 2
-  [Environment]::SetEnvironmentVariable($name.Trim(), $value.Trim(), 'Process')
-}
-agent-browser open $env:CMW_BASE_URL
-```
-
-### Option 4: playwright-cli (for cross-browser scripts)
-
-The CLI is available in the shell as `playwright-cli`. Full command reference is in the [playwright-cli skill](file:///C:/Users/ased/.config/opencode/skills/playwright/SKILL.md).
-
-**PowerShell examples** (this project uses PowerShell, not bash):
+**playwright-cli** (PowerShell):
 
 ```powershell
-# Basic navigation + snapshot + action
-playwright-cli open "https://your-platform.example.com/"
-playwright-cli snapshot
-playwright-cli click e14
-playwright-cli fill e14 "bobragent"
-playwright-cli fill e20 "$env:CMW_PASSWORD"
-playwright-cli click e21
-playwright-cli screenshot page.png
-playwright-cli close
-
-# Headed mode (user can watch)
-playwright-cli --headed open "https://your-platform.example.com/"
-
-# Cross-browser testing
-playwright-cli --browser firefox open "https://your-platform.example.com/"
-playwright-cli --browser webkit open "https://your-platform.example.com/"
-
-# Advanced features
-playwright-cli pdf --filename report.pdf
-playwright-cli network-requests
-playwright-cli console-messages
-playwright-cli eval "document.title"
-playwright-cli eval "el => el.textContent" e5
-
-# Tabs
-playwright-cli tab-list
-playwright-cli tab-new "https://example.com"
-playwright-cli tab-select 2
-playwright-cli tab-close
-
-# Wait patterns
-playwright-cli wait --text "Administration"
-playwright-cli wait --time 2000
+playwright-cli open "https://host/" ; playwright-cli snapshot ; playwright-cli fill e14 "user" ; playwright-cli screenshot page.png
 ```
 
-**Key differences from agent-browser CLI:**
-- **No session persistence** — each invocation is isolated (no `--session-name`)
-- **Cross-browser** — `--browser chrome|firefox|webkit`
-- **More features** — PDF export, network inspection, console logs, tracing
-- **Ref format** — uses `e1`, `e2` (no `@` prefix)
+### Credentials
 
-### Standalone Python browser utilities (NOT agent tools)
+Always load from `.env` — never hardcode. See [references/browser_automation.md](references/browser_automation.md#credentials-loading-from-env) for Python and PowerShell patterns.
 
-The repo also ships standalone Playwright wrappers in `tools/browser_tools.py` and `agent_ng/browser_session.py`. **These are intentionally NOT bound to the agent's tool list** — they are for external scripts only. The agent should use the MCPs above.
+### CMW Platform URL Patterns
 
-```python
-# Only for scripts in docs/progress_reports/**, never inside agent flow
-from tools.browser_tools import navigate_to_page, click_element, take_screenshot
-```
-
-### CMW Platform URL Patterns (SPA hash routing)
-
-CMW Platform is a Single Page Application. Always use `wait_for` text or `networkidle` after navigation.
-
-**Entity ID Prefix Registry:**
-
-| Prefix | Entity Type (Human-Friendly) | API Term | Resolution Method |
-|--------|---------------------------|----------|-------------------|
-| `oa.{N}` | Record template | RecordTemplate | `TemplateService/List` (Type: Record) |
-| `pa.{N}` | Process template | ProcessTemplate | `TemplateService/List` (Type: Process) |
-| `ra.{N}` | Role template | RoleTemplate | `TemplateService/List` (Type: Role) |
-| `os.{N}` | Organizational unit template | OrgStructureTemplate | `TemplateService/List` (Type: OrgStructure) |
-| `sln.{N}` | Application | Solution | Match `solution` field in TemplateService results |
-| `event.{N}` | Button | UserCommand | List candidates via `UserCommand/List` |
-| `form.{N}` | Form | Form | List candidates via `Form/List` |
-| `card.{N}` | Card view | Card | List candidates via `Form/List` |
-| `tb.{N}` | Toolbar | Toolbar | List candidates via `Toolbar/List` |
-| `lst.{N}` / `ds.{N}` | Table | Dataset | List candidates via `Dataset/List` |
-| `diagram.{N}` | Process diagram | Diagram | `Process/DiagramService/ResolveDiagram` |
-| `role.{N}` | Role | Role | `TemplateService/List` (Type: Role) |
-| `workspace.{N}` | Navigation section | Workspace | Metadata only (no known API) |
-| Plain `{N}` | Record | Record | `GET webapi/Record/{recordId}` |
-| Plain `{N}` (task page) | Task | Task | `POST TeamNetwork/UserTaskService/Get` |
-
-**⚠️ Universal Resolution via GetAxioms:** All entity IDs (templates, buttons, forms, toolbars, datasets, cards, roles) are resolved uniformly via `OntologyService/GetAxioms`. This endpoint returns `cmw.alias` / `cmw.container.alias` (system name), `cmw.object.name` (display name), and container context for application derivation.
-
-**URL Resolution Tool:** Use `resolve_entity` to parse any CMW Platform URL or entity ID and get system names for use with other tools:
-
-```python
-from tools.platform_entity_resolver import resolve_entity
-
-# Full URL with template + button
-result = resolve_entity.invoke({
-    "url_or_id": "https://host/#RecordType/oa.193/Operation/event.15199"
-})
-
-# Raw entity ID
-result = resolve_entity.invoke({"url_or_id": "oa.193"})
-
-# Process template with diagram
-result = resolve_entity.invoke({
-    "url_or_id": "#ProcessTemplate/pa.77/Designer/Revision/diagram.315"
-})
-```
-
-**Output structure (agent uses system_name + application_system_name with tools):**
-```json
-{
-    "success": true,
-    "resolved": [
-        {
-            "entity_type": "Template",
-            "id": "oa.193",
-            "system_name": "ServiceRequests",
-            "application_system_name": "CustomerPortal",
-            "name": "Service Requests"
-        },
-        {
-            "entity_type": "Button",
-            "id": "event.15199",
-            "system_name": "approve_request",
-            "application_system_name": "CustomerPortal",
-            "name": "Approve Request",
-            "kind": "Trigger scenario"
-        }
-    ]
-}
-```
-
-**Agent workflow after URL resolution:**
-```python
-# User pastes: https://host/#RecordType/oa.193/Operation/event.15199
-# Agent calls resolve_entity, then uses system names with other tools:
-
-edit_or_create_button.invoke({
-    "application_system_name": "CustomerPortal",
-    "template_system_name": "ServiceRequests",
-    "button_system_name": "approve_request",
-    "name": "Updated Button Name"
-})
-```
-
-**Architecture — Settings Pages:**
-| Page | URL |
-|------|-----|
-| Applications | `#Settings/Applications` |
-| Navigation Sections | `#Settings/NavigationSections` |
-| Templates | `#Settings/Templates` |
-| Diagrams | `#Settings/Diagrams` |
-| Functions | `#Settings/Functions` |
-| Data Transfer Paths | `#Settings/DataTransferPaths` |
-
-**Account Administration:**
-| Page | URL |
-|------|-----|
-| Accounts | `#Settings/Accounts` |
-| Groups | `#Settings/Groups` |
-| System Roles | `#Settings/Roles` |
-| Permissions Audit | `#Settings/PermissionsAudit` |
-| Substitutions | `#Settings/Substitutions` |
-| Registration and Login | `#Settings/RegistrationAndLogin` |
-
-**Infrastructure:**
-| Page | URL |
-|------|-----|
-| Monitoring | `#Settings/Monitoring` |
-| Event Logs | `#Settings/EventLogs` |
-| Licensing | `#Settings/Licensing` |
-| Backup | `#Settings/Backup` |
-| Connections | `#Settings/Connections` |
-| Performance | `#Settings/Performance` |
-| Logging Configuration | `#Settings/LoggingConfiguration` |
-| Global Configuration | `#Settings/GlobalConfiguration` |
-| Adapters | `#Settings/Adapters` |
-| Authentication Keys | `#Settings/AuthenticationKeys` |
-
-**Corporate Architecture:**
-| Page | URL |
-|------|-----|
-| Org Structure | `#Settings/OrgStructure` |
-| Processes | `#Settings/Processes` |
-| Version Management | `#Settings/VersionManagement` |
-
-**Solutions & Entity Views:**
-| Page | URL | Entities |
-|------|-----|----------|
-| Administration (hub) | `#Settings/Administration` | None |
-| Global Security | `#Settings/globalSecurity` | None |
-| Global Security Role | `#Settings/globalSecurity/role.{N}` | Role |
-| Global Security Privileges | `#Settings/globalSecurity/role.{N}/privileges` | Role |
-| Solutions | `#solutions` | None |
-| Solution Admin | `#solutions/sln.{N}/Administration` | Solution |
-| Solution Diagrams | `#solutions/sln.{N}/DiagramList/showAll` | Solution |
-| Solution Roles | `#solutions/sln.{N}/roles` | Solution |
-| Solution Role | `#solutions/sln.{N}/roles/role.{M}` | Solution + Role |
-| Solution Workspaces | `#solutions/Workspaces` | None |
-| Solution Workspace | `#solutions/sln.{N}/Workspaces/workspace.{M}` | Solution + Workspace |
-| Dashboard | `#desktop/` | None |
-
-**Record Template Views (`oa.{N}`):**
-| Page | URL | Entities |
-|------|-----|----------|
-| Administration | `#RecordType/oa.{N}/Administration` | Record template |
-| Context | `#RecordType/oa.{N}/Context` | Record template |
-| Forms | `#RecordType/oa.{N}/Forms` | Record template |
-| Form | `#RecordType/oa.{N}/Forms/form.{M}` | Record template + Form |
-| Operations | `#RecordType/oa.{N}/Operations` | Record template |
-| Operation | `#RecordType/oa.{N}/Operation/event.{M}` | Record template + Button |
-| Toolbar | `#RecordType/oa.{N}/Toolbar/` | Record template |
-| Toolbar Settings | `#RecordType/oa.{N}/Toolbar/Settings/tb.{M}` | Record template + Toolbar |
-| Card view | `#RecordType/oa.{N}/Card/` | Record template |
-| Card Settings | `#RecordType/oa.{N}/Card/Settings/card.{M}` | Record template + Card view |
-| Tables | `#RecordType/oa.{N}/Lists/` | Record template |
-| Table | `#RecordType/oa.{N}/Lists/lst.{M}` | Record template + Table |
-| CSV Export | `#RecordType/oa.{N}/csv` | Record template |
-| Security | `#RecordType/oa.{N}/Security` | Record template |
-| Document Templates | `#RecordType/oa.{N}/DocumentsTemplates` | Record template |
-
-**Role Template Views (`ra.{N}`):**
-| Page | URL | Entities |
-|------|-----|----------|
-| Administration | `#RecordType/ra.{N}/Administration` | Role template |
-| Context | `#RecordType/ra.{N}/Context` | Role template |
-| Toolbar | `#RecordType/ra.{N}/Toolbar/` | Role template |
-
-**Organizational Unit Template Views (`os.{N}`):**
-| Page | URL | Entities |
-|------|-----|----------|
-| Administration | `#RecordType/os.{N}/Administration` | Organizational unit template |
-| Context | `#RecordType/os.{N}/Context` | Organizational unit template |
-| Toolbar | `#RecordType/os.{N}/Toolbar/` | Organizational unit template |
-
-**Process Template Views (`pa.{N}`):**
-| Page | URL | Entities |
-|------|-----|----------|
-| Designer Diagram | `#ProcessTemplate/pa.{N}/Designer/Revision/diagram.{M}` | Process template + Process diagram |
-| Tables | `#ProcessTemplate/pa.{N}/Lists/` | Process template |
-| Table | `#ProcessTemplate/pa.{N}/Lists/lst.{M}` | Process template + Table |
-| Toolbar | `#ProcessTemplate/pa.{N}/Toolbar/tb.{M}` | Process template + Toolbar |
-| Operation | `#ProcessTemplate/pa.{N}/Operation/event.{M}` | Process template + Button |
-
-**Data & Form Views:**
-| Page | URL | Entities |
-|------|-----|----------|
-| Data view | `#data/oa.{N}/lst.{M}/...` | Record template + Table (+ query params) |
-| Form view | `#form/oa.{N}/form.{M}/{recordId}` | Record template + Form + Record |
-| App data list | `#app/{App}/list/{Tpl}` | Application + Record template |
-| App record view | `#app/{App}/view/{Tpl}/{recordId}` | Application + Record template + Record |
-| Entity resolver | `#Resolver/{id}` | Single entity |
-
-**Task Views:**
-| Page | URL | Entities |
-|------|-----|----------|
-| Task | `#task/{taskId}` | Task (plain numeric ID) |
-| My Tasks | `#myTasks/...` | Tasks list page (no specific entity IDs) |
-
-**Naming convention:** PascalCase (e.g. `#Settings/Applications`), with one camelCase exception: `#Settings/globalSecurity`.
-
-### Troubleshooting
-
-| Issue | Cause | Fix |
-|-------|-------|-----|
-| "Element not found" after click | Refs invalidated by navigation | Re-run `snapshot` before next action |
-| Timeout on SPA load | Content loads after networkidle | Add `wait_for { text: "Expected text" }` |
-| "Session expired" | Cookie TTL passed | Re-login; consider using saved state file |
-| Screenshot shows old content | Action ran before render completed | `wait_for` text or use `networkidle` |
-| Modal dialog blocks clicks | Push-notification / permissions popup | `press Escape` or `handle_dialog` |
-| Login form not detected | Login page is localized | Use `ref=` from snapshot, not text/placeholder |
-| `agent-browser` "spawn ENOENT" | CLI not on PATH / Node not found in WSL | Use Windows PowerShell, or `npm i -g agent-browser` |
-
-### Browser Automation Lessons from Platform Testing
-
-**Login flow:**
-- Login page URL: `https://host/Home/Login/?returnUrl=/`
-- Fields: "E-mail address or username" (textbox), "Password" (textbox), "Log in" (button)
-- After login: redirects to `#desktop/` (dashboard)
-- Page title changes from "Comindware Platform" to app-specific title
-
-**Navigation via hash:**
-- `playwright-cli eval "() => { window.location.hash = '#path/here'; }"` works for SPA navigation
-- After hash change: always `snapshot` to get fresh refs
-- Page title updates to reflect current context (e.g., "Управление объектами недвижимости > Шаблоны > Планы техобслуживания > Кнопки")
-
-**Admin panel structure:**
-- Solution admin: `#solutions/sln.{N}/Administration`
-- Template admin: `#RecordType/oa.{N}/Administration`
-- Template operations (buttons): `#RecordType/oa.{N}/Operations`
-- Templates list: `#solutions/sln.{N}/templates/showall/...`
-
-**UI localization:**
-- Russian UI shows Russian labels (e.g., "Приложение", "Шаблоны", "Кнопки")
-- Use `ref=` from snapshot for reliable element targeting, not text labels
-- Navigation sidebar has collapsible sections with submenu items
-
-**Snapshot best practices:**
-- After any navigation (hash change, click), always re-snapshot
-- Refs are invalidated immediately after DOM changes
-- Use `playwright-cli snapshot` to get the YAML tree with `[ref=eN]` identifiers
+See [references/browser_automation.md](references/browser_automation.md#cmw-platform-url-patterns-spa-hash-routing) for the entity ID prefix registry (`oa.{N}`, `event.{N}`, etc.), all admin/template/form URL patterns, and the `resolve_entity` tool reference.
 
 ### Best Practices
 
-1. **Snapshot → Act → Re-snapshot** after any DOM-changing action
-2. **Save before edit** — always screenshot or export current UI state before making destructive changes
-3. **Session isolation** — use unique `session_name` / `sessionId` per workflow to avoid cross-contamination
-4. **Headed for debugging, headless for automation** — flip the mode based on the task
-5. **Credentials from `.env`** — never commit or hardcode (see Credentials section above)
-6. **PowerShell, not bash** — this project runs on Windows; avoid `&&`, `cat`, `grep`; use `;`, `Get-Content`, `Select-String`
+1. **Snapshot → Act → Re-snapshot** — after every DOM-changing action
+2. **Save before edit** — screenshot current state before destructive changes
+3. **Session isolation** — unique `session_name` / `sessionId` per workflow
+4. **Headed for debugging, headless for automation**
+5. **PowerShell, not bash** — use `;` not `&&`, `Get-Content` not `cat`
 
-→ See also: [references/browser_automation.md](references/browser_automation.md)
+→ See also: [references/browser_automation.md](references/browser_automation.md) — full tool lists for all 4 options, CMW Platform URL patterns, troubleshooting, platform testing lessons
 
 ---
 
@@ -1042,7 +599,7 @@ edit_or_create_form.invoke({
 
 ## 7. Localization (System Names)
 
-Localization workflow for renaming system names (aliases) in Comindware Platform applications. This is a **multi-step interactive process** requiring user confirmation at each phase.
+System-name (alias) rename workflow for Comindware Platform applications. Keep this section as the decision and phase map; use the reference files for the full 9-phase procedure and for RU→EN UI text translation.
 
 ### Phase Overview
 
@@ -1060,452 +617,22 @@ Localization workflow for renaming system names (aliases) in Comindware Platform
 
 **Table columns:** `type`, `systemName`, `jsonPath`, `id`, `renamedSystemName`
 
-### Step-by-Step Workflow
+**Suffix rules:** `dangerous` aliases used in expressions usually get `_calc`; `safe` aliases used only in alias fields usually get `_sv`.
 
-#### Phase 1: Export CTF
+### Key Tools
 
-```python
-from tools.transfer_tools.tool_export_application import export_application
+| Purpose | Tool / Reference |
+|---------|------------------|
+| Export / re-export CTF | `export_application` |
+| Verify aliases in platform | `get_ontology_objects` |
+| Apply alias rename in platform | `update_object_property` |
+| Full alias-rename procedure | [references/localization_workflow.md](references/localization_workflow.md) |
+| RU→EN UI text translation workflow | [references/localization.md](references/localization.md) |
+| Large-app batched scripts | `.agents/skills/cmw-platform/scripts/tool_*.py` |
 
-result = export_application.invoke({
-    "application_system_name": "my_app",
-    "save_to_file": True,
-})
-if result["success"]:
-    ctf_path = result["ctf_file_path"]
-```
+→ See also: [references/localization_workflow.md](references/localization_workflow.md) — full 9-phase alias rename workflow, type/predicate mappings, `tool_localize`, step scripts, and workspace outputs.
 
-#### Phase 2: Collect Aliases from JSON
-
-Traverse the exported JSON folder. For each file, extract `"Alias"` values and tag with the **object type inferred from the parent folder name**:
-
-```
-RecordTemplates/ → RecordTemplate
-ProcessTemplates/ → ProcessTemplate
-Datasets/ → Dataset
-Forms/ → Form
-Toolbars/ → Toolbar
-UserCommands/ → UserCommand
-Attributes/ → Attribute
-Workspaces/ → Workspace
-Pages/ → Page
-Roles/ → RoleTemplate
-Accounts/ → AccountTemplate
-```
-
-Build a lookup dict: `{alias: {"type": obj_type, "json_path": path}}`.
-
-**Show table to user:**
-
-| type | systemName | jsonPath | id | renamedSystemName |
-|------|------------|----------|----|-------------------|
-| Form | MyForm | Forms/MyForm.json#$.GlobalAlias.Alias | — | — |
-| RecordTemplate | MyRecord | RecordTemplates/MyRecord.json#$.GlobalAlias.Alias | — | — |
-| ... | ... | ... | ... | ... |
-
-#### Phase 3: Verify Aliases via get_ontology_objects
-
-```python
-from tools.applications_tools.tool_get_ontology_objects import get_ontology_objects
-
-result = get_ontology_objects.invoke({
-    "application_system_name": "my_app",
-    "types": ["RecordTemplate", "ProcessTemplate", "Dataset", "Form", "Toolbar", "UserCommand", "Attribute", "Workspace", "Page"],
-    "parameter": "alias",
-    "min_count": 1,
-    "max_count": 10000,
-})
-```
-
-Compare results with Phase 2 aliases. **Only include aliases found in platform** — silently exclude aliases not matched. Build verified dict: `{alias: object_id}`.
-
-**Show table to user (id column now filled):**
-
-| type | systemName | jsonPath | id | renamedSystemName |
-|------|------------|----------|----|-------------------|
-| Form | MyForm | Forms/MyForm.json#$.GlobalAlias.Alias | form.338 | — |
-| RecordTemplate | MyRecord | RecordTemplates/MyRecord.json#$.GlobalAlias.Alias | container.42 | — |
-| ... | ... | ... | ... | ... |
-
-#### Phase 4: Analyze Expression Fields
-
-Scan all JSON files for `"Expression"` fields containing alias references **outside of `"Alias"` context**.
-
-```python
-import re
-
-EXPRESSION_KEYS = {"Expression", "Code", "ValueExpression", "ValidationScript"}
-
-def check_dangerous_aliases(json_folder: str, aliases: set[str]) -> dict[str, bool]:
-    dangerous = {a: False for a in aliases}
-    for json_file in Path(json_folder).rglob("*.json"):
-        content = open(json_file).read()
-        for alias in aliases:
-            if dangerous[alias]:
-                continue
-            for key in EXPRESSION_KEYS:
-                pattern = rf'"{key}"\s*:\s*"[^"]*{re.escape(alias)}[^"]*"'
-                if re.search(pattern, content):
-                    dangerous[alias] = True
-                    break
-    return dangerous
-```
-
-Assign suffixes and **show complete table to user:**
-
-| type | systemName | jsonPath | id | renamedSystemName |
-|------|------------|----------|----|-------------------|
-| Form | MyForm | Forms/MyForm.json#$.GlobalAlias.Alias | form.338 | MyForm_calc |
-| RecordTemplate | MyRecord | RecordTemplates/MyRecord.json#$.GlobalAlias.Alias | container.42 | MyRecord_sv |
-| ... | ... | ... | ... | ... |
-
-- `type` — object type from folder name
-- `systemName` — original alias from JSON
-- `jsonPath` — path to the JSON file with JSONPath to the alias field
-- `id` — platform object ID (from get_ontology_objects)
-- `renamedSystemName` — new alias with suffix (`_calc` for dangerous, `_sv` for safe)
-
-| Category | Suffix | Meaning |
-|----------|--------|---------|
-| **Dangerous** | `_calc` (default) | Mentioned in Expression — rename to `{alias}{suffix}` everywhere (e.g. `MyAlias_calc`) |
-| **Safe** | `_sv` (default) | Only in `GlobalAlias.Alias` context — rename to `{alias}{suffix}` (e.g. `MyAlias_sv`) |
-
-**Show table to user and ask to confirm** the rename plan before proceeding.
-
-#### Phase 5: Apply Renames via update_object_property
-
-```python
-from tools.applications_tools.tool_update_object_property import update_object_property
-
-for alias, new_alias in rename_map.items():
-    object_id = verified_aliases[alias]
-    object_type = TYPE_MAPPING[alias_type]
-
-    result = update_object_property.invoke({
-        "object_id": object_id,
-        "object_type": object_type,
-        "new_value": new_alias,
-    })
-```
-
-**Important:** Alias values must be without spaces — use CamelCase or underscores (e.g. `myAlias_calc`, `anotherOne_sv`).
-
-**Show table to user** with rename results:
-
-| type | systemName | jsonPath | id | renamedSystemName | status |
-|------|------------|----------|----|-------------------|--------|
-| Form | MyForm | Forms/MyForm.json#$.GlobalAlias.Alias | form.338 | MyForm_calc | ✅ renamed |
-| RecordTemplate | MyRecord | RecordTemplates/MyRecord.json#$.GlobalAlias.Alias | container.42 | MyRecord_sv | ✅ renamed |
-| ... | ... | ... | ... | ... | ... |
-
-**Show table and ask user to confirm** before proceeding to restart.
-
-#### Phase 6: Request Platform Restart
-
-Inform the user:
-> "System names have been renamed. Please restart the Comindware Platform service now. Once restarted, confirm to proceed with re-export."
-
-**Wait for user confirmation** that restart is complete.
-
-#### Phase 7: Re-Export CTF
-
-```python
-result = export_application.invoke({
-    "application_system_name": "my_app",
-    "save_to_file": True,
-})
-```
-
-#### Phase 8: Replace Dangerous Aliases in JSON
-
-In the newly exported JSON files, replace all occurrences of **dangerous** aliases (in both `Alias` and `Expression` fields) with their new suffixed names:
-
-```python
-for alias, new_alias in dangerous_renames.items():
-    safe_pattern = re.escape(alias)
-    for json_file in Path(json_folder).rglob("*.json"):
-        content = open(json_file).read()
-        content = re.sub(r'"Alias"\s*:\s*"' + safe_pattern + r'"', '"Alias": "' + new_alias + '"', content)
-        for key in EXPRESSION_KEYS:
-            content = re.sub(rf'"{key}"\s*:\s*"[^"]*{safe_pattern}[^"]*"',
-                            lambda m: m.group(0).replace(alias, new_alias), content)
-        open(json_file, "w").write(content)
-```
-
-**Important:** Only dangerous aliases are replaced. Safe aliases remain untouched in JSON (their rename is only in platform).
-
-**Show table to user** with updated jsonPath (if changed):
-
-| type | systemName | jsonPath | id | renamedSystemName | jsonUpdated |
-|------|------------|----------|----|-------------------|-------------|
-| Form | MyForm | Forms/MyForm.json#$.GlobalAlias.Alias | form.338 | MyForm_calc | ✅ |
-| RecordTemplate | MyRecord | RecordTemplates/MyRecord.json#$.GlobalAlias.Alias | container.42 | MyRecord_sv | — |
-| ... | ... | ... | ... | ... | ... |
-
-#### Phase 9: Import Modified CTF (Update Existing)
-
-```python
-from tools.transfer_tools.tool_import_application import import_application
-
-result = import_application.invoke({
-    "application_system_name": "my_app",
-    "ctf_file_path": "/path/to/modified_ctf.ctf",
-    "update_existing": True,
-})
-```
-
-**Use `update_existing: True`** to update the existing application by system name, not create a new one.
-
-Save the final table to files:
-
-```python
-import json
-from pathlib import Path
-
-# Save as JSON
-table_data = [
-    {"type": "Form", "systemName": "MyForm", "jsonPath": "Forms/MyForm.json#$.GlobalAlias.Alias", "id": "form.338", "renamedSystemName": "MyForm_calc"},
-    {"type": "RecordTemplate", "systemName": "MyRecord", "jsonPath": "RecordTemplates/MyRecord.json#$.GlobalAlias.Alias", "id": "container.42", "renamedSystemName": "MyRecord_sv"},
-]
-
-output_dir = Path("/path/to/output")
-(output_dir / "localization_table.json").write_text(json.dumps(table_data, indent=2))
-
-# Save as Markdown
-md_lines = ["| type | systemName | jsonPath | id | renamedSystemName |",
-           "|------|------------|----------|----|-------------------|"]
-for row in table_data:
-    md_lines.append(f"| {row['type']} | {row['systemName']} | {row['jsonPath']} | {row['id']} | {row['renamedSystemName']} |")
-(output_dir / "localization_table.md").write_text("\n".join(md_lines))
-```
-
-**Show final table and ask user to confirm** before importing.
-
-### Type-Folder Mapping Reference
-
-```python
-TYPE_FOLDER_MAPPING = {
-    "RecordTemplate": "RecordTemplates",
-    "ProcessTemplate": "ProcessTemplates",
-    "RoleTemplate": "Roles",
-    "AccountTemplate": "Accounts",
-    "OrgStructureTemplate": "OrgStructure",
-    "MessageTemplate": "MessageTemplates",
-    "Workspace": "Workspaces",
-    "Page": "Pages",
-    "Attribute": "Attributes",
-    "Dataset": "Datasets",
-    "Toolbar": "Toolbars",
-    "Form": "Forms",
-    "UserCommand": "UserCommands",
-    "Card": "Cards",
-    "Cart": "Carts",
-    "Trigger": "Triggers",
-    "Role": "Roles",
-    "WidgetConfig": "WidgetConfigs",
-}
-
-TYPE_PREDICATE_MAPPING = {
-    "RecordTemplate": "cmw.container.alias",
-    "ProcessTemplate": "cmw.container.alias",
-    "RoleTemplate": "cmw.container.alias",
-    "AccountTemplate": "cmw.container.alias",
-    "OrgStructureTemplate": "cmw.container.alias",
-    "MessageTemplate": "cmw.message.type.alias",
-    "Workspace": "cmw.alias",
-    "Page": "cmw.desktopPage.alias",
-    "Attribute": "cmw.object.alias",
-    "Dataset": "cmw.alias",
-    "Toolbar": "cmw.alias",
-    "Form": "cmw.alias",
-    "UserCommand": "cmw.alias",
-    "Card": "cmw.alias",
-    "Cart": "cmw.cart.alias",
-    "Trigger": "cmw.trigger.alias",
-    "Role": "cmw.role.alias",
-    "WidgetConfig": "cmw.form.alias",
-}
-
-# For Role objects with aliasProperty:
-# - Role type supports both "cmw.role.alias" (direct) and "cmw.role.aliasProperty" (indirect)
-# - When cmw.role.aliasProperty is present, it contains an attribute ID (e.g., "op.2")
-# - Use GetAxiomsByPredicate endpoint to resolve: {"id": "role.2", "predicate": "op.2"}
-# - Response returns the actual alias value: ["Администратор"]
-# - ID prefix for Role objects: "role."
-# - ID prefix for WidgetConfig objects: "fw."
-```
-
-### tool_localize - Localization Tool
-
-The `tool_localize` (function name: `localize_aliases`) provides automated localization workflow for collecting and tracking aliases and display names.
-
-**Capabilities:**
-- Collect aliases (system names) from CTF JSON
-- Collect display names (Name property) from CTF JSON
-- Verify aliases via API (GetWithMultipleValues)
-- Track both in localization workflow
-- Generate reports with aliases and/or display names
-- Apply alias renames via API (OntologyService/AddStatement)
-
-**Important Notes:**
-- Both alias and displayName collection are optional (can be enabled/disabled independently)
-- Aliases are applied via API (step 6 in workflow)
-- DisplayNames are applied via CTF import (step 10 in workflow)
-- DisplayNames are NOT verified via API (CTF-based workflow)
-
-**Parameters:**
-- `collect_aliases`: bool (default: True) - Collect alias data (system names)
-- `collect_display_names`: bool (default: True) - Collect displayName data (Name property)
-- `dry_run`: bool (default: True) - Preview changes without applying
-- `dangerous_suffix`: str (default: "_calc") - Suffix for dangerous aliases
-- `safe_suffix`: str (default: "_sv") - Suffix for safe aliases
-
-**Usage Examples:**
-
-```python
-from tools.localization_tools.tool_localize import localize_aliases
-
-# Collect both aliases and display names (default)
-result = localize_aliases.invoke({
-    "application_system_name": "MyApp",
-    "json_folder": "/path/to/ctf",
-    "collect_aliases": True,
-    "collect_display_names": True,
-    "dry_run": True
-})
-
-# Collect only aliases
-result = localize_aliases.invoke({
-    "application_system_name": "MyApp",
-    "json_folder": "/path/to/ctf",
-    "collect_aliases": True,
-    "collect_display_names": False
-})
-
-# Collect only display names
-result = localize_aliases.invoke({
-    "application_system_name": "MyApp",
-    "json_folder": "/path/to/ctf",
-    "collect_aliases": False,
-    "collect_display_names": True
-})
-```
-
-**Return Structure:**
-```python
-{
-    "success": bool,
-    "aliases_collected": int,           # Count of aliases collected
-    "display_names_collected": int,     # Count of display names collected
-    "aliases_verified": int,            # Count of aliases verified via API
-    "aliases_missing": list,            # Aliases not found in platform
-    "dangerous_aliases": list,          # Aliases used in expressions
-    "safe_aliases": list,               # Aliases only in alias fields
-    "collect_aliases": bool,            # What was collected
-    "collect_display_names": bool,      # What was collected
-    "errors": list
-}
-```
-
-→ See also: [references/localization.md](references/localization.md)
-
-### Step Scripts - Modular Alias Analysis
-
-For large applications (5000+ CTF JSON files), use the step scripts for resumable, batched processing.
-
-**Location:** `.agents/skills/cmw-platform/scripts/tool_*.py`
-
-**Folder Structure:**
-```
-/tmp/cmw-transfer/
-  {app}/                    # CTF extracted content (contains metadata.json + {app}/ folder)
-    metadata.json
-    {app}/                  # Actual app content
-      RecordTemplates/
-      ProcessTemplates/
-      ...
-  {app}.ctf                 # CTF file (named after app)
-  {app}_tr/                # Output folder (separate from extract)
-```
-
-**Workflow:**
-
-| Step | Script | Purpose | Output |
-|------|--------|---------|--------|
-| 1 | `tool_extract_aliases.py` | Extract aliases per folder | `{app}_{folder}_aliases.json` |
-| 2 | `tool_collect_platform.py` | Query platform types (parallel) | `{app}_platform_cache.json` |
-| 3 | `tool_verify_aliases.py` | Verify aliases per folder | `{app}_{folder}_verified.json` |
-| 4 | `tool_find_dangerous.py` | Scan for expression patterns | `{app}_dangerous_aliases.json` |
-| 5 | `tool_finalize.py` | Merge and set aliasLocked | `{app}_verified_complete.json` |
-
-**Usage:**
-```bash
-# Activate venv first
-source .venv/bin/activate
-
-# Run all steps
-python .agents/skills/cmw-platform/scripts/tool_analyze_all.py \
-    --app Volga \
-    --extract-dir /tmp/cmw-transfer/Volga \
-    --output-dir /tmp/cmw-transfer/Volga_tr
-
-# Or run individual steps
-python .agents/skills/cmw-platform/scripts/tool_extract_aliases.py --app Volga \
-    --extract-dir /tmp/cmw-transfer/Volga \
-    --output-dir /tmp/cmw-transfer/Volga_tr
-
-python .agents/skills/cmw-platform/scripts/tool_collect_platform.py --app Volga \
-    --output-dir /tmp/cmw-transfer/Volga_tr
-
-python .agents/skills/cmw-platform/scripts/tool_verify_aliases.py --app Volga \
-    --folder RecordTemplates \
-    --output-dir /tmp/cmw-transfer/Volga_tr
-
-python .agents/skills/cmw-platform/scripts/tool_find_dangerous.py --app Volga \
-    --extract-dir /tmp/cmw-transfer/Volga \
-    --output-dir /tmp/cmw-transfer/Volga_tr
-
-python .agents/skills/cmw-platform/scripts/tool_finalize.py --app Volga \
-    --output-dir /tmp/cmw-transfer/Volga_tr
-```
-
-**Expression Patterns Detected:**
-- `${alias}` - variable reference
-- `->{alias}` - method call on alias
-- `{alias}->` - alias as method target
-- `"alias"` - string quoted alias
-
-**aliasLocked Logic:**
-- `true`: matches skip pattern, has displayName, NOT dangerous (safe to skip)
-- `false`: normal OR matches skip pattern BUT dangerous (will be renamed)
-
-**Final JSON Schema (schema.json compliant):**
-```json
-{
-  "type": "RecordTemplate",
-  "ids": ["container.42"],
-  "parent_template": "Sotrudniki",
-  "aliasOriginal": "SomeAlias",
-  "aliasRenamed": "",
-  "displayNameOriginal": "Some Display Name",
-  "displayNameRenamed": "",
-  "jsonPathOriginal": ["Volga/RecordTemplates/Sotrudniki/SomeAlias.json"],
-  "jsonPathRenamed": [],
-  "expressions": [
-    {
-      "jsonPathOriginal": "Volga/RecordTemplates/Sotrudniki/Attributes/Count.json#Expression",
-      "jsonPathRenamed": "",
-      "expressionOriginal": "COUNT(from a in $SomeAlias where ...)",
-      "expressionRenamed": ""
-    }
-  ],
-  "aliasLocked": false
-}
-```
-
-**State Files:**
-- `{app}_extraction_state.json` - tracks completed folders
-- `{app}_master_state.json` - tracks overall workflow progress (for resume)
+→ See also: [references/localization.md](references/localization.md) — Russian→English UI text translation guide (different workflow from alias rename).
 
 ---
 
@@ -1565,12 +692,11 @@ Exit code 0 = pass, 1 = fail.
 | [references/api_endpoints.md](references/api_endpoints.md) | HTTP endpoint reference |
 | [references/errors.md](references/errors.md) | Error handling playbook |
 | [references/workflow_sequences.md](references/workflow_sequences.md) | Reusable code patterns |
-| [references/localization.md](references/localization.md) | Russian→English translation guide |
+| [references/localization_workflow.md](references/localization_workflow.md) | Full 9-phase system-name (alias) rename workflow |
+| [references/localization.md](references/localization.md) | Russian→English UI text translation guide |
 | [references/browser_automation.md](references/browser_automation.md) | Browser automation guide |
 | [browser-switch skill](file:///C:/Users/ased/.agents/skills/browser-switch/skills/browser-switch/SKILL.md) | Decide between agent-browser and Playwright |
 | [agent-browser skill](file:///C:/Users/ased/.agents/skills/agent-browser/SKILL.md) | Full agent-browser CLI reference |
 | [playwright-cli skill](file:///C:/Users/ased/.config/opencode/skills/playwright/SKILL.md) | Playwright CLI reference |
 
 ---
-
-*End of SKILL.md — Updated with relocated content references*

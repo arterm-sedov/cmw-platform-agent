@@ -698,4 +698,411 @@ UNDO_RETENTION_DAYS=7                 # Keep backups for N days
 
 ---
 
-*Last Updated: 2026-04-22*
+## MCP Tool Interface Reference
+
+The MCP server exposes tool names prefixed with the server alias. All four options below are configured in `~/.config/opencode/opencode.json`.
+
+### Option 1: agent-browser MCP
+
+Tool prefix: `agent-browser_browser_*`
+
+```
+agent-browser_browser_new_session      — create isolated session
+agent-browser_browser_navigate         — open a URL
+agent-browser_browser_snapshot         — get accessibility tree with @e1, @e2 refs
+agent-browser_browser_click            — click by selector or ref
+agent-browser_browser_fill             — fill input
+agent-browser_browser_type             — type char-by-char (triggers JS handlers)
+agent-browser_browser_press            — press keyboard key
+agent-browser_browser_screenshot       — capture PNG
+agent-browser_browser_evaluate         — run JS in page context
+agent-browser_browser_wait_for_selector / wait_for_navigation
+agent-browser_browser_get_text / get_html / get_url / get_title
+agent-browser_browser_set_cookies / get_cookies
+agent-browser_browser_close_session
+```
+
+Typical agent flow:
+```
+1. browser_new_session { viewport: {width:1920, height:1080} }
+2. browser_navigate { url: "https://platform/..." }
+3. browser_snapshot  → returns refs @e1, @e2, ...
+4. browser_click { selector: "@e5" }
+5. browser_fill { selector: "@e8", value: "text" }
+6. browser_screenshot { path: "cmw-platform-workspace/step1.png" }
+7. browser_close_session { sessionId: "..." }
+```
+
+Headed mode: `$env:AGENT_BROWSER_HEADED = "1"` then restart opencode.
+
+### Option 2: playwright MCP
+
+Tool prefix: `playwright_browser_*` — headed by default.
+
+```
+playwright_browser_navigate            — open URL
+playwright_browser_snapshot            — rich accessibility snapshot with [ref=eN] (use to act)
+playwright_browser_click               — click by ref (e.g., ref="e21")
+playwright_browser_fill_form           — fill MULTIPLE fields at once
+playwright_browser_type                — type into single field
+playwright_browser_press_key           — keyboard input
+playwright_browser_select_option       — dropdowns
+playwright_browser_take_screenshot     — PNG/JPEG, optionally full-page
+playwright_browser_evaluate            — run JS on page or element
+playwright_browser_wait_for            — wait for text / time
+playwright_browser_tabs                — list/new/close/select tabs
+playwright_browser_network_requests    — inspect network
+playwright_browser_console_messages    — collect console logs
+playwright_browser_handle_dialog       — accept/dismiss native dialogs
+playwright_browser_navigate_back / resize / close
+```
+
+**Two-step interaction (mandatory):**
+1. `playwright_browser_snapshot` → returns YAML tree with `[ref=eN]` identifiers
+2. Use that `ref` in `click` / `type` / `fill_form`
+
+```yaml
+# Example snapshot excerpt:
+- textbox "E-mail or username" [ref=e14]
+- textbox "Password" [ref=e20]
+- button "Log in" [ref=e21]
+```
+
+Then:
+```
+playwright_browser_fill_form {
+  fields: [
+    { name: "Username", ref: "e14", type: "textbox", value: "bobragent" },
+    { name: "Password", ref: "e20", type: "textbox", value: "***" }
+  ]
+}
+playwright_browser_click { ref: "e21", element: "Log in button" }
+```
+
+⚠️ **Refs invalidate** after any navigation or DOM change. Re-snapshot always.
+
+### Snapshot vs Screenshot
+
+- Use **snapshot** to act on elements — it returns refs like `[ref=e14]` or `@e14`.
+- Use **screenshot** only for visual verification, debugging, or reporting.
+- **Screenshots do not return refs** and cannot be used directly for click/fill actions.
+
+Rule of thumb:
+1. `snapshot` → identify element refs
+2. act (`click` / `fill` / `type`)
+3. `snapshot` again after DOM or navigation changes
+4. `take_screenshot` only when you need visual evidence
+
+### Option 3: agent-browser CLI
+
+Available as `agent-browser` in the shell. Full reference: [agent-browser skill](file:///C:/Users/ased/.agents/skills/agent-browser/SKILL.md).
+
+```powershell
+# Navigate, snapshot, fill, screenshot
+agent-browser open "https://host/"
+agent-browser wait --load networkidle
+agent-browser snapshot -i
+agent-browser fill @e14 "bobragent"
+agent-browser fill @e20 "$env:CMW_PASSWORD"
+agent-browser click @e21
+agent-browser screenshot "cmw-platform-workspace/logged_in.png"
+agent-browser close
+
+# Headed mode
+agent-browser --headed open "https://host/"
+
+# Named persistent session
+agent-browser --session-name cmw-admin open "https://host/"
+# ... login once ...
+agent-browser --session-name cmw-admin close   # state auto-saved
+# Later:
+agent-browser --session-name cmw-admin open "https://host/#Settings/Administration"
+
+# Get CDP URL to connect Playwright to the same Chrome instance
+agent-browser get cdp-url
+```
+
+Auth vault:
+```powershell
+$env:CMW_PASSWORD | agent-browser auth save cmw --url "https://host/" --username bobragent --password-stdin
+agent-browser auth login cmw
+```
+
+### Option 4: playwright-cli
+
+Available as `playwright-cli` in the shell. Full reference: [playwright-cli skill](file:///C:/Users/ased/.config/opencode/skills/playwright/SKILL.md).
+
+```powershell
+# Basic flow
+playwright-cli open "https://host/"
+playwright-cli snapshot
+playwright-cli fill e14 "bobragent"
+playwright-cli fill e20 "$env:CMW_PASSWORD"
+playwright-cli click e21
+playwright-cli screenshot page.png
+playwright-cli close
+
+# Headed mode
+playwright-cli --headed open "https://host/"
+
+# Cross-browser
+playwright-cli --browser firefox open "https://host/"
+playwright-cli --browser webkit open "https://host/"
+
+# Advanced features
+playwright-cli pdf --filename report.pdf
+playwright-cli network-requests
+playwright-cli console-messages
+playwright-cli eval "document.title"
+playwright-cli eval "el => el.textContent" e5
+
+# Tabs
+playwright-cli tab-list
+playwright-cli tab-new "https://example.com"
+playwright-cli tab-select 2
+playwright-cli tab-close
+
+# Wait
+playwright-cli wait --text "Administration"
+playwright-cli wait --time 2000
+```
+
+**Key differences from agent-browser CLI:**
+- **No session persistence** — each invocation is isolated
+- **Cross-browser** — `--browser chrome|firefox|webkit`
+- **More features** — PDF, network inspection, console logs, tracing
+- **Ref format** — `e1` not `@e1`
+
+### Credentials: Loading from .env
+
+Never hardcode. Load via `python-dotenv` in Python:
+
+```python
+from dotenv import load_dotenv
+import os
+load_dotenv()
+base_url = os.environ["CMW_BASE_URL"]
+username = os.environ["CMW_LOGIN"]
+password = os.environ["CMW_PASSWORD"]
+```
+
+PowerShell:
+```powershell
+Get-Content .env | Where-Object { $_ -match '^\s*[^#].*=' } | ForEach-Object {
+  $name, $value = $_ -split '=', 2
+  [Environment]::SetEnvironmentVariable($name.Trim(), $value.Trim(), 'Process')
+}
+agent-browser open $env:CMW_BASE_URL
+```
+
+### Standalone Python Utilities (NOT agent tools)
+
+`tools/browser_tools.py` and `agent_ng/browser_session.py` are **intentionally NOT bound to the agent's tool list** — for external scripts only.
+
+```python
+# Only for scripts in docs/progress_reports/** — never inside agent flow
+from tools.browser_tools import navigate_to_page, click_element, take_screenshot
+```
+
+---
+
+## CMW Platform URL Patterns (SPA Hash Routing)
+
+CMW Platform is a Single Page Application. Always use `wait_for` text or `networkidle` after navigation. Use `resolve_entity` to convert any URL or entity ID to system names for tool calls.
+
+### Entity ID Prefix Registry
+
+| Prefix | Entity Type | API Term | Resolution Method |
+|--------|------------|----------|-------------------|
+| `oa.{N}` | Record template | RecordTemplate | `TemplateService/List` (Type: Record) |
+| `pa.{N}` | Process template | ProcessTemplate | `TemplateService/List` (Type: Process) |
+| `ra.{N}` | Role template | RoleTemplate | `TemplateService/List` (Type: Role) |
+| `os.{N}` | Org unit template | OrgStructureTemplate | `TemplateService/List` (Type: OrgStructure) |
+| `sln.{N}` | Application | Solution | Match `solution` field in TemplateService results |
+| `event.{N}` | Button | UserCommand | `UserCommand/List` |
+| `form.{N}` | Form | Form | `Form/List` |
+| `card.{N}` | Card view | Card | `Form/List` |
+| `tb.{N}` | Toolbar | Toolbar | `Toolbar/List` |
+| `lst.{N}` / `ds.{N}` | Table | Dataset | `Dataset/List` |
+| `diagram.{N}` | Process diagram | Diagram | `Process/DiagramService/ResolveDiagram` |
+| `role.{N}` | Role | Role | `TemplateService/List` (Type: Role) |
+| `workspace.{N}` | Navigation section | Workspace | Metadata only |
+| Plain `{N}` | Record | Record | `GET webapi/Record/{recordId}` |
+| Plain `{N}` (task page) | Task | Task | `POST TeamNetwork/UserTaskService/Get` |
+
+⚠️ **Universal Resolution:** All entity IDs are resolved via `OntologyService/GetAxioms` → returns `cmw.alias` / `cmw.container.alias` (system name), `cmw.object.name` (display name).
+
+### resolve_entity Tool
+
+```python
+from tools.platform_entity_resolver import resolve_entity
+
+# Full URL with template + button
+result = resolve_entity.invoke({
+    "url_or_id": "https://host/#RecordType/oa.193/Operation/event.15199"
+})
+
+# Raw entity ID
+result = resolve_entity.invoke({"url_or_id": "oa.193"})
+
+# Process template with diagram
+result = resolve_entity.invoke({
+    "url_or_id": "#ProcessTemplate/pa.77/Designer/Revision/diagram.315"
+})
+```
+
+Output → use `system_name` + `application_system_name` with other tools:
+```json
+{
+  "success": true,
+  "resolved": [
+    {
+      "entity_type": "Template",
+      "id": "oa.193",
+      "system_name": "ServiceRequests",
+      "application_system_name": "CustomerPortal",
+      "name": "Service Requests"
+    },
+    {
+      "entity_type": "Button",
+      "id": "event.15199",
+      "system_name": "approve_request",
+      "application_system_name": "CustomerPortal",
+      "name": "Approve Request",
+      "kind": "Trigger scenario"
+    }
+  ]
+}
+```
+
+### Settings Pages
+
+| Page | URL |
+|------|-----|
+| Applications | `#Settings/Applications` |
+| Navigation Sections | `#Settings/NavigationSections` |
+| Templates | `#Settings/Templates` |
+| Diagrams | `#Settings/Diagrams` |
+| Functions | `#Settings/Functions` |
+| Data Transfer Paths | `#Settings/DataTransferPaths` |
+| Accounts | `#Settings/Accounts` |
+| Groups | `#Settings/Groups` |
+| System Roles | `#Settings/Roles` |
+| Permissions Audit | `#Settings/PermissionsAudit` |
+| Monitoring | `#Settings/Monitoring` |
+| Event Logs | `#Settings/EventLogs` |
+| Licensing | `#Settings/Licensing` |
+| Backup | `#Settings/Backup` |
+| Connections | `#Settings/Connections` |
+| Performance | `#Settings/Performance` |
+| Global Configuration | `#Settings/GlobalConfiguration` |
+| Authentication Keys | `#Settings/AuthenticationKeys` |
+| Org Structure | `#Settings/OrgStructure` |
+| Version Management | `#Settings/VersionManagement` |
+| Administration (hub) | `#Settings/Administration` |
+| Global Security | `#Settings/globalSecurity` |
+
+**Note:** PascalCase throughout, with one exception: `#Settings/globalSecurity`.
+
+### Solution & Entity Views
+
+| Page | URL |
+|------|-----|
+| Solutions | `#solutions` |
+| Solution Admin | `#solutions/sln.{N}/Administration` |
+| Solution Diagrams | `#solutions/sln.{N}/DiagramList/showAll` |
+| Solution Roles | `#solutions/sln.{N}/roles` |
+| Solution Workspace | `#solutions/sln.{N}/Workspaces/workspace.{M}` |
+| Dashboard | `#desktop/` |
+| Global Security Role | `#Settings/globalSecurity/role.{N}` |
+| Global Security Privileges | `#Settings/globalSecurity/role.{N}/privileges` |
+
+### Record Template Views (`oa.{N}`)
+
+| Page | URL |
+|------|-----|
+| Administration | `#RecordType/oa.{N}/Administration` |
+| Context | `#RecordType/oa.{N}/Context` |
+| Forms | `#RecordType/oa.{N}/Forms` |
+| Form | `#RecordType/oa.{N}/Forms/form.{M}` |
+| Operations (buttons) | `#RecordType/oa.{N}/Operations` |
+| Operation | `#RecordType/oa.{N}/Operation/event.{M}` |
+| Toolbar | `#RecordType/oa.{N}/Toolbar/` |
+| Toolbar Settings | `#RecordType/oa.{N}/Toolbar/Settings/tb.{M}` |
+| Card view | `#RecordType/oa.{N}/Card/` |
+| Card Settings | `#RecordType/oa.{N}/Card/Settings/card.{M}` |
+| Tables | `#RecordType/oa.{N}/Lists/` |
+| Table | `#RecordType/oa.{N}/Lists/lst.{M}` |
+| CSV Export | `#RecordType/oa.{N}/csv` |
+| Security | `#RecordType/oa.{N}/Security` |
+| Document Templates | `#RecordType/oa.{N}/DocumentsTemplates` |
+
+### Other Template Views
+
+| Template | Page | URL |
+|----------|------|-----|
+| Role (`ra.{N}`) | Administration | `#RecordType/ra.{N}/Administration` |
+| Role | Toolbar | `#RecordType/ra.{N}/Toolbar/` |
+| Org Unit (`os.{N}`) | Administration | `#RecordType/os.{N}/Administration` |
+| Process (`pa.{N}`) | Designer Diagram | `#ProcessTemplate/pa.{N}/Designer/Revision/diagram.{M}` |
+| Process | Tables | `#ProcessTemplate/pa.{N}/Lists/` |
+| Process | Toolbar | `#ProcessTemplate/pa.{N}/Toolbar/tb.{M}` |
+| Process | Operation | `#ProcessTemplate/pa.{N}/Operation/event.{M}` |
+
+### Data & Form Views
+
+| Page | URL |
+|------|-----|
+| Data view | `#data/oa.{N}/lst.{M}/...` |
+| Form view | `#form/oa.{N}/form.{M}/{recordId}` |
+| App data list | `#app/{App}/list/{Tpl}` |
+| App record view | `#app/{App}/view/{Tpl}/{recordId}` |
+| Task | `#task/{taskId}` |
+| Entity resolver | `#Resolver/{id}` |
+
+---
+
+## Common Issues (MCP / CLI)
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| "Element not found" after click | Refs invalidated by navigation | Re-run `snapshot` before next action |
+| Timeout on SPA load | Content loads after networkidle | Add `wait_for { text: "Expected text" }` |
+| "Session expired" | Cookie TTL passed | Re-login; consider using saved state file |
+| Screenshot shows old content | Action ran before render | `wait_for` text or `networkidle` |
+| Modal dialog blocks clicks | Popup/notification overlay | `press Escape` or `handle_dialog` |
+| Login form not detected | Localized page | Use `ref=` from snapshot, not text/placeholder |
+| `agent-browser` "spawn ENOENT" | CLI not on PATH / Node not found | Use Windows PowerShell, or `npm i -g agent-browser` |
+
+---
+
+## Platform Testing Lessons
+
+**Login flow:**
+- Login URL: `https://host/Home/Login/?returnUrl=/`
+- Fields: "E-mail address or username" (textbox), "Password" (textbox), "Log in" (button)
+- After login: redirects to `#desktop/` (dashboard)
+- Page title changes from "Comindware Platform" to app-specific title
+
+**Navigation via hash:**
+- `playwright-cli eval "() => { window.location.hash = '#path/here'; }"` works for SPA navigation
+- After hash change: always `snapshot` to get fresh refs
+- Page title reflects current context (e.g., "Управление объектами недвижимости > Шаблоны > ...")
+
+**Admin panel structure:**
+- Solution admin: `#solutions/sln.{N}/Administration`
+- Template admin: `#RecordType/oa.{N}/Administration`
+- Template operations (buttons): `#RecordType/oa.{N}/Operations`
+
+**UI localization:**
+- Russian UI shows Russian labels — use `ref=` from snapshot for reliable targeting
+- Navigation sidebar has collapsible sections with submenu items
+
+**Snapshot best practices:**
+- After any navigation (hash change, click, form submit), always re-snapshot
+- Refs invalidate immediately after DOM changes
+- Use `playwright_browser_snapshot` / `playwright-cli snapshot` to get YAML tree with `[ref=eN]`
+
+---
+
+*Last Updated: 2026-05-02*
