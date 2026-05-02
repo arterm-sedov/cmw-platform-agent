@@ -3,7 +3,7 @@
 # Based on LangChain and Gradio best practices
 
 # Target Python version
-target-version = "py311"
+target-version = "py312"
 
 # Line length (PEP 8 standard)
 line-length = 88

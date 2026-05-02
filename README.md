@@ -155,7 +155,7 @@ The agent supports multiple LLM providers with manual selection:
 
 ### Prerequisites
 
-- Python 3.11+ (local tooling targets 3.11; Hugging Face Spaces metadata uses 3.12)
+- Python 3.12+
 - CMW Platform access credentials
 - At least one LLM provider API key
 

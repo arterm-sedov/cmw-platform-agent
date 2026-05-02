@@ -1,6 +1,6 @@
 # AGENTS.md - CMW Platform Agent
 
-Repo-specific guidance for this LangChain + Gradio Python 3.11+ project.
+Repo-specific guidance for this LangChain + Gradio Python 3.12+ project.
 
 ## Research & Planning
 
@@ -76,7 +76,7 @@ python -m pytest -k "pattern"              # Filter by name
 
 ## Code Style & Conventions
 
-- **Ruff (pyproject.toml):** Line length 88, Python 3.11+, double quotes. Many rules are `unfixable` - ruff flags but will not auto-fix (F401, F403, T201, PLR, ANN, etc). Run `ruff check --fix --unsafe-fixes` to auto-fix.
+- **Ruff (pyproject.toml):** Line length 88, Python 3.12+, double quotes. Many rules are `unfixable` - ruff flags but will not auto-fix (F401, F403, T201, PLR, ANN, etc). Run `ruff check --fix --unsafe-fixes` to auto-fix.
 - **Imports:** Standard library -> third-party -> local with fallback pattern:
 ```python
 try:
