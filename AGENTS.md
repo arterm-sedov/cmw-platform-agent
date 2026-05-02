@@ -241,4 +241,4 @@ Non-obvious caveats. For standard setup, run, lint, and test commands see the **
 
 - On startup, the app fetches OpenRouter model pricing via HTTP (~10-15 s of network calls). This is normal, not an error.
 - Some `ruff` findings are intentionally unfixable per `pyproject.toml`. When in doubt about whether to fix a lint finding, ask the user.
-- On a clean first start with dummy/empty `.env`, some tests may fail or error due to missing credentials or import issues. This is expected; configure real API keys and check test prerequisites before investigating failures.
+- On a clean first start with dummy/empty `.env`, some tests may fail or error due to missing credentials or import issues. Configure real API keys and check test prerequisites first; if failures persist, ask the user before investigating further.
