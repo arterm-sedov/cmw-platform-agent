@@ -140,8 +140,8 @@ result = list_template_records.invoke({"offset": 100, "limit": 100})
 ## Knowledge Base Tools
 
 ### get_knowledge_base_articles
-- **Server:** `cmw_platform_knowledge-base` MCP
-- **Signature:** `get_knowledge_base_articles.invoke({"query": str, "top_k": int})`
+- **Server:** Comindware knowledge base MCP (tool `get_knowledge_base_articles`)
+- **Invocation:** Call via your MCP harness (not via Python import)
 - **Parameters:**
   - `query` (required): Natural language search query about platform behavior
   - `top_k` (optional): Number of articles to return (default: 5)

@@ -1,15 +1,14 @@
 # Knowledge Base
 
-When needing platform expertise, use the MCP knowledge base tool:
+When needing platform expertise, call the MCP tool `get_knowledge_base_articles` (payload is JSON: `query`, optional `top_k`, optional `exclude_kb_ids`).
 
-```python
-from cmw_platform_knowledge-base_get_knowledge_base_articles import get_knowledge_base_articles
+Example payload:
 
-# Search for relevant platform documentation
-articles = get_knowledge_base_articles.invoke({
-    "query": "attribute schema edit partial update",
-    "top_k": 5
-})
+```json
+{
+  "query": "attribute schema edit partial update",
+  "top_k": 5
+}
 ```
 
 ## When to Use

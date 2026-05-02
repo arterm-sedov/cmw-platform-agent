@@ -85,7 +85,7 @@ print(result["data"])
 
 ### Knowledge Base
 
-When uncertain about platform behavior, use the `cmw_platform_knowledge-base` MCP `get_knowledge_base_articles` tool. Never use `ask_comindware`.
+When uncertain about platform behavior, call the MCP tool `get_knowledge_base_articles` from the Comindware knowledge base server. Never use `ask_comindware` MCP tool.
 
 → See also: [references/knowledge_base.md](references/knowledge_base.md)
 
@@ -150,7 +150,7 @@ Use browser automation when the operation is not available via API. All four opt
 
 ### Quick Invocation Reference
 
-**agent-browser MCP** (tool calls in agent):
+**agent-browser MCP** (tool calls in agent, see [browser_automation.md](references/browser_automation.md#option-1-agent-browser-mcp)):
 
 ```
 browser_new_session → browser_navigate → browser_snapshot → browser_click / browser_fill → browser_screenshot → browser_close_session
