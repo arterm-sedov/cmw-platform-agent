@@ -139,12 +139,16 @@ class ConfigTab:
             gr.Markdown("---")
             gr.Markdown(f"**{self._get_translation('config_llm_section')}**")
 
-            # Filter providers by env allowlist just like the model selector
+            # Filter providers by env allowlist just like the model selector.
+            # Fallback list mirrors LLMProvider enum; overridden at runtime by
+            # llm_manager.get_available_providers() below.
             llm_providers = [
                 "gemini",
                 "groq",
                 "huggingface",
+                "openai",
                 "openrouter",
+                "polza",
                 "mistral",
                 "gigachat",
             ]
