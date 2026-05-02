@@ -1,6 +1,6 @@
 # AGENTS.md - CMW Platform Agent
 
-Repo-specific guidance for this LangChain + Gradio Python 3.11+ project.
+Repo-specific guidance for this LangChain + Gradio Python 3.12+ project.
 
 ## Research & Planning
 
@@ -76,7 +76,7 @@ python -m pytest -k "pattern"              # Filter by name
 
 ## Code Style & Conventions
 
-- **Ruff (pyproject.toml):** Line length 88, Python 3.11+, double quotes. Many rules are `unfixable` - ruff flags but will not auto-fix (F401, F403, T201, PLR, ANN, etc). Run `ruff check --fix --unsafe-fixes` to auto-fix.
+- **Ruff (pyproject.toml):** Line length 88, Python 3.12+, double quotes. Many rules are `unfixable` - ruff flags but will not auto-fix (F401, F403, T201, PLR, ANN, etc). Run `ruff check --fix --unsafe-fixes` to auto-fix.
 - **Imports:** Standard library -> third-party -> local with fallback pattern:
 ```python
 try:
@@ -234,3 +234,11 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 ---
 
 **Remember:** LangChain-pure, DRY, lean, modular, pythonic patterns. Always research first, plan thoroughly, produce flawless code.
+
+## Agent Environment Notes
+
+Non-obvious caveats. For standard setup, run, lint, and test commands see the **Development Setup** section in `README.md`.
+
+- On startup, the app fetches OpenRouter model pricing via HTTP (~10-15 s of network calls). This is normal, not an error.
+- Some `ruff` findings are intentionally unfixable per `pyproject.toml`. When in doubt about whether to fix a lint finding, ask the user.
+- On a clean first start with dummy/empty `.env`, some tests may fail or error due to missing credentials or import issues. Configure real API keys and check test prerequisites first; if failures persist, ask the user before investigating further.

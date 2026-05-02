@@ -38,7 +38,7 @@ The Comindware Analyst Copilot is a LangChain-native AI agent designed for creat
 - **Real-Time Streaming**: Live response streaming with tool usage visualization
 - **Session Isolation**: Each user gets isolated agent instances with proper cleanup
 - **Internationalization**: Full support for English and Russian UI
-- **Comprehensive Tool Suite**: 61 specialized tools (38 CMW Platform + 23 general utility)
+- **Comprehensive Tool Suite**: 71 specialized tools
 
 ### Target Use Cases
 
@@ -65,9 +65,9 @@ graph TD
         B4["ErrorHandler<br/>Recovery"]
     end
     
-    subgraph "Tools (61)"
-        C1["CMW Platform<br/>38 tools"]
-        C2["Utility Tools<br/>23 tools"]
+    subgraph "Tools (71)"
+        C1["CMW Platform<br/>47 tools"]
+        C2["Utility Tools<br/>24 tools"]
     end
     
     subgraph "APIs"
@@ -89,7 +89,7 @@ graph TD
 
 - **CmwAgent** (`langchain_agent.py`) - Main orchestrator using pure LangChain patterns
 - **LLMManager** (`llm_manager.py`) - Multi-provider management with persistent instances
-- **Tool System** (`tools/`) - 61 tools (38 CMW Platform + 23 utility)
+- **Tool System** (`tools/`) - LangChain tools
 - **UI Layer** (`tabs/`) - Gradio modular tabs with real-time updates
 - **Session Management** (`session_manager.py`) - User isolation and cleanup
 - **Error Handler** (`error_handler.py`) - Vector similarity error classification
@@ -110,13 +110,13 @@ The agent provides comprehensive integration with the CMW Platform through speci
 
 ### Tool Categories
 
-**CMW Platform Tools (38 tools)**
+**CMW Platform Tools**
 
-- **Applications & Templates (6 tools)**: List/create applications, manage templates, generate URLs, process diagrams
-- **Attributes (15 tools)**: 12 attribute types (Text, Boolean, DateTime, Decimal, Document, Drawing, Duration, Image, Record, Role, Account, Enum) + general operations (get, create, edit, delete, archive)
-- **Templates, forms, toolbars, buttons, records (17 tools)**: Template and record CRUD, form management, toolbars, buttons
+- **Applications & Templates**: List/create applications, manage templates, ontology/schema helpers, entity URLs, import/export
+- **Attributes**: All supported attribute types (Text, Boolean, DateTime, Decimal, Document, Drawing, Duration, Image, Record, Role, Account, Enum) plus get, create, edit, delete, archive
+- **Templates, forms, toolbars, buttons, records**: Template and record CRUD, datasets, forms, toolbars, buttons, record files
 
-**Utility Tools (23 tools)**
+**Utility Tools**
 
 - **Search & Research**: Web search, Wikipedia, ArXiv, deep research
 - **Code Execution**: Multi-language support (Python, Bash, SQL, C, Java)
@@ -155,7 +155,7 @@ The agent supports multiple LLM providers with manual selection:
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - CMW Platform access credentials
 - At least one LLM provider API key
 
@@ -366,21 +366,66 @@ This is an experimental research project. Contributions are welcome in the form 
 
 ### Development Setup
 
-1. **Activate virtual environment**:
+1. **Create and activate virtual environment**:
+
+   Linux / Mac:
    ```bash
-   # Windows
-   .venv\Scripts\Activate.ps1
-   
-   # Linux/Mac
+   python3 -m venv .venv
    source .venv/bin/activate
    ```
 
-2. **Run tests**:
+   WSL (separate venv so Windows and WSL can run in parallel):
    ```bash
-   python -m pytest agent_ng/_tests/
+   python3 -m venv .venv-wsl   # or .venv-ubuntu
+   source .venv-wsl/bin/activate
    ```
 
-3. **Code style**:
-   ```bash
-   ruff check agent_ng/ tools/
+   Windows (PowerShell):
+   ```powershell
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1
    ```
+
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Configure environment**:
+   ```bash
+   cp .env.example .env
+   # Edit .env and set at least one LLM provider API key
+   ```
+
+4. **Run the application**:
+   ```bash
+   python agent_ng/app_ng_modular.py
+   # Gradio UI starts on the port configured by GRADIO_DEFAULT_PORT in .env (default 7860)
+   ```
+   The app starts even without valid API keys (the UI is fully functional; chat requests return auth errors until a valid key is configured).
+
+5. **Run linter**:
+   ```bash
+   ruff check agent_ng/ tools/      # Lint core directories
+   python lint.py                    # Lint only changed files vs HEAD
+   python lint.py --all              # Lint entire repo
+   ```
+
+6. **Run tests**:
+   ```bash
+   python -m pytest agent_ng/_tests/           # All tests
+   python -m pytest agent_ng/_tests/test_x.py  # Single file
+   python -m pytest -k "pattern"               # Filter by name
+   ```
+   Integration tests require `CMW_INTEGRATION_TESTS=1` plus a live CMW Platform server and are skipped by default.
+
+7. **Typecheck**:
+   ```bash
+   mypy agent_ng/
+   ```
+
+### External Services
+
+- **LLM providers**: At least one API key is needed for chat functionality (`OPENROUTER_API_KEY`, `GEMINI_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `GIGACHAT_API_KEY`, or `HUGGINGFACE_API_KEY`). See `.env.example` for all options.
+- **CMW Platform** (optional): Platform integration tools require `CMW_BASE_URL`, `CMW_LOGIN`, `CMW_PASSWORD`. Utility tools work without it.
+- **No Docker, databases, or message queues** are required. The app is a single Python process.
