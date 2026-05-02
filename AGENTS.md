@@ -237,9 +237,8 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 
 ## Agent Environment Notes
 
-Non-obvious caveats for automated agents. For standard setup, run, lint, and test commands see the **Development Setup** section in `README.md`.
+Non-obvious caveats. For standard setup, run, lint, and test commands see the **Development Setup** section in `README.md`.
 
 - On startup, the app fetches OpenRouter model pricing via HTTP (~10-15 s of network calls). This is normal, not an error.
 - The codebase has ~3 k pre-existing `ruff` findings; many are intentionally unfixable per `pyproject.toml`. Only focus on new findings in files you change.
-- Three test files have pre-existing import errors and will cause collection failures if not skipped: `test_concurrency.py`, `test_debug_system.py`, `test_streaming_agent_behavior.py`.
-- ~21 tests fail pre-existing on `main`; do not treat these as regressions introduced by your changes.
+- On a clean first start with dummy/empty `.env`, some tests may fail or error due to missing credentials or import issues. This is expected; configure real API keys and check test prerequisites before investigating failures.

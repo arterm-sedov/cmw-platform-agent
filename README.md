@@ -367,10 +367,17 @@ This is an experimental research project. Contributions are welcome in the form 
 ### Development Setup
 
 1. **Create and activate virtual environment**:
+
+   Linux / Mac / WSL:
    ```bash
    python3 -m venv .venv
-   source .venv/bin/activate        # Linux/Mac/WSL
-   # .venv\Scripts\Activate.ps1     # PowerShell
+   source .venv/bin/activate
+   ```
+
+   Windows (PowerShell):
+   ```powershell
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1
    ```
 
 2. **Install dependencies**:
@@ -387,7 +394,7 @@ This is an experimental research project. Contributions are welcome in the form 
 4. **Run the application**:
    ```bash
    python agent_ng/app_ng_modular.py
-   # Gradio UI starts on http://0.0.0.0:7860
+   # Gradio UI starts on the port configured by GRADIO_DEFAULT_PORT in .env (default 7860)
    ```
    The app starts even without valid API keys (the UI is fully functional; chat requests return auth errors until a valid key is configured).
 
