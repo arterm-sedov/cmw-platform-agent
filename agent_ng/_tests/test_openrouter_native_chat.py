@@ -281,17 +281,19 @@ def test_live_openrouter_stream_returns_cost_when_api_allows() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_normalize_polza_usage_reads_cost_rub(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_normalize_polza_usage_always_converts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """cost is always USD-converted, never 0 — falls back to default rate."""
     monkeypatch.delenv("POLZA_RUB_TO_USD_RATE", raising=False)
     raw = {
         "prompt_tokens": 10,
         "completion_tokens": 5,
         "total_tokens": 15,
-        "cost_rub": 1.23,
+        "cost_rub": 90.0,
     }
     n = normalize_polza_usage(raw)
-    assert n["cost_rub"] == pytest.approx(1.23)
-    assert n["cost"] == pytest.approx(0.0)
+    assert n["cost_rub"] == pytest.approx(90.0)
+    # 90 ₽ / 90 (default rate) = $1.00
+    assert n["cost"] == pytest.approx(1.0)
 
 
 def test_normalize_polza_usage_converts_to_usd_when_rate_given() -> None:
@@ -311,13 +313,14 @@ def test_polza_callback_accumulates_cost_rub(
     mock_completion_response: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("POLZA_RUB_TO_USD_RATE", raising=False)
+    # Fix rate so test is deterministic regardless of local .env
+    monkeypatch.setenv("POLZA_RUB_TO_USD_RATE", "100")
     # Override cost field to simulate Polza cost_rub field
     mock_completion_response.usage.model_dump.return_value = {
         "prompt_tokens": 7,
         "completion_tokens": 3,
         "total_tokens": 10,
-        "cost_rub": 2.5,
+        "cost_rub": 50.0,
     }
 
     client = MagicMock()
@@ -338,8 +341,9 @@ def test_polza_callback_accumulates_cost_rub(
 
     snap = cb.flush_turn_summary()
     assert snap is not None
-    assert snap["cost_rub"] == pytest.approx(2.5)
-    assert snap["cost"] == pytest.approx(0.0)
+    assert snap["cost_rub"] == pytest.approx(50.0)
+    # 50 ₽ / 100 ₽per$ = $0.50
+    assert snap["cost"] == pytest.approx(0.50)
 
 
 def test_live_polza_stream_returns_cost_rub_when_api_allows() -> None:

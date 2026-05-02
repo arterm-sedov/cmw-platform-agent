@@ -152,6 +152,32 @@ class OpenRouterUsageAccountingCallback(BaseCallbackHandler):
 
 POLZA_USAGE_NUMERIC_FIELDS = (*USAGE_NUMERIC_FIELDS, "cost_rub")
 
+_POLZA_DEFAULT_RATE = 90.0  # RUB per 1 USD — used when env var is absent
+
+
+def _get_polza_rate(override: float | None = None) -> float:
+    """Return the RUB-per-USD rate, logging a warning when falling back to default."""
+    if override is not None:
+        return override
+    env_val = os.getenv("POLZA_RUB_TO_USD_RATE", "").strip()
+    if env_val:
+        with contextlib.suppress(ValueError):
+            return float(env_val)
+        _logger.warning(
+            "POLZA_RUB_TO_USD_RATE='%s' is not a valid float; "
+            "using default rate %.0f RUB/USD",
+            env_val,
+            _POLZA_DEFAULT_RATE,
+        )
+    else:
+        _logger.warning(
+            "POLZA_RUB_TO_USD_RATE is not set; "
+            "using default rate %.0f RUB/USD for cost conversion. "
+            "Set POLZA_RUB_TO_USD_RATE in .env to suppress this warning.",
+            _POLZA_DEFAULT_RATE,
+        )
+    return _POLZA_DEFAULT_RATE
+
 
 def normalize_polza_usage(
     token_usage: dict[str, Any] | None,
@@ -160,11 +186,15 @@ def normalize_polza_usage(
     """Normalize Polza.ai ``usage`` dict.
 
     ``cost_rub`` is the authoritative billing field (rubles).
-    If *rub_to_usd_rate* is provided (or ``POLZA_RUB_TO_USD_RATE`` env var is
-    set), ``cost`` is populated with the USD equivalent.  The rate is expressed
-    as **RUB per 1 USD** (e.g. ``90`` means 90 ₽ = $1), so
-    ``cost_usd = cost_rub / rate``.  If the rate is not set ``cost`` stays 0.0
-    and callers should use ``cost_rub`` for display.
+    Conversion to USD is **always performed** so that ``cost`` is a valid USD
+    figure for the shared billing pipeline.  The rate is expressed as
+    **RUB per 1 USD** (e.g. ``90`` means 90 ₽ = $1):
+    ``cost_usd = cost_rub / rate``.
+
+    Rate resolution order:
+      1. *rub_to_usd_rate* argument (for tests / explicit override)
+      2. ``POLZA_RUB_TO_USD_RATE`` env var
+      3. Built-in default ``_POLZA_DEFAULT_RATE`` (logged as a warning)
     """
     base = normalize_openrouter_usage(token_usage)
     if not isinstance(token_usage, dict):
@@ -174,22 +204,17 @@ def normalize_polza_usage(
         token_usage.get("cost_rub") or token_usage.get("cost")
     )
 
-    rate = rub_to_usd_rate
-    if rate is None:
-        env_rate = os.getenv("POLZA_RUB_TO_USD_RATE")
-        if env_rate:
-            with contextlib.suppress(ValueError):
-                rate = float(env_rate)
-
-    cost_usd = cost_rub / rate if rate else 0.0
+    rate = _get_polza_rate(override=rub_to_usd_rate)
+    cost_usd = cost_rub / rate
     return {**base, "cost": cost_usd, "cost_rub": cost_rub}
 
 
 class PolzaUsageAccountingCallback(BaseCallbackHandler):
     """Accumulates Polza.ai usage from ``LLMResult.llm_output['token_usage']``.
 
-    Identical to ``OpenRouterUsageAccountingCallback`` but reads ``cost_rub``
-    and optionally converts to USD via the ``POLZA_RUB_TO_USD_RATE`` env var.
+    Always converts ``cost_rub`` → ``cost`` (USD) via ``POLZA_RUB_TO_USD_RATE``
+    (RUB per 1 USD).  Falls back to ``_POLZA_DEFAULT_RATE`` with a warning when
+    the env var is absent, so ``cost`` is never silently zero.
     """
 
     def __init__(self, rub_to_usd_rate: float | None = None) -> None:
