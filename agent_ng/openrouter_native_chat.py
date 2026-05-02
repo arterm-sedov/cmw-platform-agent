@@ -96,10 +96,12 @@ def _create_usage_metadata(token_usage: dict[str, Any]) -> UsageMetadata:
         cache_read = prompt_details.get("cached_tokens")
         cache_creation = prompt_details.get("cache_write_tokens")
         if cache_read is not None or cache_creation is not None:
-            out["input_token_details"] = InputTokenDetails(
-                cache_read=int(cache_read) if cache_read is not None else None,
-                cache_creation=int(cache_creation) if cache_creation is not None else None,
-            )
+            details_kwargs: dict[str, int] = {}
+            if cache_read is not None:
+                details_kwargs["cache_read"] = int(cache_read)
+            if cache_creation is not None:
+                details_kwargs["cache_creation"] = int(cache_creation)
+            out["input_token_details"] = InputTokenDetails(**details_kwargs)
     if isinstance(comp_details, dict) and comp_details.get("reasoning_tokens") is not None:
         out["output_token_details"] = OutputTokenDetails(
             reasoning=int(comp_details["reasoning_tokens"])

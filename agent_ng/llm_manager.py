@@ -73,6 +73,7 @@ class LLMProvider(Enum):
     HUGGINGFACE = "huggingface"
     OPENAI = "openai"
     OPENROUTER = "openrouter"
+    POLZA = "polza"
     MISTRAL = "mistral"
     GIGACHAT = "gigachat"
 
@@ -536,6 +537,51 @@ class LLMManager:
             )
             return None
 
+    def _initialize_polza_llm(
+        self,
+        config: LLMConfig,
+        model_config: dict[str, Any],
+        api_key_override: str | None = None,
+    ) -> Any | None:
+        """Initialize Polza.ai LLM instance.
+
+        Polza.ai (https://polza.ai/api/v1) is OpenAI-compatible; billing is
+        reported in rubles (``usage.cost_rub``).  Uses the same native SDK
+        wrapper as OpenRouter so the full usage dict reaches callbacks.
+
+        Env vars:
+            POLZA_API_KEY  — required
+            POLZA_BASE_URL — optional, defaults to https://polza.ai/api/v1
+        """
+        api_key = self._get_api_key(config, api_key_override=api_key_override)
+        if not api_key:
+            return None
+
+        try:
+            base_url = os.getenv(
+                config.api_base_env or "POLZA_BASE_URL",
+                "https://polza.ai/api/v1",
+            )
+            from agent_ng.openrouter_native_chat import create_openrouter_native_chat_model
+
+            llm = create_openrouter_native_chat_model(
+                model_name=model_config["model"],
+                base_url=base_url,
+                api_key=api_key,
+                temperature=float(model_config.get("temperature", 0)),
+                max_tokens=int(model_config.get("max_tokens", 2048)),
+                default_headers={"X-Title": "CMW Platform Agent"},
+            )
+            self._log_initialization(
+                f"Successfully initialized {config.name} - {model_config['model']}"
+            )
+            return llm
+        except Exception as e:
+            self._log_initialization(
+                f"Failed to initialize {config.name}: {str(e)}", "ERROR"
+            )
+            return None
+
     def _initialize_mistral_llm(
         self,
         config: LLMConfig,
@@ -700,6 +746,10 @@ class LLMManager:
             )
         elif provider == LLMProvider.OPENROUTER:
             llm = self._initialize_openrouter_llm(
+                config, model_config, api_key_override=api_key_override
+            )
+        elif provider == LLMProvider.POLZA:
+            llm = self._initialize_polza_llm(
                 config, model_config, api_key_override=api_key_override
             )
         elif provider == LLMProvider.MISTRAL:

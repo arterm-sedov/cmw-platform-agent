@@ -1,33 +1,23 @@
 # // pragma: allowlist secret
 # pragma: allowlist secret
-"""OpenRouter usage normalization and optional accounting callback.
+"""Usage normalization and accounting callbacks for OpenRouter and Polza.ai.
 
-Mirrors the cmw-rag pattern: flatten ``usage`` and nested billing detail fields
-for logging and downstream aggregation without coupling to Gradio or session context.
+Mirrors the cmw-rag pattern: flatten ``usage`` and nested billing fields for
+logging and downstream aggregation, decoupled from Gradio / session context.
 
---- Future: Polza.ai provider ---
-Polza.ai (https://polza.ai/api/v1) is structurally identical to OpenRouter:
-  - Same OpenAI-compatible wire protocol and streaming pattern
-    (usage arrives in the final SSE chunk, ``choices: []``)
-  - ``OpenRouterNativeChatModel`` can be reused as-is
-The only difference is cost currency:
-  - OpenRouter: ``usage.cost`` → USD
-  - Polza.ai:   ``usage.cost_rub`` → RUB  (``usage.cost`` is an alias)
-When adding a ``polza`` provider:
-  1. Add ``LLMProvider.POLZA = "polza"`` and a config block in llm_configs.py
-     (api_key_env="POLZA_API_KEY", api_base_env="POLZA_BASE_URL").
-  2. Add ``_initialize_polza_llm`` in LLMManager — identical to
-     ``_initialize_openai_llm`` but wired to POLZA_* env vars.
-  3. Add ``PolzaUsageAccountingCallback`` here that reads ``cost_rub``
-     and either stores it as-is (display "X ₽") or converts to USD via
-     a ``POLZA_RUB_TO_USD_RATE`` env var.
-     ``normalize_openrouter_usage`` can be reused after remapping
-     ``cost_rub`` → ``cost``.
+Polza.ai (https://polza.ai/api/v1) is structurally identical to OpenRouter
+(same OpenAI-compatible wire protocol, usage in final SSE chunk) with one
+difference: billing is in **rubles** (``usage.cost_rub``; ``usage.cost`` is
+an alias for the same value).  ``PolzaUsageAccountingCallback`` handles the
+RUB-specific normalization; optionally converts to USD via
+``POLZA_RUB_TO_USD_RATE`` env var (float, e.g. ``0.011``).
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.callbacks import BaseCallbackHandler
@@ -125,6 +115,19 @@ class OpenRouterUsageAccountingCallback(BaseCallbackHandler):
         raw_output = response.llm_output
         llm_output = raw_output if isinstance(raw_output, dict) else {}
         token_usage = llm_output.get("token_usage")
+
+        # Streaming: llm_output is None; token_usage lives in generation_info.
+        if not isinstance(token_usage, dict):
+            for gen_row in response.generations or []:
+                gens = gen_row if isinstance(gen_row, list) else [gen_row]
+                for gen in gens:
+                    gi = getattr(gen, "generation_info", None) or {}
+                    if isinstance(gi.get("token_usage"), dict):
+                        token_usage = gi["token_usage"]
+                        break
+                if isinstance(token_usage, dict):
+                    break
+
         if not isinstance(token_usage, dict):
             return
 
@@ -139,5 +142,95 @@ class OpenRouterUsageAccountingCallback(BaseCallbackHandler):
             return None
         out = dict(self._accumulator)
         self._accumulator = dict.fromkeys(USAGE_NUMERIC_FIELDS, 0.0)
+        self._last_raw = None
+        return out
+
+
+# ---------------------------------------------------------------------------
+# Polza.ai
+# ---------------------------------------------------------------------------
+
+POLZA_USAGE_NUMERIC_FIELDS = (*USAGE_NUMERIC_FIELDS, "cost_rub")
+
+
+def normalize_polza_usage(
+    token_usage: dict[str, Any] | None,
+    rub_to_usd_rate: float | None = None,
+) -> dict[str, float]:
+    """Normalize Polza.ai ``usage`` dict.
+
+    ``cost_rub`` is the authoritative billing field (rubles).
+    If *rub_to_usd_rate* is provided (or ``POLZA_RUB_TO_USD_RATE`` env var is
+    set), ``cost`` is populated with the USD equivalent; otherwise ``cost``
+    stays 0.0 and callers should use ``cost_rub`` for display.
+    """
+    base = normalize_openrouter_usage(token_usage)
+    if not isinstance(token_usage, dict):
+        return {**base, "cost_rub": 0.0}
+
+    cost_rub = _safe_float(
+        token_usage.get("cost_rub") or token_usage.get("cost")
+    )
+
+    rate = rub_to_usd_rate
+    if rate is None:
+        env_rate = os.getenv("POLZA_RUB_TO_USD_RATE")
+        if env_rate:
+            with contextlib.suppress(ValueError):
+                rate = float(env_rate)
+
+    cost_usd = cost_rub * rate if rate else 0.0
+    return {**base, "cost": cost_usd, "cost_rub": cost_rub}
+
+
+class PolzaUsageAccountingCallback(BaseCallbackHandler):
+    """Accumulates Polza.ai usage from ``LLMResult.llm_output['token_usage']``.
+
+    Identical to ``OpenRouterUsageAccountingCallback`` but reads ``cost_rub``
+    and optionally converts to USD via the ``POLZA_RUB_TO_USD_RATE`` env var.
+    """
+
+    def __init__(self, rub_to_usd_rate: float | None = None) -> None:
+        super().__init__()
+        self._rate = rub_to_usd_rate
+        self._accumulator: dict[str, float] = dict.fromkeys(
+            POLZA_USAGE_NUMERIC_FIELDS, 0.0
+        )
+        self._last_raw: dict[str, Any] | None = None
+
+    def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:  # type: ignore[override]
+        _ = kwargs
+        raw_output = response.llm_output
+        llm_output = raw_output if isinstance(raw_output, dict) else {}
+        token_usage = llm_output.get("token_usage")
+
+        # Streaming: llm_output is None; token_usage lives in generation_info.
+        if not isinstance(token_usage, dict):
+            for gen_row in response.generations or []:
+                gens = gen_row if isinstance(gen_row, list) else [gen_row]
+                for gen in gens:
+                    gi = getattr(gen, "generation_info", None) or {}
+                    if isinstance(gi.get("token_usage"), dict):
+                        token_usage = gi["token_usage"]
+                        break
+                if isinstance(token_usage, dict):
+                    break
+
+        if not isinstance(token_usage, dict):
+            return
+
+        self._last_raw = dict(token_usage)
+        normalized = normalize_polza_usage(token_usage, rub_to_usd_rate=self._rate)
+        for k in POLZA_USAGE_NUMERIC_FIELDS:
+            self._accumulator[k] = (
+                self._accumulator.get(k, 0.0) + normalized.get(k, 0.0)
+            )
+
+    def flush_turn_summary(self) -> dict[str, float] | None:
+        """Return accumulated totals and reset."""
+        if not any(self._accumulator.values()) and self._last_raw is None:
+            return None
+        out = dict(self._accumulator)
+        self._accumulator = dict.fromkeys(POLZA_USAGE_NUMERIC_FIELDS, 0.0)
         self._last_raw = None
         return out

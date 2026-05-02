@@ -521,6 +521,21 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             ],
             enable_chunking=False
         ),
+        LLMProvider.POLZA: LLMConfig(
+            name="Polza.ai",
+            type_str="polza",
+            api_key_env="POLZA_API_KEY",
+            api_base_env="POLZA_BASE_URL",
+            max_history=20,
+            tool_support=True,
+            force_tools=False,
+            vision_support=False,
+            # Billing is in RUB (cost_rub field).  Set POLZA_RUB_TO_USD_RATE
+            # for optional USD conversion in PolzaUsageAccountingCallback.
+            # Add models here or rely on AGENT_DEFAULT_MODEL + AGENT_PROVIDER=polza.
+            models=[],
+            enable_chunking=True,
+        ),
         LLMProvider.MISTRAL: LLMConfig(
             name="Mistral AI",
             type_str="mistral",
