@@ -110,13 +110,13 @@ The agent provides comprehensive integration with the CMW Platform through speci
 
 ### Tool Categories
 
-**CMW Platform Tools (47 tools)**
+**CMW Platform Tools**
 
 - **Applications & Templates**: List/create applications, manage templates, ontology/schema helpers, entity URLs, import/export
 - **Attributes**: All supported attribute types (Text, Boolean, DateTime, Decimal, Document, Drawing, Duration, Image, Record, Role, Account, Enum) plus get, create, edit, delete, archive
 - **Templates, forms, toolbars, buttons, records**: Template and record CRUD, datasets, forms, toolbars, buttons, record files
 
-**Utility Tools (24 tools)**
+**Utility Tools**
 
 - **Search & Research**: Web search, Wikipedia, ArXiv, deep research
 - **Code Execution**: Multi-language support (Python, Bash, SQL, C, Java)
@@ -427,5 +427,5 @@ This is an experimental research project. Contributions are welcome in the form 
 ### External Services
 
 - **LLM providers**: At least one API key is needed for chat functionality (`OPENROUTER_API_KEY`, `GEMINI_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `GIGACHAT_API_KEY`, or `HUGGINGFACE_API_KEY`). See `.env.example` for all options.
-- **CMW Platform** (optional): 47 platform tools require `CMW_BASE_URL`, `CMW_LOGIN`, `CMW_PASSWORD`. The 24 utility tools work without it.
+- **CMW Platform** (optional): Platform integration tools require `CMW_BASE_URL`, `CMW_LOGIN`, `CMW_PASSWORD`. Utility tools work without it.
 - **No Docker, databases, or message queues** are required. The app is a single Python process.
