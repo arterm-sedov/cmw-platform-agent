@@ -233,37 +233,13 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 
 ---
 
-## Cursor Cloud specific instructions
-
-### Environment
-
-- Python 3.12 venv at `.venv/`. Always `source .venv/bin/activate` before running any Python commands.
-- Dependencies come from `requirements.txt` (pinned versions). The update script handles `pip install -r requirements.txt`.
-- `.env` is copied from `.env.example` on first setup. LLM API keys default to placeholder `XXX` values.
-
-### Running the app
-
-- `python agent_ng/app_ng_modular.py` starts Gradio on `0.0.0.0:7860`.
-- The app starts even without valid API keys; chat requests return 401 errors but the UI is fully functional.
-- On startup, the app fetches OpenRouter model pricing via HTTP (takes ~10-15 s); this is normal and not an error.
-
-### Linting
-
-- `ruff check agent_ng/ tools/` for lint. The codebase has ~3 k pre-existing findings; many are intentionally unfixable per `pyproject.toml`. Focus on new findings in files you change.
-- `python lint.py` lints only changed files (vs HEAD) by default.
-
-### Testing
-
-- `python -m pytest agent_ng/_tests/` runs unit tests. Three test files have pre-existing import errors (`test_concurrency.py`, `test_debug_system.py`, `test_streaming_agent_behavior.py`) and must be skipped or will cause collection errors.
-- Integration tests require `CMW_INTEGRATION_TESTS=1` plus a live CMW Platform server and are skipped by default.
-- 222 tests pass, ~21 fail pre-existing; do not treat pre-existing failures as regressions.
-
-### External services
-
-- **LLM providers**: At least one API key (`OPENROUTER_API_KEY`, `GEMINI_KEY`, `GROQ_API_KEY`, etc.) is needed for actual chat functionality. Without keys the app starts but chat returns auth errors.
-- **CMW Platform**: Optional; 38 platform tools need `CMW_BASE_URL`/`CMW_LOGIN`/`CMW_PASSWORD`. The 23 utility tools work without it.
-- No Docker, no databases, no message queues are required.
-
----
-
 **Remember:** LangChain-pure, DRY, lean, modular, pythonic patterns. Always research first, plan thoroughly, produce flawless code.
+
+## Agent Environment Notes
+
+Non-obvious caveats for automated agents. For standard setup, run, lint, and test commands see the **Development Setup** section in `README.md`.
+
+- On startup, the app fetches OpenRouter model pricing via HTTP (~10-15 s of network calls). This is normal, not an error.
+- The codebase has ~3 k pre-existing `ruff` findings; many are intentionally unfixable per `pyproject.toml`. Only focus on new findings in files you change.
+- Three test files have pre-existing import errors and will cause collection failures if not skipped: `test_concurrency.py`, `test_debug_system.py`, `test_streaming_agent_behavior.py`.
+- ~21 tests fail pre-existing on `main`; do not treat these as regressions introduced by your changes.
