@@ -38,7 +38,7 @@ The Comindware Analyst Copilot is a LangChain-native AI agent designed for creat
 - **Real-Time Streaming**: Live response streaming with tool usage visualization
 - **Session Isolation**: Each user gets isolated agent instances with proper cleanup
 - **Internationalization**: Full support for English and Russian UI
-- **Comprehensive Tool Suite**: 71 specialized tools (47 CMW Platform + 24 general utility)
+- **Comprehensive Tool Suite**: 71 specialized tools
 
 ### Target Use Cases
 
@@ -89,7 +89,7 @@ graph TD
 
 - **CmwAgent** (`langchain_agent.py`) - Main orchestrator using pure LangChain patterns
 - **LLMManager** (`llm_manager.py`) - Multi-provider management with persistent instances
-- **Tool System** (`tools/`) - 71 LangChain tools; see **Tool Categories** for the platform vs utility split
+- **Tool System** (`tools/`) - LangChain tools
 - **UI Layer** (`tabs/`) - Gradio modular tabs with real-time updates
 - **Session Management** (`session_manager.py`) - User isolation and cleanup
 - **Error Handler** (`error_handler.py`) - Vector similarity error classification
