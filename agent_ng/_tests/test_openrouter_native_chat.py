@@ -4,13 +4,15 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage, HumanMessage
 import pytest
 
-from agent_ng.openrouter_native_chat import (
+from agent_ng.openrouter_native_chat import (  # pragma: allowlist secret
     OpenRouterNativeChatModel,
+    create_openrouter_native_chat_model,
     usage_dict_from_sdk,
 )
 from agent_ng.openrouter_usage_accounting import (
@@ -159,3 +161,103 @@ def test_usage_metadata_callback_tracks_ai_message_not_llm_result() -> None:
     last = getattr(tracker, "_last_api_tokens", None)
     assert last is not None
     assert last.cost == pytest.approx(0.01)
+
+
+def test_openrouter_native_stream_preserves_cost_on_usage_chunk() -> None:
+    # pragma: allowlist secret
+    """Final chunk may be usage-only (empty choices) when include_usage is enabled."""
+
+    def _chunk(**kwargs: object) -> MagicMock:
+        m = MagicMock()
+        m.model_dump.return_value = kwargs
+        return m
+
+    content_chunk = _chunk(
+        id="stream-1",
+        model="test/model",
+        choices=[
+            {
+                "index": 0,
+                "delta": {"content": "Hi"},
+                "finish_reason": None,
+            }
+        ],
+        usage=None,
+    )
+    usage_chunk = _chunk(
+        id="stream-1",
+        model="test/model",
+        choices=[],
+        usage={
+            "prompt_tokens": 5,
+            "completion_tokens": 2,
+            "total_tokens": 7,
+            "cost": 0.000077,
+        },
+    )
+
+    client = MagicMock()
+    # pragma: allowlist secret
+    client.chat.completions.create.return_value = iter([content_chunk, usage_chunk])
+
+    llm = OpenRouterNativeChatModel(
+        client=client,
+        model_name="test/model",
+        base_url="https://example.com/v1",
+        api_key="sk-test",
+        temperature=0,
+        max_tokens=64,
+    )
+
+    chunks = list(llm.stream([HumanMessage("Hi")]))
+    cost_chunks = [
+        c
+        for c in chunks
+        if (getattr(c, "response_metadata", None) or {}).get("cost") is not None
+    ]
+    assert cost_chunks, "expected at least one chunk with provider charge in metadata"
+    assert cost_chunks[-1].response_metadata.get("cost") == pytest.approx(0.000077)
+    body = client.chat.completions.create.call_args[1]
+    eb = body.get("extra_body") or {}
+    assert eb.get("stream_options") == {"include_usage": True}
+    assert body.get("stream") is True
+
+
+def test_live_openrouter_stream_returns_cost_when_api_allows() -> None:
+    # pragma: allowlist secret
+    """Optional live stream cost check; skips without key or on HTTP errors."""
+    # pragma: allowlist secret
+
+    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if not api_key:
+        pytest.skip("provider API key not set")
+
+    pytest.importorskip("openai")
+
+    from openai import APIStatusError, PermissionDeniedError
+
+    base_url = os.getenv(
+        "OPENROUTER_BASE_URL",
+        "https://openrouter.ai/api/v1",
+    )
+    llm = create_openrouter_native_chat_model(
+        model_name=os.getenv("OPENROUTER_STREAM_TEST_MODEL", "openai/gpt-4o-mini"),
+        base_url=base_url,
+        api_key=api_key,
+        temperature=0,
+        max_tokens=32,
+    )
+
+    try:
+        chunks = list(llm.stream([HumanMessage("Say only: ok")]))
+    except (PermissionDeniedError, APIStatusError) as exc:
+        pytest.skip(f"upstream API declined live stream test: {exc}")
+
+    cost_chunks = [
+        c
+        for c in chunks
+        if (getattr(c, "response_metadata", None) or {}).get("cost") is not None
+    ]
+    assert cost_chunks, "live stream produced no chunk with response_metadata.cost"
+    cost = float(cost_chunks[-1].response_metadata["cost"])
+    assert cost >= 0.0
