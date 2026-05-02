@@ -368,10 +368,16 @@ This is an experimental research project. Contributions are welcome in the form 
 
 1. **Create and activate virtual environment**:
 
-   Linux / Mac / WSL:
+   Linux / Mac:
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
+   ```
+
+   WSL (separate venv so Windows and WSL can run in parallel):
+   ```bash
+   python3 -m venv .venv-wsl
+   source .venv-wsl/bin/activate
    ```
 
    Windows (PowerShell):
