@@ -240,5 +240,5 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 Non-obvious caveats. For standard setup, run, lint, and test commands see the **Development Setup** section in `README.md`.
 
 - On startup, the app fetches OpenRouter model pricing via HTTP (~10-15 s of network calls). This is normal, not an error.
-- The codebase has ~3 k pre-existing `ruff` findings; many are intentionally unfixable per `pyproject.toml`. Only focus on new findings in files you change.
+- Some `ruff` findings are intentionally unfixable per `pyproject.toml`. When in doubt about whether to fix a lint finding, ask the user.
 - On a clean first start with dummy/empty `.env`, some tests may fail or error due to missing credentials or import issues. This is expected; configure real API keys and check test prerequisites before investigating failures.
