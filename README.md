@@ -89,7 +89,7 @@ graph TD
 
 - **CmwAgent** (`langchain_agent.py`) - Main orchestrator using pure LangChain patterns
 - **LLMManager** (`llm_manager.py`) - Multi-provider management with persistent instances
-- **Tool System** (`tools/`) - 71 tools (47 CMW Platform + 24 utility)
+- **Tool System** (`tools/`) - 71 LangChain tools; see **Tool Categories** for the platform vs utility split
 - **UI Layer** (`tabs/`) - Gradio modular tabs with real-time updates
 - **Session Management** (`session_manager.py`) - User isolation and cleanup
 - **Error Handler** (`error_handler.py`) - Vector similarity error classification
