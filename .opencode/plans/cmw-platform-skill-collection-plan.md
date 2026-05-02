@@ -4,7 +4,7 @@
 
 **Goal:** Create a production-ready autonomous platform skill using TDD methodology (RED→GREEN→REFACTOR cycle).
 
-**Architecture:** Single-skill (`cmw-platform`) with progressive disclosure. Skill imports tools from `D:/Repo/cmw-platform-agent/tools/` and orchestrates via LLM reasoning. Supplementary scripts for diagnostics in `scripts/`.
+**Architecture:** Single-skill (`cmw-platform`) with progressive disclosure. Skill imports tools from `cmw-platform-agent/tools/` and orchestrates via LLM reasoning. Supplementary scripts for diagnostics in `scripts/`.
 
 **Tech Stack:** Python 3.11+, existing `tools/` modules, `requests`, `python-dotenv`.
 
@@ -29,7 +29,7 @@
 ### Task 0.1: Create Pressure Test Scenarios
 
 **Files:**
-- Create: `D:/Repo/cmw-platform-agent/cmw-platform-workspace/red-phase/baseline-scenarios.md`
+- Create: `cmw-platform-agent/cmw-platform-workspace/red-phase/baseline-scenarios.md`
 
 - [ ] **Step 1: Document baseline scenario templates**
 
@@ -133,7 +133,7 @@ Run each scenario WITHOUT the skill loaded. Document:
 - [ ] **Step 5: Commit RED phase**
 
 ```bash
-git add D:/Repo/cmw-platform-agent/cmw-platform-workspace/red-phase/
+git add cmw-platform-agent/cmw-platform-workspace/red-phase/
 git commit -m "test(skill): RED phase baseline scenarios and failures"
 ```
 
@@ -144,15 +144,15 @@ git commit -m "test(skill): RED phase baseline scenarios and failures"
 ### Task 1.1: Create Skill Directory Structure
 
 **Files:**
-- Create: `C:/Users/ased/.agents/skills/cmw-platform/SKILL.md`
-- Create: `C:/Users/ased/.agents/skills/cmw-platform/references/`
-- Create: `C:/Users/ased/.agents/skills/cmw-platform/scripts/`
+- Create: `~/.agents/skills/cmw-platform/SKILL.md`
+- Create: `~/.agents/skills/cmw-platform/references/`
+- Create: `~/.agents/skills/cmw-platform/scripts/`
 
 - [ ] **Step 1: Create directories**
 
 ```bash
-mkdir -p "C:/Users/ased/.agents/skills/cmw-platform/references"
-mkdir -p "C:/Users/ased/.agents/skills/cmw-platform/scripts"
+mkdir -p "~/.agents/skills/cmw-platform/references"
+mkdir -p "~/.agents/skills/cmw-platform/scripts"
 ```
 
 - [ ] **Step 2: Create SKILL.md with frontmatter**
@@ -166,7 +166,7 @@ description: Use when working with Comindware Platform — connecting to platfor
 # cmw-platform Skill
 
 ## Overview
-Enables autonomous interaction with Comindware Platform using tools from `D:/Repo/cmw-platform-agent`.
+Enables autonomous interaction with Comindware Platform using tools from `cmw-platform-agent`.
 
 ## Quick Start
 
@@ -233,13 +233,13 @@ result = list_applications.invoke({})
 - Errors: [references/errors.md](references/errors.md)
 
 ## Diagnostic Script
-Run: `python C:/Users/ased/.agents/skills/cmw-platform/scripts/diagnose_connection.py`
+Run: `python ~/.agents/skills/cmw-platform/scripts/diagnose_connection.py`
 ```
 
 - [ ] **Step 3: Commit SKILL.md**
 
 ```bash
-git add "C:/Users/ased/.agents/skills/cmw-platform/SKILL.md"
+git add "~/.agents/skills/cmw-platform/SKILL.md"
 git commit -m "feat(skill): initial cmw-platform SKILL.md"
 ```
 
@@ -248,7 +248,7 @@ git commit -m "feat(skill): initial cmw-platform SKILL.md"
 ### Task 1.2: Create references/tool_inventory.md
 
 **Files:**
-- Create: `C:/Users/ased/.agents/skills/cmw-platform/references/tool_inventory.md`
+- Create: `~/.agents/skills/cmw-platform/references/tool_inventory.md`
 
 - [ ] **Step 1: Write complete tool inventory**
 
@@ -297,7 +297,7 @@ Types: text, decimal, enum, boolean, datetime, document, image, drawing, role, r
 - [ ] **Step 2: Commit**
 
 ```bash
-git add "C:/Users/ased/.agents/skills/cmw-platform/references/tool_inventory.md"
+git add "~/.agents/skills/cmw-platform/references/tool_inventory.md"
 git commit -m "feat(skill): add tool_inventory.md"
 ```
 
@@ -306,7 +306,7 @@ git commit -m "feat(skill): add tool_inventory.md"
 ### Task 1.3: Create references/api_endpoints.md
 
 **Files:**
-- Create: `C:/Users/ased/.agents/skills/cmw-platform/references/api_endpoints.md`
+- Create: `~/.agents/skills/cmw-platform/references/api_endpoints.md`
 
 - [ ] **Step 1: Write API reference**
 
@@ -340,15 +340,15 @@ HTTP Basic: `Authorization: Basic {base64(login:password)}`
 ```
 
 ## API Schemas
-- `D:/Repo/cmw-platform-agent/cmw_open_api/web_api_v1.json`
-- `D:/Repo/cmw-platform-agent/cmw_open_api/solition_api.json`
-- `D:/Repo/cmw-platform-agent/cmw_open_api/system_core_api.json`
+- `cmw-platform-agent/cmw_open_api/web_api_v1.json`
+- `cmw-platform-agent/cmw_open_api/solition_api.json`
+- `cmw-platform-agent/cmw_open_api/system_core_api.json`
 ```
 
 - [ ] **Step 2: Commit**
 
 ```bash
-git add "C:/Users/ased/.agents/skills/cmw-platform/references/api_endpoints.md"
+git add "~/.agents/skills/cmw-platform/references/api_endpoints.md"
 git commit -m "feat(skill): add api_endpoints.md"
 ```
 
@@ -357,7 +357,7 @@ git commit -m "feat(skill): add api_endpoints.md"
 ### Task 1.4: Create references/workflow_sequences.md
 
 **Files:**
-- Create: `C:/Users/ased/.agents/skills/cmw-platform/references/workflow_sequences.md`
+- Create: `~/.agents/skills/cmw-platform/references/workflow_sequences.md`
 
 - [ ] **Step 1: Write workflow patterns**
 
@@ -439,7 +439,7 @@ def fetch_all(app_name: str, template: str, page_size: int = 100):
 - [ ] **Step 2: Commit**
 
 ```bash
-git add "C:/Users/ased/.agents/skills/cmw-platform/references/workflow_sequences.md"
+git add "~/.agents/skills/cmw-platform/references/workflow_sequences.md"
 git commit -m "feat(skill): add workflow_sequences.md"
 ```
 
@@ -448,7 +448,7 @@ git commit -m "feat(skill): add workflow_sequences.md"
 ### Task 1.5: Create references/errors.md
 
 **Files:**
-- Create: `C:/Users/ased/.agents/skills/cmw-platform/references/errors.md`
+- Create: `~/.agents/skills/cmw-platform/references/errors.md`
 
 - [ ] **Step 1: Write error playbook**
 
@@ -489,14 +489,14 @@ def retry_with_backoff(func, max_retries=3, delay=1):
 
 ## Diagnostic Command
 ```bash
-python C:/Users/ased/.agents/skills/cmw-platform/scripts/diagnose_connection.py
+python ~/.agents/skills/cmw-platform/scripts/diagnose_connection.py
 ```
 ```
 
 - [ ] **Step 2: Commit**
 
 ```bash
-git add "C:/Users/ased/.agents/skills/cmw-platform/references/errors.md"
+git add "~/.agents/skills/cmw-platform/references/errors.md"
 git commit -m "feat(skill): add errors.md"
 ```
 
@@ -505,7 +505,7 @@ git commit -m "feat(skill): add errors.md"
 ### Task 1.6: Create scripts/diagnose_connection.py
 
 **Files:**
-- Create: `C:/Users/ased/.agents/skills/cmw-platform/scripts/diagnose_connection.py`
+- Create: `~/.agents/skills/cmw-platform/scripts/diagnose_connection.py`
 
 - [ ] **Step 1: Write complete diagnostic script**
 
@@ -527,7 +527,7 @@ def check_env():
     print("CHECKING .env FILE")
     print("=" * 60)
     
-    repo_root = Path("D:/Repo/cmw-platform-agent")
+    repo_root = Path("cmw-platform-agent")
     env_path = repo_root / ".env"
     
     if not env_path.exists():
@@ -555,7 +555,7 @@ def check_connection():
     
     try:
         from dotenv import load_dotenv
-        load_dotenv(Path("D:/Repo/cmw-platform-agent/.env"))
+        load_dotenv(Path("cmw-platform-agent/.env"))
     except ImportError:
         print("FAIL: python-dotenv not installed")
         return False
@@ -615,7 +615,7 @@ if __name__ == "__main__":
 - [ ] **Step 2: Test script**
 
 ```bash
-.venv\Scripts\Activate.ps1 && python "C:/Users/ased/.agents/skills/cmw-platform/scripts/diagnose_connection.py"
+.venv\Scripts\Activate.ps1 && python "~/.agents/skills/cmw-platform/scripts/diagnose_connection.py"
 ```
 
 Expected: Diagnostics output with PASS/FAIL summary
@@ -623,7 +623,7 @@ Expected: Diagnostics output with PASS/FAIL summary
 - [ ] **Step 3: Commit**
 
 ```bash
-git add "C:/Users/ased/.agents/skills/cmw-platform/scripts/diagnose_connection.py"
+git add "~/.agents/skills/cmw-platform/scripts/diagnose_connection.py"
 git commit -m "feat(skill): add diagnose_connection.py"
 ```
 
@@ -668,7 +668,7 @@ using manual approaches when tools exist.
 ### Task 3.1: Create Test Evals
 
 **Files:**
-- Create: `D:/Repo/cmw-platform-agent/cmw-platform-workspace/evals/evals.json`
+- Create: `cmw-platform-agent/cmw-platform-workspace/evals/evals.json`
 
 - [ ] **Step 1: Create evaluation prompts**
 
@@ -703,7 +703,7 @@ using manual approaches when tools exist.
 - [ ] **Step 3: Commit evals**
 
 ```bash
-git add D:/Repo/cmw-platform-agent/cmw-platform-workspace/evals/
+git add cmw-platform-agent/cmw-platform-workspace/evals/
 git commit -m "test(skill): add evaluation prompts"
 ```
 

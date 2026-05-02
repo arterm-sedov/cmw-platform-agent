@@ -9,7 +9,7 @@
 
 ### 1. Comprehensive Planning Documents Created
 
-**Location:** `C:/Users/ased/.opencode/plans/`
+**Location:** `~/.opencode/plans/`
 
 #### Main Implementation Plan
 - **File:** `VL_MODEL_SUPPORT_IMPLEMENTATION.md`
@@ -203,7 +203,7 @@ cat experiments/vl_test_results.json
 4. Is Gemini 3.1 Flash available on OpenRouter?
 5. Should we proceed with implementation?
 
-**Update:** `C:/Users/ased/.opencode/plans/VL_MODEL_SUPPORT_IMPLEMENTATION.md`
+**Update:** `~/.opencode/plans/VL_MODEL_SUPPORT_IMPLEMENTATION.md`
 
 ---
 
@@ -282,14 +282,14 @@ cat experiments/vl_test_results.json
 
 ### Planning Documents
 ```
-C:/Users/ased/.opencode/plans/
+~/.opencode/plans/
 ├── VL_MODEL_SUPPORT_IMPLEMENTATION.md  (50+ pages, detailed plan)
 └── RUSSIAN_PROVIDERS_SUPPORT.md        (Russian providers plan)
 ```
 
 ### Experimentation Framework
 ```
-D:/Repo/cmw-platform-agent/experiments/
+cmw-platform-agent/experiments/
 ├── test_vl_models.py                   (Test script)
 ├── README.md                            (Experiment guide)
 ├── test_files/
@@ -299,7 +299,7 @@ D:/Repo/cmw-platform-agent/experiments/
 
 ### Documentation
 ```
-D:/Repo/cmw-platform-agent/docs/
+cmw-platform-agent/docs/
 ├── research/
 │   ├── CMW_Agent_Model_Selection_Report_20260423.md
 │   ├── GLM-4.7-research-report.md

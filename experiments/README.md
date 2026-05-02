@@ -195,7 +195,7 @@ After running tests, fill in this matrix:
 
 1. **Review Results:** Analyze `vl_test_results.json`
 2. **Compare Quality:** Test OCR against Tesseract
-3. **Update Plan:** Update `C:/Users/ased/.opencode/plans/VL_MODEL_SUPPORT_IMPLEMENTATION.md` with findings
+3. **Update Plan:** Update `~/.opencode/plans/VL_MODEL_SUPPORT_IMPLEMENTATION.md` with findings
 4. **Make Recommendations:** Choose default models based on results
 5. **Proceed to Phase 1:** Begin implementation
 
@@ -236,4 +236,4 @@ After running tests, fill in this matrix:
 
 - OpenRouter Models: https://openrouter.ai/models
 - OpenRouter Docs: https://openrouter.ai/docs
-- VL Support Plan: `C:/Users/ased/.opencode/plans/VL_MODEL_SUPPORT_IMPLEMENTATION.md`
+- VL Support Plan: `~/.opencode/plans/VL_MODEL_SUPPORT_IMPLEMENTATION.md`
