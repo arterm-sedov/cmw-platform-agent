@@ -243,18 +243,9 @@ def test_live_openrouter_stream_returns_cost_when_api_allows() -> None:
     if not base_url:
         pytest.skip("missing provider API base URL for live test")
 
-    # pragma: allowlist secret
-    stream_model = os.getenv(
-        "OPENROUTER_STREAM_TEST_MODEL",
-        "",
-    ).strip()
-    default_model = os.getenv(
-        "AGENT_DEFAULT_MODEL",
-        "",
-    ).strip()
-    model_name = stream_model or default_model
+    model_name = os.getenv("AGENT_DEFAULT_MODEL", "").strip()
     if not model_name:
-        pytest.skip("configure stream test model env vars")
+        pytest.skip("AGENT_DEFAULT_MODEL not set")
 
     pytest.importorskip("openai")
 

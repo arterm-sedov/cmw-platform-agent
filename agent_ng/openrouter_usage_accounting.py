@@ -4,6 +4,25 @@
 
 Mirrors the cmw-rag pattern: flatten ``usage`` and nested billing detail fields
 for logging and downstream aggregation without coupling to Gradio or session context.
+
+--- Future: Polza.ai provider ---
+Polza.ai (https://polza.ai/api/v1) is structurally identical to OpenRouter:
+  - Same OpenAI-compatible wire protocol and streaming pattern
+    (usage arrives in the final SSE chunk, ``choices: []``)
+  - ``OpenRouterNativeChatModel`` can be reused as-is
+The only difference is cost currency:
+  - OpenRouter: ``usage.cost`` → USD
+  - Polza.ai:   ``usage.cost_rub`` → RUB  (``usage.cost`` is an alias)
+When adding a ``polza`` provider:
+  1. Add ``LLMProvider.POLZA = "polza"`` and a config block in llm_configs.py
+     (api_key_env="POLZA_API_KEY", api_base_env="POLZA_BASE_URL").
+  2. Add ``_initialize_polza_llm`` in LLMManager — identical to
+     ``_initialize_openai_llm`` but wired to POLZA_* env vars.
+  3. Add ``PolzaUsageAccountingCallback`` here that reads ``cost_rub``
+     and either stores it as-is (display "X ₽") or converts to USD via
+     a ``POLZA_RUB_TO_USD_RATE`` env var.
+     ``normalize_openrouter_usage`` can be reused after remapping
+     ``cost_rub`` → ``cost``.
 """
 
 from __future__ import annotations

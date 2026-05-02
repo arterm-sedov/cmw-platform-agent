@@ -155,6 +155,20 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             ],
             enable_chunking=True
         ),
+        LLMProvider.OPENAI: LLMConfig(
+            name="OpenAI-compatible",
+            type_str="openai",
+            api_key_env="OPENAI_API_KEY",
+            api_base_env="OPENAI_BASE_URL",
+            max_history=20,
+            tool_support=True,
+            force_tools=False,
+            vision_support=True,
+            # Add models here or via AGENT_DEFAULT_MODEL + AGENT_PROVIDER=openai.
+            # OPENAI_BASE_URL defaults to https://api.openai.com/v1.
+            models=[],
+            enable_chunking=True,
+        ),
         LLMProvider.OPENROUTER: LLMConfig(
             name="OpenRouter",
             type_str="openrouter",
