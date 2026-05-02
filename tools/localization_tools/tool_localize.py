@@ -155,7 +155,10 @@ class LocalizeSchema(BaseModel):
     resume: bool = Field(default=False, description="Resume from last translated alias")
     apply_renames: bool = Field(default=False, description="Apply renames to platform")
     fix_expressions: bool = Field(default=False, description="Fix _calc aliases in expressions")
-    dry_run: bool = Field(default=True, description="If True, only analyze without making changes")
+    dry_run: bool = Field(
+        default=True,
+        description="If True, skip the scripted extract→finalize pipeline (steps 1–6). Set False to run it.",
+    )
     dangerous_suffix: str = Field(default="_calc", description="Suffix for dangerous system names")
     safe_suffix: str = Field(default="_sv", description="Suffix for safe system names")
 
@@ -176,6 +179,9 @@ def localize_aliases(
 ) -> dict[str, Any]:
     """
     Localization workflow for system names (aliases) and display names.
+
+    When ``dry_run`` is True (default), the extract→finalize script chain is skipped.
+    Set ``dry_run`` to False to run that pipeline.
 
     Follows schema.json specification:
     - Output files: {domain}_{app}_aliases.json and {domain}_{app}_aliases_tr.json
@@ -475,7 +481,12 @@ if __name__ == "__main__":
     parser.add_argument("--resume", action="store_true", help="Resume from last translated alias")
     parser.add_argument("--apply-renames", action="store_true", help="Apply renames to platform")
     parser.add_argument("--fix-expressions", action="store_true", help="Fix _calc aliases in expressions")
-    parser.add_argument("--no-dry-run", dest="dry_run", action="store_false", help="Actually perform changes (not just preview)")
+    parser.add_argument(
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+        help="Run extract/finalize pipeline (disabled by default)",
+    )
     parser.add_argument("--dangerous-suffix", default="_calc", help="Suffix for dangerous aliases")
     parser.add_argument("--safe-suffix", default="_sv", help="Suffix for safe aliases")
 

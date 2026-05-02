@@ -213,72 +213,70 @@ TYPE_PREDICATE_MAPPING = {
 
 ### tool_localize — Automated Workflow Tool
 
-Function: `localize_aliases`
+Function: `localize_aliases` (`tools.localization_tools.tool_localize`)
 
-**Capabilities:** collect aliases + display names from CTF JSON, verify via API, apply renames, generate reports.
+**Capabilities:** Orchestrates the CTF alias pipeline (extract → platform cache → verify → dangerous scan → finalize → schema JSON), optional `_tr` translation file creation, interactive per-alias edits, `apply_renames` on platform, and expression fixes — matching the implementation in `tool_localize.py`.
 
-**Key parameters:**
+**Parameters** (see `LocalizeSchema` in-repo):
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `application_system_name` | str | required | App system name |
-| `json_folder` | str | required | Path to extracted CTF JSON |
-| `collect_aliases` | bool | `True` | Collect alias (system name) data |
-| `collect_display_names` | bool | `True` | Collect Name property data |
-| `dry_run` | bool | `True` | Preview without applying |
-| `dangerous_suffix` | str | `"_calc"` | Suffix for dangerous aliases |
+| `application_system_name` | str | required | Application system name |
+| `json_folder` | str | required | Path to the folder whose **parent** is used as `--extract-dir` for scripts (typically the inner JSON root inside the CTF tree) |
+| `output_dir` | str \| `None` | `None` | Output directory; defaults to `json_folder` when omitted |
+| `dry_run` | bool | `True` | If **`True`**, the scripted pipeline (steps 1–6: extract through schema export) **does not run**. If **`False`**, runs `tool_extract_aliases` → `tool_collect_platform` → per-folder verify → `tool_find_dangerous` → `tool_finalize` → schema file write |
+| `create_tr` | bool | `False` | Build `{domain}_{app}_aliases_tr.json` from existing aliases output (requires prior artifacts on disk) |
+| `translate_one` | str \| `None` | `None` | Interactive edit for a single `aliasOriginal` in the `_tr` file |
+| `resume` | bool | `False` | Resume interactive translation from saved state |
+| `apply_renames` | bool | `False` | Run `apply_renames.py` to push renames to the platform |
+| `fix_expressions` | bool | `False` | Rewrite `_calc` expression strings inside the `_tr` JSON on disk (also runs inside `create_tr` when combined with that flag) |
+| `dangerous_suffix` | str | `"_calc"` | Suffix for dangerous (expression-backed) aliases |
 | `safe_suffix` | str | `"_sv"` | Suffix for safe aliases |
 
 ```python
 from tools.localization_tools.tool_localize import localize_aliases
 
-# Collect both aliases and display names (default)
+# Run the full extract→finalize pipeline (writes under output_dir)
 result = localize_aliases.invoke({
     "application_system_name": "MyApp",
-    "json_folder": "/path/to/ctf",
-    "collect_aliases": True,
-    "collect_display_names": True,
+    "json_folder": "/path/to/ctf_json_root",
+    "output_dir": "/path/to/workdir",
+    "dry_run": False,
+})
+
+# After schema / verified files exist: create _tr copy (pipeline skipped if dry_run True)
+result = localize_aliases.invoke({
+    "application_system_name": "MyApp",
+    "json_folder": "/path/to/ctf_json_root",
+    "output_dir": "/path/to/workdir",
+    "create_tr": True,
     "dry_run": True,
-})
-
-# Aliases only
-result = localize_aliases.invoke({
-    "application_system_name": "MyApp",
-    "json_folder": "/path/to/ctf",
-    "collect_aliases": True,
-    "collect_display_names": False,
-})
-
-# Display names only
-result = localize_aliases.invoke({
-    "application_system_name": "MyApp",
-    "json_folder": "/path/to/ctf",
-    "collect_aliases": False,
-    "collect_display_names": True,
 })
 ```
 
-**Return structure:**
+**Return structure** (always present):
 
 ```python
 {
     "success": bool,
-    "aliases_collected": int,
-    "display_names_collected": int,
-    "aliases_verified": int,
-    "aliases_missing": list,     # aliases not found in platform
-    "dangerous_aliases": list,   # aliases used in expressions
-    "safe_aliases": list,        # aliases only in alias fields
-    "collect_aliases": bool,
-    "collect_display_names": bool,
-    "errors": list,
+    "phase": str,       # e.g. "started", "create_tr", "translate", "apply_renames", "fix_expressions", "complete", "error"
+    "actions": list,    # human-readable log lines
+    "errors": list,     # error strings when success is False
 }
 ```
 
+**Optional keys** after a successful `dry_run=False` pipeline (when verification file existed and finalize produced entries):
+
+- `output_file` — path to `{domain}_{app}_aliases.json`
+- `total_entries` — count of entries written
+- `locked_entries` — count with `aliasLocked`
+- `dangerous_count` — length of dangerous-alias list when `*_dangerous_aliases.json` exists
+
 **Important:**
-- Both alias and displayName collection are **optional and independent** — run one without the other as needed
-- Aliases are applied via API (Phase 5)
-- DisplayNames are applied via CTF import (Phase 9) and are NOT verified against the platform API
+
+- Default call (`dry_run=True`, other flags off) **does not** run extraction; you get `phase: "complete"` and empty `actions` unless you set another mode (`create_tr`, `translate_one`, etc.) that uses existing files.
+- Manual Phases 1–9 above remain the conceptual workflow; `localize_aliases` wraps the same scripts under `dry_run=False` and optional later stages.
+- Display-name–vs–alias semantics for CTF import vs API still follow Workflow A (Phases 5 vs 9) in this document.
 
 ### Step Scripts — Large Application Workflow
 

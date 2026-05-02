@@ -176,6 +176,8 @@ agent-browser open "https://host/" ; agent-browser snapshot -i ; agent-browser f
 playwright-cli open "https://host/" ; playwright-cli snapshot ; playwright-cli fill e14 "user" ; playwright-cli screenshot page.png
 ```
 
+The flows above use **short names**; your MCP host may namespace tools (names differ by client). Example full names used in this skill’s reference: `agent-browser_browser_*`, `playwright_browser_*` — see [MCP Tool Interface Reference](references/browser_automation.md#mcp-tool-interface-reference). Call whatever appears in your client’s tool list.
+
 ### Credentials
 
 Always load from `.env` — never hardcode. See [references/browser_automation.md](references/browser_automation.md#credentials-loading-from-env) for Python and PowerShell patterns.
@@ -408,8 +410,18 @@ Exit code `0` = pass, `1` = fail.
 | [references/workflow_sequences.md](references/workflow_sequences.md) | Reusable code patterns |
 | [references/localization.md](references/localization.md) | Both localization workflows: alias rename (9-phase) + RU→EN UI text translation |
 | [references/browser_automation.md](references/browser_automation.md) | Browser automation guide |
-| [browser-switch skill](file:///C:/Users/ased/.agents/skills/browser-switch/skills/browser-switch/SKILL.md) | Decide between agent-browser and Playwright |
-| [agent-browser skill](file:///C:/Users/ased/.agents/skills/agent-browser/SKILL.md) | Full agent-browser CLI reference |
-| [playwright-cli skill](file:///C:/Users/ased/.config/opencode/skills/playwright/SKILL.md) | Playwright CLI reference |
+
+## Optional companion skills (GitHub)
+
+- [web-search](https://github.com/arterm-sedov/web-search-skill)
+- [human-search](https://github.com/arterm-sedov/human-search-skill)
+- [searxng-agent-skills](https://github.com/arterm-sedov/searxng-agent-skills)
+- [browser-switch](https://github.com/arterm-sedov/browser-switch)
+- [deep-research](https://github.com/arterm-sedov/deep-research)
+- [agent-browser](https://github.com/vercel-labs/agent-browser)
+- [Playwright CLI](https://playwright.dev/docs/cli)
+- [microsoft/playwright](https://github.com/microsoft/playwright)
+
+Install: [`npx skills add`](https://www.npmjs.com/package/skills) (e.g. `npx skills add arterm-sedov/web-search-skill --skill web-search`).
 
 ---

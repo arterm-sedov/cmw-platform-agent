@@ -795,7 +795,7 @@ Rule of thumb:
 
 ### Option 3: agent-browser CLI
 
-Available as `agent-browser` in the shell. Full reference: [agent-browser skill](file:///C:/Users/ased/.agents/skills/agent-browser/SKILL.md).
+Available as `agent-browser` in the shell. Upstream project and bundled skill: [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) (`skills/agent-browser`).
 
 ```powershell
 # Navigate, snapshot, fill, screenshot
@@ -830,7 +830,7 @@ agent-browser auth login cmw
 
 ### Option 4: playwright-cli
 
-Available as `playwright-cli` in the shell. Full reference: [playwright-cli skill](file:///C:/Users/ased/.config/opencode/skills/playwright/SKILL.md).
+Available as `playwright-cli` in the shell. CLI reference: [Playwright CLI](https://playwright.dev/docs/cli) · [microsoft/playwright](https://github.com/microsoft/playwright).
 
 ```powershell
 # Basic flow
