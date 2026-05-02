@@ -457,31 +457,6 @@ class LLMManager:
             )
             return None
 
-        try:
-            # Convert model to repo_id for HuggingFace
-            repo_id = model_config["model"]
-            task = model_config.get("task", "text-generation")
-
-            llm = ChatHuggingFace(
-                llm=HuggingFaceEndpoint(
-                    repo_id=repo_id,
-                    task=task,
-                    huggingfacehub_api_token=api_key,
-                    max_new_tokens=model_config.get("max_new_tokens", 1024),
-                    do_sample=model_config.get("do_sample", False),
-                    temperature=model_config.get("temperature", 0),
-                )
-            )
-            self._log_initialization(
-                f"Successfully initialized {config.name} - {model_config['model']}"
-            )
-            return llm
-        except Exception as e:
-            self._log_initialization(
-                f"Failed to initialize {config.name}: {str(e)}", "ERROR"
-            )
-            return None
-
     def _initialize_openrouter_llm(
         self,
         config: LLMConfig,
@@ -494,15 +469,34 @@ class LLMManager:
             return None
 
         try:
-            base_url = os.getenv(config.api_base_env, "https://openrouter.ai/api/v1")
-            llm = ChatOpenAI(
-                model=model_config["model"],
-                api_key=api_key,
-                base_url=base_url,
-                temperature=model_config.get("temperature", 0),
-                max_tokens=model_config.get("max_tokens", 2048),
-                streaming=True,  # Enable streaming
+            base_url = os.getenv(config.api_base_env, "https://openrouter.ai/api/v1")  # // pragma: allowlist secret
+            use_native = os.getenv("OPENROUTER_NATIVE_SDK", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+                "on",
             )
+            if use_native:
+                from agent_ng.openrouter_native_chat import (
+                    create_openrouter_native_chat_model,
+                )
+
+                llm = create_openrouter_native_chat_model(
+                    model_name=model_config["model"],
+                    base_url=base_url,
+                    api_key=api_key,
+                    temperature=float(model_config.get("temperature", 0)),
+                    max_tokens=int(model_config.get("max_tokens", 2048)),
+                )
+            else:
+                llm = ChatOpenAI(
+                    model=model_config["model"],
+                    api_key=api_key,
+                    base_url=base_url,
+                    temperature=model_config.get("temperature", 0),
+                    max_tokens=model_config.get("max_tokens", 2048),
+                    streaming=True,  # Enable streaming
+                )
             # LangSmith tracing is handled via @traceable decorators
             self._log_initialization(
                 f"Successfully initialized {config.name} - {model_config['model']}"

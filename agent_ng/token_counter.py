@@ -109,6 +109,16 @@ def _usage_to_dict(usage_obj: Any) -> dict[str, Any] | None:
     return d or None
 
 
+def _first_chat_generation(llm_result: Any) -> Any | None:
+    """First ``ChatGeneration`` from ``LLMResult`` (nested batches or flat list)."""
+    if not hasattr(llm_result, "generations") or not llm_result.generations:
+        return None
+    head = llm_result.generations[0]
+    if isinstance(head, list):
+        return head[0] if head else None
+    return head
+
+
 def _extract_cache_details(
     usage_dict: dict[str, Any] | None,
 ) -> tuple[int | None, int | None]:
@@ -421,6 +431,15 @@ class ConversationTokenTracker:
         """Track LLM response tokens with API fallback"""
         logger = logging.getLogger(__name__)
         logger.debug("track_llm_response response type: %s", type(response))
+        # Unwrap LangChain LLMResult so callbacks receive AIMessage-shaped payloads
+        if hasattr(response, "generations") and response.generations:
+            try:
+                gen0 = _first_chat_generation(response)
+                inner = getattr(gen0, "message", None) if gen0 is not None else None
+                if inner is not None:
+                    response = inner
+            except Exception as exc:
+                logger.debug("Could not unwrap LLMResult for token tracking: %s", exc)
         # Try to extract API tokens from response
         api_tokens = self._extract_api_tokens(response)
         logger.debug("Extracted API tokens: %s", api_tokens)
@@ -800,6 +819,27 @@ class ConversationTokenTracker:
                     cached_tokens,
                     cache_write_tokens,
                 )
+
+            # // pragma: allowlist secret
+            # pragma: allowlist secret
+            # OpenRouter native / ChatOpenRouter: usage charge may appear top-level on metadata
+            rm_top = getattr(response, "response_metadata", None)
+            if isinstance(rm_top, dict) and fallback_result is not None:
+                try:
+                    rc = rm_top.get("cost")
+                    if rc is not None:
+                        rc_f = float(rc)
+                        if rc_f > float(fallback_result[3]):
+                            fallback_result = (
+                                fallback_result[0],
+                                fallback_result[1],
+                                fallback_result[2],
+                                rc_f,
+                                fallback_result[4],
+                                fallback_result[5],
+                            )
+                except (TypeError, ValueError) as exc:
+                    logger.debug("Skipped merging response_metadata.cost: %s", exc)
 
             # Direct `usage` attribute (OpenAI/OpenRouter clients; streaming final chunk)
             usage_attr = getattr(response, "usage", None)
@@ -1249,8 +1289,8 @@ class UsageMetadataCallbackHandler(BaseCallbackHandler):
         _ = kwargs
         try:
             if hasattr(response, "generations") and response.generations:
-                generation = response.generations[0][0]
-                if hasattr(generation, "message"):
+                generation = _first_chat_generation(response)
+                if generation is not None and hasattr(generation, "message"):
                     self.token_tracker.track_llm_response(
                         response, [generation.message]
                     )
@@ -1258,6 +1298,21 @@ class UsageMetadataCallbackHandler(BaseCallbackHandler):
             logging.getLogger(__name__).debug(
                 "Failed to capture usage metadata: %s", exc
             )
+
+
+class SessionUsageMetadataCallbackHandler(BaseCallbackHandler):
+    """Routes LLM end events to a session-bound ``ConversationTokenTracker``.
+
+    Use with ``RunnableConfig(callbacks=[...])`` so streaming inherits the same
+    tracker as the agent without mutating global LLM singletons.
+    """
+
+    def __init__(self, token_tracker: ConversationTokenTracker) -> None:
+        super().__init__()
+        self._handler = UsageMetadataCallbackHandler(token_tracker)
+
+    def on_llm_end(self, response: Any, **kwargs: Any) -> None:  # type: ignore[override]
+        self._handler.on_llm_end(response, **kwargs)
 
 
 # Session-specific token tracker instances
