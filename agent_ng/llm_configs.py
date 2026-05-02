@@ -529,11 +529,45 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             max_history=20,
             tool_support=True,
             force_tools=False,
-            vision_support=False,
+            # Some models support vision (qwen3.6-plus, grok-4.20); text-only
+            # models (glm-5.1, minimax-m2.7) have vision_support=False per-model.
+            vision_support=True,
             # Billing is in RUB (cost_rub field).  Set POLZA_RUB_TO_USD_RATE
-            # (RUB per 1 USD, e.g. 90) for optional USD conversion.
-            # Add models here or rely on AGENT_DEFAULT_MODEL + AGENT_PROVIDER=polza.
-            models=[],
+            # (RUB per 1 USD, e.g. 90) for USD conversion in the billing pipeline.
+            models=[
+                {
+                    "model": "qwen/qwen3.6-plus",
+                    "token_limit": 1000000,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                },
+                {
+                    "model": "z-ai/glm-5.1",
+                    "token_limit": 202752,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": False,
+                },
+                {
+                    "model": "minimax/minimax-m2.7",
+                    "token_limit": 204800,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": False,
+                },
+                {
+                    "model": "x-ai/grok-4.20",
+                    "token_limit": 2000000,
+                    "max_tokens": 131072,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                },
+            ],
             enable_chunking=True,
         ),
         LLMProvider.MISTRAL: LLMConfig(
