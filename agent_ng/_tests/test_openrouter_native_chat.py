@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -225,23 +226,42 @@ def test_openrouter_native_stream_preserves_cost_on_usage_chunk() -> None:
 
 def test_live_openrouter_stream_returns_cost_when_api_allows() -> None:
     # pragma: allowlist secret
-    """Optional live stream cost check; skips without key or on HTTP errors."""
+    """Live stream cost: uses ``.env`` / env only (no hardcoded URL or model)."""
     # pragma: allowlist secret
 
-    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    from dotenv import load_dotenv
+
+    _env = Path(__file__).resolve().parents[2] / ".env"
+    if _env.is_file():
+        load_dotenv(_env, override=False)
+
+    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()  # pragma: allowlist secret
     if not api_key:
-        pytest.skip("provider API key not set")
+        pytest.skip("missing provider API key for live test")
+
+    base_url = os.getenv("OPENROUTER_BASE_URL", "").strip()  # pragma: allowlist secret
+    if not base_url:
+        pytest.skip("missing provider API base URL for live test")
+
+    # pragma: allowlist secret
+    stream_model = os.getenv(
+        "OPENROUTER_STREAM_TEST_MODEL",
+        "",
+    ).strip()
+    default_model = os.getenv(
+        "AGENT_DEFAULT_MODEL",
+        "",
+    ).strip()
+    model_name = stream_model or default_model
+    if not model_name:
+        pytest.skip("configure stream test model env vars")
 
     pytest.importorskip("openai")
 
     from openai import APIStatusError, PermissionDeniedError
 
-    base_url = os.getenv(
-        "OPENROUTER_BASE_URL",
-        "https://openrouter.ai/api/v1",
-    )
     llm = create_openrouter_native_chat_model(
-        model_name=os.getenv("OPENROUTER_STREAM_TEST_MODEL", "openai/gpt-4o-mini"),
+        model_name=model_name,
         base_url=base_url,
         api_key=api_key,
         temperature=0,

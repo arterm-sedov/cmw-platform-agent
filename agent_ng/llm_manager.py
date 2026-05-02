@@ -1182,3 +1182,14 @@ def get_llm_manager() -> LLMManager:
             if _llm_manager is None:
                 _llm_manager = LLMManager()
     return _llm_manager
+
+
+def reset_llm_manager_singleton() -> None:
+    """Clear the cached manager so the next ``get_llm_manager()`` reads fresh env.
+
+    Used by tests and scripts that call ``load_dotenv(override=True)`` before
+    constructing LLMs (singleton would otherwise keep earlier instances).
+    """
+    global _llm_manager
+    with _manager_lock:
+        _llm_manager = None
