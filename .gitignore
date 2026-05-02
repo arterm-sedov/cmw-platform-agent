@@ -19,3 +19,6 @@ docs/cmw_admin_pages.md
 .browser-states/
 .playwright-mcp/**
 .playwright-cli/**
+.opencode/node_modules/
+.opencode/package-lock.json
+.opencode/package.json
