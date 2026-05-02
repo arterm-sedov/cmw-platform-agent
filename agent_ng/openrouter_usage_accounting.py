@@ -161,8 +161,10 @@ def normalize_polza_usage(
 
     ``cost_rub`` is the authoritative billing field (rubles).
     If *rub_to_usd_rate* is provided (or ``POLZA_RUB_TO_USD_RATE`` env var is
-    set), ``cost`` is populated with the USD equivalent; otherwise ``cost``
-    stays 0.0 and callers should use ``cost_rub`` for display.
+    set), ``cost`` is populated with the USD equivalent.  The rate is expressed
+    as **RUB per 1 USD** (e.g. ``90`` means 90 ₽ = $1), so
+    ``cost_usd = cost_rub / rate``.  If the rate is not set ``cost`` stays 0.0
+    and callers should use ``cost_rub`` for display.
     """
     base = normalize_openrouter_usage(token_usage)
     if not isinstance(token_usage, dict):
@@ -179,7 +181,7 @@ def normalize_polza_usage(
             with contextlib.suppress(ValueError):
                 rate = float(env_rate)
 
-    cost_usd = cost_rub * rate if rate else 0.0
+    cost_usd = cost_rub / rate if rate else 0.0
     return {**base, "cost": cost_usd, "cost_rub": cost_rub}
 
 

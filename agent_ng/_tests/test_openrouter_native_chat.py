@@ -295,14 +295,15 @@ def test_normalize_polza_usage_reads_cost_rub(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_normalize_polza_usage_converts_to_usd_when_rate_given() -> None:
+    # rate is RUB per 1 USD: 10 ₽ / 100 ₽per$ = $0.10
     raw = {
         "prompt_tokens": 10,
         "completion_tokens": 5,
         "total_tokens": 15,
         "cost_rub": 10.0,
     }
-    n = normalize_polza_usage(raw, rub_to_usd_rate=0.011)
-    assert n["cost"] == pytest.approx(0.11)
+    n = normalize_polza_usage(raw, rub_to_usd_rate=100.0)
+    assert n["cost"] == pytest.approx(0.10)
     assert n["cost_rub"] == pytest.approx(10.0)
 
 

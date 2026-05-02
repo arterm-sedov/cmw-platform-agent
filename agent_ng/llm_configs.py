@@ -531,7 +531,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             force_tools=False,
             vision_support=False,
             # Billing is in RUB (cost_rub field).  Set POLZA_RUB_TO_USD_RATE
-            # for optional USD conversion in PolzaUsageAccountingCallback.
+            # (RUB per 1 USD, e.g. 90) for optional USD conversion.
             # Add models here or rely on AGENT_DEFAULT_MODEL + AGENT_PROVIDER=polza.
             models=[],
             enable_chunking=True,
