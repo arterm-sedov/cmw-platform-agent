@@ -15,7 +15,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agent_ng.langchain_agent import NextGenAgent
+from agent_ng import NextGenAgent
 from agent_ng.llm_manager import get_llm_manager
 
 

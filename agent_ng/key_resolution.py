@@ -8,7 +8,7 @@ Checks config tab override first, then falls back to environment variable.
 
 import os
 
-from agent_ng.session_manager import get_session_config
+from .session_manager import get_session_config
 
 
 def get_api_key(

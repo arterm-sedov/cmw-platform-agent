@@ -7,8 +7,19 @@ functionality to ensure everything works correctly.
 
 import asyncio
 import time
-from .debug_streamer import get_debug_streamer, get_log_handler, get_thinking_transparency, LogLevel, LogCategory
-from .streaming_chat import get_chat_interface
+
+import pytest
+
+from agent_ng.debug_streamer import (
+    LogCategory,
+    LogLevel,
+    get_debug_streamer,
+    get_log_handler,
+    get_thinking_transparency,
+)
+
+pytest.importorskip("agent_ng.streaming_chat")
+from agent_ng.streaming_chat import get_chat_interface
 
 
 async def test_debug_system():
