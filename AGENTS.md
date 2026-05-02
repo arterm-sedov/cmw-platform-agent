@@ -234,3 +234,11 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 ---
 
 **Remember:** LangChain-pure, DRY, lean, modular, pythonic patterns. Always research first, plan thoroughly, produce flawless code.
+
+## Agent Environment Notes
+
+Non-obvious caveats. For standard setup, run, lint, and test commands see the **Development Setup** section in `README.md`.
+
+- On startup, the app fetches OpenRouter model pricing via HTTP (~10-15 s of network calls). This is normal, not an error.
+- Some `ruff` findings are intentionally unfixable per `pyproject.toml`. When in doubt about whether to fix a lint finding, ask the user.
+- On a clean first start with dummy/empty `.env`, some tests may fail or error due to missing credentials or import issues. Configure real API keys and check test prerequisites first; if failures persist, ask the user before investigating further.
