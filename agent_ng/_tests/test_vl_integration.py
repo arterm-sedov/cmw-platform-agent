@@ -103,10 +103,15 @@ class TestVLCapabilityFlags:
             assert not m.get("video_support"),         f"{m['model']} does NOT support video"
             assert not m.get("audio_support"),         f"{m['model']} does NOT support audio"
 
-    def test_grok_is_text_only(self):
-        grok_models = [m for m in self._all_models() if "grok" in m["model"]]
+    def test_grok_is_text_only_on_openrouter(self):
+        # Grok via OpenRouter has no vision support; Polza's grok-4.20 may differ.
+        from agent_ng.llm_manager import LLMProvider
+        or_cfg = self.configs.get(LLMProvider.OPENROUTER)
+        if or_cfg is None:
+            pytest.skip("OpenRouter config not found")
+        grok_models = [m for m in or_cfg.models if "grok" in m["model"]]
         for m in grok_models:
-            assert not m.get("vision_support"), f"{m['model']} should be text-only"
+            assert not m.get("vision_support"), f"{m['model']} should be text-only on OpenRouter"
             assert not m.get("video_support")
             assert not m.get("audio_support")
 
@@ -186,8 +191,9 @@ class TestVisionToolManagerRouting:
 
     def test_adapter_openrouter_for_qwen(self):
         from agent_ng.vision_tool_manager import VisionToolManager
-        mgr = VisionToolManager()
-        adapter = mgr.get_adapter_for_model("qwen/qwen3.6-plus")
+        with patch.dict(os.environ, {"AGENT_PROVIDER": "openrouter"}, clear=False):
+            mgr = VisionToolManager()
+            adapter = mgr.get_adapter_for_model("qwen/qwen3.6-plus")
         assert adapter is mgr.adapters.get("openrouter"), "Qwen should use OpenRouter adapter"
 
     def test_adapter_gemini_direct_for_bare_gemini(self):
@@ -198,9 +204,72 @@ class TestVisionToolManagerRouting:
 
     def test_adapter_openrouter_for_google_prefixed(self):
         from agent_ng.vision_tool_manager import VisionToolManager
-        mgr = VisionToolManager()
-        adapter = mgr.get_adapter_for_model("google/gemini-2.5-flash")
+        with patch.dict(os.environ, {"AGENT_PROVIDER": "openrouter"}, clear=False):
+            mgr = VisionToolManager()
+            adapter = mgr.get_adapter_for_model("google/gemini-2.5-flash")
         assert adapter is mgr.adapters.get("openrouter"), "google/ prefix → OpenRouter adapter"
+
+    # ------------------------------------------------------------------
+    # Polza routing tests (TDD — require implementation below)
+    # ------------------------------------------------------------------
+
+    def test_polza_adapter_registered(self):
+        """Polza adapter slot is always registered in VisionToolManager."""
+        from agent_ng.vision_tool_manager import VisionToolManager
+        mgr = VisionToolManager()
+        assert "polza" in mgr.adapters, "polza adapter must be registered"
+
+    def test_polza_adapter_has_polza_provider(self):
+        """Polza adapter carries LLMProvider.POLZA, not OPENROUTER."""
+        from agent_ng.vision_tool_manager import VisionToolManager
+        from agent_ng.llm_manager import LLMProvider
+        mgr = VisionToolManager()
+        adapter = mgr.adapters["polza"]
+        assert adapter.provider == LLMProvider.POLZA
+
+    def test_adapter_uses_polza_when_agent_provider_polza(self):
+        """AGENT_PROVIDER=polza routes slash-model to polza adapter."""
+        from agent_ng.vision_tool_manager import VisionToolManager
+        with patch.dict(os.environ, {"AGENT_PROVIDER": "polza"}, clear=False):
+            mgr = VisionToolManager()
+            adapter = mgr.get_adapter_for_model("qwen/qwen3.6-plus")
+        assert adapter is mgr.adapters.get("polza"), (
+            "AGENT_PROVIDER=polza: qwen/* should use polza adapter"
+        )
+
+    def test_adapter_uses_polza_for_google_prefixed_when_agent_provider_polza(self):
+        """AGENT_PROVIDER=polza routes google/* to polza adapter."""
+        from agent_ng.vision_tool_manager import VisionToolManager
+        with patch.dict(os.environ, {"AGENT_PROVIDER": "polza"}, clear=False):
+            mgr = VisionToolManager()
+            adapter = mgr.get_adapter_for_model("google/gemini-2.5-flash")
+        assert adapter is mgr.adapters.get("polza"), (
+            "AGENT_PROVIDER=polza: google/* should use polza adapter"
+        )
+
+    def test_vl_gemini_provider_polza_normalizes_to_google_prefix(self):
+        """VL_GEMINI_PROVIDER=polza normalizes gemini-* to google/gemini-*."""
+        from agent_ng.vision_tool_manager import VisionToolManager
+        with patch.dict(
+            os.environ,
+            {"VL_GEMINI_PROVIDER": "polza", "VL_AUDIO_MODEL": "gemini-2.5-flash"},
+            clear=False,
+        ):
+            mgr = VisionToolManager()
+            from agent_ng.vision_input import VisionInput
+            vi = VisionInput(prompt="x", audio_url="http://example.com/x.mp3")
+            model = mgr.get_model_for_input(vi)
+        assert model == "google/gemini-2.5-flash", (
+            f"VL_GEMINI_PROVIDER=polza should produce google/ prefix, got: {model}"
+        )
+
+    def test_default_openrouter_adapter_unaffected(self):
+        """Regression: default AGENT_PROVIDER still routes to openrouter."""
+        from agent_ng.vision_tool_manager import VisionToolManager
+        with patch.dict(os.environ, {"AGENT_PROVIDER": "openrouter"}, clear=False):
+            mgr = VisionToolManager()
+            adapter = mgr.get_adapter_for_model("qwen/qwen3.6-plus")
+        assert adapter is mgr.adapters.get("openrouter")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

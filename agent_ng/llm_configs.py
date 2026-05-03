@@ -567,6 +567,31 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": True,
                     "vision_support": True,
                 },
+                {
+                    # Omni model: image + video + audio input.
+                    # Used as VL_AUDIO_MODEL when AGENT_PROVIDER=polza.
+                    "model": "xiaomi/mimo-v2-omni",
+                    "token_limit": 262144,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True,
+                },
+                {
+                    # Full multimodal Gemini via Polza.
+                    # Active for audio routing when VL_GEMINI_PROVIDER=polza.
+                    # YouTube stays on Gemini Direct (VL_YOUTUBE_GEMINI_PROVIDER=google).
+                    "model": "google/gemini-2.5-flash",
+                    "token_limit": 1048576,
+                    "max_tokens": 65535,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True,
+                },
             ],
             enable_chunking=True,
         ),
