@@ -27,6 +27,7 @@ class DownloadsTab:
         self.main_app = None  # Reference to main app for session management
         self.language = language
         self.i18n = i18n_instance
+        self._tab_item: gr.TabItem | None = None
 
     def create_tab(self) -> tuple[gr.TabItem, dict[str, Any]]:
         """
@@ -37,7 +38,12 @@ class DownloadsTab:
         """
         logging.getLogger(__name__).info("✅ DownloadsTab: Creating downloads interface...")
 
-        with gr.TabItem(self._get_translation("tab_downloads"), id="downloads") as tab:
+        with gr.TabItem(
+            self._get_translation("tab_downloads"),
+            id="downloads",
+            render_children=True,
+        ) as tab:
+            self._tab_item = tab
             # Create downloads interface
             self._create_downloads_interface()
 

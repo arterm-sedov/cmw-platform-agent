@@ -107,7 +107,11 @@ class Sidebar(QuickActionsMixin):
             "✅ Sidebar: Creating sidebar as tab interface..."
         )
 
-        with gr.TabItem(self._get_translation("tab_sidebar"), id="sidebar") as tab:
+        with gr.TabItem(
+            self._get_translation("tab_sidebar"),
+            id="sidebar",
+            render_children=True,
+        ) as tab:
             # LLM Selection section
             with gr.Column(elem_classes=["model-card"]):
                 gr.Markdown(

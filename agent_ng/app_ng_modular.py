@@ -48,14 +48,28 @@ except Exception:
 
 # Import configuration with fallback for direct execution
 try:
-    from agent_ng.agent_config import config, get_language_settings, get_port_settings
+    from agent_ng.agent_config import (
+        config,
+        get_language_settings,
+        get_port_settings,
+        get_ui_disable_auto_timers,
+        get_ui_stack_home_chat,
+        get_ui_tab_allowlist,
+    )
 except ImportError:
     # Fallback for direct execution
     from pathlib import Path
     import sys
 
     sys.path.append(str(Path(__file__).parent))
-    from agent_config import config, get_language_settings, get_port_settings
+    from agent_config import (
+        config,
+        get_language_settings,
+        get_port_settings,
+        get_ui_disable_auto_timers,
+        get_ui_stack_home_chat,
+        get_ui_tab_allowlist,
+    )
 
 
 # Local imports with robust fallback handling
@@ -1379,41 +1393,64 @@ class NextGenApp:
         # Create event handlers
         event_handlers = self._create_event_handlers()
 
+        ui_allow = get_ui_tab_allowlist()
+
+        def _want_tab(tab_key: str) -> bool:
+            return ui_allow is None or tab_key in ui_allow
+
+        if ui_allow is not None:
+            tabs_raw = (os.getenv("CMW_UI_TABS") or "").strip()
+            limit_raw = (os.getenv("CMW_UI_TAB_LIMIT") or "").strip()
+            via = "CMW_UI_TABS" if tabs_raw else "CMW_UI_TAB_LIMIT"
+            _logger.info(
+                "%s active — building subset: %s",
+                via,
+                ", ".join(sorted(ui_allow)),
+            )
+            if via == "CMW_UI_TAB_LIMIT" and limit_raw:
+                _logger.info("CMW_UI_TAB_LIMIT=%s", limit_raw)
+
         # Create tab modules with error handling
         tab_modules = []
         try:
             # Home tab first (welcome page)
-            if HomeTab:
+            if HomeTab and _want_tab("home"):
                 home_tab = HomeTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
                 home_tab.set_main_app(self)  # Set reference to main app
                 tab_modules.append(home_tab)
                 self.tab_instances["home"] = home_tab
+            elif HomeTab:
+                _logger.info("HomeTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("HomeTab not available")
 
-            if ChatTab:
+            if ChatTab and _want_tab("chat"):
                 chat_tab = ChatTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
                 chat_tab.set_main_app(self)  # Set reference to main app
                 tab_modules.append(chat_tab)
                 self.tab_instances["chat"] = chat_tab
+            elif ChatTab:
+                _logger.info("ChatTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("ChatTab not available")
 
-            if LogsTab:
+            if LogsTab and _want_tab("logs"):
                 logs_tab = LogsTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
                 logs_tab.set_main_app(self)  # Pass main app reference
                 tab_modules.append(logs_tab)
                 self.tab_instances["logs"] = logs_tab
+            elif LogsTab:
+                _logger.info("LogsTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("LogsTab not available")
 
-            if StatsTab:
+            if StatsTab and _want_tab("stats"):
                 stats_tab = StatsTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
@@ -1422,6 +1459,8 @@ class NextGenApp:
                 )  # Set reference to main app for session management
                 tab_modules.append(stats_tab)
                 self.tab_instances["stats"] = stats_tab
+            elif StatsTab:
+                _logger.info("StatsTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("StatsTab not available")
 
@@ -1432,7 +1471,11 @@ class NextGenApp:
                 "true",
                 "yes",
             )
-            if not use_dotenv_flag and ConfigTab:
+            if (
+                not use_dotenv_flag
+                and ConfigTab
+                and _want_tab("config")
+            ):
                 config_tab = ConfigTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
@@ -1441,17 +1484,19 @@ class NextGenApp:
                 self.tab_instances["config"] = config_tab
             else:
                 _logger.info(
-                    "ConfigTab not shown (CMW_USE_DOTENV is true or tab unavailable)"
+                    "ConfigTab not shown (CMW_USE_DOTENV is true, CMW_UI_TABS, or tab unavailable)"
                 )
 
             # Downloads tab
-            if DownloadsTab:
+            if DownloadsTab and _want_tab("downloads"):
                 downloads_tab = DownloadsTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
                 downloads_tab.set_main_app(self)
                 tab_modules.append(downloads_tab)
                 self.tab_instances["downloads"] = downloads_tab
+            elif DownloadsTab:
+                _logger.info("DownloadsTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("DownloadsTab not available")
         except Exception as e:
@@ -1462,9 +1507,23 @@ class NextGenApp:
         # launched Blocks to receive .queue() or validation fails (streaming / cancel chains).
 
         # Use UI Manager to create interface
+        stack_home_chat = get_ui_stack_home_chat()
+        disable_auto_timers = get_ui_disable_auto_timers()
+        include_sidebar_tab = (
+            ui_allow is None or "sidebar" in ui_allow
+        ) and not stack_home_chat
+        if stack_home_chat:
+            _logger.info(
+                "CMW_UI_STACK_HOME_CHAT: single-column layout; sidebar tab disabled"
+            )
         try:
             demo = self.ui_manager.create_interface(
-                tab_modules, event_handlers, main_app=self
+                tab_modules,
+                event_handlers,
+                main_app=self,
+                include_sidebar_tab=include_sidebar_tab,
+                stack_home_chat=stack_home_chat,
+                disable_auto_timers=disable_auto_timers,
             )
         except Exception as e:
             _logger.exception("Error creating interface: %s", e)
@@ -1710,60 +1769,52 @@ class NextGenAppWithLanguageDetection(NextGenApp):
 
 # Global demo variable for single port architecture
 demo = None
+# Tracks dev-only UI env (CMW_UI_TABS / stack / timers) so cached Blocks rebuilds when they change.
+_DEMO_UI_EXPERIMENT_SIG: str | None = None
+
+
+def _ui_experiment_signature() -> str:
+    """Stable fingerprint for UI bisect env vars (same interpreter, e.g. watch / reload)."""
+    return "|".join(
+        [
+            os.getenv("CMW_UI_TABS") or "",
+            os.getenv("CMW_UI_TAB_LIMIT") or "",
+            os.getenv("CMW_UI_STACK_HOME_CHAT") or "",
+            os.getenv("CMW_UI_DISABLE_AUTO_TIMERS") or "",
+        ]
+    )
 
 
 def get_demo_with_language_detection():
     """Get or create the demo interface with language detection support"""
-    global demo
+    global demo, _DEMO_UI_EXPERIMENT_SIG
+
+    sig = _ui_experiment_signature()
+    if demo is not None and _DEMO_UI_EXPERIMENT_SIG != sig:
+        _logger.info(
+            "Rebuilding demo: UI experiment env changed (%r -> %r)",
+            _DEMO_UI_EXPERIMENT_SIG,
+            sig,
+        )
+        demo = None
 
     if demo is None:
         try:
-            # #region agent log
-            import json, time
-            try:
-                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"J","location":"app_ng_modular.py:1558","message":"Starting demo creation","data":{},"timestamp":int(time.time()*1000)}) + '\n')
-            except: pass
-            # #endregion
             # First, detect the language using the elegant i18n system
             temp_app = NextGenAppWithLanguageDetection()
             detected_language = temp_app.get_current_language()
-            # #region agent log
-            try:
-                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"K","location":"app_ng_modular.py:1562","message":"Language detected","data":{"language":detected_language},"timestamp":int(time.time()*1000)}) + '\n')
-            except: pass
-            # #endregion
 
             # Create app with the detected language
             app = NextGenAppWithLanguageDetection(language=detected_language)
-            # #region agent log
-            try:
-                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"L","location":"app_ng_modular.py:1566","message":"Calling create_interface","data":{},"timestamp":int(time.time()*1000)}) + '\n')
-            except: pass
-            # #endregion
             demo = app.create_interface()
-            # #region agent log
-            try:
-                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"M","location":"app_ng_modular.py:1567","message":"Interface created successfully","data":{},"timestamp":int(time.time()*1000)}) + '\n')
-            except: pass
-            # #endregion
 
             # Ensure the demo has the required attributes for Gradio reloading
             if not hasattr(demo, "_queue"):
                 demo._queue = None
 
+            _DEMO_UI_EXPERIMENT_SIG = sig
             _logger.info(f"🌐 Demo created with detected language: {detected_language}")
         except Exception as e:
-            # #region agent log
-            import json, time
-            try:
-                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"N","location":"app_ng_modular.py:1574","message":"Error creating demo","data":{"error":str(e),"error_type":type(e).__name__},"timestamp":int(time.time()*1000)}) + '\n')
-            except: pass
-            # #endregion
             _logger.exception("Error creating demo: %s", e)
             # Create a minimal working demo with required attributes
             with gr.Blocks() as fallback_demo:
@@ -1773,6 +1824,7 @@ def get_demo_with_language_detection():
             if not hasattr(fallback_demo, "_queue"):
                 fallback_demo._queue = None
             demo = fallback_demo
+            _DEMO_UI_EXPERIMENT_SIG = sig
 
     return demo
 
@@ -1817,6 +1869,7 @@ def reload_demo():
     global demo
     try:
         _logger.info("Reloading demo...")
+        demo = None
         demo = get_demo_with_language_detection()
         return demo
     except Exception as e:

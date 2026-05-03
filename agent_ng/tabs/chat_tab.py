@@ -21,15 +21,16 @@ import uuid
 import gradio as gr
 import markdown
 
+from agent_ng.agent_config import get_ui_export_html_after_turn
 from agent_ng.debug_streamer import get_debug_streamer
+from agent_ng.history_compression import (
+    perform_compression_with_notifications,
+    should_compress_on_completion,
+)
 from agent_ng.i18n_translations import get_translation_key
 from agent_ng.queue_manager import (
     apply_concurrency_to_click_event,
     apply_concurrency_to_submit_event,
-)
-from agent_ng.history_compression import (
-    perform_compression_with_notifications,
-    should_compress_on_completion,
 )
 from agent_ng.token_budget import (
     HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
@@ -44,13 +45,14 @@ try:
     from agent_ng._file_attachment import build_file_bubbles_for_role
 except ImportError:
     try:
-        from .._file_attachment import build_file_bubbles_for_role  # type: ignore[no-redef]
+        from .._file_attachment import (
+            build_file_bubbles_for_role,  # type: ignore[no-redef]
+        )
     except Exception:  # pragma: no cover
         def build_file_bubbles_for_role(_att, role="user"):  # type: ignore[no-redef]
             return []
 
 from .sidebar import QuickActionsMixin
-
 
 CHAT_DOWNLOADS_ENABLED = True  # Enable chat export/download functionality
 
@@ -80,12 +82,12 @@ class ChatTab(QuickActionsMixin):
         logging.getLogger(__name__).info("✅ ChatTab: Creating chat interface...")
 
         try:
-            with gr.TabItem(self._get_translation("tab_chat"), id="chat") as tab:
-                # Create main chat interface (includes sidebar)
-                self._create_chat_interface()
-
-                # Connect event handlers
-                self._connect_events()
+            with gr.TabItem(
+                self._get_translation("tab_chat"),
+                id="chat",
+                render_children=True,
+            ) as tab:
+                self.build_ui(show_stack_heading=False)
 
                 # Verify tab was created successfully
                 if tab is None:
@@ -101,6 +103,16 @@ class ChatTab(QuickActionsMixin):
             "✅ ChatTab: Successfully created with all components and event handlers"
         )
         return tab, self.components
+
+    def build_ui(self, *, show_stack_heading: bool = False) -> None:
+        """Mount chat UI (used inside ``TabItem`` or ``CMW_UI_STACK_HOME_CHAT`` column)."""
+        if show_stack_heading:
+            gr.Markdown(
+                f"### {self._get_translation('tab_chat')}",
+                elem_classes=["stack-section-heading"],
+            )
+        self._create_chat_interface()
+        self._connect_events()
 
     def _create_chat_interface(self):
         """Create the main chat interface with proper layout"""
@@ -525,13 +537,6 @@ class ChatTab(QuickActionsMixin):
                 logging.getLogger(__name__).debug(f"Failed to update session cancellation state: {exc}")
 
         logging.getLogger(__name__).info("Stop button clicked - setting cancellation flag")
-        # #region agent log
-        import json
-        try:
-            with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "A", "location": "chat_tab.py:455", "message": "_handle_stop_click called", "data": {"history_len": len(history) if history else 0, "has_request": request is not None}, "timestamp": __import__("time").time() * 1000}) + "\n")
-        except: pass
-        # #endregion
         try:
             # Attempt to finalize token accounting for this turn even if stream was interrupted
             if (
@@ -660,13 +665,6 @@ class ChatTab(QuickActionsMixin):
 
         # Return history and cancellation_state - MultimodalTextbox update is handled in .then() chain
         # Following reference repo pattern: return history and cancellation_state
-        # #region agent log
-        import json
-        try:
-            with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "A", "location": "chat_tab.py:640", "message": "_handle_stop_click returning", "data": {"return_type": "tuple", "history_len": len(history) if history else 0, "cancelled": cancel_state.get("cancelled", False) if cancel_state else False}, "timestamp": __import__("time").time() * 1000}) + "\n")
-        except: pass
-        # #endregion
         return history, cancel_state
 
     def _finalize_tokens_on_stop(self, request: gr.Request, history: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -1659,6 +1657,12 @@ class ChatTab(QuickActionsMixin):
                     gr.update(value=markdown_file_path, visible=True),
                     gr.update(value=html_file_path, visible=True),
                 )
+            if markdown_file_path:
+                # MD-only fast path (HTML deferred unless CMW_UI_EXPORT_HTML_AFTER_TURN)
+                return (
+                    gr.update(value=markdown_file_path, visible=True),
+                    gr.update(visible=False),
+                )
             # Hide buttons if generation fails
             return (
                 gr.update(visible=False),
@@ -1700,22 +1704,19 @@ class ChatTab(QuickActionsMixin):
             f"**Exported on:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         )
         markdown_content += f"**Total messages:** {len(history)}\n\n"
-        # Simple conversation summary using existing agent stats (minimal, non-intrusive)
+        # Simple conversation summary using existing agent stats (minimal, non-intrusive).
         try:
             main_app = getattr(self, "main_app", None)
             if main_app and hasattr(main_app, "session_manager"):
-                # Get current session ID to maintain session isolation
                 try:
                     debug_streamer = get_debug_streamer()
                     session_id = debug_streamer.get_current_session_id()
                 except Exception as debug_exc:
-                    # Fallback to default if debug streamer not available
                     logging.getLogger(__name__).debug(
                         "Debug streamer not available: %s", debug_exc
                     )
                     session_id = "default"
 
-                # Use existing agent stats instead of complex turn_complete event
                 agent = main_app.session_manager.get_session_agent(session_id)
                 if agent:
                     stats = agent.get_stats()
@@ -1731,8 +1732,13 @@ class ChatTab(QuickActionsMixin):
                         provider = llm_info.get("provider", "unknown")
                         model = llm_info.get("model", "unknown")
 
-                        markdown_content += f"## Сводка диалога ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n\n"
-                        markdown_content += f"**Всего сообщений:** {message_count} ({user_messages} user, {assistant_messages} assistant)\n\n"
+                        markdown_content += (
+                            f"## Сводка диалога ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n\n"
+                        )
+                        markdown_content += (
+                            "**Всего сообщений:** "
+                            f"{message_count} ({user_messages} user, {assistant_messages} assistant)\n\n"
+                        )
                         markdown_content += (
                             f"**Провайдер / модель:** {provider} / {model}\n\n"
                         )
@@ -1776,12 +1782,18 @@ class ChatTab(QuickActionsMixin):
 
             logger.debug("Created markdown file: %s", clean_file_path)
 
-            # Also generate HTML version and store the path
-            html_file_path = self._generate_conversation_html(markdown_content, filename.replace(".md", ".html"))
-            if html_file_path:
-                logger.debug("Also created HTML file: %s", html_file_path)
-                # Store the HTML file path for the HTML download button
-                self._last_html_file_path = html_file_path
+            # HTML export is expensive (markdown→HTML + CSS + template); skip on the hot path
+            # unless CMW_UI_EXPORT_HTML_AFTER_TURN is set — avoids multi-second UI stall after stream.
+            html_file_path = None
+            if get_ui_export_html_after_turn():
+                html_file_path = self._generate_conversation_html(
+                    markdown_content, filename.replace(".md", ".html")
+                )
+                if html_file_path:
+                    logger.debug("Also created HTML file: %s", html_file_path)
+                    self._last_html_file_path = html_file_path
+                else:
+                    self._last_html_file_path = None
             else:
                 self._last_html_file_path = None
 

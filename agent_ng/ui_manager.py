@@ -11,6 +11,7 @@ from collections.abc import Callable
 import logging
 import os
 from pathlib import Path
+
 from typing import Any, Dict, List, Optional, Tuple
 from .i18n_translations import get_translation_key
 from .tabs.sidebar import Sidebar
@@ -18,13 +19,19 @@ import gradio as gr
 
 # Import configuration with fallback for direct execution
 try:
-    from agent_ng.agent_config import get_refresh_intervals
+    from agent_ng.agent_config import (
+        get_refresh_intervals,
+        get_ui_download_prep_after_stream,
+    )
 except ImportError:
     # Fallback for direct execution
     from pathlib import Path
     import sys
     sys.path.append(str(Path(__file__).parent))
-    from agent_config import get_refresh_intervals
+    from agent_config import (  # type: ignore[no-redef]
+        get_refresh_intervals,
+        get_ui_download_prep_after_stream,
+    )
 
 class UIManager:
     """Manages Gradio UI creation and configuration with i18n support"""
@@ -54,7 +61,16 @@ class UIManager:
         except Exception as e:
             logging.getLogger(__name__).warning(f"Could not set GRADIO_ALLOWED_PATHS: {e}")
 
-    def create_interface(self, tab_modules: list[Any], event_handlers: dict[str, Callable], main_app=None) -> gr.Blocks:
+    def create_interface(
+        self,
+        tab_modules: list[Any],
+        event_handlers: dict[str, Callable],
+        main_app=None,
+        *,
+        include_sidebar_tab: bool = True,
+        stack_home_chat: bool = False,
+        disable_auto_timers: bool = False,
+    ) -> gr.Blocks:
         # Store main_app reference for initialization completion checks
         self._main_app = main_app
         """
@@ -63,6 +79,10 @@ class UIManager:
         Args:
             tab_modules: List of tab module instances
             event_handlers: Dictionary of event handlers
+            main_app: Application instance for tab callbacks
+            include_sidebar_tab: When False, omit the settings/sidebar tab (for UI bisect debugging).
+            stack_home_chat: When True, render ``tab_modules`` in one column via ``build_ui()`` (no ``gr.Tabs``).
+            disable_auto_timers: When True, skip ``gr.Timer`` wiring (bisect periodic refresh noise).
 
         Returns:
             Gradio Blocks interface
@@ -84,55 +104,110 @@ class UIManager:
             with gr.Row(), gr.Column():
                 gr.Markdown(f"# {hero_title}", elem_classes=["hero-title"])
 
-            # Create sidebar as a tab (converted from sidebar component)
-            sidebar_instance = Sidebar(event_handlers, language=self.language, i18n_instance=self.i18n)
-            sidebar_instance.set_main_app(main_app)  # Pass main app reference
+            # Settings/sidebar tab (optional — omit when bisecting tab-switch issues via CMW_UI_TABS)
+            sidebar_instance = None
+            if include_sidebar_tab:
+                sidebar_instance = Sidebar(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
+                )
+                sidebar_instance.set_main_app(main_app)
 
-            with gr.Tabs():
-                # Create tabs using provided tab modules
-                for tab_module in tab_modules:
-                    if tab_module:
+            if stack_home_chat:
+                logging.getLogger(__name__).info(
+                    "📚 Stack layout: rendering modules without gr.Tabs (CMW_UI_STACK_HOME_CHAT)"
+                )
+                with gr.Column(elem_classes=["cmw-stack-layout"]):
+                    for tab_module in tab_modules:
+                        if not tab_module:
+                            continue
+                        if not hasattr(tab_module, "build_ui"):
+                            msg = (
+                                f"{tab_module.__class__.__name__} has no build_ui(); "
+                                "narrow CMW_UI_TABS to tabs that support stack layout "
+                                "or set CMW_UI_STACK_HOME_CHAT=false"
+                            )
+                            raise TypeError(msg)
                         try:
-                            tab_item, tab_components = tab_module.create_tab()
-                            # Skip if tab_item is None (e.g., ConfigTab when CMW_USE_DOTENV=true)
-                            if tab_item is None:
-                                logging.getLogger(__name__).info(
-                                    f"⚠️ Skipping tab {tab_module.__class__.__name__} (create_tab returned None)"
-                                )
-                                continue
-                            # Consolidate all components in one place
-                            self.components.update(tab_components)
-                            # Store tab reference for later use
-                            self.components[f"{tab_module.__class__.__name__.lower()}_tab"] = tab_module
+                            tab_module.build_ui(show_stack_heading=True)
+                            self.components.update(tab_module.components)
+                            key = f"{tab_module.__class__.__name__.lower()}_tab"
+                            self.components[key] = tab_module
                             logging.getLogger(__name__).debug(
-                                f"✅ Successfully created tab: {tab_module.__class__.__name__}"
+                                "✅ Stack section: %s", tab_module.__class__.__name__
                             )
                         except Exception as e:
                             logging.getLogger(__name__).error(
-                                f"❌ Error creating tab {tab_module.__class__.__name__}: {e}",
-                                exc_info=True
+                                "❌ Stack layout failed for %s: %s",
+                                tab_module.__class__.__name__,
+                                e,
+                                exc_info=True,
                             )
                             raise
-
-                # Create sidebar as a tab (after other tabs)
-                try:
-                    sidebar_tab, sidebar_components = sidebar_instance.create_tab()
-                    # Skip if sidebar_tab is None
-                    if sidebar_tab is None:
-                        logging.getLogger(__name__).warning(
-                            "⚠️ Sidebar create_tab returned None, skipping"
-                        )
-                    else:
-                        # Consolidate sidebar components
-                        self.components.update(sidebar_components)
-                        self.components["sidebar_instance"] = sidebar_instance
-                        logging.getLogger(__name__).debug("✅ Successfully created sidebar tab")
-                except Exception as e:
-                    logging.getLogger(__name__).error(
-                        f"❌ Error creating sidebar tab: {e}",
-                        exc_info=True
+                if sidebar_instance is not None:
+                    logging.getLogger(__name__).warning(
+                        "Sidebar instance exists but stack layout omits TabItem sidebar — "
+                        "use include_sidebar_tab=False with CMW_UI_STACK_HOME_CHAT"
                     )
-                    raise
+            else:
+                with gr.Tabs():
+                    # Create tabs using provided tab modules
+                    for tab_module in tab_modules:
+                        if tab_module:
+                            try:
+                                tab_item, tab_components = tab_module.create_tab()
+                                # Skip if tab_item is None (e.g., ConfigTab when CMW_USE_DOTENV=true)
+                                if tab_item is None:
+                                    logging.getLogger(__name__).info(
+                                        "⚠️ Skipping tab %s (create_tab returned None)",
+                                        tab_module.__class__.__name__,
+                                    )
+                                    continue
+                                # Consolidate all components in one place
+                                self.components.update(tab_components)
+                                # Store tab reference for later use
+                                self.components[
+                                    f"{tab_module.__class__.__name__.lower()}_tab"
+                                ] = tab_module
+                                logging.getLogger(__name__).debug(
+                                    "✅ Successfully created tab: %s",
+                                    tab_module.__class__.__name__,
+                                )
+                            except Exception as e:
+                                logging.getLogger(__name__).error(
+                                    "❌ Error creating tab %s: %s",
+                                    tab_module.__class__.__name__,
+                                    e,
+                                    exc_info=True,
+                                )
+                                raise
+
+                    # Create sidebar as a tab (after other tabs)
+                    if sidebar_instance is not None:
+                        try:
+                            sidebar_tab, sidebar_components = sidebar_instance.create_tab()
+                            # Skip if sidebar_tab is None
+                            if sidebar_tab is None:
+                                logging.getLogger(__name__).warning(
+                                    "⚠️ Sidebar create_tab returned None, skipping"
+                                )
+                            else:
+                                # Consolidate sidebar components
+                                self.components.update(sidebar_components)
+                                self.components["sidebar_instance"] = sidebar_instance
+                                logging.getLogger(__name__).debug(
+                                    "✅ Successfully created sidebar tab"
+                                )
+                        except Exception as e:
+                            logging.getLogger(__name__).error(
+                                "❌ Error creating sidebar tab: %s",
+                                e,
+                                exc_info=True,
+                            )
+                            raise
+                    else:
+                        logging.getLogger(__name__).info(
+                            "Sidebar/settings tab omitted (include_sidebar_tab=False)"
+                        )
 
             # Connect quick action dropdown after all components are available
             if "sidebar_instance" in self.components:
@@ -140,54 +215,40 @@ class UIManager:
                 sidebar_instance.connect_quick_action_dropdown()
 
             # Connect DownloadsTab to update from chat streaming events
-            # #region agent log
-            import json, time
-            try:
-                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"E","location":"ui_manager.py:110","message":"Looking for tab instances","data":{"component_keys":list(self.components.keys())},"timestamp":int(time.time()*1000)}) + '\n')
-            except: pass
-            # #endregion
             chat_tab_instance = self.components.get("chattab_tab")
             downloads_tab_instance = self.components.get("downloadstab_tab")
-            # #region agent log
-            try:
-                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"F","location":"ui_manager.py:112","message":"Tab instances found","data":{"has_chat":chat_tab_instance is not None,"has_downloads":downloads_tab_instance is not None},"timestamp":int(time.time()*1000)}) + '\n')
-            except: pass
-            # #endregion
             if chat_tab_instance and downloads_tab_instance:
                 download_btn = downloads_tab_instance.components.get("download_btn")
                 download_html_btn = downloads_tab_instance.components.get("download_html_btn")
-                # #region agent log
-                try:
-                    with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"G","location":"ui_manager.py:115","message":"Download buttons found","data":{"has_download_btn":download_btn is not None,"has_download_html_btn":download_html_btn is not None},"timestamp":int(time.time()*1000)}) + '\n')
-                except: pass
-                # #endregion
                 if download_btn and download_html_btn:
                     # Wire download buttons to update after streaming completes
                     def _update_downloads_from_chat(history):
                         """Update download buttons from chat tab"""
                         return chat_tab_instance.get_download_button_updates(history)
 
-                    # #region agent log
-                    try:
-                        with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                            f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"H","location":"ui_manager.py:122","message":"Wiring download events","data":{"has_streaming_event":hasattr(chat_tab_instance, "streaming_event"),"has_submit_event":hasattr(chat_tab_instance, "submit_event")},"timestamp":int(time.time()*1000)}) + '\n')
-                    except: pass
-                    # #endregion
-                    if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
-                        chat_tab_instance.streaming_event.then(
+                    prep_after_stream = get_ui_download_prep_after_stream()
+                    chatbot_comp = chat_tab_instance.components.get("chatbot")
+                    dl_tab = getattr(downloads_tab_instance, "_tab_item", None)
+                    if prep_after_stream:
+                        if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
+                            chat_tab_instance.streaming_event.then(
+                                fn=_update_downloads_from_chat,
+                                inputs=[chatbot_comp],
+                                outputs=[download_btn, download_html_btn],
+                            )
+                        if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
+                            chat_tab_instance.submit_event.then(
+                                fn=_update_downloads_from_chat,
+                                inputs=[chatbot_comp],
+                                outputs=[download_btn, download_html_btn],
+                                queue=False,
+                            )
+                    elif dl_tab is not None and chatbot_comp is not None:
+                        dl_tab.select(
                             fn=_update_downloads_from_chat,
-                            inputs=[chat_tab_instance.components.get("chatbot")],
+                            inputs=[chatbot_comp],
                             outputs=[download_btn, download_html_btn],
-                        )
-                    if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
-                        chat_tab_instance.submit_event.then(
-                            fn=_update_downloads_from_chat,
-                            inputs=[chat_tab_instance.components.get("chatbot")],
-                            outputs=[download_btn, download_html_btn],
-                            queue=False,  # Don't queue file generation to prevent blocking
+                            queue=False,
                         )
                     # Also wire clear event to hide download buttons
                     if hasattr(chat_tab_instance, "clear_event") and chat_tab_instance.clear_event:
@@ -198,12 +259,6 @@ class UIManager:
                             fn=_hide_downloads_on_clear,
                             outputs=[download_btn, download_html_btn],
                         )
-                    # #region agent log
-                    try:
-                        with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                            f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"I","location":"ui_manager.py:142","message":"Download events wired successfully","data":{},"timestamp":int(time.time()*1000)}) + '\n')
-                    except: pass
-                    # #endregion
                     logging.getLogger(__name__).info("✅ Connected DownloadsTab to chat streaming events")
 
             # Wire end-of-turn event-driven refresh using existing chat events
@@ -216,6 +271,7 @@ class UIManager:
                 update_token_budget_handler = event_handlers.get("update_token_budget")
 
                 chat_tab_instance = self.components.get("chattab_tab")
+
                 if update_all_ui_handler and status_comp and stats_comp and logs_comp and chat_tab_instance:
                     refresh_outputs = [status_comp, stats_comp, logs_comp]
 
@@ -302,12 +358,20 @@ class UIManager:
                 logging.getLogger(__name__).warning(f"Could not wire event-driven refresh: {e}")
 
             # Setup auto-refresh timers
-            self._setup_auto_refresh(demo, event_handlers)
+            self._setup_auto_refresh(
+                demo, event_handlers, disable_auto_timers=disable_auto_timers
+            )
 
         logging.getLogger(__name__).info("✅ UIManager: Interface created successfully with all components and timers")
         return demo
 
-    def _setup_auto_refresh(self, demo: gr.Blocks, event_handlers: dict[str, Callable]):
+    def _setup_auto_refresh(
+        self,
+        demo: gr.Blocks,
+        event_handlers: dict[str, Callable],
+        *,
+        disable_auto_timers: bool = False,
+    ):
         """Setup auto-refresh timers for status and logs - matches original behavior exactly"""
         # Get handlers with validation
         update_status_handler = event_handlers.get("update_status")
@@ -360,10 +424,23 @@ class UIManager:
         # No demo.load() needed — config loads when user opens the tab.
 
         # Setup auto-refresh timers for real-time updates
-        self._setup_auto_refresh_timers(demo, event_handlers)
+        self._setup_auto_refresh_timers(
+            demo, event_handlers, disable_auto_timers=disable_auto_timers
+        )
 
-    def _setup_auto_refresh_timers(self, demo: gr.Blocks, event_handlers: dict[str, Callable]):
+    def _setup_auto_refresh_timers(
+        self,
+        demo: gr.Blocks,
+        event_handlers: dict[str, Callable],
+        *,
+        disable_auto_timers: bool = False,
+    ):
         """Setup auto-refresh timers for real-time updates (single interval)"""
+        if disable_auto_timers:
+            logging.getLogger(__name__).info(
+                "⏹️ Auto-refresh timers skipped (CMW_UI_DISABLE_AUTO_TIMERS)"
+            )
+            return
         logging.getLogger(__name__).info("🔄 Setting up auto-refresh timers...")
 
         # Single interval from central configuration

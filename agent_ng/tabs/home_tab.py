@@ -37,14 +37,24 @@ class HomeTab:
         """
         logging.getLogger(__name__).info("✅ HomeTab: Creating home interface...")
 
-        with gr.TabItem(self._get_translation("tab_home"), id="home") as tab:
-            # Create home interface
-            self._create_home_interface()
-
-            # Connect event handlers
-            self._connect_events()
+        with gr.TabItem(
+            self._get_translation("tab_home"),
+            id="home",
+            render_children=True,
+        ) as tab:
+            self.build_ui(show_stack_heading=False)
 
         return tab, self.components
+
+    def build_ui(self, *, show_stack_heading: bool = False) -> None:
+        """Mount home content (used inside ``TabItem`` or ``CMW_UI_STACK_HOME_CHAT`` column)."""
+        if show_stack_heading:
+            gr.Markdown(
+                f"### {self._get_translation('tab_home')}",
+                elem_classes=["stack-section-heading"],
+            )
+        self._create_home_interface()
+        self._connect_events()
 
     def _create_home_interface(self):
         """Create the home interface with welcome content"""

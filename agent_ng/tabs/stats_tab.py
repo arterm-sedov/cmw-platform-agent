@@ -40,7 +40,11 @@ class StatsTab:
         """
         logging.getLogger(__name__).info("✅ StatsTab: Creating stats interface...")
 
-        with gr.TabItem(self._get_translation("tab_stats"), id="stats") as tab:
+        with gr.TabItem(
+            self._get_translation("tab_stats"),
+            id="stats",
+            render_children=True,
+        ) as tab:
             # Create stats interface
             self._create_stats_interface()
 
