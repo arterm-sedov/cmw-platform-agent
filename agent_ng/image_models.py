@@ -120,15 +120,13 @@ _HINT_TEXT_FOCUSED = (
 
 # Provider order: polza first (Russian CDN, no regional restrictions),
 # openrouter as fallback. Models only available on one provider list it alone.
-_P_BOTH = ["polza", "openrouter"]  # available on both
-_P_OR = ["openrouter"]             # OpenRouter-only
-_P_PZ = ["polza"]                  # Polza-only
+
 
 IMAGE_MODELS: dict[str, ImageModelConfig] = {
     # ------ Google Gemini family (multimodal: image + text output) -----
     "google/gemini-2.5-flash-image": ImageModelConfig(
         name="google/gemini-2.5-flash-image",
-        providers=_P_BOTH,
+        providers=["polza", "openrouter"],
         modalities=["image", "text"],
         supports_image_config=True,
         description=(
@@ -139,7 +137,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "google/gemini-3.1-flash-image-preview": ImageModelConfig(
         name="google/gemini-3.1-flash-image-preview",
-        providers=_P_BOTH,
+        providers=["polza", "openrouter"],
         modalities=["image", "text"],
         supports_image_config=True,
         description=(
@@ -151,7 +149,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "google/gemini-3-pro-image-preview": ImageModelConfig(
         name="google/gemini-3-pro-image-preview",
-        providers=_P_BOTH,
+        providers=["polza", "openrouter"],
         modalities=["image", "text"],
         supports_image_config=True,
         description=(
@@ -163,7 +161,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     # ------ OpenAI GPT image family (multimodal: image + text output) --
     "openai/gpt-5-image-mini": ImageModelConfig(
         name="openai/gpt-5-image-mini",
-        providers=_P_OR,
+        providers=["openrouter"],
         modalities=["image", "text"],
         supports_image_config=False,
         description=(
@@ -174,7 +172,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "openai/gpt-5-image": ImageModelConfig(
         name="openai/gpt-5-image",
-        providers=_P_BOTH,
+        providers=["polza", "openrouter"],
         modalities=["image", "text"],
         supports_image_config=False,
         description=(
@@ -185,7 +183,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "openai/gpt-5.4-image-2": ImageModelConfig(
         name="openai/gpt-5.4-image-2",
-        providers=_P_BOTH,
+        providers=["polza", "openrouter"],
         modalities=["image", "text"],
         supports_image_config=False,
         description=(
@@ -197,7 +195,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     # ------ Black Forest Labs FLUX (image-only output) ------------------
     "black-forest-labs/flux.2-flex": ImageModelConfig(
         name="black-forest-labs/flux.2-flex",
-        providers=_P_BOTH,
+        providers=["polza", "openrouter"],
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -208,7 +206,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "black-forest-labs/flux.2-pro": ImageModelConfig(
         name="black-forest-labs/flux.2-pro",
-        providers=_P_BOTH,
+        providers=["polza", "openrouter"],
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -220,7 +218,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "black-forest-labs/flux.2-max": ImageModelConfig(
         name="black-forest-labs/flux.2-max",
-        providers=_P_OR,
+        providers=["openrouter"],
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -232,7 +230,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     # ------ ByteDance Seedream (image-only output) ----------------------
     "bytedance-seed/seedream-4.5": ImageModelConfig(
         name="bytedance-seed/seedream-4.5",
-        providers=_P_BOTH,
+        providers=["polza", "openrouter"],
         modalities=["image"],
         supports_image_config=True,
         provider_model_ids={"polza": "bytedance/seedream-4.5"},
@@ -245,7 +243,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "bytedance-seed/seedream-4": ImageModelConfig(
         name="bytedance-seed/seedream-4",
-        providers=_P_OR,
+        providers=["openrouter"],
         modalities=["image"],
         supports_image_config=False,
         description="Previous-generation Seedream. Good multilingual text rendering.",
@@ -253,7 +251,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "bytedance-seed/seedream-3": ImageModelConfig(
         name="bytedance-seed/seedream-3",
-        providers=_P_OR,
+        providers=["openrouter"],
         modalities=["image"],
         supports_image_config=False,
         description="Proven Seedream generation with solid multilingual support.",
@@ -262,7 +260,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     # ------ Sourceful Riverflow (image-only, text-focused, OR-only) ----
     "sourceful/riverflow-v2-fast": ImageModelConfig(
         name="sourceful/riverflow-v2-fast",
-        providers=_P_OR,
+        providers=["openrouter"],
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -273,7 +271,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "sourceful/riverflow-v2-pro": ImageModelConfig(
         name="sourceful/riverflow-v2-pro",
-        providers=_P_OR,
+        providers=["openrouter"],
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -285,7 +283,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     # ------ Polza-exclusive models --------------------------------------
     "x-ai/grok-imagine": ImageModelConfig(
         name="x-ai/grok-imagine",
-        providers=_P_PZ,
+        providers=["polza"],
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -296,7 +294,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "qwen/qwen-vl-max-image": ImageModelConfig(
         name="qwen/qwen-vl-max-image",
-        providers=_P_PZ,
+        providers=["polza"],
         modalities=["image"],
         supports_image_config=False,
         description=(
