@@ -117,6 +117,11 @@ except Exception:  # pragma: no cover
 
     _GRADIO_CACHE_DIR = tempfile.gettempdir()
 
+# Static theme assets (logo, fonts) are loaded via `/gradio_api/file=...` in CSS.
+# Passing `allowed_paths` to `launch()` replaces `GRADIO_ALLOWED_PATHS`, so the cache
+# dir alone would block `resources/` and break hero logo + @font-face URLs.
+_GRADIO_RESOURCES_DIR = Path(__file__).resolve().parent.parent / "resources"
+
 # Try absolute imports first (works from root directory)
 try:
     from langsmith import traceable
@@ -178,9 +183,7 @@ except ImportError as e1:
             "Please check: 1) requirements_ng.txt installed 2) PYTHONPATH 3) circular imports 4) modules exist 5) working directory"
         )
         msg = f"Failed to import required modules. Absolute: {e1}, Relative: {e2}"
-        raise ImportError(
-            msg
-        )
+        raise ImportError(msg)
 
 
 class NextGenApp:
@@ -690,7 +693,11 @@ class NextGenApp:
             tool_costs_this_turn: float = 0.0
 
             # Add user message to history
-            working_history = [*history, {"role": "user", "content": message}, {"role": "assistant", "content": ""}]
+            working_history = [
+                *history,
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": ""},
+            ]
 
             # Get prompt token count for user message (will be displayed below assistant response)
             prompt_tokens = None
@@ -1160,9 +1167,7 @@ class NextGenApp:
             except Exception as e:
                 logging.debug(f"Failed to clear session context: {e}")
 
-    def _sync_llm_dropdown_from_session(
-        self, request: gr.Request | None = None
-    ) -> Any:
+    def _sync_llm_dropdown_from_session(self, request: gr.Request | None = None) -> Any:
         """Align sidebar LLM dropdown with the active session agent."""
         if not request or not getattr(self, "session_manager", None):
             return gr.update()
@@ -1869,7 +1874,11 @@ def main():
         # Allow Gradio's /file= endpoint to serve session-registered files
         # (generated images, extracted assets, etc.) from the cache dir.
         # Required when GRADIO_TEMP_DIR is set to a non-default path.
-        allowed_paths=[_GRADIO_CACHE_DIR],
+        # Include `resources/` so theme CSS can load logo/fonts via `/gradio_api/file=...`.
+        allowed_paths=[
+            str(Path(_GRADIO_CACHE_DIR).resolve()),
+            str(_GRADIO_RESOURCES_DIR.resolve()),
+        ],
     )
 
 
