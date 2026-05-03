@@ -999,19 +999,31 @@ class LLMManager:
 
     def _get_configured_provider_and_model_index(
         self,
+        provider_str_override: str | None = None,
     ) -> tuple[LLMProvider | None, int]:
-        """Get configured provider and model index from config/env"""
+        """Get configured provider and model index from config/env.
+
+        When ``provider_str_override`` is set (e.g. session config for API-key
+        bucket), use that provider but still resolve ``AGENT_DEFAULT_MODEL`` /
+        settings ``default_model`` within that provider's catalog — never force
+        model index 0, which would ignore the user's chosen default model.
+        """
         import os
 
         try:
             from agent_ng.agent_config import get_llm_settings
 
             llm_settings = get_llm_settings()
-            provider = llm_settings.get("default_provider", "openrouter")
+            default_provider = llm_settings.get("default_provider", "openrouter")
             default_model = llm_settings.get("default_model")
         except ImportError:
-            provider = os.environ.get("AGENT_PROVIDER", "openrouter")
+            default_provider = os.environ.get("AGENT_PROVIDER", "openrouter")
             default_model = os.environ.get("AGENT_DEFAULT_MODEL")
+
+        if provider_str_override and str(provider_str_override).strip():
+            provider = str(provider_str_override).strip()
+        else:
+            provider = default_provider
 
         try:
             provider_enum = LLMProvider(provider.lower())
@@ -1019,8 +1031,10 @@ class LLMManager:
             return None, 0
 
         model_index = 0
-        if default_model and default_model.strip():
-            found_index = self._find_model_index(provider_enum, default_model.strip())
+        if default_model and str(default_model).strip():
+            found_index = self._find_model_index(
+                provider_enum, str(default_model).strip()
+            )
             if found_index is not None:
                 model_index = found_index
 

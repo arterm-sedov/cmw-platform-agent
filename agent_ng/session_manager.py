@@ -22,8 +22,6 @@ import uuid
 
 import gradio as gr
 
-from .llm_manager import LLMProvider
-
 if TYPE_CHECKING:
     from .langchain_agent import CmwAgent
 
@@ -293,24 +291,15 @@ class SessionData:
                 session_config.get("llm_api_key_override") or ""
             ).strip()
 
-        if llm_provider_override:
-            # Use override provider
-            try:
-                provider_enum = LLMProvider(llm_provider_override.lower())
-                model_index = 0
-            except ValueError:
-                logging.getLogger(__name__).warning(
-                    f"Invalid LLM provider override: {llm_provider_override}, using default"
-                )
-                provider_enum, model_index = (
-                    self.agent.llm_manager._get_configured_provider_and_model_index()
-                )
-        else:
-            # Use default from env/config
+        provider_enum, model_index = (
+            self.agent.llm_manager._get_configured_provider_and_model_index(
+                llm_provider_override if llm_provider_override else None,
+            )
+        )
+        if not provider_enum:
             provider_enum, model_index = (
                 self.agent.llm_manager._get_configured_provider_and_model_index()
             )
-
         if not provider_enum:
             return
 

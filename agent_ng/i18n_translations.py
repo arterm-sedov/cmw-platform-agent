@@ -238,12 +238,7 @@ RUSSIAN_TRANSLATIONS = {
     "config_llm_section": "Подключение к LLM",
     "config_llm_provider_label": "Провайдер",
     "config_llm_api_key_label": "Ключ API",
-    "config_llm_active_provider_label": "Активный провайдер (для агента)",
-    "config_llm_api_keys_table_label": "Ключи API по провайдерам",
-    "config_llm_api_keys_table_help": (
-        "Все поддерживаемые провайдеры в таблице; ключи можно править «как есть» "
-        "(колонка провайдера только для справки)."
-    ),
+    "config_llm_api_keys_table_label": "Ключи API провайдеров",
     "config_llm_empty_means_default": "Оставьте пустым, чтобы использовать настройки по умолчанию",
     # Statistics labels
     "agent_status_section": "**Агент:**",
@@ -589,12 +584,7 @@ ENGLISH_TRANSLATIONS = {
     "config_llm_section": "LLM Connection",
     "config_llm_provider_label": "Provider",
     "config_llm_api_key_label": "API Key",
-    "config_llm_active_provider_label": "Active provider (used by the agent)",
-    "config_llm_api_keys_table_label": "API keys by provider",
-    "config_llm_api_keys_table_help": (
-        "Supported providers listed here; edit keys in the right column "
-        "(provider column is read-only)."
-    ),
+    "config_llm_api_keys_table_label": "Provider API keys",
     "config_llm_empty_means_default": "Leave empty to use default settings",
     # Statistics labels
     "agent_status_section": "**Agent:**",
