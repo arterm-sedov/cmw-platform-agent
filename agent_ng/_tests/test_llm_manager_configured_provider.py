@@ -1,12 +1,12 @@
-"""Tests for _get_configured_provider_and_model_index provider override behavior."""
+"""Tests for _get_configured_provider_and_model_index (env defaults)."""
 
 from unittest.mock import patch
 
 from agent_ng.llm_manager import LLMManager, LLMProvider
 
 
-def test_provider_override_still_resolves_default_model_index() -> None:
-    """Session API-key bucket must not force model_index=0 (first catalog slot)."""
+def test_configured_provider_resolves_default_model_index() -> None:
+    """Catalog index follows AGENT_DEFAULT_MODEL / settings, not first slot."""
     mgr = LLMManager()
     grok_idx = mgr._find_model_index(LLMProvider.POLZA, "x-ai/grok-4.20")
     assert grok_idx is not None and grok_idx > 0, "fixture expects grok after first polza slot"
@@ -17,7 +17,7 @@ def test_provider_override_still_resolves_default_model_index() -> None:
     }
 
     with patch("agent_ng.agent_config.get_llm_settings", return_value=fake_settings):
-        pe, idx = mgr._get_configured_provider_and_model_index("polza")
+        pe, idx = mgr._get_configured_provider_and_model_index()
 
     assert pe == LLMProvider.POLZA
     assert idx == grok_idx

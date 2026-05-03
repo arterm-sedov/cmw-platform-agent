@@ -999,15 +999,8 @@ class LLMManager:
 
     def _get_configured_provider_and_model_index(
         self,
-        provider_str_override: str | None = None,
     ) -> tuple[LLMProvider | None, int]:
-        """Get configured provider and model index from config/env.
-
-        When ``provider_str_override`` is set (e.g. session config for API-key
-        bucket), use that provider but still resolve ``AGENT_DEFAULT_MODEL`` /
-        settings ``default_model`` within that provider's catalog — never force
-        model index 0, which would ignore the user's chosen default model.
-        """
+        """Get configured provider and model index from config/env (AGENT_*)."""
         import os
 
         try:
@@ -1020,10 +1013,7 @@ class LLMManager:
             default_provider = os.environ.get("AGENT_PROVIDER", "openrouter")
             default_model = os.environ.get("AGENT_DEFAULT_MODEL")
 
-        if provider_str_override and str(provider_str_override).strip():
-            provider = str(provider_str_override).strip()
-        else:
-            provider = default_provider
+        provider = str(default_provider or "openrouter").strip()
 
         try:
             provider_enum = LLMProvider(provider.lower())

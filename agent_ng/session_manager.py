@@ -17,7 +17,7 @@ Key Features:
 from contextvars import ContextVar
 import logging
 import time
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 import uuid
 
 import gradio as gr
@@ -39,21 +39,61 @@ def get_current_session_id() -> str | None:
     return _current_session_id.get()
 
 
-# Lightweight per-session config snapshot (URL, username, password, LLM override)
-_config_by_session: dict[str, dict[str, str]] = {}
+# Per-session snapshot: platform credentials + per-provider API keys map
+_config_by_session: dict[str, dict[str, Any]] = {}
 
 
-def set_session_config(session_id: str, config: dict[str, str]) -> None:
-    _config_by_session[session_id] = {
-        "url": (config.get("url") or "").strip(),
-        "username": (config.get("username") or "").strip(),
-        "password": (config.get("password") or "").strip(),
-        "llm_provider_override": (config.get("llm_provider_override") or "").strip(),
-        "llm_api_key_override": (config.get("llm_api_key_override") or "").strip(),
+def set_session_config(session_id: str, config: dict[str, Any]) -> None:
+    """Merge ``config`` into the server-side session snapshot.
+
+    Partial updates (e.g. API /ask with only credentials) keep existing API-key
+    map and other fields.
+    """
+    prev = _config_by_session.get(session_id)
+    base: dict[str, Any] = {
+        "url": "",
+        "username": "",
+        "password": "",
+        "llm_provider_api_keys": {},
     }
+    if isinstance(prev, dict):
+        for k in ("url", "username", "password"):
+            v = prev.get(k)
+            if isinstance(v, str):
+                base[k] = v
+        pk_prev = prev.get("llm_provider_api_keys")
+        if isinstance(pk_prev, dict):
+            base["llm_provider_api_keys"] = {
+                str(a).strip(): (str(b).strip() if isinstance(b, str) else "")
+                for a, b in pk_prev.items()
+                if str(a).strip()
+            }
+
+    if "url" in config:
+        base["url"] = (config.get("url") or "").strip()
+    if "username" in config:
+        base["username"] = (config.get("username") or "").strip()
+    if "password" in config:
+        base["password"] = (config.get("password") or "").strip()
+    if "llm_provider_api_keys" in config:
+        raw = config.get("llm_provider_api_keys")
+        cleaned: dict[str, str] = {}
+        if isinstance(raw, dict):
+            for pk, vk in raw.items():
+                if not isinstance(pk, str):
+                    continue
+                k_strip = pk.strip()
+                if not k_strip:
+                    continue
+                cleaned[k_strip] = (vk or "").strip() if isinstance(vk, str) else ""
+        base["llm_provider_api_keys"] = cleaned
+
+    base.pop("llm_provider_override", None)
+    base.pop("llm_api_key_override", None)
+    _config_by_session[session_id] = base
 
 
-def get_session_config(session_id: str | None) -> dict[str, str] | None:
+def get_session_config(session_id: str | None) -> dict[str, Any] | None:
     if not session_id:
         return None
     return _config_by_session.get(session_id)
@@ -186,8 +226,15 @@ class SessionManager:
                     logging.getLogger(__name__).info(
                         f"🔄 Creating new LLM instance for {provider} at index {model_index}"
                     )
+                    sess_cfg = get_session_config(session_id) or {}
+                    raw_km = sess_cfg.get("llm_provider_api_keys")
+                    key_override = None
+                    if isinstance(raw_km, dict):
+                        key_override = (raw_km.get(provider) or "").strip() or None
                     new_llm_instance = agent.llm_manager.create_new_llm_instance(
-                        provider, model_index
+                        provider,
+                        model_index,
+                        api_key_override=key_override,
                     )
                     if new_llm_instance:
                         logging.getLogger(__name__).info(
@@ -196,6 +243,7 @@ class SessionManager:
                         # Update the agent's LLM instance
                         agent.llm_instance = new_llm_instance
                         session_data.llm_provider = provider
+                        session_data._session_llm_choice = (provider, model)
 
                         # Verify the update
                         if hasattr(agent, "llm_instance") and agent.llm_instance:
@@ -263,9 +311,11 @@ class SessionData:
             session_id=session_id, language=language
         )  # Pass session ID and language to agent
         self.status = get_translation_key("progress_ready", language)
-        self.llm_provider = "openrouter"  # Default provider
+        self.llm_provider = "openrouter"  # Updated when LLM instance is ready
         self.created_at = time.time()
         self.last_activity = time.time()
+        # Last provider/model from the sidebar (``Выбор LLM``); drives re-init.
+        self._session_llm_choice: tuple[str, str] | None = None
 
         # Initialize the agent with a default LLM instance for this session
         self._initialize_session_agent()
@@ -275,38 +325,50 @@ class SessionData:
         self.last_activity = time.time()
 
     def _initialize_session_agent(self) -> None:
-        """Initialize the session agent with a unique LLM instance, using override if available"""
+        """Initialize the session agent with a unique LLM instance.
+
+        Uses the last sidebar provider/model when set; otherwise env defaults.
+        API keys come from ``llm_provider_api_keys`` for the resolved provider.
+        """
         if not (hasattr(self.agent, "llm_manager") and self.agent.llm_manager):
             return
 
-        # Check for LLM override in session config
-        session_config = get_session_config(self.session_id)
-        llm_provider_override = ""
-        llm_api_key_override = ""
-        if session_config:
-            llm_provider_override = (
-                session_config.get("llm_provider_override") or ""
-            ).strip()
-            llm_api_key_override = (
-                session_config.get("llm_api_key_override") or ""
-            ).strip()
-
-        provider_enum, model_index = (
-            self.agent.llm_manager._get_configured_provider_and_model_index(
-                llm_provider_override if llm_provider_override else None,
-            )
+        session_config = get_session_config(self.session_id) or {}
+        keys_raw = session_config.get("llm_provider_api_keys")
+        keys_map: dict[str, str] = (
+            {str(k).strip(): str(v).strip() for k, v in keys_raw.items()}
+            if isinstance(keys_raw, dict)
+            else {}
         )
-        if not provider_enum:
-            provider_enum, model_index = (
-                self.agent.llm_manager._get_configured_provider_and_model_index()
-            )
+
+        mgr = self.agent.llm_manager
+        choice = self._session_llm_choice
+        if choice:
+            prov_s, mod_s = choice[0].strip().lower(), choice[1].strip()
+            try:
+                try:
+                    from .llm_manager import LLMProvider
+                except ImportError:
+                    from agent_ng.llm_manager import LLMProvider
+
+                provider_enum = LLMProvider(prov_s)
+            except ValueError:
+                provider_enum, model_index = mgr._get_configured_provider_and_model_index()
+            else:
+                found = mgr._find_model_index(provider_enum, mod_s)
+                model_index = found if found is not None else 0
+        else:
+            provider_enum, model_index = mgr._get_configured_provider_and_model_index()
+
         if not provider_enum:
             return
+
+        api_key_override = (keys_map.get(provider_enum.value) or "").strip() or None
 
         llm_instance = self.agent.llm_manager.create_new_llm_instance(
             provider_enum.value,
             model_index,
-            api_key_override=llm_api_key_override if llm_api_key_override else None,
+            api_key_override=api_key_override,
         )
         if llm_instance:
             self.agent.llm_instance = llm_instance

@@ -1160,6 +1160,26 @@ class NextGenApp:
             except Exception as e:
                 logging.debug(f"Failed to clear session context: {e}")
 
+    def _sync_llm_dropdown_from_session(
+        self, request: gr.Request | None = None
+    ) -> Any:
+        """Align sidebar LLM dropdown with the active session agent."""
+        if not request or not getattr(self, "session_manager", None):
+            return gr.update()
+        try:
+            sid = self.session_manager.get_session_id(request)
+            agent = self.session_manager.get_session_agent(sid)
+            inst = getattr(agent, "llm_instance", None)
+            if not inst:
+                return gr.update()
+            p, m = inst.provider.value, inst.model_name
+            return f"{p.title()} / {m}"
+        except Exception as e:
+            logging.getLogger(__name__).debug(
+                "sync_llm_dropdown_from_session: %s", e, exc_info=True
+            )
+            return gr.update()
+
     def _create_event_handlers(self) -> dict[str, Any]:
         """Create event handlers for all tabs"""
         handlers = {
@@ -1169,6 +1189,7 @@ class NextGenApp:
             # Status and monitoring handlers
             "update_status": self._update_status,
             "update_token_budget": self._update_token_budget,
+            "sync_llm_dropdown_from_session": self._sync_llm_dropdown_from_session,
             "refresh_logs": self._refresh_logs,
             "refresh_stats": self._refresh_stats,
             "update_all_ui": self.update_all_ui_components,

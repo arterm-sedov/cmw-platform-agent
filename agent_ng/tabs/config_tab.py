@@ -82,8 +82,6 @@ class ConfigTab:
                 "url": "",
                 "username": "",
                 "password": "",
-                "llm_provider_override": "",
-                "llm_api_key_override": "",
                 "llm_provider_api_keys": {},
             },
             storage_key="cmw_config_v1",
@@ -246,19 +244,6 @@ class ConfigTab:
             ],
         )
 
-    def _default_active_llm_provider(self) -> str:
-        """Default LLM provider from env/settings (matches app startup)."""
-        try:
-            from agent_ng.agent_config import get_llm_settings
-
-            init = get_llm_settings().get("default_provider", "openrouter")
-        except ImportError:
-            init = os.environ.get("AGENT_PROVIDER", "openrouter")
-        init_s = str(init).strip()
-        if self._config_llm_providers and init_s not in self._config_llm_providers:
-            return ""
-        return init_s
-
     @staticmethod
     def _normalize_llm_provider_api_keys(browser_state: dict | None) -> dict[str, str]:
         """Build canonical provider-to-API-key mapping from BrowserState."""
@@ -276,10 +261,6 @@ class ConfigTab:
                 val = vk if isinstance(vk, str) else ""
                 mp[k_strip] = val.strip()
         # Single-key legacy rows (saved before multi-key map existed)
-        leg_p = (browser_state.get("llm_provider_override") or "").strip()
-        leg_k = (browser_state.get("llm_api_key_override") or "").strip()
-        if leg_p and leg_k and leg_p not in mp:
-            mp[leg_p] = leg_k
         return mp
 
     @staticmethod
@@ -390,8 +371,6 @@ class ConfigTab:
             url = (url or "").strip()
             username = (username or "").strip()
             password = (password or "").strip()
-            llm_provider_override = self._default_active_llm_provider()
-
             current_state_raw = rest[-1]
             key_inputs = rest[:-1]
 
@@ -419,17 +398,11 @@ class ConfigTab:
             for p in self._config_llm_providers:
                 keys_map[p] = parsed.get(p, "")
 
-            llm_api_key_override = ""
-            if llm_provider_override:
-                llm_api_key_override = keys_map.get(llm_provider_override, "")
-
             # Prepare new state dict
             new_state = {
                 "url": url,
                 "username": username,
                 "password": password,
-                "llm_provider_override": llm_provider_override,
-                "llm_api_key_override": llm_api_key_override,
                 "llm_provider_api_keys": keys_map,
             }
 
@@ -487,16 +460,7 @@ class ConfigTab:
                 any((vk or "").strip() for vk in keys_precheck.values())
             )
             has_saved_config = (
-                any(
-                    state.get(k)
-                    for k in (
-                        "url",
-                        "username",
-                        "password",
-                        "llm_provider_override",
-                        "llm_api_key_override",
-                    )
-                )
+                any(state.get(k) for k in ("url", "username", "password"))
                 or any_stored_llm_keys
             )
             if not has_saved_config:
@@ -512,15 +476,12 @@ class ConfigTab:
             pwd = state.get("password", "") or ""
 
             keys_map = ConfigTab._normalize_llm_provider_api_keys(state)
-            active = self._default_active_llm_provider()
 
             logging.getLogger(__name__).debug(
-                "ConfigTab._load_from_state: url_present=%s user_len=%s pwd_len=%s "
-                "active_provider=%s",
+                "ConfigTab._load_from_state: url_present=%s user_len=%s pwd_len=%s",
                 bool(url),
                 len(login),
                 len(pwd),
-                active,
             )
 
             # Also propagate BrowserState snapshot into per-session store for backend
@@ -528,20 +489,13 @@ class ConfigTab:
                 session_id = self._resolve_session_id(request)
 
                 if session_id:
-                    llm_api_key = (keys_map.get(active, "") or "").strip()
-                    if not llm_api_key:
-                        llm_api_key = (
-                            state.get("llm_api_key_override", "") or ""
-                        ).strip()
-
                     set_session_config(
                         session_id,
                         {
                             "url": url,
                             "username": login,
                             "password": pwd,
-                            "llm_provider_override": active,
-                            "llm_api_key_override": llm_api_key,
+                            "llm_provider_api_keys": keys_map,
                         },
                     )
                     self._reinitialize_session_llm(session_id)
@@ -593,8 +547,6 @@ class ConfigTab:
                 "url": "",
                 "username": "",
                 "password": "",
-                "llm_provider_override": "",
-                "llm_api_key_override": "",
                 "llm_provider_api_keys": {},
             }
 
