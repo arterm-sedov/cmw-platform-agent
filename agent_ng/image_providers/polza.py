@@ -32,6 +32,14 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 _DEFAULT_BASE_URL = "https://polza.ai/api"
+
+
+def _to_media_file_dto(image: str) -> dict[str, str]:
+    """Convert a URL, data URI, or raw base64 string to a Polza MediaFileDto."""
+    if image.startswith(("http://", "https://")):
+        return {"type": "url", "data": image}
+    # data URI or raw base64 — send as-is; Polza accepts both forms.
+    return {"type": "base64", "data": image}
 _POLL_INTERVAL = 3.0  # seconds between status checks
 _DEFAULT_TIMEOUT = 180.0  # total max wait for generation
 _DEFAULT_RUB_RATE = 90.0  # RUB per 1 USD fallback
@@ -172,6 +180,11 @@ class PolzaProvider(ImageProvider):
                 input_body["quality"] = (
                     "high" if request.image_size.lower() in ("4k", "high") else "basic"
                 )
+        if request.reference_images:
+            max_imgs = request.config.max_reference_images
+            images = request.reference_images[:max_imgs] if max_imgs else []
+            if images:
+                input_body["images"] = [_to_media_file_dto(img) for img in images]
         logger.debug(
             "PolzaProvider POST model=%s input=%s", model_id, input_body
         )

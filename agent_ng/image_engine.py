@@ -128,6 +128,7 @@ class ImageEngine:
         model: str | None = None,
         aspect_ratio: str | None = None,
         image_size: str | None = None,
+        reference_images: list[str] | None = None,
     ) -> ImageGenerationResult:
         """Generate a single image via the resolved provider.
 
@@ -183,12 +184,36 @@ class ImageEngine:
                 ),
             )
 
+        # Clip reference images to what this model supports.
+        clipped_refs: list[str] | None = None
+        if reference_images:
+            max_imgs = config.max_reference_images
+            if max_imgs > 0:
+                clipped_refs = reference_images[:max_imgs]
+                if len(clipped_refs) < len(reference_images):
+                    logger.warning(
+                        "Model %s supports at most %d reference image(s); "
+                        "%d provided, clipped to %d.",
+                        resolved_model,
+                        max_imgs,
+                        len(reference_images),
+                        len(clipped_refs),
+                    )
+            else:
+                logger.warning(
+                    "Model %s does not support reference images; "
+                    "ignoring %d provided.",
+                    resolved_model,
+                    len(reference_images),
+                )
+
         return provider.generate(
             ImageRequest(
                 prompt=prompt,
                 config=config,
                 aspect_ratio=aspect_ratio,
                 image_size=image_size,
+                reference_images=clipped_refs,
             )
         )
 

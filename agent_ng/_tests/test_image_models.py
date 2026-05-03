@@ -70,9 +70,15 @@ class TestRegistryShape:
         gemini = get_image_models()["google/gemini-2.5-flash-image"]
         assert set(gemini.modalities) == {"image", "text"}
 
-    def test_only_gemini_supports_image_config(self) -> None:
-        """Google Gemini and Seedream 4.5 document image_config support."""
-        _supports = {"google/", "bytedance-seed/seedream-4.5", "bytedance-seed/seedream-3", "bytedance-seed/seedream-5-lite"}
+    def test_supports_image_config_set(self) -> None:
+        """Models that document aspect_ratio/image_resolution have the flag set."""
+        _supports = {
+            "google/",
+            "bytedance-seed/",
+            "black-forest-labs/flux.2-flex",
+            "black-forest-labs/flux.2-pro",
+            "openai/gpt-5.4-image-2",
+        }
         for slug, cfg in get_image_models().items():
             expected = any(cfg.name.startswith(p) or cfg.name == p for p in _supports)
             assert cfg.supports_image_config is expected, (

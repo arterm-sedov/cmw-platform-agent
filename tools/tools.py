@@ -51,10 +51,16 @@ from langchain_core.tools import InjectedToolArg, tool
 # default-model hint accessor — never the active model slug or provider.
 try:
     from agent_ng.image_engine import ImageEngine
-    from agent_ng.image_models import get_default_prompt_style_hint
+    from agent_ng.image_models import (
+        get_default_model,
+        get_default_prompt_style_hint,
+        get_model_config,
+    )
 except ImportError:  # pragma: no cover
     ImageEngine = None  # type: ignore[assignment,misc]
+    get_default_model = None  # type: ignore[assignment]
     get_default_prompt_style_hint = None  # type: ignore[assignment]
+    get_model_config = None  # type: ignore[assignment]
 
 # Session-aware current_session_id (ContextVar fallback when agent not injected)
 try:
@@ -1589,23 +1595,50 @@ def _build_generate_ai_image_description() -> str:
     """Compose the LLM-facing tool description.
 
     Includes the active model's prompt-style hint (never the slug or
-    vendor) so the calling LLM can adapt prompt craft to the configured
-    backend.
+    vendor) and its reference-image cap so the calling LLM can adapt
+    prompt craft and parameter choices to the configured backend.
     """
+    # Resolve reference-image cap for the active default model.
+    ref_note: str
+    if get_default_model is not None and get_model_config is not None:
+        cfg = get_model_config(get_default_model())
+        max_ref = cfg.max_reference_images if cfg else 0
+        if max_ref > 0:
+            ref_note = (
+                f"Pass `reference_images` (a list of URLs or base64 strings) "
+                f"to use image-to-image or editing mode — for example to "
+                f"repaint a background, apply a style, or modify an existing "
+                f"image. The active model accepts up to {max_ref} reference "
+                f"image(s); extras are silently dropped."
+            )
+        else:
+            ref_note = (
+                "The active model is text-to-image only and ignores "
+                "`reference_images` — omit it."
+            )
+    else:
+        ref_note = (
+            "Pass `reference_images` (a list of URLs or base64 strings) to "
+            "use image-to-image or editing mode. The list is clipped to the "
+            "maximum the active model accepts."
+        )
+
     body = (
-        "Create a new image from a text description.\n\n"
+        "Create or edit an image from a text description.\n\n"
         "Use this when the user asks for an illustration, icon, "
         "diagram, business infographic, logo, banner, social-media "
-        "graphic, or any other visual that does not yet exist. The "
-        "generated image comes back as a chat attachment reference "
-        "that you can pass to other tools (for example, to attach the "
-        "image to a record, analyze it, or transform it).\n\n"
+        "graphic, or any other visual — either generating from scratch "
+        "or editing/restyling an existing image via `reference_images`. "
+        "The result comes back as a chat attachment reference that you "
+        "can pass to other tools (for example, to attach the image to "
+        "a record, analyze it, or transform it further).\n\n"
         "`aspect_ratio` lets you request a specific shape (for example "
         "`16:9` for a banner, `9:16` for a mobile story, `1:1` for a "
         "square icon). `image_size` lets you request a resolution tier "
         "(`1K` for small/fast, `2K` for sharper details, `4K` for "
         "print-quality). Only set these when the composition really "
         "depends on shape or size.\n\n"
+        f"{ref_note}\n\n"
         "Returns a structured result containing the image reference "
         "and the generation cost. If the call fails, the result "
         "contains an `error` message explaining why — simplify the "
@@ -1656,6 +1689,16 @@ class GenerateAIImageParams(BaseModel):
             "sharper details, '4K' for print-quality."
         ),
     )
+    reference_images: list[str] | None = Field(
+        None,
+        description=(
+            "Optional list of reference images for image-to-image or "
+            "editing. Each item is a URL (https://...) or a base64 "
+            "string (with or without data URI prefix). Pass an image "
+            "that was generated or attached earlier to have the model "
+            "repaint, restyle, or edit it. Omit for text-to-image."
+        ),
+    )
     agent: Annotated[Any | None, InjectedToolArg] = Field(
         default=None,
         description="Runtime-injected; not supplied by the LLM.",
@@ -1671,13 +1714,14 @@ def generate_ai_image(
     prompt: str,
     aspect_ratio: str | None = None,
     image_size: str | None = None,
+    reference_images: list[str] | None = None,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
-    """Create a new image from a text description.
+    """Create or edit an image from a text description.
 
     The image generator is chosen by the deployment (via
     ``IMAGE_GEN_DEFAULT_MODEL``); the calling LLM only decides on the
-    prompt, aspect ratio and size.
+    prompt, aspect ratio, size, and optional reference images.
 
     Returns a structured result. On success it includes a
     ``file_reference`` (an attachment name usable by other chat tools),
@@ -1702,10 +1746,32 @@ def generate_ai_image(
             "cost": None,
         }
 
+    # Warn the LLM when it supplied more reference images than the model
+    # supports.  The engine clips silently; we surface that here so the
+    # agent can inform the user or adjust on the next call.
+    ref_images_warning: str | None = None
+    if reference_images and get_default_model is not None and get_model_config is not None:
+        _cfg = get_model_config(get_default_model())
+        if _cfg is not None:
+            _max = _cfg.max_reference_images
+            _given = len(reference_images)
+            if _max == 0:
+                ref_images_warning = (
+                    f"The active image model does not support reference images; "
+                    f"all {_given} reference image(s) were ignored."
+                )
+            elif _given > _max:
+                ref_images_warning = (
+                    f"Reference images clipped: the active model supports at "
+                    f"most {_max}, but {_given} were provided. "
+                    f"Only the first {_max} were used."
+                )
+
     result = engine.generate(
         prompt=prompt,
         aspect_ratio=aspect_ratio,
         image_size=image_size,
+        reference_images=reference_images,
     )
 
     if not result.success or result.image_bytes is None:
@@ -1714,6 +1780,7 @@ def generate_ai_image(
             "error": result.error or "image generation failed",
             "file_reference": None,
             "cost": result.cost,
+            "reference_images_warning": ref_images_warning,
         }
 
     # Resolve session id: prefer the injected agent, fall back to ContextVar.
@@ -1766,6 +1833,7 @@ def generate_ai_image(
         "cost": result.cost,
         "mime_type": result.mime_type,
         "size_bytes": len(result.image_bytes),
+        "reference_images_warning": ref_images_warning,
     }
 
 
