@@ -129,12 +129,16 @@ class ImageEngine:
         aspect_ratio: str | None = None,
         image_size: str | None = None,
     ) -> ImageGenerationResult:
-        """Generate a single image, delegating to the model's provider.
+        """Generate a single image via the resolved provider.
 
-        Provider selection order:
-        1. ``IMAGE_GEN_PROVIDER`` env var — forces a single provider globally
-           (useful for testing or single-key deployments).
-        2. ``config.providers`` list — tried in order; first success returned.
+        Provider resolution order:
+        1. ``IMAGE_GEN_PROVIDER`` env var — explicit override; must be in the
+           model's ``providers`` list (or the request is rejected with an error).
+        2. ``config.providers[0]`` — the model's default/preferred provider.
+
+        No automatic fallback cascade: if the selected provider fails, the
+        failure is returned immediately.  The ``providers`` list is a registry
+        of *available* providers for a model, not a cascade chain.
         """
         resolved_model = model or get_default_model()
         config = get_model_config(resolved_model)
@@ -147,49 +151,45 @@ class ImageEngine:
                 ),
             )
 
-        # IMAGE_GEN_PROVIDER overrides the per-model provider list globally.
+        # Resolve which single provider to use.
         forced = os.getenv("IMAGE_GEN_PROVIDER", "").strip()
-        provider_order = [forced] if forced else list(config.providers)
-
-        # Iterate through the provider list in order.
-        # Each provider is tried; the first success is returned.
-        last_result: ImageGenerationResult | None = None
-        for provider_name in provider_order:
-            if self._instance_openrouter is not None and provider_name == "openrouter":
-                provider = self._instance_openrouter
-            else:
-                provider = get_provider(provider_name)
-            if provider is None:
-                logger.debug(
-                    "No adapter registered for provider %r; skipping", provider_name
+        if forced:
+            if forced not in config.providers:
+                return ImageGenerationResult(
+                    success=False,
+                    model=resolved_model,
+                    error=(
+                        f"Provider {forced!r} (IMAGE_GEN_PROVIDER) is not available "
+                        f"for model {resolved_model!r}. "
+                        f"Available providers: {config.providers}"
+                    ),
                 )
-                continue
+            provider_name = forced
+        else:
+            provider_name = config.providers[0]
 
-            request = ImageRequest(
+        if self._instance_openrouter is not None and provider_name == "openrouter":
+            provider = self._instance_openrouter
+        else:
+            provider = get_provider(provider_name)
+
+        if provider is None:
+            return ImageGenerationResult(
+                success=False,
+                model=resolved_model,
+                error=(
+                    f"No adapter registered for provider {provider_name!r}. "
+                    "See agent_ng/image_providers for how to add one."
+                ),
+            )
+
+        return provider.generate(
+            ImageRequest(
                 prompt=prompt,
                 config=config,
                 aspect_ratio=aspect_ratio,
                 image_size=image_size,
             )
-            last_result = provider.generate(request)
-            if last_result.success:
-                return last_result
-            logger.warning(
-                "Provider %r failed for model %r: %s — trying next",
-                provider_name,
-                resolved_model,
-                last_result.error,
-            )
-
-        if last_result is not None:
-            return last_result
-        return ImageGenerationResult(
-            success=False,
-            model=resolved_model,
-            error=(
-                f"No adapter registered for any provider in {provider_order!r}. "
-                "See agent_ng/image_providers for how to add one."
-            ),
         )
 
 
