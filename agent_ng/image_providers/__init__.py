@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from .base import ImageGenerationResult, ImageProvider, ImageRequest
 from .openrouter import OpenRouterProvider
+from .polza import PolzaProvider
 from .registry import get_provider, list_providers, register_provider
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "ImageProvider",
     "ImageRequest",
     "OpenRouterProvider",
+    "PolzaProvider",
     "get_provider",
     "list_providers",
     "register_provider",

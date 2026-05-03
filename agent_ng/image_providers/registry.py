@@ -16,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from .openrouter import OpenRouterProvider
+from .polza import PolzaProvider
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -68,6 +69,7 @@ def list_providers() -> list[str]:
 # --- Built-in registrations ------------------------------------------------
 
 register_provider("openrouter", OpenRouterProvider)
+register_provider("polza", PolzaProvider)
 
 
 __all__ = [

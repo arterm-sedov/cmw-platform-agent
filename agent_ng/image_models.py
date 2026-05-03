@@ -10,9 +10,12 @@ interchangeable with chat/vision LLMs:
   LangChain's ``ChatOpenAI`` client discards, so they cannot flow through
   :class:`agent_ng.llm_manager.LLMManager`.
 * They should not appear in chat/model selector UIs.
-* Per-call pricing is returned by OpenRouter in ``response.usage.cost``
-  (see `Usage Accounting <https://openrouter.ai/docs/guides/administration/usage-accounting>`_),
-  so no separate pricing fetcher is required.
+* Per-call pricing is returned by OpenRouter in ``response.usage.cost`` or
+  by Polza.ai in ``response.usage.cost_rub``.
+
+Each model lists its supported backends in ``providers`` (ordered by
+preference). The engine tries them in order and returns the first success —
+so regional or key-availability differences are handled transparently.
 
 The registry is a single Python dict — promote to YAML if the list grows
 beyond what is comfortably reviewed in code.
@@ -21,13 +24,15 @@ Example:
     >>> cfg = get_model_config("google/gemini-2.5-flash-image")
     >>> cfg.modalities
     ['image', 'text']
+    >>> cfg.providers
+    ['polza', 'openrouter']
     >>> get_default_model()
-    'google/gemini-2.5-flash-image'
+    'google/gemini-3.1-flash-image-preview'
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 import os
 
@@ -39,33 +44,36 @@ class ImageModelConfig:
     """Static metadata describing one image-generation model.
 
     Attributes:
-        name: Provider slug (also the registry key).
-        provider: Dispatch key used by :class:`ImageEngine`. Currently only
-            ``"openrouter"``; future providers (Polza.ai, Yandex, GigaChat,
-            Replicate, ...) plug in by adding a new dispatcher keyed here.
+        name: Model slug sent to the API (also the registry key).
+        providers: Ordered list of provider keys to try. The engine
+            iterates through them and returns the first successful
+            response, so regional or credential availability differences
+            are handled transparently. E.g. ``["polza", "openrouter"]``
+            tries Polza.ai first (works in Russia), OpenRouter as
+            fallback.
         modalities: Value to send as the ``modalities`` request field.
-            Multimodal models (Gemini) use ``["image", "text"]``; image-only
-            models (Flux, Seedream) use ``["image"]``.
+            Multimodal models (Gemini) use ``["image", "text"]``; image-
+            only models (Flux, Seedream) use ``["image"]``.
         supports_image_config: Whether the model documents support for
-            ``image_config.aspect_ratio`` / ``image_config.image_size``.
-            Only Google Gemini image models document this per OpenRouter;
-            other models silently ignore it and may deviate from the
-            requested dimensions.
-        description: Operations-facing summary (shown in dev docs, logs,
-            admin tooling). May reference vendors, tiers, cost tradeoffs.
-        prompt_style_hint: LLM-facing hint about how this model wants to be
-            prompted, without naming the vendor. Surfaced to the calling
-            model so it can adapt prompt style (natural language vs.
-            comma-separated keywords, text-rendering caveats, etc.). Must
-            not leak the slug, provider or vendor name.
+            ``image_config.aspect_ratio`` / ``image_config.image_size``
+            (OpenRouter) or ``aspect_ratio`` / ``image_resolution``
+            (Polza). Only Google Gemini image models document this.
+        description: Operations-facing summary shown in dev docs / logs.
+        prompt_style_hint: LLM-facing prompting guidance. Must not leak
+            the slug, provider or vendor name.
     """
 
     name: str
-    provider: str
+    providers: list[str]
     modalities: list[str]
     supports_image_config: bool
     description: str = ""
     prompt_style_hint: str = ""
+
+    @property
+    def provider(self) -> str:
+        """Primary (first) provider — backward-compat shorthand."""
+        return self.providers[0]
 
 
 # ---------------------------------------------------------------------------
@@ -102,11 +110,17 @@ _HINT_TEXT_FOCUSED = (
     "Ignores `aspect_ratio` / `image_size` hints."
 )
 
+# Provider order: polza first (Russian CDN, no regional restrictions),
+# openrouter as fallback. Models only available on one provider list it alone.
+_P_BOTH = ["polza", "openrouter"]  # available on both
+_P_OR = ["openrouter"]             # OpenRouter-only
+_P_PZ = ["polza"]                  # Polza-only
+
 IMAGE_MODELS: dict[str, ImageModelConfig] = {
     # ------ Google Gemini family (multimodal: image + text output) -----
     "google/gemini-2.5-flash-image": ImageModelConfig(
         name="google/gemini-2.5-flash-image",
-        provider="openrouter",
+        providers=_P_BOTH,
         modalities=["image", "text"],
         supports_image_config=True,
         description=(
@@ -117,63 +131,65 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "google/gemini-3.1-flash-image-preview": ImageModelConfig(
         name="google/gemini-3.1-flash-image-preview",
-        provider="openrouter",
+        providers=_P_BOTH,
         modalities=["image", "text"],
         supports_image_config=True,
         description=(
-            "Newer fast tier with a larger native canvas and extra aspect "
-            "ratios (including 1:4, 4:1, 1:8, 8:1) for banners and "
-            "vertical layouts."
+            "Newer fast tier (Nano Banana 2) with a larger native canvas "
+            "and extra aspect ratios (including 21:9) for banners and "
+            "vertical layouts. Supports up to 4K resolution."
         ),
         prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
     "google/gemini-3-pro-image-preview": ImageModelConfig(
         name="google/gemini-3-pro-image-preview",
-        provider="openrouter",
+        providers=_P_BOTH,
         modalities=["image", "text"],
         supports_image_config=True,
         description=(
-            "Premium quality for polished hero imagery, complex scenes "
-            "and multilingual text. Slower and pricier."
+            "Premium quality (Nano Banana Pro) for polished hero imagery, "
+            "complex scenes and multilingual text. Slower and pricier."
         ),
         prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
     # ------ OpenAI GPT image family (multimodal: image + text output) --
     "openai/gpt-5-image-mini": ImageModelConfig(
         name="openai/gpt-5-image-mini",
-        provider="openrouter",
+        providers=_P_OR,
         modalities=["image", "text"],
         supports_image_config=False,
         description=(
             "Budget OpenAI image model. Sometimes unavailable depending "
             "on geography — use an alternative when calls fail."
         ),
-        prompt_style_hint=_HINT_GEMINI_STYLE,  # Similar conversational-prompt profile.
+        prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
     "openai/gpt-5-image": ImageModelConfig(
         name="openai/gpt-5-image",
-        provider="openrouter",
+        providers=_P_BOTH,
         modalities=["image", "text"],
         supports_image_config=False,
         description=(
-            "Standard OpenAI image model. Availability varies by region."
+            "Standard OpenAI image model. Polza used first to avoid "
+            "regional restrictions."
         ),
         prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
     "openai/gpt-5.4-image-2": ImageModelConfig(
         name="openai/gpt-5.4-image-2",
-        provider="openrouter",
+        providers=_P_BOTH,
         modalities=["image", "text"],
         supports_image_config=False,
         description=(
-            "Latest OpenAI image model. Availability varies by region."
+            "Latest OpenAI image model. Polza used first to avoid "
+            "regional restrictions."
         ),
         prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
     # ------ Black Forest Labs FLUX (image-only output) ------------------
     "black-forest-labs/flux.2-flex": ImageModelConfig(
         name="black-forest-labs/flux.2-flex",
-        provider="openrouter",
+        providers=_P_BOTH,
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -184,7 +200,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "black-forest-labs/flux.2-pro": ImageModelConfig(
         name="black-forest-labs/flux.2-pro",
-        provider="openrouter",
+        providers=_P_BOTH,
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -196,7 +212,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "black-forest-labs/flux.2-max": ImageModelConfig(
         name="black-forest-labs/flux.2-max",
-        provider="openrouter",
+        providers=_P_OR,
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -208,7 +224,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     # ------ ByteDance Seedream (image-only output) ----------------------
     "bytedance-seed/seedream-4.5": ImageModelConfig(
         name="bytedance-seed/seedream-4.5",
-        provider="openrouter",
+        providers=_P_BOTH,
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -218,10 +234,26 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         ),
         prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
     ),
-    # ------ Sourceful Riverflow (image-only, text-focused renderings) --
+    "bytedance-seed/seedream-4": ImageModelConfig(
+        name="bytedance-seed/seedream-4",
+        providers=_P_BOTH,
+        modalities=["image"],
+        supports_image_config=False,
+        description="Previous-generation Seedream. Good multilingual text rendering.",
+        prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
+    ),
+    "bytedance-seed/seedream-3": ImageModelConfig(
+        name="bytedance-seed/seedream-3",
+        providers=_P_BOTH,
+        modalities=["image"],
+        supports_image_config=False,
+        description="Proven Seedream generation with solid multilingual support.",
+        prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
+    ),
+    # ------ Sourceful Riverflow (image-only, text-focused, OR-only) ----
     "sourceful/riverflow-v2-fast": ImageModelConfig(
         name="sourceful/riverflow-v2-fast",
-        provider="openrouter",
+        providers=_P_OR,
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -232,7 +264,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "sourceful/riverflow-v2-pro": ImageModelConfig(
         name="sourceful/riverflow-v2-pro",
-        provider="openrouter",
+        providers=_P_OR,
         modalities=["image"],
         supports_image_config=False,
         description=(
@@ -241,11 +273,37 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         ),
         prompt_style_hint=_HINT_TEXT_FOCUSED,
     ),
+    # ------ Polza-exclusive models --------------------------------------
+    "x-ai/grok-imagine": ImageModelConfig(
+        name="x-ai/grok-imagine",
+        providers=_P_PZ,
+        modalities=["image"],
+        supports_image_config=False,
+        description=(
+            "Grok Imagine via Polza.ai. Photorealistic and artistic "
+            "generation from xAI, billed in RUB."
+        ),
+        prompt_style_hint=_HINT_DIFFUSION_ARTISTIC,
+    ),
+    "qwen/qwen-vl-max-image": ImageModelConfig(
+        name="qwen/qwen-vl-max-image",
+        providers=_P_PZ,
+        modalities=["image"],
+        supports_image_config=False,
+        description=(
+            "Qwen VL Image via Polza.ai. Alibaba multimodal model, "
+            "billed in RUB."
+        ),
+        prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
+    ),
 }
 
 
 DEFAULT_IMAGE_MODEL: str = "google/gemini-3.1-flash-image-preview"
 """Compile-time default; overridable via ``IMAGE_GEN_DEFAULT_MODEL`` env.
+
+Routes through Polza.ai first (Russian CDN, no regional restrictions) with
+OpenRouter as fallback — see the ``providers`` list on this entry.
 
 Chosen from live side-by-side comparison of Russian + business prompts —
 see ``docs/image_generation/progress_reports/20260425_model_comparison.md``

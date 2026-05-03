@@ -66,14 +66,14 @@ class TestRegistryShape:
         assert seed.modalities == ["image"]
 
     def test_gemini_has_text_and_image_modalities(self) -> None:
-        """Gemini models return both text and images per OpenRouter docs."""
+        """Gemini models return both text and images."""
         gemini = get_image_models()["google/gemini-2.5-flash-image"]
         assert set(gemini.modalities) == {"image", "text"}
 
     def test_only_gemini_supports_image_config(self) -> None:
-        """Per OpenRouter docs, only Google Gemini models document image_config."""
+        """Only Google Gemini models document image_config support."""
         for slug, cfg in get_image_models().items():
-            if slug.startswith("google/"):
+            if cfg.name.startswith("google/"):
                 assert cfg.supports_image_config is True, (
                     f"{slug} should support image_config"
                 )
@@ -82,12 +82,29 @@ class TestRegistryShape:
                     f"{slug} should NOT advertise image_config support"
                 )
 
-    def test_every_config_has_openrouter_provider(self) -> None:
-        for cfg in get_image_models().values():
-            assert cfg.provider == "openrouter", (
-                "All seeded models route via OpenRouter; add a new provider "
-                "dispatcher before changing this."
+    def test_every_config_has_known_providers(self) -> None:
+        known = {"openrouter", "polza"}
+        for slug, cfg in get_image_models().items():
+            assert isinstance(cfg.providers, list), (
+                f"{slug}: providers must be a list"
             )
+            assert cfg.providers, f"{slug}: providers must not be empty"
+            for p in cfg.providers:
+                assert p in known, (
+                    f"{slug}: unknown provider {p!r}; add adapter before using it."
+                )
+
+    def test_provider_property_returns_first(self) -> None:
+        """Backward-compat .provider property returns providers[0]."""
+        cfg = get_image_models()["google/gemini-3.1-flash-image-preview"]
+        assert cfg.provider == cfg.providers[0]
+
+    def test_gemini_default_has_polza_first(self) -> None:
+        """Default Gemini model routes through Polza first (Russian CDN)."""
+        cfg = get_image_models()["google/gemini-3.1-flash-image-preview"]
+        assert cfg.providers[0] == "polza", (
+            "Polza should be first provider for Gemini to avoid regional restrictions"
+        )
 
 
 class TestDefaultSelection:

@@ -48,7 +48,6 @@ except ImportError:  # pragma: no cover — fallback for script / test harnesses
     )
     from agent_ng.key_resolution import get_provider_api_key
     from agent_ng.session_manager import get_current_session_id
-
 logger = logging.getLogger(__name__)
 
 
@@ -77,19 +76,31 @@ class ImageEngine:
         timeout: float = 120.0,
         session_id: str | None = None,
     ) -> None:
-        # Image gen ONLY supports OpenRouter models.
-        # Provider is hardcoded here; key is resolved via unified resolution.
-        effective_key = get_provider_api_key(
-            provider="openrouter",
-            override_key=api_key,
-            session_id=session_id or get_current_session_id(),
-        )
-        if not effective_key:
-            msg = (
-                "OPENROUTER_API_KEY is required (pass api_key= or set "
-                "the environment variable)."
+        # Resolve OpenRouter key for backward-compat / per-instance override.
+        # When api_key is explicitly passed (tests or custom callers) we require
+        # it and bind a dedicated adapter. Otherwise, key validation is deferred
+        # to the provider at generate-time so that Polza-only deployments work
+        # without an OpenRouter key.
+        effective_key: str | None = None
+        if api_key is not None:
+            effective_key = get_provider_api_key(
+                provider="openrouter",
+                override_key=api_key,
+                session_id=session_id or get_current_session_id(),
             )
-            raise ValueError(msg)
+            if not effective_key:
+                msg = (
+                    "OPENROUTER_API_KEY is required (pass api_key= or set "
+                    "the environment variable)."
+                )
+                raise ValueError(msg)
+        else:
+            # Lazy: let the chosen provider validate its own key.
+            effective_key = get_provider_api_key(
+                provider="openrouter",
+                session_id=session_id or get_current_session_id(),
+            )
+            # If no OpenRouter key, still OK — Polza models don't need it.
 
         self.api_key = effective_key
         self.base_url = (base_url or "https://openrouter.ai/api/v1").rstrip(
@@ -102,7 +113,7 @@ class ImageEngine:
         # rather than mutating the global registry (which would leak creds
         # across test cases and concurrent callers).
         self._instance_openrouter: OpenRouterProvider | None = None
-        if api_key is not None or base_url is not None:
+        if (api_key is not None or base_url is not None) and effective_key:
             self._instance_openrouter = OpenRouterProvider(
                 api_key=effective_key, base_url=base_url, timeout=timeout
             )
@@ -130,29 +141,47 @@ class ImageEngine:
                 ),
             )
 
-        # Per-instance override wins for the openrouter provider when
-        # the engine was built with explicit credentials.
-        if self._instance_openrouter is not None and config.provider == "openrouter":
-            provider = self._instance_openrouter
-        else:
-            provider = get_provider(config.provider)
-        if provider is None:
-            return ImageGenerationResult(
-                success=False,
-                model=resolved_model,
-                error=(
-                    f"No adapter registered for provider {config.provider!r}. "
-                    "See agent_ng/image_providers for how to add one."
-                ),
+        # Iterate through the model's provider list in order.
+        # Each provider is tried; the first success is returned.
+        # On failure, the next provider is attempted (transparent fallback).
+        last_result: ImageGenerationResult | None = None
+        for provider_name in config.providers:
+            if self._instance_openrouter is not None and provider_name == "openrouter":
+                provider = self._instance_openrouter
+            else:
+                provider = get_provider(provider_name)
+            if provider is None:
+                logger.debug(
+                    "No adapter registered for provider %r; skipping", provider_name
+                )
+                continue
+
+            request = ImageRequest(
+                prompt=prompt,
+                config=config,
+                aspect_ratio=aspect_ratio,
+                image_size=image_size,
+            )
+            last_result = provider.generate(request)
+            if last_result.success:
+                return last_result
+            logger.warning(
+                "Provider %r failed for model %r: %s — trying next",
+                provider_name,
+                resolved_model,
+                last_result.error,
             )
 
-        request = ImageRequest(
-            prompt=prompt,
-            config=config,
-            aspect_ratio=aspect_ratio,
-            image_size=image_size,
+        if last_result is not None:
+            return last_result
+        return ImageGenerationResult(
+            success=False,
+            model=resolved_model,
+            error=(
+                f"No adapter registered for any provider in {config.providers!r}. "
+                "See agent_ng/image_providers for how to add one."
+            ),
         )
-        return provider.generate(request)
 
 
 __all__ = ["ImageEngine", "ImageGenerationResult"]
