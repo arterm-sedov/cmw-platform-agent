@@ -42,6 +42,19 @@ from agent_ng.token_budget import (
 from tools.file_utils import FileUtils
 
 try:
+    from agent_ng._debug_ndjson import debug_ndjson as _debug_ndjson_chat
+except ImportError:
+
+    def _debug_ndjson_chat(
+        _hypothesis_id: str,
+        _location: str,
+        _message: str,
+        _data: dict | None = None,
+    ) -> None:
+        return
+
+
+try:
     from agent_ng._file_attachment import build_file_bubbles_for_role
 except ImportError:
     try:
@@ -1672,10 +1685,11 @@ class ChatTab(QuickActionsMixin):
         if history and len(history) > 0:
             # Check if conversation has changed since last generation
             history_str = str(history)
-            if (
+            regen = (
                 not hasattr(self, "_last_history_str")
                 or self._last_history_str != history_str
-            ):
+            )
+            if regen:
                 # Generate files with fresh timestamp when conversation changes
                 # Use try/except to prevent blocking on file generation errors
                 try:
@@ -1697,6 +1711,14 @@ class ChatTab(QuickActionsMixin):
                 html_file_path = getattr(self, "_last_download_html_file", None)
 
             if markdown_file_path and html_file_path:
+                # region agent log
+                _debug_ndjson_chat(
+                    "H4",
+                    "chat_tab._update_download_button_visibility",
+                    "branch",
+                    {"branch": "md_html", "regen": regen},
+                )
+                # endregion
                 # Show both download buttons with pre-generated files
                 # Use gr.update() instead of creating new components (Gradio 6 pattern)
                 return (
@@ -1704,11 +1726,27 @@ class ChatTab(QuickActionsMixin):
                     gr.update(value=html_file_path, visible=True),
                 )
             if markdown_file_path:
+                # region agent log
+                _debug_ndjson_chat(
+                    "H4",
+                    "chat_tab._update_download_button_visibility",
+                    "branch",
+                    {"branch": "md_only", "regen": regen},
+                )
+                # endregion
                 # MD-only when HTML export is disabled or HTML build failed
                 return (
                     gr.update(value=markdown_file_path, visible=True),
                     gr.update(visible=False),
                 )
+            # region agent log
+            _debug_ndjson_chat(
+                "H4",
+                "chat_tab._update_download_button_visibility",
+                "branch",
+                {"branch": "hide_gen_fail", "regen": regen},
+            )
+            # endregion
             # Hide buttons if generation fails
             return (
                 gr.update(visible=False),
@@ -1735,6 +1773,7 @@ class ChatTab(QuickActionsMixin):
         logger = logging.getLogger(__name__)
         logger.debug("Download function called with history type: %s", type(history))
         logger.debug("History content: %s", str(history)[:50])
+        _t_export = time.perf_counter()
 
         if not history:
             logger.warning("No history provided")
@@ -1835,9 +1874,34 @@ class ChatTab(QuickActionsMixin):
             else:
                 self._last_html_file_path = None
 
+            # region agent log
+            _debug_ndjson_chat(
+                "H3",
+                "chat_tab._download_conversation_as_markdown",
+                "export_done",
+                {
+                    "ms": round((time.perf_counter() - _t_export) * 1000, 2),
+                    "html_gate": get_ui_export_html_after_turn(),
+                    "html_stored": bool(
+                        getattr(self, "_last_html_file_path", None)
+                    ),
+                },
+            )
+            # endregion
             # Return the markdown file path for Gradio to handle the download
             return clean_file_path
         except Exception as e:
+            # region agent log
+            _debug_ndjson_chat(
+                "H3",
+                "chat_tab._download_conversation_as_markdown",
+                "export_error",
+                {
+                    "ms": round((time.perf_counter() - _t_export) * 1000, 2),
+                    "err_type": type(e).__name__,
+                },
+            )
+            # endregion
             logger.exception("Error creating markdown file: %s", e)
             return None
 
