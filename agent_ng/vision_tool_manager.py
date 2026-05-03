@@ -71,16 +71,23 @@ class VisionToolManager:
         # If set, overrides VL_GEMINI_PROVIDER only for YouTube videoUrl routing
         ygp = os.getenv("VL_YOUTUBE_GEMINI_PROVIDER", "").strip().lower()
         self.vl_youtube_gemini_provider: Optional[str] = ygp or None
+        # Provider for non-Gemini VL calls: follows AGENT_PROVIDER so VL and
+        # the main agent use the same backend by default.
+        self.vl_default_provider = os.getenv("AGENT_PROVIDER", "openrouter").strip().lower()
 
         # Initialize adapters
         self._init_adapters()
 
     def _init_adapters(self):
         """Initialize provider adapters"""
-        # OpenRouter adapter
         try:
             from .vision_adapters import OpenRouterVisionAdapter
+            from .llm_manager import LLMProvider
             self.adapters['openrouter'] = OpenRouterVisionAdapter(self.llm_manager)
+            # Polza uses identical wire protocol — same adapter, different provider
+            self.adapters['polza'] = OpenRouterVisionAdapter(
+                self.llm_manager, provider=LLMProvider.POLZA
+            )
         except ImportError as e:
             print(f"Warning: Could not load OpenRouterVisionAdapter: {e}")
 
@@ -133,11 +140,15 @@ class VisionToolManager:
         - auto: use ``prefer_openrouter_on_auto`` to pick OpenRouter vs Google Direct
         """
         p = (provider or self.vl_gemini_provider).strip().lower()
-        if p == "openrouter":
+        # openrouter and polza both accept google/<model> format
+        if p in ("openrouter", "polza"):
             return self._to_openrouter_gemini_model(base_model)
         if p == "google":
             return self._to_google_direct_model(base_model)
-        # auto
+        # auto: follow vl_default_provider if it is an openrouter-compatible backend
+        if p == "auto" and self.vl_default_provider in ("openrouter", "polza"):
+            if prefer_openrouter_on_auto:
+                return self._to_openrouter_gemini_model(base_model)
         if prefer_openrouter_on_auto:
             return self._to_openrouter_gemini_model(base_model)
         return self._to_google_direct_model(base_model)
@@ -179,15 +190,22 @@ class VisionToolManager:
         return self.vl_model
 
     def get_adapter_for_model(self, model: str) -> Optional[VisionProviderAdapter]:
-        """Get the appropriate adapter for the given model."""
-        if model.startswith('google/'):
-            return self.adapters.get('openrouter')
-        elif model.startswith('gemini-'):
+        """Get the appropriate adapter for the given model.
+
+        Bare ``gemini-*`` names always go to Gemini Direct (Google API).
+        Everything with a provider prefix (``google/*``, ``qwen/*``, etc.)
+        routes through :attr:`vl_default_provider` (from ``AGENT_PROVIDER``),
+        falling back to ``openrouter`` if the slot is missing.
+        """
+        if model.startswith('gemini-'):
             return self.adapters.get('gemini')
-        elif '/' in model:
-            return self.adapters.get('openrouter')
-        else:
-            return self.adapters.get('gemini')
+        if '/' in model:
+            return self.adapters.get(
+                self.vl_default_provider,
+                self.adapters.get('openrouter'),
+            )
+        # plain name with no slash → Gemini Direct
+        return self.adapters.get('gemini')
 
     def analyze(
         self,

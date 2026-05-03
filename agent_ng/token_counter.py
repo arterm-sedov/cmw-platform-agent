@@ -109,6 +109,16 @@ def _usage_to_dict(usage_obj: Any) -> dict[str, Any] | None:
     return d or None
 
 
+def _first_chat_generation(llm_result: Any) -> Any | None:
+    """First ``ChatGeneration`` from ``LLMResult`` (nested batches or flat list)."""
+    if not hasattr(llm_result, "generations") or not llm_result.generations:
+        return None
+    head = llm_result.generations[0]
+    if isinstance(head, list):
+        return head[0] if head else None
+    return head
+
+
 def _extract_cache_details(
     usage_dict: dict[str, Any] | None,
 ) -> tuple[int | None, int | None]:
@@ -123,6 +133,45 @@ def _extract_cache_details(
         int(ptd.get("cache_write_tokens", 0)) if "cache_write_tokens" in ptd else None
     )
     return (cached, cache_write)
+
+
+def _provider_cost_from_usage_dict(usage_dict: dict[str, Any] | None) -> float | None:
+    """USD charge from usage dict when provider supplies usage billing metadata.
+
+    Polza.ai sends ``cost_rub`` (and ``cost`` as a same-value alias, both in
+    rubles).  When ``cost_rub`` is present the value must be converted ₽→$ via
+    ``POLZA_RUB_TO_USD_RATE``; only fall through to ``cost`` for providers
+    (e.g. OpenRouter) that send it in USD.
+    """
+    if not isinstance(usage_dict, dict):
+        return None
+    # Polza: cost_rub present → cost field is also in rubles, must convert.
+    if "cost_rub" in usage_dict:
+        try:
+            from agent_ng.openrouter_usage_accounting import _get_polza_rate
+            rub = float(usage_dict["cost_rub"] or 0.0)
+            return rub / _get_polza_rate()
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Polza cost_rub conversion failed: %s", exc
+            )
+    if "cost" not in usage_dict:
+        return None
+    raw = usage_dict.get("cost")
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _provider_cost_from_usage_obj(usage: Any) -> float | None:
+    """Best-effort provider cost from dict or object-shaped usage metadata."""
+    if isinstance(usage, dict):
+        return _provider_cost_from_usage_dict(usage)
+    dumped = _usage_to_dict(usage)
+    return _provider_cost_from_usage_dict(dumped) if isinstance(dumped, dict) else None
 
 
 @dataclass
@@ -400,6 +449,15 @@ class ConversationTokenTracker:
         """Track LLM response tokens with API fallback"""
         logger = logging.getLogger(__name__)
         logger.debug("track_llm_response response type: %s", type(response))
+        # Unwrap LangChain LLMResult so callbacks receive AIMessage-shaped payloads
+        if hasattr(response, "generations") and response.generations:
+            try:
+                gen0 = _first_chat_generation(response)
+                inner = getattr(gen0, "message", None) if gen0 is not None else None
+                if inner is not None:
+                    response = inner
+            except Exception as exc:
+                logger.debug("Could not unwrap LLMResult for token tracking: %s", exc)
         # Try to extract API tokens from response
         api_tokens = self._extract_api_tokens(response)
         logger.debug("Extracted API tokens: %s", api_tokens)
@@ -411,12 +469,17 @@ class ConversationTokenTracker:
                 input_tokens,
                 output_tokens,
                 total_tokens,
-                _api_cost,  # Ignored - we calculate from pricing config
+                api_cost_reported,
                 cached_tokens,
                 cache_write_tokens,
             ) = self._unpack_api_tokens(api_tokens)
-            # Calculate cost from token counts and pricing config
-            cost = self._calculate_cost_from_tokens(input_tokens, output_tokens)
+            calculated_cost = self._calculate_cost_from_tokens(input_tokens, output_tokens)
+            if api_cost_reported > 0:
+                cost: float | None = api_cost_reported
+            elif calculated_cost is not None:
+                cost = calculated_cost
+            else:
+                cost = 0.0
             token_count = TokenCount(
                 input_tokens,
                 output_tokens,
@@ -466,7 +529,7 @@ class ConversationTokenTracker:
         self._turn_input_tokens = 0
         self._turn_output_tokens = 0
         self._turn_total_tokens = 0
-        self._turn_cost = None
+        self._turn_cost = 0.0
         self._turn_estimated_total_tokens = 0
         self._turn_interrupted = False
 
@@ -492,7 +555,7 @@ class ConversationTokenTracker:
             input_tokens,
             output_tokens,
             total_tokens,
-            _api_cost,  # Ignored - we calculate from pricing config
+            api_cost_reported,
             cached_tokens,
             cache_write_tokens,
         ) = self._unpack_api_tokens(api_tokens)
@@ -501,10 +564,15 @@ class ConversationTokenTracker:
             self._turn_input_tokens = int(input_tokens or 0)
             self._turn_output_tokens = int(output_tokens or 0)
             self._turn_total_tokens = int(total_tokens or 0)
-            # Calculate cost from token counts and pricing config
-            self._turn_cost = self._calculate_cost_from_tokens(
+            calculated_cost = self._calculate_cost_from_tokens(
                 self._turn_input_tokens, self._turn_output_tokens
             )
+            if api_cost_reported > 0:
+                self._turn_cost = api_cost_reported
+            elif calculated_cost is not None:
+                self._turn_cost = calculated_cost
+            else:
+                self._turn_cost = 0.0
         except Exception as exc:
             logging.getLogger(__name__).debug(
                 "Failed to accumulate LLM call usage: %s", exc
@@ -717,15 +785,10 @@ class ConversationTokenTracker:
     def _extract_api_tokens(
         self, response: Any
     ) -> tuple[int, int, int, float, int | None, int | None] | None:
-        """Extract token usage from API response.
+        """Extract token usage (and optional provider-reported billing amount) from API response.
 
-        Note: Cost is not extracted from API responses (LangChain doesn't provide it reliably,
-        especially in streaming mode). Cost is calculated separately from token counts and
-        pricing config via `_calculate_cost_from_tokens()`.
-
-        Returns:
-            Tuple of (input_tokens, output_tokens, total_tokens, cost, cached_tokens, cache_write_tokens) or None.
-            Cost is always 0.0 (calculated separately from pricing config).
+        Tuple slot index 3 carries provider USD when present in usage metadata;
+        otherwise ``0.0`` so callers can combine with configured pricing.
         """
         try:
             logger = logging.getLogger(__name__)
@@ -734,40 +797,72 @@ class ConversationTokenTracker:
 
             if hasattr(response, "usage_metadata"):
                 usage = response.usage_metadata
-                logger.debug("Found usage_metadata type=%s", type(usage))
+                # LangChain 1.x appends a final empty AIMessageChunk with
+                # chunk_position="last" whose usage_metadata is None.  Skip it
+                # so the caller receives None (not a zero-count success) and can
+                # fall back to the accumulated chunk that does carry real usage.
+                if usage is not None:
+                    logger.debug("Found usage_metadata type=%s", type(usage))
 
-                # Handle both dict and object formats
-                if isinstance(usage, dict):
-                    input_tokens = usage.get("input_tokens", 0)
-                    output_tokens = usage.get("output_tokens", 0)
-                    total_tokens = usage.get(
-                        "total_tokens", input_tokens + output_tokens
-                    )
-                    cached_tokens, cache_write_tokens = _extract_cache_details(usage)
-                else:
-                    input_tokens = getattr(usage, "input_tokens", 0)
-                    output_tokens = getattr(usage, "output_tokens", 0)
-                    total_tokens = getattr(
-                        usage, "total_tokens", input_tokens + output_tokens
-                    )
-                    cached_tokens, cache_write_tokens = _extract_cache_details(
-                        _usage_to_dict(getattr(usage, "prompt_tokens_details", None))
+                    # Handle both dict and object formats
+                    if isinstance(usage, dict):
+                        input_tokens = usage.get("input_tokens", 0)
+                        output_tokens = usage.get("output_tokens", 0)
+                        total_tokens = usage.get(
+                            "total_tokens", input_tokens + output_tokens
+                        )
+                        cached_tokens, cache_write_tokens = _extract_cache_details(usage)
+                    else:
+                        input_tokens = getattr(usage, "input_tokens", 0)
+                        output_tokens = getattr(usage, "output_tokens", 0)
+                        total_tokens = getattr(
+                            usage, "total_tokens", input_tokens + output_tokens
+                        )
+                        cached_tokens, cache_write_tokens = _extract_cache_details(
+                            _usage_to_dict(getattr(usage, "prompt_tokens_details", None))
+                        )
+
+                    provider_cost = (
+                        _provider_cost_from_usage_dict(usage)
+                        if isinstance(usage, dict)
+                        else _provider_cost_from_usage_obj(usage)
                     )
 
-                logger.debug(
-                    "Extracted tokens from usage_metadata: input=%s output=%s total=%s",
-                    input_tokens,
-                    output_tokens,
-                    total_tokens,
-                )
-                fallback_result = (
-                    int(input_tokens or 0),
-                    int(output_tokens or 0),
-                    int(total_tokens or 0),
-                    0.0,  # Cost calculated from pricing config, not API response
-                    cached_tokens,
-                    cache_write_tokens,
-                )
+                    logger.debug(
+                        "Extracted tokens from usage_metadata: input=%s output=%s total=%s",
+                        input_tokens,
+                        output_tokens,
+                        total_tokens,
+                    )
+                    fallback_result = (
+                        int(input_tokens or 0),
+                        int(output_tokens or 0),
+                        int(total_tokens or 0),
+                        float(provider_cost if provider_cost is not None else 0.0),
+                        cached_tokens,
+                        cache_write_tokens,
+                    )
+
+            # // pragma: allowlist secret
+            # pragma: allowlist secret
+            # OpenRouter native / ChatOpenRouter: usage charge may appear top-level on metadata
+            rm_top = getattr(response, "response_metadata", None)
+            if isinstance(rm_top, dict) and fallback_result is not None:
+                try:
+                    rc = rm_top.get("cost")
+                    if rc is not None:
+                        rc_f = float(rc)
+                        if rc_f > float(fallback_result[3]):
+                            fallback_result = (
+                                fallback_result[0],
+                                fallback_result[1],
+                                fallback_result[2],
+                                rc_f,
+                                fallback_result[4],
+                                fallback_result[5],
+                            )
+                except (TypeError, ValueError) as exc:
+                    logger.debug("Skipped merging response_metadata.cost: %s", exc)
 
             # Direct `usage` attribute (OpenAI/OpenRouter clients; streaming final chunk)
             usage_attr = getattr(response, "usage", None)
@@ -783,12 +878,13 @@ class ConversationTokenTracker:
                     except Exception:
                         total_tokens = 0
                 cached_tokens, cache_write_tokens = _extract_cache_details(usage_attr_dict)
+                provider_cost = _provider_cost_from_usage_dict(usage_attr_dict)
                 if int(total_tokens or 0) > 0:
                     return (
                         int(input_tokens or 0),
                         int(output_tokens or 0),
                         int(total_tokens or 0),
-                        0.0,  # Cost calculated from pricing config, not API response
+                        float(provider_cost if provider_cost is not None else 0.0),
                         cached_tokens,
                         cache_write_tokens,
                     )
@@ -852,6 +948,7 @@ class ConversationTokenTracker:
                         total_tokens = 0
 
                 cached_tokens, cache_write_tokens = _extract_cache_details(usage_dict)
+                provider_cost = _provider_cost_from_usage_dict(usage_dict)
 
                 if int(total_tokens or 0) > 0:
                     logger.debug(
@@ -864,7 +961,7 @@ class ConversationTokenTracker:
                         int(input_tokens or 0),
                         int(output_tokens or 0),
                         int(total_tokens or 0),
-                        0.0,  # Cost calculated from pricing config, not API response
+                        float(provider_cost if provider_cost is not None else 0.0),
                         cached_tokens,
                         cache_write_tokens,
                     )
@@ -1133,6 +1230,12 @@ class ConversationTokenTracker:
         # - otherwise, a monotonic estimate (snapshot-based) suitable for interruption
         #   fallback
         current_tokens = self.get_message_display_total_tokens()
+        if (
+            current_tokens == 0
+            and not self._turn_active
+            and self._last_api_tokens is not None
+        ):
+            current_tokens = int(self._last_api_tokens.total_tokens or 0)
 
         percentage = (current_tokens / context_window) * 100.0
         remaining_tokens = max(0, context_window - current_tokens)
@@ -1209,8 +1312,8 @@ class UsageMetadataCallbackHandler(BaseCallbackHandler):
         _ = kwargs
         try:
             if hasattr(response, "generations") and response.generations:
-                generation = response.generations[0][0]
-                if hasattr(generation, "message"):
+                generation = _first_chat_generation(response)
+                if generation is not None and hasattr(generation, "message"):
                     self.token_tracker.track_llm_response(
                         response, [generation.message]
                     )
@@ -1218,6 +1321,21 @@ class UsageMetadataCallbackHandler(BaseCallbackHandler):
             logging.getLogger(__name__).debug(
                 "Failed to capture usage metadata: %s", exc
             )
+
+
+class SessionUsageMetadataCallbackHandler(BaseCallbackHandler):
+    """Routes LLM end events to a session-bound ``ConversationTokenTracker``.
+
+    Use with ``RunnableConfig(callbacks=[...])`` so streaming inherits the same
+    tracker as the agent without mutating global LLM singletons.
+    """
+
+    def __init__(self, token_tracker: ConversationTokenTracker) -> None:
+        super().__init__()
+        self._handler = UsageMetadataCallbackHandler(token_tracker)
+
+    def on_llm_end(self, response: Any, **kwargs: Any) -> None:  # type: ignore[override]
+        self._handler.on_llm_end(response, **kwargs)
 
 
 # Session-specific token tracker instances

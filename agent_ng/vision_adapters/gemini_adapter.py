@@ -135,7 +135,7 @@ class GeminiDirectVisionAdapter(VisionProviderAdapter):
             msg = "Gemini SDK not available"
             raise RuntimeError(msg)
 
-        # Unified key resolution: session llm_provider_override → llm_api_key_override → env var
+        # Unified key resolution: session llm_provider_api_keys → env var
         gemini_key = get_provider_api_key(
             provider="gemini",
             session_id=get_current_session_id(),

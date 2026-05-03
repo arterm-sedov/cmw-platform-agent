@@ -167,6 +167,22 @@ class UIManager:
                             outputs=[token_budget_comp],
                         )
                     logging.getLogger(__name__).debug("✅ Token budget event-driven refresh wired for end-of-turn updates, clear button, and stop button")
+
+                    provider_sel = self.components.get("provider_model_selector")
+                    sync_dd = event_handlers.get("sync_llm_dropdown_from_session")
+                    if provider_sel and sync_dd and main_app:
+                        demo.load(fn=sync_dd, outputs=[provider_sel])
+                        if (
+                            hasattr(chat_tab_instance, "clear_event")
+                            and chat_tab_instance.clear_event
+                        ):
+                            chat_tab_instance.clear_event.then(
+                                fn=sync_dd,
+                                outputs=[provider_sel],
+                            )
+                        logging.getLogger(__name__).debug(
+                            "✅ LLM dropdown synced from session on load and after clear"
+                        )
             except Exception as e:
                 logging.getLogger(__name__).warning(f"Could not wire event-driven refresh: {e}")
 

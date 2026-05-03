@@ -10,9 +10,12 @@ interchangeable with chat/vision LLMs:
   LangChain's ``ChatOpenAI`` client discards, so they cannot flow through
   :class:`agent_ng.llm_manager.LLMManager`.
 * They should not appear in chat/model selector UIs.
-* Per-call pricing is returned by OpenRouter in ``response.usage.cost``
-  (see `Usage Accounting <https://openrouter.ai/docs/guides/administration/usage-accounting>`_),
-  so no separate pricing fetcher is required.
+* Per-call pricing is returned by OpenRouter in ``response.usage.cost`` or
+  by Polza.ai in ``response.usage.cost_rub``.
+
+Each model lists its supported backends in ``providers`` (ordered by
+preference). The engine tries them in order and returns the first success —
+so regional or key-availability differences are handled transparently.
 
 The registry is a single Python dict — promote to YAML if the list grows
 beyond what is comfortably reviewed in code.
@@ -21,13 +24,15 @@ Example:
     >>> cfg = get_model_config("google/gemini-2.5-flash-image")
     >>> cfg.modalities
     ['image', 'text']
+    >>> cfg.providers
+    ['polza', 'openrouter']
     >>> get_default_model()
-    'google/gemini-2.5-flash-image'
+    'google/gemini-3.1-flash-image-preview'
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 import os
 
@@ -39,33 +44,59 @@ class ImageModelConfig:
     """Static metadata describing one image-generation model.
 
     Attributes:
-        name: Provider slug (also the registry key).
-        provider: Dispatch key used by :class:`ImageEngine`. Currently only
-            ``"openrouter"``; future providers (Polza.ai, Yandex, GigaChat,
-            Replicate, ...) plug in by adding a new dispatcher keyed here.
+        name: Model slug sent to the API (also the registry key).
+        providers: Ordered list of provider keys to try. The engine
+            iterates through them and returns the first successful
+            response, so regional or credential availability differences
+            are handled transparently. E.g. ``["polza", "openrouter"]``
+            tries Polza.ai first (works in Russia), OpenRouter as
+            fallback.
         modalities: Value to send as the ``modalities`` request field.
-            Multimodal models (Gemini) use ``["image", "text"]``; image-only
-            models (Flux, Seedream) use ``["image"]``.
+            Multimodal models (Gemini) use ``["image", "text"]``; image-
+            only models (Flux, Seedream) use ``["image"]``.
         supports_image_config: Whether the model documents support for
-            ``image_config.aspect_ratio`` / ``image_config.image_size``.
-            Only Google Gemini image models document this per OpenRouter;
-            other models silently ignore it and may deviate from the
-            requested dimensions.
-        description: Operations-facing summary (shown in dev docs, logs,
-            admin tooling). May reference vendors, tiers, cost tradeoffs.
-        prompt_style_hint: LLM-facing hint about how this model wants to be
-            prompted, without naming the vendor. Surfaced to the calling
-            model so it can adapt prompt style (natural language vs.
-            comma-separated keywords, text-rendering caveats, etc.). Must
-            not leak the slug, provider or vendor name.
+            ``image_config.aspect_ratio`` / ``image_config.image_size``
+            (OpenRouter) or ``aspect_ratio`` / ``quality`` (Polza).
+            Only Google Gemini and Seedream 4.5 image models document this.
+        max_reference_images: Maximum number of reference images the model
+            accepts as input (image-to-image / editing). 0 means the model
+            is text-to-image only. Callers should clip the list to this count
+            before passing it to the engine.
+        description: Operations-facing summary shown in dev docs / logs.
+        prompt_style_hint: LLM-facing prompting guidance. Must not leak
+            the slug, provider or vendor name.
     """
 
     name: str
-    provider: str
+    providers: list[str]
     modalities: list[str]
     supports_image_config: bool
+    max_reference_images: int = 0
+    """Maximum number of reference images the model accepts (0 = text-to-image only)."""
     description: str = ""
     prompt_style_hint: str = ""
+    provider_model_ids: dict[str, str] = field(default_factory=dict)
+    """Per-provider model ID overrides.
+
+    When a provider uses a different slug for the same model (e.g. OpenRouter
+    uses ``bytedance-seed/seedream-4.5`` but Polza uses
+    ``bytedance/seedream-4.5``), add an entry here so the provider adapter
+    sends the correct ID.  Falls back to ``name`` when not set.
+    """
+    price_per_generation_usd: float | None = None
+    """Estimated generation cost in USD for providers that don't return cost at runtime.
+
+    Used exclusively by the ``google`` native provider (Google Gemini API
+    returns token counts but no dollar amount).  Other providers return live
+    cost in the response and ignore this field.
+
+    Values are Polza.ai base-tier prices converted to USD.
+    """
+
+    @property
+    def provider(self) -> str:
+        """Primary (first) provider — backward-compat shorthand."""
+        return self.providers[0]
 
 
 # ---------------------------------------------------------------------------
@@ -102,13 +133,23 @@ _HINT_TEXT_FOCUSED = (
     "Ignores `aspect_ratio` / `image_size` hints."
 )
 
+# Provider order: polza first (Russian CDN, no regional restrictions),
+# openrouter as fallback. Models only available on one provider list it alone.
+
+
 IMAGE_MODELS: dict[str, ImageModelConfig] = {
     # ------ Google Gemini family (multimodal: image + text output) -----
+    # provider_model_ids["google"] strips the "google/" prefix that OpenRouter
+    # and Polza use as a namespace, since the native Gemini API expects bare IDs.
+    # price_per_generation_usd: Polza base-tier price ÷ 90 RUB/USD (default rate).
     "google/gemini-2.5-flash-image": ImageModelConfig(
         name="google/gemini-2.5-flash-image",
-        provider="openrouter",
+        providers=["polza", "openrouter", "google"],
         modalities=["image", "text"],
         supports_image_config=True,
+        max_reference_images=8,
+        provider_model_ids={"google": "gemini-2.5-flash-image"},
+        price_per_generation_usd=0.039,  # Google native: $0.039/image @ 1K (official)
         description=(
             "Fast everyday workhorse for icons, diagrams and simple "
             "business illustrations. Balanced quality and speed."
@@ -117,65 +158,78 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "google/gemini-3.1-flash-image-preview": ImageModelConfig(
         name="google/gemini-3.1-flash-image-preview",
-        provider="openrouter",
+        providers=["polza", "openrouter", "google"],
         modalities=["image", "text"],
         supports_image_config=True,
+        max_reference_images=8,
+        provider_model_ids={"google": "gemini-3.1-flash-image-preview"},
+        price_per_generation_usd=0.067,  # Google native: $0.067/image @ 1K (official)
         description=(
-            "Newer fast tier with a larger native canvas and extra aspect "
-            "ratios (including 1:4, 4:1, 1:8, 8:1) for banners and "
-            "vertical layouts."
+            "Newer fast tier (Nano Banana 2) with a larger native canvas "
+            "and extra aspect ratios (including 21:9) for banners and "
+            "vertical layouts. Supports up to 4K resolution."
         ),
         prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
     "google/gemini-3-pro-image-preview": ImageModelConfig(
         name="google/gemini-3-pro-image-preview",
-        provider="openrouter",
+        providers=["polza", "openrouter", "google"],
         modalities=["image", "text"],
         supports_image_config=True,
+        max_reference_images=8,
+        provider_model_ids={"google": "gemini-3-pro-image-preview"},
+        price_per_generation_usd=0.134,  # Google native: $0.134/image @ 1K/2K (official)
         description=(
-            "Premium quality for polished hero imagery, complex scenes "
-            "and multilingual text. Slower and pricier."
+            "Premium quality (Nano Banana Pro) for polished hero imagery, "
+            "complex scenes and multilingual text. Slower and pricier."
         ),
         prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
     # ------ OpenAI GPT image family (multimodal: image + text output) --
     "openai/gpt-5-image-mini": ImageModelConfig(
         name="openai/gpt-5-image-mini",
-        provider="openrouter",
+        providers=["polza", "openrouter"],
         modalities=["image", "text"],
         supports_image_config=False,
+        max_reference_images=10,
         description=(
             "Budget OpenAI image model. Sometimes unavailable depending "
             "on geography — use an alternative when calls fail."
         ),
-        prompt_style_hint=_HINT_GEMINI_STYLE,  # Similar conversational-prompt profile.
+        prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
     "openai/gpt-5-image": ImageModelConfig(
         name="openai/gpt-5-image",
-        provider="openrouter",
+        providers=["polza", "openrouter"],
         modalities=["image", "text"],
         supports_image_config=False,
+        max_reference_images=10,
         description=(
-            "Standard OpenAI image model. Availability varies by region."
+            "Standard OpenAI image model. Polza used first to avoid "
+            "regional restrictions."
         ),
         prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
     "openai/gpt-5.4-image-2": ImageModelConfig(
         name="openai/gpt-5.4-image-2",
-        provider="openrouter",
+        providers=["polza", "openrouter"],
         modalities=["image", "text"],
-        supports_image_config=False,
+        supports_image_config=True,
+        max_reference_images=1,
         description=(
-            "Latest OpenAI image model. Availability varies by region."
+            "Latest OpenAI image model. Supports 11 aspect ratios, "
+            "up to 4 images per request, and reference-image editing. "
+            "Polza used first to avoid regional restrictions."
         ),
         prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
     # ------ Black Forest Labs FLUX (image-only output) ------------------
     "black-forest-labs/flux.2-flex": ImageModelConfig(
         name="black-forest-labs/flux.2-flex",
-        provider="openrouter",
+        providers=["polza", "openrouter"],
         modalities=["image"],
-        supports_image_config=False,
+        supports_image_config=True,
+        max_reference_images=8,
         description=(
             "Fast artistic text-to-image at moderate cost. Good prompt "
             "adherence on stylized or photographic imagery."
@@ -184,9 +238,10 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "black-forest-labs/flux.2-pro": ImageModelConfig(
         name="black-forest-labs/flux.2-pro",
-        provider="openrouter",
+        providers=["polza", "openrouter"],
         modalities=["image"],
-        supports_image_config=False,
+        supports_image_config=True,
+        max_reference_images=8,
         description=(
             "Production-grade artistic text-to-image up to 4 MP. Best "
             "for photorealistic or richly stylized scenes; weaker at "
@@ -196,9 +251,10 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "black-forest-labs/flux.2-max": ImageModelConfig(
         name="black-forest-labs/flux.2-max",
-        provider="openrouter",
+        providers=["openrouter"],
         modalities=["image"],
         supports_image_config=False,
+        max_reference_images=0,
         description=(
             "Highest artistic fidelity tier. Use when visual richness "
             "matters more than speed or cost."
@@ -206,24 +262,62 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         prompt_style_hint=_HINT_DIFFUSION_ARTISTIC,
     ),
     # ------ ByteDance Seedream (image-only output) ----------------------
-    "bytedance-seed/seedream-4.5": ImageModelConfig(
-        name="bytedance-seed/seedream-4.5",
-        provider="openrouter",
+    "bytedance-seed/seedream-5-lite": ImageModelConfig(
+        name="bytedance-seed/seedream-5-lite",
+        providers=["polza"],
         modalities=["image"],
-        supports_image_config=False,
+        supports_image_config=True,
+        max_reference_images=10,
+        provider_model_ids={"polza": "bytedance/seedream-5-lite"},
         description=(
-            "Large-canvas (2K) output at flat per-image cost. Handles "
-            "multilingual text (including Cyrillic) and small-text "
-            "rendering better than most text-to-image models."
+            "Seedream 5.0 Lite via Polza.ai. Generation and image-to-image "
+            "editing, 2K/3K output, up to 10 reference images."
         ),
         prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
     ),
-    # ------ Sourceful Riverflow (image-only, text-focused renderings) --
+    "bytedance-seed/seedream-4.5": ImageModelConfig(
+        name="bytedance-seed/seedream-4.5",
+        providers=["polza", "openrouter"],
+        modalities=["image"],
+        supports_image_config=True,
+        max_reference_images=14,
+        provider_model_ids={"polza": "bytedance/seedream-4.5"},
+        description=(
+            "Large-canvas (2K/4K) output. Handles multilingual text "
+            "(including Cyrillic) and small-text rendering better than "
+            "most text-to-image models. Polza: quality=basic(2K)/high(4K)."
+        ),
+        prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
+    ),
+    "bytedance-seed/seedream-4": ImageModelConfig(
+        name="bytedance-seed/seedream-4",
+        providers=["polza"],
+        modalities=["image"],
+        supports_image_config=True,
+        max_reference_images=10,
+        description=(
+            "Previous-generation Seedream with 4K output and unique "
+            "artistic style. Good multilingual text rendering."
+        ),
+        prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
+    ),
+    "bytedance-seed/seedream-3": ImageModelConfig(
+        name="bytedance-seed/seedream-3",
+        providers=["polza"],
+        modalities=["image"],
+        supports_image_config=True,
+        max_reference_images=1,
+        provider_model_ids={"polza": "bytedance/seedream"},
+        description="Proven Seedream generation with solid multilingual support.",
+        prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
+    ),
+    # ------ Sourceful Riverflow (image-only, text-focused, OR-only) ----
     "sourceful/riverflow-v2-fast": ImageModelConfig(
         name="sourceful/riverflow-v2-fast",
-        provider="openrouter",
+        providers=["openrouter"],
         modalities=["image"],
         supports_image_config=False,
+        max_reference_images=0,
         description=(
             "Specialized for readable text inside images (posters, "
             "social cards). Accepts custom font URLs."
@@ -232,20 +326,49 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "sourceful/riverflow-v2-pro": ImageModelConfig(
         name="sourceful/riverflow-v2-pro",
-        provider="openrouter",
+        providers=["openrouter"],
         modalities=["image"],
         supports_image_config=False,
+        max_reference_images=0,
         description=(
             "Higher-quality text-focused tier. Best when embedded text "
             "must be sharp and perfectly legible."
         ),
         prompt_style_hint=_HINT_TEXT_FOCUSED,
     ),
+    # ------ Polza-exclusive models --------------------------------------
+    "x-ai/grok-imagine": ImageModelConfig(
+        name="x-ai/grok-imagine",
+        providers=["polza"],
+        modalities=["image"],
+        supports_image_config=False,
+        max_reference_images=1,
+        description=(
+            "Grok Imagine via Polza.ai. Photorealistic and artistic "
+            "generation from xAI, billed in RUB."
+        ),
+        prompt_style_hint=_HINT_DIFFUSION_ARTISTIC,
+    ),
+    "qwen/qwen-vl-max-image": ImageModelConfig(
+        name="qwen/qwen-vl-max-image",
+        providers=["polza"],
+        modalities=["image"],
+        supports_image_config=False,
+        max_reference_images=1,
+        description=(
+            "Qwen VL Image via Polza.ai. Alibaba multimodal model, "
+            "billed in RUB."
+        ),
+        prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
+    ),
 }
 
 
 DEFAULT_IMAGE_MODEL: str = "google/gemini-3.1-flash-image-preview"
 """Compile-time default; overridable via ``IMAGE_GEN_DEFAULT_MODEL`` env.
+
+Routes through Polza.ai first (Russian CDN, no regional restrictions) with
+OpenRouter as fallback — see the ``providers`` list on this entry.
 
 Chosen from live side-by-side comparison of Russian + business prompts —
 see ``docs/image_generation/progress_reports/20260425_model_comparison.md``

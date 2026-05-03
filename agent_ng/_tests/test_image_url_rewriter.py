@@ -20,7 +20,10 @@ class DummyAgent:
 def test_basic_rewrite_png() -> None:
     agent = DummyAgent({"llm_image_abc.png": "C:\\Temp\\llm_image_abc.png"})
     content = 'Here is an image: <img src="llm_image_abc.png" alt="test">'
-    expected = 'Here is an image: <img src="/gradio_api/file=C:\\Temp\\llm_image_abc.png">'
+    expected = (
+        'Here is an image: <img src="/gradio_api/file=C:\\Temp\\llm_image_abc.png" '
+        'alt="test">'
+    )
     assert rewrite_llm_inline_images(content, agent) == expected
 
 
@@ -82,6 +85,30 @@ def test_non_png_extensions() -> None:
     agent = DummyAgent({"llm_image_foo.jpg": "/tmp/foo.jpg"})
     content = '<img src="llm_image_foo.jpg">'
     assert "/gradio_api/file=/tmp/foo.jpg" in rewrite_llm_inline_images(content, agent)
+
+
+def test_gradio_cache_style_basename() -> None:
+    """Match unique basenames like FileUtils.generate_unique_filename output."""
+    name = (
+        "gradio_sess_xyz_llm_image_20260503_053100_"
+        "a117d2b9_1777775460335_af825050.png"
+    )
+    dest = "/tmp/cache/" + name
+    agent = DummyAgent({name: dest})
+    content = f'<p><img src="{name}" alt="v"></p>'
+    assert f'/gradio_api/file={dest}" alt="v"' in rewrite_llm_inline_images(content, agent)
+
+
+def test_already_served_gradio_src_unchanged() -> None:
+    agent = DummyAgent({"llm_image_x.png": "/tmp/x.png"})
+    raw = '<img src="/gradio_api/file=C:/Temp/x.png" alt="done">'
+    assert rewrite_llm_inline_images(raw, agent) == raw
+
+
+def test_http_src_unchanged() -> None:
+    agent = DummyAgent({"x.png": "/tmp/x.png"})
+    raw = '<img src="https://example.com/x.png">'
+    assert rewrite_llm_inline_images(raw, agent) == raw
 
 
 if __name__ == "__main__":

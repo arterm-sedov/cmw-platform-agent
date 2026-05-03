@@ -1,12 +1,15 @@
-"""Rewrite LLM-generated inline image references to Gradio-servable /file= URLs.
+"""Rewrite bare inline image filenames to Gradio-servable ``/gradio_api/file=`` URLs.
 
-When the LLM outputs markdown containing:
-    <img src="llm_image_20260425_182217_65874bd8.png" alt="...">
-or:
-    ![alt text](llm_image_20260425_182217_65874bd8.png)
+Filenames can appear as:
 
-the bare filename is not served by Gradio. This module rewrites those to
-fully-qualified URLs that Gradio can serve via its /gradio_api/file= endpoint.
+- **Registered logical names** — e.g. ``llm_image_<ts>_<id>.png`` from image tools.
+- **Cache basenames** — ``FileUtils.generate_unique_filename`` yields
+  ``<session_stem>_<original_stem>_<ms>_<hash>.png`` (often
+  ``gradio_<sid>_llm_image_….png``).
+- **User uploads** registered under whatever basename showed up in ``[Files: …]``.
+
+We only rewrite when ``agent.get_file_path(<name>)`` returns a path — so we do **not**
+need a brittle whitelist of prefixes, and unrelated strings are left untouched.
 """
 
 from __future__ import annotations
@@ -14,56 +17,56 @@ from __future__ import annotations
 import re
 from typing import Any
 
-# Match HTML img tag: <img src="llm_image_*.{ext}">
-_HTML_PATTERN = re.compile(
-    r'<img\s+src="(llm_image_[^"]+\.(?:png|jpg|jpeg|gif|webp))"[^>]*>'
-)
+_BARE_IMG_BASENAME = r"[\w.-]+\.(?:png|jpg|jpeg|gif|webp)"
+_IMG_TAG_RE = re.compile(r"(?is)<img\b[^>]*>")
+_SRC_DOUBLE = re.compile(rf'(?is)\bsrc\s*=\s*"({_BARE_IMG_BASENAME})"')
 
-# Match Markdown image link: ![alt](llm_image_*.{ext})
-_MD_PATTERN = re.compile(
-    r'!\[([^\]]*)\]\((llm_image_[^)]+\.(?:png|jpg|jpeg|gif|webp))\)'
-)
+
+def _is_skip_src(value: str) -> bool:
+    v = value.strip()
+    lowered = v.lower()
+    return lowered.startswith(
+        ("http://", "https://", "/gradio_api/file=", "//", "data:")
+    )
 
 
 def rewrite_llm_inline_images(content: str, agent: Any) -> str:
-    """Rewrite bare llm_image_* file references to Gradio-servable URLs.
+    """Rewrite session-registered bare image ``src`` / markdown targets.
 
-    Handles both HTML and Markdown image syntax:
-    - HTML:    <img src="llm_image_foo.png" alt="...">
-    - Markdown: ![alt text](llm_image_foo.png)
-
-    Args:
-        content: Content that may contain LLM-generated image references.
-        agent: Object with get_file_path(name) -> str | None.
-
-    Returns:
-        Content with matched image references rewritten.
+    Skips URLs (http(s), protocol-relative), ``data:``, and paths already using
+    ``/gradio_api/file=``.
     """
 
     if agent is None or not callable(getattr(agent, "get_file_path", None)):
         return content
 
-    # First, rewrite Markdown links
     def md_replacer(m: re.Match[str]) -> str:
         alt_text = m.group(1)
-        filename = m.group(2)
-        abs_path = agent.get_file_path(filename)
+        basename = m.group(2)
+        if _is_skip_src(basename):
+            return m.group(0)
+        abs_path = agent.get_file_path(basename)
         if abs_path is None:
             return m.group(0)
-        # Keep the markdown syntax, replace filename with Gradio URL
         return f"![{alt_text}](/gradio_api/file={abs_path})"
 
-    content = _MD_PATTERN.sub(md_replacer, content)
+    _md_pat = re.compile(
+        rf"!\[([^\]]*)]\(({_BARE_IMG_BASENAME})\)", flags=re.IGNORECASE
+    )
+    content = _md_pat.sub(md_replacer, content)
 
-    # Then, rewrite HTML img tags
-    def html_replacer(m: re.Match[str]) -> str:
-        filename = m.group(1)
-        abs_path = agent.get_file_path(filename)
-        if abs_path is None:
-            return m.group(0)
-        # Replace with full Gradio URL, preserve rest of tag
-        return f'<img src="/gradio_api/file={abs_path}">'
+    def rewrite_one_img_tag(match: re.Match[str]) -> str:
+        fragment = match.group(0)
 
-    content = _HTML_PATTERN.sub(html_replacer, content)
+        def src_repl(s: re.Match[str]) -> str:
+            basename = s.group(1)
+            if _is_skip_src(basename):
+                return s.group(0)
+            abs_path = agent.get_file_path(basename)
+            if abs_path is None:
+                return s.group(0)
+            return f'src="/gradio_api/file={abs_path}"'
 
-    return content
+        return _SRC_DOUBLE.sub(src_repl, fragment)
+
+    return _IMG_TAG_RE.sub(rewrite_one_img_tag, content)

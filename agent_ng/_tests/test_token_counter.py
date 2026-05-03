@@ -35,7 +35,8 @@ class TestTokenCount:
         # Actual tokens with cost
         actual_with_cost = TokenCount(100, 50, 150, False, "api", 0.0015)
         assert "150 total (100 input + 50 output)" in actual_with_cost.formatted
-        assert "$0.0015" in actual_with_cost.formatted
+        # format_cost rounds to 3 decimals → 0.0015 → $0.002
+        assert "$0.002" in actual_with_cost.formatted
 
         # Estimated tokens
         estimated = TokenCount(100, 50, 150, True, "tiktoken", 0.0)
