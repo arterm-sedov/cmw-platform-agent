@@ -238,9 +238,12 @@ class LangChainConversationChain:
 
     def _create_chain(self):
         """Create the LangChain conversation chain"""
-        # Create prompt template
+        # Use SystemMessage directly to avoid LangChain's f-string template
+        # parser misinterpreting curly braces in the system prompt (e.g. JSON
+        # examples, tool descriptions) as template variables.
+        from langchain_core.messages import SystemMessage as _SystemMessage
         prompt = ChatPromptTemplate.from_messages([
-            ("system", self.system_prompt),
+            _SystemMessage(content=self.system_prompt),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad")

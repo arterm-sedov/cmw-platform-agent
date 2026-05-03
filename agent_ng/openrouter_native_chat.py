@@ -147,6 +147,13 @@ def _convert_response_message_to_ai(
         response_metadata["token_usage"] = usage_dict
         if "cost" in usage_dict:
             response_metadata["cost"] = usage_dict["cost"]
+        elif "cost_rub" in usage_dict:
+            # Polza reports cost in RUB; convert to USD using env rate so that
+            # token_counter.py sees a non-zero cost figure.
+            from agent_ng.openrouter_usage_accounting import _get_polza_rate
+            rub = float(usage_dict["cost_rub"] or 0.0)
+            response_metadata["cost"] = rub / _get_polza_rate()
+            response_metadata["cost_rub"] = rub
         if usage_dict.get("cost_details"):
             response_metadata["cost_details"] = usage_dict["cost_details"]
 
@@ -191,8 +198,14 @@ def _convert_delta_to_chunk(
 
     usage_metadata = _create_usage_metadata(chunk_usage) if chunk_usage else None
     response_metadata: dict[str, Any] = {"model_provider": "openrouter"}
-    if chunk_usage and "cost" in chunk_usage:
-        response_metadata["cost"] = chunk_usage["cost"]
+    if chunk_usage:
+        if "cost" in chunk_usage:
+            response_metadata["cost"] = chunk_usage["cost"]
+        elif "cost_rub" in chunk_usage:
+            from agent_ng.openrouter_usage_accounting import _get_polza_rate
+            rub = float(chunk_usage["cost_rub"] or 0.0)
+            response_metadata["cost"] = rub / _get_polza_rate()
+            response_metadata["cost_rub"] = rub
 
     return AIMessageChunk(
         content=content,
