@@ -162,16 +162,20 @@ class PolzaProvider(ImageProvider):
         }
 
     def _build_payload(self, request: ImageRequest) -> dict[str, Any]:
+        model_id = request.config.provider_model_ids.get("polza", request.config.name)
         input_body: dict[str, Any] = {"prompt": request.prompt}
         if request.config.supports_image_config:
             if request.aspect_ratio:
                 input_body["aspect_ratio"] = request.aspect_ratio
             if request.image_size:
-                input_body["image_resolution"] = request.image_size
+                # Polza uses quality=basic(2K)|high(4K) instead of image_resolution.
+                input_body["quality"] = (
+                    "high" if request.image_size.lower() in ("4k", "high") else "basic"
+                )
         logger.debug(
-            "PolzaProvider POST model=%s input=%s", request.config.name, input_body
+            "PolzaProvider POST model=%s input=%s", model_id, input_body
         )
-        return {"model": request.config.name, "input": input_body}
+        return {"model": model_id, "input": input_body}
 
     def _poll_until_done(self, gen_id: str, model: str) -> ImageGenerationResult:
         """Poll until completed/failed, then download the image."""

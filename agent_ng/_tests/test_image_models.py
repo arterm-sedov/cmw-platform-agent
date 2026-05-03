@@ -71,16 +71,13 @@ class TestRegistryShape:
         assert set(gemini.modalities) == {"image", "text"}
 
     def test_only_gemini_supports_image_config(self) -> None:
-        """Only Google Gemini models document image_config support."""
+        """Google Gemini and Seedream 4.5 document image_config support."""
+        _supports = {"google/", "bytedance-seed/seedream-4.5"}
         for slug, cfg in get_image_models().items():
-            if cfg.name.startswith("google/"):
-                assert cfg.supports_image_config is True, (
-                    f"{slug} should support image_config"
-                )
-            else:
-                assert cfg.supports_image_config is False, (
-                    f"{slug} should NOT advertise image_config support"
-                )
+            expected = any(cfg.name.startswith(p) or cfg.name == p for p in _supports)
+            assert cfg.supports_image_config is expected, (
+                f"{slug}: supports_image_config should be {expected}"
+            )
 
     def test_every_config_has_known_providers(self) -> None:
         known = {"openrouter", "polza"}

@@ -56,8 +56,8 @@ class ImageModelConfig:
             only models (Flux, Seedream) use ``["image"]``.
         supports_image_config: Whether the model documents support for
             ``image_config.aspect_ratio`` / ``image_config.image_size``
-            (OpenRouter) or ``aspect_ratio`` / ``image_resolution``
-            (Polza). Only Google Gemini image models document this.
+            (OpenRouter) or ``aspect_ratio`` / ``quality`` (Polza).
+            Only Google Gemini and Seedream 4.5 image models document this.
         description: Operations-facing summary shown in dev docs / logs.
         prompt_style_hint: LLM-facing prompting guidance. Must not leak
             the slug, provider or vendor name.
@@ -69,6 +69,14 @@ class ImageModelConfig:
     supports_image_config: bool
     description: str = ""
     prompt_style_hint: str = ""
+    provider_model_ids: dict[str, str] = field(default_factory=dict)
+    """Per-provider model ID overrides.
+
+    When a provider uses a different slug for the same model (e.g. OpenRouter
+    uses ``bytedance-seed/seedream-4.5`` but Polza uses
+    ``bytedance/seedream-4.5``), add an entry here so the provider adapter
+    sends the correct ID.  Falls back to ``name`` when not set.
+    """
 
     @property
     def provider(self) -> str:
@@ -226,17 +234,18 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         name="bytedance-seed/seedream-4.5",
         providers=_P_BOTH,
         modalities=["image"],
-        supports_image_config=False,
+        supports_image_config=True,
+        provider_model_ids={"polza": "bytedance/seedream-4.5"},
         description=(
-            "Large-canvas (2K) output at flat per-image cost. Handles "
-            "multilingual text (including Cyrillic) and small-text "
-            "rendering better than most text-to-image models."
+            "Large-canvas (2K/4K) output. Handles multilingual text "
+            "(including Cyrillic) and small-text rendering better than "
+            "most text-to-image models. Polza: quality=basic(2K)/high(4K)."
         ),
         prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
     ),
     "bytedance-seed/seedream-4": ImageModelConfig(
         name="bytedance-seed/seedream-4",
-        providers=_P_BOTH,
+        providers=_P_OR,
         modalities=["image"],
         supports_image_config=False,
         description="Previous-generation Seedream. Good multilingual text rendering.",
@@ -244,7 +253,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "bytedance-seed/seedream-3": ImageModelConfig(
         name="bytedance-seed/seedream-3",
-        providers=_P_BOTH,
+        providers=_P_OR,
         modalities=["image"],
         supports_image_config=False,
         description="Proven Seedream generation with solid multilingual support.",
