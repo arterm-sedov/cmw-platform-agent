@@ -106,7 +106,9 @@ class OpenRouterProvider(ImageProvider):
         payload: dict[str, Any] = {
             "model": request.config.name,
             "modalities": list(request.config.modalities),
-            "messages": [{"role": "user", "content": request.prompt}],
+            "messages": [
+                {"role": "user", "content": self._build_message_content(request)}
+            ],
         }
         image_config = self._build_image_config(request)
         if image_config is not None:
@@ -121,6 +123,29 @@ class OpenRouterProvider(ImageProvider):
         return requests.post(
             self.base_url, headers=headers, json=payload, timeout=self.timeout
         )
+
+    @staticmethod
+    def _build_message_content(
+        request: ImageRequest,
+    ) -> str | list[dict[str, Any]]:
+        """Build user message content, injecting reference images when present."""
+        refs = request.reference_images
+        max_imgs = request.config.max_reference_images
+        if not refs or not max_imgs:
+            return request.prompt
+        images = refs[:max_imgs]
+        parts: list[dict[str, Any]] = [{"type": "text", "text": request.prompt}]
+        for img in images:
+            if img.startswith(("http://", "https://")):
+                parts.append({"type": "image_url", "image_url": {"url": img}})
+            else:
+                # data URI or raw base64 — normalize to data URI form.
+                data = (
+                    img if img.startswith("data:")
+                    else f"data:image/jpeg;base64,{img}"
+                )
+                parts.append({"type": "image_url", "image_url": {"url": data}})
+        return parts
 
     @staticmethod
     def _build_image_config(request: ImageRequest) -> dict[str, str] | None:

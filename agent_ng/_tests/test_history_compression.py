@@ -249,7 +249,7 @@ class TestCompressConversationHistory:
         with patch(
             "agent_ng.token_budget.compute_context_tokens"
         ) as mock_tokens:
-            mock_tokens.side_effect = [1000, 200]  # before, after
+            mock_tokens.side_effect = [(1000, 0), (200, 0)]  # (conv, tool) before, after
 
             success, tokens_saved = await compress_conversation_history(
                 agent, "conv1", keep_recent_turns=0, target_tokens=100, reason="critical"

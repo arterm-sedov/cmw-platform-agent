@@ -155,6 +155,20 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             ],
             enable_chunking=True
         ),
+        LLMProvider.OPENAI: LLMConfig(
+            name="OpenAI-compatible",
+            type_str="openai",
+            api_key_env="OPENAI_API_KEY",
+            api_base_env="OPENAI_BASE_URL",
+            max_history=20,
+            tool_support=True,
+            force_tools=False,
+            vision_support=True,
+            # Add models here or via AGENT_DEFAULT_MODEL + AGENT_PROVIDER=openai.
+            # OPENAI_BASE_URL defaults to https://api.openai.com/v1.
+            models=[],
+            enable_chunking=True,
+        ),
         LLMProvider.OPENROUTER: LLMConfig(
             name="OpenRouter",
             type_str="openrouter",
@@ -506,6 +520,80 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                 },
             ],
             enable_chunking=False
+        ),
+        LLMProvider.POLZA: LLMConfig(
+            name="Polza.ai",
+            type_str="polza",
+            api_key_env="POLZA_API_KEY",
+            api_base_env="POLZA_BASE_URL",
+            max_history=20,
+            tool_support=True,
+            force_tools=False,
+            # Some models support vision (qwen3.6-plus, grok-4.20); text-only
+            # models (glm-5.1, minimax-m2.7) have vision_support=False per-model.
+            vision_support=True,
+            # Billing is in RUB (cost_rub field).  Set POLZA_RUB_TO_USD_RATE
+            # (RUB per 1 USD, e.g. 90) for USD conversion in the billing pipeline.
+            models=[
+                {
+                    "model": "qwen/qwen3.6-plus",
+                    "token_limit": 1000000,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                },
+                {
+                    "model": "z-ai/glm-5.1",
+                    "token_limit": 202752,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": False,
+                },
+                {
+                    "model": "minimax/minimax-m2.7",
+                    "token_limit": 204800,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": False,
+                },
+                {
+                    "model": "x-ai/grok-4.20",
+                    "token_limit": 2000000,
+                    "max_tokens": 131072,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                },
+                {
+                    # Omni model: image + video + audio input.
+                    # Used as VL_AUDIO_MODEL when AGENT_PROVIDER=polza.
+                    "model": "xiaomi/mimo-v2-omni",
+                    "token_limit": 262144,
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True,
+                },
+                {
+                    # Full multimodal Gemini via Polza.
+                    # Active for audio routing when VL_GEMINI_PROVIDER=polza.
+                    # YouTube stays on Gemini Direct (VL_YOUTUBE_GEMINI_PROVIDER=google).
+                    "model": "google/gemini-2.5-flash",
+                    "token_limit": 1048576,
+                    "max_tokens": 65535,
+                    "temperature": 0,
+                    "force_tools": True,
+                    "vision_support": True,
+                    "video_support": True,
+                    "audio_support": True,
+                },
+            ],
+            enable_chunking=True,
         ),
         LLMProvider.MISTRAL: LLMConfig(
             name="Mistral AI",

@@ -15,7 +15,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from .google import GoogleGeminiProvider
 from .openrouter import OpenRouterProvider
+from .polza import PolzaProvider
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -67,7 +69,9 @@ def list_providers() -> list[str]:
 
 # --- Built-in registrations ------------------------------------------------
 
+register_provider("google", GoogleGeminiProvider)
 register_provider("openrouter", OpenRouterProvider)
+register_provider("polza", PolzaProvider)
 
 
 __all__ = [

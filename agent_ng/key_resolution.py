@@ -3,12 +3,58 @@ Unified API Key Resolution
 =========================
 
 Centralized key resolution reused by LLM, VL, and image generation.
-Checks config tab override first, then falls back to environment variable.
+Session keys live in ``llm_provider_api_keys`` (provider id -> key).
 """
 
-import os
+from __future__ import annotations
 
-from agent_ng.session_manager import get_session_config
+import os
+from typing import Any
+
+from .session_manager import get_session_config
+
+
+def _session_keys_map(session_config: dict[str, Any] | None) -> dict[str, str]:
+    if not session_config:
+        return {}
+    raw = session_config.get("llm_provider_api_keys")
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for pk, vk in raw.items():
+        if not isinstance(pk, str):
+            continue
+        k = pk.strip()
+        if not k:
+            continue
+        out[k] = (vk or "").strip() if isinstance(vk, str) else ""
+    return out
+
+
+def _default_llm_provider_str() -> str:
+    try:
+        try:
+            from .agent_config import get_llm_settings
+        except ImportError:
+            from agent_ng.agent_config import get_llm_settings
+
+        return str(get_llm_settings().get("default_provider", "openrouter")).strip()
+    except Exception:
+        return str(os.environ.get("AGENT_PROVIDER", "openrouter")).strip()
+
+
+def _provider_for_config_env(config_key: str) -> str | None:
+    try:
+        from .llm_configs import get_default_llm_configs
+        from .llm_manager import LLMProvider
+    except ImportError:
+        from agent_ng.llm_configs import get_default_llm_configs
+        from agent_ng.llm_manager import LLMProvider
+
+    for pe, cfg in get_default_llm_configs().items():
+        if isinstance(pe, LLMProvider) and cfg.api_key_env == config_key:
+            return pe.value
+    return None
 
 
 def get_api_key(
@@ -20,31 +66,23 @@ def get_api_key(
     Get API key with unified resolution.
 
     Resolution order:
-    1. Direct override_key parameter (passed from config tab)
-    2. Session config llm_api_key_override (if session_id provided)
-    3. Environment variable (config_key)
-
-    Args:
-        config_key: Environment variable name (e.g., "GEMINI_KEY")
-        override_key: Direct override from caller (highest priority)
-        session_id: Session ID to read session config from
-
-    Returns:
-        API key string or None if not found
+    1. Direct ``override_key`` parameter
+    2. Session ``llm_provider_api_keys`` for the provider that owns ``config_key``
+    3. Environment variable ``config_key``
     """
-    # 1. Direct override (highest priority)
     if override_key:
         return override_key
 
-    # 2. Session config override
     if session_id:
         session_config = get_session_config(session_id)
-        if session_config:
-            llm_api_key_override = session_config.get("llm_api_key_override", "")
-            if llm_api_key_override:
-                return llm_api_key_override
+        keys_map = _session_keys_map(session_config)
+        if keys_map:
+            prov = _provider_for_config_env(config_key)
+            if prov:
+                hit = (keys_map.get(prov) or "").strip()
+                if hit:
+                    return hit
 
-    # 3. Environment variable (lowest priority)
     return os.getenv(config_key) or None
 
 
@@ -56,48 +94,29 @@ def get_provider_api_key(
     """
     Get API key for a specific provider using its config env var.
 
-    Resolution order for override_key:
-    1. Direct override_key parameter (highest priority)
-    2. Session config llm_api_key_override (if session_id provided)
+    Resolution order for key:
+    1. ``override_key``
+    2. Session ``llm_provider_api_keys[provider]``
+    3. Environment variable from provider config
 
-    Resolution order for provider:
-    1. Explicit provider parameter
-    2. Session config llm_provider_override (if session_id provided)
-
-    Args:
-        provider: Provider name (e.g., "gemini", "groq", "openrouter")
-        override_key: Direct override from caller (highest priority)
-        session_id: Session ID to read session config from
-
-    Returns:
-        API key string or None if not found
+    When ``provider`` is omitted, ``default_provider`` from settings/env is used.
     """
-    # Import configs directly (avoid circular dependency via LLMManager instantiation)
     try:
-        from .llm_configs import get_default_llm_configs
-        from .llm_manager import LLMProvider
+        from agent_ng.llm_configs import get_default_llm_configs
+        from agent_ng.llm_manager import LLMProvider
     except ImportError:
         from agent_ng.llm_configs import get_default_llm_configs
         from agent_ng.llm_manager import LLMProvider
 
-    # Resolve provider: explicit param → session config → None
-    resolved_provider = provider
-    if not resolved_provider and session_id:
-        session_config = get_session_config(session_id)
-        if session_config:
-            provider_override = session_config.get("llm_provider_override", "")
-            if provider_override:
-                resolved_provider = provider_override
-
+    resolved_provider = (provider or "").strip() if provider else ""
     if not resolved_provider:
-        return None
+        resolved_provider = _default_llm_provider_str()
 
     try:
         provider_enum = LLMProvider(resolved_provider.lower())
     except ValueError:
         return None
 
-    # Get configs directly without instantiating LLMManager
     configs = get_default_llm_configs()
     config = configs.get(provider_enum)
     if not config:
@@ -105,18 +124,15 @@ def get_provider_api_key(
 
     config_key = config.api_key_env
 
-    # Resolve API key: override → session config → env var
     final_key: str | None = None
-
-    # 1. Direct override (highest priority)
     if override_key:
         final_key = override_key
-    # 2. Session config llm_api_key_override
     elif session_id:
         session_config = get_session_config(session_id)
-        if session_config:
-            final_key = session_config.get("llm_api_key_override", "") or None
-    # 3. Environment variable (lowest priority)
+        hit = (_session_keys_map(session_config).get(provider_enum.value) or "").strip()
+        if hit:
+            final_key = hit
+
     if not final_key:
         final_key = os.getenv(config_key) or None
 

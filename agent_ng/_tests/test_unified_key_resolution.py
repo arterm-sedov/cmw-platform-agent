@@ -74,14 +74,14 @@ def test_get_api_key_returns_none_when_no_source():
 
 
 def test_get_api_key_reads_session_config():
-    """Test that get_api_key reads llm_api_key_override from session config"""
+    """Test that get_api_key reads llm_provider_api_keys from session config."""
     from agent_ng import key_resolution
     from agent_ng import session_manager
 
     test_session = "test_key_resolution_session"
     session_manager.set_session_config(
         test_session,
-        {"llm_api_key_override": "session_override_key"},
+        {"llm_provider_api_keys": {"gemini": "session_override_key"}},
     )
 
     with patch.dict(os.environ, {}, clear=True):

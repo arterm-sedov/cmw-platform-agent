@@ -622,33 +622,40 @@ class Sidebar(QuickActionsMixin):
         # No fallback - return error message
         return [(self._get_translation("no_providers_available"), "")]
 
-    def _get_current_provider_model_combination(self) -> str:
-        """Get current provider/model combination in format 'Provider / Model'"""
-        if not hasattr(self, "main_app") or not self.main_app:
-            # Return fallback value when main app is not available
-            provider = os.environ.get("AGENT_PROVIDER", "openrouter")
-            return f"{provider.title()} / {provider}/default-model"
+    def _default_dropdown_combo_str(self) -> str:
+        """Env/settings default as ``Provider / model_id`` (matches dropdown values)."""
+        mgr = getattr(self.main_app, "llm_manager", None) if self.main_app else None
+        if not mgr:
+            p = os.environ.get("AGENT_PROVIDER", "openrouter").strip()
+            return f"{p.title()} / {p}"
+        pe, idx = mgr._get_configured_provider_and_model_index()
+        if not pe:
+            p = os.environ.get("AGENT_PROVIDER", "openrouter").strip()
+            return f"{p.title()} / {p}"
+        cfg = mgr.get_provider_config(pe.value)
+        if cfg and 0 <= idx < len(cfg.models):
+            mname = cfg.models[idx].get("model", "") or pe.value
+            return f"{pe.value.title()} / {mname}"
+        return f"{pe.value.title()} / {pe.value}"
 
-        try:
-            # Try to get from session manager first
-            if hasattr(self.main_app, "session_manager"):
-                # Get default session for UI display
-                session_data = self.main_app.session_manager.get_session_data("default")
-                if (
-                    session_data
-                    and session_data.agent
-                    and hasattr(session_data.agent, "llm_instance")
-                    and session_data.agent.llm_instance
-                ):
-                    provider = session_data.agent.llm_instance.provider.value
-                    model = session_data.agent.llm_instance.model_name
-                    return f"{provider.title()} / {model}"
-        except Exception as e:
-            print(f"Error getting current provider/model combination: {e}")
-
-        # Return fallback value on error
-        provider = os.environ.get("AGENT_PROVIDER", "openrouter")
-        return f"{provider.title()} / {provider}/default-model"
+    def _get_current_provider_model_combination(
+        self, request: gr.Request | None = None
+    ) -> str:
+        """Current provider/model for the active Gradio session, else env default."""
+        if request and self.main_app and getattr(self.main_app, "session_manager", None):
+            try:
+                sid = self.main_app.session_manager.get_session_id(request)
+                agent = self.main_app.session_manager.get_session_agent(sid)
+                inst = getattr(agent, "llm_instance", None)
+                if inst:
+                    p = inst.provider.value
+                    m = inst.model_name
+                    return f"{p.title()} / {m}"
+            except Exception as e:
+                logging.getLogger(__name__).debug(
+                    "Sidebar: current provider/model from session failed: %s", e
+                )
+        return self._default_dropdown_combo_str()
 
     def _apply_llm_selection_combined(
         self, provider_model_combination: str, request: gr.Request = None
@@ -675,7 +682,9 @@ class Sidebar(QuickActionsMixin):
             # Check if switching to Mistral and show native Gradio warning
             if self._is_mistral_model(provider, model):
                 # Check if we're switching FROM a non-Mistral provider TO Mistral
-                current_provider_model = self._get_current_provider_model_combination()
+                current_provider_model = self._get_current_provider_model_combination(
+                    request
+                )
                 current_is_mistral = "mistral" in current_provider_model.lower()
 
                 # Only clear chat if switching from non-Mistral to Mistral

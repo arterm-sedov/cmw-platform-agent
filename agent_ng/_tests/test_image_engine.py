@@ -90,11 +90,15 @@ def _err_response(status: int, body: str = "forbidden") -> MagicMock:
 
 
 class TestEngineConstruction:
-    def test_raises_without_api_key(self) -> None:
+    def test_no_key_still_constructs(self) -> None:
+        # Engine no longer validates keys at construction — each provider
+        # validates its own credentials at generate-time so that Polza-only
+        # (or other non-OpenRouter) deployments can construct without an
+        # OPENROUTER_API_KEY.
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("OPENROUTER_API_KEY", None)
-            with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
-                ImageEngine(api_key=None)
+            engine = ImageEngine(api_key=None)
+            assert engine.api_key is None  # No OpenRouter key resolved.
 
     def test_accepts_explicit_api_key(self) -> None:
         engine = ImageEngine(api_key="sk-test")
@@ -111,6 +115,11 @@ class TestEngineConstruction:
 
 
 class TestSuccessfulGeneration:
+    @pytest.fixture(autouse=True)
+    def _use_openrouter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # These tests mock only the OpenRouter HTTP layer; force that provider.
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "openrouter")
+
     def test_gemini_returns_bytes_cost_and_tokens(self) -> None:
         engine = ImageEngine(api_key="sk-test")
         with patch(_POST_TARGET, return_value=_ok_response()):
@@ -151,22 +160,48 @@ class TestSuccessfulGeneration:
 
     def test_default_model_used_when_none_passed(self) -> None:
         """Engine picks the registry default when no ``model`` is given."""
-        engine = ImageEngine(api_key="sk-test")
-        with patch(
-            _POST_TARGET,
-            return_value=_ok_response(),
-        ) as post:
+        _polza_post = "agent_ng.image_providers.polza.requests.post"
+        _polza_get = "agent_ng.image_providers.polza.requests.get"
+        # Default model is now Polza — mock submit + poll responses.
+        submit_resp = MagicMock(spec=requests.Response)
+        submit_resp.ok = True
+        submit_resp.json.return_value = {
+            "id": "aig_test123",
+            "status": "pending",
+            "model": "google/gemini-3.1-flash-image-preview",
+        }
+        poll_resp = MagicMock(spec=requests.Response)
+        poll_resp.ok = True
+        poll_resp.json.return_value = {
+            "id": "aig_test123",
+            "status": "completed",
+            "model": "google/gemini-3.1-flash-image-preview",
+            "data": {"url": "https://s3.polza.ai/test.png"},
+            "usage": {"cost_rub": 5.0},
+        }
+        img_resp = MagicMock(spec=requests.Response)
+        img_resp.ok = True
+        img_resp.content = _PNG_1PX_BYTES
+        img_resp.headers = {"Content-Type": "image/png"}
+
+        engine = ImageEngine()
+        with (
+            patch(_polza_post, return_value=submit_resp) as polza_post,
+            patch(_polza_get, side_effect=[poll_resp, img_resp]),
+        ):
             engine.generate("a cat")
 
-        payload = post.call_args.kwargs["json"]
-        assert payload["model"] == get_default_model()
+        # Verify the default model slug (the API slug, not the registry key).
+        submitted = polza_post.call_args.kwargs["json"]
+        assert submitted["model"] == "google/gemini-3.1-flash-image-preview"
+        assert submitted["model"] == get_default_model()
 
     def test_authorization_header_set(self) -> None:
         engine = ImageEngine(api_key="sk-test")
         with patch(
             _POST_TARGET, return_value=_ok_response()
         ) as post:
-            engine.generate("a cat")
+            engine.generate("a cat", model="google/gemini-2.5-flash-image")
 
         headers = post.call_args.kwargs["headers"]
         assert headers["Authorization"] == "Bearer sk-test"
@@ -175,6 +210,10 @@ class TestSuccessfulGeneration:
 
 class TestImageConfigForwarding:
     """image_config is forwarded only for Gemini, ignored for Flux/Seedream."""
+
+    @pytest.fixture(autouse=True)
+    def _use_openrouter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "openrouter")
 
     def test_image_config_forwarded_for_gemini(self) -> None:
         engine = ImageEngine(api_key="sk-test")
@@ -234,13 +273,17 @@ class TestImageConfigForwarding:
 
 
 class TestErrorHandling:
+    @pytest.fixture(autouse=True)
+    def _use_openrouter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "openrouter")
+
     def test_http_error_returns_failure_with_status(self) -> None:
         engine = ImageEngine(api_key="sk-test")
         with patch(
             _POST_TARGET,
             return_value=_err_response(403, "region blocked"),
         ):
-            result = engine.generate("a cat")
+            result = engine.generate("a cat", model="google/gemini-2.5-flash-image")
 
         assert result.success is False
         assert result.image_bytes is None
@@ -264,7 +307,7 @@ class TestErrorHandling:
             _POST_TARGET,
             side_effect=requests.exceptions.Timeout("timed out"),
         ):
-            result = engine.generate("a cat")
+            result = engine.generate("a cat", model="google/gemini-2.5-flash-image")
 
         assert result.success is False
         assert "timed out" in (result.error or "").lower()
@@ -275,7 +318,7 @@ class TestErrorHandling:
             _POST_TARGET,
             side_effect=requests.exceptions.ConnectionError("dns fail"),
         ):
-            result = engine.generate("a cat")
+            result = engine.generate("a cat", model="google/gemini-2.5-flash-image")
 
         assert result.success is False
         assert result.error is not None
@@ -298,7 +341,7 @@ class TestErrorHandling:
             },
         }
         with patch(_POST_TARGET, return_value=mock):
-            result = engine.generate("a cat")
+            result = engine.generate("a cat", model="google/gemini-2.5-flash-image")
 
         assert result.success is False
         assert "no image" in (result.error or "").lower()
@@ -309,7 +352,7 @@ class TestErrorHandling:
         images = bad.json.return_value["choices"][0]["message"]["images"]
         images[0]["image_url"]["url"] = "not-a-data-url"
         with patch(_POST_TARGET, return_value=bad):
-            result = engine.generate("a cat")
+            result = engine.generate("a cat", model="google/gemini-2.5-flash-image")
 
         assert result.success is False
         assert result.error is not None
@@ -320,7 +363,7 @@ class TestErrorHandling:
         mock = _ok_response()
         mock.json.return_value.pop("usage", None)
         with patch(_POST_TARGET, return_value=mock):
-            result = engine.generate("a cat")
+            result = engine.generate("a cat", model="google/gemini-2.5-flash-image")
 
         assert result.success is True
         assert result.image_bytes == _PNG_1PX_BYTES
@@ -331,12 +374,16 @@ class TestErrorHandling:
 class TestGenerationIdFallback:
     """generation_id is a nice-to-have; missing id doesn't cause failure."""
 
+    @pytest.fixture(autouse=True)
+    def _use_openrouter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "openrouter")
+
     def test_missing_id_is_none(self) -> None:
         engine = ImageEngine(api_key="sk-test")
         mock = _ok_response()
         mock.json.return_value.pop("id", None)
         with patch(_POST_TARGET, return_value=mock):
-            result = engine.generate("a cat")
+            result = engine.generate("a cat", model="google/gemini-2.5-flash-image")
 
         assert result.success is True
         assert result.generation_id is None
@@ -351,23 +398,126 @@ def _has_openrouter_key() -> bool:
     return bool(os.getenv("OPENROUTER_API_KEY"))
 
 
+def _has_polza_key() -> bool:
+    return bool(os.getenv("POLZA_API_KEY"))
+
+
+@pytest.mark.skipif(
+    not _has_polza_key(),
+    reason="POLZA_API_KEY not set; skipping live Polza call",
+)
+@pytest.mark.xfail(
+    strict=False,
+    reason="Live API: transient safety filters or network errors may cause flakes",
+)
+class TestImageEngineLivePolza:
+    """Real API calls forced through Polza.ai (no regional restrictions)."""
+
+    def test_gemini_via_polza(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "polza"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "A minimalist geometric logo: simple blue square on white background",
+                model="google/gemini-3.1-flash-image-preview",
+            )
+        assert result.success is True, f"generation failed: {result.error}"
+        assert result.image_bytes is not None
+        assert len(result.image_bytes) > 1024, "image suspiciously small"
+        is_png = result.image_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+        is_jpeg = result.image_bytes[:2] == b"\xff\xd8"
+        assert is_png or is_jpeg, "expected PNG or JPEG output"
+        assert result.cost is not None
+        assert result.cost > 0
+
+    def test_seedream_via_polza(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "polza"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "Minimalist icon: blue circle on white background",
+                model="bytedance-seed/seedream-4.5",
+            )
+        assert result.success is True, f"generation failed: {result.error}"
+        assert result.image_bytes is not None
+        assert len(result.image_bytes) > 1024, "image suspiciously small"
+
+    def test_seedream5_lite_via_polza(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "polza"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "Minimalist icon: blue circle on white background",
+                model="bytedance-seed/seedream-5-lite",
+            )
+        assert result.success is True, f"generation failed: {result.error}"
+        assert result.image_bytes is not None
+        assert len(result.image_bytes) > 1024, "image suspiciously small"
+
+
 @pytest.mark.skipif(
     not _has_openrouter_key(),
     reason="OPENROUTER_API_KEY not set; skipping live OpenRouter call",
 )
-class TestImageEngineLiveAPI:
-    """Real API calls — each run costs ~$0.04. Kept minimal."""
+@pytest.mark.xfail(
+    strict=False,
+    reason="Live API: regional restrictions or network errors may cause flakes",
+)
+class TestImageEngineLiveOpenRouter:
+    """Real API calls forced through OpenRouter (may be geo-restricted)."""
 
-    def test_gemini_generates_real_image(self) -> None:
-        engine = ImageEngine()
-        result = engine.generate(
-            "A single blue circle on a white background, minimalist icon",
-            model="google/gemini-2.5-flash-image",
-        )
+    def test_seedream_via_openrouter(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "openrouter"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "Minimalist icon: blue circle on white background",
+                model="bytedance-seed/seedream-4.5",
+            )
         assert result.success is True, f"generation failed: {result.error}"
         assert result.image_bytes is not None
         assert len(result.image_bytes) > 1024, "image suspiciously small"
-        # PNG magic bytes
-        assert result.image_bytes[:8] == b"\x89PNG\r\n\x1a\n", "expected PNG output"
+
+
+def _has_gemini_key() -> bool:
+    return bool(os.getenv("GEMINI_KEY"))
+
+
+@pytest.mark.skipif(
+    not _has_gemini_key(),
+    reason="GEMINI_KEY not set; skipping live Google native call",
+)
+@pytest.mark.xfail(
+    strict=False,
+    reason="Live API: geo-restrictions (Russia) or quota errors may cause flakes",
+)
+class TestImageEngineLiveGoogle:
+    """Real API calls forced through Google's native Gemini API.
+
+    Requires ``GEMINI_KEY`` and unrestricted access to generativelanguage.googleapis.com
+    (does not work from Russia/CIS without a VPN or proxy).
+    """
+
+    def test_gemini_flash_via_google(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "google"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "A minimalist geometric logo: simple blue square on white background",
+                model="google/gemini-3.1-flash-image-preview",
+            )
+        assert result.success is True, f"generation failed: {result.error}"
+        assert result.image_bytes is not None
+        assert len(result.image_bytes) > 1024, "image suspiciously small"
+        is_png = result.image_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+        is_jpeg = result.image_bytes[:2] == b"\xff\xd8"
+        assert is_png or is_jpeg, "expected PNG or JPEG output"
+        # Google provider uses static price from registry
         assert result.cost is not None
         assert result.cost > 0
+
+    def test_gemini_pro_via_google(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "google"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "A minimalist geometric logo: simple blue circle on white background",
+                model="google/gemini-3-pro-image-preview",
+            )
+        assert result.success is True, f"generation failed: {result.error}"
+        assert result.image_bytes is not None
+        assert len(result.image_bytes) > 1024, "image suspiciously small"

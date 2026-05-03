@@ -23,8 +23,7 @@ from threading import Lock
 
 # LangChain imports
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage
-from langchain_core.memory import BaseMemory
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
+from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_core.tools import BaseTool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
@@ -239,16 +238,23 @@ class LangChainConversationChain:
 
     def _create_chain(self):
         """Create the LangChain conversation chain"""
-        # Create prompt template
+        # Use SystemMessage directly to avoid LangChain's f-string template
+        # parser misinterpreting curly braces in the system prompt (e.g. JSON
+        # examples, tool descriptions) as template variables.
+        from langchain_core.messages import SystemMessage as _SystemMessage
         prompt = ChatPromptTemplate.from_messages([
-            ("system", self.system_prompt),
+            _SystemMessage(content=self.system_prompt),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad")
         ])
 
-        # Use LLM with pre-bound tools (tools are already bound in the LLM instance)
-        llm_with_tools = self.llm_instance.llm
+        # Use LLM with pre-bound tools (tools are already bound in the LLM instance).
+        # LangChain 1.x requires Runnable steps; wrap plain callables (e.g. test mocks).
+        llm = self.llm_instance.llm
+        llm_with_tools = (
+            llm if isinstance(llm, Runnable) else RunnableLambda(llm.invoke)
+        )
 
         # Create the chain
         chain = prompt | llm_with_tools | StrOutputParser()
@@ -348,7 +354,54 @@ class LangChainConversationChain:
                 "error": str(e)
             }
 
-    # NOTE: _run_tool_calling_loop was removed; streaming is the sole executor
+    def _run_tool_calling_loop(
+        self,
+        messages: List[BaseMessage],
+        conversation_id: str = "default",
+        *,
+        max_iterations: int = 16,
+    ) -> BaseMessage:
+        """Minimal tool loop for tests and non-streaming callers (LangChain 1.x).
+
+        Token tracking: only the first LLM response is passed to the tracker so a
+        single turn does not multiply-count across tool iterations (matches legacy tests).
+        """
+        llm = self.llm_instance.llm
+        working = list(messages)
+        last_response: BaseMessage | None = None
+        tracked_first = False
+
+        for _ in range(max_iterations):
+            last_response = llm.invoke(working)
+            if not tracked_first:
+                self._track_token_usage(last_response, working, conversation_id)
+                tracked_first = True
+
+            tool_calls = getattr(last_response, "tool_calls", None) or []
+            if not tool_calls:
+                break
+
+            working.append(last_response)
+            for tc in tool_calls:
+                if isinstance(tc, dict):
+                    name = tc.get("name", "")
+                    args = tc.get("args") or {}
+                    tid = tc.get("id", "")
+                else:
+                    name = getattr(tc, "name", "") or ""
+                    args = getattr(tc, "args", {}) or {}
+                    tid = getattr(tc, "id", "") or ""
+                result = self._execute_tool(str(name), dict(args) if args else {})
+                working.append(
+                    ToolMessage(
+                        content=str(result),
+                        tool_call_id=str(tid),
+                        name=str(name) if name else "tool",
+                    )
+                )
+        if last_response is None:
+            raise RuntimeError("tool calling loop produced no LLM response")
+        return last_response
 
     def _deduplicate_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
         """
