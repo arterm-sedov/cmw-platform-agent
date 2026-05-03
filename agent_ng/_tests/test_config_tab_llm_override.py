@@ -3,8 +3,10 @@ Test Config Tab LLM API keys (BrowserState + session store)
 =========================================================
 """
 
-import sys
 from pathlib import Path
+import sys
+from unittest.mock import patch
+
 import pandas as pd
 
 project_root = Path(__file__).parent.parent
@@ -13,9 +15,9 @@ sys.path.insert(0, str(project_root))
 
 def test_config_tab_browser_state_schema():
     """BrowserState holds URL/creds + per-provider key map only."""
-    from agent_ng.tabs.config_tab import ConfigTab
-
     import inspect
+
+    from agent_ng.tabs.config_tab import ConfigTab
 
     source = inspect.getsource(ConfigTab._create_config_interface)
 
@@ -29,9 +31,9 @@ def test_config_tab_browser_state_schema():
 
 def test_config_tab_save_load_uses_key_map_only():
     """Save/load persist llm_provider_api_keys (no override pair)."""
-    from agent_ng.tabs.config_tab import ConfigTab
-
     import inspect
+
+    from agent_ng.tabs.config_tab import ConfigTab
 
     save_source = inspect.getsource(ConfigTab._save_to_state)
     assert "llm_provider_api_keys" in save_source
@@ -40,9 +42,93 @@ def test_config_tab_save_load_uses_key_map_only():
     assert "llm_api_key_override" not in save_source
 
     load_source = inspect.getsource(ConfigTab._load_from_state)
+    apply_source = inspect.getsource(ConfigTab._apply_session_config)
     assert "llm_provider_api_keys" in load_source
+    assert "_apply_session_config" in save_source
+    assert "_apply_session_config" in load_source
+    assert "set_session_config" in apply_source
+    assert "llm_provider_override" not in save_source
+    assert "llm_api_key_override" not in save_source
     assert "llm_provider_override" not in load_source
     assert "llm_api_key_override" not in load_source
+
+
+def test_resolve_session_id_delegates_to_session_manager_get_session_id():
+    """When request is present, use SessionManager.get_session_id (same as chat)."""
+    from agent_ng.tabs.config_tab import ConfigTab
+
+    class _Req:
+        session_hash = "abc"
+
+    calls: list[object] = []
+
+    class _SM:
+        def get_session_id(self, request: object) -> str:
+            calls.append(request)
+            return "gradio_abc"
+
+        def get_last_active_session_id(self) -> None:
+            return None
+
+    tab = ConfigTab(event_handlers={}, language="en")
+    tab.main_app = type("MA", (), {"session_manager": _SM()})()
+    req = _Req()
+    assert tab._resolve_session_id(req) == "gradio_abc"
+    assert calls == [req]
+
+
+def test_resolve_session_id_never_calls_get_session_id_with_none():
+    from agent_ng.tabs.config_tab import ConfigTab
+
+    class _SM:
+        def get_session_id(self, request: object) -> str:
+            if request is None:
+                msg = "get_session_id(None) must not be called"
+                raise AssertionError(msg)
+            return "unused"
+
+        def get_last_active_session_id(self) -> str:
+            return "fallback_sid"
+
+    tab = ConfigTab(event_handlers={}, language="en")
+    tab.main_app = type("MA", (), {"session_manager": _SM()})()
+    assert tab._resolve_session_id(None) == "fallback_sid"
+
+
+def test_resolve_session_id_returns_none_without_fallback():
+    from agent_ng.tabs.config_tab import ConfigTab
+
+    class _SM:
+        def get_session_id(self, request: object) -> str:
+            if request is None:
+                raise AssertionError
+            return "sid"
+
+        def get_last_active_session_id(self) -> None:
+            return None
+
+    tab = ConfigTab(event_handlers={}, language="en")
+    tab.main_app = type("MA", (), {"session_manager": _SM()})()
+    assert tab._resolve_session_id(None) is None
+
+
+def test_apply_session_config_calls_set_session_and_reinitialize():
+    from agent_ng.tabs.config_tab import ConfigTab
+
+    tab = ConfigTab(event_handlers={}, language="en")
+    reinit_ids: list[str] = []
+    tab._reinitialize_session_llm = lambda sid: reinit_ids.append(sid)
+
+    payload = {
+        "url": "https://x",
+        "username": "",
+        "password": "",
+        "llm_provider_api_keys": {},
+    }
+    with patch("agent_ng.tabs.config_tab.set_session_config") as mock_set:
+        tab._apply_session_config("sid123", payload)
+    mock_set.assert_called_once_with("sid123", payload)
+    assert reinit_ids == ["sid123"]
 
 
 def test_normalize_llm_provider_api_keys_map_only():
@@ -86,6 +172,52 @@ def test_key_values_to_map():
     assert ConfigTab._key_values_to_map(["x", "y"], ["a", "b"]) == {"a": "x", "b": "y"}
 
 
+def test_save_to_state_request_before_var_positional_for_gradio_injection():
+    """Gradio injects Request only for params before *args (special_args)."""
+    import inspect
+
+    from agent_ng.tabs.config_tab import ConfigTab
+
+    params = list(inspect.signature(ConfigTab._save_to_state).parameters.values())
+    var_i = next(i for i, p in enumerate(params) if p.kind == inspect.Parameter.VAR_POSITIONAL)
+    req_i = next(i for i, p in enumerate(params) if p.name == "request")
+    assert req_i < var_i
+
+
+def test_gradio_special_args_inserts_request_into_save_inputs():
+    """Harness: same injection path Gradio uses when the Save button fires."""
+    from gradio.helpers import special_args
+
+    from agent_ng.tabs.config_tab import ConfigTab
+
+    tab = ConfigTab(event_handlers={}, language="en", i18n_instance=None)
+    tab._config_llm_providers = ["openrouter", "groq"]
+    browser_tail = {
+        "llm_provider_api_keys": {},
+        "url": "",
+        "username": "",
+        "password": "",
+    }
+    inputs = [
+        "https://example.com/",
+        "",
+        "",
+        "sk-one",
+        "sk-two",
+        browser_tail,
+    ]
+    sentinel = object()
+    patched, _, _ = special_args(
+        tab._save_to_state,
+        list(inputs),
+        request=sentinel,  # type: ignore[arg-type]
+        event_data=None,
+    )
+    assert patched[3] is sentinel
+    assert patched[:3] == inputs[:3]
+    assert patched[4:] == inputs[3:]
+
+
 def test_save_to_state_merges_into_llm_provider_api_keys_stub():
     from agent_ng.tabs.config_tab import ConfigTab
 
@@ -96,6 +228,7 @@ def test_save_to_state_merges_into_llm_provider_api_keys_stub():
         "https://example.com/",
         "",
         "",
+        None,
         "sk-one",
         "sk-g-new",
         {
@@ -124,6 +257,7 @@ def test_save_to_state_accepts_dataframe_single_arg():
         "https://example.com/",
         "",
         "",
+        None,
         df,
         {
             "llm_provider_api_keys": {},
@@ -137,16 +271,18 @@ def test_save_to_state_accepts_dataframe_single_arg():
 
 
 def test_llm_manager_accepts_api_key_override():
-    from agent_ng.llm_manager import LLMManager
     import inspect
+
+    from agent_ng.llm_manager import LLMManager
 
     sig = inspect.signature(LLMManager.get_llm)
     assert "api_key_override" in sig.parameters
 
 
 def test_llm_manager_get_api_key_with_override():
-    from agent_ng.llm_manager import LLMManager
     import inspect
+
+    from agent_ng.llm_manager import LLMManager
 
     sig = inspect.signature(LLMManager._get_api_key)
     assert "api_key_override" in sig.parameters
@@ -207,9 +343,9 @@ def test_session_manager_clear_config():
 
 
 def test_session_data_init_uses_keys_map_and_choice():
-    from agent_ng.session_manager import SessionData
-
     import inspect
+
+    from agent_ng.session_manager import SessionData
 
     source = inspect.getsource(SessionData._initialize_session_agent)
     assert "llm_provider_api_keys" in source
@@ -221,6 +357,12 @@ def main():
     tests = [
         test_config_tab_browser_state_schema,
         test_config_tab_save_load_uses_key_map_only,
+        test_save_to_state_request_before_var_positional_for_gradio_injection,
+        test_gradio_special_args_inserts_request_into_save_inputs,
+        test_resolve_session_id_delegates_to_session_manager_get_session_id,
+        test_resolve_session_id_never_calls_get_session_id_with_none,
+        test_resolve_session_id_returns_none_without_fallback,
+        test_apply_session_config_calls_set_session_and_reinitialize,
         test_normalize_llm_provider_api_keys_map_only,
         test_parse_llm_keys_dataframe_pandas_and_lists,
         test_key_values_to_map,

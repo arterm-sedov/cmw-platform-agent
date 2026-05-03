@@ -353,10 +353,15 @@ class ConfigTab:
         url: str,
         username: str,
         password: str,
-        *rest: Any,
         request: gr.Request | None = None,
+        *rest: Any,
     ) -> dict:
-        """Save configuration into browser state and update process env."""
+        """Save configuration into browser state and update process env.
+
+        ``request`` must come **before** ``*rest``: Gradio only injects ``gr.Request``
+        for positional-or-keyword parameters listed before ``*args`` (see
+        ``gradio.helpers.special_args``).
+        """
         prior_browser: dict[Any, Any] = {}
         if rest and isinstance(rest[-1], dict):
             prior_browser = dict(rest[-1])
@@ -406,12 +411,10 @@ class ConfigTab:
                 "llm_provider_api_keys": keys_map,
             }
 
-            # Determine accurate session id
             session_id = self._resolve_session_id(request)
 
             if session_id:
-                set_session_config(session_id, new_state)
-                self._reinitialize_session_llm(session_id)
+                self._apply_session_config(session_id, new_state)
                 try:
                     masked = {
                         "url_present": bool(url),
@@ -428,6 +431,11 @@ class ConfigTab:
                         "🔐 ConfigTab.save -> debug logging failed",
                         exc_info=True,
                     )
+            elif any((vk or "").strip() for vk in keys_map.values()):
+                logging.getLogger(__name__).warning(
+                    "ConfigTab.save: no session id; LLM API keys were not applied "
+                    "to the server session (browser storage still updated)",
+                )
 
             with suppress(Exception):
                 gr.Info(self._get_translation("config_save_success_session"))
@@ -484,21 +492,16 @@ class ConfigTab:
                 len(pwd),
             )
 
-            # Also propagate BrowserState snapshot into per-session store for backend
+            payload = {
+                "url": url,
+                "username": login,
+                "password": pwd,
+                "llm_provider_api_keys": keys_map,
+            }
+            session_id = self._resolve_session_id(request)
             try:
-                session_id = self._resolve_session_id(request)
-
                 if session_id:
-                    set_session_config(
-                        session_id,
-                        {
-                            "url": url,
-                            "username": login,
-                            "password": pwd,
-                            "llm_provider_api_keys": keys_map,
-                        },
-                    )
-                    self._reinitialize_session_llm(session_id)
+                    self._apply_session_config(session_id, payload)
                     logging.getLogger(__name__).debug(
                         "🔄 ConfigTab.load -> propagated BrowserState to session=%s",
                         session_id,
@@ -602,19 +605,29 @@ class ConfigTab:
                 exc_info=True,
             )
 
+    def _apply_session_config(self, session_id: str, state: dict[str, Any]) -> None:
+        """Push config snapshot to server session store and rebuild LLM for keys."""
+        set_session_config(session_id, state)
+        self._reinitialize_session_llm(session_id)
+
     def _resolve_session_id(self, request: gr.Request | None) -> str | None:
-        """Resolve session ID from request or main app fallback."""
+        """Resolve session ID — match chat/sidebar via SessionManager.get_session_id."""
         try:
-            if request and hasattr(request, "session_hash") and request.session_hash:
-                return f"gradio_{request.session_hash}"
+            sm = (
+                getattr(self.main_app, "session_manager", None)
+                if self.main_app
+                else None
+            )
+            if sm is not None and request is not None:
+                return sm.get_session_id(request)
         except Exception:
             logging.getLogger(__name__).debug(
-                "_resolve_session_id: request.parse failed", exc_info=True
+                "_resolve_session_id: get_session_id failed", exc_info=True
             )
 
         if (
             self.main_app
-            and hasattr(self.main_app, "session_manager")
+            and getattr(self.main_app, "session_manager", None) is not None
             and hasattr(self.main_app.session_manager, "get_last_active_session_id")
         ):
             return self.main_app.session_manager.get_last_active_session_id()  # type: ignore[attr-defined]
