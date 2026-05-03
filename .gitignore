@@ -22,3 +22,4 @@ docs/cmw_admin_pages.md
 .opencode/package-lock.json
 .opencode/package.json
 .opencode/node_modules/
+.mypy_cache/*

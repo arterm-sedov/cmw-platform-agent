@@ -132,3 +132,18 @@ max-args = 10
 max-locals = 20
 max-branches = 15
 max-statements = 60
+
+# Optional dev tooling (pip >= 25: pip install --group dev ; else: pip install "mypy>=1.11")
+[dependency-groups]
+dev = [
+    "mypy>=1.11.0,<2",
+]
+
+# Static typing (run: mypy agent_ng/ — aligns with AGENTS.md)
+[tool.mypy]
+python_version = "3.12"
+explicit_package_bases = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+show_error_codes = true
+pretty = true
