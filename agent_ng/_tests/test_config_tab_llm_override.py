@@ -25,7 +25,10 @@ def test_config_tab_browser_state_schema():
     source = inspect.getsource(ConfigTab._create_config_interface)
 
     assert "llm_provider_override" in source, "llm_provider_override not in _create_config_interface"
-    assert "llm_api_key_override" in source, "llm_api_key_override not in _create_config_interface"
+    assert "llm_api_key_override" in source, "llm_api_key_override not in BrowserState default"
+    assert "llm_provider_api_keys" in source, "llm_provider_api_keys not in BrowserState default"
+    assert "llm_provider_keys_table" in source, "llm_provider_keys_table not in UI"
+    assert "gr.Dataframe" in source, "editable provider keys table missing"
     print("✅ BrowserState schema includes LLM override fields")
 
 
@@ -38,13 +41,101 @@ def test_config_tab_save_load_includes_llm_override():
     save_source = inspect.getsource(ConfigTab._save_to_state)
     assert "llm_provider_override" in save_source, "llm_provider_override not in _save_to_state"
     assert "llm_api_key_override" in save_source, "llm_api_key_override not in _save_to_state"
+    assert "llm_provider_api_keys" in save_source, "llm_provider_api_keys not in _save_to_state"
+    assert "llm_keys_df" in save_source, "dataframe keys input not in _save_to_state"
 
     # Check _load_from_state returns LLM override fields
     load_source = inspect.getsource(ConfigTab._load_from_state)
     assert "llm_provider_override" in load_source, "llm_provider_override not in _load_from_state"
     assert "llm_api_key_override" in load_source, "llm_api_key_override not in _load_from_state"
+    assert "llm_provider_api_keys" in load_source or "_normalize_llm_provider_api_keys" in load_source
 
     print("✅ Save/Load methods handle LLM override fields")
+
+
+def test_normalize_llm_provider_api_keys_from_map_and_legacy():
+    from agent_ng.tabs.config_tab import ConfigTab
+
+    assert ConfigTab._normalize_llm_provider_api_keys(None) == {}
+    mp = ConfigTab._normalize_llm_provider_api_keys(
+        {
+            "llm_provider_api_keys": {" openrouter ": " sk-aa "},
+            "llm_provider_override": "",
+            "llm_api_key_override": "",
+        }
+    )
+    assert mp == {"openrouter": "sk-aa"}
+
+    leg = ConfigTab._normalize_llm_provider_api_keys(
+        {
+            "llm_provider_api_keys": {},
+            "llm_provider_override": "groq",
+            "llm_api_key_override": "sk-g",
+        }
+    )
+    assert leg == {"groq": "sk-g"}
+
+    both = ConfigTab._normalize_llm_provider_api_keys(
+        {
+            "llm_provider_api_keys": {"openrouter": "sk-o"},
+            "llm_provider_override": "groq",
+            "llm_api_key_override": "sk-g",
+        }
+    )
+    assert both["openrouter"] == "sk-o"
+    assert both["groq"] == "sk-g"
+
+
+def test_parse_llm_keys_dataframe_pandas_and_lists():
+    import pandas as pd
+
+    from agent_ng.tabs.config_tab import ConfigTab
+
+    provs = ["openrouter", "groq"]
+    df = pd.DataFrame([["openrouter", " k1 "], ["groq", ""]], columns=["a", "b"])
+    m1 = ConfigTab._parse_llm_keys_dataframe(df, provs)
+    assert m1 == {"openrouter": "k1", "groq": ""}
+
+    m2 = ConfigTab._parse_llm_keys_dataframe(
+        [["openrouter", "x"], ["groq", "y"]],
+        provs,
+    )
+    assert m2 == {"openrouter": "x", "groq": "y"}
+
+
+def test_save_to_state_merges_into_llm_provider_api_keys_stub():
+    import pandas as pd
+
+    from agent_ng.tabs.config_tab import ConfigTab
+
+    tab = ConfigTab(event_handlers={}, language="en", i18n_instance=None)
+    tab._config_llm_providers = ["openrouter", "groq"]
+    tab._llm_keys_df_columns = ["Provider", "API Key"]
+
+    df = pd.DataFrame(
+        [["openrouter", "sk-one"], ["groq", "sk-g-new"]],
+        columns=tab._llm_keys_df_columns,
+    )
+
+    merged = tab._save_to_state(
+        "https://example.com/",
+        "",
+        "",
+        "openrouter",
+        df,
+        {
+            "llm_provider_api_keys": {"groq": "should-be-replaced"},
+            "llm_provider_override": "",
+            "llm_api_key_override": "",
+            "url": "",
+            "username": "",
+            "password": "",
+        },
+        request=None,
+    )
+    assert merged["llm_provider_api_keys"]["openrouter"] == "sk-one"
+    assert merged["llm_provider_api_keys"]["groq"] == "sk-g-new"
+    assert merged["llm_api_key_override"] == "sk-one"
 
 
 def test_llm_manager_accepts_api_key_override():
@@ -140,6 +231,9 @@ def main():
     tests = [
         test_config_tab_browser_state_schema,
         test_config_tab_save_load_includes_llm_override,
+        test_normalize_llm_provider_api_keys_from_map_and_legacy,
+        test_parse_llm_keys_dataframe_pandas_and_lists,
+        test_save_to_state_merges_into_llm_provider_api_keys_stub,
         test_llm_manager_accepts_api_key_override,
         test_llm_manager_get_api_key_with_override,
         test_session_manager_has_llm_config,
