@@ -40,6 +40,15 @@ from agent_ng.token_budget import (
 )
 from tools.file_utils import FileUtils
 
+try:
+    from agent_ng._file_attachment import build_file_bubbles_for_role
+except ImportError:
+    try:
+        from .._file_attachment import build_file_bubbles_for_role  # type: ignore[no-redef]
+    except Exception:  # pragma: no cover
+        def build_file_bubbles_for_role(_att, role="user"):  # type: ignore[no-redef]
+            return []
+
 from .sidebar import QuickActionsMixin
 
 
@@ -122,6 +131,8 @@ class ChatTab(QuickActionsMixin):
                 submit_btn=True,  # Show submit button with icon (interchanges with stop)
                 stop_btn=False,  # Start hidden, will be shown when streaming starts (interchanges with submit)
                 file_types=[
+                    ".txt",  # Pasted text files from Gradio
+                    "text",  # MIME category for all text/*
                     ".pdf", ".csv", ".tsv", ".xlsx", ".xls",  # Documents and data
                     ".docx", ".pptx", ".vsdx", ".msg", ".eml",  # Office documents
                     ".zip", ".rar", ".tar", ".gz", ".bz2",  # Archives
@@ -582,13 +593,13 @@ class ChatTab(QuickActionsMixin):
                         if prompt_tokens:
                             stats_lines.append(
                                 self._get_translation("prompt_tokens").format(
-                                    tokens=prompt_tokens.formatted
+                                    tokens=prompt_tokens.formatted_no_cost
                                 )
                             )
                         if api_tokens:
                             stats_lines.append(
                                 self._get_translation("api_tokens").format(
-                                    tokens=api_tokens.formatted
+                                    tokens=api_tokens.formatted_no_cost
                                 )
                             )
                         # Provider/model and execution time where possible
@@ -759,20 +770,21 @@ class ChatTab(QuickActionsMixin):
         """Build and return token statistics message for history"""
         prompt_tokens = agent.token_tracker.get_last_prompt_tokens()
         api_tokens = agent.token_tracker.get_last_api_tokens()
+        cumulative_stats = agent.token_tracker.get_cumulative_stats()
 
         stats_lines = []
         if prompt_tokens:
             stats_lines.append(
                 self._get_translation("prompt_tokens").format(
-                    tokens=prompt_tokens.formatted
+                    tokens=prompt_tokens.formatted_no_cost
                 )
             )
         if api_tokens:
-            stats_lines.append(
-                self._get_translation("api_tokens").format(
-                    tokens=api_tokens.formatted
-                )
+            # Show API tokens with input/output breakdown (no cost in chat)
+            token_line = self._get_translation("api_tokens").format(
+                tokens=api_tokens.formatted_no_cost
             )
+            stats_lines.append(token_line)
 
         # Provider/model info
         provider = "unknown"
@@ -806,6 +818,28 @@ class ChatTab(QuickActionsMixin):
         # Return updated history with stats message appended
         return [token_metadata_message]
 
+    def _is_free_model(self, agent) -> bool:
+        """Heuristic: OpenRouter uses ':free' suffix for free-tier models."""
+        try:
+            llm_instance = getattr(agent, "llm_instance", None)
+            model = (getattr(llm_instance, "model_name", "") or "").lower()
+            return ":free" in model
+        except Exception:
+            return False
+
+    def _format_cost_display(self, agent, cost: float | None) -> str:
+        """Format cost for UI: show $0.0000 only for free models, else '—' if unknown."""
+        if cost is None:
+            return "—"  # Unknown pricing
+        if cost == 0.0:
+            # cost == 0.0: check if it's a free model or unknown
+            if self._is_free_model(agent):
+                return "$0.0000"  # Explicitly free model
+            return "—"  # Unknown (0.0 but not a free model)
+        # Use helper to format with minimum necessary decimal places
+        from agent_ng.utils import format_cost
+        return format_cost(cost)
+
     def format_token_budget_display(self, request: gr.Request = None) -> str:
         """Format and return the token budget display - now session-aware"""
         if not hasattr(self, "main_app") or not self.main_app:
@@ -829,7 +863,13 @@ class ChatTab(QuickActionsMixin):
                 return self._get_translation("token_budget_unknown")
 
             # Get cumulative stats for detailed display
-            cumulative_stats = agent.token_tracker.get_cumulative_stats()
+            try:
+                cumulative_stats = agent.token_tracker.get_cumulative_stats()
+            except Exception as exc:
+                logging.getLogger(__name__).debug(
+                    "Failed to get cumulative stats: %s", exc
+                )
+                return self._get_translation("token_budget_initializing")
 
             # "Сообщение" is per-turn and must be monotonic:
             # - sums API usage across iterations when available
@@ -865,13 +905,33 @@ class ChatTab(QuickActionsMixin):
                     f"token_status_{budget_info['status']}"
                 )
 
-            # Build token usage display using separated components for better flexibility
+            # Build token usage display using hierarchical format
+            # Get cost information
+            conv_cost = cumulative_stats.get("conversation_cost")
+            total_cost = cumulative_stats.get("total_cost")
+            turn_cost = cumulative_stats.get("turn_cost")
+
+            # Format total with cost (precision .4f)
+            total_tokens = cumulative_stats.get("conversation_tokens", 0)
+            cost_str = ""
+            total_cost_display = self._format_cost_display(agent, total_cost)
+            if total_cost_display != "—":
+                cost_str = f" / {total_cost_display}"
             total = self._get_translation("token_usage_total").format(
-                total_tokens=cumulative_stats["conversation_tokens"]
-            )
+                total_tokens=total_tokens
+            ) + cost_str
+
+            # Format conversation with cost (precision .4f)
+            conv_tokens = cumulative_stats.get("session_tokens", 0)
+            conv_cost_str = ""
+            conv_cost_display = self._format_cost_display(agent, conv_cost)
+            if conv_cost_display != "—":
+                conv_cost_str = f" / {conv_cost_display}"
             conversation = self._get_translation("token_usage_conversation").format(
-                conversation_tokens=cumulative_stats["session_tokens"]
-            )
+                conversation_tokens=conv_tokens
+            ) + conv_cost_str
+
+            # Get estimated total for forecast breakdown
             estimated_total = 0
             try:
                 # Prefer monotonic per-turn estimate; fall back to latest snapshot total.
@@ -888,44 +948,90 @@ class ChatTab(QuickActionsMixin):
                 )
                 estimated_total = 0
 
-            estimate_line = self._get_translation("token_usage_estimate").format(
-                estimated_tokens=estimated_total
-            )
-            last_message = self._get_translation("token_usage_last_message").format(
-                percentage=percentage_for_display,
-                used=used_tokens,
-                context_window=budget_info["context_window"],
-                status_icon=status_icon,
-            )
-            average = self._get_translation("token_usage_average").format(
-                avg_tokens=cumulative_stats["avg_tokens_per_message"]
-            )
-
-            # Add token breakdown from latest budget snapshot
+            # Forecast breakdown (indented sub-items)
             breakdown_info = ""
             try:
                 snap = agent.token_tracker.get_budget_snapshot()
                 if isinstance(snap, dict):
-                    conv_tokens = snap.get("conversation_tokens", 0)
+                    conv_tokens_snap = snap.get("conversation_tokens", 0)
                     tool_tokens = snap.get("tool_tokens", 0)
                     overhead_tokens = snap.get("overhead_tokens", 0)
                     breakdown_info = (
-                        "\n" + self._get_translation("token_breakdown_context").format(conv_tokens=conv_tokens) +
-                        "\n" + self._get_translation("token_breakdown_tools").format(tool_tokens=tool_tokens) +
-                        "\n" + self._get_translation("token_breakdown_overhead").format(overhead_tokens=overhead_tokens)
+                        "\n    - " + self._get_translation("token_breakdown_context").format(conv_tokens=conv_tokens_snap)
+                        + "\n    - " + self._get_translation("token_breakdown_tools").format(tool_tokens=tool_tokens)
+                        + "\n    - " + self._get_translation("token_breakdown_overhead").format(overhead_tokens=overhead_tokens)
                     )
             except Exception as exc:
                 logging.getLogger(__name__).debug(
                     "Failed to get token breakdown: %s", exc
                 )
 
+            estimate_line = "- " + self._get_translation("token_usage_estimate").format(
+                estimated_tokens=estimated_total
+            ) + breakdown_info
+
+            # Message section with context, input/output, and cost (indented sub-items)
+            message_section = "- " + self._get_translation("token_usage_last_message")
+            input_tokens = cumulative_stats.get("last_input_tokens", 0)
+            output_tokens = cumulative_stats.get("last_output_tokens", 0)
+
+            # Message context (percentage)
+            message_context_line = self._get_translation("token_message_context").format(
+                percentage=percentage_for_display,
+                used=used_tokens,
+                context_window=budget_info["context_window"],
+                status_icon=status_icon,
+            )
+
+            # Input/output tokens
+            input_line = self._get_translation("token_message_input").format(tokens=input_tokens)
+            output_line = self._get_translation("token_message_output").format(tokens=output_tokens)
+
+            # Cache details (OpenRouter prompt_tokens_details)
+            cached_tokens = cumulative_stats.get("last_cached_tokens")
+            cache_write_tokens = cumulative_stats.get("last_cache_write_tokens")
+            cache_lines = ""
+            if cached_tokens is not None:
+                cache_lines += (
+                    "\n    - "
+                    + self._get_translation("token_message_cached_tokens").format(
+                        tokens=int(cached_tokens or 0)
+                    )
+                )
+            if cache_write_tokens is not None:
+                cache_lines += (
+                    "\n    - "
+                    + self._get_translation("token_message_cache_write_tokens").format(
+                        tokens=int(cache_write_tokens or 0)
+                    )
+                )
+
+            # Cost for current message/turn
+            base_cost = turn_cost if (turn_cost is not None) else conv_cost
+            message_cost_str = self._format_cost_display(agent, base_cost)
+            cost_line = self._get_translation("token_message_cost").format(cost=message_cost_str)
+
+            message_details = f"\n    - {message_context_line}\n    - {input_line}\n    - {output_line}{cache_lines}\n    - {cost_line}"
+
+            # Average with cost (precision .4f)
+            avg_tokens = cumulative_stats.get("avg_tokens_per_message", 0)
+            message_count = cumulative_stats.get("message_count", 0)
+            avg_cost_str = ""
+            if message_count > 0:
+                # Treat 0-cost as "unknown" unless we know we're on a free model.
+                avg_cost = (conv_cost / message_count) if (conv_cost is not None and conv_cost > 0) else None
+                avg_cost_display = self._format_cost_display(agent, avg_cost)
+                avg_cost_str = f" / {avg_cost_display}"
+            average = self._get_translation("token_usage_average").format(
+                avg_tokens=avg_tokens
+            ) + avg_cost_str
+
         except Exception as e:
             print(f"Error formatting token budget: {e}")
             return self._get_translation("token_budget_unknown")
         else:
             return (
-                f"- {total}\n- {conversation}\n- {estimate_line}{breakdown_info}\n"
-                f"- {last_message}\n- {average}"
+                f"- {total}\n- {conversation}\n{estimate_line}\n{message_section}{message_details}\n- {average}"
             )
 
     def _get_available_providers(self) -> list[str]:
@@ -1010,55 +1116,56 @@ class ChatTab(QuickActionsMixin):
         # No fallback - return error message
         return [self._get_translation("no_providers_available")]
 
-    def _get_current_model(self) -> str:
-        """Get current LLM model from session manager (fallback to default)"""
-        if not hasattr(self, "main_app") or not self.main_app:
+    def _default_dropdown_combo_str(self) -> str:
+        """Env/settings default as ``Provider / model_id``."""
+        mgr = getattr(self.main_app, "llm_manager", None) if self.main_app else None
+        if not mgr:
+            p = os.environ.get("AGENT_PROVIDER", "openrouter").strip()
+            return f"{p.title()} / {p}"
+        pe, idx = mgr._get_configured_provider_and_model_index()
+        if not pe:
+            p = os.environ.get("AGENT_PROVIDER", "openrouter").strip()
+            return f"{p.title()} / {p}"
+        cfg = mgr.get_provider_config(pe.value)
+        if cfg and 0 <= idx < len(cfg.models):
+            mname = cfg.models[idx].get("model", "") or pe.value
+            return f"{pe.value.title()} / {mname}"
+        return f"{pe.value.title()} / {pe.value}"
+
+    def _get_current_model(self, request: gr.Request | None = None) -> str:
+        """Current model id for the active session, else empty."""
+        if not self.main_app or not getattr(self.main_app, "session_manager", None):
             return ""
-
+        if not request:
+            return ""
         try:
-            # Try to get from session manager first
-            if hasattr(self.main_app, "session_manager"):
-                # Get default session for UI display
-                session_data = self.main_app.session_manager.get_session_data("default")
-                if (
-                    session_data
-                    and session_data.agent
-                    and hasattr(session_data.agent, "llm_instance")
-                    and session_data.agent.llm_instance
-                ):
-                    return session_data.agent.llm_instance.model_name
+            sid = self.main_app.session_manager.get_session_id(request)
+            agent = self.main_app.session_manager.get_session_agent(sid)
+            inst = getattr(agent, "llm_instance", None)
+            if inst:
+                return inst.model_name
         except Exception as e:
-            print(f"Error getting current model: {e}")
-
+            logging.getLogger(__name__).debug("ChatTab: current model: %s", e)
         return ""
 
-    def _get_current_provider_model_combination(self) -> str:
-        """Get current provider/model combination in format 'Provider / Model'"""
-        if not hasattr(self, "main_app") or not self.main_app:
-            # Return fallback value when main app is not available
-            provider = os.environ.get("AGENT_PROVIDER", "openrouter")
-            return f"{provider.title()} / {provider}/default-model"
-
-        try:
-            # Try to get from session manager first
-            if hasattr(self.main_app, "session_manager"):
-                # Get default session for UI display
-                session_data = self.main_app.session_manager.get_session_data("default")
-                if (
-                    session_data
-                    and session_data.agent
-                    and hasattr(session_data.agent, "llm_instance")
-                    and session_data.agent.llm_instance
-                ):
-                    provider = session_data.agent.llm_instance.provider.value
-                    model = session_data.agent.llm_instance.model_name
-                    return f"{provider.title()} / {model}"
-        except Exception as e:
-            print(f"Error getting current provider/model combination: {e}")
-
-        # Return fallback value on error
-        provider = os.environ.get("AGENT_PROVIDER", "openrouter")
-        return f"{provider.title()} / {provider}/default-model"
+    def _get_current_provider_model_combination(
+        self, request: gr.Request | None = None
+    ) -> str:
+        """Current ``Provider / Model`` for the active Gradio session."""
+        if request and self.main_app and getattr(self.main_app, "session_manager", None):
+            try:
+                sid = self.main_app.session_manager.get_session_id(request)
+                agent = self.main_app.session_manager.get_session_agent(sid)
+                inst = getattr(agent, "llm_instance", None)
+                if inst:
+                    p = inst.provider.value
+                    m = inst.model_name
+                    return f"{p.title()} / {m}"
+            except Exception as e:
+                logging.getLogger(__name__).debug(
+                    "ChatTab: current provider/model: %s", e
+                )
+        return self._default_dropdown_combo_str()
 
     def _update_models_for_provider(self, provider: str) -> list[str]:
         """Update available models when provider changes from session manager"""
@@ -1105,7 +1212,9 @@ class ChatTab(QuickActionsMixin):
             # Check if switching to Mistral and show native Gradio warning
             if self._is_mistral_model(provider, model):
                 # Check if we're switching FROM a non-Mistral provider TO Mistral
-                current_provider_model = self._get_current_provider_model_combination()
+                current_provider_model = self._get_current_provider_model_combination(
+                    request
+                )
                 current_is_mistral = "mistral" in current_provider_model.lower()
 
                 # Only clear chat if switching from non-Mistral to Mistral
@@ -1386,27 +1495,63 @@ class ChatTab(QuickActionsMixin):
                         file_list.append(f"{original_filename}")
 
                     # Register file with agent's session-isolated registry
-                    if (
-                        hasattr(self, "main_app")
-                        and self.main_app
-                        and hasattr(self.main_app, "session_manager")
-                    ):
-                        session_id = self.main_app.session_manager.get_session_id(
-                            request
-                        )
-                        agent = self.main_app.session_manager.get_agent(session_id)
-                        if agent and hasattr(agent, "register_file"):
-                            agent.register_file(original_filename, file_path)
-                            current_files.append(original_filename)
-                            print(
-                                f"📁 Registered file: {original_filename} -> {agent.file_registry.get((session_id, original_filename), 'NOT_FOUND')}"
+                    _main_app = getattr(self, "main_app", None)
+                    _session_mgr = getattr(_main_app, "session_manager", None) if _main_app else None
+                    if _main_app and _session_mgr:
+                        try:
+                            session_id = _session_mgr.get_session_id(request)
+                            agent = _session_mgr.get_agent(session_id)
+                            if agent and hasattr(agent, "register_file"):
+                                agent.register_file(original_filename, file_path)
+                                current_files.append(original_filename)
+                            else:
+                                logging.getLogger(__name__).warning(
+                                    "Agent or register_file not available: agent=%s",
+                                    agent is not None,
+                                )
+                        except Exception as e:
+                            logging.getLogger(__name__).error(
+                                "Error registering file %s: %s",
+                                original_filename, e,
                             )
+                    else:
+                        logging.getLogger(__name__).warning(
+                            "Cannot register file: main_app=%s, session_mgr=%s",
+                            _main_app is not None, _session_mgr is not None,
+                        )
 
                 file_info += ", ".join(file_list) + "]"
                 message += file_info
 
-                # Store current files (deprecated - use session manager)
-                print(f"📁 Registered {len(current_files)} files: {current_files}")
+                # Prepend an inline preview bubble for each uploaded file so
+                # it appears in the chat history visually (not just as text).
+                # build_file_bubbles_for_role returns [] for missing files so
+                # no guard needed — safe to call unconditionally.
+                for file in files:
+                    fpath = (
+                        file.get("path", "") if isinstance(file, dict) else str(file)
+                    )
+                    fname = (
+                        file.get("orig_name") or os.path.basename(fpath)
+                        if isinstance(file, dict)
+                        else os.path.basename(fpath)
+                    )
+                    if fpath and os.path.isfile(fpath):
+                        att = {
+                            "path": str(Path(fpath).resolve()),
+                            "display_name": fname or os.path.basename(fpath),
+                            "size_bytes": (
+                                os.path.getsize(fpath)
+                                if os.path.exists(fpath)
+                                else 0
+                            ),
+                        }
+                        history = list(history or [])
+                        history.extend(build_file_bubbles_for_role(att, role="user"))
+
+                logging.getLogger(__name__).debug(
+                    "Registered %d files: %s", len(current_files), current_files,
+                )
             else:
                 # No files, just use the text message
                 pass
@@ -1599,41 +1744,15 @@ class ChatTab(QuickActionsMixin):
             )
         markdown_content += "---\n\n"
 
-        # Add conversation messages
-        # Handle Gradio 6 format: content can be a list of dicts [{'text': '...', 'type': 'text'}]
-        # or a plain string (Gradio 5 format)
-        def extract_text_content(content):
-            """Extract plain text from content, handling both Gradio 5 and 6 formats."""
-            if content is None:
-                return ""
-
-            # If content is a string, return it directly (Gradio 5 format)
-            if isinstance(content, str):
-                return content
-
-            # If content is a list (Gradio 6 format), extract text from each item
-            if isinstance(content, list):
-                text_parts = []
-                for item in content:
-                    if isinstance(item, dict):
-                        # Extract text from dict items (e.g., {'text': '...', 'type': 'text'})
-                        text = item.get("text", "")
-                        if text:
-                            text_parts.append(str(text))
-                    elif isinstance(item, str):
-                        # Direct string in list
-                        text_parts.append(item)
-                return "\n".join(text_parts)
-
-            # Fallback: convert to string
-            return str(content)
-
+        # Add conversation messages (plain string content only; skip file bubbles / structured payloads).
         for i, message in enumerate(history, 1):
             if isinstance(message, dict):
-                role = message.get("role", "unknown")
-                raw_content = message.get("content", "") or ""
-                content = extract_text_content(raw_content)
+                # Skip file-bubble messages (content is a dict, not text).
+                content = message.get("content", "")
+                if not isinstance(content, str):
+                    continue
 
+                role = message.get("role", "unknown")
                 if role == "user":
                     markdown_content += f"## User Message {i}\n\n"
                     markdown_content += f"{content}\n\n"

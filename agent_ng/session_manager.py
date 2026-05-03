@@ -18,7 +18,7 @@ from contextvars import ContextVar
 import logging
 import threading
 import time
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 import uuid
 
 import gradio as gr
@@ -40,22 +40,70 @@ def get_current_session_id() -> str | None:
     return _current_session_id.get()
 
 
-# Lightweight per-session config snapshot (URL, username, password)
-_config_by_session: dict[str, dict[str, str]] = {}
+# Per-session snapshot: platform credentials + per-provider API keys map
+_config_by_session: dict[str, dict[str, Any]] = {}
 
 
-def set_session_config(session_id: str, config: dict[str, str]) -> None:
-    _config_by_session[session_id] = {
-        "url": (config.get("url") or "").strip(),
-        "username": (config.get("username") or "").strip(),
-        "password": (config.get("password") or "").strip(),
+def set_session_config(session_id: str, config: dict[str, Any]) -> None:
+    """Merge ``config`` into the server-side session snapshot.
+
+    Partial updates (e.g. API /ask with only credentials) keep existing API-key
+    map and other fields.
+    """
+    prev = _config_by_session.get(session_id)
+    base: dict[str, Any] = {
+        "url": "",
+        "username": "",
+        "password": "",
+        "llm_provider_api_keys": {},
     }
+    if isinstance(prev, dict):
+        for k in ("url", "username", "password"):
+            v = prev.get(k)
+            if isinstance(v, str):
+                base[k] = v
+        pk_prev = prev.get("llm_provider_api_keys")
+        if isinstance(pk_prev, dict):
+            base["llm_provider_api_keys"] = {
+                str(a).strip(): (str(b).strip() if isinstance(b, str) else "")
+                for a, b in pk_prev.items()
+                if str(a).strip()
+            }
+
+    if "url" in config:
+        base["url"] = (config.get("url") or "").strip()
+    if "username" in config:
+        base["username"] = (config.get("username") or "").strip()
+    if "password" in config:
+        base["password"] = (config.get("password") or "").strip()
+    if "llm_provider_api_keys" in config:
+        raw = config.get("llm_provider_api_keys")
+        cleaned: dict[str, str] = {}
+        if isinstance(raw, dict):
+            for pk, vk in raw.items():
+                if not isinstance(pk, str):
+                    continue
+                k_strip = pk.strip()
+                if not k_strip:
+                    continue
+                cleaned[k_strip] = (vk or "").strip() if isinstance(vk, str) else ""
+        base["llm_provider_api_keys"] = cleaned
+
+    base.pop("llm_provider_override", None)
+    base.pop("llm_api_key_override", None)
+    _config_by_session[session_id] = base
 
 
-def get_session_config(session_id: str | None) -> dict[str, str] | None:
+def get_session_config(session_id: str | None) -> dict[str, Any] | None:
     if not session_id:
         return None
     return _config_by_session.get(session_id)
+
+
+def clear_session_config(session_id: str) -> None:
+    """Clear session config"""
+    _config_by_session.pop(session_id, None)
+
 
 # Handle both relative and absolute imports
 try:
@@ -142,9 +190,9 @@ class SessionManager:
     def get_clock_icon(self) -> str:
         """Get RTC-based clock icon for cosmetic rotation"""
         import time
+
         clock_icons = get_translation_key("clock_icons", self.language)
         return clock_icons[int(time.time()) % len(clock_icons)]
-
 
     def set_status(self, session_id: str, status: str) -> None:
         """Set session-specific status"""
@@ -166,60 +214,97 @@ class SessionManager:
         session_data = self.get_session_data(session_id)
         if hasattr(session_data.agent, "clear_conversation"):
             session_data.agent.clear_conversation(session_id)
-        if hasattr(session_data.agent, "token_tracker") and session_data.agent.token_tracker:
+        if (
+            hasattr(session_data.agent, "token_tracker")
+            and session_data.agent.token_tracker
+        ):
             session_data.agent.token_tracker.start_new_conversation()
         session_data.status = get_translation_key("progress_ready", self.language)
 
     def update_llm_provider(self, session_id: str, provider: str, model: str) -> bool:
         """Update LLM provider for the session"""
         try:
-            logging.getLogger(__name__).info(f"🔄 Updating LLM provider for session {session_id}: {provider}/{model}")
+            logging.getLogger(__name__).info(
+                f"🔄 Updating LLM provider for session {session_id}: {provider}/{model}"
+            )
             session_data = self.get_session_data(session_id)
             agent = session_data.agent
 
             if hasattr(agent, "llm_manager") and agent.llm_manager:
-                logging.getLogger(__name__).debug(f"🔍 Agent has LLM manager, getting config for {provider}")
+                logging.getLogger(__name__).debug(
+                    f"🔍 Agent has LLM manager, getting config for {provider}"
+                )
                 config = agent.llm_manager.get_provider_config(provider)
                 if config and config.models:
-                    logging.getLogger(__name__).debug(f"✅ Found config with {len(config.models)} models")
+                    logging.getLogger(__name__).debug(
+                        f"✅ Found config with {len(config.models)} models"
+                    )
                     # Find model index
                     model_index = 0
                     for i, model_config in enumerate(config.models):
                         if model_config["model"] == model:
                             model_index = i
-                            logging.getLogger(__name__).debug(f"✅ Found model {model} at index {i}")
+                            logging.getLogger(__name__).debug(
+                                f"✅ Found model {model} at index {i}"
+                            )
                             break
 
                     # Create a NEW LLM instance for this session (not shared)
-                    logging.getLogger(__name__).info(f"🔄 Creating new LLM instance for {provider} at index {model_index}")
-                    new_llm_instance = agent.llm_manager.create_new_llm_instance(provider, model_index)
+                    logging.getLogger(__name__).info(
+                        f"🔄 Creating new LLM instance for {provider} at index {model_index}"
+                    )
+                    sess_cfg = get_session_config(session_id) or {}
+                    raw_km = sess_cfg.get("llm_provider_api_keys")
+                    key_override = None
+                    if isinstance(raw_km, dict):
+                        key_override = (raw_km.get(provider) or "").strip() or None
+                    new_llm_instance = agent.llm_manager.create_new_llm_instance(
+                        provider,
+                        model_index,
+                        api_key_override=key_override,
+                    )
                     if new_llm_instance:
-                        logging.getLogger(__name__).info(f"✅ Created new LLM instance: {new_llm_instance.model_name}")
+                        logging.getLogger(__name__).info(
+                            f"✅ Created new LLM instance: {new_llm_instance.model_name}"
+                        )
                         # Update the agent's LLM instance
                         agent.llm_instance = new_llm_instance
                         session_data.llm_provider = provider
+                        session_data._session_llm_choice = (provider, model)
 
                         # Verify the update
                         if hasattr(agent, "llm_instance") and agent.llm_instance:
-                            logging.getLogger(__name__).debug(f"🔍 DEBUG: Agent LLM instance updated to: {agent.llm_instance.provider.value}/{agent.llm_instance.model_name}")
+                            logging.getLogger(__name__).debug(
+                                f"🔍 DEBUG: Agent LLM instance updated to: {agent.llm_instance.provider.value}/{agent.llm_instance.model_name}"
+                            )
                         else:
-                            logging.getLogger(__name__).error("❌ DEBUG: Agent LLM instance update failed!")
+                            logging.getLogger(__name__).error(
+                                "❌ DEBUG: Agent LLM instance update failed!"
+                            )
 
                         # Reset token budget for this session
                         if hasattr(agent, "token_tracker") and agent.token_tracker:
                             agent.token_tracker.reset_current_conversation_budget()
 
-                        logging.getLogger(__name__).info(f"✅ Updated session {session_id} to use {provider}/{model}")
+                        logging.getLogger(__name__).info(
+                            f"✅ Updated session {session_id} to use {provider}/{model}"
+                        )
                         return True
                     else:
-                        logging.getLogger(__name__).error(f"❌ Failed to create new LLM instance for {provider}")
+                        logging.getLogger(__name__).error(
+                            f"❌ Failed to create new LLM instance for {provider}"
+                        )
                 else:
-                    logging.getLogger(__name__).error(f"❌ No config or models found for {provider}")
+                    logging.getLogger(__name__).error(
+                        f"❌ No config or models found for {provider}"
+                    )
             else:
                 logging.getLogger(__name__).error("❌ Agent has no LLM manager")
             return False
         except Exception as e:
-            logging.getLogger(__name__).exception(f"❌ Error updating session LLM provider: {e}")
+            logging.getLogger(__name__).exception(
+                f"❌ Error updating session LLM provider: {e}"
+            )
             return False
 
     def get_session_agent(self, session_id: str) -> "CmwAgent":
@@ -259,13 +344,17 @@ class SessionData:
 
         self.session_id = session_id
         self.language = language
-        self.agent = CmwAgent(session_id=session_id, language=language)  # Pass session ID and language to agent
+        self.agent = CmwAgent(
+            session_id=session_id, language=language
+        )  # Pass session ID and language to agent
         self.status = get_translation_key("progress_ready", language)
-        self.llm_provider = "openrouter"  # Default provider
+        self.llm_provider = "openrouter"  # Updated when LLM instance is ready
         self.created_at = time.time()
         self.last_activity = time.time()
         # Cancellation state for stop button (following reference repo pattern)
         self.cancellation_state: dict[str, bool] = {"cancelled": False}
+        # Last provider/model from the sidebar (``Выбор LLM``); drives re-init.
+        self._session_llm_choice: tuple[str, str] | None = None
 
         # Initialize the agent with a default LLM instance for this session
         self._initialize_session_agent()
@@ -275,16 +364,54 @@ class SessionData:
         self.last_activity = time.time()
 
     def _initialize_session_agent(self) -> None:
-        """Initialize the session agent with a unique LLM instance"""
+        """Initialize the session agent with a unique LLM instance.
+
+        Uses the last sidebar provider/model when set; otherwise env defaults.
+        API keys come from ``llm_provider_api_keys`` for the resolved provider.
+        """
         if not (hasattr(self.agent, "llm_manager") and self.agent.llm_manager):
             return
 
-        provider_enum, model_index = self.agent.llm_manager._get_configured_provider_and_model_index()
+        session_config = get_session_config(self.session_id) or {}
+        keys_raw = session_config.get("llm_provider_api_keys")
+        keys_map: dict[str, str] = (
+            {str(k).strip(): str(v).strip() for k, v in keys_raw.items()}
+            if isinstance(keys_raw, dict)
+            else {}
+        )
+
+        mgr = self.agent.llm_manager
+        choice = self._session_llm_choice
+        if choice:
+            prov_s, mod_s = choice[0].strip().lower(), choice[1].strip()
+            try:
+                try:
+                    from .llm_manager import LLMProvider
+                except ImportError:
+                    from agent_ng.llm_manager import LLMProvider
+
+                provider_enum = LLMProvider(prov_s)
+            except ValueError:
+                provider_enum, model_index = mgr._get_configured_provider_and_model_index()
+            else:
+                found = mgr._find_model_index(provider_enum, mod_s)
+                model_index = found if found is not None else 0
+        else:
+            provider_enum, model_index = mgr._get_configured_provider_and_model_index()
+
         if not provider_enum:
             return
 
-        llm_instance = self.agent.llm_manager.create_new_llm_instance(provider_enum.value, model_index)
+        api_key_override = (keys_map.get(provider_enum.value) or "").strip() or None
+
+        llm_instance = self.agent.llm_manager.create_new_llm_instance(
+            provider_enum.value,
+            model_index,
+            api_key_override=api_key_override,
+        )
         if llm_instance:
             self.agent.llm_instance = llm_instance
             self.llm_provider = provider_enum.value
-            logging.getLogger(__name__).info(f"✅ Initialized session {self.session_id} with {provider_enum.value}/{llm_instance.model_name}")
+            logging.getLogger(__name__).info(
+                f"✅ Initialized session {self.session_id} with {provider_enum.value}/{llm_instance.model_name}"
+            )

@@ -15,7 +15,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agent_ng.langchain_agent import NextGenAgent
+from agent_ng import NextGenAgent
 from agent_ng.llm_manager import get_llm_manager
 
 
@@ -31,17 +31,13 @@ class TestStreamingAgentBehavior:
     async def _get_agent(self):
         """Get or create agent for testing"""
         if not self.agent:
-            # Get a working LLM instance
-            llm_instance = self.llm_manager.get_llm("gemini", use_tools=True)
-            if not llm_instance:
-                pytest.skip("No LLM available for testing")
-
             self.agent = NextGenAgent(
-                llm_instance=llm_instance,
-                tools=[],  # Add tools if needed
                 system_prompt="You are a helpful assistant.",
-                session_id=self.conversation_id
+                session_id=self.conversation_id,
             )
+            await self.agent._initialize_async()  # noqa: SLF001
+            if not self.agent.is_initialized or not self.agent.llm_instance:
+                pytest.skip("No LLM available for testing")
         return self.agent
 
     @pytest.mark.asyncio
@@ -120,7 +116,7 @@ class TestStreamingAgentBehavior:
         # Multi-turn conversation
         messages = [
             "Hello! What's 5 + 3?",
-            "Now multiply that by 2", 
+            "Now multiply that by 2",
             "What's the sum of all the numbers I asked about?"
         ]
 

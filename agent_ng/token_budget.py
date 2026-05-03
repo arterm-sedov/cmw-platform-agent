@@ -91,7 +91,12 @@ def _message_content(msg: Any) -> str:
             )
             return ""
     if isinstance(msg, dict):
-        return str(msg.get("content", "") or "")
+        content = msg.get("content", "") or ""
+        # File-bubble messages have dict content ({"path": …, "alt_text": …}).
+        # Return empty string so they don't pollute token budget estimates.
+        if not isinstance(content, str):
+            return ""
+        return str(content)
     return str(msg)
 
 

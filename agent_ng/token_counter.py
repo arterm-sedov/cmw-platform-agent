@@ -44,6 +44,136 @@ from .token_budget import (
 )
 
 
+def _usage_to_dict(usage_obj: Any) -> dict[str, Any] | None:
+    """Best-effort conversion of usage objects to dict.
+
+    OpenRouter extends OpenAI usage with `cost` and `prompt_tokens_details`, but some
+    client SDKs represent `usage` as a typed object; extra fields may live in
+    pydantic "extra" containers.
+    """
+    if usage_obj is None:
+        return None
+    if isinstance(usage_obj, dict):
+        return usage_obj
+
+    logger = logging.getLogger(__name__)
+
+    # pydantic v2
+    if hasattr(usage_obj, "model_dump"):
+        try:
+            dumped = usage_obj.model_dump()
+            if isinstance(dumped, dict):
+                return dumped
+        except Exception as exc:
+            logger.debug("usage.model_dump() failed: %s", exc)
+
+    # pydantic v1
+    if hasattr(usage_obj, "dict"):
+        try:
+            dumped = usage_obj.dict()
+            if isinstance(dumped, dict):
+                return dumped
+        except Exception as exc:
+            logger.debug("usage.dict() failed: %s", exc)
+
+    d: dict[str, Any] = {}
+    # Common token keys (OpenAI/OpenRouter + LangChain)
+    for k in (
+        "prompt_tokens",
+        "prompt_tokens_details",
+        "completion_tokens",
+        "total_tokens",
+        "input_tokens",
+        "output_tokens",
+        "cost",
+        "cost_details",
+    ):
+        try:
+            if hasattr(usage_obj, k):
+                d[k] = getattr(usage_obj, k)
+        except Exception as exc:
+            logger.debug("Failed reading usage attribute %s: %s", k, exc)
+            continue
+
+    # Try to capture unknown extra keys (common in OpenAI/OpenRouter SDK models)
+    for extra_attr in ("model_extra", "__pydantic_extra__"):
+        extra = getattr(usage_obj, extra_attr, None)
+        if isinstance(extra, dict):
+            d.update(extra)
+
+    # Final fallback: instance dict
+    inst_dict = getattr(usage_obj, "__dict__", None)
+    if isinstance(inst_dict, dict):
+        d.update(inst_dict)
+
+    return d or None
+
+
+def _first_chat_generation(llm_result: Any) -> Any | None:
+    """First ``ChatGeneration`` from ``LLMResult`` (nested batches or flat list)."""
+    if not hasattr(llm_result, "generations") or not llm_result.generations:
+        return None
+    head = llm_result.generations[0]
+    if isinstance(head, list):
+        return head[0] if head else None
+    return head
+
+
+def _extract_cache_details(
+    usage_dict: dict[str, Any] | None,
+) -> tuple[int | None, int | None]:
+    """Extract OpenRouter prompt cache details from a usage dict."""
+    if not isinstance(usage_dict, dict):
+        return (None, None)
+    ptd = usage_dict.get("prompt_tokens_details")
+    if not isinstance(ptd, dict):
+        return (None, None)
+    cached = int(ptd.get("cached_tokens", 0)) if "cached_tokens" in ptd else None
+    cache_write = (
+        int(ptd.get("cache_write_tokens", 0)) if "cache_write_tokens" in ptd else None
+    )
+    return (cached, cache_write)
+
+
+def _provider_cost_from_usage_dict(usage_dict: dict[str, Any] | None) -> float | None:
+    """USD charge from usage dict when provider supplies usage billing metadata.
+
+    Polza.ai sends ``cost_rub`` (and ``cost`` as a same-value alias, both in
+    rubles).  When ``cost_rub`` is present the value must be converted ₽→$ via
+    ``POLZA_RUB_TO_USD_RATE``; only fall through to ``cost`` for providers
+    (e.g. OpenRouter) that send it in USD.
+    """
+    if not isinstance(usage_dict, dict):
+        return None
+    # Polza: cost_rub present → cost field is also in rubles, must convert.
+    if "cost_rub" in usage_dict:
+        try:
+            from agent_ng.openrouter_usage_accounting import _get_polza_rate
+            rub = float(usage_dict["cost_rub"] or 0.0)
+            return rub / _get_polza_rate()
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Polza cost_rub conversion failed: %s", exc
+            )
+    if "cost" not in usage_dict:
+        return None
+    raw = usage_dict.get("cost")
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _provider_cost_from_usage_obj(usage: Any) -> float | None:
+    """Best-effort provider cost from dict or object-shaped usage metadata."""
+    if isinstance(usage, dict):
+        return _provider_cost_from_usage_dict(usage)
+    dumped = _usage_to_dict(usage)
+    return _provider_cost_from_usage_dict(dumped) if isinstance(dumped, dict) else None
+
+
 @dataclass
 class TokenCount:
     """Immutable token count data structure"""
@@ -52,10 +182,32 @@ class TokenCount:
     total_tokens: int
     is_estimated: bool = False
     source: str = "unknown"
+    cost: float | None = None  # Cost in USD credits (None = unknown, 0.0 = free)
+    cached_tokens: int | None = None  # OpenRouter prompt_tokens_details.cached_tokens
+    cache_write_tokens: int | None = None  # OpenRouter prompt_tokens_details.cache_write_tokens
 
     @property
     def formatted(self) -> str:
-        """Format token count for display"""
+        """Format token count for display (includes cost for sidebar stats)"""
+        if self.is_estimated:
+            return f"~{self.total_tokens:,} total (estimated via {self.source})"
+        if self.cost is None:
+            cost_str = " | —"
+        elif self.cost == 0.0:
+            cost_str = " | $0.0000"  # Free model
+        else:
+            # Use helper to format with minimum necessary decimal places
+            from agent_ng.utils import format_cost
+            cost_str = f" | {format_cost(self.cost)}"
+        return (
+            f"{self.total_tokens:,} total "
+            f"({self.input_tokens:,} input + {self.output_tokens:,} output)"
+            f"{cost_str}"
+        )
+
+    @property
+    def formatted_no_cost(self) -> str:
+        """Format token count for display without cost (for chat flow)"""
         if self.is_estimated:
             return f"~{self.total_tokens:,} total (estimated via {self.source})"
         return (
@@ -203,7 +355,7 @@ class ApiTokenCounter(TokenCounter):
         self._last_api_tokens: TokenCount | None = None
 
     def set_api_tokens(
-        self, input_tokens: int, output_tokens: int, total_tokens: int
+        self, input_tokens: int, output_tokens: int, total_tokens: int, cost: float = 0.0
     ) -> None:
         """Set token count from API response"""
         self._last_api_tokens = TokenCount(
@@ -212,6 +364,7 @@ class ApiTokenCounter(TokenCounter):
             total_tokens,
             is_estimated=False,
             source="api",
+            cost=cost,
         )
 
     def count_tokens(
@@ -267,6 +420,7 @@ class ConversationTokenTracker:
         self._turn_input_tokens: int = 0
         self._turn_output_tokens: int = 0
         self._turn_total_tokens: int = 0
+        self._turn_cost: float | None = None  # Cost per turn in USD (None = unknown)
         # Per-QA-turn monotonic estimate (used only when API usage isn't available and
         # turn was interrupted/failed).
         self._turn_estimated_total_tokens: int = 0
@@ -274,6 +428,14 @@ class ConversationTokenTracker:
         self._last_turn_estimated_total_tokens: int = 0
         # Track if the turn was interrupted/failed (so we know to use estimates).
         self._turn_interrupted: bool = False
+        # Cost tracking: per-conversation and overall totals
+        self.conversation_cost: float = 0.0  # Total cost across all conversations
+        self.session_cost: float = 0.0  # Cost for current conversation/session
+        self._last_turn_cost: float | None = None  # Cost of last finalized turn (None = unknown)
+        # Model pricing for cost calculation (set via set_model_pricing)
+        self._prompt_price_per_1k: float | None = None  # USD per 1K prompt tokens (None = unknown)
+        self._completion_price_per_1k: float | None = None  # USD per 1K completion tokens (None = unknown)
+        self._current_model_name: str | None = None
 
     def count_prompt_tokens(self, messages: list[BaseMessage]) -> TokenCount:
         """Count tokens in user prompt context"""
@@ -285,7 +447,17 @@ class ConversationTokenTracker:
         self, response: Any, messages: list[BaseMessage]
     ) -> TokenCount:
         """Track LLM response tokens with API fallback"""
+        logger = logging.getLogger(__name__)
         logger.debug("track_llm_response response type: %s", type(response))
+        # Unwrap LangChain LLMResult so callbacks receive AIMessage-shaped payloads
+        if hasattr(response, "generations") and response.generations:
+            try:
+                gen0 = _first_chat_generation(response)
+                inner = getattr(gen0, "message", None) if gen0 is not None else None
+                if inner is not None:
+                    response = inner
+            except Exception as exc:
+                logger.debug("Could not unwrap LLMResult for token tracking: %s", exc)
         # Try to extract API tokens from response
         api_tokens = self._extract_api_tokens(response)
         logger.debug("Extracted API tokens: %s", api_tokens)
@@ -293,14 +465,32 @@ class ConversationTokenTracker:
         # Get token count (API or estimated)
         if api_tokens:
             # Use API tokens directly
+            (
+                input_tokens,
+                output_tokens,
+                total_tokens,
+                api_cost_reported,
+                cached_tokens,
+                cache_write_tokens,
+            ) = self._unpack_api_tokens(api_tokens)
+            calculated_cost = self._calculate_cost_from_tokens(input_tokens, output_tokens)
+            if api_cost_reported > 0:
+                cost: float | None = api_cost_reported
+            elif calculated_cost is not None:
+                cost = calculated_cost
+            else:
+                cost = 0.0
             token_count = TokenCount(
-                api_tokens[0],  # input_tokens
-                api_tokens[1],  # output_tokens
-                api_tokens[2],  # total_tokens
+                input_tokens,
+                output_tokens,
+                total_tokens,
                 is_estimated=False,  # Not estimated
                 source="api",
+                cost=cost,
+                cached_tokens=cached_tokens,
+                cache_write_tokens=cache_write_tokens,
             )
-            logger.debug("Using API tokens: %d", token_count)
+            logger.debug("Using API tokens: %s", token_count)
         else:
             # Fallback to tiktoken estimation - count only the current request
             logger.debug("No API tokens, using tiktoken fallback")
@@ -324,7 +514,7 @@ class ConversationTokenTracker:
                 source="tiktoken_estimation",
             )
 
-        logger.debug("Token count result: %d", token_count)
+        logger.debug("Token count result: %s", token_count)
         self._last_api_tokens = token_count
 
         # Update cumulative tracking
@@ -339,6 +529,7 @@ class ConversationTokenTracker:
         self._turn_input_tokens = 0
         self._turn_output_tokens = 0
         self._turn_total_tokens = 0
+        self._turn_cost = 0.0
         self._turn_estimated_total_tokens = 0
         self._turn_interrupted = False
 
@@ -360,12 +551,28 @@ class ConversationTokenTracker:
         if not api_tokens:
             return False
 
-        input_tokens, output_tokens, total_tokens = api_tokens
+        (
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            api_cost_reported,
+            cached_tokens,
+            cache_write_tokens,
+        ) = self._unpack_api_tokens(api_tokens)
         try:
             # API returns accumulated spending per turn - use replacement, not addition
             self._turn_input_tokens = int(input_tokens or 0)
             self._turn_output_tokens = int(output_tokens or 0)
             self._turn_total_tokens = int(total_tokens or 0)
+            calculated_cost = self._calculate_cost_from_tokens(
+                self._turn_input_tokens, self._turn_output_tokens
+            )
+            if api_cost_reported > 0:
+                self._turn_cost = api_cost_reported
+            elif calculated_cost is not None:
+                self._turn_cost = calculated_cost
+            else:
+                self._turn_cost = 0.0
         except Exception as exc:
             logging.getLogger(__name__).debug(
                 "Failed to accumulate LLM call usage: %s", exc
@@ -379,8 +586,26 @@ class ConversationTokenTracker:
             self._turn_total_tokens,
             is_estimated=False,
             source="api",
+            cost=self._turn_cost,
+            cached_tokens=cached_tokens,
+            cache_write_tokens=cache_write_tokens,
         )
         return True
+
+    @staticmethod
+    def _unpack_api_tokens(
+        api_tokens: tuple[int, int, int, float, int | None, int | None],
+    ) -> tuple[int, int, int, float, int | None, int | None]:
+        """Unpack `_extract_api_tokens()` output into named fields."""
+        input_tokens, output_tokens, total_tokens, cost, cached, cache_write = api_tokens
+        return (
+            int(input_tokens or 0),
+            int(output_tokens or 0),
+            int(total_tokens or 0),
+            float(cost or 0.0),
+            cached,
+            cache_write,
+        )
 
     def get_turn_estimated_total_tokens(self) -> int:
         """Get the current per-turn monotonic estimate."""
@@ -432,14 +657,25 @@ class ConversationTokenTracker:
         if self._turn_total_tokens > 0:
             # We have API counts: use them (successful completion or interrupted
             # with API).
+            # Preserve cached/cache-write details if present on last API tokens.
+            last_cached = (
+                self._last_api_tokens.cached_tokens if self._last_api_tokens else None
+            )
+            last_cache_write = (
+                self._last_api_tokens.cache_write_tokens if self._last_api_tokens else None
+            )
             token_count = TokenCount(
                 self._turn_input_tokens,
                 self._turn_output_tokens,
                 self._turn_total_tokens,
                 is_estimated=False,
                 source="api",
+                cost=self._turn_cost,
+                cached_tokens=last_cached,
+                cache_write_tokens=last_cache_write,
             )
             self._last_api_tokens = token_count
+            self._last_turn_cost = self._turn_cost
             # For normal completions with API values, don't contaminate with estimates
             self._last_turn_estimated_total_tokens = 0
             # Reset turn estimates since the turn is complete
@@ -450,6 +686,10 @@ class ConversationTokenTracker:
             self.session_tokens += token_count.total_tokens
             self.last_conversation_tokens = self.session_tokens
             self.message_count += 1
+            # Track costs (skip if None/unknown)
+            if self._turn_cost is not None:
+                self.conversation_cost += self._turn_cost
+                self.session_cost += self._turn_cost
 
             # Track API-only totals for accurate average calculation.
             self._api_only_tokens += token_count.total_tokens
@@ -498,6 +738,24 @@ class ConversationTokenTracker:
             return None
         return self.track_llm_response(response, messages)
 
+    def add_tool_cost(self, amount: float) -> None:
+        """Accumulate an out-of-band tool cost into conversation totals.
+
+        Called for tools that make their own API calls (e.g. image generation
+        via direct HTTP) and report cost in their result dict. The amount is
+        added to the same ``session_cost`` and ``conversation_cost``
+        accumulators used by the LLM, so all cost displays — the per-turn
+        stats bubble, the sidebar token budget widget, and the Stats tab —
+        reflect the true total without any extra wiring.
+
+        Args:
+            amount: Cost in USD. Silently ignored when non-positive.
+        """
+        if not amount or amount <= 0:
+            return
+        self.session_cost += amount
+        self.conversation_cost += amount
+
     def _extract_current_request(
         self, messages: list[BaseMessage]
     ) -> list[BaseMessage]:
@@ -524,36 +782,112 @@ class ConversationTokenTracker:
 
         return current_request
 
-    def _extract_api_tokens(self, response: Any) -> tuple[int, int, int] | None:
-        """Extract token usage from API response"""
+    def _extract_api_tokens(
+        self, response: Any
+    ) -> tuple[int, int, int, float, int | None, int | None] | None:
+        """Extract token usage (and optional provider-reported billing amount) from API response.
+
+        Tuple slot index 3 carries provider USD when present in usage metadata;
+        otherwise ``0.0`` so callers can combine with configured pricing.
+        """
         try:
             logger = logging.getLogger(__name__)
             logger.debug("Extracting API tokens from response type=%s", type(response))
+            fallback_result: tuple[int, int, int, float, int | None, int | None] | None = None
+
             if hasattr(response, "usage_metadata"):
                 usage = response.usage_metadata
-                logger.debug("Found usage_metadata type=%s", type(usage))
+                # LangChain 1.x appends a final empty AIMessageChunk with
+                # chunk_position="last" whose usage_metadata is None.  Skip it
+                # so the caller receives None (not a zero-count success) and can
+                # fall back to the accumulated chunk that does carry real usage.
+                if usage is not None:
+                    logger.debug("Found usage_metadata type=%s", type(usage))
 
-                # Handle both dict and object formats
-                if isinstance(usage, dict):
-                    input_tokens = usage.get("input_tokens", 0)
-                    output_tokens = usage.get("output_tokens", 0)
-                    total_tokens = usage.get(
-                        "total_tokens", input_tokens + output_tokens
-                    )
-                else:
-                    input_tokens = getattr(usage, "input_tokens", 0)
-                    output_tokens = getattr(usage, "output_tokens", 0)
-                    total_tokens = getattr(
-                        usage, "total_tokens", input_tokens + output_tokens
+                    # Handle both dict and object formats
+                    if isinstance(usage, dict):
+                        input_tokens = usage.get("input_tokens", 0)
+                        output_tokens = usage.get("output_tokens", 0)
+                        total_tokens = usage.get(
+                            "total_tokens", input_tokens + output_tokens
+                        )
+                        cached_tokens, cache_write_tokens = _extract_cache_details(usage)
+                    else:
+                        input_tokens = getattr(usage, "input_tokens", 0)
+                        output_tokens = getattr(usage, "output_tokens", 0)
+                        total_tokens = getattr(
+                            usage, "total_tokens", input_tokens + output_tokens
+                        )
+                        cached_tokens, cache_write_tokens = _extract_cache_details(
+                            _usage_to_dict(getattr(usage, "prompt_tokens_details", None))
+                        )
+
+                    provider_cost = (
+                        _provider_cost_from_usage_dict(usage)
+                        if isinstance(usage, dict)
+                        else _provider_cost_from_usage_obj(usage)
                     )
 
-                logger.debug(
-                    "Extracted tokens from usage_metadata: input=%s output=%s total=%s",
-                    input_tokens,
-                    output_tokens,
-                    total_tokens,
-                )
-                return (input_tokens, output_tokens, total_tokens)
+                    logger.debug(
+                        "Extracted tokens from usage_metadata: input=%s output=%s total=%s",
+                        input_tokens,
+                        output_tokens,
+                        total_tokens,
+                    )
+                    fallback_result = (
+                        int(input_tokens or 0),
+                        int(output_tokens or 0),
+                        int(total_tokens or 0),
+                        float(provider_cost if provider_cost is not None else 0.0),
+                        cached_tokens,
+                        cache_write_tokens,
+                    )
+
+            # // pragma: allowlist secret
+            # pragma: allowlist secret
+            # OpenRouter native / ChatOpenRouter: usage charge may appear top-level on metadata
+            rm_top = getattr(response, "response_metadata", None)
+            if isinstance(rm_top, dict) and fallback_result is not None:
+                try:
+                    rc = rm_top.get("cost")
+                    if rc is not None:
+                        rc_f = float(rc)
+                        if rc_f > float(fallback_result[3]):
+                            fallback_result = (
+                                fallback_result[0],
+                                fallback_result[1],
+                                fallback_result[2],
+                                rc_f,
+                                fallback_result[4],
+                                fallback_result[5],
+                            )
+                except (TypeError, ValueError) as exc:
+                    logger.debug("Skipped merging response_metadata.cost: %s", exc)
+
+            # Direct `usage` attribute (OpenAI/OpenRouter clients; streaming final chunk)
+            usage_attr = getattr(response, "usage", None)
+            usage_attr_dict = _usage_to_dict(usage_attr)
+            if isinstance(usage_attr_dict, dict):
+                # Normalize OpenAI/OpenRouter {prompt_tokens, completion_tokens, total_tokens}
+                input_tokens = usage_attr_dict.get("input_tokens", usage_attr_dict.get("prompt_tokens", 0))
+                output_tokens = usage_attr_dict.get("output_tokens", usage_attr_dict.get("completion_tokens", 0))
+                total_tokens = usage_attr_dict.get("total_tokens", None)
+                if total_tokens is None:
+                    try:
+                        total_tokens = int(input_tokens or 0) + int(output_tokens or 0)
+                    except Exception:
+                        total_tokens = 0
+                cached_tokens, cache_write_tokens = _extract_cache_details(usage_attr_dict)
+                provider_cost = _provider_cost_from_usage_dict(usage_attr_dict)
+                if int(total_tokens or 0) > 0:
+                    return (
+                        int(input_tokens or 0),
+                        int(output_tokens or 0),
+                        int(total_tokens or 0),
+                        float(provider_cost if provider_cost is not None else 0.0),
+                        cached_tokens,
+                        cache_write_tokens,
+                    )
 
             # Provider/model wrappers often attach usage to response_metadata or
             # additional_kwargs.
@@ -561,17 +895,24 @@ class ConversationTokenTracker:
             response_meta = getattr(response, "response_metadata", None)
             if isinstance(response_meta, dict):
                 candidate_dicts.append(response_meta)
+            else:
+                # Some providers attach response_metadata as a typed object
+                meta_dict = _usage_to_dict(response_meta)
+                if isinstance(meta_dict, dict):
+                    candidate_dicts.append(meta_dict)
             additional = getattr(response, "additional_kwargs", None)
             if isinstance(additional, dict):
                 candidate_dicts.append(additional)
 
             # Also consider direct `usage` / `token_usage` fields when they are dicts.
             usage_field = getattr(response, "usage", None)
-            if isinstance(usage_field, dict):
-                candidate_dicts.append({"usage": usage_field})
+            usage_field_dict = _usage_to_dict(usage_field)
+            if isinstance(usage_field_dict, dict):
+                candidate_dicts.append({"usage": usage_field_dict})
             token_usage_field = getattr(response, "token_usage", None)
-            if isinstance(token_usage_field, dict):
-                candidate_dicts.append({"usage": token_usage_field})
+            token_usage_field_dict = _usage_to_dict(token_usage_field)
+            if isinstance(token_usage_field_dict, dict):
+                candidate_dicts.append({"usage": token_usage_field_dict})
 
             for d in candidate_dicts:
                 usage = (
@@ -580,22 +921,23 @@ class ConversationTokenTracker:
                     or d.get("token_usage")
                     or d.get("usage_details")
                 )
-                if not isinstance(usage, dict):
+                usage_dict = _usage_to_dict(usage)
+                if not isinstance(usage_dict, dict):
                     continue
 
                 # Normalize common shapes:
                 # OpenAI/OpenRouter {prompt_tokens, completion_tokens, total_tokens} and
                 # LangChain usage_metadata {input_tokens, output_tokens, total_tokens}.
-                if "input_tokens" in usage:
-                    input_tokens = usage.get("input_tokens", 0)
+                if "input_tokens" in usage_dict:
+                    input_tokens = usage_dict.get("input_tokens", 0)
                 else:
-                    input_tokens = usage.get("prompt_tokens", 0)
+                    input_tokens = usage_dict.get("prompt_tokens", 0)
 
-                if "output_tokens" in usage:
-                    output_tokens = usage.get("output_tokens", 0)
+                if "output_tokens" in usage_dict:
+                    output_tokens = usage_dict.get("output_tokens", 0)
                 else:
-                    output_tokens = usage.get("completion_tokens", 0)
-                total_tokens = usage.get("total_tokens", None)
+                    output_tokens = usage_dict.get("completion_tokens", 0)
+                total_tokens = usage_dict.get("total_tokens", None)
                 if total_tokens is None:
                     try:
                         total_tokens = int(input_tokens or 0) + int(output_tokens or 0)
@@ -605,9 +947,12 @@ class ConversationTokenTracker:
                         )
                         total_tokens = 0
 
+                cached_tokens, cache_write_tokens = _extract_cache_details(usage_dict)
+                provider_cost = _provider_cost_from_usage_dict(usage_dict)
+
                 if int(total_tokens or 0) > 0:
                     logger.debug(
-                        "Extracted tokens from metadata dict: input=%s output=%s total=%s",  # noqa: E501
+                        "Extracted tokens from metadata dict: input=%s output=%s total=%s",
                         input_tokens,
                         output_tokens,
                         total_tokens,
@@ -616,11 +961,113 @@ class ConversationTokenTracker:
                         int(input_tokens or 0),
                         int(output_tokens or 0),
                         int(total_tokens or 0),
+                        float(provider_cost if provider_cost is not None else 0.0),
+                        cached_tokens,
+                        cache_write_tokens,
                     )
+
+            return fallback_result
 
         except Exception as e:
             logging.getLogger(__name__).debug("Error extracting API tokens: %s", e)
         return None
+
+    def set_model_pricing(
+        self, model_name: str, prompt_price_per_1k: float | None = None, completion_price_per_1k: float | None = None
+    ) -> None:
+        """Set pricing for the current model to enable cost calculation.
+
+        Args:
+            model_name: Model identifier (e.g., "deepseek/deepseek-v3.1-terminus")
+            prompt_price_per_1k: Price per 1K prompt tokens in USD (None = unknown, 0.0 = free)
+            completion_price_per_1k: Price per 1K completion tokens in USD (None = unknown, 0.0 = free)
+        """
+        self._current_model_name = model_name
+        # Convert None/empty to None, otherwise convert to float
+        self._prompt_price_per_1k = None if prompt_price_per_1k is None else float(prompt_price_per_1k)
+        self._completion_price_per_1k = None if completion_price_per_1k is None else float(completion_price_per_1k)
+        logger = logging.getLogger(__name__)
+        if self._prompt_price_per_1k is None or self._completion_price_per_1k is None:
+            logger.debug(
+                "Set pricing for %s: prompt=%s/1K, completion=%s/1K (unknown pricing)",
+                model_name,
+                "None" if self._prompt_price_per_1k is None else f"${self._prompt_price_per_1k:.6f}",
+                "None" if self._completion_price_per_1k is None else f"${self._completion_price_per_1k:.6f}",
+            )
+        else:
+            logger.debug(
+                "Set pricing for %s: prompt=$%.6f/1K, completion=$%.6f/1K",
+                model_name,
+                self._prompt_price_per_1k,
+                self._completion_price_per_1k,
+            )
+
+    def _calculate_cost_from_tokens(self, input_tokens: int, output_tokens: int) -> float | None:
+        """Calculate cost from token counts using configured pricing.
+
+        Args:
+            input_tokens: Number of input/prompt tokens
+            output_tokens: Number of output/completion tokens
+
+        Returns:
+            Cost in USD, or None if pricing is unknown
+        """
+        # If pricing is unknown (None), return None
+        if self._prompt_price_per_1k is None or self._completion_price_per_1k is None:
+            return None
+
+        # Free models always return 0.0 (check by model name or explicit 0.0 pricing)
+        if self._is_free_model_name(self._current_model_name or ""):
+            return 0.0
+
+        # If pricing is explicitly 0.0 (free model), return 0.0
+        if self._prompt_price_per_1k == 0.0 and self._completion_price_per_1k == 0.0:
+            return 0.0
+
+        prompt_cost = (input_tokens / 1000.0) * self._prompt_price_per_1k
+        completion_cost = (output_tokens / 1000.0) * self._completion_price_per_1k
+        return prompt_cost + completion_cost
+
+    def _is_free_model_name(self, model_name: str) -> bool:
+        """Check if model name indicates a free-tier model.
+
+        Args:
+            model_name: Model identifier (e.g., "deepseek/deepseek-chat-v3.1:free")
+
+        Returns:
+            True if model has ':free' suffix (OpenRouter free-tier convention)
+        """
+        return ":free" in (model_name or "").lower()
+
+    def load_pricing_from_llm_config(self, model_name: str, model_config: dict[str, Any] | None = None) -> None:
+        """Load pricing from model config dictionary.
+
+        Args:
+            model_name: Model identifier
+            model_config: Model configuration dict (from LLMConfig.models entry)
+        """
+        if not model_config:
+            logger = logging.getLogger(__name__)
+            logger.debug("No model config provided for %s, pricing will be unknown (None)", model_name)
+            self.set_model_pricing(model_name, None, None)
+            return
+
+        # Free models always have 0.0 pricing regardless of JSON values
+        if self._is_free_model_name(model_name):
+            logger = logging.getLogger(__name__)
+            logger.debug("Free model detected (%s), setting pricing to 0.0", model_name)
+            self.set_model_pricing(model_name, 0.0, 0.0)
+            return
+
+        # Get pricing from config, defaulting to None if not present
+        prompt_price = model_config.get("prompt_price_per_1k")
+        completion_price = model_config.get("completion_price_per_1k")
+
+        # Convert empty/None to None, otherwise convert to float
+        prompt_price = None if prompt_price is None else float(prompt_price)
+        completion_price = None if completion_price is None else float(completion_price)
+
+        self.set_model_pricing(model_name, prompt_price, completion_price)
 
     def _update_cumulative_tokens(self, token_count: TokenCount) -> None:
         """Update cumulative token tracking.
@@ -636,6 +1083,11 @@ class ConversationTokenTracker:
             self.session_tokens += token_count.total_tokens
             self.last_conversation_tokens = self.session_tokens
             self.message_count += 1
+            # Track costs (skip if None/unknown)
+            if token_count.cost is not None:
+                self.conversation_cost += token_count.cost
+                self.session_cost += token_count.cost
+            self._last_turn_cost = token_count.cost
 
             # Track API-only totals for accurate average calculation.
             self._api_only_tokens += token_count.total_tokens
@@ -654,14 +1106,33 @@ class ConversationTokenTracker:
           estimates only for interrupted turns without API counts.
         - avg_tokens_per_message (Average per
           message): Per-conversation average (session_tokens / message_count).
+        - Cost tracking: per-turn, per-conversation, and overall totals.
         """
         # Calculate average per message for current conversation only
         # Use session_tokens (per-conversation) divided by message_count (per-conversation)
+        # Keep legacy alias in sync (tests and occasional direct mutation rely on it).
+        self.last_conversation_tokens = self.session_tokens
         avg_tokens = (
             (self.last_conversation_tokens / self.message_count)
             if self.message_count > 0
             else 0
         )
+
+        # Get last turn token counts if available
+        last_input_tokens = 0
+        last_output_tokens = 0
+        last_cached_tokens: int | None = None
+        last_cache_write_tokens: int | None = None
+        if self._last_api_tokens:
+            last_input_tokens = self._last_api_tokens.input_tokens
+            last_output_tokens = self._last_api_tokens.output_tokens
+            last_cached_tokens = self._last_api_tokens.cached_tokens
+            last_cache_write_tokens = self._last_api_tokens.cache_write_tokens
+
+        # Get cumulative input/output token counts
+        # For now, we track per-turn but need to accumulate for totals
+        # This is a simplified version - in practice, we'd need to track these separately
+        # For now, we'll use the last turn's breakdown as an indicator
 
         # conversation_tokens and session_tokens are already API-only (only updated
         # with API counts or interrupted-turn estimates in finalize_turn_usage).
@@ -669,13 +1140,26 @@ class ConversationTokenTracker:
             "conversation_tokens": self.conversation_tokens,
             "session_tokens": self.last_conversation_tokens,
             "message_count": self.message_count,
-            "avg_tokens_per_message": int(avg_tokens)
+            "avg_tokens_per_message": int(avg_tokens),
+            # Cost tracking
+            "turn_cost": self._last_turn_cost,
+            "conversation_cost": self.session_cost,
+            "total_cost": self.conversation_cost,
+            # Token breakdowns
+            "last_input_tokens": last_input_tokens,
+            "last_output_tokens": last_output_tokens,
+            "last_cached_tokens": last_cached_tokens,
+            "last_cache_write_tokens": last_cache_write_tokens,
+            # Per-turn breakdown (for current/last turn)
+            "turn_input_tokens": self._turn_input_tokens if not self._turn_active else 0,
+            "turn_output_tokens": self._turn_output_tokens if not self._turn_active else 0,
         }
 
     def reset_session(self) -> None:
         """Reset session tokens while keeping conversation total"""
         self.session_tokens = 0
         self.last_conversation_tokens = 0
+        self.session_cost = 0.0
         # Reset API-only tracking for session (but keep conversation total).
         # Note: We keep _api_only_tokens and _api_only_message_count for
         # accurate average across all conversations.
@@ -684,6 +1168,7 @@ class ConversationTokenTracker:
         """Start tracking a new conversation"""
         self.session_tokens = 0
         self.last_conversation_tokens = 0
+        self.session_cost = 0.0
         # Reset API-only tracking for new conversation (but keep conversation total).
         # Note: We keep _api_only_tokens and _api_only_message_count for
         # accurate average across all conversations.
@@ -694,10 +1179,12 @@ class ConversationTokenTracker:
         self._turn_total_tokens = 0
         self._turn_input_tokens = 0
         self._turn_output_tokens = 0
+        self._turn_cost = None
         self._turn_active = False
         self._turn_interrupted = False
         self._last_api_tokens = None
         self._last_turn_estimated_total_tokens = 0
+        self._last_turn_cost = None
         self._last_turn_used_estimate = False
         # Reset per-conversation message count for average calculation
         # (but keep cumulative _api_only_message_count for cross-conversation average)
@@ -743,6 +1230,12 @@ class ConversationTokenTracker:
         # - otherwise, a monotonic estimate (snapshot-based) suitable for interruption
         #   fallback
         current_tokens = self.get_message_display_total_tokens()
+        if (
+            current_tokens == 0
+            and not self._turn_active
+            and self._last_api_tokens is not None
+        ):
+            current_tokens = int(self._last_api_tokens.total_tokens or 0)
 
         percentage = (current_tokens / context_window) * 100.0
         remaining_tokens = max(0, context_window - current_tokens)
@@ -819,8 +1312,8 @@ class UsageMetadataCallbackHandler(BaseCallbackHandler):
         _ = kwargs
         try:
             if hasattr(response, "generations") and response.generations:
-                generation = response.generations[0][0]
-                if hasattr(generation, "message"):
+                generation = _first_chat_generation(response)
+                if generation is not None and hasattr(generation, "message"):
                     self.token_tracker.track_llm_response(
                         response, [generation.message]
                     )
@@ -828,6 +1321,21 @@ class UsageMetadataCallbackHandler(BaseCallbackHandler):
             logging.getLogger(__name__).debug(
                 "Failed to capture usage metadata: %s", exc
             )
+
+
+class SessionUsageMetadataCallbackHandler(BaseCallbackHandler):
+    """Routes LLM end events to a session-bound ``ConversationTokenTracker``.
+
+    Use with ``RunnableConfig(callbacks=[...])`` so streaming inherits the same
+    tracker as the agent without mutating global LLM singletons.
+    """
+
+    def __init__(self, token_tracker: ConversationTokenTracker) -> None:
+        super().__init__()
+        self._handler = UsageMetadataCallbackHandler(token_tracker)
+
+    def on_llm_end(self, response: Any, **kwargs: Any) -> None:  # type: ignore[override]
+        self._handler.on_llm_end(response, **kwargs)
 
 
 # Session-specific token tracker instances
@@ -858,9 +1366,15 @@ def convert_chat_history_to_messages(
     messages = []
 
     for msg in history:
-        role = msg.get("role", "user")
+        # Skip Gradio file-rendering bubbles — their content is a dict
+        # {"path": …, "alt_text": …}, not LLM text. Passing a dict to
+        # HumanMessage would be interpreted as a vision message and fail
+        # on non-vision models.
         content = msg.get("content", "")
+        if not isinstance(content, str):
+            continue
 
+        role = msg.get("role", "user")
         if role == "user":
             messages.append(HumanMessage(content=content))
         elif role == "assistant":

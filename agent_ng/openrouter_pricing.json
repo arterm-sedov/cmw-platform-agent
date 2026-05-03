@@ -1,0 +1,206 @@
+{
+  "anthropic/claude-sonnet-4.5": {
+    "prompt_price_per_1k": 0.0030000000000000005,
+    "completion_price_per_1k": 0.015000000000000001
+  },
+  "anthropic/claude-sonnet-4.6": {
+    "prompt_price_per_1k": 0.003,
+    "completion_price_per_1k": 0.015000000000000001
+  },
+  "deepseek/deepseek-chat-v3.1:free": {
+    "prompt_price_per_1k": 0.00040285714285714285,
+    "completion_price_per_1k": 0.0012542857142857143
+  },
+  "deepseek/deepseek-chat-v3.1": {
+    "prompt_price_per_1k": 0.00040285714285714285,
+    "completion_price_per_1k": 0.0012542857142857143
+  },
+  "deepseek/deepseek-r1-0528": {
+    "prompt_price_per_1k": 0.0005833333333333334,
+    "completion_price_per_1k": 0.002276666666666667
+  },
+  "deepseek/deepseek-v3.1-terminus": {
+    "prompt_price_per_1k": 0.00028000000000000003,
+    "completion_price_per_1k": 0.0009833333333333332
+  },
+  "deepseek/deepseek-v3.1-terminus:exacto": {
+    "prompt_price_per_1k": 0.00028000000000000003,
+    "completion_price_per_1k": 0.0009833333333333332
+  },
+  "deepseek/deepseek-v3.2-speciale": {
+    "prompt_price_per_1k": 0.00039999999999999996,
+    "completion_price_per_1k": 0.0012
+  },
+  "google/gemma-4-31b-it:free": {
+    "prompt_price_per_1k": 0.00014000000000000001,
+    "completion_price_per_1k": 0.00039999999999999996
+  },
+  "google/gemma-4-31b-it": {
+    "prompt_price_per_1k": 0.00014000000000000001,
+    "completion_price_per_1k": 0.00039999999999999996
+  },
+  "minimax/minimax-m2.1": {
+    "prompt_price_per_1k": 0.0003,
+    "completion_price_per_1k": 0.0015999999999999999
+  },
+  "minimax/minimax-m2.5:free": {
+    "prompt_price_per_1k": 0.0002875,
+    "completion_price_per_1k": 0.001199
+  },
+  "minimax/minimax-m2.5": {
+    "prompt_price_per_1k": 0.0002875,
+    "completion_price_per_1k": 0.001199
+  },
+  "mistralai/codestral-2508": {
+    "prompt_price_per_1k": 0.0003,
+    "completion_price_per_1k": 0.0009
+  },
+  "moonshotai/kimi-k2-0905:exacto": {
+    "prompt_price_per_1k": 0.0007333333333333332,
+    "completion_price_per_1k": 0.0026666666666666666
+  },
+  "moonshotai/kimi-k2-0905": {
+    "prompt_price_per_1k": 0.0007333333333333332,
+    "completion_price_per_1k": 0.0026666666666666666
+  },
+  "moonshotai/kimi-k2-thinking": {
+    "prompt_price_per_1k": 0.0006,
+    "completion_price_per_1k": 0.0025
+  },
+  "moonshotai/kimi-k2.5": {
+    "prompt_price_per_1k": 0.0005466666666666667,
+    "completion_price_per_1k": 0.0028
+  },
+  "nvidia/nemotron-3-super-120b-a12b:free": {
+    "prompt_price_per_1k": 0.00016333333333333334,
+    "completion_price_per_1k": 0.0006166666666666667
+  },
+  "nvidia/nemotron-3-super-120b-a12b": {
+    "prompt_price_per_1k": 0.00016333333333333334,
+    "completion_price_per_1k": 0.0006166666666666667
+  },
+  "nvidia/nemotron-nano-9b-v2:free": {
+    "prompt_price_per_1k": 4e-05,
+    "completion_price_per_1k": 0.00016
+  },
+  "nvidia/nemotron-nano-9b-v2": {
+    "prompt_price_per_1k": 4e-05,
+    "completion_price_per_1k": 0.00016
+  },
+  "openai/gpt-5-mini": {
+    "prompt_price_per_1k": 0.00025,
+    "completion_price_per_1k": 0.002
+  },
+  "openai/gpt-oss-120b:free": {
+    "prompt_price_per_1k": 0.000129,
+    "completion_price_per_1k": 0.000544
+  },
+  "openai/gpt-oss-120b": {
+    "prompt_price_per_1k": 0.000129,
+    "completion_price_per_1k": 0.000544
+  },
+  "openai/gpt-oss-120b:exacto": {
+    "prompt_price_per_1k": 0.000129,
+    "completion_price_per_1k": 0.000544
+  },
+  "qwen/qwen-plus-2025-07-28": {
+    "prompt_price_per_1k": 0.00026,
+    "completion_price_per_1k": 0.0007800000000000001
+  },
+  "qwen/qwen3.6-plus": {
+    "prompt_price_per_1k": 0.000325,
+    "completion_price_per_1k": 0.00195
+  },
+  "qwen/qwen3-coder:free": {
+    "prompt_price_per_1k": 0.0005610000000000001,
+    "completion_price_per_1k": 0.0016799999999999999
+  },
+  "qwen/qwen3-coder": {
+    "prompt_price_per_1k": 0.0005610000000000001,
+    "completion_price_per_1k": 0.0016799999999999999
+  },
+  "qwen/qwen3-coder-flash": {
+    "prompt_price_per_1k": 0.00019500000000000002,
+    "completion_price_per_1k": 0.000975
+  },
+  "qwen/qwen3-coder-plus": {
+    "prompt_price_per_1k": 0.00065,
+    "completion_price_per_1k": 0.00325
+  },
+  "qwen/qwen3-coder:exacto": {
+    "prompt_price_per_1k": 0.0005610000000000001,
+    "completion_price_per_1k": 0.0016799999999999999
+  },
+  "qwen/qwen3-max": {
+    "prompt_price_per_1k": 0.0007800000000000001,
+    "completion_price_per_1k": 0.0039
+  },
+  "x-ai/grok-4-fast": {
+    "prompt_price_per_1k": 0.00019999999999999998,
+    "completion_price_per_1k": 0.0005
+  },
+  "x-ai/grok-4-fast:free": {
+    "prompt_price_per_1k": 0.00019999999999999998,
+    "completion_price_per_1k": 0.0005
+  },
+  "x-ai/grok-4.20": {
+    "prompt_price_per_1k": 0.002,
+    "completion_price_per_1k": 0.006
+  },
+  "x-ai/grok-4.20-multi-agent": {
+    "prompt_price_per_1k": 0.002,
+    "completion_price_per_1k": 0.006
+  },
+  "x-ai/grok-4.1-fast": {
+    "prompt_price_per_1k": 0.00019999999999999998,
+    "completion_price_per_1k": 0.0005
+  },
+  "x-ai/grok-code-fast-1": {
+    "prompt_price_per_1k": 0.00019999999999999998,
+    "completion_price_per_1k": 0.0015
+  },
+  "z-ai/glm-4.5-air:free": {
+    "prompt_price_per_1k": 0.00015666666666666666,
+    "completion_price_per_1k": 0.0009366666666666667
+  },
+  "z-ai/glm-4.5-air": {
+    "prompt_price_per_1k": 0.00015666666666666666,
+    "completion_price_per_1k": 0.0009366666666666667
+  },
+  "z-ai/glm-4.6:exacto": {
+    "prompt_price_per_1k": 0.000545,
+    "completion_price_per_1k": 0.002125
+  },
+  "z-ai/glm-4.6": {
+    "prompt_price_per_1k": 0.000545,
+    "completion_price_per_1k": 0.002125
+  },
+  "z-ai/glm-4.7": {
+    "prompt_price_per_1k": 0.00053,
+    "completion_price_per_1k": 0.0021685714285714286
+  },
+  "minimax/minimax-m2.7": {
+    "prompt_price_per_1k": 0.00039999999999999996,
+    "completion_price_per_1k": 0.0015999999999999999
+  },
+  "z-ai/glm-5.1": {
+    "prompt_price_per_1k": 0.001378888888888889,
+    "completion_price_per_1k": 0.0044
+  },
+  "google/gemini-2.5-flash": {
+    "prompt": "0.00000025",
+    "completion": "0.0000015"
+  },
+  "google/gemini-3.1-flash-lite-preview": {
+    "prompt": "0.00000025",
+    "completion": "0.0000015"
+  },
+  "google/gemini-3.1-pro-preview": {
+    "prompt": "0.000002",
+    "completion": "0.000012"
+  },
+  "google/gemini-3-flash-preview": {
+    "prompt": "0.0000005",
+    "completion": "0.000003"
+  }
+}

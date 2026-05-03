@@ -127,6 +127,9 @@ except ImportError as e1:
         )
 
 
+logger = logging.getLogger(__name__)
+
+
 @dataclass
 class ChatMessage:
     """Structured chat message for Gradio compatibility"""
@@ -144,7 +147,14 @@ class CmwAgent:
     maintaining all the modular components from NextGenAgent.
     """
 
-    def __init__(self, system_prompt: str = None, session_id: str = "default", language: str = "en"):
+    def __init__(
+        self,
+        system_prompt: str = None,
+        session_id: str = "default",
+        language: str = "en",
+        *,
+        memory_manager=None,
+    ):
         """
         Initialize the LangChain agent with full modular architecture.
 
@@ -152,16 +162,18 @@ class CmwAgent:
             system_prompt: System prompt for the agent
             session_id: Unique session ID for conversation isolation
             language: Language for the agent (default: "en")
+            memory_manager: Optional memory manager (tests); defaults to global singleton
         """
         # Store session ID for conversation isolation
         self.session_id = session_id
         # Store language for internationalization
         self.language = language
+        self._logger = logging.getLogger(__name__)
 
         # Initialize all modular components
         self.llm_manager = get_llm_manager()
 
-        self.memory_manager = get_memory_manager()
+        self.memory_manager = memory_manager or get_memory_manager()
         self.error_handler = get_error_handler()
         self.message_processor = get_message_processor()
         self.response_processor = get_response_processor()
@@ -236,6 +248,14 @@ class CmwAgent:
                 raise Exception(
                     "No LLM provider available. Check AGENT_PROVIDER environment variable."
                 )
+
+            # Load pricing for token tracker from model config
+            if hasattr(self, "token_tracker") and self.token_tracker:
+                model_config = getattr(self.llm_instance, "config", None)
+                if model_config:
+                    self.token_tracker.load_pricing_from_llm_config(
+                        self.llm_instance.model_name, model_config
+                    )
 
             # Initialize tools using LLM manager's cached tools
             self.tools = self.llm_manager.get_tools()
@@ -358,14 +378,20 @@ class CmwAgent:
         Returns:
             str: Full path to the file, or None if not found
         """
-        # Check if we have this file in our session-isolated registry
         registry_key = (self.session_id, original_filename)
+        logger.info(
+            ">>> get_file_path lookup: filename='%s', key=%s, registry size=%d",
+            original_filename, registry_key, len(self.file_registry),
+        )
 
         if registry_key in self.file_registry:
             full_path = self.file_registry[registry_key]
+            logger.info(">>> get_file_path FOUND in registry: '%s' -> '%s'", original_filename, full_path)
             if os.path.exists(full_path):
                 return full_path
+            logger.warning(">>> get_file_path registry entry exists but file MISSING: %s", full_path)
 
+        logger.info(">>> get_file_path returning None for: %s", original_filename)
         return None
 
     def register_file(self, original_filename: str, file_path: str) -> None:
@@ -396,10 +422,14 @@ class CmwAgent:
             # Register the unique file path in session-isolated registry
             registry_key = (self.session_id, original_filename)
             self.file_registry[registry_key] = unique_file_path
-            print(f"📁 Registered file: {original_filename} -> {unique_file_path}")
+            logger.info(
+                "Registered file: %s -> %s", original_filename, unique_file_path,
+            )
 
         except Exception as e:
-            print(f"⚠️ Failed to move file {original_filename} to Gradio cache: {e}")
+            logger.warning(
+                "Failed to move file %s to cache: %s", original_filename, e,
+            )
             # Fallback: register original path
             registry_key = (self.session_id, original_filename)
             self.file_registry[registry_key] = file_path
@@ -466,8 +496,34 @@ class CmwAgent:
             "conversation_stats": self._get_conversation_stats(),
         }
 
-    def _get_conversation_stats(self, debug: bool = False) -> Dict[str, int]:
-        """Get conversation statistics from memory manager
+    def _get_token_stats(self) -> Dict[str, Any]:
+        """Get token and cost statistics from token tracker (helper method).
+
+        Returns:
+            Dictionary with token and cost statistics, or empty dict if unavailable.
+        """
+        token_stats = {}
+        if hasattr(self, "token_tracker") and self.token_tracker:
+            try:
+                cumulative_stats = self.token_tracker.get_cumulative_stats()
+                token_stats = {
+                    "total_tokens": cumulative_stats.get("conversation_tokens", 0),
+                    "conversation_tokens": cumulative_stats.get("session_tokens", 0),
+                    "avg_tokens_per_message": cumulative_stats.get("avg_tokens_per_message", 0),
+                    "turn_cost": cumulative_stats.get("turn_cost"),  # None if unknown
+                    "conversation_cost": cumulative_stats.get("conversation_cost", 0.0),
+                    "total_cost": cumulative_stats.get("total_cost", 0.0),
+                    "last_input_tokens": cumulative_stats.get("last_input_tokens", 0),
+                    "last_output_tokens": cumulative_stats.get("last_output_tokens", 0),
+                    "turn_input_tokens": cumulative_stats.get("turn_input_tokens", 0),
+                    "turn_output_tokens": cumulative_stats.get("turn_output_tokens", 0),
+                }
+            except Exception as e:
+                logging.warning(f"Failed to get token stats from tracker: {e}")
+        return token_stats
+
+    def _get_conversation_stats(self, debug: bool = False) -> Dict[str, Any]:
+        """Get conversation statistics from memory manager and token tracker
 
         Args:
             debug: If True, show detailed debug messages. If False, only log on changes.
@@ -597,6 +653,9 @@ class CmwAgent:
                     self.session_id
                 )
 
+                # Get token and cost stats from token tracker
+                token_stats = self._get_token_stats()
+
                 return {
                     "message_count": total_messages,
                     "user_messages": user_messages,
@@ -605,20 +664,37 @@ class CmwAgent:
                     "total_tool_calls": tool_call_count,
                     "compression_count": compression_count,
                     "compression_tokens_saved": total_tokens_saved,
+                    **token_stats,  # Merge token stats
                 }
 
             if debug:
                 self._logger.debug("No memory manager available")
-            return {"message_count": 0, "user_messages": 0, "assistant_messages": 0, "system_prompt_count": 0, "total_tool_calls": 0}
+            # Still return token stats even if no memory manager
+            token_stats = self._get_token_stats()
+            return {
+                "message_count": 0,
+                "user_messages": 0,
+                "assistant_messages": 0,
+                "system_prompt_count": 0,
+                "total_tool_calls": 0,
+                **token_stats,
+            }
         except Exception as e:
             self._logger.exception("Error getting conversation stats: %s", e)
+            # Still try to get token stats even on error
+            token_stats = self._get_token_stats()
             return {
                 "message_count": 0,
                 "user_messages": 0,
                 "assistant_messages": 0,
                 "compression_count": 0,
                 "compression_tokens_saved": 0,
+                **token_stats,
             }
+
+    def get_conversation_stats(self, debug: bool = False) -> Dict[str, Any]:
+        """Public alias for stats collection (UI / tests)."""
+        return self._get_conversation_stats(debug=debug)
 
     def get_token_counts(self, messages: List[Any]) -> Dict[str, Any]:
         """Get token counts for display"""

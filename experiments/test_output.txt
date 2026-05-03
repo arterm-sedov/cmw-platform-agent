@@ -1,0 +1,320 @@
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                   Vision-Language Model Testing Script                      ║
+║                                                                              ║
+║  This script tests VL capabilities of models via OpenRouter API             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+    
+
+🚀 Starting tests...
+Total test cases: 7
+
+
+[Test 1/7]
+
+================================================================================
+Testing: qwen/qwen3.6-plus
+File: experiments/test_files/test_image.jpg
+Type: image
+Prompt: Describe this image in detail.
+================================================================================
+Encoding file to base64...
+Sending request to OpenRouter...
+
+DEBUG - Full response: {
+  "id": "gen-1776932399-InZVa7cgaMqLreLIEzNj",
+  "object": "chat.completion",
+  "created": 1776932399,
+  "model": "qwen/qwen3.6-plus-04-02",
+  "provider": "Alibaba",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": " content, here is a detailed description of the image:\n\n**Overall Composition:**\nThe image appears to be a simple, digital graphic set against a solid, light sky-blue background. It resembles a basic drawing or a test pattern.\n\n**Key Elements:**\n\n1.  **Central Shape (The Sun):**\n    *   Located in the upper-middle portion of the canvas is a large, horizontal oval or ellipse.\n    *   The shape is filled with a bright, solid yellow color.\n    *   It is outlined with a thin orange border.\n    *   In the exact center of this yellow shape, there is small, black sans-serif text that reads \
+
+✅ SUCCESS (latency: 9433ms)
+
+Response:
+ content, here is a detailed description of the image:
+
+**Overall Composition:**
+The image appears to be a simple, digital graphic set against a solid, light sky-blue background. It resembles a basic drawing or a test pattern.
+
+**Key Elements:**
+
+1.  **Central Shape (The Sun):**
+    *   Located in the upper-middle portion of the canvas is a large, horizontal oval or ellipse.
+    *   The shape is filled with a bright, solid yellow color.
+    *   It is outlined with a thin orange border.
+    *   I...
+
+
+[Test 2/7]
+
+================================================================================
+Testing: qwen/qwen3.6-plus
+File: experiments/test_files/test_document.jpg
+Type: image
+Prompt: Extract all text from this image (OCR). Return only the extracted text.
+================================================================================
+Encoding file to base64...
+Sending request to OpenRouter...
+
+DEBUG - Full response: {
+  "id": "gen-1776932410-xOQ5BNwcdWRw6g56bYNP",
+  "object": "chat.completion",
+  "created": 1776932410,
+  "model": "qwen/qwen3.6-plus-04-02",
+  "provider": "Alibaba",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "Sample Document\nThis is a test image\nfor OCR testing\n\nLine 1: Hello World\nLine 2: Testing 123\nLine 3: Vision Models",
+        "refusal": null,
+        "reasoning": "The user wants the text from the image transcribed exactly.\n\n1.  **Analyze the image:**\n    *   The image contains a simple block of text inside a black border.\n    *   The text is:\n        \"Sample Document\n        This is a test image\n        for OCR testing\n\n        Line 1: Hello World\n        Line 2: Testing 123\n        Line 3: Vision Models\"\n\n2.  **Transcribe the text:**\n    Sample Document\n    This is a te
+
+✅ SUCCESS (latency: 3406ms)
+
+Response:
+Sample Document
+This is a test image
+for OCR testing
+
+Line 1: Hello World
+Line 2: Testing 123
+Line 3: Vision Models...
+
+
+[Test 3/7]
+
+================================================================================
+Testing: qwen/qwen3.6-plus
+File: experiments/test_files/test_chart.jpg
+Type: image
+Prompt: Analyze this chart and extract the data in a structured format.
+================================================================================
+Encoding file to base64...
+Sending request to OpenRouter...
+
+DEBUG - Full response: {
+  "id": "gen-1776932415-Fn3pTiRdLQHIUbSQg8aP",
+  "object": "chat.completion",
+  "created": 1776932415,
+  "model": "qwen/qwen3.6-plus-04-02",
+  "provider": "Alibaba",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": " analysis of the chart, here is the extracted data in a structured format.\n\n**Note:** The chart lacks specific axis labels, a legend, and numerical values. Therefore, the data below represents relative estimates based on bar height and color.\n\n### Chart Overview\n*   **Title:** SalesChart\n*   **Chart Type:** Vertical Bar Chart\n*   **Background Color:** Light Blue\n\n### Data Extraction (Estimated Relative Values)\n\n| Bar Position | Color | Relative Height | Estimated Rank |\n| :--- | :--- | :--- | :--- |\n| **Left** | Red | ~100% (Tallest) | 1 (Highest) |\n| **Center** | Green | ~75% (Sho
+
+✅ SUCCESS (latency: 15466ms)
+
+Response:
+ analysis of the chart, here is the extracted data in a structured format.
+
+**Note:** The chart lacks specific axis labels, a legend, and numerical values. Therefore, the data below represents relative estimates based on bar height and color.
+
+### Chart Overview
+*   **Title:** SalesChart
+*   **Chart Type:** Vertical Bar Chart
+*   **Background Color:** Light Blue
+
+### Data Extraction (Estimated Relative Values)
+
+| Bar Position | Color | Relative Height | Estimated Rank |
+| :--- | :--- | :--- | :-...
+
+
+[Test 4/7]
+
+================================================================================
+Testing: google/gemini-2.5-flash
+File: experiments/test_files/test_image.jpg
+Type: image
+Prompt: Describe this image in detail.
+================================================================================
+Encoding file to base64...
+Sending request to OpenRouter...
+
+DEBUG - Full response: {
+  "id": "gen-1776932433-D7LLP3TzZRzGauqyA3x2",
+  "object": "chat.completion",
+  "created": 1776932433,
+  "model": "google/gemini-2.5-flash",
+  "provider": "Google",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "message": {
+        "role": "assistant",
+        "content": "This image displays a simple, digitally created graphic featuring basic shapes on a solid blue background.\n\nThe most prominent element is a large, vibrant yellow circle, centrally located in the upper half of the image. This circle has a thin orange outline, creating a defined edge against the blue background. Inside the yellow circle, slightly off-center towards the right, the words \"Test Image\" are written in small, black sans-serif font.\n\nBelow the yellow circle, and positioned towards the bottom of the image, is a rectangular bar. This bar is dark green in color and extends horizontally
+
+✅ SUCCESS (latency: 2883ms)
+
+Response:
+This image displays a simple, digitally created graphic featuring basic shapes on a solid blue background.
+
+The most prominent element is a large, vibrant yellow circle, centrally located in the upper half of the image. This circle has a thin orange outline, creating a defined edge against the blue background. Inside the yellow circle, slightly off-center towards the right, the words "Test Image" are written in small, black sans-serif font.
+
+Below the yellow circle, and positioned towards the bo...
+
+
+[Test 5/7]
+
+================================================================================
+Testing: google/gemini-2.5-flash
+File: experiments/test_files/test_document.jpg
+Type: image
+Prompt: Extract all text from this image (OCR). Return only the extracted text.
+================================================================================
+Encoding file to base64...
+Sending request to OpenRouter...
+
+DEBUG - Full response: {
+  "id": "gen-1776932438-X6XU799B7Q03cI39JDIH",
+  "object": "chat.completion",
+  "created": 1776932438,
+  "model": "google/gemini-2.5-flash",
+  "provider": "Google",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "STOP",
+      "message": {
+        "role": "assistant",
+        "content": "Sample Document\nThis is a test image\nfor OCR testing\n\nLine 1: Hello World\nLine 2: Testing 123\nLine 3: Vision Models",
+        "refusal": null,
+        "reasoning": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1305,
+    "completion_tokens": 36,
+    "total_tokens": 1341,
+    "cost": 0.0004815,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0004815,
+      "upstream_inference_prompt_cost": 0.0003915,
+      "u
+
+✅ SUCCESS (latency: 1686ms)
+
+Response:
+Sample Document
+This is a test image
+for OCR testing
+
+Line 1: Hello World
+Line 2: Testing 123
+Line 3: Vision Models...
+
+
+[Test 6/7]
+
+================================================================================
+Testing: xiaomi/mimo-v2.5
+File: experiments/test_files/test_image.jpg
+Type: image
+Prompt: Describe this image in detail.
+================================================================================
+Encoding file to base64...
+Sending request to OpenRouter...
+
+DEBUG - Full response: {
+  "id": "gen-1776932442-DbzaWRPhvaYuMz5d5fyA",
+  "object": "chat.completion",
+  "created": 1776932442,
+  "model": "xiaomi/mimo-v2.5-20260422",
+  "provider": "Xiaomi",
+  "system_fingerprint": null,
+  "choices": [
+    {
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "This is a simple, graphic-style image with distinct flat-colored elements:\n1.  **Background**: The entire canvas is filled with a solid, muted light sky-blue color.\n2.  **Central Oval**: A large, bright, solid yellow ellipse, an oval, is positioned in the upper-center of the image, vertically and horizontally centered in the top half. It is bordered by a thin, thin, bright orange outline along its curved edge. Centered perfectly inside this yellow oval is small, plain black text that reads *Test Image*.\n3.  **Bottom Bar**: At the bottom of the image, below the oval, there is a solid, dark fo
+
+✅ SUCCESS (latency: 6765ms)
+
+Response:
+This is a simple, graphic-style image with distinct flat-colored elements:
+1.  **Background**: The entire canvas is filled with a solid, muted light sky-blue color.
+2.  **Central Oval**: A large, bright, solid yellow ellipse, an oval, is positioned in the upper-center of the image, vertically and horizontally centered in the top half. It is bordered by a thin, thin, bright orange outline along its curved edge. Centered perfectly inside this yellow oval is small, plain black text that reads *Test...
+
+
+[Test 7/7]
+⚠️  Skipping: File not found - https://www.youtube.com/watch?v=dQw4w9WgXcQ
+
+
+================================================================================
+TEST SUMMARY
+================================================================================
+
+Total tests: 6
+Successful: 6 (100.0%)
+Failed: 0 (0.0%)
+Average latency: 6606ms
+
+================================================================================
+RESULTS BY MODEL
+================================================================================
+
+qwen/qwen3.6-plus:
+  Success rate: 100.0% (3/3)
+  Avg latency: 9435ms
+
+google/gemini-2.5-flash:
+  Success rate: 100.0% (2/2)
+  Avg latency: 2284ms
+
+xiaomi/mimo-v2.5:
+  Success rate: 100.0% (1/1)
+  Avg latency: 6765ms
+
+
+📊 Results saved to: experiments/vl_test_results.json
+
+
+✅ Testing complete!
+
+Next steps:
+1. Review results in experiments/vl_test_results.json
+2. Compare OCR quality with Tesseract
+3. Update VL_MODEL_SUPPORT_IMPLEMENTATION.md with findings
+4. Proceed with Phase 1 implementation

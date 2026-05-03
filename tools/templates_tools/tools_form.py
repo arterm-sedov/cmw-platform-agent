@@ -1,17 +1,200 @@
-from typing import Any
+from typing import Any, Optional
 
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from tools import requests_
-from tools.models import AttributeResult, CommonFormFields
-from tools.tool_utils import execute_get_operation, execute_list_operation
+from tools.models import AttributeResult, CommonFormFields, FormResult
+from tools.tool_utils import (
+    _apply_partial_update,
+    _fetch_entity,
+    build_global_alias,
+    execute_edit_or_create_operation,
+    execute_get_operation,
+    execute_list_operation,
+)
 
 FORM_ENDPOINT = "webapi/Form"
 
 
 class GetFormSchema(CommonFormFields):
     pass
+
+
+class EditOrCreateFormSchema(CommonFormFields):
+    operation: str = Field(
+        description="Choose operation: Create or Edit the form. RU: Создать, Редактировать",
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Human-readable name of the form. Required for create, optional for edit.",
+    )
+    form_size: Optional[str] = Field(
+        default=None,
+        description="Form size: Undefined, Small, Medium, Large, ExtraLarge. Optional for edit.",
+    )
+    widgets: Optional[dict[str, dict[str, Any]]] = Field(
+        default=None,
+        description="Widget edits: {widgetAlias: {property: value}}. Supports label, helpText, placeholder, etc.",
+    )
+
+    @field_validator("operation", mode="before")
+    @classmethod
+    def _normalize_operation(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v = v.strip().lower()
+            mapping = {"создать": "create", "редактировать": "edit", "create": "create", "edit": "edit"}
+            return mapping.get(v, v)
+        return v
+
+    @model_validator(mode="after")
+    def _validate_create_required_fields(self) -> "EditOrCreateFormSchema":
+        if self.operation == "create":
+            if not self.name or not self.name.strip():
+                raise ValueError("name is REQUIRED when operation='create'")
+        return self
+
+
+def _apply_widget_edits(form_data: dict[str, Any], widget_edits: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """
+    Recursively traverse form structure and apply widget edits.
+
+    Args:
+        form_data: Full form JSON structure
+        widget_edits: Dict of {widgetAlias: {property: value}}
+    """
+    if not widget_edits:
+        return form_data
+
+    def traverse(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            ga = obj.get("globalAlias", {})
+            widget_alias = ga.get("alias")
+
+            if widget_alias and widget_alias in widget_edits:
+                edits = widget_edits[widget_alias]
+                for prop, value in edits.items():
+                    if prop == "label":
+                        if "label" in obj:
+                            obj["label"]["text"] = {"en": value, "de": value, "ru": value}
+                            obj["label"]["hidden"] = False
+                        elif "text" in obj:
+                            obj["text"] = {"en": value, "de": value, "ru": value}
+                        else:
+                            obj["label"] = {"text": {"en": value, "de": value, "ru": value}, "hidden": False}
+                        if "content" in obj:
+                            obj["content"] = {"en": value, "de": value, "ru": value}
+                    elif prop == "helpText":
+                        obj["helpText"] = {"text": value}
+                    elif prop == "placeholder":
+                        obj["placeholder"] = {"text": value}
+                    elif prop == "content":
+                        obj["content"] = {"en": value, "de": value, "ru": value}
+                    elif prop == "text":
+                        obj["text"] = {"en": value, "de": value, "ru": value}
+                    else:
+                        obj[prop] = value
+
+            for key, value in obj.items():
+                obj[key] = traverse(value)
+
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                obj[i] = traverse(item)
+
+        return obj
+
+    return traverse(form_data)
+
+
+def _fetch_form(application_system_name: str, template_system_name: str, form_system_name: str) -> dict[str, Any] | None:
+    """Fetch current form JSON using generic _fetch_entity."""
+    return _fetch_entity(
+        "Form",
+        application_system_name,
+        template_system_name,
+        form_system_name,
+        FORM_ENDPOINT,
+    )
+
+
+@tool("edit_or_create_form", return_direct=False, args_schema=EditOrCreateFormSchema)
+def edit_or_create_form(
+    operation: str,
+    application_system_name: str,
+    template_system_name: str,
+    form_system_name: str,
+    name: Optional[str] = None,
+    form_size: Optional[str] = None,
+    widgets: Optional[dict[str, dict[str, Any]]] = None,
+) -> dict[str, Any]:
+    r"""
+    Create or edit a form for a template.
+
+    Supports:
+    - Form metadata: name, formSize
+    - Widget properties: label, helpText, placeholder, etc.
+
+    For edit operations, automatically fetches current schema and merges missing fields.
+    Widget editing: Provide widgets dict with widget aliases and their new property values.
+    Example widgets={"TipRabot": {"label": "Work Type", "helpText": "Select work type"}}
+
+    Returns:
+        dict: {
+            "success": bool - True if the form was created or edited successfully
+            "status_code": int - HTTP response status code
+            "error": str|None - Error message if operation failed
+        }
+    """
+    endpoint = f"{FORM_ENDPOINT}/{application_system_name}"
+
+    request_body: dict[str, Any] = {
+        "globalAlias": build_global_alias("Form", template_system_name, form_system_name),
+    }
+
+    if name is not None:
+        request_body["name"] = name
+    if form_size is not None:
+        request_body["formSize"] = form_size
+
+    if operation == "edit":
+        if widgets:
+            current_form = _fetch_form(
+                application_system_name, template_system_name, form_system_name
+            )
+            if not current_form:
+                return {
+                    "success": False,
+                    "status_code": 404,
+                    "error": "Could not fetch current form",
+                }
+
+            current_form = _apply_widget_edits(current_form, widgets)
+
+            if name is not None:
+                current_form["name"] = name
+            if form_size is not None:
+                current_form["formSize"] = form_size
+
+            request_body = current_form
+
+        # Reconstruct globalAlias if missing (process_data strips it)
+        if "globalAlias" not in request_body and "owner" in request_body and "alias" in request_body:
+            request_body["globalAlias"] = {
+                "type": "Form",
+                "owner": request_body["owner"],
+                "alias": request_body["alias"],
+            }
+
+        merged_body = _apply_partial_update(endpoint, request_body)
+        return requests_._put_request(merged_body, endpoint)  # noqa: SLF001
+
+    return execute_edit_or_create_operation(
+        request_body=request_body,
+        operation=operation,
+        endpoint=endpoint,
+        result_model=FormResult,
+    )
 
 
 class ListFormsSchema(BaseModel):

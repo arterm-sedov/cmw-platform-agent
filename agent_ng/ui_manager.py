@@ -282,6 +282,22 @@ class UIManager:
                             outputs=[token_budget_comp],
                         )
                     logging.getLogger(__name__).debug("✅ Token budget event-driven refresh wired for end-of-turn updates, clear button, and stop button")
+
+                    provider_sel = self.components.get("provider_model_selector")
+                    sync_dd = event_handlers.get("sync_llm_dropdown_from_session")
+                    if provider_sel and sync_dd and main_app:
+                        demo.load(fn=sync_dd, outputs=[provider_sel])
+                        if (
+                            hasattr(chat_tab_instance, "clear_event")
+                            and chat_tab_instance.clear_event
+                        ):
+                            chat_tab_instance.clear_event.then(
+                                fn=sync_dd,
+                                outputs=[provider_sel],
+                            )
+                        logging.getLogger(__name__).debug(
+                            "✅ LLM dropdown synced from session on load and after clear"
+                        )
             except Exception as e:
                 logging.getLogger(__name__).warning(f"Could not wire event-driven refresh: {e}")
 
@@ -340,9 +356,8 @@ class UIManager:
                 outputs=[self.components["stats_display"]]
             )
 
-        # Wire initialization completion to update UI components
-        # This is lean and timely - updates happen exactly when initialization completes
-        self._wire_initialization_completion_updates(demo, event_handlers)
+        # Config auto-load is handled by tab.select in config_tab.py.
+        # No demo.load() needed — config loads when user opens the tab.
 
         # Setup auto-refresh timers for real-time updates
         self._setup_auto_refresh_timers(demo, event_handlers)
@@ -417,79 +432,6 @@ class UIManager:
             logging.getLogger(__name__).debug(f"✅ Progress/iteration timer set ({iteration_interval}s) - shows ticking clock and iterations")
 
         logging.getLogger(__name__).info("🔄 Auto-refresh timers configured successfully")
-
-    def _wire_initialization_completion_updates(self, demo: gr.Blocks, event_handlers: dict[str, Callable]):
-        """Wire initialization completion to trigger UI updates - lean and timely"""
-        update_all_ui_handler = event_handlers.get("update_all_ui")
-        status_comp = self.components.get("status_display")
-        stats_comp = self.components.get("stats_display")
-        logs_comp = self.components.get("logs_display")
-        token_budget_comp = self.components.get("token_budget_display")
-        update_token_budget_handler = event_handlers.get("update_token_budget")
-        update_progress_handler = event_handlers.get("update_progress_display")
-        progress_comp = self.components.get("progress_display")
-
-        # Create a hidden state to track initialization status
-        # When initialization completes, we'll update this state which triggers UI updates
-        init_state = gr.State(value=False)  # False = not ready, True = ready
-        self.components["_init_state"] = init_state
-
-        # Function to check initialization and update UI when ready
-        def check_initialization_and_update(init_ready: bool, request: gr.Request = None) -> tuple[bool, str, str, str, str, str]:
-            """Check if initialization is complete and update UI components - session-aware"""
-            main_app = getattr(self, "_main_app", None)
-            is_ready = main_app.is_ready() if main_app and hasattr(main_app, "is_ready") else False
-
-            # If initialization just completed, update all UI components
-            # Pass request for session isolation
-            if is_ready and not init_ready:
-                if update_all_ui_handler and status_comp and stats_comp and logs_comp:
-                    # update_all_ui_components() now accepts request for session isolation
-                    status, stats, logs = update_all_ui_handler(request)
-                    # Other handlers also accept request for session isolation
-                    token_budget = update_token_budget_handler(request) if (update_token_budget_handler and token_budget_comp) else ""
-                    progress = update_progress_handler(request) if (update_progress_handler and progress_comp) else ""
-                    return True, status, stats, logs, token_budget, progress
-
-            # Return current values if not ready yet
-            return (
-                is_ready,
-                status_comp.value if status_comp else "",
-                stats_comp.value if stats_comp else "",
-                logs_comp.value if logs_comp else "",
-                token_budget_comp.value if token_budget_comp else "",
-                progress_comp.value if progress_comp else ""
-            )
-
-        # Use a short-lived timer that checks initialization status
-        # Timer stops automatically once initialization completes (no permanent timer)
-        init_check_timer = gr.Timer(0.5, active=True)
-
-        outputs = [init_state]
-        if status_comp and stats_comp and logs_comp:
-            outputs.extend([status_comp, stats_comp, logs_comp])
-        if token_budget_comp:
-            outputs.append(token_budget_comp)
-        if progress_comp:
-            outputs.append(progress_comp)
-
-        def timer_check(init_ready: bool, request: gr.Request = None) -> tuple:
-            """Timer function that checks initialization and stops when ready - session-aware"""
-            # Pass request for session isolation
-            result = check_initialization_and_update(init_ready, request)
-            is_ready = result[0]
-            # Stop timer when ready (return active=False)
-            timer_update = gr.Timer(active=not is_ready)
-            return (is_ready,) + result[1:] + (timer_update,)
-
-        init_check_timer.tick(
-            fn=timer_check,
-            inputs=[init_state],
-            outputs=outputs + [init_check_timer]
-        )
-
-        logging.getLogger(__name__).debug("✅ Initialization completion wired to update UI (timer stops when ready)")
-
 
     def get_components(self) -> dict[str, Any]:
         """Get all components created by the UI manager"""

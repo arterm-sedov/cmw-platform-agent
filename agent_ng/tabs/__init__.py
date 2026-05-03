@@ -19,7 +19,7 @@ from .downloads_tab import DownloadsTab
 __all__ = [
     "ChatTab",
     "HomeTab",
-    "LogsTab", 
+    "LogsTab",
     "StatsTab",
     "ConfigTab",
     "Sidebar",

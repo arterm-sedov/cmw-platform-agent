@@ -58,8 +58,8 @@
     Shows all available log files with sizes and modification times.
 
 .EXAMPLE
-    .\run-agent.ps1 -Action tail
-    Follows the latest log file in real-time (respects Python log rotation).
+    .\run-agent.ps1 -Action restart
+    Stops the agent if running, then starts a fresh instance.
 
 .EXAMPLE
     .\run-agent.ps1 -Port 8080
@@ -74,6 +74,7 @@
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #>
 
+[CmdletBinding(SupportsShouldProcess, ConfirmImpact='High')]
 param (
     [ValidateSet("start","stop","status","tail","restart","logs")]
     [string]$Action = "start",
@@ -169,9 +170,15 @@ function Start-Agent {
     $scriptFullPath = Resolve-Path -Path $ScriptPath -ErrorAction Stop
     $workingDir = Split-Path -Path $scriptFullPath -Parent
 
+    # Set log path to repo root (parent of workingDir)
+    $logDir = Split-Path -Path $workingDir -Parent
+    $logPath = Join-Path -Path $logDir -ChildPath $LogPath
+    [System.Environment]::SetEnvironmentVariable("LOG_FILE", $logPath, "Process")
+
     Write-Info "Starting agent in background (detached from terminal)..."
     Write-Info "Working directory: $workingDir"
     Write-Info "Script: $scriptFullPath"
+    Write-Info "Log file: $logPath"
     
     # Build argument list for Python script
     $scriptArgs = "`"$scriptFullPath`""
@@ -230,7 +237,7 @@ function Stop-Agent {
     Write-Info "Searching for Python processes running the agent..."
     $pythonProcesses = Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object {
         try {
-            $commandLine = (Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
+            $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
             return $commandLine -and $commandLine.Contains($ScriptPath)
         } catch {
             return $false
@@ -239,7 +246,7 @@ function Stop-Agent {
     
     # Also find child processes of the main agent process
     if ($processId) {
-        $childProcesses = Get-WmiObject Win32_Process | Where-Object { $_.ParentProcessId -eq $processId }
+        $childProcesses = Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $processId }
         foreach ($child in $childProcesses) {
             if ($child.ProcessName -eq "python") {
                 $pythonProcesses += Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue
@@ -266,7 +273,7 @@ function Stop-Agent {
             Write-Host "Processes:" -ForegroundColor Yellow
             foreach ($proc in $allPythonProcesses) {
                 try {
-                    $commandLine = (Get-WmiObject Win32_Process -Filter "ProcessId = $($proc.Id)").CommandLine
+                    $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($proc.Id)").CommandLine
                     Write-Host "  - PID $($proc.Id): $commandLine" -ForegroundColor Yellow
                 } catch {
                     Write-Host "  - PID $($proc.Id): (unable to get command line)" -ForegroundColor Yellow
@@ -320,7 +327,7 @@ function Show-Status {
     # Check for Python processes running our script
     $pythonProcesses = Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object {
         try {
-            $commandLine = (Get-WmiObject Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
+            $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
             return $commandLine -and $commandLine.Contains($ScriptPath)
         } catch {
             return $false
@@ -329,7 +336,7 @@ function Show-Status {
     
     # Also check child processes of the main agent process
     if ($processId) {
-        $childProcesses = Get-WmiObject Win32_Process | Where-Object { $_.ParentProcessId -eq $processId }
+        $childProcesses = Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq $processId }
         foreach ($child in $childProcesses) {
             if ($child.ProcessName -eq "python") {
                 $childProc = Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue
@@ -345,7 +352,7 @@ function Show-Status {
         Write-Host "Python agent processes running: $pythonProcessesRunning" -ForegroundColor Green
         foreach ($proc in $pythonProcesses) {
             try {
-                $commandLine = (Get-WmiObject Win32_Process -Filter "ProcessId = $($proc.Id)").CommandLine
+                $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($proc.Id)").CommandLine
                 $memoryMB = [math]::Round($proc.WorkingSet64 / 1MB, 1)
                 Write-Host "  - PID $($proc.Id) (${memoryMB}MB)" -ForegroundColor Cyan
                 if ($commandLine) {
@@ -405,7 +412,21 @@ function Get-LatestLogFile {
 }
 
 function Tail-Logs {
-    $latestLogFile = Get-LatestLogFile -BaseLogPath $LogPath
+    # Check if LOG_FILE is set in environment
+    $logFile = [System.Environment]::GetEnvironmentVariable("LOG_FILE")
+    if ([string]::IsNullOrEmpty($logFile)) {
+        # Default to repo root location
+        $scriptFullPath = Resolve-Path -Path $ScriptPath -ErrorAction SilentlyContinue
+        if ($scriptFullPath) {
+            $workingDir = Split-Path -Path $scriptFullPath -Parent
+            $logDir = Split-Path -Path $workingDir -Parent
+            $logFile = Join-Path -Path $logDir -ChildPath $LogPath
+        } else {
+            $logFile = $LogPath
+        }
+    }
+    
+    $latestLogFile = Get-LatestLogFile -BaseLogPath $logFile
     
     if (-not (Test-Path -Path $latestLogFile)) {
         Write-Warn "Log file not found at $latestLogFile. It will be created after start."
@@ -419,7 +440,15 @@ function Show-LogFiles {
     # Check if LOG_FILE is set in environment
     $logFile = [System.Environment]::GetEnvironmentVariable("LOG_FILE")
     if ([string]::IsNullOrEmpty($logFile)) {
-        $logFile = $LogPath
+        # Default to repo root location
+        $scriptFullPath = Resolve-Path -Path $ScriptPath -ErrorAction SilentlyContinue
+        if ($scriptFullPath) {
+            $workingDir = Split-Path -Path $scriptFullPath -Parent
+            $logDir = Split-Path -Path $workingDir -Parent
+            $logFile = Join-Path -Path $logDir -ChildPath $LogPath
+        } else {
+            $logFile = $LogPath
+        }
     }
     
     # Get the base name without extension

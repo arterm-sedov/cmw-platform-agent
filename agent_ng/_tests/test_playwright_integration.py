@@ -7,7 +7,7 @@ in your Cursor IDE for browser automation tasks.
 
 Once the MCP server is properly connected, you'll have access to these tools:
 - mcp_Playwright_browser_navigate
-- mcp_Playwright_browser_click  
+- mcp_Playwright_browser_click
 - mcp_Playwright_browser_type
 - mcp_Playwright_browser_screenshot
 - mcp_Playwright_browser_snapshot

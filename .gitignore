@@ -1,5 +1,6 @@
 .env
-.venv**/
+.venv/**
+.venv*/**
 __pycache__/
 !logs/*.log
 server_config.yml
@@ -9,3 +10,16 @@ server_config.yml
 *.log.*
 cmw-agent.pid
 .reference_repos/**
+cmw-platform-workspace/**
+browser-automation-poc/**
+docs/cmw_urls_real.md
+docs/cmw_admin_pages.md
+.agents/skills/cmw-platform/SKILL.md.backup_20260422
+.opencode/plans/20260423_browser_automation_implementation_plan.md.backup
+.browser-states/
+.playwright-mcp/**
+.playwright-cli/**
+.opencode/package-lock.json
+.opencode/package.json
+.opencode/node_modules/
+.mypy_cache/*

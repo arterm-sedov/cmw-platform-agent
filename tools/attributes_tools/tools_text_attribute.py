@@ -19,7 +19,7 @@ def _set_input_mask(display_format: str) -> str:
 
     return input_mask_mapping.get(display_format, None)
 class EditOrCreateTextAttributeSchema(CommonAttributeFields):
-    display_format: Literal[
+    display_format: Optional[Literal[
         "PlainText",
         "MarkedText",
         "HtmlText",
@@ -32,9 +32,10 @@ class EditOrCreateTextAttributeSchema(CommonAttributeFields):
         "PhoneRuMask",
         "EmailMask",
         "CustomMask",
-    ] = Field(
-        description="Attribute display format."
-            "RU: Формат отображения. When `display_format=CustomMask` provide `custom_mask`."
+    ]] = Field(
+        default=None,
+        description="Attribute display format. For edit operations, leave empty to preserve current format."
+            "RU: Формат отображения. При редактировании оставьте пустым для сохранения текущего формата."
     )
     custom_mask: Optional[str] = Field(
         default=None,
@@ -96,7 +97,7 @@ def edit_or_create_text_attribute(
     system_name: str,
     application_system_name: str,
     template_system_name: str,
-    display_format: str,
+    display_format: str | None = None,
     description: Optional[str] = None,
     custom_mask: Optional[str] = None,
     control_uniqueness: Optional[bool] = False,
@@ -138,7 +139,6 @@ def edit_or_create_text_attribute(
             "alias": system_name
         },
         "type": "String",
-        "format": display_format,
         "name": name,
         "description": description,
         "isUnique": control_uniqueness,
@@ -147,8 +147,13 @@ def edit_or_create_text_attribute(
         "isTitle": use_as_record_title,
         "isCalculated": calculate_value if expression_for_calculation != None else False,
         "expression": expression_for_calculation,
-        "validationMaskRegex": custom_mask if display_format == "CustomMask" else _set_input_mask(display_format)
     }
+
+    # Only include format and validationMask if display_format is explicitly provided
+    # For partial updates (edit without specifying format), these will be filled from current schema
+    if display_format is not None:
+        request_body["format"] = display_format
+        request_body["validationMaskRegex"] = custom_mask if display_format == "CustomMask" else _set_input_mask(display_format)
 
     endpoint = f"{ATTRIBUTE_ENDPOINT}/{application_system_name}"
 

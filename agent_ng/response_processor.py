@@ -21,6 +21,7 @@ Usage:
 """
 
 import json
+import logging
 import re
 from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass
@@ -110,8 +111,8 @@ class ResponseProcessor:
                         answer = args_dict.get('answer', '')
                         if answer:
                             return answer
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as e:
+                        logging.debug(f"Failed to parse tool call arguments as JSON: {e}")
 
             # Check content for tool call patterns
             content = getattr(response, 'content', '')
@@ -153,10 +154,12 @@ class ResponseProcessor:
 
             # If no pattern matches, check if content looks like an answer
             content = content.strip()
-            if (len(content) > 10 and 
-                not content.startswith('I need to') and 
-                not content.startswith('Let me') and
-                not content.startswith('I will')):
+            if (
+                len(content) > 10
+                and not content.startswith('I need to')
+                and not content.startswith('Let me')
+                and not content.startswith('I will')
+            ):
                 return content
 
         except Exception as e:
@@ -261,8 +264,9 @@ class ResponseProcessor:
             confidence += 0.2
 
         # Increase confidence for answers with specific patterns
-        if final_answer and any(pattern in final_answer.lower() for pattern in 
-                              ['based on', 'according to', 'the answer is', 'therefore']):
+        if final_answer and any(
+            pattern in final_answer.lower() for pattern in ['based on', 'according to', 'the answer is', 'therefore']
+        ):
             confidence += 0.1
 
         return min(confidence, 1.0)

@@ -106,8 +106,9 @@ class ToolCallDeduplicator:
         return normalized
 
 
-    def store_tool_call(self, tool_name: str, tool_args: Dict[str, Any], 
-                       tool_result: Any, conversation_id: str = "default") -> None:
+    def store_tool_call(
+        self, tool_name: str, tool_args: Dict[str, Any], tool_result: Any, conversation_id: str = "default"
+    ) -> None:
         """
         Store a tool call and its result for future deduplication.
 
@@ -141,8 +142,10 @@ class ToolCallDeduplicator:
         )
 
         # Only add if not already present
-        if not any(h.tool_name == tool_name and h.hash_value == hash_value 
-                  for h in self._conversation_hashes[conversation_id]):
+        if not any(
+            h.tool_name == tool_name and h.hash_value == hash_value
+            for h in self._conversation_hashes[conversation_id]
+        ):
             self._conversation_hashes[conversation_id].append(tool_call_hash)
 
 
@@ -164,8 +167,10 @@ class ToolCallDeduplicator:
 
 
         # Remove cached results for this conversation
-        keys_to_remove = [k for k in self._tool_call_cache.keys() 
-                         if k.startswith(f"{conversation_id}:")]
+        keys_to_remove = [
+            k for k in self._tool_call_cache.keys()
+            if k.startswith(f"{conversation_id}:")
+        ]
         for key in keys_to_remove:
             del self._tool_call_cache[key]
 

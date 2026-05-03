@@ -15,8 +15,11 @@ python_version: 3.12
 
 # Comindware Analyst Copilot
 
-**Authors:** Arte(r)m Sedov & Marat Mutalimov
-**GitHub:** [https://github.com/arterm-sedov/](https://github.com/arterm-sedov/)  
+**Authors:**  
+
+- [**Arte(r)m Sedov**](https://github.com/arterm-sedov/)
+- [**Marat Mutalimov**](https://github.com/Dagdaf)
+
 **Repository:** [https://github.com/arterm-sedov/cmw-platform-agent](https://github.com/arterm-sedov/cmw-platform-agent)
 
 [Ask DeepWiki](https://deepwiki.com/arterm-sedov/cmw-platform-agent)
@@ -35,7 +38,7 @@ The Comindware Analyst Copilot is a LangChain-native AI agent designed for creat
 - **Real-Time Streaming**: Live response streaming with tool usage visualization
 - **Session Isolation**: Each user gets isolated agent instances with proper cleanup
 - **Internationalization**: Full support for English and Russian UI
-- **Comprehensive Tool Suite**: 49 specialized tools (27 CMW Platform + 22 utility tools)
+- **Comprehensive Tool Suite**: 71 specialized tools
 
 ### Target Use Cases
 
@@ -62,9 +65,9 @@ graph TD
         B4["ErrorHandler<br/>Recovery"]
     end
     
-    subgraph "Tools (49)"
-        C1["CMW Platform<br/>27 tools"]
-        C2["Utility Tools<br/>22 tools"]
+    subgraph "Tools (71)"
+        C1["CMW Platform<br/>47 tools"]
+        C2["Utility Tools<br/>24 tools"]
     end
     
     subgraph "APIs"
@@ -86,7 +89,7 @@ graph TD
 
 - **CmwAgent** (`langchain_agent.py`) - Main orchestrator using pure LangChain patterns
 - **LLMManager** (`llm_manager.py`) - Multi-provider management with persistent instances
-- **Tool System** (`tools/`) - 49 tools (27 CMW Platform + 22 utility)
+- **Tool System** (`tools/`) - LangChain tools
 - **UI Layer** (`tabs/`) - Gradio modular tabs with real-time updates
 - **Session Management** (`session_manager.py`) - User isolation and cleanup
 - **Error Handler** (`error_handler.py`) - Vector similarity error classification
@@ -107,17 +110,17 @@ The agent provides comprehensive integration with the CMW Platform through speci
 
 ### Tool Categories
 
-**CMW Platform Tools (27 tools)**
+**CMW Platform Tools**
 
-- **Applications & Templates (6 tools)**: List/create applications, manage templates, generate URLs, process diagrams
-- **Attributes (15 tools)**: 12 attribute types (Text, Boolean, DateTime, Decimal, Document, Drawing, Duration, Image, Record, Role, Account, Enum) + general operations (get, create, edit, delete, archive)
-- **Templates & Records (6 tools)**: List attributes/records, create/edit templates, form management
+- **Applications & Templates**: List/create applications, manage templates, ontology/schema helpers, entity URLs, import/export
+- **Attributes**: All supported attribute types (Text, Boolean, DateTime, Decimal, Document, Drawing, Duration, Image, Record, Role, Account, Enum) plus get, create, edit, delete, archive
+- **Templates, forms, toolbars, buttons, records**: Template and record CRUD, datasets, forms, toolbars, buttons, record files
 
-**Utility Tools (22 tools)**
+**Utility Tools**
 
 - **Search & Research**: Web search, Wikipedia, ArXiv, deep research
 - **Code Execution**: Multi-language support (Python, Bash, SQL, C, Java)
-- **File Analysis**: CSV, Excel, images, PDFs, OCR text extraction
+- **File Analysis**: CSV, Excel, images, PDFs; image text via vision models (`analyze_image_ai`), not local OCR
 - **Image/Video Processing**: Analysis, transformation, generation, combination
 - **Mathematical Operations**: Basic arithmetic and advanced functions
 
@@ -152,7 +155,7 @@ The agent supports multiple LLM providers with manual selection:
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - CMW Platform access credentials
 - At least one LLM provider API key
 
@@ -207,6 +210,17 @@ Set up your CMW Platform connection in the Config tab:
 - Session-based file handling and resource management
 - Automatic cleanup and memory management
 
+### File Upload & Analysis
+
+The agent supports uploading and analyzing various file types through Gradio's MultimodalTextbox:
+
+- **Documents**: PDF, DOCX, XLSX, PPTX, TXT, Markdown, HTML
+- **Data**: CSV, TSV, Excel (with pandas-powered analysis)
+- **Media**: Images (PNG, JPG, etc.), video, audio
+- **Code**: Python, JavaScript, SQL, and other text-based formats
+
+Files are automatically registered in a session-isolated registry and accessible to analysis tools (`read_text_based_file`, `analyze_csv_file`, `analyze_excel_file`, `analyze_image`, etc.). See `docs/20260423_FILE_HANDLING_FIX_AND_TOOL_SCHEMA_ANALYSIS.md` for implementation details.
+
 ### Internationalization
 
 - Full support for English and Russian languages
@@ -220,19 +234,24 @@ Set up your CMW Platform connection in the Config tab:
 - Manual provider switching with context preservation
 - Graceful degradation when components fail
 
-### Token Budget Tracking
+### Token Budget Tracking & Cost Management
 
-- Accurate token counting using `tiktoken` with `cl100k_base` encoding
-- Real-time token budget snapshots computed at key decision points
-- Breakdown display with three components:
+- **Accurate Token Counting**: Uses `tiktoken` with `cl100k_base` encoding, with API-reported tokens prioritized as ground truth
+- **Real-Time Budget Snapshots**: Computed at key decision points for immediate visibility
+- **Token Breakdown Display**: Three components shown:
   - **Context**: Conversation messages (system, user, assistant) - excludes tool results
   - **Tools**: Tool result messages (ToolMessage content) returned by executed tools
   - **Overhead**: Tool schemas sent with every LLM call (constant per tool set, ~600 tokens per tool)
+- **Cost Tracking**: For OpenRouter models, cost is computed from token counts and prices fetched at startup via the endpoints API (`/models/{author}/{slug}/endpoints`). The API returns prices per token, which we convert to per 1K tokens: `cost = (input_tokens/1000)*prompt_price_per_1k + (output_tokens/1000)*completion_price_per_1k`
+- **Multi-Level Statistics**: 
+  - Per-turn cost and token counts (displayed in chat after each QA turn, including zero cost)
+  - Per-conversation totals (session-scoped) with integrated cost display
+  - Overall totals (across all conversations) with cost tracking
+- **Input/Output Breakdown**: Token counts separated by input/output in stats pane
 - **Overhead Adjustment Factor** (`OVERHEAD_ADJUSTMENT_FACTOR = 0.8`): Heuristic factor applied to tool schema overhead to better match API-reported tokens, compensating for differences between `tiktoken` and provider tokenization
-- API-reported tokens prioritized as ground truth when available
-- Event-driven UI updates for immediate budget visibility
+- **Event-Driven UI Updates**: Immediate budget and cost visibility without polling
 
-**Note**: The estimate may differ from actual API tokens due to provider-specific tokenization. The overhead adjustment factor (0.8) brings estimates within 1-2% of API-reported values by accounting for these differences.
+**Note**: The estimate may differ from actual API tokens due to provider-specific tokenization. The overhead adjustment factor (0.8) brings estimates within 1-2% of API-reported values by accounting for these differences. See also `docs/OPENROUTER_PRICING.md` for OpenRouter-specific details.
 
 ### History Compression
 
@@ -347,21 +366,66 @@ This is an experimental research project. Contributions are welcome in the form 
 
 ### Development Setup
 
-1. **Activate virtual environment**:
+1. **Create and activate virtual environment**:
+
+   Linux / Mac:
    ```bash
-   # Windows
-   .venv\Scripts\Activate.ps1
-   
-   # Linux/Mac
+   python3 -m venv .venv
    source .venv/bin/activate
    ```
 
-2. **Run tests**:
+   WSL (separate venv so Windows and WSL can run in parallel):
    ```bash
-   python -m pytest agent_ng/_tests/
+   python3 -m venv .venv-wsl   # or .venv-ubuntu
+   source .venv-wsl/bin/activate
    ```
 
-3. **Code style**:
-   ```bash
-   ruff check agent_ng/ tools/
+   Windows (PowerShell):
+   ```powershell
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1
    ```
+
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Configure environment**:
+   ```bash
+   cp .env.example .env
+   # Edit .env and set at least one LLM provider API key
+   ```
+
+4. **Run the application**:
+   ```bash
+   python agent_ng/app_ng_modular.py
+   # Gradio UI starts on the port configured by GRADIO_DEFAULT_PORT in .env (default 7860)
+   ```
+   The app starts even without valid API keys (the UI is fully functional; chat requests return auth errors until a valid key is configured).
+
+5. **Run linter**:
+   ```bash
+   ruff check agent_ng/ tools/      # Lint core directories
+   python lint.py                    # Lint only changed files vs HEAD
+   python lint.py --all              # Lint entire repo
+   ```
+
+6. **Run tests**:
+   ```bash
+   python -m pytest agent_ng/_tests/           # All tests
+   python -m pytest agent_ng/_tests/test_x.py  # Single file
+   python -m pytest -k "pattern"               # Filter by name
+   ```
+   Integration tests require `CMW_INTEGRATION_TESTS=1` plus a live CMW Platform server and are skipped by default.
+
+7. **Typecheck**:
+   ```bash
+   mypy agent_ng/
+   ```
+
+### External Services
+
+- **LLM providers**: At least one API key is needed for chat functionality (`OPENROUTER_API_KEY`, `GEMINI_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `GIGACHAT_API_KEY`, or `HUGGINGFACE_API_KEY`). See `.env.example` for all options.
+- **CMW Platform** (optional): Platform integration tools require `CMW_BASE_URL`, `CMW_LOGIN`, `CMW_PASSWORD`. Utility tools work without it.
+- **No Docker, databases, or message queues** are required. The app is a single Python process.

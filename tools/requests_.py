@@ -15,6 +15,7 @@ Key Features:
 
 HTTP Methods:
 - _get_request(): GET requests with JSON/text response handling
+- _get_url_binary(): GET for raw byte bodies (e.g. document / octet-stream)
 - _post_request(): POST requests with request body validation
 - _put_request(): PUT requests with request body validation
 - _delete_request(): DELETE requests with proper error handling
@@ -38,6 +39,8 @@ from dotenv import load_dotenv
 import requests
 
 from .requests_models import HTTPResponse, RequestConfig
+
+logger = logging.getLogger(__name__)
 
 # Import session-aware config access
 try:
@@ -330,7 +333,7 @@ def _post_request(request_body: dict[str, Any], endpoint: str) -> dict[str, Any]
             success=False,
             status_code=408,  # Request Timeout
             raw_response=None,
-            error=f"Request timeout: {str(e)}",
+            error=f"Request timeout: {e!s}",
             base_url=url,
         )
         result = error_response.model_dump()
@@ -341,7 +344,7 @@ def _post_request(request_body: dict[str, Any], endpoint: str) -> dict[str, Any]
             success=False,
             status_code=503,  # Service Unavailable
             raw_response=None,
-            error=f"Connection error: {str(e)}",
+            error=f"Connection error: {e!s}",
             base_url=url,
         )
         result = error_response.model_dump()
@@ -353,7 +356,7 @@ def _post_request(request_body: dict[str, Any], endpoint: str) -> dict[str, Any]
             success=False,
             status_code=500,  # Internal Server Error
             raw_response=None,
-            error=f"Request failed: {str(e)}",
+            error=f"Request failed: {e!s}",
             base_url=url,
         )
         result = error_response.model_dump()
@@ -407,7 +410,7 @@ def _put_request(request_body: dict[str, Any], endpoint: str) -> dict[str, Any]:
             success=False,
             status_code=408,  # Request Timeout
             raw_response=None,
-            error=f"Request timeout: {str(e)}",
+            error=f"Request timeout: {e!s}",
             base_url=url,
         )
         result = error_response.model_dump()
@@ -418,7 +421,7 @@ def _put_request(request_body: dict[str, Any], endpoint: str) -> dict[str, Any]:
             success=False,
             status_code=503,  # Service Unavailable
             raw_response=None,
-            error=f"Connection error: {str(e)}",
+            error=f"Connection error: {e!s}",
             base_url=url,
         )
         result = error_response.model_dump()
@@ -430,7 +433,7 @@ def _put_request(request_body: dict[str, Any], endpoint: str) -> dict[str, Any]:
             success=False,
             status_code=500,  # Internal Server Error
             raw_response=None,
-            error=f"Request failed: {str(e)}",
+            error=f"Request failed: {e!s}",
             base_url=url,
         )
         result = error_response.model_dump()
@@ -513,6 +516,52 @@ def _get_request(endpoint: str) -> dict[str, Any]:
             base_url=url,
         )
         return error_response.model_dump()
+
+
+def _get_url_binary(relative_path: str) -> dict[str, Any]:
+    """
+    GET request for endpoints that return raw bytes (e.g. document binary).
+
+    Returns:
+        success (bool), status_code (int), content (bytes|None), error (str|None)
+    """
+    cfg = _load_server_config()
+    url = f"{cfg.base_url}/{relative_path.lstrip('/')}"
+    headers = _basic_headers()
+    # Avoid forcing JSON; some servers return octet-stream for binary bodies.
+    headers["Accept"] = "*/*"
+
+    try:
+        response = requests.get(url, headers=headers, timeout=cfg.timeout)
+        if response.status_code != 200:
+            return {
+                "success": False,
+                "status_code": response.status_code,
+                "content": None,
+                "error": f"HTTP {response.status_code}",
+            }
+        content = response.content
+        return {
+            "success": True,
+            "status_code": 200,
+            "content": content,
+            "error": None,
+        }
+    except requests.exceptions.Timeout as e:
+        return {
+            "success": False,
+            "status_code": 408,
+            "content": None,
+            "error": f"Request timeout: {e!s}",
+        }
+    except requests.exceptions.RequestException as e:
+        logger.exception("_get_url_binary failed")
+        return {
+            "success": False,
+            "status_code": 500,
+            "content": None,
+            "error": f"Request failed: {e!s}",
+        }
 
 
 def _delete_request(endpoint: str) -> dict[str, Any]:

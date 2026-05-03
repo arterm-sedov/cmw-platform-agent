@@ -174,7 +174,8 @@ class DebugStreamer:
                 self.log_queue.get_nowait()
                 self.log_queue.put_nowait(entry)
             except Empty:
-                pass
+                # Queue was already empty when we tried to remove oldest entry
+                logging.debug("Log queue was empty when attempting to remove oldest entry")
 
     # Convenience methods for different log levels
     def debug(self, message: str, category: LogCategory = LogCategory.SYSTEM,

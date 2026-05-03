@@ -22,6 +22,11 @@ import os
 import sys
 from typing import Any
 
+try:
+    from ._file_attachment import build_file_attachment
+except ImportError:
+    from agent_ng._file_attachment import build_file_attachment  # type: ignore[no-redef]
+
 # LangChain imports
 from langchain_core.messages import (
     AIMessage,
@@ -32,6 +37,7 @@ from langchain_core.messages import (
 )
 
 from .debug_streamer import get_debug_streamer
+from .datetime_context import wrap_user_message
 from .history_compression import (
     compress_conversation_history,
     emit_compression_notification,
@@ -41,6 +47,10 @@ from .history_compression import (
     should_compress_on_completion,
 )
 from .i18n_translations import get_translation_key
+from .message_content_text import (
+    memory_dedupe_fingerprint,
+    visible_plain_text_from_message,
+)
 from .streaming_config import get_streaming_config
 from .tool_deduplicator import get_deduplicator
 from .token_budget import (
@@ -507,8 +517,9 @@ class NativeLangChainStreaming:
                 f"🔍 DEBUG: Added {len(non_system_history)} messages from history to LLM context"
             )
 
-            # Create user message and save to memory
-            user_message = HumanMessage(content=message)
+            # Create user message with datetime context and save to memory
+            wrapped_message = wrap_user_message(message)
+            user_message = HumanMessage(content=wrapped_message)
             messages.append(user_message)
             agent.memory_manager.add_message(conversation_id, user_message)
 
@@ -742,16 +753,26 @@ class NativeLangChainStreaming:
                         # Log directly - if logging fails, let it fail visibly for debugging
                         self._logger.debug("Failed to emit early-finish hint: %s", exc)
 
-                    # Stream content as it arrives
+                    # Stream content as it arrives (Gemini/LC may use list-shaped content)
                     if hasattr(chunk, "content") and chunk.content:
-                        yield StreamingEvent(
-                            event_type="content",
-                            content=chunk.content,
-                            metadata={
-                                "chunk_type": "llm_stream",
-                                "provider": agent.llm_instance.provider.value,
-                            },
+                        stream_text = (
+                            visible_plain_text_from_message(chunk)
+                            if isinstance(chunk, BaseMessage)
+                            else ""
                         )
+                        if not stream_text and isinstance(
+                            getattr(chunk, "content", None), str
+                        ):
+                            stream_text = chunk.content
+                        if stream_text:
+                            yield StreamingEvent(
+                                event_type="content",
+                                content=stream_text,
+                                metadata={
+                                    "chunk_type": "llm_stream",
+                                    "provider": agent.llm_instance.provider.value,
+                                },
+                            )
 
                     # Process tool call chunks as they stream
                     if hasattr(chunk, "tool_call_chunks") and chunk.tool_call_chunks:
@@ -918,6 +939,27 @@ class NativeLangChainStreaming:
                                         else "Tool execution returned no result"
                                     )
 
+                                    # Resolve any file the tool registered so
+                                    # the app layer can render it inline.
+                                    file_att = build_file_attachment(
+                                        tool_result, agent
+                                    )
+
+                                    # Extract optional out-of-band tool cost
+                                    # (e.g. image generation via direct HTTP).
+                                    # Only numeric, positive values are trusted.
+                                    _raw_cost = (
+                                        tool_result.get("cost")
+                                        if isinstance(tool_result, dict)
+                                        else None
+                                    )
+                                    tool_cost: float | None = (
+                                        float(_raw_cost)
+                                        if isinstance(_raw_cost, (int, float))
+                                        and _raw_cost > 0
+                                        else None
+                                    )
+
                                     yield StreamingEvent(
                                         event_type="tool_end",
                                         content=f"\n{self._get_call_count_message(duplicate_count, language)}\n\n{self._get_result_message(str(safe_tool_result), language)}",
@@ -929,6 +971,8 @@ class NativeLangChainStreaming:
                                             "title": self._get_tool_called_message(
                                                 tool_name, language
                                             ),
+                                            "file_attachment": file_att,
+                                            "tool_cost": tool_cost,
                                         },
                                     )
 
@@ -1259,9 +1303,9 @@ class NativeLangChainStreaming:
                         conversation_id
                     )
                     memory_content = {
-                        (type(msg).__name__, msg.content)
+                        memory_dedupe_fingerprint(msg)
                         for msg in current_memory
-                        if hasattr(msg, "content")
+                        if isinstance(msg, BaseMessage)
                     }
 
                     new_messages_added = 0
@@ -1284,12 +1328,10 @@ class NativeLangChainStreaming:
                             )
                             continue
 
-                        # Create a unique identifier for this message
                         message_key = (
-                            type(message).__name__,
-                            message.content
-                            if hasattr(message, "content")
-                            else str(message),
+                            memory_dedupe_fingerprint(message)
+                            if isinstance(message, BaseMessage)
+                            else (type(message).__name__, str(message))
                         )
 
                         # Only add if not already in memory
@@ -1407,6 +1449,14 @@ class NativeLangChainStreaming:
             # (preserves avg-per-message semantics).
             if hasattr(agent, "token_tracker") and agent.token_tracker:
                 try:
+                    # IMPORTANT: OpenRouter cost/cache details often appear only on the final chunk
+                    # under response_metadata.token_usage. Refresh once from final_chunk before finalize.
+                    try:
+                        agent.token_tracker.update_turn_usage_from_api(final_chunk)
+                    except Exception as exc:
+                        self._logger.debug(
+                            "Failed to refresh final usage from final_chunk: %s", exc
+                        )
                     agent.token_tracker.finalize_turn_usage(final_chunk, messages)
                 except Exception as e:
                     self._logger.exception("Error finalizing turn usage: %s", e)
@@ -1479,9 +1529,9 @@ class NativeLangChainStreaming:
                 conversation_id
             )
             memory_content = {
-                (type(msg).__name__, msg.content)
+                memory_dedupe_fingerprint(msg)
                 for msg in current_memory
-                if hasattr(msg, "content")
+                if isinstance(msg, BaseMessage)
             }
 
             new_messages_added = 0
@@ -1502,10 +1552,10 @@ class NativeLangChainStreaming:
                     )
                     continue
 
-                # Create a unique identifier for this message
                 message_key = (
-                    type(message).__name__,
-                    message.content if hasattr(message, "content") else str(message),
+                    memory_dedupe_fingerprint(message)
+                    if isinstance(message, BaseMessage)
+                    else (type(message).__name__, str(message))
                 )
 
                 # Only add if not already in memory
@@ -1533,10 +1583,17 @@ class NativeLangChainStreaming:
                             role = "assistant"
                         else:
                             role = type(m).__name__
+                        snap_content: str | Any = getattr(m, "content", "")
+                        if isinstance(m, BaseMessage):
+                            snap_content = visible_plain_text_from_message(m) or (
+                                snap_content
+                                if isinstance(snap_content, str)
+                                else ""
+                            )
                         ordered_messages_snapshot.append(
                             {
                                 "role": role,
-                                "content": getattr(m, "content", ""),
+                                "content": snap_content,
                                 "tool_call_id": getattr(m, "tool_call_id", None),
                                 "tool_calls": getattr(m, "tool_calls", None),
                                 "name": getattr(m, "name", None),
@@ -1591,9 +1648,9 @@ class NativeLangChainStreaming:
                     conversation_id
                 )
                 memory_content = {
-                    (type(msg).__name__, msg.content)
+                    memory_dedupe_fingerprint(msg)
                     for msg in current_memory
-                    if hasattr(msg, "content")
+                    if isinstance(msg, BaseMessage)
                 }
 
                 # Collect any ToolMessages and AI messages already in working list
@@ -1601,7 +1658,11 @@ class NativeLangChainStreaming:
                 try:
                     for m in messages:
                         if isinstance(m, ToolMessage) or isinstance(m, AIMessage):
-                            key = (type(m).__name__, getattr(m, "content", ""))
+                            key = (
+                                memory_dedupe_fingerprint(m)
+                                if isinstance(m, BaseMessage)
+                                else (type(m).__name__, str(m))
+                            )
                             if key not in memory_content:
                                 partial_messages_to_add.append(m)
                 except Exception as exc:
@@ -1613,15 +1674,20 @@ class NativeLangChainStreaming:
                 # Add a lean truncated AIMessage if we have partial content
                 try:
                     partial_text = ""
-                    if (
-                        "accumulated_chunk" in locals()
-                        and hasattr(accumulated_chunk, "content")
-                        and accumulated_chunk.content
-                    ):
-                        partial_text = accumulated_chunk.content
+                    if "accumulated_chunk" in locals() and accumulated_chunk is not None:
+                        ac = accumulated_chunk
+                        if hasattr(ac, "content") and ac.content:
+                            if isinstance(ac, BaseMessage):
+                                partial_text = visible_plain_text_from_message(ac)
+                            if not partial_text and isinstance(
+                                getattr(ac, "content", None), str
+                            ):
+                                partial_text = ac.content
                     if partial_text:
-                        truncated_msg = AIMessage(content=f"{partial_text} [truncated]")
-                        key = ("AIMessage", truncated_msg.content)
+                        truncated_msg = AIMessage(
+                            content=f"{partial_text} [truncated]"
+                        )
+                        key = memory_dedupe_fingerprint(truncated_msg)
                         if key not in memory_content:
                             partial_messages_to_add.append(truncated_msg)
                 except Exception as exc:

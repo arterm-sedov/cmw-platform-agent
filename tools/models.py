@@ -21,6 +21,30 @@ class AttributeResult(BaseModel):
     class Config:
         extra = 'allow'
 
+class FormResult(BaseModel):
+    """
+    Result model for a fetched or edited form.
+    Contains cleaned data after successful fetch or edit.
+    """
+    success: bool
+    status_code: int
+    error: Optional[str] = Field(default=None)
+
+    class Config:
+        extra = 'allow'
+
+class DatasetResult(BaseModel):
+    """
+    Result model for a fetched or edited dataset.
+    Contains cleaned data after successful fetch or edit.
+    """
+    success: bool
+    status_code: int
+    error: Optional[str] = Field(default=None)
+
+    class Config:
+        extra = 'allow'
+
 class CommonAttributeFields(BaseModel):
     """
     Common field definitions for attribute schemas across all tool modules.
@@ -163,6 +187,90 @@ class CommonFormFields(BaseModel):
         "application_system_name",
         "template_system_name",
         "form_system_name",
+        mode="before",
+    )
+    def non_empty_str(cls, v: Any) -> Any:  # type: ignore[override]
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
+
+
+class CommonDatasetFields(BaseModel):
+    """
+    Common definitions for dataset schemas.
+
+    Provides standardized fields to work with dataset models.
+    """
+    application_system_name: str = Field(
+        description="System name of the application. RU: Системное имя приложения",
+    )
+    template_system_name: str = Field(
+        description="System name of the template. RU: Системное имя шаблона",
+    )
+    dataset_system_name: str = Field(
+        description="System name of the dataset. RU: Системное имя набора данных",
+    )
+
+    @field_validator(
+        "application_system_name",
+        "template_system_name",
+        "dataset_system_name",
+        mode="before",
+    )
+    def non_empty_str(cls, v: Any) -> Any:  # type: ignore[override]
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
+
+
+class CommonToolbarFields(BaseModel):
+    """
+    Common definitions for toolbar schemas.
+
+    Provides standardized fields to work with toolbar models.
+    """
+    application_system_name: str = Field(
+        description="System name of the application. RU: Системное имя приложения",
+    )
+    template_system_name: str = Field(
+        description="System name of the template. RU: Системное имя шаблона",
+    )
+    toolbar_system_name: str = Field(
+        description="System name of the toolbar. RU: Системное имя тулбара",
+    )
+
+    @field_validator(
+        "application_system_name",
+        "template_system_name",
+        "toolbar_system_name",
+        mode="before",
+    )
+    def non_empty_str(cls, v: Any) -> Any:  # type: ignore[override]
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("must be a non-empty string")
+        return v
+
+
+class CommonButtonFields(BaseModel):
+    """
+    Common definitions for button/usercommand schemas.
+
+    Provides standardized fields to work with button models.
+    """
+    application_system_name: str = Field(
+        description="System name of the application. RU: Системное имя приложения",
+    )
+    template_system_name: str = Field(
+        description="System name of the template. RU: Системное имя шаблона",
+    )
+    button_system_name: str = Field(
+        description="System name of the button. RU: Системное имя кнопки",
+    )
+
+    @field_validator(
+        "application_system_name",
+        "template_system_name",
+        "button_system_name",
         mode="before",
     )
     def non_empty_str(cls, v: Any) -> Any:  # type: ignore[override]

@@ -219,8 +219,9 @@ def setup_logging(force: bool | None = None) -> Logger:
         backup_count = int(os.getenv("LOG_BACKUP_COUNT", "5") or 5)
         try:
             os.makedirs(os.path.dirname(log_file) or ".", exist_ok=True)
-        except Exception:
-            pass
+        except Exception as e:
+            # Best-effort directory creation; log but don't fail setup
+            logging.getLogger(__name__).warning(f"Could not create log directory: {e}")
         file_handler: Handler
         if rotate:
             file_handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8")

@@ -10,9 +10,10 @@ class EditOrCreateRecordTemplateSchema(BaseModel):
         description="System name of the application where the template is created or edited. "
                     "RU: Системное имя приложения"
     )
-    name: str = Field(
+    name: Optional[str] = Field(
+        default=None,
         description="Human-readable name of the template. "
-                    "RU: Название"
+                    "RU: Название. Required for create, optional for edit."
     )
     description: Optional[str] = Field(
         default=None,
@@ -24,24 +25,26 @@ class EditOrCreateRecordTemplateSchema(BaseModel):
                     "RU: Системное имя"
     )
 
-    @field_validator("name", "system_name", mode="before")
+    @field_validator("system_name", mode="before")
+    @classmethod
     def non_empty_str(cls, v: Any) -> Any:
-        """
-        Validate that string fields are not empty.
-
-        This field validator is automatically applied to the name, system_name, 
-        application_system_name fields ensuring consistent validation.
-        """
         if isinstance(v, str) and v.strip() == "":
             raise ValueError("must be a non-empty string")
         return v
 
+    @model_validator(mode="after")
+    def _validate_create_required_fields(self) -> "EditOrCreateRecordTemplateSchema":
+        if self.operation == "create":
+            if not self.name or not self.name.strip():
+                raise ValueError("name is REQUIRED when operation='create'")
+        return self
+
 @tool("edit_or_create_record_template", return_direct=False, args_schema=EditOrCreateRecordTemplateSchema)
 def edit_or_create_record_template(
     operation: str,
-    name: str,
     system_name: str,
     application_system_name: str,
+    name: Optional[str] = None,
     description: Optional[str] = None
 ) -> Dict[str, Any]:
     r"""
@@ -50,20 +53,22 @@ def edit_or_create_record_template(
     Returns:
         dict: {
             "success": bool - True if the template was created or edited successfully
-            "status_code": int - HTTP response status code  
+            "status_code": int - HTTP response status code
             "raw_response": dict|str|None - template model (sanitized)
             "error": str|None - Error message if operation failed
         }
     """
 
     request_body: Dict[str, Any] = {
-        "name": name,
-        "description": description,
         "globalAlias": {
             "type": "RecordTemplate",
             "alias": system_name
         }
     }
+    if name is not None:
+        request_body["name"] = name
+    if description is not None:
+        request_body["description"] = description
 
     endpoint = f"{RECORD_TEMPLATE_ENDPOINT}/{application_system_name}"
 

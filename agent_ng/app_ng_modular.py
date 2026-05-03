@@ -23,14 +23,19 @@ import asyncio
 from collections.abc import AsyncGenerator
 import json
 import logging
+import os
 from pathlib import Path
+from queue import Empty, Queue
+import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
-import time
-import threading
-from queue import Queue, Empty
+
+from dotenv import load_dotenv
 import gradio as gr
+
+# Load .env early so Gradio picks up env settings
+load_dotenv()
 
 # Initialize logging early (idempotent)
 try:
@@ -52,8 +57,6 @@ except ImportError:
     sys.path.append(str(Path(__file__).parent))
     from agent_config import config, get_language_settings, get_port_settings
 
-# LangChain imports
-import os
 
 # Local imports with robust fallback handling
 import sys
@@ -63,9 +66,12 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 # Set LangChain verbose mode using new pattern (suppresses deprecation warning)
 try:
     from langchain.globals import set_verbose
+
     set_verbose(False)  # Set to True for debugging if needed
 except ImportError:
-    pass  # Older LangChain version, no action needed
+    logging.debug(
+        "langchain.globals.set_verbose not available (older LangChain version)"
+    )
 
 # Add current directory to path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -83,8 +89,38 @@ except ImportError:
     try:
         from .session_manager import set_current_session_id
     except Exception:  # pragma: no cover - ultimate fallback
+
         def set_current_session_id(_session_id):  # type: ignore[no-redef]
             return None
+
+
+try:
+    from agent_ng._file_attachment import build_file_bubbles
+except ImportError:
+    try:
+        from ._file_attachment import build_file_bubbles  # type: ignore[no-redef]
+    except Exception:  # pragma: no cover
+
+        def build_file_bubbles(_att):  # type: ignore[no-redef]
+            return []
+
+
+# Import image URL rewriter for LLM inline image references
+from agent_ng._image_url_rewriter import rewrite_llm_inline_images
+
+try:
+    from tools.file_utils import FileUtils as _FileUtils
+
+    _GRADIO_CACHE_DIR = _FileUtils.get_gradio_cache_path()
+except Exception:  # pragma: no cover
+    import tempfile
+
+    _GRADIO_CACHE_DIR = tempfile.gettempdir()
+
+# Static theme assets (logo, fonts) are loaded via `/gradio_api/file=...` in CSS.
+# Passing `allowed_paths` to `launch()` replaces `GRADIO_ALLOWED_PATHS`, so the cache
+# dir alone would block `resources/` and break hero logo + @font-face URLs.
+_GRADIO_RESOURCES_DIR = Path(__file__).resolve().parent.parent / "resources"
 
 # Try absolute imports first (works from root directory)
 try:
@@ -143,12 +179,11 @@ except ImportError as e1:
             e1,
             e2,
         )
-        _logger.error(
+        _logger.exception(
             "Please check: 1) requirements_ng.txt installed 2) PYTHONPATH 3) circular imports 4) modules exist 5) working directory"
         )
-        raise ImportError(
-            f"Failed to import required modules. Absolute: {e1}, Relative: {e2}"
-        )
+        msg = f"Failed to import required modules. Absolute: {e1}, Relative: {e2}"
+        raise ImportError(msg)
 
 
 class NextGenApp:
@@ -175,16 +210,22 @@ class NextGenApp:
             self.concurrency_config = get_concurrency_config()
             self.queue_manager = create_queue_manager(self.concurrency_config)
             _logger.debug(f"Queue manager created: {self.queue_manager is not None}")
-            _logger.debug(f"Queue manager has config: {hasattr(self.queue_manager, 'config') if self.queue_manager else False}")
+            _logger.debug(
+                f"Queue manager has config: {hasattr(self.queue_manager, 'config') if self.queue_manager else False}"
+            )
         except ImportError:
             # Fallback for when running as script
-            from concurrency_config import get_concurrency_config
-            from queue_manager import create_queue_manager
+            from agent_ng.concurrency_config import get_concurrency_config
+            from agent_ng.queue_manager import create_queue_manager
 
             self.concurrency_config = get_concurrency_config()
             self.queue_manager = create_queue_manager(self.concurrency_config)
-            _logger.debug(f"Queue manager created (fallback): {self.queue_manager is not None}")
-            _logger.debug(f"Queue manager has config: {hasattr(self.queue_manager, 'config') if self.queue_manager else False}")
+            _logger.debug(
+                f"Queue manager created (fallback): {self.queue_manager is not None}"
+            )
+            _logger.debug(
+                f"Queue manager has config: {hasattr(self.queue_manager, 'config') if self.queue_manager else False}"
+            )
 
         # Session Management - Clean modular approach
         # Use the process-wide SessionManager singleton to avoid
@@ -194,7 +235,7 @@ class NextGenApp:
             from .session_manager import get_session_manager
         except ImportError:
             # Fallback for when running as script
-            from session_manager import get_session_manager
+            from agent_ng.session_manager import get_session_manager
 
         self.session_manager = get_session_manager(language)
 
@@ -210,7 +251,7 @@ class NextGenApp:
             from .debug_streamer import set_session_context
         except ImportError:
             # Fallback for when running as script
-            from debug_streamer import set_session_context
+            from agent_ng.debug_streamer import set_session_context
         self.set_session_context = set_session_context
         # self.chat_interface = get_chat_interface("app_ng")  # Dead code - never used
 
@@ -218,7 +259,8 @@ class NextGenApp:
         try:
             self.ui_manager = get_ui_manager(language=language, i18n_instance=self.i18n)
             if not self.ui_manager:
-                raise ValueError("UI Manager not available")
+                msg = "UI Manager not available"
+                raise ValueError(msg)
         except Exception as e:
             _logger.exception("Failed to initialize UI Manager: %s", e)
             self.ui_manager = None
@@ -278,7 +320,6 @@ class NextGenApp:
             self._stream_loop = None
             self._stream_loop_thread = None
 
-
         self._stream_loop = asyncio.new_event_loop()
 
         def _run_loop_forever():
@@ -292,6 +333,7 @@ class NextGenApp:
 
     def _submit_stream_task(self, message, history, request, out_queue):
         """Submit the async streaming producer to the background loop and feed results into out_queue."""
+
         async def _producer():
             try:
                 async for result in self.stream_chat_with_agent(
@@ -446,7 +488,7 @@ class NextGenApp:
 
             # Format provider/model information
             if len(provider_models) == 1:
-                providers_text = list(provider_models)[0]
+                providers_text = next(iter(provider_models))
                 total_models = 1
             else:
                 providers_text = ", ".join(sorted(provider_models))
@@ -558,8 +600,10 @@ class NextGenApp:
                 # Ensure session status converges to ready to prevent stale text
                 try:
                     self.session_manager.set_status(session_id, rendered)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(
+                        f"Failed to set session status to ready for session {session_id}: {e}"
+                    )
 
         # Reduce UI churn with a small cache
         last = self._progress_cache.get(session_id)
@@ -647,9 +691,14 @@ class NextGenApp:
             )
 
             # Initialize response
+            # Per-turn accumulator for tool costs (e.g. image generation).
+            # Added to session/conversation totals via add_tool_cost() and
+            # displayed alongside LLM cost in the stats bubble.
+            tool_costs_this_turn: float = 0.0
 
             # Add user message to history
-            working_history = history + [
+            working_history = [
+                *history,
                 {"role": "user", "content": message},
                 {"role": "assistant", "content": ""},
             ]
@@ -711,7 +760,7 @@ class NextGenApp:
                         content = event.get("content", "")
                         metadata = event.get("metadata", {})
                         # print(f"🔍 DEBUG: Processing event - type: {event_type}, content length: {len(str(content))}")
-                    except Exception as e:
+                    except Exception:
                         import traceback
 
                         # print(f"🔍 DEBUG: Error processing event: {e}")
@@ -751,8 +800,10 @@ class NextGenApp:
                             if metadata and metadata.get("early_finish"):
                                 # Stop processing to hide stop button and enable download UI
                                 self.stop_processing(session_id)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logging.warning(
+                                f"Failed to stop processing on early finish for session {session_id}: {e}"
+                            )
                         yield working_history, ""
 
                     elif event_type == "completion":
@@ -845,6 +896,25 @@ class NextGenApp:
                             "metadata": {"title": tool_title},
                         }
                         working_history.append(tool_message)
+
+                        # If the tool registered a file, append an inline
+                        # preview bubble + caption directly in the chat.
+                        file_att = metadata.get("file_attachment") if metadata else None
+                        working_history.extend(build_file_bubbles(file_att))
+
+                        # Accumulate any out-of-band tool cost (e.g. image
+                        # generation). Feeds session_cost / conversation_cost
+                        # so every cost display reflects the true total.
+                        tc = metadata.get("tool_cost") if metadata else None
+                        if tc and isinstance(tc, (int, float)) and tc > 0:
+                            tool_costs_this_turn += tc
+                            if (
+                                user_agent
+                                and hasattr(user_agent, "token_tracker")
+                                and user_agent.token_tracker
+                            ):
+                                user_agent.token_tracker.add_tool_cost(tc)
+
                         yield working_history, ""
 
                     elif event_type == "content":
@@ -872,6 +942,11 @@ class NextGenApp:
                                 content_to_add = "\n\n" + content_to_add
 
                         response_content += content_to_add
+
+                        # Rewrite LLM-generated inline image references to Gradio-servable URLs
+                        response_content = rewrite_llm_inline_images(
+                            response_content, user_agent
+                        )
 
                         # Update or create assistant message
                         if (
@@ -923,7 +998,6 @@ class NextGenApp:
                 streaming_error_handled = True
                 # print(f"🔍 DEBUG: Set streaming_error_handled to True in streaming loop")
                 # Continue with the rest of the processing even if streaming fails
-                pass
 
             # Add API token count to final response
             # Add token counts below assistant response
@@ -933,7 +1007,9 @@ class NextGenApp:
             if prompt_tokens:
                 token_displays.append(
                     format_translation(
-                        "prompt_tokens", self.language, tokens=prompt_tokens.formatted
+                        "prompt_tokens",
+                        self.language,
+                        tokens=prompt_tokens.formatted_no_cost,
                     )
                 )
 
@@ -948,7 +1024,7 @@ class NextGenApp:
                             format_translation(
                                 "api_tokens",
                                 self.language,
-                                tokens=last_api_tokens.formatted,
+                                tokens=last_api_tokens.formatted_no_cost,
                             )
                         )
                         # print(f"🔍 DEBUG: Added API token display")
@@ -994,7 +1070,7 @@ class NextGenApp:
                     total_duplicates = 0
                     total_tool_calls = 0
 
-                    for tool_key, stats in dedup_stats.items():
+                    for _tool_key, stats in dedup_stats.items():
                         total_tool_calls += stats["total_calls"]
                         if stats["duplicates"] > 0:
                             dedup_summary.append(
@@ -1028,6 +1104,27 @@ class NextGenApp:
 
             # Add token statistics as a separate metadata block
             if token_displays:
+                # Add total cost for this turn (LLM + any tool costs combined).
+                # _turn_cost covers the LLM; tool_costs_this_turn covers tools
+                # that make their own API calls (e.g. image generation).
+                try:
+                    if user_agent and hasattr(user_agent, "token_tracker"):
+                        llm_cost = getattr(user_agent.token_tracker, "_turn_cost", None)
+                        llm_cost = float(llm_cost) if llm_cost else 0.0
+                    else:
+                        llm_cost = 0.0
+                    total_cost = llm_cost + tool_costs_this_turn
+                    if total_cost > 0:
+                        token_displays.append(
+                            format_translation(
+                                "turn_cost",
+                                self.language,
+                                cost=f"${total_cost:.4f}",
+                            )
+                        )
+                except Exception:
+                    pass  # Never let cost display break the stats bubble
+
                 # Add execution time to the token display
                 token_displays.append(
                     format_translation(
@@ -1098,8 +1195,26 @@ class NextGenApp:
             # Clear session context after turn
             try:
                 set_current_session_id(None)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"Failed to clear session context: {e}")
+
+    def _sync_llm_dropdown_from_session(self, request: gr.Request | None = None) -> Any:
+        """Align sidebar LLM dropdown with the active session agent."""
+        if not request or not getattr(self, "session_manager", None):
+            return gr.update()
+        try:
+            sid = self.session_manager.get_session_id(request)
+            agent = self.session_manager.get_session_agent(sid)
+            inst = getattr(agent, "llm_instance", None)
+            if not inst:
+                return gr.update()
+            p, m = inst.provider.value, inst.model_name
+            return f"{p.title()} / {m}"
+        except Exception as e:
+            logging.getLogger(__name__).debug(
+                "sync_llm_dropdown_from_session: %s", e, exc_info=True
+            )
+            return gr.update()
 
     def _create_event_handlers(self) -> dict[str, Any]:
         """Create event handlers for all tabs"""
@@ -1110,6 +1225,7 @@ class NextGenApp:
             # Status and monitoring handlers
             "update_status": self._update_status,
             "update_token_budget": self._update_token_budget,
+            "sync_llm_dropdown_from_session": self._sync_llm_dropdown_from_session,
             "refresh_logs": self._refresh_logs,
             "refresh_stats": self._refresh_stats,
             "update_all_ui": self.update_all_ui_components,
@@ -1153,8 +1269,8 @@ class NextGenApp:
             try:
                 if not future.done():
                     future.cancel()
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"Failed to cancel future: {e}")
 
         # Refresh UI after streaming completes (EVENT-DRIVEN)
         self._refresh_ui_after_message()
@@ -1212,7 +1328,7 @@ class NextGenApp:
             # print("🔍 DEBUG: Triggering UI update...")
             # Store the update trigger - the UI will check this
             self._ui_update_needed = True
-        except Exception as e:
+        except Exception:
             # print(f"🔍 DEBUG: Error triggering UI update: {e}")
             pass
 
@@ -1237,7 +1353,7 @@ class NextGenApp:
             # This will be called when the agent is ready or after messages
             # The actual UI update will happen through Gradio's event system
             self._ui_update_needed = True
-        except Exception as e:
+        except Exception:
             # print(f"🔍 DEBUG: Error triggering UI update: {e}")
             pass
 
@@ -1249,7 +1365,7 @@ class NextGenApp:
 
             # print("🔍 DEBUG: UI refreshed after message completion (EVENT-DRIVEN)")
 
-        except Exception as e:
+        except Exception:
             # print(f"🔍 DEBUG: Error refreshing UI after message: {e}")
             pass
 
@@ -1257,7 +1373,8 @@ class NextGenApp:
         """Create the Gradio interface using UI Manager and modular tabs"""
         # Validate UI Manager
         if not self.ui_manager:
-            raise RuntimeError("UI Manager not available - cannot create interface")
+            msg = "UI Manager not available - cannot create interface"
+            raise RuntimeError(msg)
 
         # Create event handlers
         event_handlers = self._create_event_handlers()
@@ -1343,10 +1460,12 @@ class NextGenApp:
 
         # Configure queue manager BEFORE creating interface to ensure it's available to tabs
         try:
-            if hasattr(self, 'queue_manager') and self.queue_manager:
+            if hasattr(self, "queue_manager") and self.queue_manager:
                 _logger.info("Configuring queue manager before interface creation...")
                 _logger.debug(f"Queue manager type: {type(self.queue_manager)}")
-                _logger.debug(f"Queue manager has config: {hasattr(self.queue_manager, 'config')}")
+                _logger.debug(
+                    f"Queue manager has config: {hasattr(self.queue_manager, 'config')}"
+                )
                 # Create a temporary demo to configure the queue manager
                 with gr.Blocks() as temp_demo:
                     pass
@@ -1368,7 +1487,13 @@ class NextGenApp:
 
         # Add a minimal server-side API endpoint to ask a question and get final answer
         # This uses the same session isolation as the UI and returns only the last assistant text
-        def _api_ask(question: str, username: str = None, password: str = None, base_url: str = None, session_id: str = None) -> str:
+        def _api_ask(
+            question: str,
+            username: str | None = None,
+            password: str | None = None,
+            base_url: str | None = None,
+            session_id: str | None = None,
+        ) -> str:
             _logger.info(f"🔗 API /ask called with question: {question[:50]}...")
 
             # Use provided session_id or generate a new one
@@ -1391,7 +1516,9 @@ class NextGenApp:
 
                 if config:
                     set_session_config(session_id, config)
-                    _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
+                    _logger.debug(
+                        f"API: Set session config for {session_id}: {list(config.keys())}"
+                    )
 
             # Get user agent with session configuration
             user_agent = self.get_user_agent(session_id)
@@ -1422,14 +1549,22 @@ class NextGenApp:
                 loop.close()
 
             except Exception as e:
-                _logger.error(f"API /ask error: {e}")
+                _logger.exception(f"API /ask error: {e}")
                 return f"❌ {e}"
 
-            _logger.info(f"API /ask: Returning response (length: {len(response_content)})")
+            _logger.info(
+                f"API /ask: Returning response (length: {len(response_content)})"
+            )
             return response_content
 
         # Streaming endpoint: yields incremental content for cURL/Client streaming
-        def _api_ask_stream(question: str, username: str = None, password: str = None, base_url: str = None, session_id: str = None):
+        def _api_ask_stream(
+            question: str,
+            username: str | None = None,
+            password: str | None = None,
+            base_url: str | None = None,
+            session_id: str | None = None,
+        ):
             _logger.info(f"🔗 API /ask_stream called with question: {question[:50]}...")
 
             # Use provided session_id or generate a new one
@@ -1453,7 +1588,9 @@ class NextGenApp:
 
                 if config:
                     set_session_config(session_id, config)
-                    _logger.debug(f"API: Set session config for {session_id}: {list(config.keys())}")
+                    _logger.debug(
+                        f"API: Set session config for {session_id}: {list(config.keys())}"
+                    )
 
             cumulative = ""
 
@@ -1519,12 +1656,17 @@ class NextGenApp:
             _base_url = gr.Textbox(label="base_url", visible=False)
             _session_id = gr.Textbox(label="session_id", type="password", visible=False)
             _out = gr.Textbox(label="answer", visible=False)
-            #_in.submit(_api_ask, inputs=[_in, _username, _password, _base_url, _session_id], outputs=_out, api_name="ask")
-            _in.submit(_api_ask_stream, inputs=[_in, _username, _password, _base_url, _session_id], outputs=_out, api_name="ask_stream")
+            # _in.submit(_api_ask, inputs=[_in, _username, _password, _base_url, _session_id], outputs=_out, api_name="ask")
+            _in.submit(
+                _api_ask_stream,
+                inputs=[_in, _username, _password, _base_url, _session_id],
+                outputs=_out,
+                api_name="ask_stream",
+            )
 
             # Use gr.api() to register API endpoints without fake UI elements
             gr.api(_api_ask, api_name="ask")
-            #gr.api(_api_ask_stream, api_name="ask_stream")
+            # gr.api(_api_ask_stream, api_name="ask_stream")
 
         # Configure concurrency and queuing AFTER registering named endpoints
         # Always initialize queue (even with minimal settings) to prevent AttributeError
@@ -1567,10 +1709,6 @@ class NextGenAppWithLanguageDetection(NextGenApp):
         try:
             # Primary: Use GRADIO_DEFAULT_LANGUAGE environment variable
             import os
-
-            from dotenv import load_dotenv
-
-            load_dotenv()  # Load .env file
 
             gradio_lang = os.getenv("GRADIO_DEFAULT_LANGUAGE", "").lower()
             if gradio_lang is not None:
@@ -1809,17 +1947,21 @@ def main():
     _logger.info(
         "Launching Gradio interface on port %s with language switching...", port
     )
-    # Configure app-level theme and CSS at launch per Gradio 6 migration guide
-    css_path = Path(__file__).parent.parent / "resources" / "css" / "cmw_copilot_theme.css"
     demo.launch(
         debug=True,
         share=False,
         server_name="0.0.0.0",
         server_port=port,
         show_error=True,
-        footer_links=["api", "gradio", "settings"],
-        theme=gr.themes.Soft(),
-        css_paths=[css_path] if css_path.exists() else None,
+        show_api=True,  # Enable API documentation for Hugging Face Spaces
+        # Allow Gradio's /file= endpoint to serve session-registered files
+        # (generated images, extracted assets, etc.) from the cache dir.
+        # Required when GRADIO_TEMP_DIR is set to a non-default path.
+        # Include `resources/` so theme CSS can load logo/fonts via `/gradio_api/file=...`.
+        allowed_paths=[
+            str(Path(_GRADIO_CACHE_DIR).resolve()),
+            str(_GRADIO_RESOURCES_DIR.resolve()),
+        ],
     )
 
 

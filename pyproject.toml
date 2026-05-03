@@ -3,7 +3,7 @@
 # Based on LangChain and Gradio best practices
 
 # Target Python version
-target-version = "py311"
+target-version = "py312"
 
 # Line length (PEP 8 standard)
 line-length = 88
@@ -31,6 +31,7 @@ select = ["E", "W", "F", "I", "N", "UP", "YTT", "ANN", "S", "BLE", "FBT", "B", "
 # Ignore specific rules that conflict with LangChain/Gradio/HuggingFace/Langfuse/Langsmith patterns
 ignore = [
     "S101",    # Use of assert (common in LangChain tests)
+    "S112",    # try-except-continue (used for skipping malformed assets)
     "PLR0913", # Too many arguments (LangChain tools often have many params)
     "PLR0912", # Too many branches (complex LangChain logic)
     "PLR0915", # Too many statements (LangChain chains can be long)
@@ -50,10 +51,13 @@ ignore = [
     "T201",    # Print statements (Langfuse/Langsmith debugging)
     "BLE001",  # Blind except clauses (Langfuse/Langsmith error handling)
     "UP032",   # Do not suggest {e!s} over {str(e)} in f-strings
+    "RUF010",  # Do not suggest {e!s} over {str(e)} in f-strings
     "TRY300",  # Consider moving statement to else block (preferential style)
     "TRY401",  # Redundant exception object in logging.exception (preferential style)
     "PTH",     # Path-related suggestions (os.path vs Path - both are valid)
     "DTZ005",  # datetime.now() without tz (intentionally using local timezone is okay)
+    "PLC0415", # Import not at top-level (required for fallback import pattern per AGENTS.md)
+    "TID252",  # Prefer absolute imports (relative imports used in fallback pattern)
 ]
 
 # Rules that should not be automatically fixed to prevent deletion of useful code
@@ -79,12 +83,31 @@ unfixable = [
 # Allow specific patterns
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = ["S101", "PLR2004", "ANN001", "T201", "T10"]
+"**/agent_ng/_tests/**/*.py" = ["S101", "PLR2004", "ANN001", "T201", "T10", "SLF001", "E501"]
 "**/.misc_files/**/*.py" = ["S101", "PLR2004", "ANN001", "T201", "T10"]
 "**/*langfuse*" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Langfuse files
 "**/*langsmith*" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Langsmith files
 "**/agent_ng/*.py" = ["T201", "T10", "PLR0913", "ANN401", "BLE001"]  # Agent files need debugging
-"**/tools/*.py" = ["PLR0913", "ANN401", "BLE001"]  # Tool files
+"**/tools/*.py" = ["PLR0913", "ANN401", "BLE001", "N805", "TRY003", "EM101", "E501", "FBT001", "FBT002", "SLF001", "ARG001"]  # Tool files - pydantic patterns
+"**/tools/_tests/harness_*.py" = ["E402", "I001"]  # live script: path/env then imports
 "**/i18n_translations.py" = ["E501"]  # Translation dictionaries contain long strings
+"**/agent_ng/openrouter_native_chat.py" = [  # pragma: allowlist secret
+    "T201",
+    "T10",
+    "PLR0913",
+    "ANN401",
+    "BLE001",
+    "E501",
+    "TC002",
+    "TC003",
+    "S110",
+    "ARG001",
+    "ARG002",
+    "RUF012",
+    "SIM105",
+    "TRY003",
+    "EM101",
+]
 
 # Import sorting - conservative configuration to preserve imports
 [tool.ruff.lint.isort]
@@ -110,3 +133,18 @@ max-args = 10
 max-locals = 20
 max-branches = 15
 max-statements = 60
+
+# Optional dev tooling (pip >= 25: pip install --group dev ; else: pip install "mypy>=1.11")
+[dependency-groups]
+dev = [
+    "mypy>=1.11.0,<2",
+]
+
+# Static typing (run: mypy agent_ng/ — aligns with AGENTS.md)
+[tool.mypy]
+python_version = "3.12"
+explicit_package_bases = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+show_error_codes = true
+pretty = true
