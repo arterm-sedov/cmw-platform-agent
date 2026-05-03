@@ -226,12 +226,15 @@ class PolzaProvider(ImageProvider):
         self, data: dict[str, Any], model: str
     ) -> ImageGenerationResult:
         """Download the image from the CDN URL and build the result."""
-        image_data = data.get("data") or {}
-        cdn_url = (
-            image_data.get("url")
-            if isinstance(image_data, dict)
-            else None
-        )
+        raw_data = data.get("data")
+        # API returns either a dict {"url": ...} or a list [{"url": ...}]
+        if isinstance(raw_data, list):
+            image_data = raw_data[0] if raw_data else {}
+        elif isinstance(raw_data, dict):
+            image_data = raw_data
+        else:
+            image_data = {}
+        cdn_url = image_data.get("url") if isinstance(image_data, dict) else None
         if not cdn_url or not isinstance(cdn_url, str):
             return ImageGenerationResult(
                 success=False,

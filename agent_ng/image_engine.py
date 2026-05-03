@@ -129,7 +129,13 @@ class ImageEngine:
         aspect_ratio: str | None = None,
         image_size: str | None = None,
     ) -> ImageGenerationResult:
-        """Generate a single image, delegating to the model's provider."""
+        """Generate a single image, delegating to the model's provider.
+
+        Provider selection order:
+        1. ``IMAGE_GEN_PROVIDER`` env var — forces a single provider globally
+           (useful for testing or single-key deployments).
+        2. ``config.providers`` list — tried in order; first success returned.
+        """
         resolved_model = model or get_default_model()
         config = get_model_config(resolved_model)
         if config is None:
@@ -141,11 +147,14 @@ class ImageEngine:
                 ),
             )
 
-        # Iterate through the model's provider list in order.
+        # IMAGE_GEN_PROVIDER overrides the per-model provider list globally.
+        forced = os.getenv("IMAGE_GEN_PROVIDER", "").strip()
+        provider_order = [forced] if forced else list(config.providers)
+
+        # Iterate through the provider list in order.
         # Each provider is tried; the first success is returned.
-        # On failure, the next provider is attempted (transparent fallback).
         last_result: ImageGenerationResult | None = None
-        for provider_name in config.providers:
+        for provider_name in provider_order:
             if self._instance_openrouter is not None and provider_name == "openrouter":
                 provider = self._instance_openrouter
             else:
@@ -178,7 +187,7 @@ class ImageEngine:
             success=False,
             model=resolved_model,
             error=(
-                f"No adapter registered for any provider in {config.providers!r}. "
+                f"No adapter registered for any provider in {provider_order!r}. "
                 "See agent_ng/image_providers for how to add one."
             ),
         )

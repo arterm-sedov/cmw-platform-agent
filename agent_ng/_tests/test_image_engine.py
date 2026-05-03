@@ -115,6 +115,11 @@ class TestEngineConstruction:
 
 
 class TestSuccessfulGeneration:
+    @pytest.fixture(autouse=True)
+    def _use_openrouter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # These tests mock only the OpenRouter HTTP layer; force that provider.
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "openrouter")
+
     def test_gemini_returns_bytes_cost_and_tokens(self) -> None:
         engine = ImageEngine(api_key="sk-test")
         with patch(_POST_TARGET, return_value=_ok_response()):
@@ -206,6 +211,10 @@ class TestSuccessfulGeneration:
 class TestImageConfigForwarding:
     """image_config is forwarded only for Gemini, ignored for Flux/Seedream."""
 
+    @pytest.fixture(autouse=True)
+    def _use_openrouter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "openrouter")
+
     def test_image_config_forwarded_for_gemini(self) -> None:
         engine = ImageEngine(api_key="sk-test")
         with patch(
@@ -264,6 +273,10 @@ class TestImageConfigForwarding:
 
 
 class TestErrorHandling:
+    @pytest.fixture(autouse=True)
+    def _use_openrouter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "openrouter")
+
     def test_http_error_returns_failure_with_status(self) -> None:
         engine = ImageEngine(api_key="sk-test")
         with patch(
@@ -361,6 +374,10 @@ class TestErrorHandling:
 class TestGenerationIdFallback:
     """generation_id is a nice-to-have; missing id doesn't cause failure."""
 
+    @pytest.fixture(autouse=True)
+    def _use_openrouter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "openrouter")
+
     def test_missing_id_is_none(self) -> None:
         engine = ImageEngine(api_key="sk-test")
         mock = _ok_response()
@@ -393,21 +410,55 @@ def _has_polza_key() -> bool:
     strict=False,
     reason="Live API: transient safety filters or network errors may cause flakes",
 )
-class TestImageEngineLiveAPI:
-    """Real API calls via Polza.ai (no regional restrictions for Russian IPs)."""
+class TestImageEngineLivePolza:
+    """Real API calls forced through Polza.ai (no regional restrictions)."""
 
-    def test_gemini_generates_real_image(self) -> None:
-        engine = ImageEngine()
-        result = engine.generate(
-            "A minimalist geometric logo: simple blue square on white background",
-            model="polza/google/gemini-3.1-flash-image-preview",
-        )
+    def test_gemini_via_polza(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "polza"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "A minimalist geometric logo: simple blue square on white background",
+                model="google/gemini-3.1-flash-image-preview",
+            )
         assert result.success is True, f"generation failed: {result.error}"
         assert result.image_bytes is not None
         assert len(result.image_bytes) > 1024, "image suspiciously small"
-        # Accept PNG or JPEG output (Polza CDN may return either).
         is_png = result.image_bytes[:8] == b"\x89PNG\r\n\x1a\n"
         is_jpeg = result.image_bytes[:2] == b"\xff\xd8"
         assert is_png or is_jpeg, "expected PNG or JPEG output"
         assert result.cost is not None
         assert result.cost > 0
+
+    def test_seedream_via_polza(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "polza"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "Minimalist icon: blue circle on white background",
+                model="bytedance-seed/seedream-3",
+            )
+        assert result.success is True, f"generation failed: {result.error}"
+        assert result.image_bytes is not None
+        assert len(result.image_bytes) > 1024, "image suspiciously small"
+
+
+@pytest.mark.skipif(
+    not _has_openrouter_key(),
+    reason="OPENROUTER_API_KEY not set; skipping live OpenRouter call",
+)
+@pytest.mark.xfail(
+    strict=False,
+    reason="Live API: regional restrictions or network errors may cause flakes",
+)
+class TestImageEngineLiveOpenRouter:
+    """Real API calls forced through OpenRouter (may be geo-restricted)."""
+
+    def test_seedream_via_openrouter(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "openrouter"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "Minimalist icon: blue circle on white background",
+                model="bytedance-seed/seedream-4.5",
+            )
+        assert result.success is True, f"generation failed: {result.error}"
+        assert result.image_bytes is not None
+        assert len(result.image_bytes) > 1024, "image suspiciously small"
