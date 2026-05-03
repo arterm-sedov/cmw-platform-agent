@@ -1,0 +1,2156 @@
+﻿diff --git a/.cursor/chats/cursor_content_comparison_of_skill_md.md b/.cursor/chats/cursor_content_comparison_of_skill_md.md
+index 79edeba..b9b8e19 100644
+--- a/.cursor/chats/cursor_content_comparison_of_skill_md.md
++++ b/.cursor/chats/cursor_content_comparison_of_skill_md.md
+@@ -216,17 +216,9 @@ Searched the entire `.agents/skills/cmw-platform/` tree for the canonical marker
+ 
+ ## Two structural issues I noticed in the new file
+ 
+-1. **The committed file at HEAD `5cf2f48` contains unresolved merge conflict markers** in the footer (lines 1551–1555):
++1. **Historical git blemish (already fixed in-tree):** at commit `5cf2f48`, `.agents/skills/cmw-platform/SKILL.md` had three-way merge **sentinel lines** in the footer (~1551–1555): HEAD carried the “Updated **2026-04-29** …” footer line; incoming commit `8ad0b475` carried “Updated **2026-04-27** …”. The working tree later picked **2026-04-27** and removed the sentinels. (Quoted literally those lines looked like unresolved merges—grep-friendly reproduction avoided here.)
+ 
+-```1551:1555:.agents/skills/cmw-platform/SKILL.md
+-<<<<<<< HEAD
+-*End of SKILL.md - Updated 2026-04-29 with localization workflow fixes*
+-=======
+-*End of SKILL.md - Updated 2026-04-27 with import/export application tools, unified browser automation guidance, and localization workflow updates*
+->>>>>>> 8ad0b47587a708b13f67d95d8a6091138df87915
+-```
+-
+-The working tree has these resolved (kept the 2026-04-27 line, dropped the 2026-04-29 line) — that's the `M` you see in `git status`. This is technically a separate fix and unrelated to our relocation plan.
++This was unrelated to the relocation plan; mention kept only as changelog/archaeology.
+ 
+ 2. **Broken section numbering** in the new file:
+    - `## 3. Exploration` → `## 4. Data Operations` → `## 3.5. Import/Export Applications` (out-of-order) → `## 4. UI Components` (duplicate of §4) → `## 6. Localization` (skips §5).
+diff --git a/.cursor/plans/relocate_lost_skill.md_content_d9bc3cc5.plan.md b/.cursor/plans/relocate_lost_skill.md_content_d9bc3cc5.plan.md
+index db38101..ad26132 100644
+--- a/.cursor/plans/relocate_lost_skill.md_content_d9bc3cc5.plan.md
++++ b/.cursor/plans/relocate_lost_skill.md_content_d9bc3cc5.plan.md
+@@ -79,19 +79,9 @@ flowchart LR
+ 
+ Two structural issues in the current `SKILL.md` that must be fixed before content edits to keep line numbers and section references stable.
+ 
+-### 1. Merge Conflict Markers
++### 1. Historical footer conflict (resolved)
+ 
+-The committed HEAD (`5cf2f48`) contains unresolved markers at lines 1551–1555:
+-
+-```
+-<<<<<<< HEAD
+-*End of SKILL.md - Updated 2026-04-29 with localization workflow fixes*
+-=======
+-*End of SKILL.md - Updated 2026-04-27 with import/export ...*
+->>>>>>> 8ad0b47587a708b13f67d95d8a6091138df87915
+-```
+-
+-Working tree already resolved this — footer reads the single "2026-04-27" line.
++Commit `5cf2f48` briefly shipped `.agents/skills/cmw-platform/SKILL.md` with **three-way merge sentinels** around two footer variants (~1551–1555): HEAD had “Updated **2026-04-29** …”; incoming `8ad0b475` had “Updated **2026-04-27** …”. Working tree chose **2026-04-27** and dropped sentinels. (Prior docs pasted literal sentinel tokens here—they triggered grep noise; this paragraph replaces that.)
+ 
+ **Action:** Update that footer line to:
+ 
+diff --git a/.cursorignore b/.cursorignore
+index f4da1fe..21d441f 100644
+--- a/.cursorignore
++++ b/.cursorignore
+@@ -1,2 +1,3 @@
+ # Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
+-!.env.example
+\ No newline at end of file
++!.env.example
++!.reference_repos/**
+\ No newline at end of file
+diff --git a/agent_ng/app_ng_modular.py b/agent_ng/app_ng_modular.py
+index 5a2aaca..2812d0c 100644
+--- a/agent_ng/app_ng_modular.py
++++ b/agent_ng/app_ng_modular.py
+@@ -142,7 +142,7 @@ try:
+     from agent_ng.llm_manager import get_llm_manager
+ 
+     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
+-    from agent_ng.tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
++    from agent_ng.tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab, DownloadsTab
+     from agent_ng.ui_manager import get_ui_manager
+     from agent_ng.utils import safe_string
+ 
+@@ -169,7 +169,7 @@ except ImportError as e1:
+         from .llm_manager import get_llm_manager
+ 
+         # from .streaming_chat import get_chat_interface  # Module moved to .unused
+-        from .tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
++        from .tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab, DownloadsTab
+         from .ui_manager import get_ui_manager
+ 
+         _logger.info("Successfully imported all modules using relative imports")
+@@ -228,12 +228,16 @@ class NextGenApp:
+             )
+ 
+         # Session Management - Clean modular approach
++        # Use the process-wide SessionManager singleton to avoid
++        # duplicate per-session initializations when multiple app
++        # instances are constructed (e.g. for language detection).
+         try:
+-            from .session_manager import SessionManager
++            from .session_manager import get_session_manager
+         except ImportError:
+             # Fallback for when running as script
+-            from agent_ng.session_manager import SessionManager
+-        self.session_manager = SessionManager(language)
++            from agent_ng.session_manager import get_session_manager
++
++        self.session_manager = get_session_manager(language)
+ 
+         # Create i18n instance for the specified language
+         self.i18n = create_i18n_instance()
+@@ -700,6 +704,7 @@ class NextGenApp:
+             ]
+ 
+             # Get prompt token count for user message (will be displayed below assistant response)
++            # History is already in Gradio 6 messages format: list[dict[str, str]]
+             prompt_tokens = None
+             if user_agent:
+                 try:
+@@ -729,8 +734,22 @@ class NextGenApp:
+             # print(f"🔍 DEBUG: Starting streaming for session {session_id}")
+             # print(f"🔍 DEBUG: Working history length before streaming: {len(working_history)}")
+ 
++            # Helper to check if cancellation was requested (following reference repo pattern)
++            def is_cancelled() -> bool:
++                try:
++                    cancel_state = self.session_manager.get_cancellation_state(session_id)
++                    return cancel_state is not None and cancel_state.get("cancelled", False)
++                except Exception:
++                    return False
++
+             try:
+-                async for event in user_agent.stream_message(message, session_id):
++                # Pass app's language for proper i18n (iteration messages should match UI language)
++                async for event in user_agent.stream_message(message, session_id, language=self.language):
++                    # Check for cancellation at each iteration (following reference repo pattern)
++                    if is_cancelled():
++                        logging.getLogger(__name__).info("Streaming cancelled during execution - stopping")
++                        break
++
+                     # Safety check for None event
+                     if event is None:
+                         # print("🔍 DEBUG: Received None event, skipping...")
+@@ -792,6 +811,20 @@ class NextGenApp:
+                         self.session_manager.set_status(session_id, content)
+                         yield working_history, ""
+ 
++                    elif event_type == "budget_update":
++                        # Budget snapshot was refreshed - token budget display will update via timer
++                        # Why timer instead of immediate update?
++                        # - Budget snapshots are computed at specific "budget moments" (pre-iteration, post-tool),
++                        #   not on every streaming chunk, so updates are infrequent enough that timer is efficient
++                        # - Timer interval (UI_REFRESH_INTERVAL, typically 2-5s) ensures prompt updates
++                        #   without overwhelming the UI with too frequent updates
++                        # - To update immediately, we'd need to add token_budget_display as an output to the
++                        #   streaming generator, which would require significant refactoring of the generator signature
++                        # - Timer approach matches Gradio 5 behavior and provides good UX with minimal complexity
++                        # Continue streaming - timer will pick up the updated snapshot within 2-5 seconds
++                        yield working_history, ""
++                        continue
++
+                     elif event_type == "turn_complete":
+                         # Store session-aware turn snapshot for analytics/logs (non-persistent)
+                         ordered = metadata.get("ordered_messages") if metadata else None
+@@ -896,13 +929,11 @@ class NextGenApp:
+                             for i in range(
+                                 max(0, len(working_history) - 3), len(working_history)
+                             ):
+-                                if (
+-                                    i >= 0
+-                                    and working_history[i]
+-                                    and working_history[i]
+-                                    .get("metadata", {})
+-                                    .get("title")
+-                                ):
++                                msg = working_history[i]
++                                if not isinstance(msg, dict):
++                                    continue
++                                metadata = msg.get("metadata") or {}
++                                if isinstance(metadata, dict) and metadata.get("title"):
+                                     has_recent_tool_messages = True
+                                     break
+ 
+@@ -1308,11 +1339,11 @@ class NextGenApp:
+             return True
+         return False
+ 
+-    def update_all_ui_components(self) -> tuple[str, str, str]:
+-        """Update all UI components and return their values"""
+-        status = self._update_status()
+-        stats = self._refresh_stats()
+-        logs = self._refresh_logs()
++    def update_all_ui_components(self, request: gr.Request = None) -> tuple[str, str, str]:
++        """Update all UI components and return their values - session-aware"""
++        status = self._update_status(request)
++        stats = self._refresh_stats(request)
++        logs = self._refresh_logs(request)
+         return status, stats, logs
+ 
+     def trigger_ui_update(self):
+@@ -1412,6 +1443,17 @@ class NextGenApp:
+                 _logger.info(
+                     "ConfigTab not shown (CMW_USE_DOTENV is true or tab unavailable)"
+                 )
++
++            # Downloads tab
++            if DownloadsTab:
++                downloads_tab = DownloadsTab(
++                    event_handlers, language=self.language, i18n_instance=self.i18n
++                )
++                downloads_tab.set_main_app(self)
++                tab_modules.append(downloads_tab)
++                self.tab_instances["downloads"] = downloads_tab
++            else:
++                _logger.warning("DownloadsTab not available")
+         except Exception as e:
+             _logger.exception("Error creating tab modules: %s", e)
+             raise
+@@ -1555,7 +1597,8 @@ class NextGenApp:
+             async def _stream():
+                 nonlocal cumulative
+                 try:
+-                    async for event in user_agent.stream_message(question, session_id):
++                    # Pass app's language for proper i18n
++                    async for event in user_agent.stream_message(question, session_id, language=self.language):
+                         if not event:
+                             continue
+                         et = event.get("type")
+@@ -1626,8 +1669,17 @@ class NextGenApp:
+             # gr.api(_api_ask_stream, api_name="ask_stream")
+ 
+         # Configure concurrency and queuing AFTER registering named endpoints
++        # Always initialize queue (even with minimal settings) to prevent AttributeError
++        # This follows the pattern from working reference repo (rag_engine)
+         self.queue_manager.configure_queue(demo)
+ 
++        # Ensure queue is initialized even if configure_queue didn't call demo.queue()
++        # This prevents AttributeError: 'NoneType' object has no attribute 'max_thread_count'
++        if demo._queue is None:
++            # Initialize with minimal default settings
++            demo.queue(default_concurrency_limit=1, status_update_rate="auto")
++            _logger.info("Queue initialized with minimal default settings")
++
+         # Consolidate all components from UI Manager (single source of truth)
+         self.components = self.ui_manager.get_components()
+ 
+@@ -1681,13 +1733,38 @@ def get_demo_with_language_detection():
+ 
+     if demo is None:
+         try:
++            # #region agent log
++            import json, time
++            try:
++                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
++                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"J","location":"app_ng_modular.py:1558","message":"Starting demo creation","data":{},"timestamp":int(time.time()*1000)}) + '\n')
++            except: pass
++            # #endregion
+             # First, detect the language using the elegant i18n system
+             temp_app = NextGenAppWithLanguageDetection()
+             detected_language = temp_app.get_current_language()
++            # #region agent log
++            try:
++                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
++                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"K","location":"app_ng_modular.py:1562","message":"Language detected","data":{"language":detected_language},"timestamp":int(time.time()*1000)}) + '\n')
++            except: pass
++            # #endregion
+ 
+             # Create app with the detected language
+             app = NextGenAppWithLanguageDetection(language=detected_language)
++            # #region agent log
++            try:
++                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
++                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"L","location":"app_ng_modular.py:1566","message":"Calling create_interface","data":{},"timestamp":int(time.time()*1000)}) + '\n')
++            except: pass
++            # #endregion
+             demo = app.create_interface()
++            # #region agent log
++            try:
++                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
++                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"M","location":"app_ng_modular.py:1567","message":"Interface created successfully","data":{},"timestamp":int(time.time()*1000)}) + '\n')
++            except: pass
++            # #endregion
+ 
+             # Ensure the demo has the required attributes for Gradio reloading
+             if not hasattr(demo, "_queue"):
+@@ -1695,6 +1772,13 @@ def get_demo_with_language_detection():
+ 
+             _logger.info(f"🌐 Demo created with detected language: {detected_language}")
+         except Exception as e:
++            # #region agent log
++            import json, time
++            try:
++                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
++                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"N","location":"app_ng_modular.py:1574","message":"Error creating demo","data":{"error":str(e),"error_type":type(e).__name__},"timestamp":int(time.time()*1000)}) + '\n')
++            except: pass
++            # #endregion
+             _logger.exception("Error creating demo: %s", e)
+             # Create a minimal working demo with required attributes
+             with gr.Blocks() as fallback_demo:
+@@ -1863,7 +1947,6 @@ def main():
+     _logger.info(
+         "Launching Gradio interface on port %s with language switching...", port
+     )
+-
+     demo.launch(
+         debug=True,
+         share=False,
+diff --git a/agent_ng/i18n_translations.py b/agent_ng/i18n_translations.py
+index b37ea3d..7761d03 100644
+--- a/agent_ng/i18n_translations.py
++++ b/agent_ng/i18n_translations.py
+@@ -26,6 +26,8 @@ RUSSIAN_TRANSLATIONS = {
+     "tab_logs": "📜 Журналы",
+     "tab_stats": "📊 Статистика",
+     "tab_config": "⚙️ Настройки",
++    "tab_sidebar": "⚙️ Настройки и управление",
++    "tab_downloads": "📥 Загрузки",
+     # Home tab content
+     "welcome_title": "Добро пожаловать!",
+     "welcome_description": """
+@@ -374,6 +376,8 @@ ENGLISH_TRANSLATIONS = {
+     "tab_logs": "📜 Logs",
+     "tab_stats": "📊 Statistics",
+     "tab_config": "⚙️ Config",
++    "tab_sidebar": "⚙️ Settings & Control",
++    "tab_downloads": "📥 Downloads",
+     # Home tab content
+     "welcome_title": "Welcome!",
+     "welcome_description": """
+diff --git a/agent_ng/langchain_agent.py b/agent_ng/langchain_agent.py
+index a53a65d..0f324a8 100644
+--- a/agent_ng/langchain_agent.py
++++ b/agent_ng/langchain_agent.py
+@@ -287,7 +287,7 @@ class CmwAgent:
+         return self.conversation_chains[conversation_id]
+ 
+     async def stream_message(
+-        self, message: str, conversation_id: str = "default"
++        self, message: str, conversation_id: str = "default", language: str | None = None
+     ) -> AsyncGenerator[Dict[str, Any], None]:
+         """
+         Stream a message response using proper LangChain streaming.
+@@ -298,6 +298,7 @@ class CmwAgent:
+         Args:
+             message: User message
+             conversation_id: Conversation identifier
++            language: Optional language code for i18n (if not provided, uses self.language)
+ 
+         Yields:
+             Dict with event type, content, and metadata
+@@ -315,9 +316,13 @@ class CmwAgent:
+             # Get native streaming manager
+             streaming_manager = get_native_streaming()
+ 
++            # Use provided language or fall back to agent's language for i18n
++            if language is None:
++                language = getattr(self, "language", "en")
++
+             # Stream agent response using native LangChain streaming
+             async for event in streaming_manager.stream_agent_response(
+-                self, message, conversation_id
++                self, message, conversation_id, language=language
+             ):
+                 # Safety check for None event
+                 if event is None:
+diff --git a/agent_ng/native_langchain_streaming.py b/agent_ng/native_langchain_streaming.py
+index bb37409..85bb678 100644
+--- a/agent_ng/native_langchain_streaming.py
++++ b/agent_ng/native_langchain_streaming.py
+@@ -405,7 +405,7 @@ class NativeLangChainStreaming:
+ 
+     @traceable
+     async def stream_agent_response(
+-        self, agent, message: str, conversation_id: str = "default"
++        self, agent, message: str, conversation_id: str = "default", language: str | None = None
+     ) -> AsyncGenerator[StreamingEvent, None]:
+         """
+         Stream a complete QA turn using native LangChain streaming.
+@@ -422,6 +422,7 @@ class NativeLangChainStreaming:
+             agent: The LangChain agent instance
+             message: User message
+             conversation_id: Conversation identifier
++            language: Optional language code for i18n (if not provided, uses agent.language)
+ 
+         Yields:
+             StreamingEvent objects with real-time content
+@@ -437,8 +438,9 @@ class NativeLangChainStreaming:
+             if not hasattr(agent, "memory_manager") or not agent.memory_manager:
+                 raise ValueError("Agent has no memory manager")
+ 
+-            # Get language from agent once at the beginning
+-            language = self._get_agent_language(agent)
++            # Get language - prefer provided language (from app) over agent's language for i18n
++            if language is None:
++                language = self._get_agent_language(agent)
+ 
+             # Get conversation history
+             chat_history = agent.memory_manager.get_conversation_history(
+@@ -1195,6 +1197,12 @@ class NativeLangChainStreaming:
+                                     messages_override=messages,
+                                 )
+                                 snapshot = agent.token_tracker.get_budget_snapshot() or {}
++                                # Emit budget update event for mid-turn UI refresh (as in Gradio 5)
++                                yield StreamingEvent(
++                                    event_type="budget_update",
++                                    content="",
++                                    metadata={"iteration": iteration, "trigger": "post_tool"},
++                                )
+                                 percentage_used = snapshot.get("percentage_used", 0.0)
+                                 # Fallback first when enabled and threshold reached
+                                 if (
+diff --git a/agent_ng/queue_manager.py b/agent_ng/queue_manager.py
+index f525d94..ced9fbc 100644
+--- a/agent_ng/queue_manager.py
++++ b/agent_ng/queue_manager.py
+@@ -50,24 +50,32 @@ class QueueManager:
+         This method implements the exact patterns from the Gradio queuing documentation:
+         https://www.gradio.app/guides/queuing
+ 
++        IMPORTANT: Always initializes the queue, even if concurrent processing is disabled,
++        to prevent AttributeError during launch() when accessing demo._queue.max_thread_count.
++
+         Args:
+             demo: Gradio Blocks instance to configure
+         """
+         if self._queue_configured:
+             return
+ 
+-        if not self.config.enable_concurrent_processing:
+-            logging.info("Concurrent processing disabled - using default queue settings")
+-            return
+-
+-        # Configure queue using Gradio's recommended approach
+-        queue_config = self.config.to_gradio_queue_config()
+-        if queue_config:
+-            # Apply global queue configuration as per Gradio docs
+-            demo.queue(**queue_config)
+-            logging.info(f"Configured Gradio queue with global settings: {queue_config}")
++        # Always initialize queue (required by Gradio 6 before launch())
++        # This prevents AttributeError: 'NoneType' object has no attribute 'max_thread_count'
++        if not self.config.enable_concurrent_processing or not self.config.queue.enable_queue:
++            # Initialize with minimal settings when concurrent processing is disabled
++            demo.queue(default_concurrency_limit=1, status_update_rate="auto")
++            logging.info("Queue initialized with minimal settings (concurrent processing disabled)")
+         else:
+-            logging.info("Using default Gradio queue configuration")
++            # Configure queue using Gradio's recommended approach
++            queue_config = self.config.to_gradio_queue_config()
++            if queue_config:
++                # Apply global queue configuration as per Gradio docs
++                demo.queue(**queue_config)
++                logging.info(f"Configured Gradio queue with global settings: {queue_config}")
++            else:
++                # Fallback to minimal settings if config is empty
++                demo.queue(default_concurrency_limit=1, status_update_rate="auto")
++                logging.info("Queue initialized with minimal default settings")
+ 
+         self._queue_configured = True
+ 
+diff --git a/agent_ng/session_manager.py b/agent_ng/session_manager.py
+index 953376b..f5b83f4 100644
+--- a/agent_ng/session_manager.py
++++ b/agent_ng/session_manager.py
+@@ -16,6 +16,7 @@ Key Features:
+ 
+ from contextvars import ContextVar
+ import logging
++import threading
+ import time
+ from typing import TYPE_CHECKING, Any
+ import uuid
+@@ -112,12 +113,35 @@ except ImportError:
+     from agent_ng.i18n_translations import get_translation_key
+ 
+ 
++_SESSION_MANAGER_INSTANCE: "SessionManager | None" = None
++
++
++def get_session_manager(language: str = "en") -> "SessionManager":
++    """
++    Return a process-wide singleton SessionManager.
++
++    Gradio can construct multiple app instances (for language detection,
++    reloads, or different entrypoints). Using a shared SessionManager
++    ensures that each logical Gradio session ID (gradio_<hash>) maps to
++    exactly one SessionData (and thus a single CmwAgent/LLM initialization)
++    per process.
++    """
++    global _SESSION_MANAGER_INSTANCE
++
++    if _SESSION_MANAGER_INSTANCE is None:
++        _SESSION_MANAGER_INSTANCE = SessionManager(language)
++    return _SESSION_MANAGER_INSTANCE
++
++
+ class SessionManager:
+     """Clean, modular session manager for user isolation"""
+ 
+     def __init__(self, language: str = "en"):
+         self.language = language
+         self.sessions: dict[str, SessionData] = {}
++        # Protect session creation in concurrent Gradio callbacks so that
++        # each logical session ID is initialized exactly once per process.
++        self._lock = threading.Lock()
+         # Initialize module-level context variable through wrappers if needed
+ 
+     def get_session_id(self, request: gr.Request = None) -> str:
+@@ -146,9 +170,12 @@ class SessionManager:
+ 
+     def get_session_data(self, session_id: str) -> "SessionData":
+         """Get or create session data for the given session ID"""
+-        if session_id not in self.sessions:
+-            self.sessions[session_id] = SessionData(session_id, self.language)
+-        return self.sessions[session_id]
++        with self._lock:
++            session_data = self.sessions.get(session_id)
++            if session_data is None:
++                session_data = SessionData(session_id, self.language)
++                self.sessions[session_id] = session_data
++            return session_data
+ 
+     def get_agent(self, session_id: str) -> "CmwAgent":
+         """Get or create agent instance for the session"""
+@@ -285,6 +312,16 @@ class SessionManager:
+         session_data = self.get_session_data(session_id)
+         return session_data.agent
+ 
++    def get_cancellation_state(self, session_id: str) -> dict[str, bool]:
++        """Get cancellation state for the session (for stop button)"""
++        session_data = self.get_session_data(session_id)
++        return session_data.cancellation_state
++
++    def set_cancellation_state(self, session_id: str, cancelled: bool) -> None:
++        """Set cancellation state for the session (for stop button)"""
++        session_data = self.get_session_data(session_id)
++        session_data.cancellation_state["cancelled"] = cancelled
++
+     def get_session_count(self) -> int:
+         """Get total number of active sessions"""
+         return len(self.sessions)
+@@ -314,6 +351,8 @@ class SessionData:
+         self.llm_provider = "openrouter"  # Updated when LLM instance is ready
+         self.created_at = time.time()
+         self.last_activity = time.time()
++        # Cancellation state for stop button (following reference repo pattern)
++        self.cancellation_state: dict[str, bool] = {"cancelled": False}
+         # Last provider/model from the sidebar (``Выбор LLM``); drives re-init.
+         self._session_llm_choice: tuple[str, str] | None = None
+ 
+diff --git a/agent_ng/tabs/__init__.py b/agent_ng/tabs/__init__.py
+index 25b7585..37b60b7 100644
+--- a/agent_ng/tabs/__init__.py
++++ b/agent_ng/tabs/__init__.py
+@@ -14,6 +14,7 @@ from .logs_tab import LogsTab
+ from .stats_tab import StatsTab
+ from .config_tab import ConfigTab
+ from .sidebar import Sidebar
++from .downloads_tab import DownloadsTab
+ 
+ __all__ = [
+     "ChatTab",
+@@ -22,4 +23,5 @@ __all__ = [
+     "StatsTab",
+     "ConfigTab",
+     "Sidebar",
++    "DownloadsTab",
+ ]
+diff --git a/agent_ng/tabs/chat_tab.py b/agent_ng/tabs/chat_tab.py
+index 8d0e3e0..e3212e2 100644
+--- a/agent_ng/tabs/chat_tab.py
++++ b/agent_ng/tabs/chat_tab.py
+@@ -52,6 +52,9 @@ except ImportError:
+ from .sidebar import QuickActionsMixin
+ 
+ 
++CHAT_DOWNLOADS_ENABLED = True  # Enable chat export/download functionality
++
++
+ class ChatTab(QuickActionsMixin):
+     """Chat tab component with interface and quick actions"""
+ 
+@@ -76,12 +79,23 @@ class ChatTab(QuickActionsMixin):
+         """
+         logging.getLogger(__name__).info("✅ ChatTab: Creating chat interface...")
+ 
+-        with gr.TabItem(self._get_translation("tab_chat"), id="chat") as tab:
+-            # Create main chat interface (includes sidebar)
+-            self._create_chat_interface()
++        try:
++            with gr.TabItem(self._get_translation("tab_chat"), id="chat") as tab:
++                # Create main chat interface (includes sidebar)
++                self._create_chat_interface()
+ 
+-            # Connect event handlers
+-            self._connect_events()
++                # Connect event handlers
++                self._connect_events()
++
++                # Verify tab was created successfully
++                if tab is None:
++                    raise ValueError("gr.TabItem context manager returned None - this should not happen")
++        except Exception as e:
++            logging.getLogger(__name__).error(
++                f"❌ ChatTab: Error in create_tab: {e}",
++                exc_info=True
++            )
++            raise
+ 
+         logging.getLogger(__name__).info(
+             "✅ ChatTab: Successfully created with all components and event handlers"
+@@ -91,18 +105,21 @@ class ChatTab(QuickActionsMixin):
+     def _create_chat_interface(self):
+         """Create the main chat interface with proper layout"""
+         # Chat interface with metadata support for thinking transparency
++        # In Gradio 6, Chatbot uses messages format by default, so no type parameter is needed
+         self.components["chatbot"] = gr.Chatbot(
+             label=self._get_translation("chat_label"),
+             height=500,
+             show_label=True,
+             container=True,
+-            show_copy_button=True,
+-            type="messages",
++            buttons=["copy", "copy_all"],
+             elem_id="chatbot-main",
+             elem_classes=["chatbot-card"],
+         )
+ 
+         with gr.Row():
++            # Use built-in interchanging buttons in MultimodalTextbox (Gradio 6 pattern from reference repo)
++            # Following reference repo: submit_btn and stop_btn interchange with nice icons
++            # Start with submit_btn=True, stop_btn=False - submit button shows, stop button hidden
+             self.components["msg"] = gr.MultimodalTextbox(
+                 label=self._get_translation("message_label"),
+                 placeholder=self._get_translation("message_placeholder"),
+@@ -111,6 +128,8 @@ class ChatTab(QuickActionsMixin):
+                 max_lines=4,
+                 elem_id="message-input",
+                 elem_classes=["message-card"],
++                submit_btn=True,  # Show submit button with icon (interchanges with stop)
++                stop_btn=False,  # Start hidden, will be shown when streaming starts (interchanges with submit)
+                 file_types=[
+                     ".txt",  # Pasted text files from Gradio
+                     "text",  # MIME category for all text/*
+@@ -128,37 +147,8 @@ class ChatTab(QuickActionsMixin):
+                 ],
+                 file_count="multiple",
+             )
+-            with gr.Column():
+-                self.components["send_btn"] = gr.Button(
+-                    self._get_translation("send_button"),
+-                    variant="primary",
+-                    scale=1,
+-                    elem_classes=["cmw-button"],
+-                )
+-                self.components["stop_btn"] = gr.Button(
+-                    self._get_translation("stop_button"),
+-                    variant="stop",
+-                    scale=1,
+-                    elem_classes=["cmw-button"],
+-                    visible=False,
+-                )
+-                self.components["clear_btn"] = gr.Button(
+-                    self._get_translation("clear_button"),
+-                    variant="secondary",
+-                    elem_classes=["cmw-button"],
+-                )
+-                self.components["download_btn"] = gr.DownloadButton(
+-                    label=self._get_translation("download_button"),
+-                    variant="secondary",
+-                    elem_classes=["cmw-button"],
+-                    visible=False,
+-                )
+-                self.components["download_html_btn"] = gr.DownloadButton(
+-                    label=self._get_translation("download_html_button"),
+-                    variant="secondary",
+-                    elem_classes=["cmw-button"],
+-                    visible=False,
+-                )
++            # REMOVED: Separate clear button - now using Gradio's native chatbot.clear() button
++            # The built-in clear button in the chatbot component handles clearing
+ 
+         # Welcome block moved to dedicated Home tab
+ 
+@@ -201,96 +191,205 @@ class ChatTab(QuickActionsMixin):
+                     hasattr(queue_manager, "config"),
+                 )
+ 
+-        # Main chat events with concurrency control and queue status
+-        if queue_manager:
+-            # Apply concurrency settings to chat events
++        # Store original stop_btn value (True, but we start with False)
++        # Following reference repo pattern: buttons interchange - submit hides when stop shows
++        original_stop_btn = True
++
++        # Following reference repo pattern: two-step process
++        # Step 1: Simple function to clear textbox and save message (triggers .success())
++        # Step 2: Chain streaming handler with .then()
++        def clear_and_save_multimodal_textbox(multimodal_value: dict[str, Any] | None) -> tuple[gr.MultimodalTextbox, dict[str, Any] | None]:
++            """Clear MultimodalTextbox and save message to state (pattern from reference repo)."""
++            logging.getLogger(__name__).debug("clear_and_save_multimodal_textbox called")
++            # Extract text from MultimodalValue format
++            if isinstance(multimodal_value, dict):
++                text = multimodal_value.get("text", "")
++                files = multimodal_value.get("files", [])
++                saved_value = {"text": text, "files": files}
++            else:
++                saved_value = {"text": str(multimodal_value) if multimodal_value else "", "files": []}
+ 
+-            # Send button click with concurrency and queue status
+-            send_config = apply_concurrency_to_click_event(
+-                queue_manager,
+-                "chat",
+-                self._stream_message_wrapper,
+-                [self.components["msg"], self.components["chatbot"]],
+-                [
+-                    self.components["chatbot"],
+-                    self.components["msg"],
+-                    self.components["stop_btn"],
+-                    self.components["download_btn"],
+-                    self.components["download_html_btn"],
+-                    self._get_quick_actions_dropdown(),
+-                ],
++            logging.getLogger(__name__).debug(f"Saved value: text={saved_value.get('text', '')[:50]}..., files={len(saved_value.get('files', []))}")
++            return (
++                gr.MultimodalTextbox(value="", interactive=False, placeholder=""),
++                saved_value,
+             )
+-            self.streaming_event = self.components["send_btn"].click(**send_config)
+ 
+-            # Message submit with concurrency and queue status
+-            submit_config = apply_concurrency_to_submit_event(
++        # State to store saved message (pattern from reference repo)
++        saved_input = gr.State()
++        self.components["saved_input"] = saved_input  # Store for potential future use
++
++        # Cancellation state - mutable dict so changes propagate to running generator
++        # Following reference repo pattern: used for cooperative cancellation
++        cancellation_state = gr.State(value={"cancelled": False})
++        self.components["cancellation_state"] = cancellation_state
++
++        # Step 1: Submit event - simple function that clears textbox
++        # Following reference repo pattern: this triggers .success() which shows stop button
++        user_submit = self.components["msg"].submit(
++            fn=clear_and_save_multimodal_textbox,
++            inputs=[self.components["msg"]],
++            outputs=[self.components["msg"], saved_input],  # Clear textbox and save message to state
++            queue=False,
++        )
++
++        # Show stop button when submit succeeds (before streaming starts)
++        # Interchange: submit_btn=False, stop_btn=True (submit hides, stop shows)
++        # Following reference repo pattern exactly
++        def show_stop_button():
++            """Show stop button and hide submit button (interchanging buttons)."""
++            logging.getLogger(__name__).debug("show_stop_button: Interchanging buttons - showing stop, hiding submit")
++            return gr.MultimodalTextbox(submit_btn=False, stop_btn=original_stop_btn)
++
++        user_submit.success(
++            fn=show_stop_button,
++            outputs=[self.components["msg"]],
++            queue=False,
++        )
++
++        # Reset cancellation state at start of new submission (following reference repo pattern)
++        def reset_cancellation_state(cancel_state: dict | None) -> dict:
++            """Reset cancellation state at start of new submission."""
++            if cancel_state is None or not isinstance(cancel_state, dict):
++                cancel_state = {"cancelled": False}
++            else:
++                cancel_state["cancelled"] = False
++            return cancel_state
++
++        # Step 2: Chain streaming handler from user_submit
++        # Following reference repo pattern: reset cancellation state first, then chain streaming handler
++        if queue_manager:
++            # Apply concurrency settings to the chained streaming event
++            streaming_config = apply_concurrency_to_click_event(
+                 queue_manager,
+                 "chat",
+                 self._stream_message_wrapper,
+-                [self.components["msg"], self.components["chatbot"]],
++                [saved_input, self.components["chatbot"], cancellation_state],  # Add cancellation_state
+                 [
+                     self.components["chatbot"],
+                     self.components["msg"],
+-                    self.components["stop_btn"],
+-                    self.components["download_btn"],
+-                    self.components["download_html_btn"],
+                     self._get_quick_actions_dropdown(),
+                 ],
+             )
+-            self.submit_event = self.components["msg"].submit(**submit_config)
++            # Remove 'fn' from config since we'll use it directly in .then()
++            streaming_fn = streaming_config.pop("fn")
++            streaming_inputs = streaming_config.pop("inputs")
++            streaming_outputs = streaming_config.pop("outputs")
++
++            # Chain streaming handler from user_submit
++            # Following reference repo pattern: reset cancellation state first, then stream
++            self.submit_event = user_submit.then(
++                fn=reset_cancellation_state,
++                inputs=[cancellation_state],
++                outputs=[cancellation_state],
++                queue=False,
++            ).then(
++                fn=streaming_fn,
++                inputs=streaming_inputs,
++                outputs=streaming_outputs,
++                **streaming_config,
++            )
+         else:
+             # Fallback to default behavior if queue manager not available
+             logging.getLogger(__name__).warning(
+                 "⚠️ Queue manager not available - using default event configuration"
+             )
+-            self.streaming_event = self.components["send_btn"].click(
++            # Chain streaming handler from user_submit
++            # Following reference repo pattern: reset cancellation state first, then stream
++            self.submit_event = user_submit.then(
++                fn=reset_cancellation_state,
++                inputs=[cancellation_state],  # Request is automatically passed to functions that accept it
++                outputs=[cancellation_state],
++                queue=False,
++            ).then(
+                 fn=self._stream_message_wrapper,
+-                inputs=[self.components["msg"], self.components["chatbot"]],
++                inputs=[saved_input, self.components["chatbot"], cancellation_state],  # Add cancellation_state
+                 outputs=[
+                     self.components["chatbot"],
+                     self.components["msg"],
+-                    self.components["stop_btn"],
+-                    self.components["download_btn"],
+-                    self.components["download_html_btn"],
+                     self._get_quick_actions_dropdown(),
+                 ],
+             )
+ 
+-            self.submit_event = self.components["msg"].submit(
+-                fn=self._stream_message_wrapper,
+-                inputs=[self.components["msg"], self.components["chatbot"]],
++        # Built-in stop button automatically cancels submit_event when stop_btn=True
++        # Wire up the stop event to handle cancellation and update history
++        # Following reference repo pattern: use msg.stop() instead of separate button
++        # #region agent log
++        import json
++        try:
++            with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
++                f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "C", "location": "chat_tab.py:288", "message": "Wiring stop event", "data": {"has_submit_event": hasattr(self, "submit_event") and self.submit_event is not None}, "timestamp": __import__("time").time() * 1000}) + "\n")
++        except: pass
++        # #endregion
++        try:
++            self.stop_event = self.components["msg"].stop(
++                fn=self._handle_stop_click,
++                inputs=[self.components["chatbot"], cancellation_state],  # Add cancellation_state (following reference repo pattern)
+                 outputs=[
+-                    self.components["chatbot"],
+-                    self.components["msg"],
+-                    self.components["stop_btn"],
+-                    self.components["download_btn"],
+-                    self.components["download_html_btn"],
+-                    self._get_quick_actions_dropdown(),
++                    self.components["chatbot"],  # Return chatbot
++                    cancellation_state,  # Return updated cancellation_state
+                 ],
++                cancels=[self.submit_event],  # Cancel submit event (following reference repo pattern)
++            ).then(
++                lambda: gr.MultimodalTextbox(value="", interactive=True, submit_btn=True, stop_btn=False),  # Re-enable textbox and hide stop button after cancellation
++                outputs=[self.components["msg"]],
++                queue=False,
+             )
+-
+-        # Stop button - cancel both send and submit events; hide itself, show download, append stats to chat
+-        # Store stop button click event for chaining token budget updates
+-        self.stop_event = self.components["stop_btn"].click(
+-            fn=self._handle_stop_click,
+-            inputs=[self.components["chatbot"]],
+-            outputs=[
+-                self.components["chatbot"],
+-                self.components["stop_btn"],
+-                self.components["download_btn"],
+-                self.components["download_html_btn"],
+-            ],
+-            cancels=[self.streaming_event, self.submit_event],
++            # #region agent log
++            import json
++            try:
++                with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
++                    f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "C", "location": "chat_tab.py:300", "message": "Stop event wired successfully", "data": {}, "timestamp": __import__("time").time() * 1000}) + "\n")
++            except: pass
++            # #endregion
++        except Exception as exc:
++            # #region agent log
++            import json
++            try:
++                with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
++                    f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "D", "location": "chat_tab.py:302", "message": "Stop event wiring failed", "data": {"error": str(exc), "error_type": type(exc).__name__}, "timestamp": __import__("time").time() * 1000}) + "\n")
++            except: pass
++            # #endregion
++            logging.getLogger(__name__).error(f"Failed to wire stop event: {exc}", exc_info=True)
++            raise
++
++        # Wire UI update trigger to stop event (for token budget/status refresh)
++        trigger_ui_update = self.event_handlers.get("trigger_ui_update")
++        if trigger_ui_update:
++            self.stop_event.then(fn=trigger_ui_update, outputs=[], queue=False)
++
++        # Re-enable textbox and hide stop button after streaming completes
++        # Following reference repo pattern: chain after handler completion
++        def re_enable_textbox_and_hide_stop():
++            """Re-enable textbox and hide stop button after handler completion."""
++            logging.getLogger(__name__).debug("Re-enabling textbox and hiding stop button after handler completion")
++            return gr.MultimodalTextbox(value="", interactive=True, submit_btn=True, stop_btn=False)
++
++        # Chain re-enable to submit event after it completes
++        # .then() fires after generator completes and all yields are processed
++        # Following reference repo pattern: only chain to submit_event (no separate send button)
++        self.submit_event = self.submit_event.then(
++            fn=re_enable_textbox_and_hide_stop,
++            outputs=[self.components["msg"]],
++            queue=False,
+         )
+ 
+-        # Store clear button click event for chaining token budget updates
+-        self.clear_event = self.components["clear_btn"].click(
+-            fn=self._clear_chat_with_download_reset,
++        # Handle chatbot clear event - clear memory and reset downloads
++        # Following reference repo pattern: wire chatbot.clear() to handle everything
++        def handle_chatbot_clear(request: gr.Request | None = None) -> tuple[list[dict[str, str]], dict[str, Any]]:
++            """Handle chatbot clear event - clear memory, reset downloads, and clear UI."""
++            logging.getLogger(__name__).info("Chatbot clear event - clearing memory and resetting downloads")
++            # Use the same clear handler that was used for the separate clear button
++            return self._clear_chat_with_download_reset(request)
++
++        # Bind to the built-in clear button's clear event
++        # This replaces the separate clear button - Gradio's native clear button handles everything
++        self.clear_event = self.components["chatbot"].clear(
++            fn=handle_chatbot_clear,
++            inputs=[],  # Request is automatically passed to functions that accept it
+             outputs=[
+                 self.components["chatbot"],
+                 self.components["msg"],
+-                self.components["download_btn"],
+-                self.components["download_html_btn"],
+             ],
+         )
+ 
+@@ -316,9 +415,6 @@ class ChatTab(QuickActionsMixin):
+         return (
+             ui_history,
+             "",
+-            gr.Button(visible=True),
+-            gr.DownloadButton(visible=False),
+-            gr.DownloadButton(visible=False),
+             None,
+         )
+ 
+@@ -328,20 +424,17 @@ class ChatTab(QuickActionsMixin):
+         trigger_ui_update = self.event_handlers.get("trigger_ui_update")
+ 
+         if trigger_ui_update:
+-            # Trigger UI update after send button click
+-            self.components["send_btn"].click(
+-                fn=trigger_ui_update,
+-                outputs=[],  # No specific outputs, just triggers the update
+-            )
+-
+-            # Trigger UI update after message submit
++            # Trigger UI update after message submit (built-in submit button)
+             self.components["msg"].submit(fn=trigger_ui_update, outputs=[])
+ 
+-            # Trigger UI update after clear button click
+-            self.components["clear_btn"].click(fn=trigger_ui_update, outputs=[])
++            # Trigger UI update after chatbot clear (built-in clear button)
++            if hasattr(self, "clear_event") and self.clear_event:
++                self.clear_event.then(fn=trigger_ui_update, outputs=[], queue=False)
+ 
+-            # Trigger UI update after stop button click (to refresh token budget/status)
+-            self.components["stop_btn"].click(fn=trigger_ui_update, outputs=[])
++            # Trigger UI update after built-in stop button click (to refresh token budget/status)
++            # Use msg.stop() to wire to built-in stop button
++            if hasattr(self, "stop_event") and self.stop_event:
++                self.stop_event.then(fn=trigger_ui_update, outputs=[], queue=False)
+ 
+             logging.getLogger(__name__).debug(
+                 "✅ ChatTab: UI update triggers connected"
+@@ -379,9 +472,10 @@ class ChatTab(QuickActionsMixin):
+         # These components are now in the UI Manager sidebar
+         return {}
+ 
+-    def get_stop_button(self) -> gr.Button:
+-        """Get the stop button component for visibility control"""
+-        return self.components["stop_btn"]
++    def get_stop_button(self) -> gr.MultimodalTextbox:
++        """Get the message input component (stop button is now built-in)"""
++        # Stop button is now built-in to MultimodalTextbox, return the textbox component
++        return self.components["msg"]
+ 
+     def _get_quick_actions_dropdown(self) -> gr.Dropdown:
+         """Get the quick actions dropdown from the sidebar"""
+@@ -393,16 +487,53 @@ class ChatTab(QuickActionsMixin):
+             and self.main_app.ui_manager
+         ):
+             # Try to get from UI Manager components
+-                components = self.main_app.ui_manager.get_components()
+-                return components.get("quick_actions_dropdown")
++            components = self.main_app.ui_manager.get_components()
++            dropdown = components.get("quick_actions_dropdown")
++            # Ensure we always return a valid component, never None
++            if dropdown is not None:
++                return dropdown
+ 
+         # Fallback - return a dummy component that won't cause errors
++        # This ensures we never return None, which would cause '_id' attribute errors
+         return gr.Dropdown(visible=False)
+ 
+     def _handle_stop_click(
+-        self, history: list[list[str | None]], request: gr.Request | None = None
+-    ) -> tuple[list[list[str | None]], gr.Button]:
+-        """Handle stop button click: finalize token tracking, append stats, update UI."""
++        self, history: list[dict[str, str]], cancel_state: dict | None = None, request: gr.Request | None = None
++    ) -> tuple[list[dict[str, str]], dict]:
++        """Handle built-in stop button click: set cancellation flag, finalize token tracking, append stats, update UI.
++
++        Following reference repo pattern: uses msg.stop() with built-in stop button.
++        Sets cancellation flag in shared state so the running generator can check it.
++        Returns history and cancellation_state - MultimodalTextbox update is handled in .then() chain.
++        """
++        # Set cancellation flag (following reference repo pattern)
++        if cancel_state is None or not isinstance(cancel_state, dict):
++            cancel_state = {"cancelled": True}
++        else:
++            cancel_state["cancelled"] = True
++
++        # Also update cancellation state in session manager for async streaming to access
++        if (
++            hasattr(self, "main_app")
++            and self.main_app
++            and hasattr(self.main_app, "session_manager")
++            and request
++        ):
++            try:
++                session_id = self.main_app.session_manager.get_session_id(request)
++                self.main_app.session_manager.set_cancellation_state(session_id, True)
++                logging.getLogger(__name__).debug(f"Updated session cancellation state for {session_id[:8]}...")
++            except Exception as exc:
++                logging.getLogger(__name__).debug(f"Failed to update session cancellation state: {exc}")
++
++        logging.getLogger(__name__).info("Stop button clicked - setting cancellation flag")
++        # #region agent log
++        import json
++        try:
++            with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
++                f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "A", "location": "chat_tab.py:455", "message": "_handle_stop_click called", "data": {"history_len": len(history) if history else 0, "has_request": request is not None}, "timestamp": __import__("time").time() * 1000}) + "\n")
++        except: pass
++        # #endregion
+         try:
+             # Attempt to finalize token accounting for this turn even if stream was interrupted
+             if (
+@@ -529,11 +660,18 @@ class ChatTab(QuickActionsMixin):
+                 "UI state update failed: %s", exc
+             )
+ 
+-        # Hide stop button and show download button with current conversation
+-        download_btns = self._update_download_button_visibility(history)
+-        return history, gr.Button(visible=False), download_btns[0], download_btns[1]
++        # Return history and cancellation_state - MultimodalTextbox update is handled in .then() chain
++        # Following reference repo pattern: return history and cancellation_state
++        # #region agent log
++        import json
++        try:
++            with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
++                f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "A", "location": "chat_tab.py:640", "message": "_handle_stop_click returning", "data": {"return_type": "tuple", "history_len": len(history) if history else 0, "cancelled": cancel_state.get("cancelled", False) if cancel_state else False}, "timestamp": __import__("time").time() * 1000}) + "\n")
++        except: pass
++        # #endregion
++        return history, cancel_state
+ 
+-    def _finalize_tokens_on_stop(self, request: gr.Request, history: list[list[str | None]]) -> list[list[str | None]]:
++    def _finalize_tokens_on_stop(self, request: gr.Request, history: list[dict[str, str]]) -> list[dict[str, str]]:
+         """Finalize token tracking and append stats when streaming is stopped"""
+         if not (
+             hasattr(self, "main_app")
+@@ -628,7 +766,7 @@ class ChatTab(QuickActionsMixin):
+ 
+         return history
+ 
+-    def _build_token_stats_message(self, agent, messages: list) -> list[list[str | None]] | None:
++    def _build_token_stats_message(self, agent, messages: list) -> list[dict[str, str]] | None:
+         """Build and return token statistics message for history"""
+         prompt_tokens = agent.token_tracker.get_last_prompt_tokens()
+         api_tokens = agent.token_tracker.get_last_api_tokens()
+@@ -1236,94 +1374,82 @@ class ChatTab(QuickActionsMixin):
+     def _stream_message_wrapper(
+         self,
+         multimodal_value: dict[str, Any] | None,
+-        history: list[list[str | None]],
++        history: list[dict[str, str]],
++        cancel_state: dict | None = None,
+         request: gr.Request | None = None,
+     ) -> tuple[
+-        list[list[str | None]],
+-        gr.Button,
+-        gr.DownloadButton,
+-        gr.DownloadButton,
++        list[dict[str, str]],
++        str,
+         None,
+     ]:
+         """Wrapper for concurrent processing with Gradio's native queue feedback
+ 
+         Handles MultimodalValue format and extracts text for processing with proper session awareness.
+         With status_update_rate="auto", Gradio will show native queue status - no need for custom warnings.
++
++        Note: Stop button visibility is now handled by built-in stop button in MultimodalTextbox,
++        shown/hidden via .success() events on streaming/submit events (following reference repo pattern).
+         """
+ 
+-        # Show stop button at start of processing
+-        yield (
+-            history,
+-            "",
+-            gr.Button(visible=True),
+-            gr.DownloadButton(visible=False),  # Don't update download during streaming
+-            gr.DownloadButton(visible=False),  # Don't update HTML download during streaming
+-            None,
+-        )  # Show stop button, don't update download, reset dropdown
++        # Helper to check if cancellation was requested (following reference repo pattern)
++        def is_cancelled() -> bool:
++            return cancel_state is not None and cancel_state.get("cancelled", False)
++
++        # Process message with original wrapper
++        # Stop button is shown via .success() on submit_event (interchanging buttons)
+         yield self._yield_ui_newline(history)
+ 
++        # Check for cancellation before starting
++        if is_cancelled():
++            logging.getLogger(__name__).info("Streaming cancelled before start")
++            yield (history, "", None)
++            return
++
+         # Process message with original wrapper
+         last_result = None
++        # Pass cancel_state to internal wrapper so it can check cancellation during streaming
+         for result in self._stream_message_wrapper_internal(
+-            multimodal_value, history, request
++            multimodal_value, history, cancel_state, request
+         ):
++            # Check for cancellation during streaming (following reference repo pattern)
++            # This check happens between yields, so cancellation is detected promptly
++            if is_cancelled():
++                logging.getLogger(__name__).info("Streaming cancelled during execution")
++                break
+             last_result = result
+-            # Toggle buttons based on processing state (supports early-finish unlock)
+-            stop_visible = True
+-            try:
+-                if hasattr(self, "main_app") and self.main_app is not None:
+-                    stop_visible = bool(self.main_app.is_processing)
+-            except Exception as exc:
+-                logging.getLogger(__name__).debug(
+-                    "Failed to check processing state, defaulting stop visible: %s",
+-                    exc,
+-                )
+-                stop_visible = True
+-
+-            download_btns = (
+-                self._update_download_button_visibility(result[0])
+-                if not stop_visible
+-                else (gr.DownloadButton(visible=False), gr.DownloadButton(visible=False))
+-            )
+-
+             yield (
+                 result[0],
+                 result[1],
+-                gr.Button(visible=stop_visible),
+-                download_btns[0],
+-                download_btns[1],
+                 None,
+             )
+ 
+-        # Hide stop button at end of processing and update download button
++        # Hide stop button at end of processing (via .then() on submit_event)
++        # This is handled by re_enable_textbox_and_hide_stop function chained to submit completion
+         if last_result and len(last_result) >= 2:
+-            final_download_btns = self._update_download_button_visibility(last_result[0])
+             yield (
+                 last_result[0],
+                 last_result[1],
+-                gr.Button(visible=False),
+-                final_download_btns[0],
+-                final_download_btns[1],
+                 None,
+-            )  # Reset dropdown
++            )
+         else:
+-            final_download_btns = self._update_download_button_visibility(history)
+             yield (
+                 history,
+                 "",
+-                gr.Button(visible=False),
+-                final_download_btns[0],
+-                final_download_btns[1],
+                 None,
+-            )  # Reset dropdown
++            )
+ 
+     def _stream_message_wrapper_internal(
+         self,
+         multimodal_value: dict[str, Any] | None,
+-        history: list[list[str | None]],
++        history: list[dict[str, str]],
++        cancel_state: dict | None = None,
+         request: gr.Request | None = None,
+-    ) -> AsyncGenerator[tuple[list[list[str | None]], str], None]:
+-        """Internal wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware"""
++    ) -> AsyncGenerator[tuple[list[dict[str, str]], str], None]:
++        """Internal wrapper to handle MultimodalValue format and extract text for processing - now properly session-aware
++
++        Args:
++            cancel_state: Cancellation state dict to check for stop button clicks during streaming
++        """
+         # Extract text from MultimodalValue format
+         if isinstance(multimodal_value, dict):
+             message = multimodal_value.get("text", "")
+@@ -1439,17 +1565,27 @@ class ChatTab(QuickActionsMixin):
+             yield history, ""
+             return
+ 
++        # Helper to check if cancellation was requested (following reference repo pattern)
++        def is_cancelled() -> bool:
++            return cancel_state is not None and cancel_state.get("cancelled", False)
++
+         # Call the original stream handler with enhanced message (text + file analysis)
+         # Now properly session-aware with real Gradio request
+-        yield from stream_handler(message, history, request)
++        # Check for cancellation between yields from stream_handler
++        # Note: This check happens between yields, so cancellation is detected as soon as the generator yields
++        for result in stream_handler(message, history, request):
++            # Check for cancellation during streaming (following reference repo pattern)
++            # This check happens between yields, so if the generator is yielding frequently, cancellation is detected promptly
++            if is_cancelled():
++                logging.getLogger(__name__).info("Streaming cancelled during execution (in internal wrapper)")
++                break
++            yield result
+ 
+     def _clear_chat_with_download_reset(
+         self, request: gr.Request | None = None
+     ) -> tuple[
+-        list[list[str | None]],
++        list[dict[str, str]],
+         dict[str, Any],
+-        gr.DownloadButton,
+-        gr.DownloadButton,
+     ]:
+         """Clear chat and reset download state - now properly session-aware"""
+         # Clear download button cache
+@@ -1463,15 +1599,34 @@ class ChatTab(QuickActionsMixin):
+         if clear_handler:
+             # Call the original clear handler with real Gradio request
+             chatbot, _msg = clear_handler(request)
+-            # Reset download button (hide it) and return empty MultimodalValue
++            # Return empty MultimodalValue
+             empty_multimodal = {"text": "", "files": []}
+-            return chatbot, empty_multimodal, gr.DownloadButton(visible=False), gr.DownloadButton(visible=False)
++            return chatbot, empty_multimodal
+         # Fallback if clear handler not available
+         empty_multimodal = {"text": "", "files": []}
+-        return [], empty_multimodal, gr.DownloadButton(visible=False), gr.DownloadButton(visible=False)
++        return [], empty_multimodal
++
++    def get_download_button_updates(self, history):
++        """
++        Get download button updates for DownloadsTab.
++        This method can be called from DownloadsTab to update buttons.
++
++        Args:
++            history: Conversation history
++
++        Returns:
++            Tuple of (markdown_button_update, html_button_update)
++        """
++        return self._update_download_button_visibility(history)
+ 
+     def _update_download_button_visibility(self, history):
+         """Update download button visibility and file based on conversation history"""
++        if not CHAT_DOWNLOADS_ENABLED:
++            # Downloads are globally disabled via feature flag
++            return (
++                gr.update(visible=False),
++                gr.update(visible=False),
++            )
+         if history and len(history) > 0:
+             # Check if conversation has changed since last generation
+             history_str = str(history)
+@@ -1480,12 +1635,20 @@ class ChatTab(QuickActionsMixin):
+                 or self._last_history_str != history_str
+             ):
+                 # Generate files with fresh timestamp when conversation changes
+-                markdown_file_path = self._download_conversation_as_markdown(history)
+-                # HTML file path is now stored in _last_html_file_path by _download_conversation_as_markdown
+-                html_file_path = getattr(self, "_last_html_file_path", None)
+-                self._last_history_str = history_str
+-                self._last_download_file = markdown_file_path
+-                self._last_download_html_file = html_file_path
++                # Use try/except to prevent blocking on file generation errors
++                try:
++                    markdown_file_path = self._download_conversation_as_markdown(history)
++                    # HTML file path is now stored in _last_html_file_path by _download_conversation_as_markdown
++                    html_file_path = getattr(self, "_last_html_file_path", None)
++                    self._last_history_str = history_str
++                    self._last_download_file = markdown_file_path
++                    self._last_download_html_file = html_file_path
++                except Exception as exc:
++                    logging.getLogger(__name__).warning(
++                        f"Failed to generate download files: {exc}", exc_info=True
++                    )
++                    markdown_file_path = None
++                    html_file_path = None
+             else:
+                 # Use cached files if conversation hasn't changed
+                 markdown_file_path = getattr(self, "_last_download_file", None)
+@@ -1493,35 +1656,24 @@ class ChatTab(QuickActionsMixin):
+ 
+             if markdown_file_path and html_file_path:
+                 # Show both download buttons with pre-generated files
++                # Use gr.update() instead of creating new components (Gradio 6 pattern)
+                 return (
+-                    gr.DownloadButton(
+-                        label=self._get_translation("download_button"),
+-                        value=markdown_file_path,
+-                        variant="secondary",
+-                        elem_classes=["cmw-button"],
+-                        visible=True,
+-                    ),
+-                    gr.DownloadButton(
+-                        label=self._get_translation("download_html_button"),
+-                        value=html_file_path,
+-                        variant="secondary",
+-                        elem_classes=["cmw-button"],
+-                        visible=True,
+-                    ),
++                    gr.update(value=markdown_file_path, visible=True),
++                    gr.update(value=html_file_path, visible=True),
+                 )
+-            # Show buttons without files if generation fails
++            # Hide buttons if generation fails
+             return (
+-                    gr.DownloadButton(visible=False),
+-                    gr.DownloadButton(visible=False),
+-                )
++                gr.update(visible=False),
++                gr.update(visible=False),
++            )
+         # Hide download buttons when there's no conversation history
+         return (
+-                gr.DownloadButton(visible=False),
+-                gr.DownloadButton(visible=False),
+-            )
++            gr.update(visible=False),
++            gr.update(visible=False),
++        )
+ 
+     def _download_conversation_as_markdown(
+-        self, history: list[list[str | None]]
++        self, history: list[dict[str, str]]
+     ) -> str:
+         """
+         Download the conversation history as a markdown file.
+@@ -1592,8 +1744,7 @@ class ChatTab(QuickActionsMixin):
+             )
+         markdown_content += "---\n\n"
+ 
+-        # Add conversation messages
+-        # Handle the actual format from the debug output
++        # Add conversation messages (plain string content only; skip file bubbles / structured payloads).
+         for i, message in enumerate(history, 1):
+             if isinstance(message, dict):
+                 # Skip file-bubble messages (content is a dict, not text).
+diff --git a/agent_ng/tabs/config_tab.py b/agent_ng/tabs/config_tab.py
+index db99d7e..37519ec 100644
+--- a/agent_ng/tabs/config_tab.py
++++ b/agent_ng/tabs/config_tab.py
+@@ -107,7 +107,6 @@ class ConfigTab:
+                 value=url_init,
+                 lines=1,
+                 max_lines=1,
+-                show_copy_button=False,
+             )
+ 
+             # Username
+@@ -116,7 +115,6 @@ class ConfigTab:
+                 value=login_init,
+                 lines=1,
+                 max_lines=1,
+-                show_copy_button=False,
+             )
+ 
+             self.components["password"] = gr.Textbox(
+@@ -125,7 +123,6 @@ class ConfigTab:
+                 value=password_init,
+                 lines=1,
+                 max_lines=1,
+-                show_copy_button=False,
+             )
+ 
+             gr.Markdown("---")
+diff --git a/agent_ng/tabs/downloads_tab.py b/agent_ng/tabs/downloads_tab.py
+new file mode 100644
+index 0000000..36df4db
+--- /dev/null
++++ b/agent_ng/tabs/downloads_tab.py
+@@ -0,0 +1,82 @@
++"""
++Downloads Tab Module for App NG
++==============================
++
++Handles file download functionality in a separate tab to isolate it from chat streaming.
++This prevents freezes by keeping download button updates separate from the chat generator flow.
++"""
++
++from collections.abc import Callable
++import logging
++from typing import Any, Optional
++import gradio as gr
++from ..i18n_translations import get_translation_key
++
++
++class DownloadsTab:
++    """Downloads tab component for file downloads"""
++
++    def __init__(
++        self,
++        event_handlers: dict[str, Callable],
++        language: str = "en",
++        i18n_instance: gr.I18n | None = None,
++    ) -> None:
++        self.event_handlers = event_handlers
++        self.components = {}
++        self.main_app = None  # Reference to main app for session management
++        self.language = language
++        self.i18n = i18n_instance
++
++    def create_tab(self) -> tuple[gr.TabItem, dict[str, Any]]:
++        """
++        Create the downloads tab with download buttons.
++
++        Returns:
++            Tuple of (TabItem, components_dict)
++        """
++        logging.getLogger(__name__).info("✅ DownloadsTab: Creating downloads interface...")
++
++        with gr.TabItem(self._get_translation("tab_downloads"), id="downloads") as tab:
++            # Create downloads interface
++            self._create_downloads_interface()
++
++            # Connect event handlers
++            self._connect_events()
++
++        return tab, self.components
++
++    def _create_downloads_interface(self):
++        """Create the downloads interface with download buttons"""
++        logging.getLogger(__name__).debug("📥 DownloadsTab: Creating downloads interface...")
++
++        with gr.Column(elem_classes=["downloads-container"]):
++            # Download buttons - initially hidden, updated after chat streaming completes
++            with gr.Row():
++                self.components["download_btn"] = gr.DownloadButton(
++                    label=self._get_translation("download_button"),
++                    variant="secondary",
++                    elem_classes=["cmw-button"],
++                    visible=False,  # Will be shown when files are ready
++                )
++                self.components["download_html_btn"] = gr.DownloadButton(
++                    label=self._get_translation("download_html_button"),
++                    variant="secondary",
++                    elem_classes=["cmw-button"],
++                    visible=False,  # Will be shown when files are ready
++                )
++
++    def _connect_events(self):
++        """Connect event handlers for the downloads tab"""
++        logging.getLogger(__name__).debug("🔗 DownloadsTab: Connecting event handlers...")
++
++        # Event handlers will be connected from ui_manager after all tabs are created
++        # This tab just provides the UI components
++
++    def set_main_app(self, main_app):
++        """Set reference to main app for session management"""
++        self.main_app = main_app
++
++    def _get_translation(self, key: str) -> str:
++        """Get translation for a specific key"""
++        return get_translation_key(key, self.language)
+diff --git a/agent_ng/tabs/logs_tab.py b/agent_ng/tabs/logs_tab.py
+index 929d232..bb61e4a 100644
+--- a/agent_ng/tabs/logs_tab.py
++++ b/agent_ng/tabs/logs_tab.py
+@@ -60,7 +60,7 @@ class LogsTab:
+                 lines=20,
+                 max_lines=30,
+                 interactive=False,
+-                show_copy_button=True,
++                buttons=["copy", "copy_all"],
+                 container=True,
+                 elem_id="logs-display",
+             )
+diff --git a/agent_ng/tabs/sidebar.py b/agent_ng/tabs/sidebar.py
+index 45096fb..43afd5e 100644
+--- a/agent_ng/tabs/sidebar.py
++++ b/agent_ng/tabs/sidebar.py
+@@ -96,18 +96,18 @@ class Sidebar(QuickActionsMixin):
+         self.language = language
+         self.i18n = i18n_instance
+ 
+-    def create_sidebar(self) -> tuple[gr.Sidebar, dict[str, Any]]:
++    def create_tab(self) -> tuple[gr.TabItem, dict[str, Any]]:
+         """
+-        Create the common sidebar with all its components.
++        Create the sidebar as a tab component with all its components.
+ 
+         Returns:
+-            Tuple of (Sidebar, components_dict)
++            Tuple of (TabItem, components_dict)
+         """
+         logging.getLogger(__name__).info(
+-            "✅ Sidebar: Creating common sidebar interface..."
++            "✅ Sidebar: Creating sidebar as tab interface..."
+         )
+ 
+-        with gr.Sidebar(open=True, width=420) as sidebar:
++        with gr.TabItem(self._get_translation("tab_sidebar"), id="sidebar") as tab:
+             # LLM Selection section
+             with gr.Column(elem_classes=["model-card"]):
+                 gr.Markdown(
+@@ -225,9 +225,9 @@ class Sidebar(QuickActionsMixin):
+         self._connect_sidebar_events()
+ 
+         logging.getLogger(__name__).info(
+-            "✅ Sidebar: Successfully created with all components and event handlers"
++            "✅ Sidebar: Successfully created as tab with all components and event handlers"
+         )
+-        return sidebar, self.components
++        return tab, self.components
+ 
+     def _connect_sidebar_events(self):
+         """Connect all event handlers for the sidebar components"""
+@@ -290,13 +290,12 @@ class Sidebar(QuickActionsMixin):
+                 outputs=[],
+             )
+ 
+-        # Token budget display change event for download button visibility
+-        if "token_budget_display" in self.components:
+-            self.components["token_budget_display"].change(
+-                fn=self._update_download_button_visibility,
+-                inputs=[],
+-                outputs=[],  # Output will be handled by the main app
+-            )
++        # REMOVED: Token budget display change event
++        # This was causing infinite loops in Gradio 6 because:
++        # 1. token_budget_display is a gr.Markdown that gets updated programmatically
++        # 2. Every update triggers the .change() event
++        # 3. This can cause excessive event firing and errors
++        # Download button visibility is now handled through chat streaming events instead
+ 
+         logging.getLogger(__name__).debug(
+             "✅ Sidebar: All event handlers connected successfully"
+diff --git a/agent_ng/ui_manager.py b/agent_ng/ui_manager.py
+index b0ca7c0..d456802 100644
+--- a/agent_ng/ui_manager.py
++++ b/agent_ng/ui_manager.py
+@@ -35,6 +35,7 @@ class UIManager:
+         self.i18n = i18n_instance
+         self._setup_gradio_paths()
+         self.components = {}
++        self._main_app = None  # Will be set by create_interface if main_app is provided
+ 
+     def _get_translation(self, key: str) -> str:
+         """Get translation for a specific key"""
+@@ -54,6 +55,8 @@ class UIManager:
+             logging.getLogger(__name__).warning(f"Could not set GRADIO_ALLOWED_PATHS: {e}")
+ 
+     def create_interface(self, tab_modules: list[Any], event_handlers: dict[str, Callable], main_app=None) -> gr.Blocks:
++        # Store main_app reference for initialization completion checks
++        self._main_app = main_app
+         """
+         Create the main Gradio interface using tab modules with i18n support.
+ 
+@@ -73,40 +76,136 @@ class UIManager:
+         app_title = self._get_translation("app_title")
+         hero_title = self._get_translation("hero_title")
+ 
+-        with gr.Blocks(
+-            css_paths=[self.css_file_path],
+-            title=app_title,
+-            theme=gr.themes.Soft()
+-        ) as demo:
++        # In Gradio 6, app-level theme and CSS are configured on launch(),
++        # so Blocks only receives structural arguments like title.
++        with gr.Blocks(title=app_title) as demo:
+ 
+             # Header
+             with gr.Row(), gr.Column():
+                 gr.Markdown(f"# {hero_title}", elem_classes=["hero-title"])
+ 
+-            # Create common sidebar using dedicated sidebar module
++            # Create sidebar as a tab (converted from sidebar component)
+             sidebar_instance = Sidebar(event_handlers, language=self.language, i18n_instance=self.i18n)
+             sidebar_instance.set_main_app(main_app)  # Pass main app reference
+ 
+-            sidebar, sidebar_components = sidebar_instance.create_sidebar()
+-            # Consolidate sidebar components
+-            self.components.update(sidebar_components)
+-            self.components["sidebar_instance"] = sidebar_instance
+-
+             with gr.Tabs():
+                 # Create tabs using provided tab modules
+                 for tab_module in tab_modules:
+                     if tab_module:
+-                        tab_item, tab_components = tab_module.create_tab()
+-                        # Consolidate all components in one place
+-                        self.components.update(tab_components)
+-                        # Store tab reference for later use
+-                        self.components[f"{tab_module.__class__.__name__.lower()}_tab"] = tab_module
++                        try:
++                            tab_item, tab_components = tab_module.create_tab()
++                            # Skip if tab_item is None (e.g., ConfigTab when CMW_USE_DOTENV=true)
++                            if tab_item is None:
++                                logging.getLogger(__name__).info(
++                                    f"⚠️ Skipping tab {tab_module.__class__.__name__} (create_tab returned None)"
++                                )
++                                continue
++                            # Consolidate all components in one place
++                            self.components.update(tab_components)
++                            # Store tab reference for later use
++                            self.components[f"{tab_module.__class__.__name__.lower()}_tab"] = tab_module
++                            logging.getLogger(__name__).debug(
++                                f"✅ Successfully created tab: {tab_module.__class__.__name__}"
++                            )
++                        except Exception as e:
++                            logging.getLogger(__name__).error(
++                                f"❌ Error creating tab {tab_module.__class__.__name__}: {e}",
++                                exc_info=True
++                            )
++                            raise
++
++                # Create sidebar as a tab (after other tabs)
++                try:
++                    sidebar_tab, sidebar_components = sidebar_instance.create_tab()
++                    # Skip if sidebar_tab is None
++                    if sidebar_tab is None:
++                        logging.getLogger(__name__).warning(
++                            "⚠️ Sidebar create_tab returned None, skipping"
++                        )
++                    else:
++                        # Consolidate sidebar components
++                        self.components.update(sidebar_components)
++                        self.components["sidebar_instance"] = sidebar_instance
++                        logging.getLogger(__name__).debug("✅ Successfully created sidebar tab")
++                except Exception as e:
++                    logging.getLogger(__name__).error(
++                        f"❌ Error creating sidebar tab: {e}",
++                        exc_info=True
++                    )
++                    raise
+ 
+             # Connect quick action dropdown after all components are available
+             if "sidebar_instance" in self.components:
+                 sidebar_instance = self.components["sidebar_instance"]
+                 sidebar_instance.connect_quick_action_dropdown()
+ 
++            # Connect DownloadsTab to update from chat streaming events
++            # #region agent log
++            import json, time
++            try:
++                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
++                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"E","location":"ui_manager.py:110","message":"Looking for tab instances","data":{"component_keys":list(self.components.keys())},"timestamp":int(time.time()*1000)}) + '\n')
++            except: pass
++            # #endregion
++            chat_tab_instance = self.components.get("chattab_tab")
++            downloads_tab_instance = self.components.get("downloadstab_tab")
++            # #region agent log
++            try:
++                with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
++                    f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"F","location":"ui_manager.py:112","message":"Tab instances found","data":{"has_chat":chat_tab_instance is not None,"has_downloads":downloads_tab_instance is not None},"timestamp":int(time.time()*1000)}) + '\n')
++            except: pass
++            # #endregion
++            if chat_tab_instance and downloads_tab_instance:
++                download_btn = downloads_tab_instance.components.get("download_btn")
++                download_html_btn = downloads_tab_instance.components.get("download_html_btn")
++                # #region agent log
++                try:
++                    with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
++                        f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"G","location":"ui_manager.py:115","message":"Download buttons found","data":{"has_download_btn":download_btn is not None,"has_download_html_btn":download_html_btn is not None},"timestamp":int(time.time()*1000)}) + '\n')
++                except: pass
++                # #endregion
++                if download_btn and download_html_btn:
++                    # Wire download buttons to update after streaming completes
++                    def _update_downloads_from_chat(history):
++                        """Update download buttons from chat tab"""
++                        return chat_tab_instance.get_download_button_updates(history)
++
++                    # #region agent log
++                    try:
++                        with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
++                            f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"H","location":"ui_manager.py:122","message":"Wiring download events","data":{"has_streaming_event":hasattr(chat_tab_instance, "streaming_event"),"has_submit_event":hasattr(chat_tab_instance, "submit_event")},"timestamp":int(time.time()*1000)}) + '\n')
++                    except: pass
++                    # #endregion
++                    if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
++                        chat_tab_instance.streaming_event.then(
++                            fn=_update_downloads_from_chat,
++                            inputs=[chat_tab_instance.components.get("chatbot")],
++                            outputs=[download_btn, download_html_btn],
++                        )
++                    if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
++                        chat_tab_instance.submit_event.then(
++                            fn=_update_downloads_from_chat,
++                            inputs=[chat_tab_instance.components.get("chatbot")],
++                            outputs=[download_btn, download_html_btn],
++                            queue=False,  # Don't queue file generation to prevent blocking
++                        )
++                    # Also wire clear event to hide download buttons
++                    if hasattr(chat_tab_instance, "clear_event") and chat_tab_instance.clear_event:
++                        def _hide_downloads_on_clear():
++                            """Hide download buttons when chat is cleared"""
++                            return gr.update(visible=False), gr.update(visible=False)
++                        chat_tab_instance.clear_event.then(
++                            fn=_hide_downloads_on_clear,
++                            outputs=[download_btn, download_html_btn],
++                        )
++                    # #region agent log
++                    try:
++                        with open(r'd:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log', 'a', encoding='utf-8') as f:
++                            f.write(json.dumps({"sessionId":"debug-session","runId":"init","hypothesisId":"I","location":"ui_manager.py:142","message":"Download events wired successfully","data":{},"timestamp":int(time.time()*1000)}) + '\n')
++                    except: pass
++                    # #endregion
++                    logging.getLogger(__name__).info("✅ Connected DownloadsTab to chat streaming events")
++
+             # Wire end-of-turn event-driven refresh using existing chat events
+             try:
+                 update_all_ui_handler = event_handlers.get("update_all_ui")
+@@ -134,7 +233,23 @@ class UIManager:
+                             outputs=refresh_outputs
+                         )
+ 
+-                    logging.getLogger(__name__).debug("✅ Event-driven UI refresh wired for end-of-turn updates")
++                    # Wire clear event to update stats/progress
++                    if hasattr(chat_tab_instance, "clear_event") and chat_tab_instance.clear_event:
++                        chat_tab_instance.clear_event.then(
++                            fn=update_all_ui_handler,
++                            outputs=refresh_outputs,
++                            queue=False,  # Don't queue UI updates
++                        )
++
++                    # Wire stop event to update stats/progress
++                    if hasattr(chat_tab_instance, "stop_event") and chat_tab_instance.stop_event:
++                        chat_tab_instance.stop_event.then(
++                            fn=update_all_ui_handler,
++                            outputs=refresh_outputs,
++                            queue=False,  # Don't queue UI updates
++                        )
++
++                    logging.getLogger(__name__).debug("✅ Event-driven UI refresh wired for end-of-turn updates, clear, and stop")
+ 
+                 # Token budget refresh: wire separately to avoid changing update_all_ui signature
+                 if (
+@@ -223,11 +338,16 @@ class UIManager:
+                 outputs=[self.components["logs_display"]]
+             )
+ 
+-        if "progress_display" in self.components and update_progress_handler:
++        # Progress display - wire to chat events for event-driven updates
++        progress_comp = self.components.get("progress_display")
++        if progress_comp and update_progress_handler:
++            # Load initial state
+             demo.load(
+                 fn=update_progress_handler,
+-                outputs=[self.components["progress_display"]]
++                outputs=[progress_comp]
+             )
++            # Note: Progress updates are wired to chat events in the main event wiring section
++            # (see submit_event, clear_event, stop_event wiring above)
+ 
+         refresh_stats_handler = event_handlers.get("refresh_stats")
+         if "stats_display" in self.components and refresh_stats_handler:
+@@ -258,14 +378,22 @@ class UIManager:
+             )
+             logging.getLogger(__name__).debug(f"✅ Status auto-refresh timer set ({refresh_interval}s)")
+ 
+-        # Token budget updates
++        # Token budget updates - hybrid approach (immediate events + timer fallback)
++        # Token budget is updated through:
++        # - Immediate updates when budget_update events are emitted during streaming (pre-iteration, post-tool)
++        # - End-of-turn events (streaming_event.then(), submit_event.then(), clear_event.then(), stop_event.then(), model_switch_event.then())
++        # - Timer fallback (for edge cases where events might be missed)
++        # This matches Gradio 5 behavior where token budget updates immediately when budget snapshots are computed
++        # Budget snapshots are computed at "budget moments" (pre-iteration, post-tool), not on every chunk,
++        # so immediate updates are efficient and provide real-time feedback
+         if "token_budget_display" in self.components and event_handlers.get("update_token_budget"):
++            # Timer serves as fallback for edge cases, but primary updates happen immediately via budget_update events
+             token_budget_timer = gr.Timer(refresh_interval, active=True)
+             token_budget_timer.tick(
+                 fn=event_handlers["update_token_budget"],
+                 outputs=[self.components["token_budget_display"]]
+             )
+-            logging.getLogger(__name__).debug(f"✅ Token budget auto-refresh timer set ({refresh_interval}s)")
++            logging.getLogger(__name__).debug(f"✅ Token budget timer set ({refresh_interval}s) - fallback for edge cases, primary updates via budget_update events")
+ 
+         # LLM selection updates - no auto-refresh (explicit only)
+         logging.getLogger(__name__).debug("✅ LLM selection components will update only when explicitly triggered")
+@@ -279,28 +407,32 @@ class UIManager:
+             )
+             logging.getLogger(__name__).debug(f"✅ Logs auto-refresh timer set ({refresh_interval}s)")
+ 
+-        # Stats updates
+-        if "stats_display" in self.components and event_handlers.get("refresh_stats"):
+-            stats_timer = gr.Timer(refresh_interval, active=True)
+-            stats_timer.tick(
+-                fn=event_handlers["refresh_stats"],
+-                outputs=[self.components["stats_display"]]
+-            )
+-            logging.getLogger(__name__).debug(f"✅ Stats auto-refresh timer set ({refresh_interval}s)")
+-
+-        # Progress/iteration updates (faster updates for turn progress)
+-        if "progress_display" in self.components and event_handlers.get("update_progress_display"):
++        # Stats updates - REMOVED timer-based refresh
++        # Stats is now updated through events only (preferred approach):
++        # - After streaming completes (submit_event.then())
++        # - After clear (clear_event.then())
++        # - After stop (stop_event.then())
++        # - On initial load (demo.load())
++        # This ensures updates happen at appropriate events, not on a fixed timer
++        logging.getLogger(__name__).debug("✅ Stats uses event-driven updates only (no timer)")
++
++        # Progress/iteration updates - use timer for ticking clock and iteration display
++        # Iterations are useful and informative, so we keep timer-based refresh for progress
++        # Timer uses ITERATION_REFRESH_INTERVAL from .env (default 2.0s) for iteration display
++        progress_comp = self.components.get("progress_display")
++        update_progress_handler = event_handlers.get("update_progress_display")
++        if progress_comp and update_progress_handler:
++            # Use iteration interval from config (from .env ITERATION_REFRESH_INTERVAL)
+             iteration_interval = get_refresh_intervals().iteration
+             progress_timer = gr.Timer(iteration_interval, active=True)
+             progress_timer.tick(
+-                fn=event_handlers["update_progress_display"],
+-                outputs=[self.components["progress_display"]]
++                fn=update_progress_handler,
++                outputs=[progress_comp]
+             )
+-            logging.getLogger(__name__).debug(f"✅ Progress auto-refresh timer set ({iteration_interval}s)")
++            logging.getLogger(__name__).debug(f"✅ Progress/iteration timer set ({iteration_interval}s) - shows ticking clock and iterations")
+ 
+         logging.getLogger(__name__).info("🔄 Auto-refresh timers configured successfully")
+ 
+-
+     def get_components(self) -> dict[str, Any]:
+         """Get all components created by the UI manager"""
+         return self.components
+diff --git a/agent_ng/utils.py b/agent_ng/utils.py
+index 578f795..848e446 100644
+--- a/agent_ng/utils.py
++++ b/agent_ng/utils.py
+@@ -133,7 +133,9 @@ def get_tool_call_count(agent, session_id: str) -> int:
+ 
+             # Also count ToolMessage objects in conversation history
+             try:
+-                conversation_history = agent.memory_manager.get_conversation_history(session_id)
++                conversation_history = agent.memory_manager.get_conversation_history(
++                    session_id
++                )
+                 for message in conversation_history:
+                     if (
+                         hasattr(message, "__class__")
+diff --git a/requirements-problematic.txt b/requirements-problematic.txt
+index b3b9b20..0bb50fc 100644
+--- a/requirements-problematic.txt
++++ b/requirements-problematic.txt
+@@ -8,7 +8,7 @@
+ 
+ # Gradio - Modern web UI framework
+ # Not needed in Huging Face, installed from README.md
+-gradio==5.49.1
++gradio>=6.4
+ 
+ # LangChain Ecosystem - Core AI framework
+ langchain==0.3.27
+@@ -60,7 +60,7 @@ pandas==2.3.3
+ scikit-learn==1.7.2
+ 
+ # Image Processing
+-pillow==12.0.0
++pillow
+ 
+ # Optional: Advanced Data Processing
+ matplotlib==3.10.7
+diff --git a/requirements.txt b/requirements.txt
+index 804c577..3d22d2f 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -42,8 +42,8 @@ google-auth-httplib2==0.2.0
+ google-genai==1.74.0
+ google-generativeai==0.8.5
+ googleapis-common-protos==1.70.0
+-gradio==5.49.1
+-gradio_client==1.13.3
++gradio>=6.4.0
++gradio_client>=2.0.3
+ greenlet==3.2.4
+ groovy==0.1.2
+ groq==0.32.0
+@@ -194,3 +194,4 @@ xxhash==3.7.0
+ yarl==1.22.0
+ zipp==3.23.0
+ zstandard==0.25.0
++
+diff --git a/requirements_gradio_6.txt b/requirements_gradio_6.txt
+new file mode 100644
+index 0000000..d4d410e
+--- /dev/null
++++ b/requirements_gradio_6.txt
+@@ -0,0 +1,213 @@
++aiofiles==24.1.0
++aiohappyeyeballs==2.6.1
++aiohttp==3.13.0
++aiosignal==1.4.0
++annotated-doc==0.0.4
++annotated-types==0.7.0
++anyio==4.11.0
++arxiv==2.2.0
++asyncio-mqtt==0.16.2
++attrs==25.4.0
++backoff==2.2.1
++beautifulsoup4==4.14.2
++black==25.9.0
++Brotli==1.1.0
++cachetools==6.2.1
++certifi==2025.10.5
++cffi==2.0.0
++charset-normalizer==3.4.3
++click==8.3.0
++colorama==0.4.6
++contourpy==1.3.3
++cryptography==46.0.2
++cycler==0.12.1
++dataclasses-json==0.6.7
++deprecation==2.1.0
++distro==1.9.0
++et_xmlfile==2.0.0
++eval_type_backport==0.2.2
++fastapi==0.136.1
++feedparser==6.0.12
++ffmpy==0.6.3
++filelock==3.20.0
++filetype==1.2.0
++flake8==7.3.0
++fonttools==4.60.1
++frozenlist==1.8.0
++fsspec==2025.9.0
++gigachat==0.2.1
++google-ai-generativelanguage==0.6.15
++google-api-core==2.26.0
++google-api-python-client==2.184.0
++google-auth==2.50.0
++google-auth-httplib2==0.2.0
++google-genai==1.74.0
++google-generativeai==0.8.5
++googleapis-common-protos==1.70.0
++gradio==6.13.0
++gradio_client==2.5.0
++greenlet==3.2.4
++groovy==0.1.2
++groq==0.32.0
++grpcio==1.75.1
++grpcio-status>=1.49.1,<2.0.0
++h11==0.16.0
++h2==4.3.0
++hf-gradio==0.4.1
++hf-xet==1.1.10
++hpack==4.1.0
++httpcore==1.0.9
++httplib2==0.31.0
++httpx==0.28.1
++httpx-sse==0.4.3
++huggingface-hub==0.35.3
++hyperframe==6.1.0
++idna==3.11
++importlib_metadata==8.7.0
++iniconfig==2.1.0
++invoke==2.2.1
++Jinja2==3.1.6
++jiter==0.11.0
++joblib==1.5.2
++jsonpatch==1.33
++jsonpointer==3.0.0
++jsonschema==4.26.0
++jsonschema-specifications==2025.9.1
++kiwisolver==1.4.9
++langchain==1.2.17
++langchain-classic==1.0.4
++langchain-community==0.4.1
++langchain-core==1.3.2
++langchain-gigachat==0.5.0
++langchain-google-genai==4.2.2
++langchain-groq==1.1.2
++langchain-huggingface==1.2.2
++langchain-mistralai==1.1.3
++langchain-openai==1.2.1
++langchain-protocol==0.0.15
++langchain-tavily==0.2.18
++langchain-text-splitters==1.1.2
++langfuse==3.6.2
++langgraph==1.1.10
++langgraph-checkpoint==4.0.3
++langgraph-prebuilt==1.0.13
++langgraph-sdk==0.3.13
++langsmith==0.4.34
++Markdown==3.9
++markdown-it-py==4.0.0
++markitdown[docx,xlsx,pptx]
++MarkupSafe==3.0.3
++marshmallow==3.26.1
++matplotlib==3.10.7
++mccabe==0.7.0
++mcp==1.25.0
++mdurl==0.1.2
++mistralai==1.9.11
++mmh3==5.2.0
++multidict==6.7.0
++mypy_extensions==1.1.0
++numpy==2.3.3
++openai==2.33.0
++openpyxl==3.1.5
++opentelemetry-api==1.37.0
++opentelemetry-exporter-otlp-proto-common==1.37.0
++opentelemetry-exporter-otlp-proto-http==1.37.0
++opentelemetry-proto==1.37.0
++opentelemetry-sdk==1.37.0
++opentelemetry-semantic-conventions==0.58b0
++orjson==3.11.8
++ormsgpack==1.12.2
++packaging==25.0
++paho-mqtt==2.1.0
++pandas==2.3.3
++pathspec==0.12.1
++pgvector==0.4.1
++pillow==11.3.0
++platformdirs==4.5.0
++pluggy==1.6.0
++# Optional Supabase client stack — aligned with requirements.txt (legacy / optional).
++# postgrest==2.29.0
++propcache==0.4.1
++proto-plus==1.26.1
++protobuf==5.29.5
++pyasn1==0.6.1
++pyasn1_modules==0.4.2
++pycodestyle==2.14.0
++pycparser==2.23
++pydantic==2.11.10
++pydantic-settings==2.11.0
++pydantic_core==2.33.2
++pydub==0.25.1
++pyflakes==3.4.0
++Pygments==2.19.2
++pyiceberg==0.10.0
++PyJWT==2.10.1
++PyMuPDF==1.26.5
++pymupdf4llm==0.0.27
++pyparsing==3.2.5
++pyroaring==1.0.3
++pytesseract==0.3.13
++pytest==8.4.2
++pytest-asyncio==1.2.0
++python-dateutil==2.9.0.post0
++python-dotenv==1.1.1
++python-multipart==0.0.20
++pytokens==0.1.10
++pytz==2025.2
++pywin32==311
++PyYAML==6.0.3
++# realtime==2.29.0
++referencing==0.37.0
++regex==2025.9.18
++requests==2.32.5
++requests-toolbelt==1.0.0
++rich==14.2.0
++rpds-py==0.30.0
++rsa==4.9.1
++ruff==0.14.0
++safehttpx==0.1.7
++scikit-learn==1.7.2
++scipy==1.16.2
++semantic-version==2.10.0
++setuptools==80.9.0
++sgmllib3k==1.0.0
++shellingham==1.5.4
++six==1.17.0
++sniffio==1.3.1
++sortedcontainers==2.4.0
++soupsieve==2.8
++SQLAlchemy==2.0.44
++sse-starlette==3.1.2
++starlette==1.0.0
++# storage3==2.29.0
++StrEnum==0.4.15
++strictyaml==1.7.3
++# supabase==2.29.0
++# supabase-auth==2.29.0
++# supabase-functions==2.29.0
++tabulate==0.9.0
++tenacity==9.1.2
++threadpoolctl==3.6.0
++tiktoken==0.12.0
++tokenizers==0.22.1
++tomlkit==0.13.3
++tqdm==4.67.1
++typer==0.19.2
++typer-slim==0.21.1
++types-requests==2.32.4.20250913
++typing-inspect==0.9.0
++typing-inspection==0.4.2
++typing_extensions==4.15.0
++tzdata==2025.2
++uritemplate==4.2.0
++urllib3==2.5.0
++uuid_utils==0.14.1
++uvicorn==0.37.0
++websockets==15.0.1
++wheel==0.45.1
++wikipedia==1.4.0
++wrapt==1.17.3
++xxhash==3.7.0
++yarl==1.22.0
++zipp==3.23.0
++zstandard==0.25.0
+diff --git a/resources/css/cmw_copilot_theme.css b/resources/css/cmw_copilot_theme.css
+index d541ef3..d6dc799 100644
+--- a/resources/css/cmw_copilot_theme.css
++++ b/resources/css/cmw_copilot_theme.css
+@@ -773,6 +773,26 @@ body[data-theme='dark'] .gradio-container select:focus,
+     box-shadow: var(--cmw-shadow-focus) !important;
+ }
+ 
++
++/* Hide the ArrowUp SVG icon */
++.gradio-container button.submit-button[data-testid="submit-button"] > svg {
++    display: none !important;
++}
++
++/* Add Send icon using background image */
++.gradio-container button.submit-button[data-testid="submit-button"]:not(.padded-button)::before {
++    content: '';
++    display: inline-block;
++    width: 36px;
++    height: 36px;
++    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 22 24' width='100%25' height='100%25' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M19.1168 12.1484C19.474 12.3581 19.9336 12.2384 20.1432 11.8811C20.3528 11.5238 20.2331 11.0643 19.8758 10.8547L19.1168 12.1484ZM6.94331 4.13656L6.55624 4.77902L6.56378 4.78344L6.94331 4.13656ZM5.92408 4.1598L5.50816 3.5357L5.50816 3.5357L5.92408 4.1598ZM5.51031 5.09156L4.76841 5.20151C4.77575 5.25101 4.78802 5.29965 4.80505 5.34671L5.51031 5.09156ZM7.12405 11.7567C7.26496 12.1462 7.69495 12.3477 8.08446 12.2068C8.47397 12.0659 8.67549 11.6359 8.53458 11.2464L7.12405 11.7567ZM19.8758 12.1484C20.2331 11.9388 20.3528 11.4793 20.1432 11.122C19.9336 10.7648 19.474 10.6451 19.1168 10.8547L19.8758 12.1484ZM6.94331 18.8666L6.56375 18.2196L6.55627 18.2241L6.94331 18.8666ZM5.92408 18.8433L5.50815 19.4674H5.50815L5.92408 18.8433ZM5.51031 17.9116L4.80505 17.6564C4.78802 17.7035 4.77575 17.7521 4.76841 17.8016L5.51031 17.9116ZM8.53458 11.7567C8.67549 11.3672 8.47397 10.9372 8.08446 10.7963C7.69495 10.6554 7.26496 10.8569 7.12405 11.2464L8.53458 11.7567ZM19.4963 12.2516C19.9105 12.2516 20.2463 11.9158 20.2463 11.5016C20.2463 11.0873 19.9105 10.7516 19.4963 10.7516V12.2516ZM7.82931 10.7516C7.4151 10.7516 7.07931 11.0873 7.07931 11.5016C7.07931 11.9158 7.4151 12.2516 7.82931 12.2516V10.7516ZM19.8758 10.8547L7.32284 3.48968L6.56378 4.78344L19.1168 12.1484L19.8758 10.8547ZM7.33035 3.49414C6.76609 3.15419 6.05633 3.17038 5.50816 3.5357L6.34 4.78391C6.40506 4.74055 6.4893 4.73863 6.55627 4.77898L7.33035 3.49414ZM5.50816 3.5357C4.95998 3.90102 4.67184 4.54987 4.76841 5.20151L6.25221 4.98161C6.24075 4.90427 6.27494 4.82727 6.34 4.78391L5.50816 3.5357ZM4.80505 5.34671L7.12405 11.7567L8.53458 11.2464L6.21558 4.83641L4.80505 5.34671ZM19.1168 10.8547L6.56378 18.2197L7.32284 19.5134L19.8758 12.1484L19.1168 10.8547ZM6.55627 18.2241C6.4893 18.2645 6.40506 18.2626 6.34 18.2192L5.50815 19.4674C6.05633 19.8327 6.76609 19.8489 7.33035 19.509L6.55627 18.2241ZM6.34 18.2192C6.27494 18.1759 6.24075 18.0988 6.25221 18.0215L4.76841 17.8016C4.67184 18.4532 4.95998 19.1021 5.50815 19.4674L6.34 18.2192ZM6.21558 18.1667L8.53458 11.7567L7.12405 11.2464L4.80505 17.6564L6.21558 18.1667ZM19.4963 10.7516H7.82931V12.2516H19.4963V10.7516Z' fill='currentColor'%3E%3C/path%3E%3C/svg%3E");
++    background-size: contain;
++    background-repeat: no-repeat;
++    background-position: center;
++    color: currentColor;
++    vertical-align: middle;
++}
++
+ /* Dark theme for chatbot messages */
+ html[data-theme='dark'] .gradio-container .chatbot,
+ body[data-theme='dark'] .gradio-container .chatbot,
