@@ -473,3 +473,51 @@ class TestImageEngineLiveOpenRouter:
         assert result.success is True, f"generation failed: {result.error}"
         assert result.image_bytes is not None
         assert len(result.image_bytes) > 1024, "image suspiciously small"
+
+
+def _has_gemini_key() -> bool:
+    return bool(os.getenv("GEMINI_KEY"))
+
+
+@pytest.mark.skipif(
+    not _has_gemini_key(),
+    reason="GEMINI_KEY not set; skipping live Google native call",
+)
+@pytest.mark.xfail(
+    strict=False,
+    reason="Live API: geo-restrictions (Russia) or quota errors may cause flakes",
+)
+class TestImageEngineLiveGoogle:
+    """Real API calls forced through Google's native Gemini API.
+
+    Requires ``GEMINI_KEY`` and unrestricted access to generativelanguage.googleapis.com
+    (does not work from Russia/CIS without a VPN or proxy).
+    """
+
+    def test_gemini_flash_via_google(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "google"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "A minimalist geometric logo: simple blue square on white background",
+                model="google/gemini-3.1-flash-image-preview",
+            )
+        assert result.success is True, f"generation failed: {result.error}"
+        assert result.image_bytes is not None
+        assert len(result.image_bytes) > 1024, "image suspiciously small"
+        is_png = result.image_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+        is_jpeg = result.image_bytes[:2] == b"\xff\xd8"
+        assert is_png or is_jpeg, "expected PNG or JPEG output"
+        # Google provider uses static price from registry
+        assert result.cost is not None
+        assert result.cost > 0
+
+    def test_gemini_pro_via_google(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "google"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "A minimalist geometric logo: simple blue circle on white background",
+                model="google/gemini-3-pro-image-preview",
+            )
+        assert result.success is True, f"generation failed: {result.error}"
+        assert result.image_bytes is not None
+        assert len(result.image_bytes) > 1024, "image suspiciously small"

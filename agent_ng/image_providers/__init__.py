@@ -21,11 +21,13 @@ the ``generate_ai_image`` tool.
 from __future__ import annotations
 
 from .base import ImageGenerationResult, ImageProvider, ImageRequest
+from .google import GoogleGeminiProvider
 from .openrouter import OpenRouterProvider
 from .polza import PolzaProvider
 from .registry import get_provider, list_providers, register_provider
 
 __all__ = [
+    "GoogleGeminiProvider",
     "ImageGenerationResult",
     "ImageProvider",
     "ImageRequest",

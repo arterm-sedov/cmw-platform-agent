@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from .google import GoogleGeminiProvider
 from .openrouter import OpenRouterProvider
 from .polza import PolzaProvider
 
@@ -68,6 +69,7 @@ def list_providers() -> list[str]:
 
 # --- Built-in registrations ------------------------------------------------
 
+register_provider("google", GoogleGeminiProvider)
 register_provider("openrouter", OpenRouterProvider)
 register_provider("polza", PolzaProvider)
 

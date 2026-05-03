@@ -83,6 +83,15 @@ class ImageModelConfig:
     ``bytedance/seedream-4.5``), add an entry here so the provider adapter
     sends the correct ID.  Falls back to ``name`` when not set.
     """
+    price_per_generation_usd: float | None = None
+    """Estimated generation cost in USD for providers that don't return cost at runtime.
+
+    Used exclusively by the ``google`` native provider (Google Gemini API
+    returns token counts but no dollar amount).  Other providers return live
+    cost in the response and ignore this field.
+
+    Values are Polza.ai base-tier prices converted to USD.
+    """
 
     @property
     def provider(self) -> str:
@@ -130,12 +139,17 @@ _HINT_TEXT_FOCUSED = (
 
 IMAGE_MODELS: dict[str, ImageModelConfig] = {
     # ------ Google Gemini family (multimodal: image + text output) -----
+    # provider_model_ids["google"] strips the "google/" prefix that OpenRouter
+    # and Polza use as a namespace, since the native Gemini API expects bare IDs.
+    # price_per_generation_usd: Polza base-tier price ÷ 90 RUB/USD (default rate).
     "google/gemini-2.5-flash-image": ImageModelConfig(
         name="google/gemini-2.5-flash-image",
-        providers=["polza", "openrouter"],
+        providers=["polza", "openrouter", "google"],
         modalities=["image", "text"],
         supports_image_config=True,
         max_reference_images=8,
+        provider_model_ids={"google": "gemini-2.5-flash-image"},
+        price_per_generation_usd=0.039,  # Google native: $0.039/image @ 1K (official)
         description=(
             "Fast everyday workhorse for icons, diagrams and simple "
             "business illustrations. Balanced quality and speed."
@@ -144,10 +158,12 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "google/gemini-3.1-flash-image-preview": ImageModelConfig(
         name="google/gemini-3.1-flash-image-preview",
-        providers=["polza", "openrouter"],
+        providers=["polza", "openrouter", "google"],
         modalities=["image", "text"],
         supports_image_config=True,
         max_reference_images=8,
+        provider_model_ids={"google": "gemini-3.1-flash-image-preview"},
+        price_per_generation_usd=0.067,  # Google native: $0.067/image @ 1K (official)
         description=(
             "Newer fast tier (Nano Banana 2) with a larger native canvas "
             "and extra aspect ratios (including 21:9) for banners and "
@@ -157,10 +173,12 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "google/gemini-3-pro-image-preview": ImageModelConfig(
         name="google/gemini-3-pro-image-preview",
-        providers=["polza", "openrouter"],
+        providers=["polza", "openrouter", "google"],
         modalities=["image", "text"],
         supports_image_config=True,
         max_reference_images=8,
+        provider_model_ids={"google": "gemini-3-pro-image-preview"},
+        price_per_generation_usd=0.134,  # Google native: $0.134/image @ 1K/2K (official)
         description=(
             "Premium quality (Nano Banana Pro) for polished hero imagery, "
             "complex scenes and multilingual text. Slower and pricier."

@@ -86,7 +86,7 @@ class TestRegistryShape:
             )
 
     def test_every_config_has_known_providers(self) -> None:
-        known = {"openrouter", "polza"}
+        known = {"openrouter", "polza", "google"}
         for slug, cfg in get_image_models().items():
             assert isinstance(cfg.providers, list), (
                 f"{slug}: providers must be a list"
@@ -108,6 +108,24 @@ class TestRegistryShape:
         assert cfg.providers[0] == "polza", (
             "Polza should be first provider for Gemini to avoid regional restrictions"
         )
+
+    def test_gemini_models_have_google_provider(self) -> None:
+        """All Gemini image models expose the native google provider."""
+        gemini_slugs = [
+            "google/gemini-2.5-flash-image",
+            "google/gemini-3.1-flash-image-preview",
+            "google/gemini-3-pro-image-preview",
+        ]
+        for slug in gemini_slugs:
+            cfg = get_image_models()[slug]
+            assert "google" in cfg.providers, f"{slug}: missing 'google' provider"
+            assert cfg.provider_model_ids.get("google") is not None, (
+                f"{slug}: missing provider_model_ids['google']"
+            )
+            assert cfg.price_per_generation_usd is not None, (
+                f"{slug}: missing price_per_generation_usd for google provider"
+            )
+            assert cfg.price_per_generation_usd > 0
 
 
 class TestDefaultSelection:
