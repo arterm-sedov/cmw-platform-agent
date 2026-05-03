@@ -1714,6 +1714,37 @@ class GenerateAIImageParams(BaseModel):
             "repaint, restyle, or edit it. Omit for text-to-image."
         ),
     )
+
+    @field_validator("reference_images", mode="before")
+    @classmethod
+    def _coerce_reference_images(cls, value: Any) -> list[str] | None:
+        """Accept JSON-array strings some chat models emit instead of real lists."""
+        if value is None:
+            return None
+        if isinstance(value, tuple):
+            value = list(value)
+        if isinstance(value, list):
+            items = [str(x).strip() for x in value if str(x).strip()]
+            return items or None
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                except json.JSONDecodeError:
+                    return [raw]
+                if isinstance(parsed, list):
+                    items = [str(x).strip() for x in parsed if str(x).strip()]
+                    return items or None
+                return None
+            return [raw]
+        raise ValueError(
+            "reference_images must be a list of strings, a single filename/URL string, "
+            "or a JSON array string"
+        )
+
     agent: Annotated[Any | None, InjectedToolArg] = Field(
         default=None,
         description="Runtime-injected; not supplied by the LLM.",

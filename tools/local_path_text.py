@@ -78,19 +78,23 @@ def read_local_path_to_plain_text(
                 "[Image: no text layer; use vision/chat image attachment to describe the file.]",
                 None,
                 None,
+                [],
+                None,
             )
         except Exception as e:
             return "", f"Error processing image: {e!s}", None, [], None
 
     if ext == ".pdf":
         try:
-            from tools.asset_extractor import extract_assets  # noqa: PLC0415
-            from tools.pdf_utils import PDFUtils  # noqa: PLC0415
+            from tools.asset_extractor import extract_assets
+            from tools.pdf_utils import PDFUtils
 
             if not PDFUtils.is_available():
                 return (
                     "",
                     "PyMuPDF not available. Install with: pip install pymupdf",
+                    None,
+                    [],
                     None,
                 )
             if extract_images:
@@ -124,10 +128,14 @@ def read_local_path_to_plain_text(
                 "Video: not converted to text here. In chat, attach the file for a "
                 "multimodal/vision model or a transcript tool.",
                 None,
+                [],
+                None,
             )
         return (
             "",
             "Binary file with no recognized extension; no text extraction.",
+            None,
+            [],
             None,
         )
 
@@ -140,7 +148,7 @@ def read_local_path_to_plain_text(
             )
         try:
             if extract_images:
-                from tools.asset_extractor import extract_assets  # noqa: PLC0415
+                from tools.asset_extractor import extract_assets
                 asset_result = extract_assets(file_path, extract_images=True)
                 if not asset_result.success:
                     return "", asset_result.error_message or f"{ext} extraction failed", None, [], None
@@ -166,5 +174,5 @@ def read_local_path_to_plain_text(
 
     result = FileUtils.read_text_file(file_path)
     if not result.success:
-        return "", result.error or "Text read failed", None
-    return result.content or "", None, result.encoding
+        return "", result.error or "Text read failed", None, [], None
+    return result.content or "", None, result.encoding, [], None

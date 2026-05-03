@@ -35,7 +35,11 @@ from pydantic import ValidationError
 import pytest
 
 from agent_ng.image_engine import ImageGenerationResult
-from tools.tools import _resolve_reference_images, generate_ai_image
+from tools.tools import (
+    GenerateAIImageParams,
+    _resolve_reference_images,
+    generate_ai_image,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -259,6 +263,52 @@ class TestSchemaVisibility:
             "reference_images",
             "agent",
         }, f"unexpected schema fields: {fields}"
+
+
+class TestReferenceImagesCoercion:
+    """Some chat models send JSON-encoded arrays as strings; coerce before validation."""
+
+    def test_json_array_string_becomes_list(self) -> None:
+        m = GenerateAIImageParams.model_validate({
+            "prompt": "edit frame",
+            "reference_images": '["llm_image_20260503_132734_247787ca.jpg"]',
+        })
+        assert m.reference_images == ["llm_image_20260503_132734_247787ca.jpg"]
+
+    def test_single_filename_string_becomes_singleton_list(self) -> None:
+        m = GenerateAIImageParams.model_validate({
+            "prompt": "x",
+            "reference_images": "photo.png",
+        })
+        assert m.reference_images == ["photo.png"]
+
+    def test_list_passes_through(self) -> None:
+        m = GenerateAIImageParams.model_validate({
+            "prompt": "x",
+            "reference_images": ["a.jpg", "b.jpg"],
+        })
+        assert m.reference_images == ["a.jpg", "b.jpg"]
+
+    def test_tuple_becomes_list(self) -> None:
+        m = GenerateAIImageParams.model_validate({
+            "prompt": "x",
+            "reference_images": ("a.jpg",),
+        })
+        assert m.reference_images == ["a.jpg"]
+
+    def test_numeric_elements_coerced_to_string_filenames(self) -> None:
+        m = GenerateAIImageParams.model_validate({
+            "prompt": "x",
+            "reference_images": ["ok.jpg", 7],
+        })
+        assert m.reference_images == ["ok.jpg", "7"]
+
+    def test_wrong_top_level_type_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            GenerateAIImageParams.model_validate({
+                "prompt": "x",
+                "reference_images": 99,
+            })
 
 
 class TestLLMFacingDescription:
