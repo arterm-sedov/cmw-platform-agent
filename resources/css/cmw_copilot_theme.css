@@ -291,6 +291,12 @@ body {
     background: transparent !important;
 }
 
+/* Gradio chatbot markdown may inherit reduced opacity; keep bubbles fully opaque.
+   Exclude .thought-group (chain-of-thought accordions) so native subdued styling stays. */
+.gradio-container .md.chatbot.prose:not(.thought-group *) {
+    opacity: 1 !important;
+}
+
 /* Ensure hero title block has no border/shadow/background */
 .gradio-container .block.padded.hero-title,
 .gradio-container .hero-title,
