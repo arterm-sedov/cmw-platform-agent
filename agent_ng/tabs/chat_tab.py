@@ -57,6 +57,37 @@ from .sidebar import QuickActionsMixin
 CHAT_DOWNLOADS_ENABLED = True  # Enable chat export/download functionality
 
 
+def _chatbot_message_content_to_export_text(content: Any) -> str | None:
+    """Normalize Chatbot message content for Markdown export (Gradio 5/6)."""
+    if content is None:
+        return None
+    if isinstance(content, str):
+        return content.strip() or None
+    if isinstance(content, list):
+        chunks: list[str] = []
+        for part in content:
+            if isinstance(part, str):
+                if part.strip():
+                    chunks.append(part)
+            elif isinstance(part, dict) and isinstance(part.get("text"), str):
+                chunks.append(part["text"])
+        if not chunks:
+            return None
+        return "\n\n".join(chunks).strip() or None
+    if isinstance(content, dict):
+        if "path" in content or "file" in content:
+            label = (
+                content.get("alt_text")
+                or content.get("display_name")
+                or content.get("orig_name")
+                or content.get("path")
+            )
+            return f"*(attachment: {label})*" if label else "*(attachment)*"
+        return None
+    text = str(content).strip()
+    return text or None
+
+
 class ChatTab(QuickActionsMixin):
     """Chat tab component with interface and quick actions"""
 
@@ -161,6 +192,21 @@ class ChatTab(QuickActionsMixin):
             )
             # REMOVED: Separate clear button - now using Gradio's native chatbot.clear() button
             # The built-in clear button in the chatbot component handles clearing
+
+        # In-chat exports (same as ``main``); heavy prep is deferred via ui_manager (tab select / env).
+        with gr.Row(elem_classes=["chat-download-row"]):
+            self.components["download_btn"] = gr.DownloadButton(
+                label=self._get_translation("download_button"),
+                variant="secondary",
+                elem_classes=["cmw-button"],
+                visible=False,
+            )
+            self.components["download_html_btn"] = gr.DownloadButton(
+                label=self._get_translation("download_html_button"),
+                variant="secondary",
+                elem_classes=["cmw-button"],
+                visible=False,
+            )
 
         # Welcome block moved to dedicated Home tab
 
@@ -1658,7 +1704,7 @@ class ChatTab(QuickActionsMixin):
                     gr.update(value=html_file_path, visible=True),
                 )
             if markdown_file_path:
-                # MD-only fast path (HTML deferred unless CMW_UI_EXPORT_HTML_AFTER_TURN)
+                # MD-only when HTML export is disabled or HTML build failed
                 return (
                     gr.update(value=markdown_file_path, visible=True),
                     gr.update(visible=False),
@@ -1748,28 +1794,21 @@ class ChatTab(QuickActionsMixin):
             )
         markdown_content += "---\n\n"
 
-        # Add conversation messages (plain string content only; skip file bubbles / structured payloads).
+        # Conversation bodies (Gradio 6 uses list/dict multimodal ``content``, not only str).
         for i, message in enumerate(history, 1):
             if isinstance(message, dict):
-                # Skip file-bubble messages (content is a dict, not text).
-                content = message.get("content", "")
-                if not isinstance(content, str):
+                body = _chatbot_message_content_to_export_text(message.get("content"))
+                if not body:
                     continue
-
                 role = message.get("role", "unknown")
                 if role == "user":
-                    markdown_content += f"## User Message {i}\n\n"
-                    markdown_content += f"{content}\n\n"
+                    markdown_content += f"## User Message {i}\n\n{body}\n\n"
                 elif role == "assistant":
-                    markdown_content += f"## Assistant Response {i}\n\n"
-                    markdown_content += f"{content}\n\n"
+                    markdown_content += f"## Assistant Response {i}\n\n{body}\n\n"
                 else:
-                    markdown_content += f"## {role.title()} Message {i}\n\n"
-                    markdown_content += f"{content}\n\n"
+                    markdown_content += f"## {role.title()} Message {i}\n\n{body}\n\n"
             else:
-                # Fallback for other formats
-                markdown_content += f"## Message {i}\n\n"
-                markdown_content += f"{message!s}\n\n"
+                markdown_content += f"## Message {i}\n\n{message!s}\n\n"
 
         # Create file with proper filename
         try:
@@ -1782,8 +1821,7 @@ class ChatTab(QuickActionsMixin):
 
             logger.debug("Created markdown file: %s", clean_file_path)
 
-            # HTML export is expensive (markdown→HTML + CSS + template); skip on the hot path
-            # unless CMW_UI_EXPORT_HTML_AFTER_TURN is set — avoids multi-second UI stall after stream.
+            # HTML is optional (can stall); only when CMW_UI_EXPORT_HTML_AFTER_TURN is set.
             html_file_path = None
             if get_ui_export_html_after_turn():
                 html_file_path = self._generate_conversation_html(

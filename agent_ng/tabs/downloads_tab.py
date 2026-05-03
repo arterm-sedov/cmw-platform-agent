@@ -57,20 +57,19 @@ class DownloadsTab:
         logging.getLogger(__name__).debug("📥 DownloadsTab: Creating downloads interface...")
 
         with gr.Column(elem_classes=["downloads-container"]):
-            # Download buttons - initially hidden, updated after chat streaming completes
-            with gr.Row():
-                self.components["download_btn"] = gr.DownloadButton(
-                    label=self._get_translation("download_button"),
-                    variant="secondary",
-                    elem_classes=["cmw-button"],
-                    visible=False,  # Will be shown when files are ready
-                )
-                self.components["download_html_btn"] = gr.DownloadButton(
-                    label=self._get_translation("download_html_button"),
-                    variant="secondary",
-                    elem_classes=["cmw-button"],
-                    visible=False,  # Will be shown when files are ready
-                )
+            # Markdown first, HTML below (export runs when this tab is opened / prep event).
+            self.components["download_btn"] = gr.DownloadButton(
+                label=self._get_translation("download_button"),
+                variant="secondary",
+                elem_classes=["cmw-button"],
+                visible=False,
+            )
+            self.components["download_html_btn"] = gr.DownloadButton(
+                label=self._get_translation("download_html_button"),
+                variant="secondary",
+                elem_classes=["cmw-button"],
+                visible=False,
+            )
 
     def _connect_events(self):
         """Connect event handlers for the downloads tab"""

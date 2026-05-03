@@ -8,6 +8,7 @@ from agent_ng.agent_config import (
     get_ui_disable_auto_timers,
     get_ui_download_prep_after_stream,
     get_ui_export_html_after_turn,
+    get_ui_home_first,
     get_ui_stack_home_chat,
     get_ui_tab_allowlist,
 )
@@ -21,6 +22,7 @@ def clear_ui_bisect_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "CMW_UI_STACK_HOME_CHAT",
         "CMW_UI_DISABLE_AUTO_TIMERS",
         "CMW_UI_EXPORT_HTML_AFTER_TURN",
+        "CMW_UI_HOME_FIRST",
         "CMW_UI_DOWNLOAD_PREP_AFTER_STREAM",
     ):
         monkeypatch.delenv(key, raising=False)
@@ -79,6 +81,16 @@ def test_export_html_after_turn_default_off(monkeypatch: pytest.MonkeyPatch) -> 
 def test_export_html_after_turn_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CMW_UI_EXPORT_HTML_AFTER_TURN", "1")
     assert get_ui_export_html_after_turn() is True
+
+
+def test_home_first_default_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CMW_UI_HOME_FIRST", raising=False)
+    assert get_ui_home_first() is False
+
+
+def test_home_first_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CMW_UI_HOME_FIRST", "1")
+    assert get_ui_home_first() is True
 
 
 def test_download_prep_after_stream_default_off(monkeypatch: pytest.MonkeyPatch) -> None:

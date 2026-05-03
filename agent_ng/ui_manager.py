@@ -10,9 +10,19 @@ Supports internationalization (i18n) with Russian and English translations.
 from collections.abc import Callable
 import logging
 import os
+import time
 from pathlib import Path
 
 from typing import Any, Dict, List, Optional, Tuple
+
+try:
+    from agent_ng._debug_ndjson import debug_ndjson
+except ImportError:
+
+    def debug_ndjson(_h: str, _loc: str, _msg: str, _data: dict | None = None) -> None:
+        return
+
+
 from .i18n_translations import get_translation_key
 from .tabs.sidebar import Sidebar
 import gradio as gr
@@ -149,12 +159,34 @@ class UIManager:
                         "use include_sidebar_tab=False with CMW_UI_STACK_HOME_CHAT"
                     )
             else:
+                _tabs_t0 = time.perf_counter()
                 with gr.Tabs():
                     # Create tabs using provided tab modules
                     for tab_module in tab_modules:
                         if tab_module:
                             try:
+                                _t0 = time.perf_counter()
+                                # #region agent log
+                                debug_ndjson(
+                                    "H1",
+                                    "ui_manager.create_interface",
+                                    "create_tab_enter",
+                                    {"tab_class": tab_module.__class__.__name__},
+                                )
+                                # #endregion
                                 tab_item, tab_components = tab_module.create_tab()
+                                # #region agent log
+                                debug_ndjson(
+                                    "H1",
+                                    "ui_manager.create_interface",
+                                    "create_tab_exit",
+                                    {
+                                        "tab_class": tab_module.__class__.__name__,
+                                        "ms": round((time.perf_counter() - _t0) * 1000, 2),
+                                        "tab_item_none": tab_item is None,
+                                    },
+                                )
+                                # #endregion
                                 # Skip if tab_item is None (e.g., ConfigTab when CMW_USE_DOTENV=true)
                                 if tab_item is None:
                                     logging.getLogger(__name__).info(
@@ -208,6 +240,17 @@ class UIManager:
                         logging.getLogger(__name__).info(
                             "Sidebar/settings tab omitted (include_sidebar_tab=False)"
                         )
+                # #region agent log
+                debug_ndjson(
+                    "H2",
+                    "ui_manager.create_interface",
+                    "gr_tabs_block_done",
+                    {
+                        "total_tab_modules": len(tab_modules),
+                        "ms": round((time.perf_counter() - _tabs_t0) * 1000, 2),
+                    },
+                )
+                # #endregion
 
             # Connect quick action dropdown after all components are available
             if "sidebar_instance" in self.components:

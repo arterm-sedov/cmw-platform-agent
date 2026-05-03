@@ -295,14 +295,25 @@ def get_ui_disable_auto_timers() -> bool:
 
 
 def get_ui_export_html_after_turn() -> bool:
-    """Also build HTML export synchronously after each chat turn (slow; can stall Gradio 6).
+    """Build HTML export when download prep runs (Markdown + HTML file generation).
 
-    When ``False`` (default), only Markdown is generated on the post-stream path; the HTML
-    download stays hidden until you opt in via env.
+    When ``False`` (default), only Markdown is generated; the HTML download stays hidden.
+    HTML generation can stall the UI on some setups — enable only when needed.
 
     Environment ``CMW_UI_EXPORT_HTML_AFTER_TURN``: ``1``/``true``/``yes``/``on`` to enable.
     """
     return env_flag_true("CMW_UI_EXPORT_HTML_AFTER_TURN")
+
+
+def get_ui_home_first() -> bool:
+    """Keep the Home tab as the first tab (leftmost) in ``gr.Tabs``.
+
+    When ``False`` (default), Chat is placed before Home to reduce Gradio 6 stalls with
+    Home-first + many tabs.
+
+    Environment ``CMW_UI_HOME_FIRST``: ``1``/``true``/``yes``/``on`` to show Home first.
+    """
+    return env_flag_true("CMW_UI_HOME_FIRST")
 
 
 def get_ui_download_prep_after_stream() -> bool:

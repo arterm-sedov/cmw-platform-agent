@@ -60,32 +60,29 @@ class HomeTab:
         """Create the home interface with welcome content"""
         logging.getLogger(__name__).debug("🏠 HomeTab: Creating home interface...")
 
-        # Main welcome section
-        with (
-            gr.Column(elem_classes=["home-container"]),
-            gr.Row(elem_classes=["home-content"]),
-            gr.Column(scale=2)
-        ):
-            with gr.Column(elem_classes=["welcome-block"]):
-                gr.Markdown(
-                    f"## {self._get_translation('welcome_title')}",
-                    elem_classes=["welcome-title"]
-                )
-                gr.Markdown(
-                    self._get_translation("welcome_description"),
-                    elem_classes=["welcome-description"]
-                )
+        # Nested Column → Row → two Columns (Gradio requires explicit nesting; a single
+        # ``with col, row, col:`` statement breaks the block tree and breaks other tabs.)
+        with gr.Column(elem_classes=["home-container"]):
+            with gr.Row(elem_classes=["home-content"]):
+                with gr.Column(elem_classes=["welcome-block"]):
+                    gr.Markdown(
+                        f"## {self._get_translation('welcome_title')}",
+                        elem_classes=["welcome-title"],
+                    )
+                    gr.Markdown(
+                        self._get_translation("welcome_description"),
+                        elem_classes=["welcome-description"],
+                    )
+                with gr.Column(elem_classes=["quick-start-block"]):
+                    gr.Markdown(
+                        f"## {self._get_translation('quick_start_title')}",
+                        elem_classes=["quick-start-title"],
+                    )
+                    gr.Markdown(
+                        self._get_translation("quick_start_description"),
+                        elem_classes=["quick-start-description"],
+                    )
 
-            # Quick start section
-            with gr.Column(elem_classes=["quick-start-block"]):
-                gr.Markdown(
-                    f"## {self._get_translation('quick_start_title')}",
-                    elem_classes=["quick-start-title"]
-                )
-                gr.Markdown(
-                    self._get_translation("quick_start_description"),
-                    elem_classes=["quick-start-description"]
-                )
     def _connect_events(self):
         """Connect event handlers for the home tab"""
         logging.getLogger(__name__).debug("🔗 HomeTab: Connecting event handlers...")

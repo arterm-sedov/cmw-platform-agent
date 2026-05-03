@@ -53,6 +53,7 @@ try:
         get_language_settings,
         get_port_settings,
         get_ui_disable_auto_timers,
+        get_ui_home_first,
         get_ui_stack_home_chat,
         get_ui_tab_allowlist,
     )
@@ -62,11 +63,12 @@ except ImportError:
     import sys
 
     sys.path.append(str(Path(__file__).parent))
-    from agent_config import (
+    from agent_config import (  # type: ignore[no-redef]
         config,
         get_language_settings,
         get_port_settings,
         get_ui_disable_auto_timers,
+        get_ui_home_first,
         get_ui_stack_home_chat,
         get_ui_tab_allowlist,
     )
@@ -1412,31 +1414,40 @@ class NextGenApp:
 
         # Create tab modules with error handling
         tab_modules = []
+        home_tab_inst = None
+        chat_tab_inst = None
         try:
-            # Home tab first (welcome page)
             if HomeTab and _want_tab("home"):
-                home_tab = HomeTab(
+                home_tab_inst = HomeTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
-                home_tab.set_main_app(self)  # Set reference to main app
-                tab_modules.append(home_tab)
-                self.tab_instances["home"] = home_tab
+                home_tab_inst.set_main_app(self)
+                self.tab_instances["home"] = home_tab_inst
             elif HomeTab:
                 _logger.info("HomeTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("HomeTab not available")
 
             if ChatTab and _want_tab("chat"):
-                chat_tab = ChatTab(
+                chat_tab_inst = ChatTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
-                chat_tab.set_main_app(self)  # Set reference to main app
-                tab_modules.append(chat_tab)
-                self.tab_instances["chat"] = chat_tab
+                chat_tab_inst.set_main_app(self)
+                self.tab_instances["chat"] = chat_tab_inst
             elif ChatTab:
                 _logger.info("ChatTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("ChatTab not available")
+
+            # Default: Chat before Home (``CMW_UI_HOME_FIRST`` restores Home-first order).
+            if get_ui_home_first():
+                for _m in (home_tab_inst, chat_tab_inst):
+                    if _m is not None:
+                        tab_modules.append(_m)
+            else:
+                for _m in (chat_tab_inst, home_tab_inst):
+                    if _m is not None:
+                        tab_modules.append(_m)
 
             if LogsTab and _want_tab("logs"):
                 logs_tab = LogsTab(
