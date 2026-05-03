@@ -231,6 +231,7 @@ class ChatTab(QuickActionsMixin):
             inputs=[self.components["msg"]],
             outputs=[self.components["msg"], saved_input],  # Clear textbox and save message to state
             queue=False,
+            api_visibility="private",
         )
 
         # Show stop button when submit succeeds (before streaming starts)
@@ -245,7 +246,20 @@ class ChatTab(QuickActionsMixin):
             fn=show_stop_button,
             outputs=[self.components["msg"]],
             queue=False,
+            api_visibility="private",
         )
+
+        # Sidebar refresh once per submit (cmw-rag avoids a second .submit() on the same component)
+        trigger_ui_update = self.event_handlers.get("trigger_ui_update")
+        submit_chain_root = user_submit
+        if trigger_ui_update:
+            submit_chain_root = user_submit.then(
+                fn=lambda: trigger_ui_update(),
+                inputs=[],
+                outputs=[],
+                queue=False,
+                api_visibility="private",
+            )
 
         # Reset cancellation state at start of new submission (following reference repo pattern)
         def reset_cancellation_state(cancel_state: dict | None) -> dict:
@@ -270,19 +284,21 @@ class ChatTab(QuickActionsMixin):
                     self.components["msg"],
                     self._get_quick_actions_dropdown(),
                 ],
+                api_visibility="private",
             )
             # Remove 'fn' from config since we'll use it directly in .then()
             streaming_fn = streaming_config.pop("fn")
             streaming_inputs = streaming_config.pop("inputs")
             streaming_outputs = streaming_config.pop("outputs")
 
-            # Chain streaming handler from user_submit
+            # Chain streaming handler from submit chain (cmw-rag: optional step after submit)
             # Following reference repo pattern: reset cancellation state first, then stream
-            self.submit_event = user_submit.then(
+            streaming_pipeline = submit_chain_root.then(
                 fn=reset_cancellation_state,
                 inputs=[cancellation_state],
                 outputs=[cancellation_state],
                 queue=False,
+                api_visibility="private",
             ).then(
                 fn=streaming_fn,
                 inputs=streaming_inputs,
@@ -296,11 +312,12 @@ class ChatTab(QuickActionsMixin):
             )
             # Chain streaming handler from user_submit
             # Following reference repo pattern: reset cancellation state first, then stream
-            self.submit_event = user_submit.then(
+            streaming_pipeline = submit_chain_root.then(
                 fn=reset_cancellation_state,
                 inputs=[cancellation_state],  # Request is automatically passed to functions that accept it
                 outputs=[cancellation_state],
                 queue=False,
+                api_visibility="private",
             ).then(
                 fn=self._stream_message_wrapper,
                 inputs=[saved_input, self.components["chatbot"], cancellation_state],  # Add cancellation_state
@@ -309,69 +326,41 @@ class ChatTab(QuickActionsMixin):
                     self.components["msg"],
                     self._get_quick_actions_dropdown(),
                 ],
+                api_visibility="private",
             )
-
-        # Built-in stop button automatically cancels submit_event when stop_btn=True
-        # Wire up the stop event to handle cancellation and update history
-        # Following reference repo pattern: use msg.stop() instead of separate button
-        # #region agent log
-        import json
-        try:
-            with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "C", "location": "chat_tab.py:288", "message": "Wiring stop event", "data": {"has_submit_event": hasattr(self, "submit_event") and self.submit_event is not None}, "timestamp": __import__("time").time() * 1000}) + "\n")
-        except: pass
-        # #endregion
-        try:
-            self.stop_event = self.components["msg"].stop(
-                fn=self._handle_stop_click,
-                inputs=[self.components["chatbot"], cancellation_state],  # Add cancellation_state (following reference repo pattern)
-                outputs=[
-                    self.components["chatbot"],  # Return chatbot
-                    cancellation_state,  # Return updated cancellation_state
-                ],
-                cancels=[self.submit_event],  # Cancel submit event (following reference repo pattern)
-            ).then(
-                lambda: gr.MultimodalTextbox(value="", interactive=True, submit_btn=True, stop_btn=False),  # Re-enable textbox and hide stop button after cancellation
-                outputs=[self.components["msg"]],
-                queue=False,
-            )
-            # #region agent log
-            import json
-            try:
-                with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "C", "location": "chat_tab.py:300", "message": "Stop event wired successfully", "data": {}, "timestamp": __import__("time").time() * 1000}) + "\n")
-            except: pass
-            # #endregion
-        except Exception as exc:
-            # #region agent log
-            import json
-            try:
-                with open(r"d:\Repo\cmw-platform-agent-gradio-6\.cursor\debug.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps({"sessionId": "debug-session", "runId": "stop-debug", "hypothesisId": "D", "location": "chat_tab.py:302", "message": "Stop event wiring failed", "data": {"error": str(exc), "error_type": type(exc).__name__}, "timestamp": __import__("time").time() * 1000}) + "\n")
-            except: pass
-            # #endregion
-            logging.getLogger(__name__).error(f"Failed to wire stop event: {exc}", exc_info=True)
-            raise
-
-        # Wire UI update trigger to stop event (for token budget/status refresh)
-        trigger_ui_update = self.event_handlers.get("trigger_ui_update")
-        if trigger_ui_update:
-            self.stop_event.then(fn=trigger_ui_update, outputs=[], queue=False)
 
         # Re-enable textbox and hide stop button after streaming completes
-        # Following reference repo pattern: chain after handler completion
+        # Following reference repo pattern: chain after handler completion (cmw-rag: before msg.stop)
         def re_enable_textbox_and_hide_stop():
             """Re-enable textbox and hide stop button after handler completion."""
             logging.getLogger(__name__).debug("Re-enabling textbox and hiding stop button after handler completion")
             return gr.MultimodalTextbox(value="", interactive=True, submit_btn=True, stop_btn=False)
 
-        # Chain re-enable to submit event after it completes
-        # .then() fires after generator completes and all yields are processed
-        # Following reference repo pattern: only chain to submit_event (no separate send button)
-        self.submit_event = self.submit_event.then(
+        self.submit_event = streaming_pipeline.then(
             fn=re_enable_textbox_and_hide_stop,
             outputs=[self.components["msg"]],
             queue=False,
+            api_visibility="private",
+        )
+
+        # Stop must cancel a queued dependency (Gradio validates cancels -> queue=True).
+        # submit_event is the non-queued re-enable tail; streaming_pipeline ends with the stream step.
+        self.stop_event = self.components["msg"].stop(
+            fn=self._handle_stop_click,
+            inputs=[self.components["chatbot"], cancellation_state],
+            outputs=[
+                self.components["chatbot"],
+                cancellation_state,
+            ],
+            cancels=[streaming_pipeline],
+            api_visibility="private",
+        ).then(
+            lambda: gr.MultimodalTextbox(
+                value="", interactive=True, submit_btn=True, stop_btn=False
+            ),
+            outputs=[self.components["msg"]],
+            queue=False,
+            api_visibility="private",
         )
 
         # Handle chatbot clear event - clear memory and reset downloads
@@ -391,6 +380,7 @@ class ChatTab(QuickActionsMixin):
                 self.components["chatbot"],
                 self.components["msg"],
             ],
+            api_visibility="private",
         )
 
         # Download button uses pre-generated file - no click handler needed
@@ -424,17 +414,25 @@ class ChatTab(QuickActionsMixin):
         trigger_ui_update = self.event_handlers.get("trigger_ui_update")
 
         if trigger_ui_update:
-            # Trigger UI update after message submit (built-in submit button)
-            self.components["msg"].submit(fn=trigger_ui_update, outputs=[])
+            # Submit hook is chained in _connect_events (avoids second msg.submit on same component)
 
             # Trigger UI update after chatbot clear (built-in clear button)
             if hasattr(self, "clear_event") and self.clear_event:
-                self.clear_event.then(fn=trigger_ui_update, outputs=[], queue=False)
+                self.clear_event.then(
+                    fn=trigger_ui_update,
+                    outputs=[],
+                    queue=False,
+                    api_visibility="private",
+                )
 
-            # Trigger UI update after built-in stop button click (to refresh token budget/status)
-            # Use msg.stop() to wire to built-in stop button
+            # Trigger UI update after built-in stop (token budget / status)
             if hasattr(self, "stop_event") and self.stop_event:
-                self.stop_event.then(fn=trigger_ui_update, outputs=[], queue=False)
+                self.stop_event.then(
+                    fn=trigger_ui_update,
+                    outputs=[],
+                    queue=False,
+                    api_visibility="private",
+                )
 
             logging.getLogger(__name__).debug(
                 "✅ ChatTab: UI update triggers connected"

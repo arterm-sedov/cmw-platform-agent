@@ -169,7 +169,6 @@ class ConfigTab:
                         value="",
                         lines=1,
                         max_lines=1,
-                        show_copy_button=False,
                         placeholder="sk-...",
                     )
                     self._llm_provider_key_inputs.append(tb)

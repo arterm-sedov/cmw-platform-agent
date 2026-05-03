@@ -1458,23 +1458,8 @@ class NextGenApp:
             _logger.exception("Error creating tab modules: %s", e)
             raise
 
-        # Configure queue manager BEFORE creating interface to ensure it's available to tabs
-        try:
-            if hasattr(self, "queue_manager") and self.queue_manager:
-                _logger.info("Configuring queue manager before interface creation...")
-                _logger.debug(f"Queue manager type: {type(self.queue_manager)}")
-                _logger.debug(
-                    f"Queue manager has config: {hasattr(self.queue_manager, 'config')}"
-                )
-                # Create a temporary demo to configure the queue manager
-                with gr.Blocks() as temp_demo:
-                    pass
-                self.queue_manager.configure_queue(temp_demo)
-                _logger.info("Queue manager configured successfully")
-            else:
-                _logger.warning("Queue manager not available for configuration")
-        except Exception as e:
-            _logger.warning(f"Failed to configure queue manager: {e}")
+        # Do not call configure_queue on a throwaway Blocks instance — Gradio 6 requires the
+        # launched Blocks to receive .queue() or validation fails (streaming / cancel chains).
 
         # Use UI Manager to create interface
         try:
@@ -1953,7 +1938,8 @@ def main():
         server_name="0.0.0.0",
         server_port=port,
         show_error=True,
-        show_api=True,  # Enable API documentation for Hugging Face Spaces
+        # Gradio 6: show_api removed — use footer_links (same idea as cmw-rag mount_gradio_app).
+        footer_links=["api"],
         # Allow Gradio's /file= endpoint to serve session-registered files
         # (generated images, extracted assets, etc.) from the cache dir.
         # Required when GRADIO_TEMP_DIR is set to a non-default path.

@@ -40,7 +40,7 @@ class QueueManager:
             config: Concurrency configuration. If None, uses global config.
         """
         self.config = config or get_concurrency_config()
-        self._queue_configured = False
+        self._configured_block_ids: set[int] = set()
         self._event_handlers: Dict[str, Callable] = {}
 
     def configure_queue(self, demo: gr.Blocks) -> None:
@@ -56,7 +56,8 @@ class QueueManager:
         Args:
             demo: Gradio Blocks instance to configure
         """
-        if self._queue_configured:
+        block_id = id(demo)
+        if block_id in self._configured_block_ids:
             return
 
         # Always initialize queue (required by Gradio 6 before launch())
@@ -77,7 +78,7 @@ class QueueManager:
                 demo.queue(default_concurrency_limit=1, status_update_rate="auto")
                 logging.info("Queue initialized with minimal default settings")
 
-        self._queue_configured = True
+        self._configured_block_ids.add(block_id)
 
     def get_event_concurrency(self, event_type: str) -> Dict[str, Any]:
         """
@@ -148,7 +149,7 @@ class QueueManager:
             Dictionary with queue status information
         """
         return {
-            'queue_configured': self._queue_configured,
+            'queue_configured': bool(self._configured_block_ids),
             'concurrent_processing_enabled': self.config.enable_concurrent_processing,
             'default_concurrency_limit': self.config.queue.default_concurrency_limit,
             'max_threads': self.config.queue.max_threads,
