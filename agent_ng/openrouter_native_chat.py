@@ -145,15 +145,16 @@ def _convert_response_message_to_ai(
         response_metadata["id"] = response_id
     if usage_dict:
         response_metadata["token_usage"] = usage_dict
-        if "cost" in usage_dict:
-            response_metadata["cost"] = usage_dict["cost"]
-        elif "cost_rub" in usage_dict:
-            # Polza reports cost in RUB; convert to USD using env rate so that
-            # token_counter.py sees a non-zero cost figure.
+        # cost_rub takes priority: Polza sends cost=<rubles> AND cost_rub=<rubles>
+        # (cost is an alias).  Check cost_rub first so we always convert ₽→$;
+        # only fall through to "cost" for OpenRouter which sends cost in USD.
+        if "cost_rub" in usage_dict:
             from agent_ng.openrouter_usage_accounting import _get_polza_rate
             rub = float(usage_dict["cost_rub"] or 0.0)
             response_metadata["cost"] = rub / _get_polza_rate()
             response_metadata["cost_rub"] = rub
+        elif "cost" in usage_dict:
+            response_metadata["cost"] = usage_dict["cost"]
         if usage_dict.get("cost_details"):
             response_metadata["cost_details"] = usage_dict["cost_details"]
 
@@ -199,13 +200,13 @@ def _convert_delta_to_chunk(
     usage_metadata = _create_usage_metadata(chunk_usage) if chunk_usage else None
     response_metadata: dict[str, Any] = {"model_provider": "openrouter"}
     if chunk_usage:
-        if "cost" in chunk_usage:
-            response_metadata["cost"] = chunk_usage["cost"]
-        elif "cost_rub" in chunk_usage:
+        if "cost_rub" in chunk_usage:
             from agent_ng.openrouter_usage_accounting import _get_polza_rate
             rub = float(chunk_usage["cost_rub"] or 0.0)
             response_metadata["cost"] = rub / _get_polza_rate()
             response_metadata["cost_rub"] = rub
+        elif "cost" in chunk_usage:
+            response_metadata["cost"] = chunk_usage["cost"]
 
     return AIMessageChunk(
         content=content,
@@ -425,7 +426,12 @@ class OpenRouterNativeChatModel(BaseChatModel):
             if not choices:
                 if usage_dict:
                     rm_async: dict[str, Any] = {"model_provider": "openrouter"}
-                    if "cost" in usage_dict:
+                    if "cost_rub" in usage_dict:
+                        from agent_ng.openrouter_usage_accounting import _get_polza_rate
+                        rub = float(usage_dict["cost_rub"] or 0.0)
+                        rm_async["cost"] = rub / _get_polza_rate()
+                        rm_async["cost_rub"] = rub
+                    elif "cost" in usage_dict:
                         rm_async["cost"] = usage_dict["cost"]
                     yield ChatGenerationChunk(
                         message=AIMessageChunk(
