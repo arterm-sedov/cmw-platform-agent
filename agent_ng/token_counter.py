@@ -136,8 +136,26 @@ def _extract_cache_details(
 
 
 def _provider_cost_from_usage_dict(usage_dict: dict[str, Any] | None) -> float | None:
-    """USD charge from usage dict when provider supplies usage billing metadata."""
-    if not isinstance(usage_dict, dict) or "cost" not in usage_dict:
+    """USD charge from usage dict when provider supplies usage billing metadata.
+
+    Polza.ai sends ``cost_rub`` (and ``cost`` as a same-value alias, both in
+    rubles).  When ``cost_rub`` is present the value must be converted ₽→$ via
+    ``POLZA_RUB_TO_USD_RATE``; only fall through to ``cost`` for providers
+    (e.g. OpenRouter) that send it in USD.
+    """
+    if not isinstance(usage_dict, dict):
+        return None
+    # Polza: cost_rub present → cost field is also in rubles, must convert.
+    if "cost_rub" in usage_dict:
+        try:
+            from agent_ng.openrouter_usage_accounting import _get_polza_rate
+            rub = float(usage_dict["cost_rub"] or 0.0)
+            return rub / _get_polza_rate()
+        except Exception as exc:
+            logging.getLogger(__name__).debug(
+                "Polza cost_rub conversion failed: %s", exc
+            )
+    if "cost" not in usage_dict:
         return None
     raw = usage_dict.get("cost")
     if raw is None:
