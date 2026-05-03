@@ -228,6 +228,18 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         prompt_style_hint=_HINT_DIFFUSION_ARTISTIC,
     ),
     # ------ ByteDance Seedream (image-only output) ----------------------
+    "bytedance-seed/seedream-5-lite": ImageModelConfig(
+        name="bytedance-seed/seedream-5-lite",
+        providers=["polza"],
+        modalities=["image"],
+        supports_image_config=True,
+        provider_model_ids={"polza": "bytedance/seedream-5-lite"},
+        description=(
+            "Seedream 5.0 Lite via Polza.ai. Generation and image-to-image "
+            "editing, 2K/3K output, up to 10 reference images."
+        ),
+        prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
+    ),
     "bytedance-seed/seedream-4.5": ImageModelConfig(
         name="bytedance-seed/seedream-4.5",
         providers=["polza", "openrouter"],

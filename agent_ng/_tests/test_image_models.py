@@ -72,7 +72,7 @@ class TestRegistryShape:
 
     def test_only_gemini_supports_image_config(self) -> None:
         """Google Gemini and Seedream 4.5 document image_config support."""
-        _supports = {"google/", "bytedance-seed/seedream-4.5", "bytedance-seed/seedream-3"}
+        _supports = {"google/", "bytedance-seed/seedream-4.5", "bytedance-seed/seedream-3", "bytedance-seed/seedream-5-lite"}
         for slug, cfg in get_image_models().items():
             expected = any(cfg.name.startswith(p) or cfg.name == p for p in _supports)
             assert cfg.supports_image_config is expected, (

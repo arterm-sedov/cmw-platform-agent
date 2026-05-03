@@ -440,6 +440,17 @@ class TestImageEngineLivePolza:
         assert result.image_bytes is not None
         assert len(result.image_bytes) > 1024, "image suspiciously small"
 
+    def test_seedream5_lite_via_polza(self) -> None:
+        with patch.dict(os.environ, {"IMAGE_GEN_PROVIDER": "polza"}):
+            engine = ImageEngine()
+            result = engine.generate(
+                "Minimalist icon: blue circle on white background",
+                model="bytedance-seed/seedream-5-lite",
+            )
+        assert result.success is True, f"generation failed: {result.error}"
+        assert result.image_bytes is not None
+        assert len(result.image_bytes) > 1024, "image suspiciously small"
+
 
 @pytest.mark.skipif(
     not _has_openrouter_key(),
