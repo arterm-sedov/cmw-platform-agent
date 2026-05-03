@@ -107,15 +107,21 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
             return b64, cls._openrouter_audio_format(mime, p)
         return None
 
-    def __init__(self, llm_manager: LLMManager):
-        """
-        Initialize OpenRouter adapter
+    def __init__(
+        self,
+        llm_manager: LLMManager,
+        provider: LLMProvider = LLMProvider.OPENROUTER,
+    ):
+        """Initialize adapter.
 
         Args:
-            llm_manager: LLMManager instance for model access
+            llm_manager: LLMManager instance for model access.
+            provider: LLM provider to use for API calls.  Defaults to
+                ``LLMProvider.OPENROUTER``; pass ``LLMProvider.POLZA`` to
+                route identical wire-format calls through Polza.ai instead.
         """
         self.llm_manager = llm_manager
-        self.provider = LLMProvider.OPENROUTER
+        self.provider = provider
 
     def supports_media_type(self, media_type: MediaType) -> bool:
         """

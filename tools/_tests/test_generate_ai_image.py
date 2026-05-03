@@ -8,12 +8,15 @@ Behavior contracts:
 - Without an agent (e.g. unit-test harness), returns the raw absolute path as
   ``file_reference`` and skips registration.
 - Pydantic schema validates required ``prompt``; exposes optional ``model``,
-  ``aspect_ratio``, ``image_size``; hides ``agent`` from the LLM via
-  ``InjectedToolArg`` (so args_schema must declare it).
-- Returns a dict with ``success``, ``file_reference``, ``model``, ``cost``,
-  ``prompt_tokens``, ``completion_tokens``, ``total_tokens``, ``generation_id``.
+  ``aspect_ratio``, ``image_size``, ``reference_images``; hides ``agent``
+  via ``InjectedToolArg`` (so args_schema must declare it).
+- Returns a dict with ``success``, ``file_reference``, ``cost``,
+  ``mime_type``, ``size_bytes``, ``reference_images_warning``.
 - On engine failure, returns ``success=False`` with the engine's ``error``
   string and no file side effects.
+- ``_resolve_reference_images`` converts filenames in the agent's file
+  registry to base64 data URIs; URLs and data URIs pass through unchanged;
+  unresolvable names are skipped with a warning.
 
 All tests patch ``ImageEngine.generate`` — no network calls.
 
@@ -32,7 +35,7 @@ from pydantic import ValidationError
 import pytest
 
 from agent_ng.image_engine import ImageGenerationResult
-from tools.tools import generate_ai_image
+from tools.tools import _resolve_reference_images, generate_ai_image
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -242,16 +245,20 @@ class TestSchemaVisibility:
         )
 
     def test_schema_exposes_only_intended_fields(self) -> None:
-        """Schema surface is exactly the four intended fields.
+        """Schema surface is exactly the five intended fields.
 
         ``model`` is intentionally absent: the active image generator is an
         operations-level decision (IMAGE_GEN_DEFAULT_MODEL) that must not
         be controllable from the LLM.
         """
         fields = set(generate_ai_image.args_schema.model_fields.keys())
-        assert fields == {"prompt", "aspect_ratio", "image_size", "agent"}, (
-            f"unexpected schema fields: {fields}"
-        )
+        assert fields == {
+            "prompt",
+            "aspect_ratio",
+            "image_size",
+            "reference_images",
+            "agent",
+        }, f"unexpected schema fields: {fields}"
 
 
 class TestLLMFacingDescription:
@@ -290,3 +297,123 @@ class TestLLMFacingDescription:
             assert not leaks, (
                 f"param {name!r} description leaks: {leaks} (text={text!r})"
             )
+
+
+class TestResolveReferenceImages:
+    """``_resolve_reference_images`` contracts.
+
+    - HTTP/HTTPS URLs pass through unchanged (remote provider fetches them).
+    - Existing data URIs (``data:...``) pass through unchanged.
+    - Filenames present in the agent's file registry are resolved to bytes
+      and returned as ``data:<mime>;base64,<b64>`` URIs.
+    - MIME type is guessed from the file extension; unknown extensions fall
+      back to ``image/jpeg``.
+    - Unresolvable names (not in registry, not on disk) are silently skipped
+      with a WARNING log — the remaining items are still returned.
+    - An empty input list returns an empty list.
+    - A ``None`` agent skips registry lookup (filenames unresolvable).
+    """
+
+    def test_http_url_passes_through(self) -> None:
+        items = ["https://example.com/foo.png"]
+        assert _resolve_reference_images(items, agent=None) == items
+
+    def test_http_non_ssl_url_passes_through(self) -> None:
+        items = ["http://cdn.local/img.jpg"]
+        assert _resolve_reference_images(items, agent=None) == items
+
+    def test_data_uri_passes_through(self) -> None:
+        item = "data:image/png;base64,abc123=="
+        assert _resolve_reference_images([item], agent=None) == [item]
+
+    def test_empty_list_returns_empty(self) -> None:
+        assert _resolve_reference_images([], agent=None) == []
+
+    def test_filename_resolved_to_data_uri(self, tmp_path: Path) -> None:
+        img_path = tmp_path / "ref.png"
+        img_path.write_bytes(_PNG_1PX_BYTES)
+
+        agent = _make_registry_agent()
+        agent.register_file("ref.png", str(img_path))
+
+        result = _resolve_reference_images(["ref.png"], agent=agent)
+
+        assert len(result) == 1
+        assert result[0].startswith("data:image/png;base64,")
+        _, b64 = result[0].split(",", 1)
+        assert base64.b64decode(b64) == _PNG_1PX_BYTES
+
+    def test_jpeg_extension_gives_jpeg_mime(self, tmp_path: Path) -> None:
+        img_path = tmp_path / "photo.jpg"
+        img_path.write_bytes(_PNG_1PX_BYTES)
+
+        agent = _make_registry_agent()
+        agent.register_file("photo.jpg", str(img_path))
+
+        result = _resolve_reference_images(["photo.jpg"], agent=agent)
+
+        assert result[0].startswith("data:image/jpeg;base64,")
+
+    def test_unknown_extension_falls_back_to_jpeg_mime(
+        self, tmp_path: Path
+    ) -> None:
+        # .xyz is not in mimetypes — should fall back to image/jpeg.
+        img_path = tmp_path / "mystery.xyz"
+        img_path.write_bytes(_PNG_1PX_BYTES)
+
+        agent = _make_registry_agent()
+        agent.register_file("mystery.xyz", str(img_path))
+
+        result = _resolve_reference_images(["mystery.xyz"], agent=agent)
+
+        assert result[0].startswith("data:image/jpeg;base64,")
+
+    def test_unresolvable_filename_skipped_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            result = _resolve_reference_images(["ghost.png"], agent=None)
+
+        assert result == []
+        assert any("ghost.png" in r.message for r in caplog.records)
+
+    def test_mixed_list_resolves_correctly(self, tmp_path: Path) -> None:
+        img_path = tmp_path / "ref.jpg"
+        img_path.write_bytes(_PNG_1PX_BYTES)
+
+        agent = _make_registry_agent()
+        agent.register_file("ref.jpg", str(img_path))
+
+        items = [
+            "https://cdn.example.com/style.png",
+            "ref.jpg",
+            "data:image/jpeg;base64,/9j/abc",
+        ]
+        result = _resolve_reference_images(items, agent=agent)
+
+        assert len(result) == 3
+        assert result[0] == "https://cdn.example.com/style.png"
+        assert result[1].startswith("data:image/jpeg;base64,")
+        assert result[2] == "data:image/jpeg;base64,/9j/abc"
+
+    def test_unresolvable_items_do_not_block_valid_ones(
+        self, tmp_path: Path
+    ) -> None:
+        good_path = tmp_path / "good.png"
+        good_path.write_bytes(_PNG_1PX_BYTES)
+
+        agent = _make_registry_agent()
+        agent.register_file("good.png", str(good_path))
+
+        result = _resolve_reference_images(
+            ["bad_filename.png", "good.png"], agent=agent
+        )
+
+        assert len(result) == 1
+        assert result[0].startswith("data:image/png;base64,")
+
+    def test_none_agent_skips_registry_resolution(self) -> None:
+        result = _resolve_reference_images(["some_file.png"], agent=None)
+        assert result == []

@@ -22,8 +22,8 @@ import gradio as gr
 from dataclasses import dataclass
 from datetime import datetime
 
-from .concurrency_config import ConcurrencyConfig, get_concurrency_config
-from .queue_manager import QueueManager, create_queue_manager
+from agent_ng.concurrency_config import ConcurrencyConfig, get_concurrency_config
+from agent_ng.queue_manager import QueueManager, create_queue_manager
 
 
 @dataclass

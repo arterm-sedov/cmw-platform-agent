@@ -29,12 +29,21 @@ class ImageRequest:
         image_size: Optional resolution tier (e.g. ``"1K"``, ``"2K"``,
             ``"4K"``). Providers that don't support size control may
             ignore this.
+        reference_images: Optional list of reference images for
+            image-to-image or editing. Each item is either a URL string
+            (``"https://..."``), a data URI
+            (``"data:image/png;base64,..."``), or a raw base64 string.
+            Providers convert this list to their own wire format. Callers
+            should clip the list to ``config.max_reference_images`` before
+            building the request; providers clip silently if they receive
+            more than they support.
     """
 
     prompt: str
     config: ImageModelConfig
     aspect_ratio: str | None = None
     image_size: str | None = None
+    reference_images: list[str] | None = None
 
 
 @dataclass

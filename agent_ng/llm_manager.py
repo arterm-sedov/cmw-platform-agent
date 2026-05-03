@@ -40,8 +40,6 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from langchain_mistralai.chat_models import ChatMistralAI
-from langchain_openai import ChatOpenAI
-
 # Add current directory to path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
@@ -73,7 +71,9 @@ class LLMProvider(Enum):
     GEMINI = "gemini"
     GROQ = "groq"
     HUGGINGFACE = "huggingface"
+    OPENAI = "openai"
     OPENROUTER = "openrouter"
+    POLZA = "polza"
     MISTRAL = "mistral"
     GIGACHAT = "gigachat"
 
@@ -457,31 +457,6 @@ class LLMManager:
             )
             return None
 
-        try:
-            # Convert model to repo_id for HuggingFace
-            repo_id = model_config["model"]
-            task = model_config.get("task", "text-generation")
-
-            llm = ChatHuggingFace(
-                llm=HuggingFaceEndpoint(
-                    repo_id=repo_id,
-                    task=task,
-                    huggingfacehub_api_token=api_key,
-                    max_new_tokens=model_config.get("max_new_tokens", 1024),
-                    do_sample=model_config.get("do_sample", False),
-                    temperature=model_config.get("temperature", 0),
-                )
-            )
-            self._log_initialization(
-                f"Successfully initialized {config.name} - {model_config['model']}"
-            )
-            return llm
-        except Exception as e:
-            self._log_initialization(
-                f"Failed to initialize {config.name}: {str(e)}", "ERROR"
-            )
-            return None
-
     def _initialize_openrouter_llm(
         self,
         config: LLMConfig,
@@ -494,16 +469,109 @@ class LLMManager:
             return None
 
         try:
-            base_url = os.getenv(config.api_base_env, "https://openrouter.ai/api/v1")
-            llm = ChatOpenAI(
-                model=model_config["model"],
-                api_key=api_key,
+            base_url = os.getenv(config.api_base_env, "https://openrouter.ai/api/v1")  # // pragma: allowlist secret
+            from agent_ng.openrouter_native_chat import create_openrouter_native_chat_model
+
+            llm = create_openrouter_native_chat_model(
+                model_name=model_config["model"],
                 base_url=base_url,
-                temperature=model_config.get("temperature", 0),
-                max_tokens=model_config.get("max_tokens", 2048),
-                streaming=True,  # Enable streaming
+                api_key=api_key,
+                temperature=float(model_config.get("temperature", 0)),
+                max_tokens=int(model_config.get("max_tokens", 2048)),
             )
             # LangSmith tracing is handled via @traceable decorators
+            self._log_initialization(
+                f"Successfully initialized {config.name} - {model_config['model']}"
+            )
+            return llm
+        except Exception as e:
+            self._log_initialization(
+                f"Failed to initialize {config.name}: {str(e)}", "ERROR"
+            )
+            return None
+
+    def _initialize_openai_llm(
+        self,
+        config: LLMConfig,
+        model_config: dict[str, Any],
+        api_key_override: str | None = None,
+    ) -> Any | None:
+        """Initialize a generic OpenAI-compatible LLM instance.
+
+        Uses OpenRouterNativeChatModel (native OpenAI SDK) so the full usage
+        dict is preserved.  Cost is not returned by api.openai.com itself;
+        when pointed at a billing-aware compatible endpoint (e.g. Polza.ai via
+        a dedicated provider), cost handling should be added in a separate
+        normalizing callback — see openrouter_usage_accounting.py.
+
+        Env vars:
+            OPENAI_API_KEY  — required
+            OPENAI_BASE_URL — optional, defaults to https://api.openai.com/v1
+        """
+        api_key = self._get_api_key(config, api_key_override=api_key_override)
+        if not api_key:
+            return None
+
+        try:
+            base_url = os.getenv(
+                config.api_base_env or "OPENAI_BASE_URL",
+                "https://api.openai.com/v1",
+            )
+            from agent_ng.openrouter_native_chat import create_openrouter_native_chat_model
+
+            llm = create_openrouter_native_chat_model(
+                model_name=model_config["model"],
+                base_url=base_url,
+                api_key=api_key,
+                temperature=float(model_config.get("temperature", 0)),
+                max_tokens=int(model_config.get("max_tokens", 2048)),
+                default_headers={"X-Title": "CMW Platform Agent"},
+            )
+            self._log_initialization(
+                f"Successfully initialized {config.name} - {model_config['model']}"
+            )
+            return llm
+        except Exception as e:
+            self._log_initialization(
+                f"Failed to initialize {config.name}: {str(e)}", "ERROR"
+            )
+            return None
+
+    def _initialize_polza_llm(
+        self,
+        config: LLMConfig,
+        model_config: dict[str, Any],
+        api_key_override: str | None = None,
+    ) -> Any | None:
+        """Initialize Polza.ai LLM instance.
+
+        Polza.ai (https://polza.ai/api/v1) is OpenAI-compatible; billing is
+        reported in rubles (``usage.cost_rub``).  Uses the same native SDK
+        wrapper as OpenRouter so the full usage dict reaches callbacks.
+
+        Env vars:
+            POLZA_API_KEY  — required
+            POLZA_BASE_URL — optional, defaults to https://polza.ai/api/v1
+        """
+        api_key = self._get_api_key(config, api_key_override=api_key_override)
+        if not api_key:
+            return None
+
+        try:
+            base_url = os.getenv(
+                config.api_base_env or "POLZA_BASE_URL",
+                "https://polza.ai/api/v1",
+            )
+            from agent_ng.openrouter_native_chat import create_openrouter_native_chat_model
+
+            llm = create_openrouter_native_chat_model(
+                model_name=model_config["model"],
+                base_url=base_url,
+                api_key=api_key,
+                temperature=float(model_config.get("temperature", 0)),
+                max_tokens=int(model_config.get("max_tokens", 2048)),
+                default_headers={"X-Title": "CMW Platform Agent"},
+            )
             self._log_initialization(
                 f"Successfully initialized {config.name} - {model_config['model']}"
             )
@@ -672,8 +740,16 @@ class LLMManager:
             llm = self._initialize_huggingface_llm(
                 config, model_config, api_key_override=api_key_override
             )
+        elif provider == LLMProvider.OPENAI:
+            llm = self._initialize_openai_llm(
+                config, model_config, api_key_override=api_key_override
+            )
         elif provider == LLMProvider.OPENROUTER:
             llm = self._initialize_openrouter_llm(
+                config, model_config, api_key_override=api_key_override
+            )
+        elif provider == LLMProvider.POLZA:
+            llm = self._initialize_polza_llm(
                 config, model_config, api_key_override=api_key_override
             )
         elif provider == LLMProvider.MISTRAL:
@@ -924,18 +1000,20 @@ class LLMManager:
     def _get_configured_provider_and_model_index(
         self,
     ) -> tuple[LLMProvider | None, int]:
-        """Get configured provider and model index from config/env"""
+        """Get configured provider and model index from config/env (AGENT_*)."""
         import os
 
         try:
             from agent_ng.agent_config import get_llm_settings
 
             llm_settings = get_llm_settings()
-            provider = llm_settings.get("default_provider", "openrouter")
+            default_provider = llm_settings.get("default_provider", "openrouter")
             default_model = llm_settings.get("default_model")
         except ImportError:
-            provider = os.environ.get("AGENT_PROVIDER", "openrouter")
+            default_provider = os.environ.get("AGENT_PROVIDER", "openrouter")
             default_model = os.environ.get("AGENT_DEFAULT_MODEL")
+
+        provider = str(default_provider or "openrouter").strip()
 
         try:
             provider_enum = LLMProvider(provider.lower())
@@ -943,8 +1021,10 @@ class LLMManager:
             return None, 0
 
         model_index = 0
-        if default_model and default_model.strip():
-            found_index = self._find_model_index(provider_enum, default_model.strip())
+        if default_model and str(default_model).strip():
+            found_index = self._find_model_index(
+                provider_enum, str(default_model).strip()
+            )
             if found_index is not None:
                 model_index = found_index
 
@@ -1128,34 +1208,43 @@ class LLMManager:
         if tool_names is None:
             tool_names = set()
 
+        try:
+            from langchain_core.tools.base import BaseTool as _BaseTool
+        except ImportError:
+            _BaseTool = None  # type: ignore[assignment,misc]
+
+        _EXCLUDED = {
+            "CmwAgent",
+            "CodeInterpreter",
+            "submit_answer",
+            "submit_intermediate_step",
+            "web_search_deep_research_exa_ai",
+        }
+
         for name, obj in module.__dict__.items():
-            # Only include actual tool objects (decorated with @tool)
-            # Check if it's a proper @tool decorated function
-            if (
+            # Identify LangChain tools robustly across versions:
+            # - LangChain 1.x: isinstance(obj, BaseTool) covers both @tool
+            #   StructuredTool instances and BaseTool subclass instances.
+            # - Fallback duck-type check for edge cases.
+            is_tool = (
+                _BaseTool is not None and isinstance(obj, _BaseTool)
+            ) or (
                 callable(obj)
+                and not isinstance(obj, type)
+                and hasattr(obj, "name")
+                and hasattr(obj, "description")
+                and hasattr(obj, "args_schema")
+            )
+            if (
+                is_tool
                 and not name.startswith("_")
-                and not isinstance(obj, type)  # Exclude classes
-                and hasattr(obj, "__module__")  # Must have __module__ attribute
-                and (
-                    obj.__module__ == module_name
-                    or obj.__module__ == "langchain_core.tools.structured"
-                )  # Include both tools module and LangChain tools
-                and name
-                not in [
-                    "CmwAgent",
-                    "CodeInterpreter",
-                    "submit_answer",
-                    "submit_intermediate_step",
-                    "web_search_deep_research_exa_ai",
-                ]
-            ):  # Exclude specific classes and internal tools
-                # Check if it's a proper @tool decorated function
-                # @tool decorated functions have specific attributes that indicate they're LangChain tools
+                and name not in _EXCLUDED
+            ):
                 if (
                     hasattr(obj, "name")
                     and hasattr(obj, "description")
                     and hasattr(obj, "args_schema")
-                    and hasattr(obj, "func")
+                    and (hasattr(obj, "func") or hasattr(obj, "run"))
                 ):
                     # This is a proper @tool decorated function
                     tool_name = obj.name
@@ -1188,3 +1277,14 @@ def get_llm_manager() -> LLMManager:
             if _llm_manager is None:
                 _llm_manager = LLMManager()
     return _llm_manager
+
+
+def reset_llm_manager_singleton() -> None:
+    """Clear the cached manager so the next ``get_llm_manager()`` reads fresh env.
+
+    Used by tests and scripts that call ``load_dotenv(override=True)`` before
+    constructing LLMs (singleton would otherwise keep earlier instances).
+    """
+    global _llm_manager
+    with _manager_lock:
+        _llm_manager = None

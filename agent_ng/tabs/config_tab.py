@@ -32,6 +32,9 @@ class ConfigTab:
         self.components: dict[str, Any] = {}
         self.main_app = None  # Reference to main app if needed later
         self.language = language
+        # Filled in _create_config_interface; tests may assign before calling handlers.
+        self._config_llm_providers: list[str] = []
+        self._llm_provider_key_inputs: list[gr.Textbox] = []
         self.i18n = i18n_instance
         # No server-side cache here; we store per-session config via SessionManager
 
@@ -70,15 +73,6 @@ class ConfigTab:
     def _create_config_interface(self) -> None:
         """Create the configuration form with consistent styling"""
 
-        # Default provider from env/config at startup (for dropdown initial value only)
-        try:
-            from agent_ng.agent_config import get_llm_settings
-
-            llm_settings = get_llm_settings()
-            llm_provider_init = llm_settings.get("default_provider", "openrouter")
-        except ImportError:
-            llm_provider_init = os.environ.get("AGENT_PROVIDER", "openrouter")
-
         # BrowserState default MUST be all empty strings. Do NOT bake env defaults
         # here — demo.load() fires before onMount() reads localStorage, so it
         # receives the default value. If provider is pre-filled, has_any_value
@@ -88,8 +82,7 @@ class ConfigTab:
                 "url": "",
                 "username": "",
                 "password": "",
-                "llm_provider_override": "",
-                "llm_api_key_override": "",
+                "llm_provider_api_keys": {},
             },
             storage_key="cmw_config_v1",
         )
@@ -98,7 +91,6 @@ class ConfigTab:
         url_init = ""
         login_init = ""
         password_init = ""
-        llm_api_key_init = ""
 
         # Use the same card-like styling used elsewhere (model-card)
         with gr.Column(scale=1, min_width=400, elem_classes=["model-card"]):
@@ -139,12 +131,16 @@ class ConfigTab:
             gr.Markdown("---")
             gr.Markdown(f"**{self._get_translation('config_llm_section')}**")
 
-            # Filter providers by env allowlist just like the model selector
+            # Filter providers by env allowlist just like the model selector.
+            # Fallback list mirrors LLMProvider enum; overridden at runtime by
+            # llm_manager.get_available_providers() below.
             llm_providers = [
                 "gemini",
                 "groq",
                 "huggingface",
+                "openai",
                 "openrouter",
+                "polza",
                 "mistral",
                 "gigachat",
             ]
@@ -158,23 +154,29 @@ class ConfigTab:
                     if available:
                         llm_providers = sorted(available)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug(
+                    "ConfigTab: fallback static provider list "
+                    "(llm_manager unavailable)",
+                    exc_info=True,
+                )
 
-            self.components["llm_provider_override"] = gr.Dropdown(
-                label=self._get_translation("config_llm_provider_label"),
-                choices=["", *llm_providers],
-                value=llm_provider_init if llm_provider_init in llm_providers else "",
-            )
+            self._config_llm_providers = list(llm_providers)
 
-            self.components["llm_api_key_override"] = gr.Textbox(
-                label=self._get_translation("config_llm_api_key_label"),
-                type="password",
-                value=llm_api_key_init,
-                lines=1,
-                max_lines=1,
-                show_copy_button=False,
-                placeholder="sk-...",
-            )
+            gr.Markdown(f"**{self._get_translation('config_llm_api_keys_table_label')}**")
+            self._llm_provider_key_inputs = []
+            with gr.Column():
+                for prov in self._config_llm_providers:
+                    tb = gr.Textbox(
+                        label=prov,
+                        type="password",
+                        value="",
+                        lines=1,
+                        max_lines=1,
+                        show_copy_button=False,
+                        placeholder="sk-...",
+                    )
+                    self._llm_provider_key_inputs.append(tb)
+            self.components["llm_provider_key_inputs"] = self._llm_provider_key_inputs
 
             gr.Markdown(
                 "*" + self._get_translation("config_llm_empty_means_default") + "*"
@@ -211,8 +213,7 @@ class ConfigTab:
                 self.components["platform_url"],
                 self.components["username"],
                 self.components["password"],
-                self.components["llm_provider_override"],
-                self.components["llm_api_key_override"],
+                *self._llm_provider_key_inputs,
                 self.components["config_state"],
             ],
             outputs=[self.components["config_state"]],
@@ -226,8 +227,7 @@ class ConfigTab:
                 self.components["platform_url"],
                 self.components["username"],
                 self.components["password"],
-                self.components["llm_provider_override"],
-                self.components["llm_api_key_override"],
+                *self._llm_provider_key_inputs,
             ],
         )
 
@@ -240,37 +240,170 @@ class ConfigTab:
                 self.components["platform_url"],
                 self.components["username"],
                 self.components["password"],
-                self.components["llm_provider_override"],
-                self.components["llm_api_key_override"],
+                *self._llm_provider_key_inputs,
             ],
         )
 
-    # Event handlers
+    @staticmethod
+    def _normalize_llm_provider_api_keys(browser_state: dict | None) -> dict[str, str]:
+        """Build canonical provider-to-API-key mapping from BrowserState."""
+        if not isinstance(browser_state, dict):
+            return {}
+        raw = browser_state.get("llm_provider_api_keys")
+        mp: dict[str, str] = {}
+        if isinstance(raw, dict):
+            for pk, vk in raw.items():
+                if not isinstance(pk, str):
+                    continue
+                k_strip = pk.strip()
+                if not k_strip:
+                    continue
+                val = vk if isinstance(vk, str) else ""
+                mp[k_strip] = val.strip()
+        # Single-key legacy rows (saved before multi-key map existed)
+        return mp
+
+    @staticmethod
+    def _key_values_to_map(values: list[Any], providers: list[str]) -> dict[str, str]:
+        """Align password textbox values with the fixed provider order."""
+        out: dict[str, str] = dict.fromkeys(providers, "")
+        if not providers:
+            return out
+        for i, p in enumerate(providers):
+            if i >= len(values):
+                break
+            v = values[i]
+            out[p] = (str(v) if v is not None else "").strip()
+        return out
+
+    @staticmethod
+    def _parse_llm_keys_dataframe(
+        data: Any,
+        providers: list[str],
+    ) -> dict[str, str]:
+        """Best-effort parse of legacy Dataframe / 2D payloads (e.g. pasted state)."""
+        if data is None:
+            return dict.fromkeys(providers, "")
+        if isinstance(data, (list, tuple)) and data and isinstance(
+            data[0],
+            (str, int, float),
+        ):
+            flat = [str(x).strip() if x is not None else "" for x in data]
+            return ConfigTab._key_values_to_map(flat, providers)
+        out: dict[str, str] = dict.fromkeys(providers, "")
+        if not providers:
+            return out
+        n = len(providers)
+
+        try:
+            import pandas as pd
+
+            if isinstance(data, pd.DataFrame):
+                nrows = len(data.index)
+                ncol = int(data.shape[1]) if len(data.shape) > 1 else 0
+                key_col = 1 if ncol >= 2 else 0
+                for i in range(min(n, nrows)):
+                    cell = data.iloc[i, key_col]
+                    if cell is None or (
+                        isinstance(cell, float) and pd.isna(cell)
+                    ):
+                        v = ""
+                    else:
+                        v = str(cell).strip()
+                        if v.lower() == "nan":
+                            v = ""
+                    out[providers[i]] = v
+                return out
+        except ImportError:
+            pass
+
+        try:
+            import numpy as np
+
+            if isinstance(data, np.ndarray) and data.ndim == 2:
+                ncol = int(data.shape[1])
+                key_col = 1 if ncol >= 2 else 0
+                for i in range(min(n, int(data.shape[0]))):
+                    raw = data[i, key_col]
+                    s = "" if raw is None else str(raw).strip()
+                    if s.lower() == "nan":
+                        s = ""
+                    out[providers[i]] = s
+                return out
+        except ImportError:
+            pass
+
+        if isinstance(data, (list, tuple)):
+            for i, prov in enumerate(providers):
+                if i >= len(data):
+                    break
+                row = data[i]
+                if isinstance(row, (list, tuple)) and len(row) >= 2:
+                    cell = row[1]
+                elif isinstance(row, (list, tuple)) and len(row) == 1:
+                    cell = row[0]
+                else:
+                    cell = ""
+                out[prov] = (str(cell) if cell is not None else "").strip()
+
+        return out
+
     def _save_to_state(
         self,
         url: str,
         username: str,
         password: str,
-        llm_provider_override: str,
-        llm_api_key_override: str,
-        current_state: dict | None,
+        *rest: Any,
         request: gr.Request | None = None,
     ) -> dict:
         """Save configuration into browser state and update process env."""
+        prior_browser: dict[Any, Any] = {}
+        if rest and isinstance(rest[-1], dict):
+            prior_browser = dict(rest[-1])
+
         try:
+            if len(rest) < 1:
+                logging.getLogger(__name__).warning(
+                    "ConfigTab._save_to_state: missing trailing BrowserState tuple"
+                )
+                return {}
+
             url = (url or "").strip()
             username = (username or "").strip()
             password = (password or "").strip()
-            llm_provider_override = (llm_provider_override or "").strip()
-            llm_api_key_override = (llm_api_key_override or "").strip()
+            current_state_raw = rest[-1]
+            key_inputs = rest[:-1]
+
+            merged_base = (
+                dict(current_state_raw)
+                if isinstance(current_state_raw, dict)
+                else {}
+            )
+            keys_map = ConfigTab._normalize_llm_provider_api_keys(merged_base)
+            if len(key_inputs) == len(self._config_llm_providers):
+                parsed = ConfigTab._key_values_to_map(
+                    list(key_inputs), self._config_llm_providers
+                )
+            else:
+                logging.getLogger(__name__).debug(
+                    "ConfigTab.save: key input count %s != providers %s; "
+                    "falling back to dataframe-style parse",
+                    len(key_inputs),
+                    len(self._config_llm_providers),
+                )
+                parsed = ConfigTab._parse_llm_keys_dataframe(
+                    key_inputs[0] if len(key_inputs) == 1 else key_inputs,
+                    self._config_llm_providers,
+                )
+            for p in self._config_llm_providers:
+                keys_map[p] = parsed.get(p, "")
 
             # Prepare new state dict
             new_state = {
                 "url": url,
                 "username": username,
                 "password": password,
-                "llm_provider_override": llm_provider_override,
-                "llm_api_key_override": llm_api_key_override,
+                "llm_provider_api_keys": keys_map,
             }
 
             # Determine accurate session id
@@ -305,14 +438,15 @@ class ConfigTab:
                     self._get_translation("config_save_error") + "\n\n" + f"{str(e)}"
                 )
                 gr.Warning(message)
-            return current_state or {}
+            return prior_browser
         else:
             return new_state
 
     def _load_from_state(
         self, state: Any, request: gr.Request | None = None
-    ) -> tuple[Any, Any, Any, Any, Any]:
+    ) -> tuple[Any, ...]:
         """Load values from browser state and update fields."""
+        n_keys = len(self._config_llm_providers)
         try:
             # Normalize state across gradio versions (may come as tuple or dict)
             if isinstance(state, tuple) and len(state) > 0:
@@ -321,39 +455,33 @@ class ConfigTab:
                 state = {}
 
             # If no stored config, return no-ops — don't clear initial values
-            has_saved_config = any(
-                state.get(k)
-                for k in (
-                    "url",
-                    "username",
-                    "password",
-                    "llm_provider_override",
-                    "llm_api_key_override",
-                )
+            keys_precheck = ConfigTab._normalize_llm_provider_api_keys(state)
+            any_stored_llm_keys = bool(
+                any((vk or "").strip() for vk in keys_precheck.values())
+            )
+            has_saved_config = (
+                any(state.get(k) for k in ("url", "username", "password"))
+                or any_stored_llm_keys
             )
             if not has_saved_config:
                 return (
                     gr.update(),
                     gr.update(),
                     gr.update(),
-                    gr.update(),
-                    gr.update(),
+                    *((gr.skip(),) * n_keys),
                 )
 
             url = state.get("url", "") or ""
             login = state.get("username", "") or ""
             pwd = state.get("password", "") or ""
-            llm_provider = state.get("llm_provider_override", "") or ""
-            llm_api_key = state.get("llm_api_key_override", "") or ""
+
+            keys_map = ConfigTab._normalize_llm_provider_api_keys(state)
 
             logging.getLogger(__name__).debug(
-                "ConfigTab._load_from_state: url_present=%s user_len=%s pwd_len=%s "
-                "provider=%s key_len=%s",
+                "ConfigTab._load_from_state: url_present=%s user_len=%s pwd_len=%s",
                 bool(url),
                 len(login),
                 len(pwd),
-                llm_provider,
-                len(llm_api_key),
             )
 
             # Also propagate BrowserState snapshot into per-session store for backend
@@ -367,8 +495,7 @@ class ConfigTab:
                             "url": url,
                             "username": login,
                             "password": pwd,
-                            "llm_provider_override": llm_provider,
-                            "llm_api_key_override": llm_api_key,
+                            "llm_provider_api_keys": keys_map,
                         },
                     )
                     self._reinitialize_session_llm(session_id)
@@ -389,8 +516,10 @@ class ConfigTab:
                 gr.update(value=url),
                 gr.update(value=login),
                 gr.update(value=pwd),
-                gr.update(value=llm_provider),
-                gr.update(value=llm_api_key),
+                *(
+                    gr.update(value=(keys_map.get(p) or "").strip())
+                    for p in self._config_llm_providers
+                ),
             )
         except Exception as e:
             logging.getLogger(__name__).exception("Load from browser state failed")
@@ -403,34 +532,33 @@ class ConfigTab:
                 gr.update(),
                 gr.update(),
                 gr.update(),
-                gr.update(),
-                gr.update(),
+                *((gr.skip(),) * n_keys),
             )
 
     # Removed .env loading: rely solely on browser state
 
     def _clear_browser_storage(
         self, state: Any
-    ) -> tuple[dict, Any, Any, Any, Any, Any]:
+    ) -> tuple[Any, ...]:
         """Clear browser-persisted state and reset input fields."""
+        n_key = len(self._llm_provider_key_inputs) or len(self._config_llm_providers)
         try:
             new_state: dict = {
                 "url": "",
                 "username": "",
                 "password": "",
-                "llm_provider_override": "",
-                "llm_api_key_override": "",
+                "llm_provider_api_keys": {},
             }
 
             with suppress(Exception):
                 gr.Info(self._get_translation("config_clear_success"))
+            blank_keys = (gr.update(value=""),) * n_key
             return (
                 new_state,
                 gr.update(value=""),
                 gr.update(value=""),
                 gr.update(value=""),
-                gr.update(value=""),
-                gr.update(value=""),
+                *blank_keys,
             )
         except Exception as e:
             logging.getLogger(__name__).exception("Clear browser storage failed")
@@ -444,8 +572,7 @@ class ConfigTab:
                 gr.update(),
                 gr.update(),
                 gr.update(),
-                gr.update(),
-                gr.update(),
+                *((gr.skip(),) * n_key),
             )
 
     def set_main_app(self, main_app: Any) -> None:
@@ -481,7 +608,9 @@ class ConfigTab:
             if request and hasattr(request, "session_hash") and request.session_hash:
                 return f"gradio_{request.session_hash}"
         except Exception:
-            pass
+            logging.getLogger(__name__).debug(
+                "_resolve_session_id: request.parse failed", exc_info=True
+            )
 
         if (
             self.main_app

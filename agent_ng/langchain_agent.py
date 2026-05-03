@@ -147,7 +147,14 @@ class CmwAgent:
     maintaining all the modular components from NextGenAgent.
     """
 
-    def __init__(self, system_prompt: str = None, session_id: str = "default", language: str = "en"):
+    def __init__(
+        self,
+        system_prompt: str = None,
+        session_id: str = "default",
+        language: str = "en",
+        *,
+        memory_manager=None,
+    ):
         """
         Initialize the LangChain agent with full modular architecture.
 
@@ -155,16 +162,18 @@ class CmwAgent:
             system_prompt: System prompt for the agent
             session_id: Unique session ID for conversation isolation
             language: Language for the agent (default: "en")
+            memory_manager: Optional memory manager (tests); defaults to global singleton
         """
         # Store session ID for conversation isolation
         self.session_id = session_id
         # Store language for internationalization
         self.language = language
+        self._logger = logging.getLogger(__name__)
 
         # Initialize all modular components
         self.llm_manager = get_llm_manager()
 
-        self.memory_manager = get_memory_manager()
+        self.memory_manager = memory_manager or get_memory_manager()
         self.error_handler = get_error_handler()
         self.message_processor = get_message_processor()
         self.response_processor = get_response_processor()
@@ -677,6 +686,10 @@ class CmwAgent:
                 "compression_tokens_saved": 0,
                 **token_stats,
             }
+
+    def get_conversation_stats(self, debug: bool = False) -> Dict[str, Any]:
+        """Public alias for stats collection (UI / tests)."""
+        return self._get_conversation_stats(debug=debug)
 
     def get_token_counts(self, messages: List[Any]) -> Dict[str, Any]:
         """Get token counts for display"""
