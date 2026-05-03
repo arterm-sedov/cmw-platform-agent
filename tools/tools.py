@@ -1746,6 +1746,11 @@ def generate_ai_image(
             "cost": None,
         }
 
+    # Resolve any filenames in reference_images to data URIs before the
+    # engine sees them.  URLs and existing data URIs pass through unchanged.
+    if reference_images:
+        reference_images = _resolve_reference_images(reference_images, agent)
+
     # Warn the LLM when it supplied more reference images than the model
     # supports.  The engine clips silently; we surface that here so the
     # agent can inform the user or adjust on the next call.
@@ -1838,6 +1843,61 @@ def generate_ai_image(
 
 
 # ---- helpers for generate_ai_image -------------------------------------- #
+
+
+def _resolve_reference_images(
+    items: list[str],
+    agent: Any | None,
+) -> list[str]:
+    """Resolve file-registry names in *items* to base64 data URIs.
+
+    Items that are already remote URLs (``http://`` / ``https://``) or
+    data URIs (``data:``) are passed through unchanged — the image API
+    accepts both formats directly.
+
+    Everything else is treated as a logical filename and looked up via
+    ``FileUtils.read_file_reference_bytes``, which consults
+    ``agent.get_file_path`` when an agent is present.  On success the
+    bytes are base64-encoded and wrapped in a ``data:<mime>;base64,…``
+    URI.  MIME type is guessed from the file extension; unknowns fall
+    back to ``image/jpeg``.
+
+    Unresolvable names are skipped with a WARNING so the remaining valid
+    items are still forwarded to the engine.
+
+    Args:
+        items: Raw strings from the ``reference_images`` tool parameter.
+        agent: Injected agent instance (provides ``get_file_path``).
+
+    Returns:
+        List of URL strings or data URIs safe to send to the image API.
+    """
+    import base64
+    import mimetypes
+
+    from .file_utils import FileUtils
+
+    resolved: list[str] = []
+    for item in items:
+        if item.startswith(("http://", "https://", "data:")):
+            resolved.append(item)
+            continue
+
+        # Filename — look up in agent's registry and encode as data URI.
+        data, err = FileUtils.read_file_reference_bytes(item, agent)
+        if err or data is None:
+            logger.warning(
+                "generate_ai_image: cannot resolve reference image %r: %s",
+                item,
+                err,
+            )
+            continue
+
+        mime = mimetypes.guess_type(item)[0] or "image/jpeg"
+        b64 = base64.b64encode(data).decode()
+        resolved.append(f"data:{mime};base64,{b64}")
+
+    return resolved
 
 
 def _extension_for_mime(mime: str | None) -> str:
