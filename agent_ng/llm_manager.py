@@ -1204,34 +1204,43 @@ class LLMManager:
         if tool_names is None:
             tool_names = set()
 
+        try:
+            from langchain_core.tools.base import BaseTool as _BaseTool
+        except ImportError:
+            _BaseTool = None  # type: ignore[assignment,misc]
+
+        _EXCLUDED = {
+            "CmwAgent",
+            "CodeInterpreter",
+            "submit_answer",
+            "submit_intermediate_step",
+            "web_search_deep_research_exa_ai",
+        }
+
         for name, obj in module.__dict__.items():
-            # Only include actual tool objects (decorated with @tool)
-            # Check if it's a proper @tool decorated function
-            if (
+            # Identify LangChain tools robustly across versions:
+            # - LangChain 1.x: isinstance(obj, BaseTool) covers both @tool
+            #   StructuredTool instances and BaseTool subclass instances.
+            # - Fallback duck-type check for edge cases.
+            is_tool = (
+                _BaseTool is not None and isinstance(obj, _BaseTool)
+            ) or (
                 callable(obj)
+                and not isinstance(obj, type)
+                and hasattr(obj, "name")
+                and hasattr(obj, "description")
+                and hasattr(obj, "args_schema")
+            )
+            if (
+                is_tool
                 and not name.startswith("_")
-                and not isinstance(obj, type)  # Exclude classes
-                and hasattr(obj, "__module__")  # Must have __module__ attribute
-                and (
-                    obj.__module__ == module_name
-                    or obj.__module__ == "langchain_core.tools.structured"
-                )  # Include both tools module and LangChain tools
-                and name
-                not in [
-                    "CmwAgent",
-                    "CodeInterpreter",
-                    "submit_answer",
-                    "submit_intermediate_step",
-                    "web_search_deep_research_exa_ai",
-                ]
-            ):  # Exclude specific classes and internal tools
-                # Check if it's a proper @tool decorated function
-                # @tool decorated functions have specific attributes that indicate they're LangChain tools
+                and name not in _EXCLUDED
+            ):
                 if (
                     hasattr(obj, "name")
                     and hasattr(obj, "description")
                     and hasattr(obj, "args_schema")
-                    and hasattr(obj, "func")
+                    and (hasattr(obj, "func") or hasattr(obj, "run"))
                 ):
                     # This is a proper @tool decorated function
                     tool_name = obj.name
