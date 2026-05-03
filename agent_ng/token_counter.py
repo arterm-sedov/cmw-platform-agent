@@ -779,46 +779,51 @@ class ConversationTokenTracker:
 
             if hasattr(response, "usage_metadata"):
                 usage = response.usage_metadata
-                logger.debug("Found usage_metadata type=%s", type(usage))
+                # LangChain 1.x appends a final empty AIMessageChunk with
+                # chunk_position="last" whose usage_metadata is None.  Skip it
+                # so the caller receives None (not a zero-count success) and can
+                # fall back to the accumulated chunk that does carry real usage.
+                if usage is not None:
+                    logger.debug("Found usage_metadata type=%s", type(usage))
 
-                # Handle both dict and object formats
-                if isinstance(usage, dict):
-                    input_tokens = usage.get("input_tokens", 0)
-                    output_tokens = usage.get("output_tokens", 0)
-                    total_tokens = usage.get(
-                        "total_tokens", input_tokens + output_tokens
-                    )
-                    cached_tokens, cache_write_tokens = _extract_cache_details(usage)
-                else:
-                    input_tokens = getattr(usage, "input_tokens", 0)
-                    output_tokens = getattr(usage, "output_tokens", 0)
-                    total_tokens = getattr(
-                        usage, "total_tokens", input_tokens + output_tokens
-                    )
-                    cached_tokens, cache_write_tokens = _extract_cache_details(
-                        _usage_to_dict(getattr(usage, "prompt_tokens_details", None))
+                    # Handle both dict and object formats
+                    if isinstance(usage, dict):
+                        input_tokens = usage.get("input_tokens", 0)
+                        output_tokens = usage.get("output_tokens", 0)
+                        total_tokens = usage.get(
+                            "total_tokens", input_tokens + output_tokens
+                        )
+                        cached_tokens, cache_write_tokens = _extract_cache_details(usage)
+                    else:
+                        input_tokens = getattr(usage, "input_tokens", 0)
+                        output_tokens = getattr(usage, "output_tokens", 0)
+                        total_tokens = getattr(
+                            usage, "total_tokens", input_tokens + output_tokens
+                        )
+                        cached_tokens, cache_write_tokens = _extract_cache_details(
+                            _usage_to_dict(getattr(usage, "prompt_tokens_details", None))
+                        )
+
+                    provider_cost = (
+                        _provider_cost_from_usage_dict(usage)
+                        if isinstance(usage, dict)
+                        else _provider_cost_from_usage_obj(usage)
                     )
 
-                provider_cost = (
-                    _provider_cost_from_usage_dict(usage)
-                    if isinstance(usage, dict)
-                    else _provider_cost_from_usage_obj(usage)
-                )
-
-                logger.debug(
-                    "Extracted tokens from usage_metadata: input=%s output=%s total=%s",
-                    input_tokens,
-                    output_tokens,
-                    total_tokens,
-                )
-                fallback_result = (
-                    int(input_tokens or 0),
-                    int(output_tokens or 0),
-                    int(total_tokens or 0),
-                    float(provider_cost if provider_cost is not None else 0.0),
-                    cached_tokens,
-                    cache_write_tokens,
-                )
+                    logger.debug(
+                        "Extracted tokens from usage_metadata: input=%s output=%s total=%s",
+                        input_tokens,
+                        output_tokens,
+                        total_tokens,
+                    )
+                    fallback_result = (
+                        int(input_tokens or 0),
+                        int(output_tokens or 0),
+                        int(total_tokens or 0),
+                        float(provider_cost if provider_cost is not None else 0.0),
+                        cached_tokens,
+                        cache_write_tokens,
+                    )
 
             # // pragma: allowlist secret
             # pragma: allowlist secret
