@@ -251,9 +251,10 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
     ),
     "bytedance-seed/seedream-3": ImageModelConfig(
         name="bytedance-seed/seedream-3",
-        providers=["openrouter"],
+        providers=["polza", "openrouter"],
         modalities=["image"],
-        supports_image_config=False,
+        supports_image_config=True,
+        provider_model_ids={"polza": "bytedance/seedream"},
         description="Proven Seedream generation with solid multilingual support.",
         prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
     ),
