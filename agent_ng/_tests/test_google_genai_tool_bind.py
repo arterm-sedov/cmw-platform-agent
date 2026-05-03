@@ -1,36 +1,45 @@
-"""Tests for Gemini bind_tools schema adaptation (OpenAI dict → GenAI Schema)."""
+"""OpenAI tool JSON: no model-facing agent param (GenAI Schema)."""
 
 from __future__ import annotations
 
+from langchain_core.tools import BaseTool
+from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_google_genai._function_utils import (
     convert_to_genai_function_declarations,
 )
 
-from agent_ng.llm_manager import tools_for_google_genai_bind
-from tools.tools import execute_code_multilang, generate_ai_image
+from agent_ng.llm_manager import LLMManager
 
 
-def test_tools_for_google_genai_bind_removes_agent_from_openai_parameters() -> None:
-    for tool in (generate_ai_image, execute_code_multilang):
-        adapted = tools_for_google_genai_bind([tool])[0]
-        assert isinstance(adapted, dict)
-        props = (adapted.get("function") or {}).get("parameters") or {}
-        props = props.get("properties") or {}
-        assert "agent" not in props
+def _openai_props_for_tool(tool: BaseTool) -> dict:
+    spec = convert_to_openai_tool(tool)
+    func = spec.get("function") if isinstance(spec, dict) else None
+    params = func.get("parameters") if isinstance(func, dict) else None
+    props = params.get("properties") if isinstance(params, dict) else None
+    return props if isinstance(props, dict) else {}
 
 
-def test_convert_to_genai_function_declarations_accepts_adapted_tools() -> None:
-    bound = tools_for_google_genai_bind([generate_ai_image, execute_code_multilang])
-    out = convert_to_genai_function_declarations(bound)
+def test_manager_tools_openai_schema_has_no_agent_property() -> None:
+    mgr = LLMManager()
+    for tool in mgr.get_tools():
+        if not isinstance(tool, BaseTool):
+            continue
+        props = _openai_props_for_tool(tool)
+        assert "agent" not in props, (
+            f"Tool {tool.name!r} exposes agent in model schema; "
+            "use InjectedToolArg for runtime injection."
+        )
+
+
+def test_convert_to_genai_accepts_full_toolbelt_openai_dicts() -> None:
+    """Regression: all app tools must survive GenAI declaration conversion."""
+    mgr = LLMManager()
+    openai_tools: list[dict] = []
+    for t in mgr.get_tools():
+        if isinstance(t, BaseTool):
+            spec = convert_to_openai_tool(t)
+            if isinstance(spec, dict):
+                openai_tools.append(spec)
+    out = convert_to_genai_function_declarations(openai_tools)
     assert out
     assert out[0].function_declarations
-
-
-def test_convert_to_genai_accepts_full_toolbelt() -> None:
-    """Regression: all app tools must survive GenAI declaration conversion."""
-    from agent_ng.llm_manager import LLMManager
-
-    mgr = LLMManager()
-    raw = mgr.get_tools()
-    adapted = tools_for_google_genai_bind(raw)
-    convert_to_genai_function_declarations(adapted)

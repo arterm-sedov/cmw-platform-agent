@@ -47,6 +47,10 @@ from .history_compression import (
     should_compress_on_completion,
 )
 from .i18n_translations import get_translation_key
+from .message_content_text import (
+    memory_dedupe_fingerprint,
+    visible_plain_text_from_message,
+)
 from .streaming_config import get_streaming_config
 from .tool_deduplicator import get_deduplicator
 from .token_budget import (
@@ -747,16 +751,26 @@ class NativeLangChainStreaming:
                         # Log directly - if logging fails, let it fail visibly for debugging
                         self._logger.debug("Failed to emit early-finish hint: %s", exc)
 
-                    # Stream content as it arrives
+                    # Stream content as it arrives (Gemini/LC may use list-shaped content)
                     if hasattr(chunk, "content") and chunk.content:
-                        yield StreamingEvent(
-                            event_type="content",
-                            content=chunk.content,
-                            metadata={
-                                "chunk_type": "llm_stream",
-                                "provider": agent.llm_instance.provider.value,
-                            },
+                        stream_text = (
+                            visible_plain_text_from_message(chunk)
+                            if isinstance(chunk, BaseMessage)
+                            else ""
                         )
+                        if not stream_text and isinstance(
+                            getattr(chunk, "content", None), str
+                        ):
+                            stream_text = chunk.content
+                        if stream_text:
+                            yield StreamingEvent(
+                                event_type="content",
+                                content=stream_text,
+                                metadata={
+                                    "chunk_type": "llm_stream",
+                                    "provider": agent.llm_instance.provider.value,
+                                },
+                            )
 
                     # Process tool call chunks as they stream
                     if hasattr(chunk, "tool_call_chunks") and chunk.tool_call_chunks:
@@ -1281,9 +1295,9 @@ class NativeLangChainStreaming:
                         conversation_id
                     )
                     memory_content = {
-                        (type(msg).__name__, msg.content)
+                        memory_dedupe_fingerprint(msg)
                         for msg in current_memory
-                        if hasattr(msg, "content")
+                        if isinstance(msg, BaseMessage)
                     }
 
                     new_messages_added = 0
@@ -1306,12 +1320,10 @@ class NativeLangChainStreaming:
                             )
                             continue
 
-                        # Create a unique identifier for this message
                         message_key = (
-                            type(message).__name__,
-                            message.content
-                            if hasattr(message, "content")
-                            else str(message),
+                            memory_dedupe_fingerprint(message)
+                            if isinstance(message, BaseMessage)
+                            else (type(message).__name__, str(message))
                         )
 
                         # Only add if not already in memory
@@ -1509,9 +1521,9 @@ class NativeLangChainStreaming:
                 conversation_id
             )
             memory_content = {
-                (type(msg).__name__, msg.content)
+                memory_dedupe_fingerprint(msg)
                 for msg in current_memory
-                if hasattr(msg, "content")
+                if isinstance(msg, BaseMessage)
             }
 
             new_messages_added = 0
@@ -1532,10 +1544,10 @@ class NativeLangChainStreaming:
                     )
                     continue
 
-                # Create a unique identifier for this message
                 message_key = (
-                    type(message).__name__,
-                    message.content if hasattr(message, "content") else str(message),
+                    memory_dedupe_fingerprint(message)
+                    if isinstance(message, BaseMessage)
+                    else (type(message).__name__, str(message))
                 )
 
                 # Only add if not already in memory
@@ -1563,10 +1575,17 @@ class NativeLangChainStreaming:
                             role = "assistant"
                         else:
                             role = type(m).__name__
+                        snap_content: str | Any = getattr(m, "content", "")
+                        if isinstance(m, BaseMessage):
+                            snap_content = visible_plain_text_from_message(m) or (
+                                snap_content
+                                if isinstance(snap_content, str)
+                                else ""
+                            )
                         ordered_messages_snapshot.append(
                             {
                                 "role": role,
-                                "content": getattr(m, "content", ""),
+                                "content": snap_content,
                                 "tool_call_id": getattr(m, "tool_call_id", None),
                                 "tool_calls": getattr(m, "tool_calls", None),
                                 "name": getattr(m, "name", None),
@@ -1621,9 +1640,9 @@ class NativeLangChainStreaming:
                     conversation_id
                 )
                 memory_content = {
-                    (type(msg).__name__, msg.content)
+                    memory_dedupe_fingerprint(msg)
                     for msg in current_memory
-                    if hasattr(msg, "content")
+                    if isinstance(msg, BaseMessage)
                 }
 
                 # Collect any ToolMessages and AI messages already in working list
@@ -1631,7 +1650,11 @@ class NativeLangChainStreaming:
                 try:
                     for m in messages:
                         if isinstance(m, ToolMessage) or isinstance(m, AIMessage):
-                            key = (type(m).__name__, getattr(m, "content", ""))
+                            key = (
+                                memory_dedupe_fingerprint(m)
+                                if isinstance(m, BaseMessage)
+                                else (type(m).__name__, str(m))
+                            )
                             if key not in memory_content:
                                 partial_messages_to_add.append(m)
                 except Exception as exc:
@@ -1643,15 +1666,20 @@ class NativeLangChainStreaming:
                 # Add a lean truncated AIMessage if we have partial content
                 try:
                     partial_text = ""
-                    if (
-                        "accumulated_chunk" in locals()
-                        and hasattr(accumulated_chunk, "content")
-                        and accumulated_chunk.content
-                    ):
-                        partial_text = accumulated_chunk.content
+                    if "accumulated_chunk" in locals() and accumulated_chunk is not None:
+                        ac = accumulated_chunk
+                        if hasattr(ac, "content") and ac.content:
+                            if isinstance(ac, BaseMessage):
+                                partial_text = visible_plain_text_from_message(ac)
+                            if not partial_text and isinstance(
+                                getattr(ac, "content", None), str
+                            ):
+                                partial_text = ac.content
                     if partial_text:
-                        truncated_msg = AIMessage(content=f"{partial_text} [truncated]")
-                        key = ("AIMessage", truncated_msg.content)
+                        truncated_msg = AIMessage(
+                            content=f"{partial_text} [truncated]"
+                        )
+                        key = memory_dedupe_fingerprint(truncated_msg)
                         if key not in memory_content:
                             partial_messages_to_add.append(truncated_msg)
                 except Exception as exc:

@@ -18,7 +18,6 @@ Usage:
     llm = llm_manager.get_llm("gemini", use_tools=True)
 """
 
-import copy
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -37,8 +36,6 @@ load_dotenv()
 import sys
 
 from langchain_core.messages import BaseMessage
-from langchain_core.tools import BaseTool
-from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
@@ -66,57 +63,6 @@ except ImportError:
         print("🔧 Please check that all dependencies are installed and modules exist")
         msg = f"Failed to import required modules in llm_manager: {e}"
         raise ImportError(msg)
-
-
-# --- Gemini tool binding (LangChain 1.x + langchain-google-genai 4.x + google-genai) ---
-# Pre-v0.3 stacks used a different Gemini integration; the current path builds OpenAI-style
-# tool JSON then converts to ``google.genai.types.Schema``. Optional ``agent`` on tools
-# (plain ``agent=None`` or injected) often becomes ``properties.agent: {default: null}``,
-# which Schema.model_validate rejects. ChatGoogleGenerativeAI.bind_tools already uses
-# convert_to_openai_tool; we emit the same dict shape and strip ``agent`` before bind_tools.
-# Runtime still uses original BaseTool instances on the agent (model never passes agent).
-_GEMINI_RUNTIME_ONLY_TOOL_PARAMS = frozenset({"agent"})
-
-
-def _strip_runtime_only_openai_tool_parameters(openai_tool: dict[str, Any]) -> dict[str, Any]:
-    data = copy.deepcopy(openai_tool)
-    func = data.get("function")
-    if not isinstance(func, dict):
-        return data
-    params = func.get("parameters")
-    if not isinstance(params, dict):
-        return data
-    props = params.get("properties")
-    if isinstance(props, dict):
-        for key in _GEMINI_RUNTIME_ONLY_TOOL_PARAMS:
-            props.pop(key, None)
-    req = params.get("required")
-    if isinstance(req, list):
-        params["required"] = [r for r in req if r not in _GEMINI_RUNTIME_ONLY_TOOL_PARAMS]
-    return data
-
-
-def tools_for_google_genai_bind(tools: list[Any]) -> list[Any]:
-    """Adapt tools for ``ChatGoogleGenerativeAI.bind_tools`` (GenAI Schema compatibility)."""
-    adapted: list[Any] = []
-    for t in tools:
-        if isinstance(t, BaseTool):
-            try:
-                openai = convert_to_openai_tool(t)
-            except Exception:
-                adapted.append(t)
-                continue
-            adapted.append(_strip_runtime_only_openai_tool_parameters(openai))
-            continue
-        if (
-            isinstance(t, dict)
-            and t.get("type") == "function"
-            and isinstance(t.get("function"), dict)
-        ):
-            adapted.append(_strip_runtime_only_openai_tool_parameters(t))
-            continue
-        adapted.append(t)
-    return adapted
 
 
 class LLMProvider(Enum):
@@ -897,8 +843,6 @@ class LLMManager:
                 if use_tools and self.LLM_CONFIGS.get(provider_enum, {}).tool_support:
                     tools_list = self.get_tools()
                     if tools_list:
-                        if provider_enum == LLMProvider.GEMINI:
-                            tools_list = tools_for_google_genai_bind(tools_list)
                         try:
                             instance.llm = instance.llm.bind_tools(tools_list)
                             instance.bound_tools = True
@@ -992,8 +936,6 @@ class LLMManager:
             if self.LLM_CONFIGS.get(provider_enum, {}).tool_support:
                 tools_list = self.get_tools()
                 if tools_list:
-                    if provider_enum == LLMProvider.GEMINI:
-                        tools_list = tools_for_google_genai_bind(tools_list)
                     try:
                         instance.llm = instance.llm.bind_tools(tools_list)
                         instance.bound_tools = True

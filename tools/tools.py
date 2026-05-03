@@ -509,7 +509,11 @@ class CodeInterpreter:
 interpreter_instance = CodeInterpreter()
 
 @tool
-def execute_code_multilang(code_reference: str, language: str = "python", agent=None) -> str:
+def execute_code_multilang(
+    code_reference: str,
+    language: str = "python",
+    agent: Annotated[Any | None, InjectedToolArg] = None,
+) -> str:
     """Execute code in multiple languages (Python, Bash, SQL, C, Java) and return results.
 
     Args:
@@ -836,7 +840,7 @@ def read_text_based_file(
     file_reference: str,
     read_html_as_markdown: bool = True,
     extract_images: bool = False,
-    agent=None,
+    agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> str:
     """
     Read text-based files and return content as text.
@@ -1136,7 +1140,11 @@ def _apply_pandas_query(
 
 
 @tool
-def analyze_csv_file(file_reference: str, query: str, agent=None) -> str:
+def analyze_csv_file(
+    file_reference: str,
+    query: str,
+    agent: Annotated[Any | None, InjectedToolArg] = None,
+) -> str:
     """
     Analyze CSV files and return summary statistics and column information.
     This tool can process CSV files with various formats and encodings:
@@ -1193,7 +1201,11 @@ def analyze_csv_file(file_reference: str, query: str, agent=None) -> str:
         return FileUtils.create_tool_response("analyze_csv_file", error=f"Error analyzing CSV file: {str(e)}")
 
 @tool
-def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
+def analyze_excel_file(
+    file_reference: str,
+    query: str,
+    agent: Annotated[Any | None, InjectedToolArg] = None,
+) -> str:
     """
     Analyze Excel files and return summary statistics and column information.
     This tool can process Excel files in various formats:
@@ -1266,7 +1278,10 @@ def analyze_excel_file(file_reference: str, query: str, agent=None) -> str:
 
 # ========== IMAGE ANALYSIS/GENERATION TOOLS ==========
 @tool
-def analyze_image(file_reference: str, agent=None) -> str:
+def analyze_image(
+    file_reference: str,
+    agent: Annotated[Any | None, InjectedToolArg] = None,
+) -> str:
     """
     LEGACY: Analyze basic properties of an image (size, mode, color analysis, thumbnail preview).
 
@@ -1335,7 +1350,7 @@ def analyze_image_ai(
     file_reference: str,
     prompt: str,
     system_prompt: str = None,
-    agent=None
+    agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> str:
     """
     AI-powered image analysis using vision-language models.
@@ -2045,8 +2060,15 @@ def combine_images(images_base64: list[str], operation: str,
 
 # ========== VIDEO/AUDIO UNDERSTANDING TOOLS ==========
 @tool
-def understand_video(file_reference: str, prompt: str, system_prompt: str = None, agent=None,
-                     start_time: str = None, end_time: str = None, fps: float = None) -> str:
+def understand_video(
+    file_reference: str,
+    prompt: str,
+    system_prompt: str = None,
+    agent: Annotated[Any | None, InjectedToolArg] = None,
+    start_time: str = None,
+    end_time: str = None,
+    fps: float = None,
+) -> str:
     """
     Analyze a video using vision-language models (Gemini, Qwen).
 
@@ -2125,8 +2147,14 @@ def understand_video(file_reference: str, prompt: str, system_prompt: str = None
 
 
 @tool
-def understand_audio(file_reference: str, prompt: str, system_prompt: str = None, agent=None,
-                     start_time: str = None, end_time: str = None) -> str:
+def understand_audio(
+    file_reference: str,
+    prompt: str,
+    system_prompt: str = None,
+    agent: Annotated[Any | None, InjectedToolArg] = None,
+    start_time: str = None,
+    end_time: str = None,
+) -> str:
     """
     Analyze an audio file using vision-language models (Gemini).
 

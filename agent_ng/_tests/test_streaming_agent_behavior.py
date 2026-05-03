@@ -31,17 +31,13 @@ class TestStreamingAgentBehavior:
     async def _get_agent(self):
         """Get or create agent for testing"""
         if not self.agent:
-            # Get a working LLM instance
-            llm_instance = self.llm_manager.get_llm("gemini", use_tools=True)
-            if not llm_instance:
-                pytest.skip("No LLM available for testing")
-
             self.agent = NextGenAgent(
-                llm_instance=llm_instance,
-                tools=[],  # Add tools if needed
                 system_prompt="You are a helpful assistant.",
-                session_id=self.conversation_id
+                session_id=self.conversation_id,
             )
+            await self.agent._initialize_async()  # noqa: SLF001
+            if not self.agent.is_initialized or not self.agent.llm_instance:
+                pytest.skip("No LLM available for testing")
         return self.agent
 
     @pytest.mark.asyncio
