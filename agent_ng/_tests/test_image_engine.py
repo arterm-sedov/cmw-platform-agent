@@ -434,7 +434,7 @@ class TestImageEngineLivePolza:
             engine = ImageEngine()
             result = engine.generate(
                 "Minimalist icon: blue circle on white background",
-                model="bytedance-seed/seedream-3",
+                model="bytedance-seed/seedream-4.5",
             )
         assert result.success is True, f"generation failed: {result.error}"
         assert result.image_bytes is not None

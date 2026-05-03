@@ -165,8 +165,8 @@ class PolzaProvider(ImageProvider):
         model_id = request.config.provider_model_ids.get("polza", request.config.name)
         input_body: dict[str, Any] = {"prompt": request.prompt}
         if request.config.supports_image_config:
-            if request.aspect_ratio:
-                input_body["aspect_ratio"] = request.aspect_ratio
+            # aspect_ratio is required by Polza even when docs say it has a default.
+            input_body["aspect_ratio"] = request.aspect_ratio or "1:1"
             if request.image_size:
                 # Polza uses quality=basic(2K)|high(4K) instead of image_resolution.
                 input_body["quality"] = (
