@@ -218,8 +218,7 @@ RUSSIAN_TRANSLATIONS = {
     "config_clear_success": "✅ Хранилище браузера очищено",
     "config_clear_error": "❌ Не удалось очистить хранилище браузера",
     "config_platform_dotenv_notice": (
-        "Используется преднастроенное подключение к Comindware Platform / "
-        "Using the preconfigured connection to the Comindware Platform."
+        "Используется преднастроенное подключение к Comindware Platform."
     ),
     "config_help": (
         """
@@ -573,7 +572,6 @@ ENGLISH_TRANSLATIONS = {
     "config_clear_success": "✅ Browser storage cleared",
     "config_clear_error": "❌ Failed to clear browser storage",
     "config_platform_dotenv_notice": (
-        "Используется преднастроенное подключение к Comindware Platform / "
         "Using the preconfigured connection to the Comindware Platform."
     ),
     "config_help": (
