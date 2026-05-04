@@ -1,300 +1,5 @@
 # UI tab functionality issues
-_Exported on 5/4/2026 at 18:15:56 GMT+3 from Cursor (3.2.16)_
-
----
-
-**User**
-
-@.env:68 I have increased the debug verbosity in the app to via .env
-
----
-
-**Cursor**
-
-`LOG_LEVEL=DEBUG` in `.env` is picked up by `setup_logging()` in `agent_ng/logging_config.py`: it reads `os.getenv("LOG_LEVEL", "INFO")`, maps it to a `logging` level, and applies it to the **root logger** (after `load_dotenv()` there).
-
-**What you get:** more `logger.debug(...)` output across the app (console and/or `LOG_FILE` if you use it, e.g. `cmw-agent.log`), which helps trace Gradio/agent flow.
-
-**What it is not:** it does **not** change the **`debug-392eaf.log`** NDJSON lines; those come only from `_debug_ndjson` / `_debug_ndjson_chat` in the instrumented paths.
-
-**Practical note:** DEBUG during long streams can add noticeable I/O and noise; for bisecting freezes, pair it with the NDJSON timings so you can tell “slow Python” vs “slow queue/browser.”
-
-Restart the app after editing `.env` so the level is applied on the next `setup_logging()` run (unless you use `LOG_FORCE=true` to re-init handlers mid-process).
-
-<reproduction_steps>
-1. Save `.env` with `LOG_LEVEL=DEBUG`.
-2. Fully restart `python agent_ng/app_ng_modular.py` from a shell where `.env` is loaded.
-3. Reproduce the slow path (e.g. open Downloads after a turn); inspect `cmw-agent.log` (or your configured `LOG_FILE`) for DEBUG lines around the same wall-clock time as `debug-392eaf.log` H3–H5 entries.
-4. Press Proceed/Mark as fixed when done.
-</reproduction_steps>
-
----
-
-**User**
-
-Continue with our efforts further, i have interrupted you
-
----
-
-**Cursor**
-
-Checking the repo state and completing expanded instrumentation (H6–H9, app-level timings).
-
-
-
-Completing instrumentation: H6 (export phases), H7 (HTML sub-phases), H8/H9 (ui_manager wrappers + app granular timings), H1S (sidebar tab build), H10 (visibility entry).
-
-
-
-Applying `chat_tab.py` and `app_ng_modular.py` edits.
-
-
-
-Here is what was completed after the interruption.
-
-## Instrumentation added
-
-| Id | Where | What it measures |
-|----|--------|------------------|
-| **H1S** | `ui_manager.create_interface` | Sidebar `create_tab()` enter/exit + ms (explains part of **H2** ≫ sum of **H1**). |
-| **H5** | (already) `ui_manager._update_downloads_from_chat` | Enter/exit + `hist_len` (queue vs handler wall). |
-| **H6** | `chat_tab._download_conversation_as_markdown` | `ms_preamble`, `ms_body_loop`, `ms_md_write`, `ms_html_section`, `md_chars`, `html_gate`. |
-| **H7** | `chat_tab._generate_conversation_html` | `ms_md_to_html`, `ms_css_load`, `ms_tpl_string`, `ms_html_file_write`, `html_bytes` (+ error line). |
-| **H8** | `ui_manager` `_update_all_ui_timed` **and** `app_ng_modular.update_all_ui_components` | Outer wrapper enter/exit ms **and** inner `_update_status` / `_refresh_stats` / `_refresh_logs` split. |
-| **H9** | `ui_manager` `_update_token_budget_timed` **and** `app_ng_modular._update_token_budget` | Wrapper + delegate ms. |
-| **H10** | `chat_tab._update_download_button_visibility` | Entry: `hist_len`, `downloads_enabled`. |
-
-**H3/H4** unchanged. **`agent_ng/_debug_ndjson.py`** module docstring now lists all hypothesis ids.
-
-`debug-392eaf.log` was **cleared** for your next run (session file only).
-
-## `cmw-rag` / “gradion”
-
-Those paths are **not** in this workspace (search under `C:\Repos` returned nothing). If they live elsewhere, point to the real paths and we can diff patterns (e.g. how they chain `submit` / `tab.select` / `queue=False`).
-
-## Stronger Python profiling (besides NDJSON)
-
-- **[py-spy](https://github.com/benfred/py-spy)** — sampling, low overhead, good for “who holds the GIL” while the UI stalls.  
-- **[Scalene](https://github.com/plasma-umass/scalene)** — CPU + memory attribution.  
-- **[VizTracer](https://github.com/gaogaotiantian/viztracer)** — timeline / flame-style traces.  
-- **`cProfile` + [SnakeViz](https://jiffyclub.github.io/snakeviz/)** — classic deterministic profile.  
-- **`python -X perf`** (where supported) + **perfetto** — kernel-level if you need syscall-level proof.
-
-NDJSON stays best for **correlating Gradio events** with short server phases; py-spy/Scalene are best for **long or stuck** Python stacks.
-
-## How to read the next log
-
-1. **H5 enter → H5 exit** gap vs **H6/H7** sum: large gap ⇒ waiting on queue/other handlers before export runs.  
-2. **H7 `ms_tpl_string`** large ⇒ huge f-string / HTML payload build (pairs with Lighthouse main-thread cost after the response ships).  
-3. **H8 ui_manager exit** ≫ **H8 app phases sum** should be rare; if it happens, something odd wraps the handler.
-
-<reproduction_steps>
-1. Restart the app so the new instrumentation loads: `python agent_ng/app_ng_modular.py` (venv active).
-2. Reproduce: one chat turn, then open **Downloads** (with `CMW_UI_EXPORT_HTML_AFTER_TURN` on or off as you care about).
-3. Open `debug-392eaf.log` and align timestamps with `cmw-agent.log` (with `LOG_LEVEL=DEBUG` if you use it).
-4. Press Proceed/Mark as fixed when done.
-</reproduction_steps>
-
----
-
-**User**
-
-@.env:46-49 
-
-I have also increased concurrency limits in .env, continue with your effors, I am interrupting you
-
----
-
-**Cursor**
-
-Tracing how those `.env` concurrency variables are loaded and applied so we can confirm they take effect after restart.
-
-
-
-Verifying Pydantic validation: `FILE_CONCURRENCY_LIMIT=10` may exceed the model's `le=5` cap.
-
-
-
-Fixing a validation bug: `FILE_CONCURRENCY_LIMIT=10` exceeds Pydantic `le=5` for `file_upload_concurrency_limit`, causing `ConcurrencyConfig.from_env()` to fail. Raising the cap and logging effective concurrency to `debug-392eaf.log`.
-
-
-
----
-
-**User**
-
-C:\Repos\cmw-rag\rag_engine has working Gradio 6+ implementation and is similar to our agent
-
-C:\Repos\gradio source code of Gradio
-
-Continue your efforts to stengthern debugging, I have interrupted you
-
-
-
----
-
-**Cursor**
-
-Exploring cmw-rag's Gradio 6 patterns and strengthening our NDJSON instrumentation at launch and critical chat paths.
-
-
-
-Adding NDJSON **HQ** (queue configuration) and **HL** (queue snapshot after `create_interface`, launch intent before `demo.launch`). Aligns with cmw-rag’s pattern: many `queue=False` steps on the submit chain, then queued streaming.
-
-
-
-## What we added (debugging)
-
-1. **`HQ` in `agent_ng/queue_manager.py`** — After every `demo.queue(...)` path in `configure_queue`: `minimal_disabled`, `from_env` (payload = `queue_config` from `to_gradio_queue_config()`), or `empty_config_fallback`. This matches how **global** queue limits are set vs per-event limits in `queue_manager.apply_*`.
-
-2. **`HL` in `agent_ng/app_ng_modular.py`**
-   - **`create_interface` → `queue_ready`:** `queue_attached`, `default_concurrency_limit` (from `_queue` when present), `post_configure_fallback` (true if the `_queue is None` emergency `demo.queue(1)` ran).
-   - **`main` → `launch_enter`:** `port`, `server_name`, `debug` right before `demo.launch(...)`.
-
-3. **Comment** next to `configure_queue` pointing at **`C:\Repos\cmw-rag\rag_engine\api\app.py`**: same idea as there — many **`queue=False`** steps on the submit chain, then the heavy work on the Gradio queue.
-
-4. **`_debug_ndjson.py`** docstring updated for **HQ** / **HL** (and earlier **HC** from concurrency load).
-
-## cmw-rag takeaway (no code copy)
-
-In `rag_engine/api/app.py`, the chat path uses **`msg.submit(..., queue=False)`**, **`user_submit.success(..., queue=False)`**, and a **`.then(..., queue=False)`** chain for reset / append user / `save_session_id` before the real generator — same “keep the fast path off the queue” pattern you already mirror in `chat_tab.py`. Your stalls are more likely **queue depth + chained `.then` after stream** and **browser main thread** (Lighthouse) than missing `queue=False` on those first hops.
-
-## Gradio source (`C:\Repos\gradio`)
-
-Useful when **HQ/HL** show high `default_concurrency_limit` but UI still blocks: inspect **client batching** and **WebSocket payload size** for large `gr.update(value=file_path)` / multimodal history (Downloads + HTML export).
-
-## Earlier fix (still in tree)
-
-**`FILE_CONCURRENCY_LIMIT=10`** was invalid vs Pydantic `le=5` for file uploads — **`EventConcurrencyConfig.file_upload_concurrency_limit`** is now **`le=10`**, and **`HC`** logs effective limits on first `get_concurrency_config()`.
-
-<reproduction_steps>
-1. Activate venv, restart: `python agent_ng/app_ng_modular.py`.
-2. Open a fresh `debug-392eaf.log` (delete the old session file first if you want a single timeline).
-3. Confirm early lines: **HC** (limits), **HQ** (`from_env` or branch), **HL** `queue_ready` then **HL** `launch_enter`, then your usual **H1/H2** tab build and **H5–H10** on chat/Downloads.
-4. Cross-check `GRADIO_CONCURRENCY_LIMIT` / `CHAT_*` in **HC** vs `.env` (must match after restart).
-5. Press Proceed/Mark as fixed when done.
-</reproduction_steps>
-
----
-
-**User**
-
-@c:\Users\webma\.cursor\projects\c-Repos-cmw-platform-agent\terminals\76.txt:8-1028 @debug-392eaf.log @cmw-agent.log 
-
-@c:\Users\webma\.cursor\projects\c-Repos-cmw-platform-agent\terminals\76.txt:162-1028 
-
-All the previous hanging behaviour is in place
-
-C:\Repos\cmw-rag\rag_engine has working Gradio 6+ implementation and is similar to our agent
-
-C:\Repos\gradio source code of Gradio
-
-Continue your efforts to stengthern debugging or resolve the issue, I have interrupted you
-
-
-
----
-
-**Cursor**
-
-Analyzing logs and code paths: fixing the DebugStreamer session-ID error and investigating queue/DEBUG-related causes of hangs.
-
-
-
-Fixing incorrect `DebugStreamer.get_current_session_id()` usage (method exists on `SessionAwareLogHandler`, not `DebugStreamer`) and aligning post-submit UI refresh with cmw-rag by using `queue=False` on `submit_event` chains that mirror clear/stop.
-
-
-
-Here is what changed and what the logs already implied.
-
-### Runtime evidence (from your terminal / prior logs)
-
-1. **`'DebugStreamer' object has no attribute 'get_current_session_id'`** — In `debug_streamer.py`, `get_current_session_id` lives on **`SessionAwareLogHandler`**, not on **`DebugStreamer`**. Export always fell back to **`"default"`**, so the conversation summary could hit the wrong session agent.
-
-2. **`streaming_event` is never set on `ChatTab`** — Only `streaming_pipeline` exists. Every `ui_manager` branch that does `hasattr(..., "streaming_event")` is effectively **dead**; end-of-turn UI refresh runs only from **`submit_event`**.
-
-3. **`receive_response_body.failed exception=GeneratorExit()`** — Typical when the streaming generator is closed after the turn; not by itself proof of a bug.
-
-### Fixes applied
-
-1. **`agent_ng/tabs/chat_tab.py`** — Export now uses **`get_current_session_id()`** from `agent_ng.session_manager` (same `ContextVar` used elsewhere). Removed the invalid **`get_debug_streamer()`** path. Added NDJSON **`H11`** (`session_for_export` with `session_id_len`) for verification.
-
-2. **`agent_ng/ui_manager.py`** — Matched **cmw-rag** style for lightweight tails: **`queue=False`** on **`submit_event.then`** for **`_update_all_ui_timed`** and **`_update_token_budget_timed`**, and on **clear/stop** token-budget chains (they were still default-queued before).
-
-3. **`agent_ng/_debug_ndjson.py`** — Documented **`H11`** in the hypothesis list.
-
-`debug-392eaf.log` was cleared for the next run (session **`392eaf`**).
-
-After you reproduce, **`H11`** should appear on export with a sensible `session_id_len`, and **`cmw-agent.log`** should **no longer** show the DebugStreamer attribute error on download. Whether the **main-thread hang** improves depends on queue contention; if it persists, next step is to bisect with **`LOG_LEVEL=INFO`** (DEBUG multiplies `token_budget` / `httpcore` work) and/or wire **`self.streaming_event = streaming_pipeline`** **once**, with **no duplicate** `.then(update_all)` on both pipeline and submit.
-
-<reproduction_steps>
-1. Restart the app so `chat_tab` / `ui_manager` changes load (`python agent_ng/app_ng_modular.py` after activating `.venv`).
-2. Send one short chat message, wait until the reply finishes and the textbox re-enables.
-3. Open Downloads and export Markdown (and HTML if `CMW_UI_EXPORT_HTML_AFTER_TURN` is on); confirm UI responsiveness vs before.
-4. Open `debug-392eaf.log` in the repo root and confirm at least one line with `"hypothesisId":"H11"` after export.
-5. Check `cmw-agent.log` (or the terminal) for absence of `'DebugStreamer' object has no attribute 'get_current_session_id'` on download.
-6. Press Proceed/Mark as fixed when done.
-</reproduction_steps>
-
----
-
-**User**
-
-The behavior is the same, it freeses at downloads tab and does not unfreeze the input bos
-
-@debug-392eaf.log @cmw-agent.log 
-
-I have also clicked through the tabs BEFORE entering any messages
-
-@c:\Users\webma\.cursor\projects\c-Repos-cmw-platform-agent\terminals\76.txt:7-1027 
-
----
-
-**Cursor**
-
-Analyzing `debug-392eaf.log` and the Downloads-tab wiring to find why the UI freezes and the input stays disabled.
-
-
-
-Confirming logs: H7 shows ~653ms markdown→HTML and H5 exit ~911ms when selecting Downloads — synchronous HTML export blocks the Gradio handler and delays other UI updates (including re-enabling the input). Implementing: skip HTML generation on tab-select (`prep_after_stream=False`); run HTML only when prep is chained after stream; invalidate export cache when the HTML flag changes.
-
-
-
-### Log analysis (your last run)
-
-| Evidence | What it shows |
-|----------|----------------|
-| **`debug-392eaf.log` lines 32–39** | Selecting Downloads ran **`_update_downloads_from_chat`** with **`prep_after_stream: false`** but still executed HTML export: **`ms_md_to_html`: ~653ms**, **`ms_html_section`: ~849ms**, **`H5` exit ~911ms**. |
-| **`debug-392eaf.log` line 26** | **`_update_token_budget` ~6323ms** on first load (amplified by **`LOG_LEVEL=DEBUG`** + per-tool logging). Separate from Downloads but adds stress. |
-| **Terminal** | OpenRouter pricing HTTP traffic **interleaved with streaming** continues after the model finishes — extra background load while the UI updates. |
-
-**Conclusion:** **`CMW_UI_EXPORT_HTML_AFTER_TURN`** was driving **heavy synchronous HTML** on **`dl_tab.select`**. That blocks the Gradio handler for ~1s and lines up with “Downloads freezes” and delayed/unstable UI (including the multimodal input tail).
-
-### Fix (implemented, instrumentation kept)
-
-1. **`ui_manager._update_downloads_from_chat`** now passes  
-   **`generate_html = prep_after_stream and get_ui_export_html_after_turn()`**  
-   so **tab-select-only** prep stays **Markdown-only** (fast path).
-
-2. **`ChatTab`** accepts **`generate_html`** on **`get_download_button_updates` / `_update_download_button_visibility` / `_download_conversation_as_markdown`**, and **`regen`** also invalidates cache when switching between HTML on/off for the same history (**`_last_export_include_html`**).
-
-3. **Clear chat** clears **`_last_download_html_file`**, **`_last_export_include_html`**, **`_last_html_file_path`** so state cannot go stale.
-
-4. **`get_ui_export_html_after_turn()`** docstring updated: **HTML export expects `CMW_UI_DOWNLOAD_PREP_AFTER_STREAM`** so HTML runs **after streaming**, not on tab select.
-
-With **`CMW_UI_DOWNLOAD_PREP_AFTER_STREAM=1`** you get Markdown + HTML prepared **after each turn** when **`CMW_UI_EXPORT_HTML_AFTER_TURN`** is on. With default **`prep_after_stream=false`**, Downloads opens quickly and shows **MD only** (HTML button stays hidden until you enable prep-after-stream).
-
-`debug-392eaf.log` was cleared for the next verification run.
-
-<reproduction_steps>
-1. Restart the app so changes load (activate `.venv`, run `python agent_ng/app_ng_modular.py`).
-2. Without sending a message, open Chat → Downloads → Chat and confirm the UI stays responsive.
-3. Send one short message; after the reply and input re-enable, open Downloads again.
-4. Open `debug-392eaf.log`: for **`H5` exit** after Downloads with **`prep_after_stream: false`**, expect **`ms` ~ tens of ms**, not ~900ms; **`H6`** should show **`html_gate`: false** (or **`ms_html_section`** ~0).
-5. Optional: set **`CMW_UI_DOWNLOAD_PREP_AFTER_STREAM=1`** (and keep **`CMW_UI_EXPORT_HTML_AFTER_TURN=1`** if you want HTML) and confirm **`html_gate`: true** only on **post-stream** prep, not on tab select alone.
-6. For stall bisect, try **`LOG_LEVEL=INFO`** temporarily (DEBUG multiplies `token_budget` / HTTP noise).
-7. Press Proceed/Mark as fixed when done.
-</reproduction_steps>
+_Exported on 5/4/2026 at 20:38:49 GMT+3 from Cursor (3.2.16)_
 
 ---
 
@@ -1737,4 +1442,461 @@ Uncommitted locally: **`.cursor/chats/...`** and **`?? .reference-repos/`** (lef
 3. Optionally watch the console: lingering `flatMap` errors can be reported separately if they still appear after a hard refresh.
 4. Press Proceed/Mark as fixed when done if you are only confirming this cleanup/commit.
 </reproduction_steps>
+
+---
+
+**User**
+
+FIRST: enable the HTML download button by default and remove it's env var, I need it alwsays
+
+Remaining console issue: normalise_messages → flatMap on undefined is a Chatbot payload problem on the Gradio side (often fixed by ensuring the chatbot always gets a defined value list). Fix if possible leanly
+
+Remove any Debug-only env vars
+
+Remove any debug or experimental scaffolding and leftovers from
+
+b07d559: fix(ui): pin Gradio 6.10.x and trim UI refresh fan-out …
+agent_ng
+agent_ng/agent_config.py
+agent_ng/app_ng_modular.py
+agent_ng/tabs/sidebar.py
+agent_ng/_tests/test_ui_tab_allowlist.py
+agent_ng/ui_manager.py
+AGENTS.md
+requirements.txt
+c81c277: docs(agent): align CMW_UI_HOME_FIRST bisect note with Chat-first default
+c9695ab: docs(agent): tighten Gradio 6 reference and CMW_UI bisect in AGENTS.md
+1d02260: feat(ui): default Home tab first; opt-out via CMW_UI_HOME_FIRST=0 …
+f671465: add cursor chat history opn gradio 6 fixes vs gradio 5.4
+d0d7039: docs(agent): remove stale NDJSON queue comment
+17ced2c: chore(agent_ng): remove Gradio stall NDJSON instrumentation …
+fde906e: fix(gradio): stable sidebar, downloads HTML, non-queued event tails …
+1519f75: chore(debug): NDJSON H3/H4 for export timing and download visibility …
+cf6b2ba: add chat tab from main branch as a reference
+2b75d14: fix(gradio6): HTML export gate, Chat-first tabs, export text + debug timing …
+0c83989: add git diff files comparing to main branch
+0187e94: fix(gradio6): cut post-stream stalls; tab bisect and deferred downloads …
+500f93a: fix(gradio): Gradio 6.13 queue setup and chat stop cancel wiring …
+df1cb23: chore(deps): pin Gradio 6.13 stack in requirements_gradio_6.txt …
+ca01de4: docs(cursor): replace literal merge sentinels in skill migration notes
+
+
+UPDATE in AGENTS.mD
+
+- **Gradio 6 reference (battle-tested):** Sibling **cmw-rag** **`rag_engine/api/app.py`** — https://github.com/arterm-sedov/cmw-rag — copy its queue/UI discipline before inventing patterns: **`gr.Blocks`**, **`gr.api`** in context, **`demo.queue`** after wiring (before **`mount_gradio_app`**), **`queue=False`** on light **`.then`** tails, **`concurrency_limit`** on streaming, **`api_visibility="private"`** on internals, **`allowed_paths`**/**`css_paths`**. This repo: **`gr.TabItem`** **`render_children=True`** (lazy tab mounts on Gradio 6 can stall). Pins: **`requirements_gradio_6.txt`**.
+- **Local reference trees (gitignored symlinks):** Prefer **`.reference-repos/gradio`** for upstream Gradio source — [**gradio-app/gradio**](https://github.com/gradio-app/gradio) — and **`.reference-repos/cmw-rag/rag_engine`** for the sibling engine tree — [**arterm-sedov/cmw-rag**](https://github.com/arterm-sedov/cmw-rag) (see **`rag_engine/api/app.py`**). Use these when verifying tab/queue semantics before changing our UI.
+- **Gradio UI bisect (dev only):** **`CMW_UI_*`** toggles for regressions or tuning—shell or local **`.env`**, not **`.env.example`**; contracts in **`agent_ng/agent_config.py`**. **Tabs:** **`CMW_UI_TABS`** beats **`CMW_UI_TAB_LIMIT`**; **`CMW_UI_STACK_HOME_CHAT`** stacks home+chat (no tab bar); **`CMW_UI_DISABLE_AUTO_TIMERS`** drops **`gr.Timer`** ticks. **`downloads`** must be built for Chat→downloads **`.then`**. **Exports:** **`CMW_UI_HOME_FIRST`** unset or truthy ⇒ **Home leftmost** (registered first — avoid passing **`gr.Tabs(selected=)`**; two-way bind correlated with first-tab-switch hangs). **`0`**/**`false`**/**`no`**/**`off`** ⇒ **Chat before Home**. Sidebar fallback hydrates on **`demo.load`** (**`Request`** session id). **`CMW_UI_EXPORT_HTML_AFTER_TURN`** and **`CMW_UI_DOWNLOAD_PREP_AFTER_STREAM`** default **off**. **`get_demo_with_language_detection()`** rebuilds cached **`demo`** when **`CMW_UI_TABS`**, **`CMW_UI_TAB_LIMIT`**, **`CMW_UI_STACK_HOME_CHAT`**, **`CMW_UI_DISABLE_AUTO_TIMERS`**, or **`CMW_UI_HOME_FIRST`** change (**`_ui_experiment_signature`**); other **`CMW_UI_*`** ⇒ **restart**.
+
+---
+
+**Cursor**
+
+Implementing always-on HTML export, fixing Chatbot initial value, removing debug/bisect env vars, and updating AGENTS.md. Exploring the codebase for usages.
+
+
+
+Removing bisect env vars and stack-layout path, enabling HTML exports always, fixing Chatbot initial/clear values, updating AGENTS.md, and replacing tests.
+
+
+
+## Changes made
+
+### HTML download always on
+- Removed **`get_ui_export_html_after_turn()`** and **`CMW_UI_EXPORT_HTML_AFTER_TURN`** from **`agent_config.py`**.
+- **`ui_manager`** download handlers always call **`generate_html=True`** (submit tail, streaming tail, Downloads tab select).
+- **`chat_tab`**: when **`generate_html` is `None`**, exports behave like **`True`** (Markdown + HTML). Callers can still pass **`generate_html=False`** for Markdown-only if needed internally.
+
+### Chatbot `flatMap` guard (lean)
+- **`gr.Chatbot(..., value=[])`** so the frontend never starts with an undefined messages array.
+- **`_clear_chat_with_download_reset`**: if **`clear_chat`** returns **`None`** for the chatbot payload, return **`[]`** instead.
+
+### Debug / bisect env vars removed (implementation)
+Removed from **`agent_config`** and all wiring:
+- **`CMW_UI_TABS`**, **`CMW_UI_TAB_LIMIT`**, **`get_ui_tab_allowlist()`**
+- **`CMW_UI_STACK_HOME_CHAT`**, **`get_ui_stack_home_chat()`**
+- **`CMW_UI_DISABLE_AUTO_TIMERS`**, **`get_ui_disable_auto_timers()`**
+
+**Kept (operational):**
+- **`CMW_UI_HOME_FIRST`**
+- **`CMW_UI_DOWNLOAD_PREP_AFTER_STREAM`**
+
+**`_ui_experiment_signature()`** now only fingerprints those two.
+
+### UI layout code
+- **`app_ng_modular.create_interface`**: always builds the full tab set (no allowlist); **`include_sidebar_tab=True`**; **`UIManager.create_interface`** no longer takes **`stack_home_chat`** / **`disable_auto_timers`**.
+- **`ui_manager`**: dropped the stack-column branch; only **`gr.Tabs()`** layout remains.
+
+### Tests / docs
+- Replaced **`agent_ng/_tests/test_ui_tab_allowlist.py`** with **`agent_ng/_tests/test_ui_env_flags.py`** (5 tests).
+- **`AGENTS.md`**: updated the three Gradio bullets per your direction (pins → **`requirements.txt`** **`gradio==6.10.0`** / **`gradio_client==2.4.0`**, local reference trees unchanged, operational env paragraph aligned with the two remaining vars + always-on HTML exports).
+
+---
+
+**Note:** Removing **`CMW_UI_TABS`** means you can no longer shrink the UI via env for stall experiments; that matches “remove debug-only env vars.”
+
+<reproduction_steps>
+1. Activate `.venv`, run `pip install -r requirements.txt`, restart the app.
+2. Confirm Downloads shows both Markdown and HTML actions after a chat turn (no `CMW_UI_EXPORT_HTML_AFTER_TURN`).
+3. Hard-refresh the browser, open Chat, use built-in clear: console should not show `normalise_messages` / `flatMap` on undefined (if it still does, capture the stack).
+4. Run `python -m pytest agent_ng/_tests/test_ui_env_flags.py -q`.
+5. Press Proceed/Mark as fixed when done.
+</reproduction_steps>
+
+---
+
+**User**
+
+Requirement already satisfied: colorama in c:\repos\cmw-platform-agent\.venv\lib\site-packages (from click==8.3.0->-r .\requirements.txt (line 18)) (0.4.6)
+latform-agent\.venv\lib\site-packages (from gradio==6.10.0->-r .\requirements.txt (line 46)) (0.2.2)
+Requirement already satisfied: hf-gradio<1.0,>=0.3.0 in c:\repos\cmw-platform-agent\.venv\lib\site-packages (from gradio==6.10.0->-r .\requirements.txt (line 46)) (0.4.1)
+INFO: pip is looking at multiple versions of gradio to determine which version is compatible with other requirements. This could take a while.
+ERROR: Cannot install gradio==6.10.0 and safehttpx==0.1.6 because these package versions have conflicting dependencies.
+
+The conflict is caused by:
+    The user requested safehttpx==0.1.6
+    gradio 6.10.0 depends on safehttpx<0.2.0 and >=0.1.7
+
+To fix this you could try to:
+1. loosen the range of package versions you've specified
+2. remove package versions to allow pip to attempt to solve the dependency conflict
+
+
+[notice] A new release of pip is available: 24.3.1 -> 26.1
+[notice] To update, run: python.exe -m pip install --upgrade pip
+ERROR: ResolutionImpossible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/#dealing-with-dependency-conflicts
+(.venv) PS C:\Repos\cmw-platform-agent> python.exe -m pip install --upgrade pip
+Requirement already satisfied: pip in c:\repos\cmw-platform-agent\.venv\lib\site-packages (24.3.1)
+Collecting pip
+  Using cached pip-26.1-py3-none-any.whl.metadata (4.6 kB)
+Using cached pip-26.1-py3-none-any.whl (1.8 MB)
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 24.3.1
+    Uninstalling pip-24.3.1:
+      Successfully uninstalled pip-24.3.1
+Successfully installed pip-26.1
+
+---
+
+**Cursor**
+
+Bumping `safehttpx` to satisfy Gradio 6.10.0 (`safehttpx>=0.1.7,<0.2.0`).
+
+
+
+**Cause:** `gradio==6.10.0` needs **`safehttpx>=0.1.7,<0.2.0`**, while `requirements.txt` had **`safehttpx==0.1.6`**.
+
+**Change:** Bumped **`safehttpx` to `0.1.7`** and added a short comment tying it to Gradio’s constraint.
+
+`pip install -r requirements.txt` completed successfully in this environment after the edit.
+
+<reproduction_steps>
+1. Activate `.venv` in `c:\Repos\cmw-platform-agent`.
+2. Run `pip install -r requirements.txt` and confirm it finishes without `ResolutionImpossible`.
+3. Optionally run `pip show safehttpx gradio` and check **safehttpx** is **0.1.7** (or newer within **&lt;0.2.0**) and **gradio** is **6.10.0**.
+4. Press Proceed/Mark as fixed when done.
+</reproduction_steps>
+
+---
+
+**User**
+
+The issue has been fixed. Please clean up the instrumentation.
+
+---
+
+**Cursor**
+
+Searching for remaining debug instrumentation in the codebase.
+
+
+
+There is **nothing left to remove** from the Gradio/UI debug pass we worked on:
+
+- **`agent_ng/_debug_ui_trace.py`** is already gone; there are **no** `_debug_ui_trace` / `#region agent log` / **`392eaf`** / NDJSON ingest hooks under **`agent_ng/`**.
+- **`debug-392eaf.log`** is not present in the repo tree right now.
+
+What **remains** on purpose is normal product wiring (**`debug_streamer`**, **`get_debug_settings`**, logs tab text)—that is **not** Cursor-session instrumentation.
+
+No code edits were required for this cleanup request.
+
+<reproduction_steps>
+1. Run `rg -n "debug_ui_trace|392eaf|#region agent log|hypothesisId" agent_ng` (or use your IDE search on `agent_ng`) and confirm there are no hits.
+2. Press Proceed/Mark as fixed when satisfied.
+</reproduction_steps>
+
+---
+
+**User**
+
+The issue has been fixed. Please clean up the instrumentation.
+
+---
+
+**Cursor**
+
+There’s nothing to remove: the repo no longer contains that instrumentation.
+
+Verified:
+
+- No matches for `debug_ui_trace`, `_debug_ui_trace`, `392eaf`, `#region agent log`, `hypothesisId`, ingest URLs, or `debug-392eaf` under tracked Python/JS/TS/Svelte sources.
+- No `_debug*.py` helpers under the workspace root pattern search.
+
+The **`debug_streamer`** / **`get_debug_streamer`** usage is normal app logging, not temporary Cursor/session instrumentation—leave it as-is unless you want a broader logging refactor later.
+
+**Summary:** Instrumentation cleanup is already complete; no further edits needed.
+
+---
+
+**User**
+
+Remove ab=ny remaining experimental and debuggin scaffolding and vars from the commints
+
+32a1895: fix(ui): chat history for enhance tab functionality and responsiveness in Gradio 6 …
+.cursor/chats/cursor_ui_tab_functionality_issues.md
+b07d559: fix(ui): pin Gradio 6.10.x and trim UI refresh fan-out …
+c81c277: docs(agent): align CMW_UI_HOME_FIRST bisect note with Chat-first default
+c9695ab: docs(agent): tighten Gradio 6 reference and CMW_UI bisect in AGENTS.md
+1d02260: feat(ui): default Home tab first; opt-out via CMW_UI_HOME_FIRST=0 …
+f671465: add cursor chat history opn gradio 6 fixes vs gradio 5.4
+d0d7039: docs(agent): remove stale NDJSON queue comment
+17ced2c: chore(agent_ng): remove Gradio stall NDJSON instrumentation …
+fde906e: fix(gradio): stable sidebar, downloads HTML, non-queued event tails …
+1519f75: chore(debug): NDJSON H3/H4 for export timing and download visibility …
+cf6b2ba: add chat tab from main branch as a reference
+2b75d14: fix(gradio6): HTML export gate, Chat-first tabs, export text + debug timing …
+0c83989: add git diff files comparing to main branch
+0187e94: fix(gradio6): cut post-stream stalls; tab bisect and deferred downloads …
+500f93a: fix(gradio): Gradio 6.13 queue setup and chat stop cancel wiring …
+df1cb23: chore(deps): pin Gradio 6.13 stack in requirements_gradio_6.txt …
+ca01de4: docs(cursor): replace literal merge sentinels in skill migration notes
+
+---
+
+**Cursor**
+
+Searching the repo for experimental/debug artifacts from those commits.
+
+
+
+Removing Cursor chat exports, obsolete Gradio patch/requirements artifacts, and renaming `_ui_experiment_*` identifiers to neutral `_ui_layout_*` names.
+
+
+
+Here’s what was removed or renamed so the repo no longer carries that experimental / debugging scaffolding:
+
+### Deleted artifacts
+| Path | Role |
+|------|------|
+| `.cursor/chats/cursor_ui_tab_functionality_issues.md` | Large Cursor chat export (~Gradio tab hangs) |
+| `requirements_gradio_6.txt` | Alternate pin file; **`requirements.txt`** is the single source of truth |
+| `.misc_files/diff_gradio6_focused.patch` | Saved diff artifact |
+| `.misc_files/diff_gradio6_full.patch` | Saved diff artifact |
+| `.misc_files/_chat_tab_main_ref.py` | Reference copy of chat tab |
+
+### Code / docs cleanup (no behavior change)
+- **`agent_ng/app_ng_modular.py`**: Renamed **`_DEMO_UI_EXPERIMENT_SIG`** → **`_DEMO_UI_LAYOUT_SIG`** and **`_ui_experiment_signature()`** → **`_ui_layout_env_signature()`** so naming isn’t “experiment/bisect”.
+- **`AGENTS.md`**: Updated the doc pointer to **`_ui_layout_env_signature`**.
+- **`.gitignore`**: Added **`.cursor/chats/`** so future Cursor chat exports aren’t committed by mistake.
+
+`.misc_files/` is now empty (Git won’t track an empty dir unless you add something later).
+
+**Checks:** `pytest agent_ng/_tests/test_ui_env_flags.py` — **5 passed**.
+
+If you want this as a commit, say so and we can draft the message.
+
+---
+
+**User**
+
+There is a little issue with Downloads tab. It still hangs in one case: if I select it whhile the chat tab is still generating the answer
+
+---
+
+**Cursor**
+
+Tracing Downloads tab wiring and how streaming interacts with download prep.
+
+
+
+Identifying the issue: opening Downloads runs synchronous Markdown+HTML export on tab select while streaming still updates the chatbot, causing heavy work and UI contention. Adding a `streaming_active` state and skipping regeneration during streaming (use cached download buttons or hide until idle).
+
+
+
+Implementing `streaming_active` state and skipping expensive export on Downloads tab selection while streaming.
+
+
+
+Here’s what was going wrong and what we changed.
+
+### Cause
+Choosing **Downloads** while a reply is still streaming ran **`get_download_button_updates(..., generate_html=True)`** on the tab `select` handler. That does a **full Markdown + HTML export** on the live, partially updated chat history, which is heavy and fights with the streaming updates → UI feels hung.
+
+### Fix
+1. **`gr.State` `streaming_active`** on **`ChatTab`** (exposed as **`components["streaming_active"]`**):
+   - Set to **`True`** in the step **right before** the stream generator runs (`reset_stream_start`).
+   - Set back to **`False`** when streaming finishes (**`submit_event`** tail), on **Stop** (extra `.then`), and on **chat clear**.
+
+2. **`get_download_cached_ui_updates()`**  
+   Re-applies the **last finished export** (`_last_download_file` / `_last_download_html_file`) **without** touching disk or rebuilding HTML.
+
+3. **`ui_manager`** **`Downloads` `tab.select`**  
+   Inputs are now **`[chatbot, streaming_active]`**.  
+   - If **`streaming_active`**: use **`get_download_cached_ui_updates()`** only (no export).  
+   - If idle: keep **`generate_html=True`** full refresh.
+
+During an **in-flight first reply** (no prior export cache), Downloads may show **hidden buttons** until the turn completes—then **`submit_event`** refreshes both downloads as before.
+
+**Tests:** `pytest agent_ng/_tests/test_ui_env_flags.py` → **5 passed**.
+
+Try again: start a long reply, switch to **Downloads** mid-stream—the UI should stay responsive; after the reply finishes, open **Downloads** (or stay there) to get an up-to-date MD/HTML export.
+
+---
+
+**User**
+
+<system_notification>
+The following task has finished. If you were already aware, ignore this notification and do not restate prior responses.
+
+<task>
+kind: shell
+status: success
+task_id: 455447
+title: Run UI env and streaming-related tests
+output_path: C:\Users\webma\.cursor\projects\c-Repos-cmw-platform-agent\terminals\455447.txt
+</task>
+</system_notification>
+<user_query>Briefly inform the user about the task result and perform any follow-up actions (if needed).</user_query>
+
+---
+
+**Cursor**
+
+### Background test run (`task 455447`)
+
+- **Result:** **Success** — **`exit_code: 0`** when pytest finished.
+- **`test_ui_env_flags.py`** + **`test_streaming_agent_behavior.py`**: **10 passed** (full rerun ~118 s); **`EXIT:0`** confirmed.
+
+### Noise you might have seen
+
+- During interpreter shutdown, the log showed **LangSmith “Closing Client.session”** on a **closed stream** and a **`PermissionError` rotating `cmw-agent.log`** on Windows. That’s **logging/teardown**, not failing assertions.
+
+### Follow-up
+
+- **None required** for the Downloads-during-streaming fix or these tests.
+- Optional later: reduce concurrent locking on **`cmw-agent.log`** or defer **`RotatingFileHandler`** rollover if shutdown spam bothers you—that’s independent of pytest outcomes.
+
+---
+
+**User**
+
+explain Optional later: reduce concurrent locking on cmw-agent.log or defer RotatingFileHandler rollover if shutdown spam bothers you—that’s independent of pytest outcomes.
+
+---
+
+**Cursor**
+
+Here’s what that note meant in plain terms.
+
+### What happened in your traceback
+
+During **pytest exit**, Python tears down modules and closes loggers. **`RotatingFileHandler`** works by **renaming** the active file (e.g. `cmw-agent.log` → `cmw-agent.log.1`) when it decides to roll over.
+
+On **Windows**, **`os.rename`** fails with **`[WinError 32]`** if **another handle still has that file open**. Common causes:
+
+- The **same process** still has the log file open on another thread while rollover runs at shutdown (ordering/race).
+- **Another program** has `cmw-agent.log` open (editor tail, log viewer, antivirus scan).
+- **Two handlers or two processes** both trying to use the same rotating file.
+
+That’s why I called it **“concurrent locking”** loosely: it’s really **file contention / open handles**, not pytest failing.
+
+### Why it’s “independent of pytest outcomes”
+
+Pytest **already reported success** (`exit_code: 0`, tests passed). The errors appeared in **logging teardown** after tests finished. So they don’t mean your tests failed—they mean **shutdown logging got noisy or fragile on Windows**.
+
+### What “defer RotatingFileHandler rollover” would mean (conceptually)
+
+Ideas people use when this bothers them:
+
+- **Avoid rolling during interpreter exit** — rollover at exit is especially racy; some apps disable rollover on shutdown or flush-and-close without renaming.
+- **Use a logging setup that doesn’t rename under contention** — e.g. **`QueueHandler`** + a dedicated listener thread (single writer), or **`ConcurrentRotatingFileHandler`** (third-party) designed for multi-process logging.
+- **Ensure only one RotatingFileHandler** points at `cmw-agent.log`, and **close it cleanly** before other libraries (like LangSmith) finish logging during `atexit`-style cleanup.
+
+### LangSmith “I/O operation on closed file”
+
+That line was LangSmith’s client trying to **`logger.debug(...)`** while Python was already **closing stdout/stderr or logging streams**. Again: **cleanup ordering**, not a failed assertion.
+
+---
+
+**Bottom line:** Optional cleanup only if you want quieter/cleaner shutdown or fewer Windows rename errors when tests or the app exit; it doesn’t change whether tests passed.
+
+---
+
+**User**
+
+git commit staged changes
+
+---
+
+**Cursor**
+
+In **Ask mode** I can’t run `git` or create commits for you.
+
+Do one of the following:
+
+### Option A — run it locally
+
+```powershell
+cd C:\Repos\cmw-platform-agent
+git status
+git commit -m "Your message describing staged changes"
+```
+
+Use `git diff --cached` first if you want to review what’s staged.
+
+### Option B — switch to **Agent mode**
+
+Then ask again (e.g. “commit staged changes with message …”) and the agent can run `git commit` for you.
+
+If you paste `git status -sb` and `git diff --cached --stat`, I can suggest an accurate commit message while staying in Ask mode.
+
+---
+
+**User**
+
+git commit and push
+
+---
+
+**Cursor**
+
+Here’s what ran:
+
+### Commit
+- **Branch:** `20250124_gradio_6_4`
+- **Commit:** `fc26e8f` — **`feat(ui): simplify layout env and fix Downloads during streaming`**
+- **11 files** changed (includes UI env cleanup, `streaming_active` / Downloads behavior, test rename, `requirements` / `.gitignore` / `AGENTS.md`, removal of `requirements_gradio_6.txt`)
+
+### Push
+- **Remote:** `https://github.com/arterm-sedov/cmw-platform-agent.git`
+- **Updated:** `20250124_gradio_6_4` — `32a1895..fc26e8f`
+
+---
+
+**User**
+
+<system_notification>
+The following task has finished. If you were already aware, ignore this notification and do not restate prior responses.
+
+<task>
+kind: shell
+status: success
+task_id: 51357
+title: Push branch to remote origin
+output_path: C:\Users\webma\.cursor\projects\c-Repos-cmw-platform-agent\terminals\51357.txt
+</task>
+</system_notification>
+<user_query>Briefly inform the user about the task result and perform any follow-up actions (if needed).</user_query>
+
+Contunue
 
