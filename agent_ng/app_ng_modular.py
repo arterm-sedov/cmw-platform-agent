@@ -1723,8 +1723,8 @@ class NextGenApp:
 
         # Configure concurrency and queuing AFTER registering named endpoints
         # Always initialize queue (even with minimal settings) to prevent AttributeError.
-        # Reference: ``cmw-rag/rag_engine/api/app.py`` — pre-stream steps use ``queue=False``,
-        # then the heavy handler runs on the Gradio queue (see NDJSON **HQ** / **HL**).
+        # Reference: ``cmw-rag/rag_engine/api/app.py`` — lightweight tails use ``queue=False``;
+        # streaming/chat handlers run on the Gradio queue via ``QueueManager.configure_queue``.
         self.queue_manager.configure_queue(demo)
 
         # Ensure queue is initialized even if configure_queue didn't call demo.queue()
