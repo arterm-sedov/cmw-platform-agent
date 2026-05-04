@@ -106,7 +106,61 @@ class ConfigTab:
             )
             gr.Markdown(self._get_translation("config_help"))
 
+            # Platform credentials — dedicated top row (full width)
+            with gr.Row(equal_height=True):
+                self.components["platform_url"] = gr.Textbox(
+                    label=self._get_translation("config_platform_url"),
+                    placeholder="https://your-comindware-host",
+                    value=url_init,
+                    lines=1,
+                    max_lines=1,
+                    scale=2,
+                )
+                self.components["username"] = gr.Textbox(
+                    label=self._get_translation("config_username"),
+                    value=login_init,
+                    lines=1,
+                    max_lines=1,
+                    scale=1,
+                )
+                self.components["password"] = gr.Textbox(
+                    label=self._get_translation("config_password"),
+                    type="password",  # See Gradio Textbox type parameter
+                    value=password_init,
+                    lines=1,
+                    max_lines=1,
+                    scale=1,
+                )
+
             self.register_agent_overview_display()
+
+            llm_providers = [
+                "gemini",
+                "groq",
+                "huggingface",
+                "openai",
+                "[REDACTED]",
+                "polza",
+                "mistral",
+                "gigachat",
+            ]
+            try:
+                if (
+                    self.main_app
+                    and hasattr(self.main_app, "llm_manager")
+                    and self.main_app.llm_manager
+                ):
+                    available = self.main_app.llm_manager.get_available_providers()
+                    if available:
+                        llm_providers = sorted(available)
+            except Exception:
+                logging.getLogger(__name__).debug(
+                    "ConfigTab: fallback static provider list "
+                    "(llm_manager unavailable)",
+                    exc_info=True,
+                )
+
+            self._config_llm_providers = list(llm_providers)
 
             with gr.Row(equal_height=False):
                 with gr.Column(scale=1):
@@ -117,56 +171,6 @@ class ConfigTab:
                         gr.Markdown("*LLM selection unavailable (internal).*")
 
                 with gr.Column(scale=1):
-                    # Platform connection (top of right column, same row as LLM selection)
-                    self.components["platform_url"] = gr.Textbox(
-                        label=self._get_translation("config_platform_url"),
-                        placeholder="https://your-comindware-host",
-                        value=url_init,
-                        lines=1,
-                        max_lines=1,
-                    )
-                    self.components["username"] = gr.Textbox(
-                        label=self._get_translation("config_username"),
-                        value=login_init,
-                        lines=1,
-                        max_lines=1,
-                    )
-                    self.components["password"] = gr.Textbox(
-                        label=self._get_translation("config_password"),
-                        type="password",  # See Gradio Textbox type parameter
-                        value=password_init,
-                        lines=1,
-                        max_lines=1,
-                    )
-
-                    llm_providers = [
-                        "gemini",
-                        "groq",
-                        "huggingface",
-                        "openai",
-                        "[REDACTED]",
-                        "polza",
-                        "mistral",
-                        "gigachat",
-                    ]
-                    try:
-                        if (
-                            self.main_app
-                            and hasattr(self.main_app, "llm_manager")
-                            and self.main_app.llm_manager
-                        ):
-                            available = self.main_app.llm_manager.get_available_providers()
-                            if available:
-                                llm_providers = sorted(available)
-                    except Exception:
-                        logging.getLogger(__name__).debug(
-                            "ConfigTab: fallback static provider list "
-                            "(llm_manager unavailable)",
-                            exc_info=True,
-                        )
-
-                    self._config_llm_providers = list(llm_providers)
-
                     with gr.Column(elem_classes=["model-card"]):
                         gr.Markdown(
                             f"### {self._get_translation('config_llm_api_keys_table_label')}",
