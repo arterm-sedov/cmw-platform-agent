@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from .i18n_translations import get_translation_key
 from .tabs.sidebar import Sidebar as SidebarPanel
-from .tabs.stats_tab import StatsTab
 import gradio as gr
 
 # Import configuration with fallback for direct execution
@@ -111,13 +110,6 @@ class UIManager:
                     elem_classes=["cmw-gradio-sidebar"],
                 ):
                     sb.create_sidebar_column()
-                    if not config_tab_present:
-                        for tab_module in tab_modules:
-                            if isinstance(tab_module, StatsTab):
-                                tab_module.register_overview_placeholder()
-                                self.components.update(tab_module.get_components())
-                                break
-                        sb.mount_llm_selection_ui()
 
                 with gr.Column(scale=1, min_width=0):
                     with gr.Tabs():
@@ -149,6 +141,8 @@ class UIManager:
                                     raise
 
             self.components["sidebar_instance"] = sb
+            if not config_tab_present:
+                sb.mount_llm_selection_ui()
             self.components.update(sb.get_components())
 
             sb.ensure_llm_events_wired()

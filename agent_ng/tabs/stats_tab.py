@@ -31,16 +31,6 @@ class StatsTab:
         self.language = language
         self.i18n = i18n_instance
 
-    def register_overview_placeholder(self) -> None:
-        """When Config tab is hidden, create overview early for Sidebar LLM wiring."""
-        if "stats_tab_overview_display" in self.components:
-            return
-        self.components["stats_tab_overview_display"] = gr.Markdown(
-            value=self._get_translation("stats_loading"),
-            visible=False,
-            elem_id="stats-overview-display",
-        )
-
     def create_tab(self) -> tuple[gr.TabItem, dict[str, Any]]:
         """
         Create the stats tab with all its components.
@@ -74,6 +64,15 @@ class StatsTab:
             min_width=400,
             elem_classes=["stats-card"]
         ):
+            gr.Markdown(
+                f"### {self._get_translation('status_title')}",
+                elem_classes=["llm-selection-title"],
+            )
+            self.components["stats_tab_overview_display"] = gr.Markdown(
+                value=self._get_translation("stats_loading"),
+                elem_id="stats-overview-display",
+            )
+            gr.Markdown("---")
             # Create Markdown component for rich formatting
             self.components["stats_display"] = gr.Markdown(
                 value=self._get_translation("stats_loading"),

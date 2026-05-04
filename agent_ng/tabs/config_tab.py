@@ -32,7 +32,6 @@ class ConfigTab:
         self.components: dict[str, Any] = {}
         self.main_app = None  # Reference to main app if needed later
         self.sidebar_instance: Any = None  # Shared Sidebar — LLM controls live here
-        self._agent_overview_registered = False
         self.language = language
         # Filled in _create_config_interface; tests may assign before calling handlers.
         self._config_llm_providers: list[str] = []
@@ -131,8 +130,6 @@ class ConfigTab:
                     max_lines=1,
                     scale=1,
                 )
-
-            self.register_agent_overview_display()
 
             llm_providers = [
                 "gemini",
@@ -660,21 +657,6 @@ class ConfigTab:
     def set_sidebar_instance(self, sidebar: Any) -> None:
         """Share Sidebar instance so LLM controls render inside Config."""
         self.sidebar_instance = sidebar
-
-    def register_agent_overview_display(self) -> None:
-        """Concise agent status (same key as former Stats overview); must exist before LLM mount."""
-        if self._agent_overview_registered:
-            return
-        self._agent_overview_registered = True
-        with gr.Column(elem_classes=["stats-card"]):
-            gr.Markdown(
-                f"### {self._get_translation('status_title')}",
-                elem_classes=["llm-selection-title"],
-            )
-            self.components["stats_tab_overview_display"] = gr.Markdown(
-                value=self._get_translation("stats_loading"),
-                elem_id="stats-overview-display",
-            )
 
     def _reinitialize_session_llm(self, session_id: str) -> None:
         """Re-initialize session LLM instance to pick up updated config."""

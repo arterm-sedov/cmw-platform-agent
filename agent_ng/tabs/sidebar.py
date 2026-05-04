@@ -262,6 +262,22 @@ class Sidebar(QuickActionsMixin):
                         "✅ Model switch wired to trigger token budget update"
                     )
 
+            refresh_stats_handler = self.event_handlers.get("refresh_stats")
+            stats_detail = None
+            if self.main_app and getattr(self.main_app, "ui_manager", None):
+                stats_detail = self.main_app.ui_manager.get_components().get(
+                    "stats_display"
+                )
+            if refresh_stats_handler and stats_detail is not None:
+                model_switch_event.then(
+                    fn=refresh_stats_handler,
+                    outputs=[stats_detail],
+                    queue=False,
+                )
+                logging.getLogger(__name__).debug(
+                    "✅ Model switch wired to refresh full stats display"
+                )
+
         if "compression_enabled" in self.components:
             self.components["compression_enabled"].change(
                 fn=self._apply_compression_toggle,
