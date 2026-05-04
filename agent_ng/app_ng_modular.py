@@ -150,7 +150,15 @@ try:
     from agent_ng.llm_manager import get_llm_manager
 
     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
-    from agent_ng.tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab, DownloadsTab
+    from agent_ng.tabs import (
+        ChatTab,
+        ConfigTab,
+        DownloadsTab,
+        HomeTab,
+        LogsTab,
+        Sidebar,
+        StatsTab,
+    )
     from agent_ng.ui_manager import get_ui_manager
     from agent_ng.utils import safe_string
 
@@ -177,7 +185,15 @@ except ImportError as e1:
         from .llm_manager import get_llm_manager
 
         # from .streaming_chat import get_chat_interface  # Module moved to .unused
-        from .tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab, DownloadsTab
+        from .tabs import (
+            ChatTab,
+            ConfigTab,
+            DownloadsTab,
+            HomeTab,
+            LogsTab,
+            Sidebar,
+            StatsTab,
+        )
         from .ui_manager import get_ui_manager
 
         _logger.info("Successfully imported all modules using relative imports")
@@ -1387,7 +1403,13 @@ class NextGenApp:
 
         # Create tab modules with error handling
         tab_modules = []
+        sidebar_for_tabs: Any = None
         try:
+            sidebar_for_tabs = Sidebar(
+                event_handlers, language=self.language, i18n_instance=self.i18n
+            )
+            sidebar_for_tabs.set_main_app(self)
+
             # Home tab first (welcome page)
             if HomeTab:
                 home_tab = HomeTab(
@@ -1443,6 +1465,7 @@ class NextGenApp:
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
                 config_tab.set_main_app(self)
+                config_tab.set_sidebar_instance(sidebar_for_tabs)
                 tab_modules.append(config_tab)
                 self.tab_instances["config"] = config_tab
             else:
@@ -1485,7 +1508,10 @@ class NextGenApp:
         # Use UI Manager to create interface
         try:
             demo = self.ui_manager.create_interface(
-                tab_modules, event_handlers, main_app=self
+                tab_modules,
+                event_handlers,
+                main_app=self,
+                sidebar_instance=sidebar_for_tabs,
             )
         except Exception as e:
             _logger.exception("Error creating interface: %s", e)

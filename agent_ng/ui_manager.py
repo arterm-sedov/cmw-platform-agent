@@ -54,7 +54,14 @@ class UIManager:
         except Exception as e:
             logging.getLogger(__name__).warning(f"Could not set GRADIO_ALLOWED_PATHS: {e}")
 
-    def create_interface(self, tab_modules: list[Any], event_handlers: dict[str, Callable], main_app=None) -> gr.Blocks:
+    def create_interface(
+        self,
+        tab_modules: list[Any],
+        event_handlers: dict[str, Callable],
+        main_app=None,
+        *,
+        sidebar_instance: Sidebar | None = None,
+    ) -> gr.Blocks:
         # Store main_app reference for initialization completion checks
         self._main_app = main_app
         """
@@ -84,60 +91,55 @@ class UIManager:
             with gr.Row(), gr.Column():
                 gr.Markdown(f"# {hero_title}", elem_classes=["hero-title"])
 
-            # Create sidebar as a tab (converted from sidebar component)
-            sidebar_instance = Sidebar(event_handlers, language=self.language, i18n_instance=self.i18n)
-            sidebar_instance.set_main_app(main_app)  # Pass main app reference
+            sb = sidebar_instance or Sidebar(
+                event_handlers, language=self.language, i18n_instance=self.i18n
+            )
+            sb.set_main_app(main_app)
 
-            with gr.Tabs():
-                # Create tabs using provided tab modules
-                for tab_module in tab_modules:
-                    if tab_module:
-                        try:
-                            tab_item, tab_components = tab_module.create_tab()
-                            # Skip if tab_item is None (e.g., ConfigTab when CMW_USE_DOTENV=true)
-                            if tab_item is None:
-                                logging.getLogger(__name__).info(
-                                    f"⚠️ Skipping tab {tab_module.__class__.__name__} (create_tab returned None)"
-                                )
-                                continue
-                            # Consolidate all components in one place
-                            self.components.update(tab_components)
-                            # Store tab reference for later use
-                            self.components[f"{tab_module.__class__.__name__.lower()}_tab"] = tab_module
-                            logging.getLogger(__name__).debug(
-                                f"✅ Successfully created tab: {tab_module.__class__.__name__}"
-                            )
-                        except Exception as e:
-                            logging.getLogger(__name__).error(
-                                f"❌ Error creating tab {tab_module.__class__.__name__}: {e}",
-                                exc_info=True
-                            )
-                            raise
+            config_tab_present = any(
+                getattr(m, "__class__", type(None)).__name__ == "ConfigTab"
+                for m in tab_modules
+            )
 
-                # Create sidebar as a tab (after other tabs)
-                try:
-                    sidebar_tab, sidebar_components = sidebar_instance.create_tab()
-                    # Skip if sidebar_tab is None
-                    if sidebar_tab is None:
-                        logging.getLogger(__name__).warning(
-                            "⚠️ Sidebar create_tab returned None, skipping"
-                        )
-                    else:
-                        # Consolidate sidebar components
-                        self.components.update(sidebar_components)
-                        self.components["sidebar_instance"] = sidebar_instance
-                        logging.getLogger(__name__).debug("✅ Successfully created sidebar tab")
-                except Exception as e:
-                    logging.getLogger(__name__).error(
-                        f"❌ Error creating sidebar tab: {e}",
-                        exc_info=True
-                    )
-                    raise
+            with gr.Row(equal_height=False):
+                with gr.Column(scale=1, min_width=320):
+                    sb.create_sidebar_column()
+                    if not config_tab_present:
+                        sb.mount_llm_selection_ui()
 
-            # Connect quick action dropdown after all components are available
-            if "sidebar_instance" in self.components:
-                sidebar_instance = self.components["sidebar_instance"]
-                sidebar_instance.connect_quick_action_dropdown()
+                with gr.Column(scale=4):
+                    with gr.Tabs():
+                        for tab_module in tab_modules:
+                            if tab_module:
+                                try:
+                                    tab_item, tab_components = tab_module.create_tab()
+                                    if tab_item is None:
+                                        logging.getLogger(__name__).info(
+                                            "⚠️ Skipping tab %s (create_tab returned None)",
+                                            tab_module.__class__.__name__,
+                                        )
+                                        continue
+                                    self.components.update(tab_components)
+                                    self.components[
+                                        f"{tab_module.__class__.__name__.lower()}_tab"
+                                    ] = tab_module
+                                    logging.getLogger(__name__).debug(
+                                        "✅ Successfully created tab: %s",
+                                        tab_module.__class__.__name__,
+                                    )
+                                except Exception as e:
+                                    logging.getLogger(__name__).error(
+                                        "❌ Error creating tab %s: %s",
+                                        tab_module.__class__.__name__,
+                                        e,
+                                        exc_info=True,
+                                    )
+                                    raise
+
+            self.components.update(sb.get_components())
+            self.components["sidebar_instance"] = sb
+
+            sb.connect_quick_action_dropdown()
 
             # Connect DownloadsTab to update from chat streaming events
             chat_tab_instance = self.components.get("chattab_tab")

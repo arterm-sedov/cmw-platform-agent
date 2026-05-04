@@ -95,164 +95,166 @@ class Sidebar(QuickActionsMixin):
         self.main_app = None  # Reference to main app for accessing session manager
         self.language = language
         self.i18n = i18n_instance
+        self._llm_events_connected = False
+
+    def mount_llm_selection_ui(self) -> None:
+        """Create provider/model, fallback, and compression controls (Config tab)."""
+        with gr.Column(elem_classes=["model-card"]):
+            gr.Markdown(
+                f"### {self._get_translation('llm_selection_title')}",
+                elem_classes=["llm-selection-title"],
+            )
+
+            self.components["provider_model_selector"] = gr.Dropdown(
+                choices=self._get_available_provider_model_combinations(),
+                value=self._get_current_provider_model_combination(),
+                show_label=False,
+                interactive=True,
+                allow_custom_value=True,
+                elem_classes=["provider-model-selector"],
+            )
+
+            default_fallback_enabled = self._get_default_fallback_enabled()
+            fallback_master_on = self._fallback_master_switch_enabled()
+            default_fallback_visible = default_fallback_enabled and fallback_master_on
+
+            self.components["use_fallback_model"] = gr.Checkbox(
+                label=self._get_translation("use_fallback_model_label"),
+                value=default_fallback_enabled,
+                interactive=True,
+                visible=fallback_master_on,
+            )
+
+            fallback_choices: list[str] = []
+            fallback_value: str | None = None
+
+            if default_fallback_visible:
+                try:
+                    if (
+                        hasattr(self, "main_app")
+                        and self.main_app
+                        and hasattr(self.main_app, "session_manager")
+                    ):
+                        session_agent = (
+                            self.main_app.session_manager.get_session_agent("default")
+                        )
+                        if session_agent:
+                            fallback_choices, fallback_value = (
+                                self._build_fallback_defaults_for_agent(session_agent)
+                            )
+                except Exception as exc:  # pragma: no cover - defensive
+                    logging.getLogger(__name__).debug(
+                        "Failed to pre-populate fallback selector: %s", exc
+                    )
+
+            self.components["fallback_model_selector"] = gr.Dropdown(
+                choices=fallback_choices,
+                show_label=False,
+                value=fallback_value,
+                interactive=True,
+                visible=default_fallback_visible,
+                elem_classes=["provider-model-selector"],
+            )
+
+            self.components["compression_enabled"] = gr.Checkbox(
+                label=self._get_translation("compression_enabled_label"),
+                value=self._get_default_compression_enabled(),
+                interactive=True,
+            )
+        self.ensure_llm_events_wired()
+
+    def mount_sidebar_body_without_llm(self) -> None:
+        """Quick actions + progress + token budget + status (left column)."""
+        with gr.Column(elem_classes=["model-card"]):
+            gr.Markdown(
+                f"### {self._get_translation('quick_actions_title')}",
+                elem_classes=["llm-selection-title"],
+            )
+
+            self.components["quick_actions_dropdown"] = gr.Dropdown(
+                choices=self._get_quick_action_choices(),
+                value=None,
+                show_label=False,
+                interactive=True,
+                allow_custom_value=False,
+                elem_classes=["provider-model-selector"],
+            )
+
+        with gr.Column(elem_classes=["model-card"]):
+            gr.Markdown(
+                f"### {self._get_translation('progress_title')}",
+                elem_classes=["progress-title"],
+            )
+            self.components["progress_display"] = gr.Markdown(
+                self._get_translation("progress_ready")
+            )
+            gr.Markdown(
+                f"### {self._get_translation('token_budget_title')}",
+                elem_classes=["token-budget-title"],
+            )
+            self.components["token_budget_display"] = gr.Markdown(
+                self._get_translation("token_budget_initializing")
+            )
+            gr.Markdown(
+                f"### {self._get_translation('status_title')}",
+                elem_classes=["status-title"],
+            )
+            self.components["status_display"] = gr.Markdown(
+                self._get_translation("status_initializing")
+            )
+
+    def create_sidebar_column(self) -> dict[str, Any]:
+        """Build persistent left sidebar (no TabItem)."""
+        logging.getLogger(__name__).info("✅ Sidebar: Creating sidebar column...")
+        with gr.Column(scale=1, min_width=320, elem_classes=["sidebar-column"]):
+            self.mount_sidebar_body_without_llm()
+        logging.getLogger(__name__).info(
+            "✅ Sidebar: Column ready with quick actions and status panels"
+        )
+        return self.components
 
     def create_tab(self) -> tuple[gr.TabItem, dict[str, Any]]:
-        """
-        Create the sidebar as a tab component with all its components.
-
-        Returns:
-            Tuple of (TabItem, components_dict)
-        """
+        """Legacy: full sidebar inside a tab (unused by current UI layout)."""
         logging.getLogger(__name__).info(
-            "✅ Sidebar: Creating sidebar as tab interface..."
+            "✅ Sidebar: Creating sidebar as tab interface (legacy)..."
         )
 
         with gr.TabItem(self._get_translation("tab_sidebar"), id="sidebar") as tab:
-            # LLM Selection section
-            with gr.Column(elem_classes=["model-card"]):
-                gr.Markdown(
-                    f"### {self._get_translation('llm_selection_title')}",
-                    elem_classes=["llm-selection-title"],
-                )
+            self.mount_llm_selection_ui()
+            self.mount_sidebar_body_without_llm()
 
-                # Combined Provider/Model selector
-                self.components["provider_model_selector"] = gr.Dropdown(
-                    choices=self._get_available_provider_model_combinations(),
-                    value=self._get_current_provider_model_combination(),
-                    show_label=False,
-                    interactive=True,
-                    allow_custom_value=True,
-                    elem_classes=["provider-model-selector"],
-                )
-
-                # Fallback model controls - per-session, initialized from env/defaults
-                default_fallback_enabled = self._get_default_fallback_enabled()
-                fallback_master_on = self._fallback_master_switch_enabled()
-                default_fallback_visible = default_fallback_enabled and fallback_master_on
-
-                self.components["use_fallback_model"] = gr.Checkbox(
-                    label=self._get_translation("use_fallback_model_label"),
-                    value=default_fallback_enabled,
-                    interactive=True,
-                    visible=fallback_master_on,
-                )
-
-                # Pre-populate fallback selector if enabled at startup
-                fallback_choices: list[str] = []
-                fallback_value: str | None = None
-
-                if default_fallback_visible:
-                    try:
-                        if hasattr(self, "main_app") and self.main_app and hasattr(self.main_app, "session_manager"):
-                                session_agent = (
-                                    self.main_app.session_manager.get_session_agent(
-                                        "default"
-                                    )
-                                )
-                                if session_agent:
-                                    (
-                                        fallback_choices,
-                                        fallback_value,
-                                    ) = self._build_fallback_defaults_for_agent(
-                                        session_agent
-                                    )
-                    except Exception as exc:  # pragma: no cover - defensive
-                        logging.getLogger(__name__).debug(
-                            "Failed to pre-populate fallback selector: %s", exc
-                        )
-
-                self.components["fallback_model_selector"] = gr.Dropdown(
-                    choices=fallback_choices,
-                    show_label=False,
-                    value=fallback_value,
-                    interactive=True,
-                    visible=default_fallback_visible,
-                    elem_classes=["provider-model-selector"],
-                )
-
-                # History compression toggle - per-session, initialized from env/defaults
-                self.components["compression_enabled"] = gr.Checkbox(
-                    label=self._get_translation("compression_enabled_label"),
-                    value=self._get_default_compression_enabled(),
-                    interactive=True,
-                )
-
-            # Quick actions section - styled like LLM selection
-            with gr.Column(elem_classes=["model-card"]):
-                gr.Markdown(
-                    f"### {self._get_translation('quick_actions_title')}",
-                    elem_classes=["llm-selection-title"],
-                )
-
-                # Single dropdown for all quick actions - styled like LLM selector
-                self.components["quick_actions_dropdown"] = gr.Dropdown(
-                    choices=self._get_quick_action_choices(),
-                    value=None,
-                    show_label=False,
-                    interactive=True,
-                    allow_custom_value=False,
-                    elem_classes=["provider-model-selector"],
-                )
-
-            # Status section
-            with gr.Column(elem_classes=["model-card"]):
-                # Progress indicator
-                gr.Markdown(
-                    f"### {self._get_translation('progress_title')}",
-                    elem_classes=["progress-title"],
-                )
-                self.components["progress_display"] = gr.Markdown(
-                    self._get_translation("progress_ready")
-                )
-                # Token budget indicator
-                gr.Markdown(
-                    f"### {self._get_translation('token_budget_title')}",
-                    elem_classes=["token-budget-title"],
-                )
-                self.components["token_budget_display"] = gr.Markdown(
-                    self._get_translation("token_budget_initializing")
-                )
-                # Status indicator
-                gr.Markdown(
-                    f"### {self._get_translation('status_title')}",
-                    elem_classes=["status-title"],
-                )
-                self.components["status_display"] = gr.Markdown(
-                    self._get_translation("status_initializing")
-                )
-
-        # Connect sidebar event handlers
-        self._connect_sidebar_events()
+        self.ensure_llm_events_wired()
 
         logging.getLogger(__name__).info(
-            "✅ Sidebar: Successfully created as tab with all components and event handlers"
+            "✅ Sidebar: Successfully created legacy tab with all components"
         )
         return tab, self.components
 
+    def ensure_llm_events_wired(self) -> None:
+        """Wire LLM controls once they exist (may mount after sidebar column)."""
+        if self._llm_events_connected:
+            return
+        self._connect_llm_events()
+        self._llm_events_connected = True
+
     def _connect_sidebar_events(self):
-        """Connect all event handlers for the sidebar components"""
-        logging.getLogger(__name__).debug("🔗 Sidebar: Connecting event handlers...")
+        """Reserved for non-LLM wiring; LLM mounts call ``ensure_llm_events_wired``."""
+        logging.getLogger(__name__).debug("🔗 Sidebar: sidebar events hook (no-op)")
 
-        # Quick action dropdown event will be connected later after all tabs are created
-        # This is handled in the UI Manager after all components are available
-
-        # LLM selection events - now applies immediately on dropdown change
+    def _connect_llm_events(self) -> None:
+        """LLM dropdown / fallback / compression handlers."""
+        logging.getLogger(__name__).debug("🔗 Sidebar: Wiring LLM event handlers...")
         if (
             "provider_model_selector" in self.components
             and "status_display" in self.components
         ):
-            # Wire model switch to update status, then chain token budget update
-            # (token budget needs update because context window changes with model)
             model_switch_event = self.components["provider_model_selector"].change(
                 fn=self._apply_llm_selection_combined,
                 inputs=[self.components["provider_model_selector"]],
                 outputs=[self.components["status_display"]],
             )
-            # Chain token budget update after model switch completes
-            # (token budget needs update because context window changes with model)
-            if (
-                "token_budget_display" in self.components
-                and hasattr(self, "event_handlers")
+            if "token_budget_display" in self.components and hasattr(
+                self, "event_handlers"
             ):
                 update_token_budget_handler = self.event_handlers.get(
                     "update_token_budget"
@@ -266,7 +268,6 @@ class Sidebar(QuickActionsMixin):
                         "✅ Model switch wired to trigger token budget update"
                     )
 
-        # Compression toggle events - per-session setting propagated to agent
         if "compression_enabled" in self.components:
             self.components["compression_enabled"].change(
                 fn=self._apply_compression_toggle,
@@ -274,7 +275,6 @@ class Sidebar(QuickActionsMixin):
                 outputs=[],
             )
 
-        # Fallback model events - per-session setting propagated to agent
         if (
             "use_fallback_model" in self.components
             and "fallback_model_selector" in self.components
@@ -290,16 +290,7 @@ class Sidebar(QuickActionsMixin):
                 outputs=[],
             )
 
-        # REMOVED: Token budget display change event
-        # This was causing infinite loops in Gradio 6 because:
-        # 1. token_budget_display is a gr.Markdown that gets updated programmatically
-        # 2. Every update triggers the .change() event
-        # 3. This can cause excessive event firing and errors
-        # Download button visibility is now handled through chat streaming events instead
-
-        logging.getLogger(__name__).debug(
-            "✅ Sidebar: All event handlers connected successfully"
-        )
+        logging.getLogger(__name__).debug("✅ Sidebar: LLM handlers wired")
 
     def set_main_app(self, app):
         """Set reference to main app for accessing session manager and other services"""

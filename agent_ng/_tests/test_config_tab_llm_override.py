@@ -207,7 +207,7 @@ def test_gradio_special_args_inserts_request_into_save_inputs():
         browser_tail,
     ]
     sentinel = object()
-    patched, _, _ = special_args(
+    patched, *_ = special_args(
         tab._save_to_state,
         list(inputs),
         request=sentinel,  # type: ignore[arg-type]
@@ -224,7 +224,7 @@ def test_save_to_state_merges_into_llm_provider_api_keys_stub():
     tab = ConfigTab(event_handlers={}, language="en", i18n_instance=None)
     tab._config_llm_providers = ["openrouter", "groq"]
 
-    merged = tab._save_to_state(
+    merged_t = tab._save_to_state(
         "https://example.com/",
         "",
         "",
@@ -238,6 +238,7 @@ def test_save_to_state_merges_into_llm_provider_api_keys_stub():
             "password": "",
         },
     )
+    merged = merged_t[0]
     assert merged["llm_provider_api_keys"]["openrouter"] == "sk-one"
     assert merged["llm_provider_api_keys"]["groq"] == "sk-g-new"
     assert "llm_api_key_override" not in merged
@@ -253,7 +254,7 @@ def test_save_to_state_accepts_dataframe_single_arg():
         [["openrouter", "from-df"], ["groq", "g2"]],
         columns=["Provider", "API Key"],
     )
-    merged = tab._save_to_state(
+    merged_t = tab._save_to_state(
         "https://example.com/",
         "",
         "",
@@ -266,8 +267,56 @@ def test_save_to_state_accepts_dataframe_single_arg():
             "password": "",
         },
     )
+    merged = merged_t[0]
     assert merged["llm_provider_api_keys"]["openrouter"] == "from-df"
     assert merged["llm_provider_api_keys"]["groq"] == "g2"
+
+
+
+
+
+def test_save_to_state_returns_tuple_with_passthrough_slots_for_llm_outputs():
+    """Save wires optional LLM sidebar outputs — tuple is state + gr.update tails."""
+    from agent_ng.tabs.config_tab import ConfigTab
+
+    tab = ConfigTab(event_handlers={}, language="en", i18n_instance=None)
+    tab._config_llm_providers = ["provider_a", "provider_b"]
+    tab.sidebar_instance = type(
+        "SB",
+        (),
+        {
+            "components": {
+                "provider_model_selector": object(),
+                "use_fallback_model": object(),
+                "fallback_model_selector": object(),
+                "compression_enabled": object(),
+            }
+        },
+    )()
+
+    out = tab._save_to_state(
+        "https://x/",
+        "u",
+        "p",
+        None,
+        "sk-g",
+        "sk-o",
+        None,
+        None,
+        None,
+        None,
+        {
+            "llm_provider_api_keys": {},
+            "url": "",
+            "username": "",
+            "password": "",
+        },
+    )
+    assert isinstance(out, tuple)
+    assert len(out) == 5
+    assert out[0]["url"] == "https://x/"
+    assert out[0]["llm_provider_api_keys"]["provider_a"] == "sk-g"
+    assert out[0]["llm_provider_api_keys"]["provider_b"] == "sk-o"
 
 
 def test_llm_manager_accepts_api_key_override():
@@ -335,7 +384,7 @@ def test_session_manager_clear_config():
     test_session_id = "test_clear_session"
     session_manager.set_session_config(
         test_session_id,
-        {"llm_provider_api_keys": {"gemini": "sk-key"}},
+        {"llm_provider_api_keys": {"vendor_z": "sk-key"}},
     )
     assert session_manager.get_session_config(test_session_id) is not None
     session_manager.clear_session_config(test_session_id)

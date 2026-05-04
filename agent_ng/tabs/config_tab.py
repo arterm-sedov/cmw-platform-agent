@@ -31,6 +31,7 @@ class ConfigTab:
         self.event_handlers = event_handlers
         self.components: dict[str, Any] = {}
         self.main_app = None  # Reference to main app if needed later
+        self.sidebar_instance: Any = None  # Shared Sidebar — LLM controls live here
         self.language = language
         # Filled in _create_config_interface; tests may assign before calling handlers.
         self._config_llm_providers: list[str] = []
@@ -104,6 +105,73 @@ class ConfigTab:
             )
             gr.Markdown(self._get_translation("config_help"))
 
+            with gr.Row(equal_height=False):
+                with gr.Column(scale=1):
+                    if self.sidebar_instance is not None:
+                        self.sidebar_instance.mount_llm_selection_ui()
+                        self.sidebar_instance.ensure_llm_events_wired()
+                    else:
+                        gr.Markdown("*LLM selection unavailable (internal).*")
+
+                with gr.Column(scale=1):
+                    gr.Markdown(
+                        f"### {self._get_translation('config_llm_section')}",
+                        elem_classes=["llm-selection-title"],
+                    )
+
+                    llm_providers = [
+                        "gemini",
+                        "groq",
+                        "huggingface",
+                        "openai",
+                        "[REDACTED]",
+                        "polza",
+                        "mistral",
+                        "gigachat",
+                    ]
+                    try:
+                        if (
+                            self.main_app
+                            and hasattr(self.main_app, "llm_manager")
+                            and self.main_app.llm_manager
+                        ):
+                            available = self.main_app.llm_manager.get_available_providers()
+                            if available:
+                                llm_providers = sorted(available)
+                    except Exception:
+                        logging.getLogger(__name__).debug(
+                            "ConfigTab: fallback static provider list "
+                            "(llm_manager unavailable)",
+                            exc_info=True,
+                        )
+
+                    self._config_llm_providers = list(llm_providers)
+
+                    gr.Markdown(
+                        f"**{self._get_translation('config_llm_api_keys_table_label')}**"
+                    )
+                    self._llm_provider_key_inputs = []
+                    with gr.Column():
+                        for prov in self._config_llm_providers:
+                            tb = gr.Textbox(
+                                label=prov,
+                                type="password",
+                                value="",
+                                lines=1,
+                                max_lines=1,
+                                placeholder="sk-...",
+                            )
+                            self._llm_provider_key_inputs.append(tb)
+                    self.components["llm_provider_key_inputs"] = (
+                        self._llm_provider_key_inputs
+                    )
+
+                    gr.Markdown(
+                        "*" + self._get_translation("config_llm_empty_means_default") + "*"
+                    )
+
+            gr.Markdown("---")
+
             # Platform URL
             self.components["platform_url"] = gr.Textbox(
                 label=self._get_translation("config_platform_url"),
@@ -130,57 +198,6 @@ class ConfigTab:
             )
 
             gr.Markdown("---")
-            gr.Markdown(f"**{self._get_translation('config_llm_section')}**")
-
-            # Filter providers by env allowlist just like the model selector.
-            # Fallback list mirrors LLMProvider enum; overridden at runtime by
-            # llm_manager.get_available_providers() below.
-            llm_providers = [
-                "gemini",
-                "groq",
-                "huggingface",
-                "openai",
-                "openrouter",
-                "polza",
-                "mistral",
-                "gigachat",
-            ]
-            try:
-                if (
-                    self.main_app
-                    and hasattr(self.main_app, "llm_manager")
-                    and self.main_app.llm_manager
-                ):
-                    available = self.main_app.llm_manager.get_available_providers()
-                    if available:
-                        llm_providers = sorted(available)
-            except Exception:
-                logging.getLogger(__name__).debug(
-                    "ConfigTab: fallback static provider list "
-                    "(llm_manager unavailable)",
-                    exc_info=True,
-                )
-
-            self._config_llm_providers = list(llm_providers)
-
-            gr.Markdown(f"**{self._get_translation('config_llm_api_keys_table_label')}**")
-            self._llm_provider_key_inputs = []
-            with gr.Column():
-                for prov in self._config_llm_providers:
-                    tb = gr.Textbox(
-                        label=prov,
-                        type="password",
-                        value="",
-                        lines=1,
-                        max_lines=1,
-                        placeholder="sk-...",
-                    )
-                    self._llm_provider_key_inputs.append(tb)
-            self.components["llm_provider_key_inputs"] = self._llm_provider_key_inputs
-
-            gr.Markdown(
-                "*" + self._get_translation("config_llm_empty_means_default") + "*"
-            )
 
             with gr.Row(equal_height=True):
                 self.components["save_btn"] = gr.Button(
@@ -207,6 +224,22 @@ class ConfigTab:
         logging.getLogger(__name__).debug("🔗 ConfigTab: Connecting events...")
 
         # Save to browser state (and update runtime env)
+        llm_extra_inputs: list[Any] = []
+        sb = self.sidebar_instance
+        if sb is not None and getattr(sb, "components", None):
+            for key in (
+                "provider_model_selector",
+                "use_fallback_model",
+                "fallback_model_selector",
+                "compression_enabled",
+            ):
+                comp = sb.components.get(key)
+                if comp is not None:
+                    llm_extra_inputs.append(comp)
+
+        save_outputs: list[Any] = [self.components["config_state"]]
+        save_outputs.extend(llm_extra_inputs)
+
         self.components["save_btn"].click(
             fn=self._save_to_state,
             inputs=[
@@ -214,34 +247,41 @@ class ConfigTab:
                 self.components["username"],
                 self.components["password"],
                 *self._llm_provider_key_inputs,
+                *llm_extra_inputs,
                 self.components["config_state"],
             ],
-            outputs=[self.components["config_state"]],
+            outputs=save_outputs,
         )
 
         # Load from browser state
+        load_outputs: list[Any] = [
+            self.components["platform_url"],
+            self.components["username"],
+            self.components["password"],
+            *self._llm_provider_key_inputs,
+        ]
+        load_outputs.extend(llm_extra_inputs)
+
         self.components["load_btn"].click(
             fn=self._load_from_state,
             inputs=[self.components["config_state"]],
-            outputs=[
-                self.components["platform_url"],
-                self.components["username"],
-                self.components["password"],
-                *self._llm_provider_key_inputs,
-            ],
+            outputs=load_outputs,
         )
 
         # Clear browser storage and reset fields
+        clear_outputs: list[Any] = [
+            self.components["config_state"],
+            self.components["platform_url"],
+            self.components["username"],
+            self.components["password"],
+            *self._llm_provider_key_inputs,
+        ]
+        clear_outputs.extend(llm_extra_inputs)
+
         self.components["clear_storage_btn"].click(
             fn=self._clear_browser_storage,
             inputs=[self.components["config_state"]],
-            outputs=[
-                self.components["config_state"],
-                self.components["platform_url"],
-                self.components["username"],
-                self.components["password"],
-                *self._llm_provider_key_inputs,
-            ],
+            outputs=clear_outputs,
         )
 
     @staticmethod
@@ -355,12 +395,15 @@ class ConfigTab:
         password: str,
         request: gr.Request | None = None,
         *rest: Any,
-    ) -> dict:
+    ) -> tuple[Any, ...]:
         """Save configuration into browser state and update process env.
 
         ``request`` must come **before** ``*rest``: Gradio only injects ``gr.Request``
         for positional-or-keyword parameters listed before ``*args`` (see
         ``gradio.helpers.special_args``).
+
+        Returns ``(browser_state_dict, *gr.update()``...)`` when Save wires LLM
+        components as passthrough outputs so their values are not cleared.
         """
         prior_browser: dict[Any, Any] = {}
         if rest and isinstance(rest[-1], dict):
@@ -371,13 +414,19 @@ class ConfigTab:
                 logging.getLogger(__name__).warning(
                     "ConfigTab._save_to_state: missing trailing BrowserState tuple"
                 )
-                return {}
+                n_llm_side = max(0, len(rest) - 1 - len(self._config_llm_providers))
+                return (prior_browser,) + tuple(gr.update() for _ in range(n_llm_side))
 
             url = (url or "").strip()
             username = (username or "").strip()
             password = (password or "").strip()
             current_state_raw = rest[-1]
             key_inputs = rest[:-1]
+            n_llm_side = len(rest) - 1 - len(self._config_llm_providers)
+            if n_llm_side < 0:
+                n_llm_side = 0
+            passthrough = tuple(gr.update() for _ in range(n_llm_side))
+            key_inputs = key_inputs[: len(key_inputs) - n_llm_side]
 
             merged_base = (
                 dict(current_state_raw)
@@ -446,15 +495,26 @@ class ConfigTab:
                     self._get_translation("config_save_error") + "\n\n" + f"{str(e)}"
                 )
                 gr.Warning(message)
-            return prior_browser
+            return (prior_browser,) + passthrough
         else:
-            return new_state
+            return (new_state,) + passthrough
 
     def _load_from_state(
         self, state: Any, request: gr.Request | None = None
     ) -> tuple[Any, ...]:
         """Load values from browser state and update fields."""
         n_keys = len(self._config_llm_providers)
+        n_llm_side = 0
+        sb = self.sidebar_instance
+        if sb is not None and getattr(sb, "components", None):
+            for key in (
+                "provider_model_selector",
+                "use_fallback_model",
+                "fallback_model_selector",
+                "compression_enabled",
+            ):
+                if sb.components.get(key) is not None:
+                    n_llm_side += 1
         try:
             # Normalize state across gradio versions (may come as tuple or dict)
             if isinstance(state, tuple) and len(state) > 0:
@@ -477,6 +537,7 @@ class ConfigTab:
                     gr.update(),
                     gr.update(),
                     *((gr.skip(),) * n_keys),
+                    *((gr.update(),) * n_llm_side),
                 )
 
             url = state.get("url", "") or ""
@@ -523,6 +584,7 @@ class ConfigTab:
                     gr.update(value=(keys_map.get(p) or "").strip())
                     for p in self._config_llm_providers
                 ),
+                *((gr.update(),) * n_llm_side),
             )
         except Exception as e:
             logging.getLogger(__name__).exception("Load from browser state failed")
@@ -536,6 +598,7 @@ class ConfigTab:
                 gr.update(),
                 gr.update(),
                 *((gr.skip(),) * n_keys),
+                *((gr.update(),) * n_llm_side),
             )
 
     # Removed .env loading: rely solely on browser state
@@ -545,6 +608,17 @@ class ConfigTab:
     ) -> tuple[Any, ...]:
         """Clear browser-persisted state and reset input fields."""
         n_key = len(self._llm_provider_key_inputs) or len(self._config_llm_providers)
+        n_llm_side = 0
+        sb = self.sidebar_instance
+        if sb is not None and getattr(sb, "components", None):
+            for key in (
+                "provider_model_selector",
+                "use_fallback_model",
+                "fallback_model_selector",
+                "compression_enabled",
+            ):
+                if sb.components.get(key) is not None:
+                    n_llm_side += 1
         try:
             new_state: dict = {
                 "url": "",
@@ -562,6 +636,7 @@ class ConfigTab:
                 gr.update(value=""),
                 gr.update(value=""),
                 *blank_keys,
+                *((gr.update(),) * n_llm_side),
             )
         except Exception as e:
             logging.getLogger(__name__).exception("Clear browser storage failed")
@@ -576,11 +651,16 @@ class ConfigTab:
                 gr.update(),
                 gr.update(),
                 *((gr.skip(),) * n_key),
+                *((gr.update(),) * n_llm_side),
             )
 
     def set_main_app(self, main_app: Any) -> None:
         """Set reference to main app for future integration needs."""
         self.main_app = main_app
+
+    def set_sidebar_instance(self, sidebar: Any) -> None:
+        """Share Sidebar instance so LLM controls render inside Config."""
+        self.sidebar_instance = sidebar
 
     def _reinitialize_session_llm(self, session_id: str) -> None:
         """Re-initialize session LLM instance to pick up updated config."""
