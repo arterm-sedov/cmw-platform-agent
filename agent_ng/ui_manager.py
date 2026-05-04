@@ -32,6 +32,7 @@ try:
     from agent_ng.agent_config import (
         get_refresh_intervals,
         get_ui_download_prep_after_stream,
+        get_ui_export_html_after_turn,
     )
 except ImportError:
     # Fallback for direct execution
@@ -41,6 +42,7 @@ except ImportError:
     from agent_config import (  # type: ignore[no-redef]
         get_refresh_intervals,
         get_ui_download_prep_after_stream,
+        get_ui_export_html_after_turn,
     )
 
 class UIManager:
@@ -216,7 +218,29 @@ class UIManager:
                     # Create sidebar as a tab (after other tabs)
                     if sidebar_instance is not None:
                         try:
+                            _sb_t0 = time.perf_counter()
+                            # #region agent log
+                            debug_ndjson(
+                                "H1S",
+                                "ui_manager.create_interface",
+                                "sidebar_create_tab_enter",
+                                {},
+                            )
+                            # #endregion
                             sidebar_tab, sidebar_components = sidebar_instance.create_tab()
+                            # #region agent log
+                            debug_ndjson(
+                                "H1S",
+                                "ui_manager.create_interface",
+                                "sidebar_create_tab_exit",
+                                {
+                                    "ms": round(
+                                        (time.perf_counter() - _sb_t0) * 1000, 2
+                                    ),
+                                    "tab_none": sidebar_tab is None,
+                                },
+                            )
+                            # #endregion
                             # Skip if sidebar_tab is None
                             if sidebar_tab is None:
                                 logging.getLogger(__name__).warning(
@@ -264,31 +288,93 @@ class UIManager:
                 download_btn = downloads_tab_instance.components.get("download_btn")
                 download_html_btn = downloads_tab_instance.components.get("download_html_btn")
                 if download_btn and download_html_btn:
-                    # Wire download buttons to update after streaming completes
-                    def _update_downloads_from_chat(history):
-                        """Update download buttons from chat tab"""
-                        return chat_tab_instance.get_download_button_updates(history)
-
                     prep_after_stream = get_ui_download_prep_after_stream()
                     chatbot_comp = chat_tab_instance.components.get("chatbot")
                     dl_tab = getattr(downloads_tab_instance, "_tab_item", None)
-                    if prep_after_stream:
+
+                    def _downloads_update(
+                        history,
+                        *,
+                        generate_html: bool,
+                        trigger: str,
+                    ):
+                        """Update download buttons; H5 wraps wall time vs chat export."""
+                        _t0 = time.perf_counter()
+                        _hist_n = len(history) if history else 0
+                        # #region agent log
+                        debug_ndjson(
+                            "H5",
+                            "ui_manager._downloads_update",
+                            "enter",
+                            {
+                                "hist_len": _hist_n,
+                                "prep_after_stream": prep_after_stream,
+                                "generate_html": generate_html,
+                                "trigger": trigger,
+                            },
+                        )
+                        # #endregion
+                        out = chat_tab_instance.get_download_button_updates(
+                            history,
+                            generate_html=generate_html,
+                        )
+                        # #region agent log
+                        debug_ndjson(
+                            "H5",
+                            "ui_manager._downloads_update",
+                            "exit",
+                            {
+                                "hist_len": _hist_n,
+                                "ms": round((time.perf_counter() - _t0) * 1000, 2),
+                                "trigger": trigger,
+                            },
+                        )
+                        # #endregion
+                        return out
+
+                    def _downloads_on_tab_select(history):
+                        # Must match submit_tail HTML policy: forcing False here overwrote md_html
+                        # with md_only when opening Downloads (see debug H5 tab_select vs submit_tail).
+                        return _downloads_update(
+                            history,
+                            generate_html=bool(get_ui_export_html_after_turn()),
+                            trigger="tab_select",
+                        )
+
+                    def _downloads_after_chat_turn(history):
+                        return _downloads_update(
+                            history,
+                            generate_html=bool(get_ui_export_html_after_turn()),
+                            trigger="submit_tail",
+                        )
+
+                    # After each completed turn: refresh buttons (HTML when env allows).
+                    # Decoupled from CMW_UI_DOWNLOAD_PREP_AFTER_STREAM so HTML can appear without
+                    # tab-select-only prep stalling other tabs.
+                    if (
+                        chatbot_comp is not None
+                        and hasattr(chat_tab_instance, "submit_event")
+                        and chat_tab_instance.submit_event
+                    ):
+                        chat_tab_instance.submit_event.then(
+                            fn=_downloads_after_chat_turn,
+                            inputs=[chatbot_comp],
+                            outputs=[download_btn, download_html_btn],
+                            queue=False,
+                            api_visibility="private",
+                        )
+                    if prep_after_stream and chatbot_comp is not None:
                         if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
                             chat_tab_instance.streaming_event.then(
-                                fn=_update_downloads_from_chat,
-                                inputs=[chatbot_comp],
-                                outputs=[download_btn, download_html_btn],
-                            )
-                        if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
-                            chat_tab_instance.submit_event.then(
-                                fn=_update_downloads_from_chat,
+                                fn=_downloads_after_chat_turn,
                                 inputs=[chatbot_comp],
                                 outputs=[download_btn, download_html_btn],
                                 queue=False,
+                                api_visibility="private",
                             )
                     elif dl_tab is not None and chatbot_comp is not None:
                         dl_tab.select(
-                            fn=_update_downloads_from_chat,
+                            fn=_downloads_on_tab_select,
                             inputs=[chatbot_comp],
                             outputs=[download_btn, download_html_btn],
                             queue=False,
@@ -315,72 +401,108 @@ class UIManager:
 
                 chat_tab_instance = self.components.get("chattab_tab")
 
-                if update_all_ui_handler and status_comp and stats_comp and logs_comp and chat_tab_instance:
-                    refresh_outputs = [status_comp, stats_comp, logs_comp]
-
-                    # After send (streaming) completes
-                    if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
-                        chat_tab_instance.streaming_event.then(
-                            fn=update_all_ui_handler,
-                            outputs=refresh_outputs
-                        )
-
-                    # After submit completes
-                    if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
-                        chat_tab_instance.submit_event.then(
-                            fn=update_all_ui_handler,
-                            outputs=refresh_outputs
-                        )
-
-                    # Wire clear event to update stats/progress
-                    if hasattr(chat_tab_instance, "clear_event") and chat_tab_instance.clear_event:
-                        chat_tab_instance.clear_event.then(
-                            fn=update_all_ui_handler,
-                            outputs=refresh_outputs,
-                            queue=False,  # Don't queue UI updates
-                        )
-
-                    # Wire stop event to update stats/progress
-                    if hasattr(chat_tab_instance, "stop_event") and chat_tab_instance.stop_event:
-                        chat_tab_instance.stop_event.then(
-                            fn=update_all_ui_handler,
-                            outputs=refresh_outputs,
-                            queue=False,  # Don't queue UI updates
-                        )
-
-                    logging.getLogger(__name__).debug("✅ Event-driven UI refresh wired for end-of-turn updates, clear, and stop")
-
-                # Token budget refresh: wire separately to avoid changing update_all_ui signature
+                # Single .then per trigger so Gradio passes gr.Request once; avoids
+                # queue=False tails where Request is missing and token sidebar stalls.
                 if (
-                    update_token_budget_handler
+                    update_all_ui_handler
+                    and update_token_budget_handler
+                    and status_comp
+                    and stats_comp
+                    and logs_comp
                     and token_budget_comp
                     and chat_tab_instance
                 ):
-                    if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
-                        chat_tab_instance.streaming_event.then(
-                            fn=update_token_budget_handler,
-                            outputs=[token_budget_comp],
+                    refresh_outputs_all = [
+                        status_comp,
+                        stats_comp,
+                        logs_comp,
+                        token_budget_comp,
+                    ]
+
+                    def _refresh_sidebar_after_turn(
+                        request: gr.Request | None = None,
+                    ) -> tuple[str, str, str, str]:
+                        _t8 = time.perf_counter()
+                        # #region agent log
+                        debug_ndjson(
+                            "H8",
+                            "ui_manager.refresh_sidebar_after_turn",
+                            "enter",
+                            {"has_request": request is not None},
                         )
-                    if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
-                        chat_tab_instance.submit_event.then(
-                            fn=update_token_budget_handler,
-                            outputs=[token_budget_comp],
+                        # #endregion
+                        try:
+                            status_stats_logs = update_all_ui_handler(request)
+                        finally:
+                            # #region agent log
+                            debug_ndjson(
+                                "H8",
+                                "ui_manager.refresh_sidebar_after_turn",
+                                "exit_ui_block",
+                                {
+                                    "ms": round(
+                                        (time.perf_counter() - _t8) * 1000, 2
+                                    ),
+                                },
+                            )
+                            # #endregion
+                        _t9 = time.perf_counter()
+                        # #region agent log
+                        debug_ndjson(
+                            "H9",
+                            "ui_manager.refresh_sidebar_after_turn",
+                            "enter_token_budget",
+                            {"has_request": request is not None},
                         )
-                    # Wire clear button to update token budget immediately (event-driven)
-                    # Chain to the existing clear button click event
-                    if hasattr(chat_tab_instance, "clear_event") and chat_tab_instance.clear_event:
-                        chat_tab_instance.clear_event.then(
-                            fn=update_token_budget_handler,
-                            outputs=[token_budget_comp],
+                        # #endregion
+                        try:
+                            tb = update_token_budget_handler(request)
+                        finally:
+                            # #region agent log
+                            debug_ndjson(
+                                "H9",
+                                "ui_manager.refresh_sidebar_after_turn",
+                                "exit_token_budget",
+                                {
+                                    "ms": round(
+                                        (time.perf_counter() - _t9) * 1000, 2
+                                    ),
+                                },
+                            )
+                            # #endregion
+                        return (*status_stats_logs, tb)
+
+                    _ste = chat_tab_instance
+                    _refresh_kw = {"queue": False, "api_visibility": "private"}
+                    if hasattr(_ste, "streaming_event") and _ste.streaming_event:
+                        _ste.streaming_event.then(
+                            fn=_refresh_sidebar_after_turn,
+                            outputs=refresh_outputs_all,
+                            **_refresh_kw,
                         )
-                    # Wire stop button to update token budget immediately (event-driven)
-                    # Chain to the existing stop button click event
-                    if hasattr(chat_tab_instance, "stop_event") and chat_tab_instance.stop_event:
-                        chat_tab_instance.stop_event.then(
-                            fn=update_token_budget_handler,
-                            outputs=[token_budget_comp],
+                    if hasattr(_ste, "submit_event") and _ste.submit_event:
+                        _ste.submit_event.then(
+                            fn=_refresh_sidebar_after_turn,
+                            outputs=refresh_outputs_all,
+                            **_refresh_kw,
                         )
-                    logging.getLogger(__name__).debug("✅ Token budget event-driven refresh wired for end-of-turn updates, clear button, and stop button")
+                    if hasattr(_ste, "clear_event") and _ste.clear_event:
+                        _ste.clear_event.then(
+                            fn=_refresh_sidebar_after_turn,
+                            outputs=refresh_outputs_all,
+                            **_refresh_kw,
+                        )
+                    if hasattr(_ste, "stop_event") and _ste.stop_event:
+                        _ste.stop_event.then(
+                            fn=_refresh_sidebar_after_turn,
+                            outputs=refresh_outputs_all,
+                            **_refresh_kw,
+                        )
+
+                    logging.getLogger(__name__).debug(
+                        "✅ Merged sidebar refresh (status/stats/logs + token budget) "
+                        "wired for stream/submit/clear/stop"
+                    )
 
                     provider_sel = self.components.get("provider_model_selector")
                     sync_dd = event_handlers.get("sync_llm_dropdown_from_session")

@@ -295,10 +295,15 @@ def get_ui_disable_auto_timers() -> bool:
 
 
 def get_ui_export_html_after_turn() -> bool:
-    """Build HTML export when download prep runs (Markdown + HTML file generation).
+    """Build HTML export when download prep runs after each chat turn (Markdown + HTML).
 
     When ``False`` (default), only Markdown is generated; the HTML download stays hidden.
     HTML generation can stall the UI on some setups — enable only when needed.
+
+    After each completed turn, the Downloads buttons refresh on ``submit_event``; when this flag
+    is on, that refresh includes HTML generation. Tab-select-only prep (when
+    ``CMW_UI_DOWNLOAD_PREP_AFTER_STREAM`` is off) stays Markdown-only so switching tabs stays
+    lightweight.
 
     Environment ``CMW_UI_EXPORT_HTML_AFTER_TURN``: ``1``/``true``/``yes``/``on`` to enable.
     """
@@ -319,8 +324,9 @@ def get_ui_home_first() -> bool:
 def get_ui_download_prep_after_stream() -> bool:
     """Run download-file preparation chained on ``submit_event`` right after streaming ends.
 
-    When ``False`` (default), preparation runs only when the user selects the Downloads tab
-    (fewer simultaneous UI updates after each token — closer to cmw-rag-style tails).
+    When ``False`` (default), preparation still runs on ``submit_event`` for button refresh;
+    selecting the Downloads tab also refreshes exports (Markdown always; HTML too when
+    ``CMW_UI_EXPORT_HTML_AFTER_TURN`` is on — avoids hiding the HTML button after tab switch).
 
     Environment ``CMW_UI_DOWNLOAD_PREP_AFTER_STREAM``: ``1``/``true``/``yes``/``on`` to enable.
     """

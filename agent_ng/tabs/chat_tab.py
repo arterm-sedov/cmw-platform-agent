@@ -22,7 +22,6 @@ import gradio as gr
 import markdown
 
 from agent_ng.agent_config import get_ui_export_html_after_turn
-from agent_ng.debug_streamer import get_debug_streamer
 from agent_ng.history_compression import (
     perform_compression_with_notifications,
     should_compress_on_completion,
@@ -32,6 +31,7 @@ from agent_ng.queue_manager import (
     apply_concurrency_to_click_event,
     apply_concurrency_to_submit_event,
 )
+from agent_ng.session_manager import get_current_session_id
 from agent_ng.token_budget import (
     HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
     TOKEN_STATUS_CRITICAL,
@@ -404,8 +404,36 @@ class ChatTab(QuickActionsMixin):
         # Following reference repo pattern: chain after handler completion (cmw-rag: before msg.stop)
         def re_enable_textbox_and_hide_stop():
             """Re-enable textbox and hide stop button after handler completion."""
-            logging.getLogger(__name__).debug("Re-enabling textbox and hiding stop button after handler completion")
-            return gr.MultimodalTextbox(value="", interactive=True, submit_btn=True, stop_btn=False)
+            _t_re = time.perf_counter()
+            # #region agent log
+            _debug_ndjson_chat(
+                "H13",
+                "chat_tab.re_enable_textbox_and_hide_stop",
+                "enter",
+                {},
+            )
+            # #endregion
+            logging.getLogger(__name__).debug(
+                "Re-enabling textbox and hiding stop button after handler completion"
+            )
+            try:
+                return gr.MultimodalTextbox(
+                    value="", interactive=True, submit_btn=True, stop_btn=False
+                )
+            finally:
+                # #region agent log
+                _debug_ndjson_chat(
+                    "H13",
+                    "chat_tab.re_enable_textbox_and_hide_stop",
+                    "exit",
+                    {
+                        "ms": round(
+                            (time.perf_counter() - _t_re) * 1000,
+                            3,
+                        ),
+                    },
+                )
+                # #endregion
 
         self.submit_event = streaming_pipeline.then(
             fn=re_enable_textbox_and_hide_stop,
@@ -900,13 +928,18 @@ class ChatTab(QuickActionsMixin):
         if not hasattr(self, "main_app") or not self.main_app:
             return self._get_translation("token_budget_initializing")
 
-        # Get session-specific agent
+        # Session-specific agent: prefer gr.Request; fallback to context session when
+        # tails omit Request (e.g. legacy queue=False handlers).
         agent = None
-        if request and hasattr(self.main_app, "session_manager"):
-            session_id = self.main_app.session_manager.get_session_id(request)
-            agent = self.main_app.session_manager.get_session_agent(session_id)
-
-        # No fallback to global agent - use session-specific agents only
+        sm = getattr(self.main_app, "session_manager", None)
+        if sm:
+            session_id = None
+            if request:
+                session_id = sm.get_session_id(request)
+            else:
+                session_id = sm.get_current_session_id()
+            if session_id:
+                agent = sm.get_session_agent(session_id)
 
         if not agent:
             return self._get_translation("token_budget_initializing")
@@ -1648,6 +1681,12 @@ class ChatTab(QuickActionsMixin):
             delattr(self, "_last_history_str")
         if hasattr(self, "_last_download_file"):
             delattr(self, "_last_download_file")
+        if hasattr(self, "_last_download_html_file"):
+            delattr(self, "_last_download_html_file")
+        if hasattr(self, "_last_export_include_html"):
+            delattr(self, "_last_export_include_html")
+        if hasattr(self, "_last_html_file_path"):
+            delattr(self, "_last_html_file_path")
 
         # Get the clear handler from event handlers
         clear_handler = self.event_handlers.get("clear_chat")
@@ -1661,21 +1700,48 @@ class ChatTab(QuickActionsMixin):
         empty_multimodal = {"text": "", "files": []}
         return [], empty_multimodal
 
-    def get_download_button_updates(self, history):
+    def get_download_button_updates(
+        self,
+        history,
+        *,
+        generate_html: bool | None = None,
+    ):
         """
         Get download button updates for DownloadsTab.
         This method can be called from DownloadsTab to update buttons.
 
         Args:
             history: Conversation history
+            generate_html: When ``None``, follow ``CMW_UI_EXPORT_HTML_AFTER_TURN``.
+                When ``False``, skip HTML export (fast tab-select prep).
 
         Returns:
             Tuple of (markdown_button_update, html_button_update)
         """
-        return self._update_download_button_visibility(history)
+        return self._update_download_button_visibility(
+            history,
+            generate_html=generate_html,
+        )
 
-    def _update_download_button_visibility(self, history):
+    def _update_download_button_visibility(
+        self,
+        history,
+        *,
+        generate_html: bool | None = None,
+    ):
         """Update download button visibility and file based on conversation history"""
+        # region agent log
+        _debug_ndjson_chat(
+            "H10",
+            "chat_tab._update_download_button_visibility",
+            "enter",
+            {
+                "downloads_enabled": CHAT_DOWNLOADS_ENABLED,
+                "hist_len": len(history) if history else 0,
+                "generate_html_kw": generate_html,
+            },
+        )
+        # endregion
         if not CHAT_DOWNLOADS_ENABLED:
             # Downloads are globally disabled via feature flag
             return (
@@ -1683,22 +1749,32 @@ class ChatTab(QuickActionsMixin):
                 gr.update(visible=False),
             )
         if history and len(history) > 0:
+            effective_html = (
+                get_ui_export_html_after_turn()
+                if generate_html is None
+                else bool(generate_html)
+            )
             # Check if conversation has changed since last generation
             history_str = str(history)
             regen = (
                 not hasattr(self, "_last_history_str")
                 or self._last_history_str != history_str
+                or getattr(self, "_last_export_include_html", None) != effective_html
             )
             if regen:
                 # Generate files with fresh timestamp when conversation changes
                 # Use try/except to prevent blocking on file generation errors
                 try:
-                    markdown_file_path = self._download_conversation_as_markdown(history)
+                    markdown_file_path = self._download_conversation_as_markdown(
+                        history,
+                        generate_html=effective_html,
+                    )
                     # HTML file path is now stored in _last_html_file_path by _download_conversation_as_markdown
                     html_file_path = getattr(self, "_last_html_file_path", None)
                     self._last_history_str = history_str
                     self._last_download_file = markdown_file_path
                     self._last_download_html_file = html_file_path
+                    self._last_export_include_html = effective_html
                 except Exception as exc:
                     logging.getLogger(__name__).warning(
                         f"Failed to generate download files: {exc}", exc_info=True
@@ -1759,13 +1835,17 @@ class ChatTab(QuickActionsMixin):
         )
 
     def _download_conversation_as_markdown(
-        self, history: list[dict[str, str]]
-    ) -> str:
+        self,
+        history: list[dict[str, str]],
+        *,
+        generate_html: bool | None = None,
+    ) -> str | None:
         """
         Download the conversation history as a markdown file.
 
         Args:
             history: List of conversation messages from Gradio chatbot component
+            generate_html: When ``None``, follow ``CMW_UI_EXPORT_HTML_AFTER_TURN``.
 
         Returns:
             File path if successful, None if failed
@@ -1793,14 +1873,15 @@ class ChatTab(QuickActionsMixin):
         try:
             main_app = getattr(self, "main_app", None)
             if main_app and hasattr(main_app, "session_manager"):
-                try:
-                    debug_streamer = get_debug_streamer()
-                    session_id = debug_streamer.get_current_session_id()
-                except Exception as debug_exc:
-                    logging.getLogger(__name__).debug(
-                        "Debug streamer not available: %s", debug_exc
-                    )
-                    session_id = "default"
+                session_id = (get_current_session_id() or "").strip() or "default"
+                # #region agent log
+                _debug_ndjson_chat(
+                    "H11",
+                    "chat_tab._download_conversation_as_markdown",
+                    "session_for_export",
+                    {"session_id_len": len(session_id)},
+                )
+                # #endregion
 
                 agent = main_app.session_manager.get_session_agent(session_id)
                 if agent:
@@ -1832,6 +1913,7 @@ class ChatTab(QuickActionsMixin):
                 "Failed to add conversation summary to markdown: %s", exc
             )
         markdown_content += "---\n\n"
+        _t_pre_loop = time.perf_counter()
 
         # Conversation bodies (Gradio 6 uses list/dict multimodal ``content``, not only str).
         for i, message in enumerate(history, 1):
@@ -1849,6 +1931,7 @@ class ChatTab(QuickActionsMixin):
             else:
                 markdown_content += f"## Message {i}\n\n{message!s}\n\n"
 
+        _t_post_loop = time.perf_counter()
         # Create file with proper filename
         try:
             # Create a temporary directory and file with the proper filename
@@ -1857,12 +1940,18 @@ class ChatTab(QuickActionsMixin):
 
             with open(clean_file_path, "w", encoding="utf-8") as file:
                 file.write(markdown_content)
+            _t_post_md = time.perf_counter()
 
             logger.debug("Created markdown file: %s", clean_file_path)
 
-            # HTML is optional (can stall); only when CMW_UI_EXPORT_HTML_AFTER_TURN is set.
+            _want_html = (
+                get_ui_export_html_after_turn()
+                if generate_html is None
+                else bool(generate_html)
+            )
+            # HTML is optional (can stall Gradio when run on tab.select).
             html_file_path = None
-            if get_ui_export_html_after_turn():
+            if _want_html:
                 html_file_path = self._generate_conversation_html(
                     markdown_content, filename.replace(".md", ".html")
                 )
@@ -1873,15 +1962,34 @@ class ChatTab(QuickActionsMixin):
                     self._last_html_file_path = None
             else:
                 self._last_html_file_path = None
+            _t_post_html = time.perf_counter()
 
             # region agent log
+            _gate = _want_html
+            _ms_pre = round((_t_pre_loop - _t_export) * 1000, 2)
+            _ms_loop = round((_t_post_loop - _t_pre_loop) * 1000, 2)
+            _ms_disk = round((_t_post_md - _t_post_loop) * 1000, 2)
+            _ms_html = round((_t_post_html - _t_post_md) * 1000, 2) if _gate else 0.0
+            _debug_ndjson_chat(
+                "H6",
+                "chat_tab._download_conversation_as_markdown",
+                "phases_ms",
+                {
+                    "ms_preamble": _ms_pre,
+                    "ms_body_loop": _ms_loop,
+                    "ms_md_write": _ms_disk,
+                    "ms_html_section": _ms_html,
+                    "md_chars": len(markdown_content),
+                    "html_gate": _gate,
+                },
+            )
             _debug_ndjson_chat(
                 "H3",
                 "chat_tab._download_conversation_as_markdown",
                 "export_done",
                 {
                     "ms": round((time.perf_counter() - _t_export) * 1000, 2),
-                    "html_gate": get_ui_export_html_after_turn(),
+                    "html_gate": _gate,
                     "html_stored": bool(
                         getattr(self, "_last_html_file_path", None)
                     ),
@@ -1919,13 +2027,16 @@ class ChatTab(QuickActionsMixin):
         """
 
         logger = logging.getLogger(__name__)
+        _t_html = time.perf_counter()
 
         try:
             # Convert Markdown to HTML
             html_body = markdown.markdown(markdown_content, extensions=["tables", "fenced_code"])
+            _t_after_md = time.perf_counter()
 
             # Load CSS from external file
             css_content = self._load_export_css()
+            _t_after_css = time.perf_counter()
 
             # Create HTML with CSS styling and Mermaid support
             html_content = f"""<!DOCTYPE html>
@@ -1971,6 +2082,7 @@ class ChatTab(QuickActionsMixin):
     </div>
 </body>
 </html>"""
+            _t_after_tpl = time.perf_counter()
 
             # Create file with proper filename
             temp_dir = tempfile.mkdtemp()
@@ -1978,10 +2090,36 @@ class ChatTab(QuickActionsMixin):
 
             with open(clean_file_path, "w", encoding="utf-8") as file:
                 file.write(html_content)
+            _t_after_write = time.perf_counter()
 
+            # region agent log
+            _debug_ndjson_chat(
+                "H7",
+                "chat_tab._generate_conversation_html",
+                "phases_ms",
+                {
+                    "ms_md_to_html": round((_t_after_md - _t_html) * 1000, 2),
+                    "ms_css_load": round((_t_after_css - _t_after_md) * 1000, 2),
+                    "ms_tpl_string": round((_t_after_tpl - _t_after_css) * 1000, 2),
+                    "ms_html_file_write": round((_t_after_write - _t_after_tpl) * 1000, 2),
+                    "html_bytes": len(html_content),
+                },
+            )
+            # endregion
             logger.debug("Generated HTML file: %s", clean_file_path)
             return clean_file_path
         except Exception as e:
+            # region agent log
+            _debug_ndjson_chat(
+                "H7",
+                "chat_tab._generate_conversation_html",
+                "error",
+                {
+                    "ms": round((time.perf_counter() - _t_html) * 1000, 2),
+                    "err_type": type(e).__name__,
+                },
+            )
+            # endregion
             logger.exception("Error generating HTML file: %s", e)
             return None
 

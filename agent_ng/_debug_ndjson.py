@@ -1,4 +1,24 @@
-"""Append one NDJSON line for debug session 392eaf (tab build timing)."""
+"""Append one NDJSON line for debug session 392eaf (Gradio 6 stall bisect).
+
+Hypothesis ids (grep ``debug-392eaf.log``):
+
+- **H1** — per-tab ``create_tab`` wall ms.
+- **H1S** — sidebar ``create_tab`` enter/exit ms.
+- **H2** — whole ``gr.Tabs()`` block ms (often >> sum of H1: Gradio internals).
+- **H3** — markdown export total ms / errors.
+- **H4** — download button visibility branch (``md_only`` / ``md_html`` / …).
+- **H5** — UI manager download handler enter/exit (queue vs handler wall).
+- **H6** — export sub-phases: preamble, body loop, MD disk, HTML section.
+- **H7** — HTML export phases (md→HTML, CSS, template, write) + ``html_bytes``.
+- **H8** — merged ``refresh_sidebar_after_turn``: UI block timing + ``has_request``.
+- **H9** — same merge path: token budget timing + ``has_request``.
+- **H10** — download visibility enter (hist len, flag).
+- **HC** — concurrency snapshot on first ``get_concurrency_config()`` load.
+- **HQ** — ``queue_manager.configure_queue``: branch + kwargs applied to ``demo.queue``.
+- **HL** — ``create_interface`` queue snapshot; ``main`` launch_enter (port / server).
+- **H11** — export path session id from ``session_manager`` (not ``DebugStreamer``).
+- **H13** — ``re_enable_textbox_and_hide_stop`` enter/exit (multimodal input freeze bisect).
+"""
 
 from __future__ import annotations
 
