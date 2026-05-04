@@ -126,45 +126,47 @@ class ConfigTab:
         # Platform: two columns — help/title (left) and credentials (right), like Gradio row+cards.
         with gr.Row(equal_height=True):
             with gr.Column(scale=1, elem_classes=["model-card"]):
-                gr.Markdown(
-                    f"### {self._get_translation('config_title')}",
-                    elem_classes=["llm-selection-title"],
-                )
-                if platform_from_dotenv:
-                    gr.Markdown(self._get_translation("config_platform_dotenv_notice"))
-                else:
-                    gr.Markdown(self._get_translation("config_help"))
+                with gr.Row():
+                    gr.Markdown(
+                        f"### {self._get_translation('config_title')}",
+                        elem_classes=["llm-selection-title"],
+                    )
+                with gr.Row(equal_height=True):
+                    with gr.Column(scale=1, min_width="50%"):
+                        if platform_from_dotenv:
+                            gr.Markdown(self._get_translation("config_platform_dotenv_notice"))
+                        else:
+                            gr.Markdown(self._get_translation("config_help"))
 
-            with gr.Column(
-                scale=1,
-                min_width=320,
-                elem_classes=["model-card"],
-                visible=not platform_from_dotenv,
-            ):
+                    with gr.Column(
+                        scale=1,
+                        min_width="50%",
+                        visible=not platform_from_dotenv,
+                    ):
 
-                self.components["platform_url"] = gr.Textbox(
-                    label=self._get_translation("config_platform_url"),
-                    placeholder="https://your-comindware-host",
-                    value=url_init,
-                    lines=1,
-                    max_lines=1,
-                    scale=4,
-                )
-                self.components["username"] = gr.Textbox(
-                    label=self._get_translation("config_username"),
-                    value=login_init,
-                    lines=1,
-                    max_lines=1,
-                    scale=1,
-                )
-                self.components["password"] = gr.Textbox(
-                    label=self._get_translation("config_password"),
-                    type="password",
-                    value=password_init,
-                    lines=1,
-                    max_lines=1,
-                    scale=1,
-                )
+                        self.components["platform_url"] = gr.Textbox(
+                            label=self._get_translation("config_platform_url"),
+                            placeholder="https://your-comindware-host",
+                            value=url_init,
+                            lines=1,
+                            max_lines=1,
+                            scale=4,
+                        )
+                        self.components["username"] = gr.Textbox(
+                            label=self._get_translation("config_username"),
+                            value=login_init,
+                            lines=1,
+                            max_lines=1,
+                            scale=1,
+                        )
+                        self.components["password"] = gr.Textbox(
+                            label=self._get_translation("config_password"),
+                            type="password",
+                            value=password_init,
+                            lines=1,
+                            max_lines=1,
+                            scale=1,
+                        )
         with gr.Row(equal_height=True):
             with gr.Column(scale=1):
                 if self.sidebar_instance is not None:
