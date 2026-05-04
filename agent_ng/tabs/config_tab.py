@@ -99,8 +99,8 @@ class ConfigTab:
         platform_from_dotenv = self.use_dotenv_for_platform()
 
         # Platform: two columns — help/title (left) and credentials (right), like Gradio row+cards.
-        with gr.Row(equal_height=False):
-            with gr.Column(scale=1, min_width=320, elem_classes=["model-card"]):
+        with gr.Row(equal_height=True):
+            with gr.Column(scale=1, elem_classes=["model-card"]):
                 gr.Markdown(
                     f"### {self._get_translation('config_title')}",
                     elem_classes=["llm-selection-title"],
@@ -116,117 +116,113 @@ class ConfigTab:
                 elem_classes=["model-card"],
                 visible=not platform_from_dotenv,
             ):
-                with gr.Row(equal_height=True):
-                    self.components["platform_url"] = gr.Textbox(
-                        label=self._get_translation("config_platform_url"),
-                        placeholder="https://your-comindware-host",
-                        value=url_init,
-                        lines=1,
-                        max_lines=1,
-                        scale=4,
-                    )
-                    self.components["username"] = gr.Textbox(
-                        label=self._get_translation("config_username"),
-                        value=login_init,
-                        lines=1,
-                        max_lines=1,
-                        scale=1,
-                    )
-                    self.components["password"] = gr.Textbox(
-                        label=self._get_translation("config_password"),
-                        type="password",
-                        value=password_init,
-                        lines=1,
-                        max_lines=1,
-                        scale=1,
+
+                self.components["platform_url"] = gr.Textbox(
+                    label=self._get_translation("config_platform_url"),
+                    placeholder="https://your-comindware-host",
+                    value=url_init,
+                    lines=1,
+                    max_lines=1,
+                    scale=4,
+                )
+                self.components["username"] = gr.Textbox(
+                    label=self._get_translation("config_username"),
+                    value=login_init,
+                    lines=1,
+                    max_lines=1,
+                    scale=1,
+                )
+                self.components["password"] = gr.Textbox(
+                    label=self._get_translation("config_password"),
+                    type="password",
+                    value=password_init,
+                    lines=1,
+                    max_lines=1,
+                    scale=1,
+                )
+        with gr.Row(equal_height=True):
+            with gr.Column(scale=1):
+                if self.sidebar_instance is not None:
+                    self.sidebar_instance.mount_llm_selection_ui()
+                else:
+                    gr.Markdown("*LLM selection unavailable (internal).*")
+
+            with gr.Column(scale=1, elem_classes=["model-card"]):
+                llm_providers = [
+                    "gemini",
+                    "groq",
+                    "huggingface",
+                    "openai",
+                    "openrouter",
+                    "polza",
+                    "mistral",
+                    "gigachat",
+                ]
+                try:
+                    if (
+                        self.main_app
+                        and hasattr(self.main_app, "llm_manager")
+                        and self.main_app.llm_manager
+                    ):
+                        available = self.main_app.llm_manager.get_available_providers()
+                        if available:
+                            llm_providers = sorted(available)
+                except Exception:
+                    logging.getLogger(__name__).debug(
+                        "ConfigTab: fallback static provider list "
+                        "(llm_manager unavailable)",
+                        exc_info=True,
                     )
 
-        with gr.Column(scale=1, min_width=400):
-            llm_providers = [
-                "gemini",
-                "groq",
-                "huggingface",
-                "openai",
-                "[REDACTED]",
-                "polza",
-                "mistral",
-                "gigachat",
-            ]
-            try:
-                if (
-                    self.main_app
-                    and hasattr(self.main_app, "llm_manager")
-                    and self.main_app.llm_manager
-                ):
-                    available = self.main_app.llm_manager.get_available_providers()
-                    if available:
-                        llm_providers = sorted(available)
-            except Exception:
-                logging.getLogger(__name__).debug(
-                    "ConfigTab: fallback static provider list "
-                    "(llm_manager unavailable)",
-                    exc_info=True,
+                self._config_llm_providers = list(llm_providers)
+
+                _api_keys_heading = self._get_translation(
+                    "config_llm_api_keys_table_label"
+                )
+                gr.Markdown(
+                    f"### {_api_keys_heading}",
+                    elem_classes=["llm-selection-title"],
+                )
+                self._llm_provider_key_inputs = []
+                with gr.Column():
+                    for prov in self._config_llm_providers:
+                        tb = gr.Textbox(
+                            label=prov,
+                            type="password",
+                            value="",
+                            lines=1,
+                            max_lines=1,
+                            placeholder="sk-...",
+                        )
+                        self._llm_provider_key_inputs.append(tb)
+                self.components["llm_provider_key_inputs"] = (
+                    self._llm_provider_key_inputs
+                )
+                gr.Markdown(
+                    "*"
+                    + self._get_translation("config_llm_empty_means_default")
+                    + "*"
                 )
 
-            self._config_llm_providers = list(llm_providers)
+        with gr.Row(equal_height=True):
+            self.components["save_btn"] = gr.Button(
+                self._get_translation("config_save_button"),
+                variant="primary",
+                elem_classes=["cmw-button"],
+            )
+            self.components["load_btn"] = gr.Button(
+                self._get_translation("config_load_button"),
+                variant="secondary",
+                elem_classes=["cmw-button"],
+            )
+            self.components["clear_storage_btn"] = gr.Button(
+                self._get_translation("config_clear_storage_button"),
+                variant="secondary",
+                elem_classes=["cmw-button"],
+            )
 
-            with gr.Row(equal_height=False):
-                with gr.Column(scale=1):
-                    if self.sidebar_instance is not None:
-                        self.sidebar_instance.mount_llm_selection_ui()
-                    else:
-                        gr.Markdown("*LLM selection unavailable (internal).*")
-
-                with gr.Column(scale=1, elem_classes=["model-card"]):
-                    _api_keys_heading = self._get_translation(
-                        "config_llm_api_keys_table_label"
-                    )
-                    gr.Markdown(
-                        f"### {_api_keys_heading}",
-                        elem_classes=["llm-selection-title"],
-                    )
-                    self._llm_provider_key_inputs = []
-                    with gr.Column():
-                        for prov in self._config_llm_providers:
-                            tb = gr.Textbox(
-                                label=prov,
-                                type="password",
-                                value="",
-                                lines=1,
-                                max_lines=1,
-                                placeholder="sk-...",
-                            )
-                            self._llm_provider_key_inputs.append(tb)
-                    self.components["llm_provider_key_inputs"] = (
-                        self._llm_provider_key_inputs
-                    )
-                    gr.Markdown(
-                        "*"
-                        + self._get_translation("config_llm_empty_means_default")
-                        + "*"
-                    )
-
-            gr.Markdown("---")
-
-            with gr.Row(equal_height=True):
-                self.components["save_btn"] = gr.Button(
-                    self._get_translation("config_save_button"),
-                    variant="primary",
-                    elem_classes=["cmw-button"],
-                )
-                self.components["load_btn"] = gr.Button(
-                    self._get_translation("config_load_button"),
-                    variant="secondary",
-                    elem_classes=["cmw-button"],
-                )
-                self.components["clear_storage_btn"] = gr.Button(
-                    self._get_translation("config_clear_storage_button"),
-                    variant="secondary",
-                    elem_classes=["cmw-button"],
-                )
-
-            # Status area (not used as output to avoid version mismatches)
-            self.components["config_status_display"] = gr.Markdown("")
+        # Status area (not used as output to avoid version mismatches)
+        self.components["config_status_display"] = gr.Markdown("")
 
     @staticmethod
     def _platform_credentials_from_env() -> tuple[str, str, str]:
