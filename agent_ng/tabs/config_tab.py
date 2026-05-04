@@ -114,9 +114,26 @@ class ConfigTab:
                         gr.Markdown("*LLM selection unavailable (internal).*")
 
                 with gr.Column(scale=1):
-                    gr.Markdown(
-                        f"### {self._get_translation('config_llm_section')}",
-                        elem_classes=["llm-selection-title"],
+                    # Platform connection (top of right column, same row as LLM selection)
+                    self.components["platform_url"] = gr.Textbox(
+                        label=self._get_translation("config_platform_url"),
+                        placeholder="https://your-comindware-host",
+                        value=url_init,
+                        lines=1,
+                        max_lines=1,
+                    )
+                    self.components["username"] = gr.Textbox(
+                        label=self._get_translation("config_username"),
+                        value=login_init,
+                        lines=1,
+                        max_lines=1,
+                    )
+                    self.components["password"] = gr.Textbox(
+                        label=self._get_translation("config_password"),
+                        type="password",  # See Gradio Textbox type parameter
+                        value=password_init,
+                        lines=1,
+                        max_lines=1,
                     )
 
                     llm_providers = [
@@ -147,55 +164,31 @@ class ConfigTab:
 
                     self._config_llm_providers = list(llm_providers)
 
-                    gr.Markdown(
-                        f"**{self._get_translation('config_llm_api_keys_table_label')}**"
-                    )
-                    self._llm_provider_key_inputs = []
-                    with gr.Column():
-                        for prov in self._config_llm_providers:
-                            tb = gr.Textbox(
-                                label=prov,
-                                type="password",
-                                value="",
-                                lines=1,
-                                max_lines=1,
-                                placeholder="sk-...",
-                            )
-                            self._llm_provider_key_inputs.append(tb)
-                    self.components["llm_provider_key_inputs"] = (
-                        self._llm_provider_key_inputs
-                    )
-
-                    gr.Markdown(
-                        "*" + self._get_translation("config_llm_empty_means_default") + "*"
-                    )
-
-            gr.Markdown("---")
-
-            # Platform URL
-            self.components["platform_url"] = gr.Textbox(
-                label=self._get_translation("config_platform_url"),
-                placeholder="https://your-comindware-host",
-                value=url_init,
-                lines=1,
-                max_lines=1,
-            )
-
-            # Username
-            self.components["username"] = gr.Textbox(
-                label=self._get_translation("config_username"),
-                value=login_init,
-                lines=1,
-                max_lines=1,
-            )
-
-            self.components["password"] = gr.Textbox(
-                label=self._get_translation("config_password"),
-                type="password",  # See Gradio Textbox type parameter
-                value=password_init,
-                lines=1,
-                max_lines=1,
-            )
+                    with gr.Column(elem_classes=["model-card"]):
+                        gr.Markdown(
+                            f"### {self._get_translation('config_llm_api_keys_table_label')}",
+                            elem_classes=["llm-selection-title"],
+                        )
+                        self._llm_provider_key_inputs = []
+                        with gr.Column():
+                            for prov in self._config_llm_providers:
+                                tb = gr.Textbox(
+                                    label=prov,
+                                    type="password",
+                                    value="",
+                                    lines=1,
+                                    max_lines=1,
+                                    placeholder="sk-...",
+                                )
+                                self._llm_provider_key_inputs.append(tb)
+                        self.components["llm_provider_key_inputs"] = (
+                            self._llm_provider_key_inputs
+                        )
+                        gr.Markdown(
+                            "*"
+                            + self._get_translation("config_llm_empty_means_default")
+                            + "*"
+                        )
 
             gr.Markdown("---")
 
