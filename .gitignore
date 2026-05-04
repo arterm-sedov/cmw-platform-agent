@@ -1,3 +1,6 @@
+# Cursor IDE exports (large; should not ship with the app)
+.cursor/chats/
+.reference-repos/
 .env
 .venv/**
 .venv*/**

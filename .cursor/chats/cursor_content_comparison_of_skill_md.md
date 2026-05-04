@@ -216,17 +216,9 @@ Searched the entire `.agents/skills/cmw-platform/` tree for the canonical marker
 
 ## Two structural issues I noticed in the new file
 
-1. **The committed file at HEAD `5cf2f48` contains unresolved merge conflict markers** in the footer (lines 1551–1555):
+1. **Historical git blemish (already fixed in-tree):** at commit `5cf2f48`, `.agents/skills/cmw-platform/SKILL.md` had three-way merge **sentinel lines** in the footer (~1551–1555): HEAD carried the “Updated **2026-04-29** …” footer line; incoming commit `8ad0b475` carried “Updated **2026-04-27** …”. The working tree later picked **2026-04-27** and removed the sentinels. (Quoted literally those lines looked like unresolved merges—grep-friendly reproduction avoided here.)
 
-```1551:1555:.agents/skills/cmw-platform/SKILL.md
-<<<<<<< HEAD
-*End of SKILL.md - Updated 2026-04-29 with localization workflow fixes*
-=======
-*End of SKILL.md - Updated 2026-04-27 with import/export application tools, unified browser automation guidance, and localization workflow updates*
->>>>>>> 8ad0b47587a708b13f67d95d8a6091138df87915
-```
-
-The working tree has these resolved (kept the 2026-04-27 line, dropped the 2026-04-29 line) — that's the `M` you see in `git status`. This is technically a separate fix and unrelated to our relocation plan.
+This was unrelated to the relocation plan; mention kept only as changelog/archaeology.
 
 2. **Broken section numbering** in the new file:
    - `## 3. Exploration` → `## 4. Data Operations` → `## 3.5. Import/Export Applications` (out-of-order) → `## 4. UI Components` (duplicate of §4) → `## 6. Localization` (skips §5).

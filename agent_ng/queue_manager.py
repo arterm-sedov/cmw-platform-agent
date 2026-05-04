@@ -13,7 +13,8 @@ Key Features:
 - Type-safe configuration using Pydantic models
 """
 
-from typing import Dict, Any, Optional, Callable, List
+from typing import Any, Callable, Dict, List, Optional
+
 import gradio as gr
 from functools import wraps
 import logging
@@ -40,7 +41,7 @@ class QueueManager:
             config: Concurrency configuration. If None, uses global config.
         """
         self.config = config or get_concurrency_config()
-        self._queue_configured = False
+        self._configured_block_ids: set[int] = set()
         self._event_handlers: Dict[str, Callable] = {}
 
     def configure_queue(self, demo: gr.Blocks) -> None:
@@ -50,26 +51,35 @@ class QueueManager:
         This method implements the exact patterns from the Gradio queuing documentation:
         https://www.gradio.app/guides/queuing
 
+        IMPORTANT: Always initializes the queue, even if concurrent processing is disabled,
+        to prevent AttributeError during launch() when accessing demo._queue.max_thread_count.
+
         Args:
             demo: Gradio Blocks instance to configure
         """
-        if self._queue_configured:
+        block_id = id(demo)
+        if block_id in self._configured_block_ids:
             return
 
-        if not self.config.enable_concurrent_processing:
-            logging.info("Concurrent processing disabled - using default queue settings")
-            return
-
-        # Configure queue using Gradio's recommended approach
-        queue_config = self.config.to_gradio_queue_config()
-        if queue_config:
-            # Apply global queue configuration as per Gradio docs
-            demo.queue(**queue_config)
-            logging.info(f"Configured Gradio queue with global settings: {queue_config}")
+        # Always initialize queue (required by Gradio 6 before launch())
+        # This prevents AttributeError: 'NoneType' object has no attribute 'max_thread_count'
+        if not self.config.enable_concurrent_processing or not self.config.queue.enable_queue:
+            # Initialize with minimal settings when concurrent processing is disabled
+            demo.queue(default_concurrency_limit=1, status_update_rate="auto")
+            logging.info("Queue initialized with minimal settings (concurrent processing disabled)")
         else:
-            logging.info("Using default Gradio queue configuration")
+            # Configure queue using Gradio's recommended approach
+            queue_config = self.config.to_gradio_queue_config()
+            if queue_config:
+                # Apply global queue configuration as per Gradio docs
+                demo.queue(**queue_config)
+                logging.info(f"Configured Gradio queue with global settings: {queue_config}")
+            else:
+                # Fallback to minimal settings if config is empty
+                demo.queue(default_concurrency_limit=1, status_update_rate="auto")
+                logging.info("Queue initialized with minimal default settings")
 
-        self._queue_configured = True
+        self._configured_block_ids.add(block_id)
 
     def get_event_concurrency(self, event_type: str) -> Dict[str, Any]:
         """
@@ -140,7 +150,7 @@ class QueueManager:
             Dictionary with queue status information
         """
         return {
-            'queue_configured': self._queue_configured,
+            'queue_configured': bool(self._configured_block_ids),
             'concurrent_processing_enabled': self.config.enable_concurrent_processing,
             'default_concurrency_limit': self.config.queue.default_concurrency_limit,
             'max_threads': self.config.queue.max_threads,

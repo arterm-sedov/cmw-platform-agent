@@ -40,7 +40,11 @@ class StatsTab:
         """
         logging.getLogger(__name__).info("✅ StatsTab: Creating stats interface...")
 
-        with gr.TabItem(self._get_translation("tab_stats"), id="stats") as tab:
+        with gr.TabItem(
+            self._get_translation("tab_stats"),
+            id="stats",
+            render_children=True,
+        ) as tab:
             # Create stats interface
             self._create_stats_interface()
 
@@ -60,10 +64,13 @@ class StatsTab:
             min_width=400,
             elem_classes=["stats-card"]
         ):
-            # Create Markdown component for rich formatting
+            gr.Markdown(
+                f"### {self._get_translation('status_title')}",
+                elem_classes=["llm-selection-title"],
+            )
             self.components["stats_display"] = gr.Markdown(
                 value=self._get_translation("stats_loading"),
-                elem_id="stats-display"
+                elem_id="stats-display",
             )
 
         # Control buttons row
@@ -161,7 +168,6 @@ class StatsTab:
         from ..i18n_translations import get_translation_key
 
         return get_translation_key(key, self.language)
-
 
     def format_stats_display(self, request: gr.Request = None) -> str:
         """Format and return the complete stats display - always session-aware"""

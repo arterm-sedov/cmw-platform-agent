@@ -26,6 +26,8 @@ RUSSIAN_TRANSLATIONS = {
     "tab_logs": "📜 Журналы",
     "tab_stats": "📊 Статистика",
     "tab_config": "⚙️ Настройки",
+    "tab_sidebar": "⚙️ Настройки и управление",
+    "tab_downloads": "📥 Загрузки",
     # Home tab content
     "welcome_title": "Добро пожаловать!",
     "welcome_description": """
@@ -120,7 +122,7 @@ RUSSIAN_TRANSLATIONS = {
     "token_usage_conversation": "Диалог: {conversation_tokens:,}",
     "token_usage_estimate": "Прогноз: {estimated_tokens:,}",
     "token_usage_last_message": "Сообщение:",
-    "token_usage_average": "Средний на сообщение: {avg_tokens:,}",
+    "token_usage_average": "Сред. сообщение: {avg_tokens:,}",
     "token_breakdown_context": "Контекст: {conv_tokens:,}",
     "token_breakdown_tools": "Инструменты: {tool_tokens:,}",
     "token_breakdown_overhead": "Накладные: {overhead_tokens:,}",
@@ -144,7 +146,7 @@ RUSSIAN_TRANSLATIONS = {
 - Среднее на сообщение: {avg_tokens:,}""",
     "token_budget_unknown": "❓ Неизвестно",
     "progress_title": "Прогресс",
-    "progress_ready": "Готов обработать ваш запрос...",
+    "progress_ready": "Готов к работе…",
     "progress_processing": "Обработка запроса...",
     # Logs tab
     "logs_title": "Журналы инициализации",
@@ -215,6 +217,9 @@ RUSSIAN_TRANSLATIONS = {
     "config_clear_storage_button": "🧹 Очистить хранилище браузера",
     "config_clear_success": "✅ Хранилище браузера очищено",
     "config_clear_error": "❌ Не удалось очистить хранилище браузера",
+    "config_platform_dotenv_notice": (
+        "Используется преднастроенное подключение к Comindware Platform."
+    ),
     "config_help": (
         """
         Задайте параметры подключения к **Comindware Platform**:
@@ -240,6 +245,10 @@ RUSSIAN_TRANSLATIONS = {
     "config_llm_api_key_label": "Ключ API",
     "config_llm_api_keys_table_label": "Ключи API провайдеров",
     "config_llm_empty_means_default": "Оставьте пустым, чтобы использовать настройки по умолчанию",
+    "config_llm_providers_none_message": (
+        "Нет доступных провайдеров LLM (менеджер вернул пустой список). "
+        "Проверьте ключи API в окружении и журнал сервера."
+    ),
     # Statistics labels
     "agent_status_section": "**Агент:**",
     "conversation_section": "**Диалог:**",
@@ -374,6 +383,8 @@ ENGLISH_TRANSLATIONS = {
     "tab_logs": "📜 Logs",
     "tab_stats": "📊 Statistics",
     "tab_config": "⚙️ Config",
+    "tab_sidebar": "⚙️ Settings & Control",
+    "tab_downloads": "📥 Downloads",
     # Home tab content
     "welcome_title": "Welcome!",
     "welcome_description": """
@@ -564,6 +575,9 @@ ENGLISH_TRANSLATIONS = {
     "config_clear_storage_button": "🧹 Clear browser storage",
     "config_clear_success": "✅ Browser storage cleared",
     "config_clear_error": "❌ Failed to clear browser storage",
+    "config_platform_dotenv_notice": (
+        "Using the preconfigured connection to the Comindware Platform."
+    ),
     "config_help": (
         """
         Configure connection to the **Comindware Platform**:
@@ -586,6 +600,10 @@ ENGLISH_TRANSLATIONS = {
     "config_llm_api_key_label": "API Key",
     "config_llm_api_keys_table_label": "Provider API keys",
     "config_llm_empty_means_default": "Leave empty to use default settings",
+    "config_llm_providers_none_message": (
+        "No LLM providers available (manager returned an empty list). "
+        "Check API keys in the environment and the server log."
+    ),
     # Statistics labels
     "agent_status_section": "**Agent:**",
     "conversation_section": "**Conversation:**",

@@ -79,19 +79,9 @@ flowchart LR
 
 Two structural issues in the current `SKILL.md` that must be fixed before content edits to keep line numbers and section references stable.
 
-### 1. Merge Conflict Markers
+### 1. Historical footer conflict (resolved)
 
-The committed HEAD (`5cf2f48`) contains unresolved markers at lines 1551–1555:
-
-```
-<<<<<<< HEAD
-*End of SKILL.md - Updated 2026-04-29 with localization workflow fixes*
-=======
-*End of SKILL.md - Updated 2026-04-27 with import/export ...*
->>>>>>> 8ad0b47587a708b13f67d95d8a6091138df87915
-```
-
-Working tree already resolved this — footer reads the single "2026-04-27" line.
+Commit `5cf2f48` briefly shipped `.agents/skills/cmw-platform/SKILL.md` with **three-way merge sentinels** around two footer variants (~1551–1555): HEAD had “Updated **2026-04-29** …”; incoming `8ad0b475` had “Updated **2026-04-27** …”. Working tree chose **2026-04-27** and dropped sentinels. (Prior docs pasted literal sentinel tokens here—they triggered grep noise; this paragraph replaces that.)
 
 **Action:** Update that footer line to:
 

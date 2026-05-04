@@ -42,8 +42,9 @@ google-auth-httplib2==0.2.0
 google-genai==1.74.0
 google-generativeai==0.8.5
 googleapis-common-protos==1.70.0
-gradio==5.49.1
-gradio_client==1.13.3
+# Pin: 6.11+ tab/lazy-mount regressions correlate with Svelte flush storms (see browser Performance).
+gradio==6.10.0
+gradio_client==2.4.0
 greenlet==3.2.4
 groovy==0.1.2
 groq==0.32.0
@@ -156,7 +157,8 @@ requests-toolbelt==1.0.0
 rich==14.2.0
 rsa==4.9.1
 ruff==0.14.0
-safehttpx==0.1.6
+# gradio 6.10.x requires safehttpx>=0.1.7,<0.2.0
+safehttpx==0.1.7
 scikit-learn==1.7.2
 scipy==1.16.2
 semantic-version==2.10.0
@@ -194,3 +196,4 @@ xxhash==3.7.0
 yarl==1.22.0
 zipp==3.23.0
 zstandard==0.25.0
+

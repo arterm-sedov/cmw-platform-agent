@@ -71,8 +71,8 @@ class EventConcurrencyConfig(BaseModel):
     file_upload_concurrency_limit: int = Field(
         default=2,
         ge=1,
-        le=5,
-        description="Concurrency limit for file upload processing"
+        le=10,
+        description="File upload concurrency (env ``FILE_CONCURRENCY_LIMIT``)."
     )
 
     stats_refresh_concurrency_limit: int = Field(

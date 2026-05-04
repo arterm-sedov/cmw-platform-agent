@@ -48,14 +48,22 @@ except Exception:
 
 # Import configuration with fallback for direct execution
 try:
-    from agent_ng.agent_config import config, get_language_settings, get_port_settings
+    from agent_ng.agent_config import (
+        config,
+        get_language_settings,
+        get_port_settings,
+    )
 except ImportError:
     # Fallback for direct execution
     from pathlib import Path
     import sys
 
     sys.path.append(str(Path(__file__).parent))
-    from agent_config import config, get_language_settings, get_port_settings
+    from agent_config import (  # type: ignore[no-redef]
+        config,
+        get_language_settings,
+        get_port_settings,
+    )
 
 
 # Local imports with robust fallback handling
@@ -142,7 +150,15 @@ try:
     from agent_ng.llm_manager import get_llm_manager
 
     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
-    from agent_ng.tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
+    from agent_ng.tabs import (
+        ChatTab,
+        ConfigTab,
+        DownloadsTab,
+        HomeTab,
+        LogsTab,
+        Sidebar,
+        StatsTab,
+    )
     from agent_ng.ui_manager import get_ui_manager
     from agent_ng.utils import safe_string
 
@@ -169,7 +185,15 @@ except ImportError as e1:
         from .llm_manager import get_llm_manager
 
         # from .streaming_chat import get_chat_interface  # Module moved to .unused
-        from .tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
+        from .tabs import (
+            ChatTab,
+            ConfigTab,
+            DownloadsTab,
+            HomeTab,
+            LogsTab,
+            Sidebar,
+            StatsTab,
+        )
         from .ui_manager import get_ui_manager
 
         _logger.info("Successfully imported all modules using relative imports")
@@ -228,12 +252,16 @@ class NextGenApp:
             )
 
         # Session Management - Clean modular approach
+        # Use the process-wide SessionManager singleton to avoid
+        # duplicate per-session initializations when multiple app
+        # instances are constructed (e.g. for language detection).
         try:
-            from .session_manager import SessionManager
+            from .session_manager import get_session_manager
         except ImportError:
             # Fallback for when running as script
-            from agent_ng.session_manager import SessionManager
-        self.session_manager = SessionManager(language)
+            from agent_ng.session_manager import get_session_manager
+
+        self.session_manager = get_session_manager(language)
 
         # Create i18n instance for the specified language
         self.i18n = create_i18n_instance()
@@ -700,6 +728,7 @@ class NextGenApp:
             ]
 
             # Get prompt token count for user message (will be displayed below assistant response)
+            # History is already in Gradio 6 messages format: list[dict[str, str]]
             prompt_tokens = None
             if user_agent:
                 try:
@@ -729,8 +758,22 @@ class NextGenApp:
             # print(f"🔍 DEBUG: Starting streaming for session {session_id}")
             # print(f"🔍 DEBUG: Working history length before streaming: {len(working_history)}")
 
+            # Helper to check if cancellation was requested (following reference repo pattern)
+            def is_cancelled() -> bool:
+                try:
+                    cancel_state = self.session_manager.get_cancellation_state(session_id)
+                    return cancel_state is not None and cancel_state.get("cancelled", False)
+                except Exception:
+                    return False
+
             try:
-                async for event in user_agent.stream_message(message, session_id):
+                # Pass app's language for proper i18n (iteration messages should match UI language)
+                async for event in user_agent.stream_message(message, session_id, language=self.language):
+                    # Check for cancellation at each iteration (following reference repo pattern)
+                    if is_cancelled():
+                        logging.getLogger(__name__).info("Streaming cancelled during execution - stopping")
+                        break
+
                     # Safety check for None event
                     if event is None:
                         # print("🔍 DEBUG: Received None event, skipping...")
@@ -791,6 +834,20 @@ class NextGenApp:
                         # Final completion message - update progress display
                         self.session_manager.set_status(session_id, content)
                         yield working_history, ""
+
+                    elif event_type == "budget_update":
+                        # Budget snapshot was refreshed - token budget display will update via timer
+                        # Why timer instead of immediate update?
+                        # - Budget snapshots are computed at specific "budget moments" (pre-iteration, post-tool),
+                        #   not on every streaming chunk, so updates are infrequent enough that timer is efficient
+                        # - Timer interval (UI_REFRESH_INTERVAL, typically 2-5s) ensures prompt updates
+                        #   without overwhelming the UI with too frequent updates
+                        # - To update immediately, we'd need to add token_budget_display as an output to the
+                        #   streaming generator, which would require significant refactoring of the generator signature
+                        # - Timer approach matches Gradio 5 behavior and provides good UX with minimal complexity
+                        # Continue streaming - timer will pick up the updated snapshot within 2-5 seconds
+                        yield working_history, ""
+                        continue
 
                     elif event_type == "turn_complete":
                         # Store session-aware turn snapshot for analytics/logs (non-persistent)
@@ -896,13 +953,11 @@ class NextGenApp:
                             for i in range(
                                 max(0, len(working_history) - 3), len(working_history)
                             ):
-                                if (
-                                    i >= 0
-                                    and working_history[i]
-                                    and working_history[i]
-                                    .get("metadata", {})
-                                    .get("title")
-                                ):
+                                msg = working_history[i]
+                                if not isinstance(msg, dict):
+                                    continue
+                                metadata = msg.get("metadata") or {}
+                                if isinstance(metadata, dict) and metadata.get("title"):
                                     has_recent_tool_messages = True
                                     break
 
@@ -1245,25 +1300,14 @@ class NextGenApp:
         self._refresh_ui_after_message()
 
     def _update_status(self, request: gr.Request = None) -> str:
-        """Update status display - always session-aware"""
-        # Use stats tab for proper formatting (now always session-aware)
-        stats_tab = self.tab_instances.get("stats")
-        if stats_tab and hasattr(stats_tab, "format_stats_display"):
-            return stats_tab.format_stats_display(request)
-
-        # Final fallback
-        if self.is_ready():
-            return get_translation_key("agent_ready", self.language)
-        else:
-            return get_translation_key("agent_initializing", self.language)
+        """Update Statistics tab (same content as full stats refresh)."""
+        return self._refresh_stats(request)
 
     def _update_token_budget(self, request: gr.Request = None) -> str:
         """Update token budget display - delegates to chat tab with session awareness"""
         chat_tab = self.tab_instances.get("chat")
         if chat_tab and hasattr(chat_tab, "format_token_budget_display"):
             return chat_tab.format_token_budget_display(request)
-
-        # Fallback token budget
         return get_translation_key("token_budget_initializing", self.language)
 
     def _refresh_logs(self, request: gr.Request = None) -> str:
@@ -1308,12 +1352,13 @@ class NextGenApp:
             return True
         return False
 
-    def update_all_ui_components(self) -> tuple[str, str, str]:
-        """Update all UI components and return their values"""
-        status = self._update_status()
-        stats = self._refresh_stats()
-        logs = self._refresh_logs()
-        return status, stats, logs
+    def update_all_ui_components(
+        self, request: gr.Request = None
+    ) -> tuple[str, str, str, str]:
+        """Refresh stats block (three outputs) + logs (session-aware)."""
+        stats = self._refresh_stats(request)
+        logs = self._refresh_logs(request)
+        return stats, stats, stats, logs
 
     def trigger_ui_update(self):
         """Trigger UI update after agent initialization or message processing"""
@@ -1350,13 +1395,19 @@ class NextGenApp:
 
         # Create tab modules with error handling
         tab_modules = []
+        sidebar_for_tabs: Any = None
         try:
+            sidebar_for_tabs = Sidebar(
+                event_handlers, language=self.language, i18n_instance=self.i18n
+            )
+            sidebar_for_tabs.set_main_app(self)
+
             # Home tab first (welcome page)
             if HomeTab:
                 home_tab = HomeTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
-                home_tab.set_main_app(self)  # Set reference to main app
+                home_tab.set_main_app(self)
                 tab_modules.append(home_tab)
                 self.tab_instances["home"] = home_tab
             else:
@@ -1366,7 +1417,7 @@ class NextGenApp:
                 chat_tab = ChatTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
-                chat_tab.set_main_app(self)  # Set reference to main app
+                chat_tab.set_main_app(self)
                 tab_modules.append(chat_tab)
                 self.tab_instances["chat"] = chat_tab
             else:
@@ -1394,37 +1445,42 @@ class NextGenApp:
             else:
                 _logger.warning("StatsTab not available")
 
-            # Config tab visibility is controlled by CMW_USE_DOTENV
-            # Show config tab when CMW_USE_DOTENV=false (default), hide when true
-            use_dotenv_flag = os.environ.get("CMW_USE_DOTENV", "true").lower() in (
-                "1",
-                "true",
-                "yes",
-            )
-            if not use_dotenv_flag and ConfigTab:
+            # Config tab is always shown. CMW_USE_DOTENV only switches platform
+            # credentials: .env vs browser (see ConfigTab).
+            if ConfigTab:
                 config_tab = ConfigTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
                 config_tab.set_main_app(self)
+                config_tab.set_sidebar_instance(sidebar_for_tabs)
                 tab_modules.append(config_tab)
                 self.tab_instances["config"] = config_tab
             else:
-                _logger.info(
-                    "ConfigTab not shown (CMW_USE_DOTENV is true or tab unavailable)"
+                _logger.info("ConfigTab class unavailable; skipping config tab")
+
+            # Downloads tab
+            if DownloadsTab:
+                downloads_tab = DownloadsTab(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
                 )
+                downloads_tab.set_main_app(self)
+                tab_modules.append(downloads_tab)
+                self.tab_instances["downloads"] = downloads_tab
+            else:
+                _logger.warning("DownloadsTab not available")
         except Exception as e:
             _logger.exception("Error creating tab modules: %s", e)
             raise
 
-        # Configure queue manager BEFORE creating interface to ensure it's available to tabs
+        # Configure queue manager BEFORE creating interface (matches historical branch wiring).
         try:
             if hasattr(self, "queue_manager") and self.queue_manager:
                 _logger.info("Configuring queue manager before interface creation...")
-                _logger.debug(f"Queue manager type: {type(self.queue_manager)}")
+                _logger.debug("Queue manager type: %s", type(self.queue_manager))
                 _logger.debug(
-                    f"Queue manager has config: {hasattr(self.queue_manager, 'config')}"
+                    "Queue manager has config: %s",
+                    hasattr(self.queue_manager, "config"),
                 )
-                # Create a temporary demo to configure the queue manager
                 with gr.Blocks() as temp_demo:
                     pass
                 self.queue_manager.configure_queue(temp_demo)
@@ -1432,12 +1488,15 @@ class NextGenApp:
             else:
                 _logger.warning("Queue manager not available for configuration")
         except Exception as e:
-            _logger.warning(f"Failed to configure queue manager: {e}")
+            _logger.warning("Failed to configure queue manager: %s", e)
 
         # Use UI Manager to create interface
         try:
             demo = self.ui_manager.create_interface(
-                tab_modules, event_handlers, main_app=self
+                tab_modules,
+                event_handlers,
+                main_app=self,
+                sidebar_instance=sidebar_for_tabs,
             )
         except Exception as e:
             _logger.exception("Error creating interface: %s", e)
@@ -1555,7 +1614,8 @@ class NextGenApp:
             async def _stream():
                 nonlocal cumulative
                 try:
-                    async for event in user_agent.stream_message(question, session_id):
+                    # Pass app's language for proper i18n
+                    async for event in user_agent.stream_message(question, session_id, language=self.language):
                         if not event:
                             continue
                         et = event.get("type")
@@ -1626,7 +1686,17 @@ class NextGenApp:
             # gr.api(_api_ask_stream, api_name="ask_stream")
 
         # Configure concurrency and queuing AFTER registering named endpoints
+        # Always initialize queue (even with minimal settings) to prevent AttributeError.
+        # Reference: ``cmw-rag/rag_engine/api/app.py`` — lightweight tails use ``queue=False``;
+        # streaming/chat handlers run on the Gradio queue via ``QueueManager.configure_queue``.
         self.queue_manager.configure_queue(demo)
+
+        # Ensure queue is initialized even if configure_queue didn't call demo.queue()
+        # This prevents AttributeError: 'NoneType' object has no attribute 'max_thread_count'
+        if demo._queue is None:
+            # Initialize with minimal default settings
+            demo.queue(default_concurrency_limit=1, status_update_rate="auto")
+            _logger.info("Queue initialized with minimal default settings")
 
         # Consolidate all components from UI Manager (single source of truth)
         self.components = self.ui_manager.get_components()
@@ -1673,11 +1743,27 @@ class NextGenAppWithLanguageDetection(NextGenApp):
 
 # Global demo variable for single port architecture
 demo = None
+# Tracks UI-shaping env (home order, download prep) so cached Blocks rebuild when they change.
+_DEMO_UI_LAYOUT_SIG: str | None = None
+
+
+def _ui_layout_env_signature() -> str:
+    """Stable fingerprint for UI layout env vars (same interpreter, e.g. watch / reload)."""
+    return os.getenv("CMW_UI_DOWNLOAD_PREP_AFTER_STREAM") or ""
 
 
 def get_demo_with_language_detection():
     """Get or create the demo interface with language detection support"""
-    global demo
+    global demo, _DEMO_UI_LAYOUT_SIG
+
+    sig = _ui_layout_env_signature()
+    if demo is not None and _DEMO_UI_LAYOUT_SIG != sig:
+        _logger.info(
+            "Rebuilding demo: UI layout env changed (%r -> %r)",
+            _DEMO_UI_LAYOUT_SIG,
+            sig,
+        )
+        demo = None
 
     if demo is None:
         try:
@@ -1693,6 +1779,7 @@ def get_demo_with_language_detection():
             if not hasattr(demo, "_queue"):
                 demo._queue = None
 
+            _DEMO_UI_LAYOUT_SIG = sig
             _logger.info(f"🌐 Demo created with detected language: {detected_language}")
         except Exception as e:
             _logger.exception("Error creating demo: %s", e)
@@ -1704,6 +1791,7 @@ def get_demo_with_language_detection():
             if not hasattr(fallback_demo, "_queue"):
                 fallback_demo._queue = None
             demo = fallback_demo
+            _DEMO_UI_LAYOUT_SIG = sig
 
     return demo
 
@@ -1748,6 +1836,7 @@ def reload_demo():
     global demo
     try:
         _logger.info("Reloading demo...")
+        demo = None
         demo = get_demo_with_language_detection()
         return demo
     except Exception as e:
@@ -1863,14 +1952,27 @@ def main():
     _logger.info(
         "Launching Gradio interface on port %s with language switching...", port
     )
-
     demo.launch(
         debug=True,
         share=False,
         server_name="0.0.0.0",
         server_port=port,
         show_error=True,
-        show_api=True,  # Enable API documentation for Hugging Face Spaces
+        # Gradio 6: show_api removed — use footer_links (same idea as cmw-rag mount_gradio_app).
+        footer_links=["api"],
+        theme=gr.themes.Soft(),
+        css_paths=[
+            Path(__file__).resolve().parent.parent
+            / "resources"
+            / "css"
+            / "cmw_copilot_theme.css",
+        ],
+        favicon_path=(
+            Path(__file__).resolve().parent.parent
+            / "resources"
+            / "img"
+            / "comindware_logo.svg"
+        ),
         # Allow Gradio's /file= endpoint to serve session-registered files
         # (generated images, extracted assets, etc.) from the cache dir.
         # Required when GRADIO_TEMP_DIR is set to a non-default path.
