@@ -41,7 +41,6 @@ class QuickActionsMixin:
         "quick_create_attr": "quick_create_attr_message",
         "quick_edit_mask": "quick_edit_mask_message",
         "quick_archive_attr": "quick_archive_attr_message",
-
     }
 
     def _get_translation(self, key: str) -> str:
@@ -135,8 +134,8 @@ class Sidebar(QuickActionsMixin):
                         and self.main_app
                         and hasattr(self.main_app, "session_manager")
                     ):
-                        session_agent = (
-                            self.main_app.session_manager.get_session_agent("default")
+                        session_agent = self.main_app.session_manager.get_session_agent(
+                            "default"
                         )
                         if session_agent:
                             fallback_choices, fallback_value = (
@@ -242,32 +241,35 @@ class Sidebar(QuickActionsMixin):
             )
 
         if "provider_model_selector" in self.components and overview is not None:
-            model_switch_event = self.components["provider_model_selector"].change(
-                fn=self._apply_llm_selection_combined,
-                inputs=[self.components["provider_model_selector"]],
-                outputs=[overview],
-            )
-            if "token_budget_display" in self.components and hasattr(
-                self, "event_handlers"
-            ):
-                update_token_budget_handler = self.event_handlers.get(
-                    "update_token_budget"
-                )
-                if update_token_budget_handler:
-                    model_switch_event.then(
-                        fn=update_token_budget_handler,
-                        outputs=[self.components["token_budget_display"]],
-                    )
-                    logging.getLogger(__name__).debug(
-                        "✅ Model switch wired to trigger token budget update"
-                    )
-
-            refresh_stats_handler = self.event_handlers.get("refresh_stats")
+            eh = getattr(self, "event_handlers", None) or {}
+            update_token_budget_handler = eh.get("update_token_budget")
+            token_budget_comp = self.components.get("token_budget_display")
+            refresh_stats_handler = eh.get("refresh_stats")
             stats_detail = None
             if self.main_app and getattr(self.main_app, "ui_manager", None):
                 stats_detail = self.main_app.ui_manager.get_components().get(
                     "stats_display"
                 )
+
+            if token_budget_comp and update_token_budget_handler:
+                model_switch_event = self.components["provider_model_selector"].change(
+                    fn=self._apply_llm_selection_update_overview_and_budget,
+                    inputs=[self.components["provider_model_selector"]],
+                    outputs=[overview, token_budget_comp],
+                )
+                logging.getLogger(__name__).debug(
+                    "✅ Model switch: overview + token budget (session agent)"
+                )
+            else:
+                model_switch_event = self.components["provider_model_selector"].change(
+                    fn=self._apply_llm_selection_update_overview_only,
+                    inputs=[self.components["provider_model_selector"]],
+                    outputs=[overview],
+                )
+                logging.getLogger(__name__).debug(
+                    "✅ Model switch wired to overview from session agent"
+                )
+
             if refresh_stats_handler and stats_detail is not None:
                 model_switch_event.then(
                     fn=refresh_stats_handler,
@@ -377,7 +379,7 @@ class Sidebar(QuickActionsMixin):
                 return
 
             # Store per-session compression flag on the agent
-            setattr(session_agent, "compression_enabled", bool(enabled))
+            session_agent.compression_enabled = bool(enabled)
             logging.getLogger(__name__).debug(
                 "✅ Compression toggle set to %s for session %s",
                 enabled,
@@ -472,7 +474,7 @@ class Sidebar(QuickActionsMixin):
 
         # Persist chosen default back to agent
         if value:
-            setattr(session_agent, "fallback_model_name", value)
+            session_agent.fallback_model_name = value
 
         return choices, value
 
@@ -501,7 +503,7 @@ class Sidebar(QuickActionsMixin):
                 return gr.update(choices=choices, value=value, visible=visible)
 
             # Store per-session fallback flag on the agent
-            setattr(session_agent, "use_fallback_model", bool(enabled))
+            session_agent.use_fallback_model = bool(enabled)
 
             # If disabled or master switch off, just hide selector
             if not visible:
@@ -554,7 +556,7 @@ class Sidebar(QuickActionsMixin):
             if not session_agent:
                 return
 
-            setattr(session_agent, "fallback_model_name", model_name)
+            session_agent.fallback_model_name = model_name
             logging.getLogger(__name__).debug(
                 "✅ Fallback model set to %s for session %s", model_name, session_id
             )
@@ -606,7 +608,9 @@ class Sidebar(QuickActionsMixin):
                         token_limit = int(model.get("token_limit", 0))
                         base_value = f"{provider.title()} / {model_name}"
                         # Reuse shared formatter for model+ctx
-                        label_suffix = self._format_model_with_ctx(model_name, token_limit)
+                        label_suffix = self._format_model_with_ctx(
+                            model_name, token_limit
+                        )
                         # Replace bare model_name with formatted label_suffix for display
                         label = f"{provider.title()} / {label_suffix}"
                         combinations.append((label, base_value))
@@ -642,7 +646,11 @@ class Sidebar(QuickActionsMixin):
         self, request: gr.Request | None = None
     ) -> str:
         """Current provider/model for the active Gradio session, else env default."""
-        if request and self.main_app and getattr(self.main_app, "session_manager", None):
+        if (
+            request
+            and self.main_app
+            and getattr(self.main_app, "session_manager", None)
+        ):
             try:
                 sid = self.main_app.session_manager.get_session_id(request)
                 agent = self.main_app.session_manager.get_session_agent(sid)
@@ -708,6 +716,43 @@ class Sidebar(QuickActionsMixin):
         except Exception as e:
             print(f"Error applying LLM selection: {e}")
             return self._get_translation("llm_apply_error")
+
+    def _format_stats_overview_after_llm_apply(
+        self, request: gr.Request | None = None
+    ) -> str:
+        """Session-aware overview from Stats tab after ``update_llm_provider``."""
+        stats_tab = None
+        if self.main_app and hasattr(self.main_app, "tab_instances"):
+            stats_tab = self.main_app.tab_instances.get("stats")
+        if stats_tab and hasattr(stats_tab, "format_stats_overview"):
+            return stats_tab.format_stats_overview(request)
+        return ""
+
+    def _token_budget_after_llm_apply(self, request: gr.Request | None = None) -> str:
+        eh = getattr(self, "event_handlers", None) or {}
+        fn = eh.get("update_token_budget")
+        if callable(fn):
+            return fn(request)
+        return get_translation_key(
+            "token_budget_initializing", getattr(self, "language", "en")
+        )
+
+    def _apply_llm_selection_update_overview_only(
+        self, provider_model_combination: str, request: gr.Request | None = None
+    ) -> str:
+        """Apply model switch; overview shows actual session LLM (not toast text)."""
+        self._apply_llm_selection_combined(provider_model_combination, request)
+        return self._format_stats_overview_after_llm_apply(request)
+
+    def _apply_llm_selection_update_overview_and_budget(
+        self, provider_model_combination: str, request: gr.Request | None = None
+    ) -> tuple[str, str]:
+        """Apply model switch and refresh overview + token budget in one event."""
+        self._apply_llm_selection_combined(provider_model_combination, request)
+        return (
+            self._format_stats_overview_after_llm_apply(request),
+            self._token_budget_after_llm_apply(request),
+        )
 
     def _is_mistral_model(self, provider: str, model: str) -> bool:
         """Check if the selected model is a Mistral model"""
