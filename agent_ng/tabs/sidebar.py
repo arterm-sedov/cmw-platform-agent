@@ -204,10 +204,9 @@ class Sidebar(QuickActionsMixin):
             )
 
     def create_sidebar_column(self) -> dict[str, Any]:
-        """Build persistent left sidebar (no TabItem)."""
+        """Build persistent left sidebar content (wrapped by ``gr.Sidebar`` in UIManager)."""
         logging.getLogger(__name__).info("✅ Sidebar: Creating sidebar column...")
-        with gr.Column(scale=1, min_width=320, elem_classes=["sidebar-column"]):
-            self.mount_sidebar_body_without_llm()
+        self.mount_sidebar_body_without_llm()
         logging.getLogger(__name__).info(
             "✅ Sidebar: Column ready with quick actions and status panels"
         )

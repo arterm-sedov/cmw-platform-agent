@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from .i18n_translations import get_translation_key
-from .tabs.sidebar import Sidebar
+from .tabs.sidebar import Sidebar as SidebarPanel
 import gradio as gr
 
 # Import configuration with fallback for direct execution
@@ -60,7 +60,7 @@ class UIManager:
         event_handlers: dict[str, Callable],
         main_app=None,
         *,
-        sidebar_instance: Sidebar | None = None,
+        sidebar_instance: SidebarPanel | None = None,
     ) -> gr.Blocks:
         # Store main_app reference for initialization completion checks
         self._main_app = main_app
@@ -91,7 +91,7 @@ class UIManager:
             with gr.Row(), gr.Column():
                 gr.Markdown(f"# {hero_title}", elem_classes=["hero-title"])
 
-            sb = sidebar_instance or Sidebar(
+            sb = sidebar_instance or SidebarPanel(
                 event_handlers, language=self.language, i18n_instance=self.i18n
             )
             sb.set_main_app(main_app)
@@ -102,12 +102,18 @@ class UIManager:
             )
 
             with gr.Row(equal_height=False):
-                with gr.Column(scale=1, min_width=320):
+                with gr.Sidebar(
+                    label=self._get_translation("tab_sidebar"),
+                    open=True,
+                    width=320,
+                    position="left",
+                    elem_classes=["cmw-gradio-sidebar"],
+                ):
                     sb.create_sidebar_column()
                     if not config_tab_present:
                         sb.mount_llm_selection_ui()
 
-                with gr.Column(scale=4):
+                with gr.Column(scale=1, min_width=0):
                     with gr.Tabs():
                         for tab_module in tab_modules:
                             if tab_module:
