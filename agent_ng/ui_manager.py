@@ -151,6 +151,8 @@ class UIManager:
             self.components["sidebar_instance"] = sb
             self.components.update(sb.get_components())
 
+            sb.ensure_llm_events_wired()
+
             sb.connect_quick_action_dropdown()
 
             # Connect DownloadsTab to update from chat streaming events

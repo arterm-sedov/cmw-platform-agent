@@ -166,7 +166,6 @@ class ConfigTab:
                 with gr.Column(scale=1):
                     if self.sidebar_instance is not None:
                         self.sidebar_instance.mount_llm_selection_ui()
-                        self.sidebar_instance.ensure_llm_events_wired()
                     else:
                         gr.Markdown("*LLM selection unavailable (internal).*")
 

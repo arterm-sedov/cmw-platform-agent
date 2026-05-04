@@ -161,7 +161,6 @@ class Sidebar(QuickActionsMixin):
                 value=self._get_default_compression_enabled(),
                 interactive=True,
             )
-        self.ensure_llm_events_wired()
 
     def mount_sidebar_body_without_llm(self) -> None:
         """Quick actions + progress + token budget (status lives in Stats tab)."""
