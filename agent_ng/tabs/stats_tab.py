@@ -68,15 +68,9 @@ class StatsTab:
                 f"### {self._get_translation('status_title')}",
                 elem_classes=["llm-selection-title"],
             )
-            self.components["stats_tab_overview_display"] = gr.Markdown(
-                value=self._get_translation("stats_loading"),
-                elem_id="stats-overview-display",
-            )
-            gr.Markdown("---")
-            # Create Markdown component for rich formatting
             self.components["stats_display"] = gr.Markdown(
                 value=self._get_translation("stats_loading"),
-                elem_id="stats-display"
+                elem_id="stats-display",
             )
 
         # Control buttons row
@@ -174,52 +168,6 @@ class StatsTab:
         from ..i18n_translations import get_translation_key
 
         return get_translation_key(key, self.language)
-
-
-    def format_stats_overview(self, request: gr.Request = None) -> str:
-        """Short session status block (same contract as former sidebar status)."""
-        if not request:
-            try:
-                from gradio.context import Context
-
-                if hasattr(Context, "root_block") and Context.root_block:
-                    request = Context.root_block.get_request()
-            except Exception:
-                logging.getLogger(__name__).debug(
-                    "format_stats_overview: could not resolve request", exc_info=True
-                )
-
-        agent = None
-        if (
-            request
-            and hasattr(self, "main_app")
-            and hasattr(self.main_app, "session_manager")
-        ):
-            sid = self.main_app.session_manager.get_session_id(request)
-            agent = self.main_app.session_manager.get_session_agent(sid)
-
-        if not agent:
-            return self._get_translation("agent_not_available")
-
-        try:
-            stats = agent.get_stats()
-            ready = stats["agent_status"]["is_ready"]
-            model = stats["llm_info"].get("model_name", "Unknown")
-            provider = stats["llm_info"].get("provider", "Unknown")
-            tools = stats["agent_status"]["tools_count"]
-            msg_count = stats["conversation_stats"]["message_count"]
-            line1 = self._get_translation(
-                "status_ready_true" if ready else "status_ready_false"
-            )
-            return (
-                f"{line1}\n"
-                f"- {self._get_translation('current_model').format(model=model)}\n"
-                f"- {self._get_translation('provider_info').format(provider=provider)}\n"
-                f"- {self._get_translation('tools_label')}: {tools}\n"
-                f"- {self._get_translation('total_messages_label')}: {msg_count}"
-            )
-        except Exception as exc:
-            return f"{self._get_translation('error_loading_stats')}: {exc}"
 
     def format_stats_display(self, request: gr.Request = None) -> str:
         """Format and return the complete stats display - always session-aware"""

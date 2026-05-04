@@ -1,4 +1,4 @@
-"""LLM controls: wire events after overview is registered (Config tab)."""
+"""LLM controls: wire events after stats_display is registered (UIManager merge)."""
 
 from unittest.mock import MagicMock, patch
 
@@ -16,12 +16,12 @@ def test_mount_llm_selection_ui_does_not_set_events_connected():
     assert panel._llm_events_connected is False
 
 
-def test_apply_llm_selection_update_overview_reads_stats_not_combined_toast():
-    """Overview after model change must reflect session stats, not success toast text."""
+def test_apply_llm_selection_update_stats_reads_display_not_combined_toast():
+    """Stats after model change must reflect session, not success toast text."""
     panel = SidebarPanel(event_handlers={}, language="en")
     panel.main_app = MagicMock()
     stats_tab = MagicMock()
-    stats_tab.format_stats_overview.return_value = "__overview_from_stats__"
+    stats_tab.format_stats_display.return_value = "__stats_from_tab__"
     panel.main_app.tab_instances = {"stats": stats_tab}
 
     with patch.object(
@@ -29,26 +29,24 @@ def test_apply_llm_selection_update_overview_reads_stats_not_combined_toast():
         "_apply_llm_selection_combined",
         return_value="toast would be wrong here",
     ):
-        out = panel._apply_llm_selection_update_overview_only(
-            "provider_a / model_x", None
-        )
+        out = panel._apply_llm_selection_update_stats_only("provider_a / model_x", None)
 
-    assert out == "__overview_from_stats__"
-    stats_tab.format_stats_overview.assert_called_once()
+    assert out == "__stats_from_tab__"
+    stats_tab.format_stats_display.assert_called_once()
 
 
-def test_apply_llm_selection_update_overview_and_budget_returns_pair():
+def test_apply_llm_selection_update_stats_and_budget_returns_pair():
     panel = SidebarPanel(
         event_handlers={"update_token_budget": lambda _req: "__budget__"},
         language="en",
     )
     panel.main_app = MagicMock()
     stats_tab = MagicMock()
-    stats_tab.format_stats_overview.return_value = "__ov__"
+    stats_tab.format_stats_display.return_value = "__stats__"
     panel.main_app.tab_instances = {"stats": stats_tab}
 
     with patch.object(SidebarPanel, "_apply_llm_selection_combined", return_value="x"):
-        ov, bud = panel._apply_llm_selection_update_overview_and_budget("p / m", None)
+        st, bud = panel._apply_llm_selection_update_stats_and_budget("p / m", None)
 
-    assert ov == "__ov__"
+    assert st == "__stats__"
     assert bud == "__budget__"

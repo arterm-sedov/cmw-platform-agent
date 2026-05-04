@@ -234,13 +234,11 @@ class Sidebar(QuickActionsMixin):
     def _connect_llm_events(self) -> None:
         """LLM dropdown / fallback / compression handlers."""
         logging.getLogger(__name__).debug("🔗 Sidebar: Wiring LLM event handlers...")
-        overview = None
+        stats_block = None
         if self.main_app and getattr(self.main_app, "ui_manager", None):
-            overview = self.main_app.ui_manager.get_components().get(
-                "stats_tab_overview_display"
-            )
+            stats_block = self.main_app.ui_manager.get_components().get("stats_display")
 
-        if "provider_model_selector" in self.components and overview is not None:
+        if "provider_model_selector" in self.components and stats_block is not None:
             eh = getattr(self, "event_handlers", None) or {}
             update_token_budget_handler = eh.get("update_token_budget")
             token_budget_comp = self.components.get("token_budget_display")
@@ -253,21 +251,21 @@ class Sidebar(QuickActionsMixin):
 
             if token_budget_comp and update_token_budget_handler:
                 model_switch_event = self.components["provider_model_selector"].change(
-                    fn=self._apply_llm_selection_update_overview_and_budget,
+                    fn=self._apply_llm_selection_update_stats_and_budget,
                     inputs=[self.components["provider_model_selector"]],
-                    outputs=[overview, token_budget_comp],
+                    outputs=[stats_block, token_budget_comp],
                 )
                 logging.getLogger(__name__).debug(
-                    "✅ Model switch: overview + token budget (session agent)"
+                    "✅ Model switch: stats + token budget (session agent)"
                 )
             else:
                 model_switch_event = self.components["provider_model_selector"].change(
-                    fn=self._apply_llm_selection_update_overview_only,
+                    fn=self._apply_llm_selection_update_stats_only,
                     inputs=[self.components["provider_model_selector"]],
-                    outputs=[overview],
+                    outputs=[stats_block],
                 )
                 logging.getLogger(__name__).debug(
-                    "✅ Model switch wired to overview from session agent"
+                    "✅ Model switch wired to stats from session agent"
                 )
 
             if refresh_stats_handler and stats_detail is not None:
@@ -717,15 +715,15 @@ class Sidebar(QuickActionsMixin):
             print(f"Error applying LLM selection: {e}")
             return self._get_translation("llm_apply_error")
 
-    def _format_stats_overview_after_llm_apply(
+    def _format_stats_display_after_llm_apply(
         self, request: gr.Request | None = None
     ) -> str:
-        """Session-aware overview from Stats tab after ``update_llm_provider``."""
+        """Session-aware stats block from Stats tab after ``update_llm_provider``."""
         stats_tab = None
         if self.main_app and hasattr(self.main_app, "tab_instances"):
             stats_tab = self.main_app.tab_instances.get("stats")
-        if stats_tab and hasattr(stats_tab, "format_stats_overview"):
-            return stats_tab.format_stats_overview(request)
+        if stats_tab and hasattr(stats_tab, "format_stats_display"):
+            return stats_tab.format_stats_display(request)
         return ""
 
     def _token_budget_after_llm_apply(self, request: gr.Request | None = None) -> str:
@@ -737,20 +735,20 @@ class Sidebar(QuickActionsMixin):
             "token_budget_initializing", getattr(self, "language", "en")
         )
 
-    def _apply_llm_selection_update_overview_only(
+    def _apply_llm_selection_update_stats_only(
         self, provider_model_combination: str, request: gr.Request | None = None
     ) -> str:
-        """Apply model switch; overview shows actual session LLM (not toast text)."""
+        """Apply model switch; stats show actual session (not toast text)."""
         self._apply_llm_selection_combined(provider_model_combination, request)
-        return self._format_stats_overview_after_llm_apply(request)
+        return self._format_stats_display_after_llm_apply(request)
 
-    def _apply_llm_selection_update_overview_and_budget(
+    def _apply_llm_selection_update_stats_and_budget(
         self, provider_model_combination: str, request: gr.Request | None = None
     ) -> tuple[str, str]:
-        """Apply model switch and refresh overview + token budget in one event."""
+        """Apply model switch and refresh stats + token budget in one event."""
         self._apply_llm_selection_combined(provider_model_combination, request)
         return (
-            self._format_stats_overview_after_llm_apply(request),
+            self._format_stats_display_after_llm_apply(request),
             self._token_budget_after_llm_apply(request),
         )
 

@@ -1300,14 +1300,8 @@ class NextGenApp:
         self._refresh_ui_after_message()
 
     def _update_status(self, request: gr.Request = None) -> str:
-        """Update concise status overview (Stats tab header block)."""
-        stats_tab = self.tab_instances.get("stats")
-        if stats_tab and hasattr(stats_tab, "format_stats_overview"):
-            return stats_tab.format_stats_overview(request)
-
-        if self.is_ready():
-            return get_translation_key("agent_ready", self.language)
-        return get_translation_key("agent_initializing", self.language)
+        """Update Statistics tab (same content as full stats refresh)."""
+        return self._refresh_stats(request)
 
     def _update_token_budget(self, request: gr.Request = None) -> str:
         """Update token budget display - delegates to chat tab with session awareness"""
@@ -1361,11 +1355,10 @@ class NextGenApp:
     def update_all_ui_components(
         self, request: gr.Request = None
     ) -> tuple[str, str, str, str]:
-        """Refresh overview + full stats + logs (session-aware)."""
-        overview = self._update_status(request)
+        """Refresh stats block (three outputs) + logs (session-aware)."""
         stats = self._refresh_stats(request)
         logs = self._refresh_logs(request)
-        return overview, stats, stats, logs
+        return stats, stats, stats, logs
 
     def trigger_ui_update(self):
         """Trigger UI update after agent initialization or message processing"""

@@ -188,7 +188,6 @@ class UIManager:
             # Wire end-of-turn event-driven refresh using existing chat events
             try:
                 update_all_ui_handler = event_handlers.get("update_all_ui")
-                overview_comp = self.components.get("stats_tab_overview_display")
                 stats_comp = self.components.get("stats_display")
                 logs_comp = self.components.get("logs_display")
                 token_budget_comp = self.components.get("token_budget_display")
@@ -197,12 +196,11 @@ class UIManager:
                 chat_tab_instance = self.components.get("chattab_tab")
                 if (
                     update_all_ui_handler
-                    and overview_comp
                     and stats_comp
                     and logs_comp
                     and chat_tab_instance
                 ):
-                    refresh_outputs = [overview_comp, stats_comp, stats_comp, logs_comp]
+                    refresh_outputs = [stats_comp, stats_comp, stats_comp, logs_comp]
 
                     # After send (streaming) completes
                     if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
@@ -301,13 +299,7 @@ class UIManager:
         update_progress_handler = event_handlers.get("update_progress_display")
 
 
-        # Load initial UI state once on startup
-        overview_comp = self.components.get("stats_tab_overview_display")
-        if overview_comp and update_status_handler:
-            demo.load(
-                fn=update_status_handler,
-                outputs=[overview_comp],
-            )
+        # Load initial UI state once on startup (stats: single demo.load below)
 
         if "token_budget_display" in self.components and update_token_budget_handler:
             demo.load(
@@ -355,16 +347,16 @@ class UIManager:
         # Single interval from central configuration
         refresh_interval = get_refresh_intervals().interval
 
-        # Status updates
-        overview_tick = self.components.get("stats_tab_overview_display")
-        if overview_tick and event_handlers.get("update_status"):
+        # Status / stats updates (single markdown on Statistics tab)
+        stats_tick = self.components.get("stats_display")
+        if stats_tick and event_handlers.get("update_status"):
             status_timer = gr.Timer(refresh_interval, active=True)
             status_timer.tick(
                 fn=event_handlers["update_status"],
-                outputs=[overview_tick],
+                outputs=[stats_tick],
             )
             logging.getLogger(__name__).debug(
-                "✅ Stats overview auto-refresh timer set (%ss)", refresh_interval
+                "✅ Stats display auto-refresh timer set (%ss)", refresh_interval
             )
 
         # Token budget updates - hybrid approach (immediate events + timer fallback)
