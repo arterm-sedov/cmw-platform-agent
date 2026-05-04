@@ -83,14 +83,19 @@ def test_export_html_after_turn_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert get_ui_export_html_after_turn() is True
 
 
-def test_home_first_default_off(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_home_first_default_home_leftmost(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CMW_UI_HOME_FIRST", raising=False)
-    assert get_ui_home_first() is False
+    assert get_ui_home_first() is True
 
 
-def test_home_first_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_home_first_truthy_still_home_leftmost(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CMW_UI_HOME_FIRST", "1")
     assert get_ui_home_first() is True
+
+
+def test_home_first_chat_before_home_opt_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CMW_UI_HOME_FIRST", "0")
+    assert get_ui_home_first() is False
 
 
 def test_download_prep_after_stream_default_off(monkeypatch: pytest.MonkeyPatch) -> None:

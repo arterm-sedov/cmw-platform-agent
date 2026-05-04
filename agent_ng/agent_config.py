@@ -311,14 +311,17 @@ def get_ui_export_html_after_turn() -> bool:
 
 
 def get_ui_home_first() -> bool:
-    """Keep the Home tab as the first tab (leftmost) in ``gr.Tabs``.
+    """Place Home leftmost in ``gr.Tabs`` (default after tab-mount / queue stall fixes).
 
-    When ``False`` (default), Chat is placed before Home to reduce Gradio 6 stalls with
-    Home-first + many tabs.
+    Only explicit falsy tokens opt out: ``0``/``false``/``no``/``off`` puts Chat before Home.
+    Any other non-empty value (including ``1``/``true``) keeps Home first.
 
-    Environment ``CMW_UI_HOME_FIRST``: ``1``/``true``/``yes``/``on`` to show Home first.
+    Environment ``CMW_UI_HOME_FIRST``.
     """
-    return env_flag_true("CMW_UI_HOME_FIRST")
+    raw = (os.getenv("CMW_UI_HOME_FIRST") or "").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return True
 
 
 def get_ui_download_prep_after_stream() -> bool:

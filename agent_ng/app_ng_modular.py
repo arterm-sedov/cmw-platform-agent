@@ -1437,7 +1437,7 @@ class NextGenApp:
             else:
                 _logger.warning("ChatTab not available")
 
-            # Default: Chat before Home (``CMW_UI_HOME_FIRST`` restores Home-first order).
+            # Default: Home before Chat; ``CMW_UI_HOME_FIRST=0|false`` → Chat first.
             if get_ui_home_first():
                 for _m in (home_tab_inst, chat_tab_inst):
                     if _m is not None:
@@ -1779,7 +1779,7 @@ class NextGenAppWithLanguageDetection(NextGenApp):
 
 # Global demo variable for single port architecture
 demo = None
-# Tracks dev-only UI env (CMW_UI_TABS / stack / timers) so cached Blocks rebuilds when they change.
+# Tracks dev-only UI env (tabs / stack / timers / home order) so cached Blocks rebuild when they change.
 _DEMO_UI_EXPERIMENT_SIG: str | None = None
 
 
@@ -1791,6 +1791,7 @@ def _ui_experiment_signature() -> str:
             os.getenv("CMW_UI_TAB_LIMIT") or "",
             os.getenv("CMW_UI_STACK_HOME_CHAT") or "",
             os.getenv("CMW_UI_DISABLE_AUTO_TIMERS") or "",
+            os.getenv("CMW_UI_HOME_FIRST") or "",
         ]
     )
 
