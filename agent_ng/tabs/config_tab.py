@@ -31,6 +31,31 @@ class ConfigTab:
             "yes",
         )
 
+    @staticmethod
+    def _resolve_config_llm_provider_ids(main_app: Any) -> list[str]:
+        """Provider ids for API-key rows — from ``LLMManager`` only (no static fallback)."""
+        log = logging.getLogger(__name__)
+        if main_app is None or not getattr(main_app, "llm_manager", None):
+            log.warning(
+                "ConfigTab: no LLM manager when building API key rows; "
+                "provider list empty (check app wiring / init order)."
+            )
+            return []
+        try:
+            ids = main_app.llm_manager.get_available_providers()
+        except Exception:
+            log.exception(
+                "ConfigTab: get_available_providers() failed; API key rows omitted."
+            )
+            return []
+        if not ids:
+            log.warning(
+                "ConfigTab: get_available_providers() returned no providers "
+                "(no API keys / env for any configured provider?)."
+            )
+            return []
+        return sorted(ids)
+
     def __init__(
         self,
         event_handlers: dict[str, Callable],
@@ -148,34 +173,9 @@ class ConfigTab:
                     gr.Markdown("*LLM selection unavailable (internal).*")
 
             with gr.Column(scale=1, elem_classes=["model-card"]):
-                llm_providers = [
-                    "gemini",
-                    "groq",
-                    "huggingface",
-                    "openai",
-                    "openrouter",
-                    "polza",
-                    "mistral",
-                    "gigachat",
-                ]
-                try:
-                    if (
-                        self.main_app
-                        and hasattr(self.main_app, "llm_manager")
-                        and self.main_app.llm_manager
-                    ):
-                        available = self.main_app.llm_manager.get_available_providers()
-                        if available:
-                            llm_providers = sorted(available)
-                except Exception:
-                    logging.getLogger(__name__).debug(
-                        "ConfigTab: fallback static provider list "
-                        "(llm_manager unavailable)",
-                        exc_info=True,
-                    )
-
-                self._config_llm_providers = list(llm_providers)
-
+                self._config_llm_providers = self._resolve_config_llm_provider_ids(
+                    self.main_app
+                )
                 _api_keys_heading = self._get_translation(
                     "config_llm_api_keys_table_label"
                 )
@@ -184,24 +184,29 @@ class ConfigTab:
                     elem_classes=["llm-selection-title"],
                 )
                 self._llm_provider_key_inputs = []
-                with gr.Column():
-                    for prov in self._config_llm_providers:
-                        tb = gr.Textbox(
-                            label=prov,
-                            type="password",
-                            value="",
-                            lines=1,
-                            max_lines=1,
-                            placeholder="sk-...",
-                        )
-                        self._llm_provider_key_inputs.append(tb)
+                if not self._config_llm_providers:
+                    gr.Markdown(
+                        self._get_translation("config_llm_providers_none_message")
+                    )
+                else:
+                    with gr.Column():
+                        for prov in self._config_llm_providers:
+                            tb = gr.Textbox(
+                                label=prov,
+                                type="password",
+                                value="",
+                                lines=1,
+                                max_lines=1,
+                                placeholder="sk-...",
+                            )
+                            self._llm_provider_key_inputs.append(tb)
+                    gr.Markdown(
+                        "*"
+                        + self._get_translation("config_llm_empty_means_default")
+                        + "*"
+                    )
                 self.components["llm_provider_key_inputs"] = (
                     self._llm_provider_key_inputs
-                )
-                gr.Markdown(
-                    "*"
-                    + self._get_translation("config_llm_empty_means_default")
-                    + "*"
                 )
 
         with gr.Row(equal_height=True):

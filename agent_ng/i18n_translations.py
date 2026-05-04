@@ -245,6 +245,10 @@ RUSSIAN_TRANSLATIONS = {
     "config_llm_api_key_label": "Ключ API",
     "config_llm_api_keys_table_label": "Ключи API провайдеров",
     "config_llm_empty_means_default": "Оставьте пустым, чтобы использовать настройки по умолчанию",
+    "config_llm_providers_none_message": (
+        "Нет доступных провайдеров LLM (менеджер вернул пустой список). "
+        "Проверьте ключи API в окружении и журнал сервера."
+    ),
     # Statistics labels
     "agent_status_section": "**Агент:**",
     "conversation_section": "**Диалог:**",
@@ -596,6 +600,10 @@ ENGLISH_TRANSLATIONS = {
     "config_llm_api_key_label": "API Key",
     "config_llm_api_keys_table_label": "Provider API keys",
     "config_llm_empty_means_default": "Leave empty to use default settings",
+    "config_llm_providers_none_message": (
+        "No LLM providers available (manager returned an empty list). "
+        "Check API keys in the environment and the server log."
+    ),
     # Statistics labels
     "agent_status_section": "**Agent:**",
     "conversation_section": "**Conversation:**",
