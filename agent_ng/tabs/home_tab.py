@@ -37,52 +37,45 @@ class HomeTab:
         """
         logging.getLogger(__name__).info("✅ HomeTab: Creating home interface...")
 
-        with gr.TabItem(
-            self._get_translation("tab_home"),
-            id="home",
-            render_children=True,
-        ) as tab:
-            self.build_ui(show_stack_heading=False)
+        with gr.TabItem(self._get_translation("tab_home"), id="home") as tab:
+            # Create home interface
+            self._create_home_interface()
+
+            # Connect event handlers
+            self._connect_events()
 
         return tab, self.components
-
-    def build_ui(self, *, show_stack_heading: bool = False) -> None:
-        """Mount home content (inside ``TabItem``)."""
-        if show_stack_heading:
-            gr.Markdown(
-                f"### {self._get_translation('tab_home')}",
-                elem_classes=["stack-section-heading"],
-            )
-        self._create_home_interface()
-        self._connect_events()
 
     def _create_home_interface(self):
         """Create the home interface with welcome content"""
         logging.getLogger(__name__).debug("🏠 HomeTab: Creating home interface...")
 
-        # Nested Column → Row → two Columns (Gradio requires explicit nesting; a single
-        # ``with col, row, col:`` statement breaks the block tree and breaks other tabs.)
-        with gr.Column(elem_classes=["home-container"]):
-            with gr.Row(elem_classes=["home-content"]):
-                with gr.Column(elem_classes=["welcome-block"]):
-                    gr.Markdown(
-                        f"## {self._get_translation('welcome_title')}",
-                        elem_classes=["welcome-title"],
-                    )
-                    gr.Markdown(
-                        self._get_translation("welcome_description"),
-                        elem_classes=["welcome-description"],
-                    )
-                with gr.Column(elem_classes=["quick-start-block"]):
-                    gr.Markdown(
-                        f"## {self._get_translation('quick_start_title')}",
-                        elem_classes=["quick-start-title"],
-                    )
-                    gr.Markdown(
-                        self._get_translation("quick_start_description"),
-                        elem_classes=["quick-start-description"],
-                    )
+        # Main welcome section
+        with (
+            gr.Column(elem_classes=["home-container"]),
+            gr.Row(elem_classes=["home-content"]),
+            gr.Column(scale=2)
+        ):
+            with gr.Column(elem_classes=["welcome-block"]):
+                gr.Markdown(
+                    f"## {self._get_translation('welcome_title')}",
+                    elem_classes=["welcome-title"]
+                )
+                gr.Markdown(
+                    self._get_translation("welcome_description"),
+                    elem_classes=["welcome-description"]
+                )
 
+            # Quick start section
+            with gr.Column(elem_classes=["quick-start-block"]):
+                gr.Markdown(
+                    f"## {self._get_translation('quick_start_title')}",
+                    elem_classes=["quick-start-title"]
+                )
+                gr.Markdown(
+                    self._get_translation("quick_start_description"),
+                    elem_classes=["quick-start-description"]
+                )
     def _connect_events(self):
         """Connect event handlers for the home tab"""
         logging.getLogger(__name__).debug("🔗 HomeTab: Connecting event handlers...")

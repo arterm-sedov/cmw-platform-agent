@@ -107,11 +107,7 @@ class Sidebar(QuickActionsMixin):
             "✅ Sidebar: Creating sidebar as tab interface..."
         )
 
-        with gr.TabItem(
-            self._get_translation("tab_sidebar"),
-            id="sidebar",
-            render_children=True,
-        ) as tab:
+        with gr.TabItem(self._get_translation("tab_sidebar"), id="sidebar") as tab:
             # LLM Selection section
             with gr.Column(elem_classes=["model-card"]):
                 gr.Markdown(
@@ -145,8 +141,25 @@ class Sidebar(QuickActionsMixin):
                 fallback_choices: list[str] = []
                 fallback_value: str | None = None
 
-                # Defer get_session_agent until demo.load — avoids multi-second Blocks build
-                # (see HD timing). Hydrate uses gr.Request session id for isolation.
+                if default_fallback_visible:
+                    try:
+                        if hasattr(self, "main_app") and self.main_app and hasattr(self.main_app, "session_manager"):
+                                session_agent = (
+                                    self.main_app.session_manager.get_session_agent(
+                                        "default"
+                                    )
+                                )
+                                if session_agent:
+                                    (
+                                        fallback_choices,
+                                        fallback_value,
+                                    ) = self._build_fallback_defaults_for_agent(
+                                        session_agent
+                                    )
+                    except Exception as exc:  # pragma: no cover - defensive
+                        logging.getLogger(__name__).debug(
+                            "Failed to pre-populate fallback selector: %s", exc
+                        )
 
                 self.components["fallback_model_selector"] = gr.Dropdown(
                     choices=fallback_choices,
@@ -287,30 +300,6 @@ class Sidebar(QuickActionsMixin):
         logging.getLogger(__name__).debug(
             "✅ Sidebar: All event handlers connected successfully"
         )
-
-    def hydrate_fallback_dropdown_on_load(
-        self, request: gr.Request | None = None
-    ) -> Any:
-        """Populate fallback dropdown after load — uses session id from ``request`` when present."""
-        if not self._fallback_master_switch_enabled():
-            return gr.update()
-        if "fallback_model_selector" not in self.components:
-            return gr.update()
-        if not self._get_default_fallback_enabled():
-            return gr.update()
-        try:
-            if not self.main_app or not getattr(self.main_app, "session_manager", None):
-                return gr.update()
-            sm = self.main_app.session_manager
-            sid = sm.get_session_id(request) if request else "default"
-            session_agent = sm.get_session_agent(sid)
-            choices, value = self._build_fallback_defaults_for_agent(session_agent)
-            return gr.update(choices=choices, value=value, visible=True)
-        except Exception as exc:
-            logging.getLogger(__name__).debug(
-                "hydrate_fallback_dropdown_on_load failed: %s", exc
-            )
-            return gr.update()
 
     def set_main_app(self, app):
         """Set reference to main app for accessing session manager and other services"""

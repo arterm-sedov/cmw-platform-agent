@@ -11,28 +11,20 @@ from collections.abc import Callable
 import logging
 import os
 from pathlib import Path
-
 from typing import Any, Dict, List, Optional, Tuple
-
 from .i18n_translations import get_translation_key
 from .tabs.sidebar import Sidebar
 import gradio as gr
 
 # Import configuration with fallback for direct execution
 try:
-    from agent_ng.agent_config import (
-        get_refresh_intervals,
-        get_ui_download_prep_after_stream,
-    )
+    from agent_ng.agent_config import get_refresh_intervals
 except ImportError:
     # Fallback for direct execution
     from pathlib import Path
     import sys
     sys.path.append(str(Path(__file__).parent))
-    from agent_config import (  # type: ignore[no-redef]
-        get_refresh_intervals,
-        get_ui_download_prep_after_stream,
-    )
+    from agent_config import get_refresh_intervals
 
 class UIManager:
     """Manages Gradio UI creation and configuration with i18n support"""
@@ -62,14 +54,7 @@ class UIManager:
         except Exception as e:
             logging.getLogger(__name__).warning(f"Could not set GRADIO_ALLOWED_PATHS: {e}")
 
-    def create_interface(
-        self,
-        tab_modules: list[Any],
-        event_handlers: dict[str, Callable],
-        main_app=None,
-        *,
-        include_sidebar_tab: bool = True,
-    ) -> gr.Blocks:
+    def create_interface(self, tab_modules: list[Any], event_handlers: dict[str, Callable], main_app=None) -> gr.Blocks:
         # Store main_app reference for initialization completion checks
         self._main_app = main_app
         """
@@ -78,8 +63,6 @@ class UIManager:
         Args:
             tab_modules: List of tab module instances
             event_handlers: Dictionary of event handlers
-            main_app: Application instance for tab callbacks
-            include_sidebar_tab: When False, omit the settings/sidebar tab.
 
         Returns:
             Gradio Blocks interface
@@ -101,17 +84,10 @@ class UIManager:
             with gr.Row(), gr.Column():
                 gr.Markdown(f"# {hero_title}", elem_classes=["hero-title"])
 
-            # Settings/sidebar tab (optional — omit via ``include_sidebar_tab=False``)
-            sidebar_instance = None
-            if include_sidebar_tab:
-                sidebar_instance = Sidebar(
-                    event_handlers, language=self.language, i18n_instance=self.i18n
-                )
-                sidebar_instance.set_main_app(main_app)
+            # Create sidebar as a tab (converted from sidebar component)
+            sidebar_instance = Sidebar(event_handlers, language=self.language, i18n_instance=self.i18n)
+            sidebar_instance.set_main_app(main_app)  # Pass main app reference
 
-            # Do not pass ``selected=`` here: Gradio binds ``Tabs.selected`` two-way
-            # (`js/tabs`). Forcing ``selected="home"`` while Home is already the first
-            # registered tab correlated with hangs on the first navigation away from Home.
             with gr.Tabs():
                 # Create tabs using provided tab modules
                 for tab_module in tab_modules:
@@ -121,56 +97,42 @@ class UIManager:
                             # Skip if tab_item is None (e.g., ConfigTab when CMW_USE_DOTENV=true)
                             if tab_item is None:
                                 logging.getLogger(__name__).info(
-                                    "⚠️ Skipping tab %s (create_tab returned None)",
-                                    tab_module.__class__.__name__,
+                                    f"⚠️ Skipping tab {tab_module.__class__.__name__} (create_tab returned None)"
                                 )
                                 continue
                             # Consolidate all components in one place
                             self.components.update(tab_components)
                             # Store tab reference for later use
-                            self.components[
-                                f"{tab_module.__class__.__name__.lower()}_tab"
-                            ] = tab_module
+                            self.components[f"{tab_module.__class__.__name__.lower()}_tab"] = tab_module
                             logging.getLogger(__name__).debug(
-                                "✅ Successfully created tab: %s",
-                                tab_module.__class__.__name__,
+                                f"✅ Successfully created tab: {tab_module.__class__.__name__}"
                             )
                         except Exception as e:
                             logging.getLogger(__name__).error(
-                                "❌ Error creating tab %s: %s",
-                                tab_module.__class__.__name__,
-                                e,
-                                exc_info=True,
+                                f"❌ Error creating tab {tab_module.__class__.__name__}: {e}",
+                                exc_info=True
                             )
                             raise
 
                 # Create sidebar as a tab (after other tabs)
-                if sidebar_instance is not None:
-                    try:
-                        sidebar_tab, sidebar_components = sidebar_instance.create_tab()
-                        # Skip if sidebar_tab is None
-                        if sidebar_tab is None:
-                            logging.getLogger(__name__).warning(
-                                "⚠️ Sidebar create_tab returned None, skipping"
-                            )
-                        else:
-                            # Consolidate sidebar components
-                            self.components.update(sidebar_components)
-                            self.components["sidebar_instance"] = sidebar_instance
-                            logging.getLogger(__name__).debug(
-                                "✅ Successfully created sidebar tab"
-                            )
-                    except Exception as e:
-                        logging.getLogger(__name__).error(
-                            "❌ Error creating sidebar tab: %s",
-                            e,
-                            exc_info=True,
+                try:
+                    sidebar_tab, sidebar_components = sidebar_instance.create_tab()
+                    # Skip if sidebar_tab is None
+                    if sidebar_tab is None:
+                        logging.getLogger(__name__).warning(
+                            "⚠️ Sidebar create_tab returned None, skipping"
                         )
-                        raise
-                else:
-                    logging.getLogger(__name__).info(
-                        "Sidebar/settings tab omitted (include_sidebar_tab=False)"
+                    else:
+                        # Consolidate sidebar components
+                        self.components.update(sidebar_components)
+                        self.components["sidebar_instance"] = sidebar_instance
+                        logging.getLogger(__name__).debug("✅ Successfully created sidebar tab")
+                except Exception as e:
+                    logging.getLogger(__name__).error(
+                        f"❌ Error creating sidebar tab: {e}",
+                        exc_info=True
                     )
+                    raise
 
             # Connect quick action dropdown after all components are available
             if "sidebar_instance" in self.components:
@@ -184,61 +146,23 @@ class UIManager:
                 download_btn = downloads_tab_instance.components.get("download_btn")
                 download_html_btn = downloads_tab_instance.components.get("download_html_btn")
                 if download_btn and download_html_btn:
-                    prep_after_stream = get_ui_download_prep_after_stream()
-                    chatbot_comp = chat_tab_instance.components.get("chatbot")
-                    stream_active_comp = chat_tab_instance.components.get(
-                        "streaming_active"
-                    )
-                    dl_tab = getattr(downloads_tab_instance, "_tab_item", None)
+                    # Wire download buttons to update after streaming completes
+                    def _update_downloads_from_chat(history):
+                        """Update download buttons from chat tab"""
+                        return chat_tab_instance.get_download_button_updates(history)
 
-                    def _downloads_update(history, *, generate_html: bool):
-                        """Update Markdown/HTML download buttons from chat history."""
-                        return chat_tab_instance.get_download_button_updates(
-                            history,
-                            generate_html=generate_html,
+                    if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
+                        chat_tab_instance.streaming_event.then(
+                            fn=_update_downloads_from_chat,
+                            inputs=[chat_tab_instance.components.get("chatbot")],
+                            outputs=[download_btn, download_html_btn],
                         )
-
-                    def _downloads_on_tab_select(history, streaming_active: bool):
-                        # Full MD+HTML export while the answer is streaming blocks the UI badly.
-                        if streaming_active:
-                            return chat_tab_instance.get_download_cached_ui_updates()
-                        return _downloads_update(history, generate_html=True)
-
-                    def _downloads_after_chat_turn(history):
-                        return _downloads_update(history, generate_html=True)
-
-                    # After each completed turn: refresh Markdown + HTML download buttons.
-                    if (
-                        chatbot_comp is not None
-                        and hasattr(chat_tab_instance, "submit_event")
-                        and chat_tab_instance.submit_event
-                    ):
+                    if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
                         chat_tab_instance.submit_event.then(
-                            fn=_downloads_after_chat_turn,
-                            inputs=[chatbot_comp],
+                            fn=_update_downloads_from_chat,
+                            inputs=[chat_tab_instance.components.get("chatbot")],
                             outputs=[download_btn, download_html_btn],
-                            queue=False,
-                            api_visibility="private",
-                        )
-                    if prep_after_stream and chatbot_comp is not None:
-                        if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
-                            chat_tab_instance.streaming_event.then(
-                                fn=_downloads_after_chat_turn,
-                                inputs=[chatbot_comp],
-                                outputs=[download_btn, download_html_btn],
-                                queue=False,
-                                api_visibility="private",
-                            )
-                    elif (
-                        dl_tab is not None
-                        and chatbot_comp is not None
-                        and stream_active_comp is not None
-                    ):
-                        dl_tab.select(
-                            fn=_downloads_on_tab_select,
-                            inputs=[chatbot_comp, stream_active_comp],
-                            outputs=[download_btn, download_html_btn],
-                            queue=False,
+                            queue=False,  # Don't queue file generation to prevent blocking
                         )
                     # Also wire clear event to hide download buttons
                     if hasattr(chat_tab_instance, "clear_event") and chat_tab_instance.clear_event:
@@ -261,63 +185,72 @@ class UIManager:
                 update_token_budget_handler = event_handlers.get("update_token_budget")
 
                 chat_tab_instance = self.components.get("chattab_tab")
+                if update_all_ui_handler and status_comp and stats_comp and logs_comp and chat_tab_instance:
+                    refresh_outputs = [status_comp, stats_comp, logs_comp]
 
-                # Single .then per trigger so Gradio passes gr.Request once; avoids
-                # queue=False tails where Request is missing and token sidebar stalls.
+                    # After send (streaming) completes
+                    if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
+                        chat_tab_instance.streaming_event.then(
+                            fn=update_all_ui_handler,
+                            outputs=refresh_outputs
+                        )
+
+                    # After submit completes
+                    if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
+                        chat_tab_instance.submit_event.then(
+                            fn=update_all_ui_handler,
+                            outputs=refresh_outputs
+                        )
+
+                    # Wire clear event to update stats/progress
+                    if hasattr(chat_tab_instance, "clear_event") and chat_tab_instance.clear_event:
+                        chat_tab_instance.clear_event.then(
+                            fn=update_all_ui_handler,
+                            outputs=refresh_outputs,
+                            queue=False,  # Don't queue UI updates
+                        )
+
+                    # Wire stop event to update stats/progress
+                    if hasattr(chat_tab_instance, "stop_event") and chat_tab_instance.stop_event:
+                        chat_tab_instance.stop_event.then(
+                            fn=update_all_ui_handler,
+                            outputs=refresh_outputs,
+                            queue=False,  # Don't queue UI updates
+                        )
+
+                    logging.getLogger(__name__).debug("✅ Event-driven UI refresh wired for end-of-turn updates, clear, and stop")
+
+                # Token budget refresh: wire separately to avoid changing update_all_ui signature
                 if (
-                    update_all_ui_handler
-                    and update_token_budget_handler
-                    and status_comp
-                    and stats_comp
-                    and logs_comp
+                    update_token_budget_handler
                     and token_budget_comp
                     and chat_tab_instance
                 ):
-                    refresh_outputs_all = [
-                        status_comp,
-                        stats_comp,
-                        logs_comp,
-                        token_budget_comp,
-                    ]
-
-                    def _refresh_sidebar_after_turn(
-                        request: gr.Request | None = None,
-                    ) -> tuple[str, str, str, str]:
-                        status_stats_logs = update_all_ui_handler(request)
-                        tb = update_token_budget_handler(request)
-                        return (*status_stats_logs, tb)
-
-                    _ste = chat_tab_instance
-                    _refresh_kw = {"queue": False, "api_visibility": "private"}
-                    if hasattr(_ste, "streaming_event") and _ste.streaming_event:
-                        _ste.streaming_event.then(
-                            fn=_refresh_sidebar_after_turn,
-                            outputs=refresh_outputs_all,
-                            **_refresh_kw,
+                    if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
+                        chat_tab_instance.streaming_event.then(
+                            fn=update_token_budget_handler,
+                            outputs=[token_budget_comp],
                         )
-                    if hasattr(_ste, "submit_event") and _ste.submit_event:
-                        _ste.submit_event.then(
-                            fn=_refresh_sidebar_after_turn,
-                            outputs=refresh_outputs_all,
-                            **_refresh_kw,
+                    if hasattr(chat_tab_instance, "submit_event") and chat_tab_instance.submit_event:
+                        chat_tab_instance.submit_event.then(
+                            fn=update_token_budget_handler,
+                            outputs=[token_budget_comp],
                         )
-                    if hasattr(_ste, "clear_event") and _ste.clear_event:
-                        _ste.clear_event.then(
-                            fn=_refresh_sidebar_after_turn,
-                            outputs=refresh_outputs_all,
-                            **_refresh_kw,
+                    # Wire clear button to update token budget immediately (event-driven)
+                    # Chain to the existing clear button click event
+                    if hasattr(chat_tab_instance, "clear_event") and chat_tab_instance.clear_event:
+                        chat_tab_instance.clear_event.then(
+                            fn=update_token_budget_handler,
+                            outputs=[token_budget_comp],
                         )
-                    if hasattr(_ste, "stop_event") and _ste.stop_event:
-                        _ste.stop_event.then(
-                            fn=_refresh_sidebar_after_turn,
-                            outputs=refresh_outputs_all,
-                            **_refresh_kw,
+                    # Wire stop button to update token budget immediately (event-driven)
+                    # Chain to the existing stop button click event
+                    if hasattr(chat_tab_instance, "stop_event") and chat_tab_instance.stop_event:
+                        chat_tab_instance.stop_event.then(
+                            fn=update_token_budget_handler,
+                            outputs=[token_budget_comp],
                         )
-
-                    logging.getLogger(__name__).debug(
-                        "✅ Merged sidebar refresh (status/stats/logs + token budget) "
-                        "wired for stream/submit/clear/stop"
-                    )
+                    logging.getLogger(__name__).debug("✅ Token budget event-driven refresh wired for end-of-turn updates, clear button, and stop button")
 
                     provider_sel = self.components.get("provider_model_selector")
                     sync_dd = event_handlers.get("sync_llm_dropdown_from_session")
@@ -343,11 +276,7 @@ class UIManager:
         logging.getLogger(__name__).info("✅ UIManager: Interface created successfully with all components and timers")
         return demo
 
-    def _setup_auto_refresh(
-        self,
-        demo: gr.Blocks,
-        event_handlers: dict[str, Callable],
-    ):
+    def _setup_auto_refresh(self, demo: gr.Blocks, event_handlers: dict[str, Callable]):
         """Setup auto-refresh timers for status and logs - matches original behavior exactly"""
         # Get handlers with validation
         update_status_handler = event_handlers.get("update_status")
@@ -355,52 +284,45 @@ class UIManager:
         refresh_logs_handler = event_handlers.get("refresh_logs")
         update_progress_handler = event_handlers.get("update_progress_display")
 
-        refresh_stats_handler = event_handlers.get("refresh_stats")
 
-        # Single batched demo.load reduces concurrent outbound UI updates at startup
-        # (Gradio 6.x: many parallel loads can saturate the browser main thread).
-        boot_specs: list[tuple[str, Any, Callable[..., Any]]] = []
-
-        def _boot_add(comp_key: str, fn: Callable[..., Any] | None) -> None:
-            if fn is None:
-                return
-            comp = self.components.get(comp_key)
-            if comp is not None:
-                boot_specs.append((comp_key, comp, fn))
-
-        _boot_add("status_display", update_status_handler)
-        _boot_add("token_budget_display", update_token_budget_handler)
-        _boot_add("logs_display", refresh_logs_handler)
-
-        progress_comp = self.components.get("progress_display")
-        if progress_comp is not None and update_progress_handler:
-            boot_specs.append(("progress_display", progress_comp, update_progress_handler))
-
-        _boot_add("stats_display", refresh_stats_handler)
-
-        sidebar_inst = self.components.get("sidebar_instance")
-        fb_sel = self.components.get("fallback_model_selector")
-        if (
-            sidebar_inst is not None
-            and fb_sel is not None
-            and hasattr(sidebar_inst, "hydrate_fallback_dropdown_on_load")
-        ):
-            boot_specs.append(
-                (
-                    "fallback_model_selector",
-                    fb_sel,
-                    sidebar_inst.hydrate_fallback_dropdown_on_load,
-                )
+        # Load initial UI state once on startup
+        if "status_display" in self.components and update_status_handler:
+            demo.load(
+                fn=update_status_handler,
+                outputs=[self.components["status_display"]]
             )
 
-        if boot_specs:
-
-            def _bootstrap_sidebar_batch(request: gr.Request | None = None):
-                return tuple(fn(request) for _k, _c, fn in boot_specs)
-
+        if "token_budget_display" in self.components and update_token_budget_handler:
             demo.load(
-                fn=_bootstrap_sidebar_batch,
-                outputs=[c for _k, c, _fn in boot_specs],
+                fn=update_token_budget_handler,
+                outputs=[self.components["token_budget_display"]]
+            )
+
+        # LLM selection components are initialized with static values
+        # and only update when explicitly triggered by user actions
+
+        if "logs_display" in self.components and refresh_logs_handler:
+            demo.load(
+                fn=refresh_logs_handler,
+                outputs=[self.components["logs_display"]]
+            )
+
+        # Progress display - wire to chat events for event-driven updates
+        progress_comp = self.components.get("progress_display")
+        if progress_comp and update_progress_handler:
+            # Load initial state
+            demo.load(
+                fn=update_progress_handler,
+                outputs=[progress_comp]
+            )
+            # Note: Progress updates are wired to chat events in the main event wiring section
+            # (see submit_event, clear_event, stop_event wiring above)
+
+        refresh_stats_handler = event_handlers.get("refresh_stats")
+        if "stats_display" in self.components and refresh_stats_handler:
+            demo.load(
+                fn=refresh_stats_handler,
+                outputs=[self.components["stats_display"]]
             )
 
         # Config auto-load is handled by tab.select in config_tab.py.
@@ -409,49 +331,50 @@ class UIManager:
         # Setup auto-refresh timers for real-time updates
         self._setup_auto_refresh_timers(demo, event_handlers)
 
-    def _setup_auto_refresh_timers(
-        self,
-        demo: gr.Blocks,
-        event_handlers: dict[str, Callable],
-    ):
+    def _setup_auto_refresh_timers(self, demo: gr.Blocks, event_handlers: dict[str, Callable]):
         """Setup auto-refresh timers for real-time updates (single interval)"""
         logging.getLogger(__name__).info("🔄 Setting up auto-refresh timers...")
 
         # Single interval from central configuration
         refresh_interval = get_refresh_intervals().interval
 
-        # One timer tick for status + token budget + logs (same interval) cuts parallel SSE vs three timers.
-        sidebar_tick_fns: list[Callable[..., Any]] = []
-        sidebar_tick_outputs: list[Any] = []
-
-        def _append_sidebar_tick(comp_key: str, fn_key: str) -> None:
-            comp = self.components.get(comp_key)
-            fn = event_handlers.get(fn_key)
-            if comp is not None and fn:
-                sidebar_tick_outputs.append(comp)
-                sidebar_tick_fns.append(fn)
-
-        _append_sidebar_tick("status_display", "update_status")
-        _append_sidebar_tick("token_budget_display", "update_token_budget")
-        _append_sidebar_tick("logs_display", "refresh_logs")
-
-        if sidebar_tick_fns:
-
-            def _sidebar_metrics_tick(request: gr.Request | None = None):
-                return tuple(f(request) for f in sidebar_tick_fns)
-
-            sidebar_metrics_timer = gr.Timer(refresh_interval, active=True)
-            sidebar_metrics_timer.tick(
-                fn=_sidebar_metrics_tick,
-                outputs=sidebar_tick_outputs,
+        # Status updates
+        if "status_display" in self.components and event_handlers.get("update_status"):
+            status_timer = gr.Timer(refresh_interval, active=True)
+            status_timer.tick(
+                fn=event_handlers["update_status"],
+                outputs=[self.components["status_display"]]
             )
-            logging.getLogger(__name__).debug(
-                "✅ Unified sidebar metrics timer (%ss): status + token_budget + logs",
-                refresh_interval,
+            logging.getLogger(__name__).debug(f"✅ Status auto-refresh timer set ({refresh_interval}s)")
+
+        # Token budget updates - hybrid approach (immediate events + timer fallback)
+        # Token budget is updated through:
+        # - Immediate updates when budget_update events are emitted during streaming (pre-iteration, post-tool)
+        # - End-of-turn events (streaming_event.then(), submit_event.then(), clear_event.then(), stop_event.then(), model_switch_event.then())
+        # - Timer fallback (for edge cases where events might be missed)
+        # This matches Gradio 5 behavior where token budget updates immediately when budget snapshots are computed
+        # Budget snapshots are computed at "budget moments" (pre-iteration, post-tool), not on every chunk,
+        # so immediate updates are efficient and provide real-time feedback
+        if "token_budget_display" in self.components and event_handlers.get("update_token_budget"):
+            # Timer serves as fallback for edge cases, but primary updates happen immediately via budget_update events
+            token_budget_timer = gr.Timer(refresh_interval, active=True)
+            token_budget_timer.tick(
+                fn=event_handlers["update_token_budget"],
+                outputs=[self.components["token_budget_display"]]
             )
+            logging.getLogger(__name__).debug(f"✅ Token budget timer set ({refresh_interval}s) - fallback for edge cases, primary updates via budget_update events")
 
         # LLM selection updates - no auto-refresh (explicit only)
         logging.getLogger(__name__).debug("✅ LLM selection components will update only when explicitly triggered")
+
+        # Logs updates
+        if "logs_display" in self.components and event_handlers.get("refresh_logs"):
+            logs_timer = gr.Timer(refresh_interval, active=True)
+            logs_timer.tick(
+                fn=event_handlers["refresh_logs"],
+                outputs=[self.components["logs_display"]]
+            )
+            logging.getLogger(__name__).debug(f"✅ Logs auto-refresh timer set ({refresh_interval}s)")
 
         # Stats updates - REMOVED timer-based refresh
         # Stats is now updated through events only (preferred approach):

@@ -52,7 +52,6 @@ try:
         config,
         get_language_settings,
         get_port_settings,
-        get_ui_home_first,
     )
 except ImportError:
     # Fallback for direct execution
@@ -64,7 +63,6 @@ except ImportError:
         config,
         get_language_settings,
         get_port_settings,
-        get_ui_home_first,
     )
 
 
@@ -1389,36 +1387,27 @@ class NextGenApp:
 
         # Create tab modules with error handling
         tab_modules = []
-        home_tab_inst = None
-        chat_tab_inst = None
         try:
+            # Home tab first (welcome page)
             if HomeTab:
-                home_tab_inst = HomeTab(
+                home_tab = HomeTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
-                home_tab_inst.set_main_app(self)
-                self.tab_instances["home"] = home_tab_inst
+                home_tab.set_main_app(self)
+                tab_modules.append(home_tab)
+                self.tab_instances["home"] = home_tab
             else:
                 _logger.warning("HomeTab not available")
 
             if ChatTab:
-                chat_tab_inst = ChatTab(
+                chat_tab = ChatTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
-                chat_tab_inst.set_main_app(self)
-                self.tab_instances["chat"] = chat_tab_inst
+                chat_tab.set_main_app(self)
+                tab_modules.append(chat_tab)
+                self.tab_instances["chat"] = chat_tab
             else:
                 _logger.warning("ChatTab not available")
-
-            # Default: Home before Chat (initial tab = first registered; no ``Tabs(selected=…)``).
-            if get_ui_home_first():
-                for _m in (home_tab_inst, chat_tab_inst):
-                    if _m is not None:
-                        tab_modules.append(_m)
-            else:
-                for _m in (chat_tab_inst, home_tab_inst):
-                    if _m is not None:
-                        tab_modules.append(_m)
 
             if LogsTab:
                 logs_tab = LogsTab(
@@ -1449,10 +1438,7 @@ class NextGenApp:
                 "true",
                 "yes",
             )
-            if (
-                not use_dotenv_flag
-                and ConfigTab
-            ):
+            if not use_dotenv_flag and ConfigTab:
                 config_tab = ConfigTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
@@ -1461,7 +1447,7 @@ class NextGenApp:
                 self.tab_instances["config"] = config_tab
             else:
                 _logger.info(
-                    "ConfigTab not shown (CMW_USE_DOTENV is true or ConfigTab unavailable)"
+                    "ConfigTab not shown (CMW_USE_DOTENV is true or tab unavailable)"
                 )
 
             # Downloads tab
@@ -1478,16 +1464,28 @@ class NextGenApp:
             _logger.exception("Error creating tab modules: %s", e)
             raise
 
-        # Do not call configure_queue on a throwaway Blocks instance — Gradio 6 requires the
-        # launched Blocks to receive .queue() or validation fails (streaming / cancel chains).
+        # Configure queue manager BEFORE creating interface (matches historical branch wiring).
+        try:
+            if hasattr(self, "queue_manager") and self.queue_manager:
+                _logger.info("Configuring queue manager before interface creation...")
+                _logger.debug("Queue manager type: %s", type(self.queue_manager))
+                _logger.debug(
+                    "Queue manager has config: %s",
+                    hasattr(self.queue_manager, "config"),
+                )
+                with gr.Blocks() as temp_demo:
+                    pass
+                self.queue_manager.configure_queue(temp_demo)
+                _logger.info("Queue manager configured successfully")
+            else:
+                _logger.warning("Queue manager not available for configuration")
+        except Exception as e:
+            _logger.warning("Failed to configure queue manager: %s", e)
 
         # Use UI Manager to create interface
         try:
             demo = self.ui_manager.create_interface(
-                tab_modules,
-                event_handlers,
-                main_app=self,
-                include_sidebar_tab=True,
+                tab_modules, event_handlers, main_app=self
             )
         except Exception as e:
             _logger.exception("Error creating interface: %s", e)
@@ -1740,12 +1738,7 @@ _DEMO_UI_LAYOUT_SIG: str | None = None
 
 def _ui_layout_env_signature() -> str:
     """Stable fingerprint for UI layout env vars (same interpreter, e.g. watch / reload)."""
-    return "|".join(
-        [
-            os.getenv("CMW_UI_HOME_FIRST") or "",
-            os.getenv("CMW_UI_DOWNLOAD_PREP_AFTER_STREAM") or "",
-        ]
-    )
+    return os.getenv("CMW_UI_DOWNLOAD_PREP_AFTER_STREAM") or ""
 
 
 def get_demo_with_language_detection():
@@ -1956,6 +1949,19 @@ def main():
         show_error=True,
         # Gradio 6: show_api removed — use footer_links (same idea as cmw-rag mount_gradio_app).
         footer_links=["api"],
+        theme=gr.themes.Soft(),
+        css_paths=[
+            Path(__file__).resolve().parent.parent
+            / "resources"
+            / "css"
+            / "cmw_copilot_theme.css",
+        ],
+        favicon_path=(
+            Path(__file__).resolve().parent.parent
+            / "resources"
+            / "img"
+            / "comindware_logo.svg"
+        ),
         # Allow Gradio's /file= endpoint to serve session-registered files
         # (generated images, extracted assets, etc.) from the cache dir.
         # Required when GRADIO_TEMP_DIR is set to a non-default path.
