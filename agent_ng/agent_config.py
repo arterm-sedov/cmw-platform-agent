@@ -250,7 +250,7 @@ _UI_TAB_BUILD_ORDER: tuple[str, ...] = (
 
 
 def get_ui_tab_allowlist() -> frozenset[str] | None:
-    """Subset of UI tabs to build (debug / bisect lazy-tab issues).
+    """Optional subset of UI tabs to build.
 
     Environment ``CMW_UI_TABS``: comma-separated keys. When non-empty, it wins over
     ``CMW_UI_TAB_LIMIT``.
@@ -290,7 +290,7 @@ def get_ui_stack_home_chat() -> bool:
 
 
 def get_ui_disable_auto_timers() -> bool:
-    """Skip ``gr.Timer`` tick handlers (bisect periodic-queue interference)."""
+    """Skip ``gr.Timer`` tick handlers when periodic refresh interferes with the UI."""
     return env_flag_true("CMW_UI_DISABLE_AUTO_TIMERS")
 
 
@@ -311,10 +311,10 @@ def get_ui_export_html_after_turn() -> bool:
 
 
 def get_ui_home_first() -> bool:
-    """Place Home leftmost in ``gr.Tabs`` (default after tab-mount / queue stall fixes).
+    """Place Home tab leftmost in ``gr.Tabs`` (default).
 
-    Only explicit falsy tokens opt out: ``0``/``false``/``no``/``off`` puts Chat before Home.
-    Any other non-empty value (including ``1``/``true``) keeps Home first.
+    Unset or truthy ``CMW_UI_HOME_FIRST`` ⇒ Home registered first (initial selection =
+    first tab). Explicit ``0``/``false``/``no``/``off`` ⇒ Chat before Home.
 
     Environment ``CMW_UI_HOME_FIRST``.
     """

@@ -1437,7 +1437,7 @@ class NextGenApp:
             else:
                 _logger.warning("ChatTab not available")
 
-            # Default: Home before Chat; ``CMW_UI_HOME_FIRST=0|false`` → Chat first.
+            # Default: Home before Chat (initial tab = first registered; no ``Tabs(selected=…)``).
             if get_ui_home_first():
                 for _m in (home_tab_inst, chat_tab_inst):
                     if _m is not None:
@@ -1779,12 +1779,12 @@ class NextGenAppWithLanguageDetection(NextGenApp):
 
 # Global demo variable for single port architecture
 demo = None
-# Tracks dev-only UI env (tabs / stack / timers / home order) so cached Blocks rebuild when they change.
+# Tracks UI-shaping env (tabs / stack / timers / home order) so cached Blocks rebuild when they change.
 _DEMO_UI_EXPERIMENT_SIG: str | None = None
 
 
 def _ui_experiment_signature() -> str:
-    """Stable fingerprint for UI bisect env vars (same interpreter, e.g. watch / reload)."""
+    """Stable fingerprint for UI layout env vars (same interpreter, e.g. watch / reload)."""
     return "|".join(
         [
             os.getenv("CMW_UI_TABS") or "",
@@ -1803,7 +1803,7 @@ def get_demo_with_language_detection():
     sig = _ui_experiment_signature()
     if demo is not None and _DEMO_UI_EXPERIMENT_SIG != sig:
         _logger.info(
-            "Rebuilding demo: UI experiment env changed (%r -> %r)",
+            "Rebuilding demo: UI layout env changed (%r -> %r)",
             _DEMO_UI_EXPERIMENT_SIG,
             sig,
         )

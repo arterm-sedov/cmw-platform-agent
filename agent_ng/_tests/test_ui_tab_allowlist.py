@@ -88,12 +88,13 @@ def test_home_first_default_home_leftmost(monkeypatch: pytest.MonkeyPatch) -> No
     assert get_ui_home_first() is True
 
 
-def test_home_first_truthy_still_home_leftmost(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_home_first_truthy_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CMW_UI_HOME_FIRST", "1")
     assert get_ui_home_first() is True
 
 
-def test_home_first_chat_before_home_opt_out(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_home_first_opt_out_chat_before_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Legacy eager Chat mount order when Chat must precede Home in ``tab_modules``."""
     monkeypatch.setenv("CMW_UI_HOME_FIRST", "0")
     assert get_ui_home_first() is False
 

@@ -83,9 +83,9 @@ class UIManager:
             tab_modules: List of tab module instances
             event_handlers: Dictionary of event handlers
             main_app: Application instance for tab callbacks
-            include_sidebar_tab: When False, omit the settings/sidebar tab (for UI bisect debugging).
+            include_sidebar_tab: When False, omit the settings/sidebar tab.
             stack_home_chat: When True, render ``tab_modules`` in one column via ``build_ui()`` (no ``gr.Tabs``).
-            disable_auto_timers: When True, skip ``gr.Timer`` wiring (bisect periodic refresh noise).
+            disable_auto_timers: When True, skip ``gr.Timer`` wiring (see ``CMW_UI_DISABLE_AUTO_TIMERS``).
 
         Returns:
             Gradio Blocks interface
@@ -107,7 +107,7 @@ class UIManager:
             with gr.Row(), gr.Column():
                 gr.Markdown(f"# {hero_title}", elem_classes=["hero-title"])
 
-            # Settings/sidebar tab (optional — omit when bisecting tab-switch issues via CMW_UI_TABS)
+            # Settings/sidebar tab (optional — omit via ``include_sidebar_tab=False`` / ``CMW_UI_TABS``)
             sidebar_instance = None
             if include_sidebar_tab:
                 sidebar_instance = Sidebar(
@@ -152,6 +152,9 @@ class UIManager:
                         "use include_sidebar_tab=False with CMW_UI_STACK_HOME_CHAT"
                     )
             else:
+                # Do not pass ``selected=`` here: Gradio binds ``Tabs.selected`` two-way
+                # (`js/tabs`). Forcing ``selected="home"`` while Home is already the first
+                # registered tab correlated with hangs on the first navigation away from Home.
                 with gr.Tabs():
                     # Create tabs using provided tab modules
                     for tab_module in tab_modules:
@@ -398,45 +401,52 @@ class UIManager:
         refresh_logs_handler = event_handlers.get("refresh_logs")
         update_progress_handler = event_handlers.get("update_progress_display")
 
-
-        # Load initial UI state once on startup
-        if "status_display" in self.components and update_status_handler:
-            demo.load(
-                fn=update_status_handler,
-                outputs=[self.components["status_display"]]
-            )
-
-        if "token_budget_display" in self.components and update_token_budget_handler:
-            demo.load(
-                fn=update_token_budget_handler,
-                outputs=[self.components["token_budget_display"]]
-            )
-
-        # LLM selection components are initialized with static values
-        # and only update when explicitly triggered by user actions
-
-        if "logs_display" in self.components and refresh_logs_handler:
-            demo.load(
-                fn=refresh_logs_handler,
-                outputs=[self.components["logs_display"]]
-            )
-
-        # Progress display - wire to chat events for event-driven updates
-        progress_comp = self.components.get("progress_display")
-        if progress_comp and update_progress_handler:
-            # Load initial state
-            demo.load(
-                fn=update_progress_handler,
-                outputs=[progress_comp]
-            )
-            # Note: Progress updates are wired to chat events in the main event wiring section
-            # (see submit_event, clear_event, stop_event wiring above)
-
         refresh_stats_handler = event_handlers.get("refresh_stats")
-        if "stats_display" in self.components and refresh_stats_handler:
+
+        # Single batched demo.load reduces concurrent outbound UI updates at startup
+        # (Gradio 6.x: many parallel loads can saturate the browser main thread).
+        boot_specs: list[tuple[str, Any, Callable[..., Any]]] = []
+
+        def _boot_add(comp_key: str, fn: Callable[..., Any] | None) -> None:
+            if fn is None:
+                return
+            comp = self.components.get(comp_key)
+            if comp is not None:
+                boot_specs.append((comp_key, comp, fn))
+
+        _boot_add("status_display", update_status_handler)
+        _boot_add("token_budget_display", update_token_budget_handler)
+        _boot_add("logs_display", refresh_logs_handler)
+
+        progress_comp = self.components.get("progress_display")
+        if progress_comp is not None and update_progress_handler:
+            boot_specs.append(("progress_display", progress_comp, update_progress_handler))
+
+        _boot_add("stats_display", refresh_stats_handler)
+
+        sidebar_inst = self.components.get("sidebar_instance")
+        fb_sel = self.components.get("fallback_model_selector")
+        if (
+            sidebar_inst is not None
+            and fb_sel is not None
+            and hasattr(sidebar_inst, "hydrate_fallback_dropdown_on_load")
+        ):
+            boot_specs.append(
+                (
+                    "fallback_model_selector",
+                    fb_sel,
+                    sidebar_inst.hydrate_fallback_dropdown_on_load,
+                )
+            )
+
+        if boot_specs:
+
+            def _bootstrap_sidebar_batch(request: gr.Request | None = None):
+                return tuple(fn(request) for _k, _c, fn in boot_specs)
+
             demo.load(
-                fn=refresh_stats_handler,
-                outputs=[self.components["stats_display"]]
+                fn=_bootstrap_sidebar_batch,
+                outputs=[c for _k, c, _fn in boot_specs],
             )
 
         # Config auto-load is handled by tab.select in config_tab.py.
@@ -465,43 +475,38 @@ class UIManager:
         # Single interval from central configuration
         refresh_interval = get_refresh_intervals().interval
 
-        # Status updates
-        if "status_display" in self.components and event_handlers.get("update_status"):
-            status_timer = gr.Timer(refresh_interval, active=True)
-            status_timer.tick(
-                fn=event_handlers["update_status"],
-                outputs=[self.components["status_display"]]
-            )
-            logging.getLogger(__name__).debug(f"✅ Status auto-refresh timer set ({refresh_interval}s)")
+        # One timer tick for status + token budget + logs (same interval) cuts parallel SSE vs three timers.
+        sidebar_tick_fns: list[Callable[..., Any]] = []
+        sidebar_tick_outputs: list[Any] = []
 
-        # Token budget updates - hybrid approach (immediate events + timer fallback)
-        # Token budget is updated through:
-        # - Immediate updates when budget_update events are emitted during streaming (pre-iteration, post-tool)
-        # - End-of-turn events (streaming_event.then(), submit_event.then(), clear_event.then(), stop_event.then(), model_switch_event.then())
-        # - Timer fallback (for edge cases where events might be missed)
-        # This matches Gradio 5 behavior where token budget updates immediately when budget snapshots are computed
-        # Budget snapshots are computed at "budget moments" (pre-iteration, post-tool), not on every chunk,
-        # so immediate updates are efficient and provide real-time feedback
-        if "token_budget_display" in self.components and event_handlers.get("update_token_budget"):
-            # Timer serves as fallback for edge cases, but primary updates happen immediately via budget_update events
-            token_budget_timer = gr.Timer(refresh_interval, active=True)
-            token_budget_timer.tick(
-                fn=event_handlers["update_token_budget"],
-                outputs=[self.components["token_budget_display"]]
+        def _append_sidebar_tick(comp_key: str, fn_key: str) -> None:
+            comp = self.components.get(comp_key)
+            fn = event_handlers.get(fn_key)
+            if comp is not None and fn:
+                sidebar_tick_outputs.append(comp)
+                sidebar_tick_fns.append(fn)
+
+        _append_sidebar_tick("status_display", "update_status")
+        _append_sidebar_tick("token_budget_display", "update_token_budget")
+        _append_sidebar_tick("logs_display", "refresh_logs")
+
+        if sidebar_tick_fns:
+
+            def _sidebar_metrics_tick(request: gr.Request | None = None):
+                return tuple(f(request) for f in sidebar_tick_fns)
+
+            sidebar_metrics_timer = gr.Timer(refresh_interval, active=True)
+            sidebar_metrics_timer.tick(
+                fn=_sidebar_metrics_tick,
+                outputs=sidebar_tick_outputs,
             )
-            logging.getLogger(__name__).debug(f"✅ Token budget timer set ({refresh_interval}s) - fallback for edge cases, primary updates via budget_update events")
+            logging.getLogger(__name__).debug(
+                "✅ Unified sidebar metrics timer (%ss): status + token_budget + logs",
+                refresh_interval,
+            )
 
         # LLM selection updates - no auto-refresh (explicit only)
         logging.getLogger(__name__).debug("✅ LLM selection components will update only when explicitly triggered")
-
-        # Logs updates
-        if "logs_display" in self.components and event_handlers.get("refresh_logs"):
-            logs_timer = gr.Timer(refresh_interval, active=True)
-            logs_timer.tick(
-                fn=event_handlers["refresh_logs"],
-                outputs=[self.components["logs_display"]]
-            )
-            logging.getLogger(__name__).debug(f"✅ Logs auto-refresh timer set ({refresh_interval}s)")
 
         # Stats updates - REMOVED timer-based refresh
         # Stats is now updated through events only (preferred approach):

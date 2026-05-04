@@ -42,8 +42,9 @@ google-auth-httplib2==0.2.0
 google-genai==1.74.0
 google-generativeai==0.8.5
 googleapis-common-protos==1.70.0
-gradio>=6.13.0
-gradio_client>=2.5.0
+# Pin: 6.11+ tab/lazy-mount regressions correlate with Svelte flush storms (see browser Performance).
+gradio==6.10.0
+gradio_client==2.4.0
 greenlet==3.2.4
 groovy==0.1.2
 groq==0.32.0
