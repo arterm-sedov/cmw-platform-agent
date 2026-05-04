@@ -105,7 +105,7 @@ class UIManager:
                 with gr.Sidebar(
                     label=self._get_translation("tab_sidebar"),
                     open=True,
-                    width=320,
+                    width=370,
                     position="left",
                     elem_classes=["cmw-gradio-sidebar"],
                 ):

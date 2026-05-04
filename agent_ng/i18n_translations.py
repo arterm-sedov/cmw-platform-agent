@@ -122,7 +122,7 @@ RUSSIAN_TRANSLATIONS = {
     "token_usage_conversation": "Диалог: {conversation_tokens:,}",
     "token_usage_estimate": "Прогноз: {estimated_tokens:,}",
     "token_usage_last_message": "Сообщение:",
-    "token_usage_average": "Средний на сообщение: {avg_tokens:,}",
+    "token_usage_average": "Сред. сообщение: {avg_tokens:,}",
     "token_breakdown_context": "Контекст: {conv_tokens:,}",
     "token_breakdown_tools": "Инструменты: {tool_tokens:,}",
     "token_breakdown_overhead": "Накладные: {overhead_tokens:,}",
@@ -146,7 +146,7 @@ RUSSIAN_TRANSLATIONS = {
 - Среднее на сообщение: {avg_tokens:,}""",
     "token_budget_unknown": "❓ Неизвестно",
     "progress_title": "Прогресс",
-    "progress_ready": "Готов обработать ваш запрос...",
+    "progress_ready": "Готов к работе…",
     "progress_processing": "Обработка запроса...",
     # Logs tab
     "logs_title": "Журналы инициализации",
