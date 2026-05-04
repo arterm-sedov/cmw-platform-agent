@@ -102,10 +102,6 @@ class UIManager:
                 for m in tab_modules
             )
 
-            for tab_module in tab_modules:
-                if isinstance(tab_module, StatsTab):
-                    tab_module.register_overview_placeholder()
-
             with gr.Row(equal_height=False):
                 with gr.Sidebar(
                     label=self._get_translation("tab_sidebar"),
@@ -116,6 +112,11 @@ class UIManager:
                 ):
                     sb.create_sidebar_column()
                     if not config_tab_present:
+                        for tab_module in tab_modules:
+                            if isinstance(tab_module, StatsTab):
+                                tab_module.register_overview_placeholder()
+                                self.components.update(tab_module.get_components())
+                                break
                         sb.mount_llm_selection_ui()
 
                 with gr.Column(scale=1, min_width=0):

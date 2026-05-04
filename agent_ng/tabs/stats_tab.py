@@ -17,8 +17,6 @@ import gradio as gr
 class StatsTab:
     """Stats tab component for statistics and monitoring"""
 
-    _OVERVIEW_ELEM_ID = "stats-overview-display"
-
     def __init__(
         self,
         event_handlers: dict[str, Callable],
@@ -34,13 +32,13 @@ class StatsTab:
         self.i18n = i18n_instance
 
     def register_overview_placeholder(self) -> None:
-        """Create overview Markdown early so other panels can wire to it (inside Blocks)."""
+        """When Config tab is hidden, create overview early for Sidebar LLM wiring."""
         if "stats_tab_overview_display" in self.components:
             return
         self.components["stats_tab_overview_display"] = gr.Markdown(
             value=self._get_translation("stats_loading"),
             visible=False,
-            elem_id=self._OVERVIEW_ELEM_ID,
+            elem_id="stats-overview-display",
         )
 
     def create_tab(self) -> tuple[gr.TabItem, dict[str, Any]]:
@@ -76,13 +74,6 @@ class StatsTab:
             min_width=400,
             elem_classes=["stats-card"]
         ):
-            gr.Markdown(
-                f"### {self._get_translation('status_title')}",
-                elem_classes=["llm-selection-title"],
-            )
-            self.register_overview_placeholder()
-            self.components["stats_tab_overview_display"].visible = True
-            gr.Markdown("---")
             # Create Markdown component for rich formatting
             self.components["stats_display"] = gr.Markdown(
                 value=self._get_translation("stats_loading"),
