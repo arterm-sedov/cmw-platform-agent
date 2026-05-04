@@ -275,6 +275,19 @@ class ConfigTab:
         pub["password"] = ""
         return pub
 
+    @staticmethod
+    def _tuple_empty_textbox_updates(count: int) -> tuple[Any, ...]:
+        """One fresh ``gr.update(value=\"\")`` per textbox (tuple multiply reuses one object)."""
+        return tuple(gr.update(value="") for _ in range(max(0, count)))
+
+    @staticmethod
+    def _tuple_skip_updates(count: int) -> tuple[Any, ...]:
+        return tuple(gr.skip() for _ in range(max(0, count)))
+
+    @staticmethod
+    def _tuple_noop_updates(count: int) -> tuple[Any, ...]:
+        return tuple(gr.update() for _ in range(max(0, count)))
+
     def _connect_events(self) -> None:
         """Wire events for Save/Load configuration."""
         logging.getLogger(__name__).debug("🔗 ConfigTab: Connecting events...")
@@ -598,8 +611,8 @@ class ConfigTab:
                     gr.update(),
                     gr.update(),
                     gr.update(),
-                    *((gr.skip(),) * n_keys),
-                    *((gr.update(),) * n_llm_side),
+                    *ConfigTab._tuple_skip_updates(n_keys),
+                    *ConfigTab._tuple_noop_updates(n_llm_side),
                 )
 
             url = state.get("url", "") or ""
@@ -657,7 +670,7 @@ class ConfigTab:
                     gr.update(value=(keys_map.get(p) or "").strip())
                     for p in self._config_llm_providers
                 ),
-                *((gr.update(),) * n_llm_side),
+                *ConfigTab._tuple_noop_updates(n_llm_side),
             )
         except Exception as e:
             logging.getLogger(__name__).exception("Load from browser state failed")
@@ -670,8 +683,8 @@ class ConfigTab:
                 gr.update(),
                 gr.update(),
                 gr.update(),
-                *((gr.skip(),) * n_keys),
-                *((gr.update(),) * n_llm_side),
+                *ConfigTab._tuple_skip_updates(n_keys),
+                *ConfigTab._tuple_noop_updates(n_llm_side),
             )
 
     # Removed .env loading: rely solely on browser state
@@ -707,14 +720,13 @@ class ConfigTab:
 
             with suppress(Exception):
                 gr.Info(self._get_translation("config_clear_success"))
-            blank_keys = (gr.update(value=""),) * n_key
             return (
                 stored_browser,
                 gr.update(value=""),
                 gr.update(value=""),
                 gr.update(value=""),
-                *blank_keys,
-                *((gr.update(),) * n_llm_side),
+                *ConfigTab._tuple_empty_textbox_updates(n_key),
+                *ConfigTab._tuple_noop_updates(n_llm_side),
             )
         except Exception as e:
             logging.getLogger(__name__).exception("Clear browser storage failed")
@@ -728,8 +740,8 @@ class ConfigTab:
                 gr.update(),
                 gr.update(),
                 gr.update(),
-                *((gr.skip(),) * n_key),
-                *((gr.update(),) * n_llm_side),
+                *ConfigTab._tuple_skip_updates(n_key),
+                *ConfigTab._tuple_noop_updates(n_llm_side),
             )
 
     def set_main_app(self, main_app: Any) -> None:
