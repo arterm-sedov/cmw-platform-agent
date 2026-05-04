@@ -1452,14 +1452,9 @@ class NextGenApp:
             else:
                 _logger.warning("StatsTab not available")
 
-            # Config tab visibility is controlled by CMW_USE_DOTENV
-            # Show config tab when CMW_USE_DOTENV=false (default), hide when true
-            use_dotenv_flag = os.environ.get("CMW_USE_DOTENV", "true").lower() in (
-                "1",
-                "true",
-                "yes",
-            )
-            if not use_dotenv_flag and ConfigTab:
+            # Config tab is always shown. CMW_USE_DOTENV only switches platform
+            # credentials: .env vs browser (see ConfigTab).
+            if ConfigTab:
                 config_tab = ConfigTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
@@ -1468,9 +1463,7 @@ class NextGenApp:
                 tab_modules.append(config_tab)
                 self.tab_instances["config"] = config_tab
             else:
-                _logger.info(
-                    "ConfigTab not shown (CMW_USE_DOTENV is true or tab unavailable)"
-                )
+                _logger.info("ConfigTab class unavailable; skipping config tab")
 
             # Downloads tab
             if DownloadsTab:

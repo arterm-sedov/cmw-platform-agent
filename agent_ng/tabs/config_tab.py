@@ -22,6 +22,15 @@ from agent_ng.session_manager import set_session_config
 class ConfigTab:
     """Configuration tab component for Comindware Platform settings"""
 
+    @staticmethod
+    def use_dotenv_for_platform() -> bool:
+        """When true, platform URL/login/password come from .env, not the Config UI."""
+        return os.environ.get("CMW_USE_DOTENV", "true").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+
     def __init__(
         self,
         event_handlers: dict[str, Callable],
@@ -48,16 +57,6 @@ class ConfigTab:
         logging.getLogger(__name__).info(
             "✅ ConfigTab: Creating configuration interface..."
         )
-
-        # Config tab should be shown when CMW_USE_DOTENV=false (default)
-        # Hide when CMW_USE_DOTENV=true
-        use_dotenv_flag = os.environ.get("CMW_USE_DOTENV", "true").lower() in (
-            "1",
-            "true",
-            "yes",
-        )
-        if use_dotenv_flag:
-            return None, self.components
 
         with gr.TabItem(
             self._get_translation("tab_config"),
@@ -97,16 +96,21 @@ class ConfigTab:
         login_init = ""
         password_init = ""
 
+        platform_from_dotenv = self.use_dotenv_for_platform()
+
         # Use the same card-like styling used elsewhere (model-card)
         with gr.Column(scale=1, min_width=400, elem_classes=["model-card"]):
             gr.Markdown(
                 f"### {self._get_translation('config_title')}",
                 elem_classes=["llm-selection-title"],
             )
-            gr.Markdown(self._get_translation("config_help"))
+            if platform_from_dotenv:
+                gr.Markdown(self._get_translation("config_platform_dotenv_notice"))
+            else:
+                gr.Markdown(self._get_translation("config_help"))
 
-            # Platform credentials — dedicated top row (full width)
-            with gr.Row(equal_height=True):
+            # Platform row: browser when CMW_USE_DOTENV=false; hidden when true (.env).
+            with gr.Row(equal_height=True, visible=not platform_from_dotenv):
                 self.components["platform_url"] = gr.Textbox(
                     label=self._get_translation("config_platform_url"),
                     placeholder="https://your-comindware-host",
@@ -166,32 +170,34 @@ class ConfigTab:
                     else:
                         gr.Markdown("*LLM selection unavailable (internal).*")
 
-                with gr.Column(scale=1):
-                    with gr.Column(elem_classes=["model-card"]):
-                        gr.Markdown(
-                            f"### {self._get_translation('config_llm_api_keys_table_label')}",
-                            elem_classes=["llm-selection-title"],
-                        )
-                        self._llm_provider_key_inputs = []
-                        with gr.Column():
-                            for prov in self._config_llm_providers:
-                                tb = gr.Textbox(
-                                    label=prov,
-                                    type="password",
-                                    value="",
-                                    lines=1,
-                                    max_lines=1,
-                                    placeholder="sk-...",
-                                )
-                                self._llm_provider_key_inputs.append(tb)
-                        self.components["llm_provider_key_inputs"] = (
-                            self._llm_provider_key_inputs
-                        )
-                        gr.Markdown(
-                            "*"
-                            + self._get_translation("config_llm_empty_means_default")
-                            + "*"
-                        )
+                with gr.Column(scale=1, elem_classes=["model-card"]):
+                    _api_keys_heading = self._get_translation(
+                        "config_llm_api_keys_table_label"
+                    )
+                    gr.Markdown(
+                        f"### {_api_keys_heading}",
+                        elem_classes=["llm-selection-title"],
+                    )
+                    self._llm_provider_key_inputs = []
+                    with gr.Column():
+                        for prov in self._config_llm_providers:
+                            tb = gr.Textbox(
+                                label=prov,
+                                type="password",
+                                value="",
+                                lines=1,
+                                max_lines=1,
+                                placeholder="sk-...",
+                            )
+                            self._llm_provider_key_inputs.append(tb)
+                    self.components["llm_provider_key_inputs"] = (
+                        self._llm_provider_key_inputs
+                    )
+                    gr.Markdown(
+                        "*"
+                        + self._get_translation("config_llm_empty_means_default")
+                        + "*"
+                    )
 
             gr.Markdown("---")
 
@@ -214,6 +220,50 @@ class ConfigTab:
 
             # Status area (not used as output to avoid version mismatches)
             self.components["config_status_display"] = gr.Markdown("")
+
+    @staticmethod
+    def _platform_credentials_from_env() -> tuple[str, str, str]:
+        """CMW_BASE_URL, CMW_LOGIN, CMW_PASSWORD from process environment."""
+        return (
+            (os.environ.get("CMW_BASE_URL") or "").strip(),
+            (os.environ.get("CMW_LOGIN") or "").strip(),
+            (os.environ.get("CMW_PASSWORD") or "").strip(),
+        )
+
+    def _session_config_payload(
+        self, browser_snapshot: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Platform URL/login/password from .env if dotenv mode; else from snapshot."""
+        out = dict(browser_snapshot) if isinstance(browser_snapshot, dict) else {}
+        keys_raw = out.get("llm_provider_api_keys")
+        keys_map: dict[str, str] = {}
+        if isinstance(keys_raw, dict):
+            keys_map = {
+                str(k).strip(): (str(v).strip() if v is not None else "")
+                for k, v in keys_raw.items()
+                if str(k).strip()
+            }
+        if self.use_dotenv_for_platform():
+            u, login, pwd = self._platform_credentials_from_env()
+            out["url"] = u
+            out["username"] = login
+            out["password"] = pwd
+        out["llm_provider_api_keys"] = keys_map
+        return out
+
+    def _browser_state_public_snapshot(
+        self, merged_state: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Do not persist .env platform secrets into BrowserState when using dotenv."""
+        if not isinstance(merged_state, dict):
+            return {}
+        if not self.use_dotenv_for_platform():
+            return dict(merged_state)
+        pub = dict(merged_state)
+        pub["url"] = ""
+        pub["username"] = ""
+        pub["password"] = ""
+        return pub
 
     def _connect_events(self) -> None:
         """Wire events for Save/Load configuration."""
@@ -320,9 +370,13 @@ class ConfigTab:
         """Best-effort parse of legacy Dataframe / 2D payloads (e.g. pasted state)."""
         if data is None:
             return dict.fromkeys(providers, "")
-        if isinstance(data, (list, tuple)) and data and isinstance(
-            data[0],
-            (str, int, float),
+        if (
+            isinstance(data, (list, tuple))
+            and data
+            and isinstance(
+                data[0],
+                (str, int, float),
+            )
         ):
             flat = [str(x).strip() if x is not None else "" for x in data]
             return ConfigTab._key_values_to_map(flat, providers)
@@ -340,9 +394,7 @@ class ConfigTab:
                 key_col = 1 if ncol >= 2 else 0
                 for i in range(min(n, nrows)):
                     cell = data.iloc[i, key_col]
-                    if cell is None or (
-                        isinstance(cell, float) and pd.isna(cell)
-                    ):
+                    if cell is None or (isinstance(cell, float) and pd.isna(cell)):
                         v = ""
                     else:
                         v = str(cell).strip()
@@ -411,23 +463,19 @@ class ConfigTab:
                     "ConfigTab._save_to_state: missing trailing BrowserState tuple"
                 )
                 n_llm_side = max(0, len(rest) - 1 - len(self._config_llm_providers))
-                return (prior_browser,) + tuple(gr.update() for _ in range(n_llm_side))
+                return (prior_browser, *tuple(gr.update() for _ in range(n_llm_side)))
 
             url = (url or "").strip()
             username = (username or "").strip()
             password = (password or "").strip()
             current_state_raw = rest[-1]
             key_inputs = rest[:-1]
-            n_llm_side = len(rest) - 1 - len(self._config_llm_providers)
-            if n_llm_side < 0:
-                n_llm_side = 0
+            n_llm_side = max(0, len(rest) - 1 - len(self._config_llm_providers))
             passthrough = tuple(gr.update() for _ in range(n_llm_side))
             key_inputs = key_inputs[: len(key_inputs) - n_llm_side]
 
             merged_base = (
-                dict(current_state_raw)
-                if isinstance(current_state_raw, dict)
-                else {}
+                dict(current_state_raw) if isinstance(current_state_raw, dict) else {}
             )
             keys_map = ConfigTab._normalize_llm_provider_api_keys(merged_base)
             if len(key_inputs) == len(self._config_llm_providers):
@@ -448,23 +496,29 @@ class ConfigTab:
             for p in self._config_llm_providers:
                 keys_map[p] = parsed.get(p, "")
 
-            # Prepare new state dict
+            # Prepare new state dict (browser row); platform triple may be replaced
+            # from .env for the live session when ``CMW_USE_DOTENV`` is enabled.
             new_state = {
                 "url": url,
                 "username": username,
                 "password": password,
                 "llm_provider_api_keys": keys_map,
             }
+            session_payload = self._session_config_payload(new_state)
+            stored_browser = self._browser_state_public_snapshot(session_payload)
 
             session_id = self._resolve_session_id(request)
 
             if session_id:
-                self._apply_session_config(session_id, new_state)
+                self._apply_session_config(session_id, session_payload)
                 try:
+                    su = (session_payload.get("url") or "").strip()
+                    sl = (session_payload.get("username") or "").strip()
+                    sp = (session_payload.get("password") or "").strip()
                     masked = {
-                        "url_present": bool(url),
-                        "username_len": len(username),
-                        "password_len": len(password),
+                        "url_present": bool(su),
+                        "username_len": len(sl),
+                        "password_len": len(sp),
                     }
                     logging.getLogger(__name__).debug(
                         "🔐 ConfigTab.save -> session=%s stored=%s",
@@ -491,9 +545,9 @@ class ConfigTab:
                     self._get_translation("config_save_error") + "\n\n" + f"{str(e)}"
                 )
                 gr.Warning(message)
-            return (prior_browser,) + passthrough
+            return (prior_browser, *passthrough)
         else:
-            return (new_state,) + passthrough
+            return (stored_browser, *passthrough)
 
     def _load_from_state(
         self, state: Any, request: gr.Request | None = None
@@ -527,6 +581,8 @@ class ConfigTab:
                 any(state.get(k) for k in ("url", "username", "password"))
                 or any_stored_llm_keys
             )
+            if self.use_dotenv_for_platform():
+                has_saved_config = True
             if not has_saved_config:
                 return (
                     gr.update(),
@@ -542,19 +598,24 @@ class ConfigTab:
 
             keys_map = ConfigTab._normalize_llm_provider_api_keys(state)
 
-            logging.getLogger(__name__).debug(
-                "ConfigTab._load_from_state: url_present=%s user_len=%s pwd_len=%s",
-                bool(url),
-                len(login),
-                len(pwd),
-            )
-
-            payload = {
+            browser_row = {
                 "url": url,
                 "username": login,
                 "password": pwd,
                 "llm_provider_api_keys": keys_map,
             }
+            payload = self._session_config_payload(browser_row)
+            su = (payload.get("url") or "").strip()
+            sl = (payload.get("username") or "").strip()
+            sp = (payload.get("password") or "").strip()
+
+            logging.getLogger(__name__).debug(
+                "ConfigTab._load_from_state: url_present=%s user_len=%s pwd_len=%s",
+                bool(su),
+                len(sl),
+                len(sp),
+            )
+
             session_id = self._resolve_session_id(request)
             try:
                 if session_id:
@@ -572,10 +633,16 @@ class ConfigTab:
 
             with suppress(Exception):
                 gr.Info(self._get_translation("config_load_success"))
+            if self.use_dotenv_for_platform():
+                platform_updates = (gr.update(), gr.update(), gr.update())
+            else:
+                platform_updates = (
+                    gr.update(value=url),
+                    gr.update(value=login),
+                    gr.update(value=pwd),
+                )
             return (
-                gr.update(value=url),
-                gr.update(value=login),
-                gr.update(value=pwd),
+                *platform_updates,
                 *(
                     gr.update(value=(keys_map.get(p) or "").strip())
                     for p in self._config_llm_providers
@@ -599,9 +666,7 @@ class ConfigTab:
 
     # Removed .env loading: rely solely on browser state
 
-    def _clear_browser_storage(
-        self, state: Any
-    ) -> tuple[Any, ...]:
+    def _clear_browser_storage(self, state: Any) -> tuple[Any, ...]:
         """Clear browser-persisted state and reset input fields."""
         n_key = len(self._llm_provider_key_inputs) or len(self._config_llm_providers)
         n_llm_side = 0
@@ -616,18 +681,25 @@ class ConfigTab:
                 if sb.components.get(key) is not None:
                     n_llm_side += 1
         try:
-            new_state: dict = {
+            new_state: dict[str, Any] = {
                 "url": "",
                 "username": "",
                 "password": "",
                 "llm_provider_api_keys": {},
             }
+            session_id = self._resolve_session_id(None)
+            if session_id:
+                session_payload = self._session_config_payload(new_state)
+                self._apply_session_config(session_id, session_payload)
+                stored_browser = self._browser_state_public_snapshot(session_payload)
+            else:
+                stored_browser = new_state
 
             with suppress(Exception):
                 gr.Info(self._get_translation("config_clear_success"))
             blank_keys = (gr.update(value=""),) * n_key
             return (
-                new_state,
+                stored_browser,
                 gr.update(value=""),
                 gr.update(value=""),
                 gr.update(value=""),
