@@ -243,20 +243,6 @@ def env_flag_true(name: str) -> bool:
     return (os.getenv(name) or "").strip().lower() in ("1", "true", "yes", "on")
 
 
-def get_ui_home_first() -> bool:
-    """Place Home tab leftmost in ``gr.Tabs`` (default).
-
-    Unset or truthy ``CMW_UI_HOME_FIRST`` ⇒ Home registered first (initial selection =
-    first tab). Explicit ``0``/``false``/``no``/``off`` ⇒ Chat before Home.
-
-    Environment ``CMW_UI_HOME_FIRST``.
-    """
-    raw = (os.getenv("CMW_UI_HOME_FIRST") or "").strip().lower()
-    if raw in ("0", "false", "no", "off"):
-        return False
-    return True
-
-
 def get_ui_download_prep_after_stream() -> bool:
     """Run download-file preparation chained on streaming end (in addition to submit tail).
 
