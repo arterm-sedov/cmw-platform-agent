@@ -175,31 +175,6 @@ def get_concurrency_config() -> ConcurrencyConfig:
     global _concurrency_config
     if _concurrency_config is None:
         _concurrency_config = ConcurrencyConfig.from_env()
-        # region agent log
-        try:
-            from agent_ng._debug_ndjson import debug_ndjson as _debug_conc
-        except ImportError:
-
-            def _debug_conc(
-                _h: str, _loc: str, _msg: str, _data: dict | None = None
-            ) -> None:
-                return
-
-        _c = _concurrency_config
-        _debug_conc(
-            "HC",
-            "concurrency_config.get_concurrency_config",
-            "loaded",
-            {
-                "default_limit": _c.queue.default_concurrency_limit,
-                "chat": _c.events.chat_concurrency_limit,
-                "file_upload": _c.events.file_upload_concurrency_limit,
-                "stats_refresh": _c.events.stats_refresh_concurrency_limit,
-                "logs_refresh": _c.events.logs_refresh_concurrency_limit,
-                "enable_queue": _c.queue.enable_queue,
-            },
-        )
-        # endregion
     return _concurrency_config
 
 

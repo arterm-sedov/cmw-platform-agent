@@ -125,16 +125,6 @@ except ImportError:
 from agent_ng._image_url_rewriter import rewrite_llm_inline_images
 
 try:
-    from agent_ng._debug_ndjson import debug_ndjson as _debug_ndjson_app
-except ImportError:
-
-    def _debug_ndjson_app(
-        _h: str, _loc: str, _msg: str, _data: dict | None = None
-    ) -> None:
-        return
-
-
-try:
     from tools.file_utils import FileUtils as _FileUtils
 
     _GRADIO_CACHE_DIR = _FileUtils.get_gradio_cache_path()
@@ -1316,19 +1306,10 @@ class NextGenApp:
 
     def _update_token_budget(self, request: gr.Request = None) -> str:
         """Update token budget display - delegates to chat tab with session awareness"""
-        _t0 = time.perf_counter()
         chat_tab = self.tab_instances.get("chat")
         if chat_tab and hasattr(chat_tab, "format_token_budget_display"):
-            out = chat_tab.format_token_budget_display(request)
-        else:
-            out = get_translation_key("token_budget_initializing", self.language)
-        _debug_ndjson_app(
-            "H9",
-            "app_ng_modular._update_token_budget",
-            "done",
-            {"ms": round((time.perf_counter() - _t0) * 1000, 2)},
-        )
-        return out
+            return chat_tab.format_token_budget_display(request)
+        return get_translation_key("token_budget_initializing", self.language)
 
     def _refresh_logs(self, request: gr.Request = None) -> str:
         """Refresh logs display - delegates to logs tab with session awareness"""
@@ -1374,25 +1355,9 @@ class NextGenApp:
 
     def update_all_ui_components(self, request: gr.Request = None) -> tuple[str, str, str]:
         """Update all UI components and return their values - session-aware"""
-        _t0 = time.perf_counter()
-        _t1 = time.perf_counter()
         status = self._update_status(request)
-        _t_status = time.perf_counter()
         stats = self._refresh_stats(request)
-        _t_stats = time.perf_counter()
         logs = self._refresh_logs(request)
-        _t_logs = time.perf_counter()
-        _debug_ndjson_app(
-            "H8",
-            "app_ng_modular.update_all_ui_components",
-            "phases_ms",
-            {
-                "ms_total": round((_t_logs - _t0) * 1000, 2),
-                "ms_status": round((_t_status - _t1) * 1000, 2),
-                "ms_stats": round((_t_stats - _t_status) * 1000, 2),
-                "ms_logs": round((_t_logs - _t_stats) * 1000, 2),
-            },
-        )
         return status, stats, logs
 
     def trigger_ui_update(self):
@@ -1764,30 +1729,13 @@ class NextGenApp:
 
         # Ensure queue is initialized even if configure_queue didn't call demo.queue()
         # This prevents AttributeError: 'NoneType' object has no attribute 'max_thread_count'
-        _queue_fallback = False
         if demo._queue is None:
             # Initialize with minimal default settings
             demo.queue(default_concurrency_limit=1, status_update_rate="auto")
             _logger.info("Queue initialized with minimal default settings")
-            _queue_fallback = True
 
         # Consolidate all components from UI Manager (single source of truth)
         self.components = self.ui_manager.get_components()
-
-        # region agent log
-        _q = getattr(demo, "_queue", None)
-        _dlim = getattr(_q, "default_concurrency_limit", None) if _q is not None else None
-        _debug_ndjson_app(
-            "HL",
-            "app_ng_modular.create_interface",
-            "queue_ready",
-            {
-                "queue_attached": _q is not None,
-                "default_concurrency_limit": _dlim,
-                "post_configure_fallback": _queue_fallback,
-            },
-        )
-        # endregion
 
         return demo
 
@@ -2047,14 +1995,6 @@ def main():
     _logger.info(
         "Launching Gradio interface on port %s with language switching...", port
     )
-    # region agent log
-    _debug_ndjson_app(
-        "HL",
-        "app_ng_modular.main",
-        "launch_enter",
-        {"port": port, "server_name": "0.0.0.0", "debug": True},
-    )
-    # endregion
     demo.launch(
         debug=True,
         share=False,

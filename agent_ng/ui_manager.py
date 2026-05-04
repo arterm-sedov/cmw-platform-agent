@@ -10,18 +10,9 @@ Supports internationalization (i18n) with Russian and English translations.
 from collections.abc import Callable
 import logging
 import os
-import time
 from pathlib import Path
 
 from typing import Any, Dict, List, Optional, Tuple
-
-try:
-    from agent_ng._debug_ndjson import debug_ndjson
-except ImportError:
-
-    def debug_ndjson(_h: str, _loc: str, _msg: str, _data: dict | None = None) -> None:
-        return
-
 
 from .i18n_translations import get_translation_key
 from .tabs.sidebar import Sidebar
@@ -161,34 +152,12 @@ class UIManager:
                         "use include_sidebar_tab=False with CMW_UI_STACK_HOME_CHAT"
                     )
             else:
-                _tabs_t0 = time.perf_counter()
                 with gr.Tabs():
                     # Create tabs using provided tab modules
                     for tab_module in tab_modules:
                         if tab_module:
                             try:
-                                _t0 = time.perf_counter()
-                                # #region agent log
-                                debug_ndjson(
-                                    "H1",
-                                    "ui_manager.create_interface",
-                                    "create_tab_enter",
-                                    {"tab_class": tab_module.__class__.__name__},
-                                )
-                                # #endregion
                                 tab_item, tab_components = tab_module.create_tab()
-                                # #region agent log
-                                debug_ndjson(
-                                    "H1",
-                                    "ui_manager.create_interface",
-                                    "create_tab_exit",
-                                    {
-                                        "tab_class": tab_module.__class__.__name__,
-                                        "ms": round((time.perf_counter() - _t0) * 1000, 2),
-                                        "tab_item_none": tab_item is None,
-                                    },
-                                )
-                                # #endregion
                                 # Skip if tab_item is None (e.g., ConfigTab when CMW_USE_DOTENV=true)
                                 if tab_item is None:
                                     logging.getLogger(__name__).info(
@@ -218,29 +187,7 @@ class UIManager:
                     # Create sidebar as a tab (after other tabs)
                     if sidebar_instance is not None:
                         try:
-                            _sb_t0 = time.perf_counter()
-                            # #region agent log
-                            debug_ndjson(
-                                "H1S",
-                                "ui_manager.create_interface",
-                                "sidebar_create_tab_enter",
-                                {},
-                            )
-                            # #endregion
                             sidebar_tab, sidebar_components = sidebar_instance.create_tab()
-                            # #region agent log
-                            debug_ndjson(
-                                "H1S",
-                                "ui_manager.create_interface",
-                                "sidebar_create_tab_exit",
-                                {
-                                    "ms": round(
-                                        (time.perf_counter() - _sb_t0) * 1000, 2
-                                    ),
-                                    "tab_none": sidebar_tab is None,
-                                },
-                            )
-                            # #endregion
                             # Skip if sidebar_tab is None
                             if sidebar_tab is None:
                                 logging.getLogger(__name__).warning(
@@ -264,17 +211,6 @@ class UIManager:
                         logging.getLogger(__name__).info(
                             "Sidebar/settings tab omitted (include_sidebar_tab=False)"
                         )
-                # #region agent log
-                debug_ndjson(
-                    "H2",
-                    "ui_manager.create_interface",
-                    "gr_tabs_block_done",
-                    {
-                        "total_tab_modules": len(tab_modules),
-                        "ms": round((time.perf_counter() - _tabs_t0) * 1000, 2),
-                    },
-                )
-                # #endregion
 
             # Connect quick action dropdown after all components are available
             if "sidebar_instance" in self.components:
@@ -292,60 +228,24 @@ class UIManager:
                     chatbot_comp = chat_tab_instance.components.get("chatbot")
                     dl_tab = getattr(downloads_tab_instance, "_tab_item", None)
 
-                    def _downloads_update(
-                        history,
-                        *,
-                        generate_html: bool,
-                        trigger: str,
-                    ):
-                        """Update download buttons; H5 wraps wall time vs chat export."""
-                        _t0 = time.perf_counter()
-                        _hist_n = len(history) if history else 0
-                        # #region agent log
-                        debug_ndjson(
-                            "H5",
-                            "ui_manager._downloads_update",
-                            "enter",
-                            {
-                                "hist_len": _hist_n,
-                                "prep_after_stream": prep_after_stream,
-                                "generate_html": generate_html,
-                                "trigger": trigger,
-                            },
-                        )
-                        # #endregion
-                        out = chat_tab_instance.get_download_button_updates(
+                    def _downloads_update(history, *, generate_html: bool):
+                        """Update Markdown/HTML download buttons from chat history."""
+                        return chat_tab_instance.get_download_button_updates(
                             history,
                             generate_html=generate_html,
                         )
-                        # #region agent log
-                        debug_ndjson(
-                            "H5",
-                            "ui_manager._downloads_update",
-                            "exit",
-                            {
-                                "hist_len": _hist_n,
-                                "ms": round((time.perf_counter() - _t0) * 1000, 2),
-                                "trigger": trigger,
-                            },
-                        )
-                        # #endregion
-                        return out
 
                     def _downloads_on_tab_select(history):
-                        # Must match submit_tail HTML policy: forcing False here overwrote md_html
-                        # with md_only when opening Downloads (see debug H5 tab_select vs submit_tail).
+                        # Match submit_tail HTML policy so tab switch does not hide HTML export.
                         return _downloads_update(
                             history,
                             generate_html=bool(get_ui_export_html_after_turn()),
-                            trigger="tab_select",
                         )
 
                     def _downloads_after_chat_turn(history):
                         return _downloads_update(
                             history,
                             generate_html=bool(get_ui_export_html_after_turn()),
-                            trigger="submit_tail",
                         )
 
                     # After each completed turn: refresh buttons (HTML when env allows).
@@ -422,54 +322,8 @@ class UIManager:
                     def _refresh_sidebar_after_turn(
                         request: gr.Request | None = None,
                     ) -> tuple[str, str, str, str]:
-                        _t8 = time.perf_counter()
-                        # #region agent log
-                        debug_ndjson(
-                            "H8",
-                            "ui_manager.refresh_sidebar_after_turn",
-                            "enter",
-                            {"has_request": request is not None},
-                        )
-                        # #endregion
-                        try:
-                            status_stats_logs = update_all_ui_handler(request)
-                        finally:
-                            # #region agent log
-                            debug_ndjson(
-                                "H8",
-                                "ui_manager.refresh_sidebar_after_turn",
-                                "exit_ui_block",
-                                {
-                                    "ms": round(
-                                        (time.perf_counter() - _t8) * 1000, 2
-                                    ),
-                                },
-                            )
-                            # #endregion
-                        _t9 = time.perf_counter()
-                        # #region agent log
-                        debug_ndjson(
-                            "H9",
-                            "ui_manager.refresh_sidebar_after_turn",
-                            "enter_token_budget",
-                            {"has_request": request is not None},
-                        )
-                        # #endregion
-                        try:
-                            tb = update_token_budget_handler(request)
-                        finally:
-                            # #region agent log
-                            debug_ndjson(
-                                "H9",
-                                "ui_manager.refresh_sidebar_after_turn",
-                                "exit_token_budget",
-                                {
-                                    "ms": round(
-                                        (time.perf_counter() - _t9) * 1000, 2
-                                    ),
-                                },
-                            )
-                            # #endregion
+                        status_stats_logs = update_all_ui_handler(request)
+                        tb = update_token_budget_handler(request)
                         return (*status_stats_logs, tb)
 
                     _ste = chat_tab_instance

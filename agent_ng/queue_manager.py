@@ -20,15 +20,6 @@ from functools import wraps
 import logging
 
 try:
-    from agent_ng._debug_ndjson import debug_ndjson as _debug_queue_ndjson
-except ImportError:
-
-    def _debug_queue_ndjson(
-        _h: str, _loc: str, _msg: str, _data: dict | None = None
-    ) -> None:
-        return
-
-try:
     from .concurrency_config import get_concurrency_config, ConcurrencyConfig
 except ImportError:
     from concurrency_config import get_concurrency_config, ConcurrencyConfig
@@ -76,17 +67,6 @@ class QueueManager:
             # Initialize with minimal settings when concurrent processing is disabled
             demo.queue(default_concurrency_limit=1, status_update_rate="auto")
             logging.info("Queue initialized with minimal settings (concurrent processing disabled)")
-            # region agent log
-            _debug_queue_ndjson(
-                "HQ",
-                "queue_manager.configure_queue",
-                "minimal_disabled",
-                {
-                    "default_concurrency_limit": 1,
-                    "enable_concurrent_processing": False,
-                },
-            )
-            # endregion
         else:
             # Configure queue using Gradio's recommended approach
             queue_config = self.config.to_gradio_queue_config()
@@ -94,26 +74,10 @@ class QueueManager:
                 # Apply global queue configuration as per Gradio docs
                 demo.queue(**queue_config)
                 logging.info(f"Configured Gradio queue with global settings: {queue_config}")
-                # region agent log
-                _debug_queue_ndjson(
-                    "HQ",
-                    "queue_manager.configure_queue",
-                    "from_env",
-                    dict(queue_config),
-                )
-                # endregion
             else:
                 # Fallback to minimal settings if config is empty
                 demo.queue(default_concurrency_limit=1, status_update_rate="auto")
                 logging.info("Queue initialized with minimal default settings")
-                # region agent log
-                _debug_queue_ndjson(
-                    "HQ",
-                    "queue_manager.configure_queue",
-                    "empty_config_fallback",
-                    {"default_concurrency_limit": 1},
-                )
-                # endregion
 
         self._configured_block_ids.add(block_id)
 
