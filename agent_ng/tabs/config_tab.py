@@ -689,8 +689,10 @@ class ConfigTab:
 
     # Removed .env loading: rely solely on browser state
 
-    def _clear_browser_storage(self, state: Any) -> tuple[Any, ...]:
-        """Clear browser-persisted state and reset input fields."""
+    def _clear_browser_storage(
+        self, state: Any, request: gr.Request | None = None
+    ) -> tuple[Any, ...]:
+        """Clear browser-persisted state, reset fields, and apply empty config to session (like Save)."""
         n_key = len(self._llm_provider_key_inputs) or len(self._config_llm_providers)
         n_llm_side = 0
         sb = self.sidebar_instance
@@ -710,7 +712,7 @@ class ConfigTab:
                 "password": "",
                 "llm_provider_api_keys": {},
             }
-            session_id = self._resolve_session_id(None)
+            session_id = self._resolve_session_id(request)
             if session_id:
                 session_payload = self._session_config_payload(new_state)
                 self._apply_session_config(session_id, session_payload)
