@@ -164,7 +164,7 @@ class Sidebar(QuickActionsMixin):
         self.ensure_llm_events_wired()
 
     def mount_sidebar_body_without_llm(self) -> None:
-        """Quick actions + progress + token budget + status (left column)."""
+        """Quick actions + progress + token budget (status lives in Stats tab)."""
         with gr.Column(elem_classes=["model-card"]):
             gr.Markdown(
                 f"### {self._get_translation('quick_actions_title')}",
@@ -194,13 +194,6 @@ class Sidebar(QuickActionsMixin):
             )
             self.components["token_budget_display"] = gr.Markdown(
                 self._get_translation("token_budget_initializing")
-            )
-            gr.Markdown(
-                f"### {self._get_translation('status_title')}",
-                elem_classes=["status-title"],
-            )
-            self.components["status_display"] = gr.Markdown(
-                self._get_translation("status_initializing")
             )
 
     def create_sidebar_column(self) -> dict[str, Any]:
@@ -243,14 +236,17 @@ class Sidebar(QuickActionsMixin):
     def _connect_llm_events(self) -> None:
         """LLM dropdown / fallback / compression handlers."""
         logging.getLogger(__name__).debug("🔗 Sidebar: Wiring LLM event handlers...")
-        if (
-            "provider_model_selector" in self.components
-            and "status_display" in self.components
-        ):
+        overview = None
+        if self.main_app and getattr(self.main_app, "ui_manager", None):
+            overview = self.main_app.ui_manager.get_components().get(
+                "stats_tab_overview_display"
+            )
+
+        if "provider_model_selector" in self.components and overview is not None:
             model_switch_event = self.components["provider_model_selector"].change(
                 fn=self._apply_llm_selection_combined,
                 inputs=[self.components["provider_model_selector"]],
-                outputs=[self.components["status_display"]],
+                outputs=[overview],
             )
             if "token_budget_display" in self.components and hasattr(
                 self, "event_handlers"

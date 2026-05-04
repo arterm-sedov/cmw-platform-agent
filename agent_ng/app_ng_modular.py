@@ -1300,17 +1300,14 @@ class NextGenApp:
         self._refresh_ui_after_message()
 
     def _update_status(self, request: gr.Request = None) -> str:
-        """Update status display - always session-aware"""
-        # Use stats tab for proper formatting (now always session-aware)
+        """Update concise status overview (Stats tab header block)."""
         stats_tab = self.tab_instances.get("stats")
-        if stats_tab and hasattr(stats_tab, "format_stats_display"):
-            return stats_tab.format_stats_display(request)
+        if stats_tab and hasattr(stats_tab, "format_stats_overview"):
+            return stats_tab.format_stats_overview(request)
 
-        # Final fallback
         if self.is_ready():
             return get_translation_key("agent_ready", self.language)
-        else:
-            return get_translation_key("agent_initializing", self.language)
+        return get_translation_key("agent_initializing", self.language)
 
     def _update_token_budget(self, request: gr.Request = None) -> str:
         """Update token budget display - delegates to chat tab with session awareness"""
@@ -1361,12 +1358,14 @@ class NextGenApp:
             return True
         return False
 
-    def update_all_ui_components(self, request: gr.Request = None) -> tuple[str, str, str]:
-        """Update all UI components and return their values - session-aware"""
-        status = self._update_status(request)
+    def update_all_ui_components(
+        self, request: gr.Request = None
+    ) -> tuple[str, str, str, str]:
+        """Refresh overview + full stats + logs (session-aware)."""
+        overview = self._update_status(request)
         stats = self._refresh_stats(request)
         logs = self._refresh_logs(request)
-        return status, stats, logs
+        return overview, stats, stats, logs
 
     def trigger_ui_update(self):
         """Trigger UI update after agent initialization or message processing"""

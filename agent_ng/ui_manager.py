@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from .i18n_translations import get_translation_key
 from .tabs.sidebar import Sidebar as SidebarPanel
+from .tabs.stats_tab import StatsTab
 import gradio as gr
 
 # Import configuration with fallback for direct execution
@@ -101,6 +102,10 @@ class UIManager:
                 for m in tab_modules
             )
 
+            for tab_module in tab_modules:
+                if isinstance(tab_module, StatsTab):
+                    tab_module.register_overview_placeholder()
+
             with gr.Row(equal_height=False):
                 with gr.Sidebar(
                     label=self._get_translation("tab_sidebar"),
@@ -142,8 +147,8 @@ class UIManager:
                                     )
                                     raise
 
-            self.components.update(sb.get_components())
             self.components["sidebar_instance"] = sb
+            self.components.update(sb.get_components())
 
             sb.connect_quick_action_dropdown()
 
@@ -186,15 +191,21 @@ class UIManager:
             # Wire end-of-turn event-driven refresh using existing chat events
             try:
                 update_all_ui_handler = event_handlers.get("update_all_ui")
-                status_comp = self.components.get("status_display")
+                overview_comp = self.components.get("stats_tab_overview_display")
                 stats_comp = self.components.get("stats_display")
                 logs_comp = self.components.get("logs_display")
                 token_budget_comp = self.components.get("token_budget_display")
                 update_token_budget_handler = event_handlers.get("update_token_budget")
 
                 chat_tab_instance = self.components.get("chattab_tab")
-                if update_all_ui_handler and status_comp and stats_comp and logs_comp and chat_tab_instance:
-                    refresh_outputs = [status_comp, stats_comp, logs_comp]
+                if (
+                    update_all_ui_handler
+                    and overview_comp
+                    and stats_comp
+                    and logs_comp
+                    and chat_tab_instance
+                ):
+                    refresh_outputs = [overview_comp, stats_comp, stats_comp, logs_comp]
 
                     # After send (streaming) completes
                     if hasattr(chat_tab_instance, "streaming_event") and chat_tab_instance.streaming_event:
@@ -294,10 +305,11 @@ class UIManager:
 
 
         # Load initial UI state once on startup
-        if "status_display" in self.components and update_status_handler:
+        overview_comp = self.components.get("stats_tab_overview_display")
+        if overview_comp and update_status_handler:
             demo.load(
                 fn=update_status_handler,
-                outputs=[self.components["status_display"]]
+                outputs=[overview_comp],
             )
 
         if "token_budget_display" in self.components and update_token_budget_handler:
@@ -347,13 +359,16 @@ class UIManager:
         refresh_interval = get_refresh_intervals().interval
 
         # Status updates
-        if "status_display" in self.components and event_handlers.get("update_status"):
+        overview_tick = self.components.get("stats_tab_overview_display")
+        if overview_tick and event_handlers.get("update_status"):
             status_timer = gr.Timer(refresh_interval, active=True)
             status_timer.tick(
                 fn=event_handlers["update_status"],
-                outputs=[self.components["status_display"]]
+                outputs=[overview_tick],
             )
-            logging.getLogger(__name__).debug(f"✅ Status auto-refresh timer set ({refresh_interval}s)")
+            logging.getLogger(__name__).debug(
+                "✅ Stats overview auto-refresh timer set (%ss)", refresh_interval
+            )
 
         # Token budget updates - hybrid approach (immediate events + timer fallback)
         # Token budget is updated through:
