@@ -238,76 +238,9 @@ def get_llm_settings() -> dict[str, Any]:
     return config.get_llm_settings()
 
 
-# Order matches ``NextGenApp.create_interface()`` tab registration (excluding sidebar TabItem).
-_UI_TAB_BUILD_ORDER: tuple[str, ...] = (
-    "home",
-    "chat",
-    "logs",
-    "stats",
-    "config",
-    "downloads",
-)
-
-
-def get_ui_tab_allowlist() -> frozenset[str] | None:
-    """Optional subset of UI tabs to build.
-
-    Environment ``CMW_UI_TABS``: comma-separated keys. When non-empty, it wins over
-    ``CMW_UI_TAB_LIMIT``.
-
-    Environment ``CMW_UI_TAB_LIMIT``: positive integer — keep only the first *N* tabs in
-    ``_UI_TAB_BUILD_ORDER`` (e.g. ``3`` → home, chat, logs). Unset / invalid = no limit.
-
-    Sidebar uses key ``sidebar`` and is only included when listed in ``CMW_UI_TABS`` (never
-    via ``CMW_UI_TAB_LIMIT``).
-
-    Keys: ``home``, ``chat``, ``logs``, ``stats``, ``config``, ``downloads``, ``sidebar``.
-    """
-    raw = (os.getenv("CMW_UI_TABS") or "").strip()
-    if raw:
-        return frozenset(x.strip().lower() for x in raw.split(",") if x.strip())
-    limit_raw = (os.getenv("CMW_UI_TAB_LIMIT") or "").strip()
-    if limit_raw.isdigit():
-        n = int(limit_raw, 10)
-        if n <= 0:
-            return None
-        keys = _UI_TAB_BUILD_ORDER[: min(n, len(_UI_TAB_BUILD_ORDER))]
-        return frozenset(keys)
-    return None
-
-
 def env_flag_true(name: str) -> bool:
     """Return True if ``name`` is set to a truthy token (1/true/yes/on)."""
     return (os.getenv(name) or "").strip().lower() in ("1", "true", "yes", "on")
-
-
-def get_ui_stack_home_chat() -> bool:
-    """Stack home + chat in one column without ``gr.Tabs`` (eliminates tab-switch mount).
-
-    Environment ``CMW_UI_STACK_HOME_CHAT`` — requires every built tab module to implement ``build_ui()``.
-    """
-    return env_flag_true("CMW_UI_STACK_HOME_CHAT")
-
-
-def get_ui_disable_auto_timers() -> bool:
-    """Skip ``gr.Timer`` tick handlers when periodic refresh interferes with the UI."""
-    return env_flag_true("CMW_UI_DISABLE_AUTO_TIMERS")
-
-
-def get_ui_export_html_after_turn() -> bool:
-    """Build HTML export when download prep runs after each chat turn (Markdown + HTML).
-
-    When ``False`` (default), only Markdown is generated; the HTML download stays hidden.
-    HTML generation can stall the UI on some setups — enable only when needed.
-
-    After each completed turn, the Downloads buttons refresh on ``submit_event``; when this flag
-    is on, that refresh includes HTML generation. Tab-select-only prep (when
-    ``CMW_UI_DOWNLOAD_PREP_AFTER_STREAM`` is off) stays Markdown-only so switching tabs stays
-    lightweight.
-
-    Environment ``CMW_UI_EXPORT_HTML_AFTER_TURN``: ``1``/``true``/``yes``/``on`` to enable.
-    """
-    return env_flag_true("CMW_UI_EXPORT_HTML_AFTER_TURN")
 
 
 def get_ui_home_first() -> bool:
@@ -325,11 +258,11 @@ def get_ui_home_first() -> bool:
 
 
 def get_ui_download_prep_after_stream() -> bool:
-    """Run download-file preparation chained on ``submit_event`` right after streaming ends.
+    """Run download-file preparation chained on streaming end (in addition to submit tail).
 
-    When ``False`` (default), preparation still runs on ``submit_event`` for button refresh;
-    selecting the Downloads tab also refreshes exports (Markdown always; HTML too when
-    ``CMW_UI_EXPORT_HTML_AFTER_TURN`` is on — avoids hiding the HTML button after tab switch).
+    When ``False`` (default), Markdown/HTML export refresh still runs on ``submit_event`` and
+    when opening the Downloads tab. Turning this on adds the same refresh on the streaming
+    completion event (both Markdown and HTML).
 
     Environment ``CMW_UI_DOWNLOAD_PREP_AFTER_STREAM``: ``1``/``true``/``yes``/``on`` to enable.
     """

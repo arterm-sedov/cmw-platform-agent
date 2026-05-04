@@ -52,10 +52,7 @@ try:
         config,
         get_language_settings,
         get_port_settings,
-        get_ui_disable_auto_timers,
         get_ui_home_first,
-        get_ui_stack_home_chat,
-        get_ui_tab_allowlist,
     )
 except ImportError:
     # Fallback for direct execution
@@ -67,10 +64,7 @@ except ImportError:
         config,
         get_language_settings,
         get_port_settings,
-        get_ui_disable_auto_timers,
         get_ui_home_first,
-        get_ui_stack_home_chat,
-        get_ui_tab_allowlist,
     )
 
 
@@ -1393,47 +1387,26 @@ class NextGenApp:
         # Create event handlers
         event_handlers = self._create_event_handlers()
 
-        ui_allow = get_ui_tab_allowlist()
-
-        def _want_tab(tab_key: str) -> bool:
-            return ui_allow is None or tab_key in ui_allow
-
-        if ui_allow is not None:
-            tabs_raw = (os.getenv("CMW_UI_TABS") or "").strip()
-            limit_raw = (os.getenv("CMW_UI_TAB_LIMIT") or "").strip()
-            via = "CMW_UI_TABS" if tabs_raw else "CMW_UI_TAB_LIMIT"
-            _logger.info(
-                "%s active — building subset: %s",
-                via,
-                ", ".join(sorted(ui_allow)),
-            )
-            if via == "CMW_UI_TAB_LIMIT" and limit_raw:
-                _logger.info("CMW_UI_TAB_LIMIT=%s", limit_raw)
-
         # Create tab modules with error handling
         tab_modules = []
         home_tab_inst = None
         chat_tab_inst = None
         try:
-            if HomeTab and _want_tab("home"):
+            if HomeTab:
                 home_tab_inst = HomeTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
                 home_tab_inst.set_main_app(self)
                 self.tab_instances["home"] = home_tab_inst
-            elif HomeTab:
-                _logger.info("HomeTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("HomeTab not available")
 
-            if ChatTab and _want_tab("chat"):
+            if ChatTab:
                 chat_tab_inst = ChatTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
                 chat_tab_inst.set_main_app(self)
                 self.tab_instances["chat"] = chat_tab_inst
-            elif ChatTab:
-                _logger.info("ChatTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("ChatTab not available")
 
@@ -1447,19 +1420,17 @@ class NextGenApp:
                     if _m is not None:
                         tab_modules.append(_m)
 
-            if LogsTab and _want_tab("logs"):
+            if LogsTab:
                 logs_tab = LogsTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
                 logs_tab.set_main_app(self)  # Pass main app reference
                 tab_modules.append(logs_tab)
                 self.tab_instances["logs"] = logs_tab
-            elif LogsTab:
-                _logger.info("LogsTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("LogsTab not available")
 
-            if StatsTab and _want_tab("stats"):
+            if StatsTab:
                 stats_tab = StatsTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
@@ -1468,8 +1439,6 @@ class NextGenApp:
                 )  # Set reference to main app for session management
                 tab_modules.append(stats_tab)
                 self.tab_instances["stats"] = stats_tab
-            elif StatsTab:
-                _logger.info("StatsTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("StatsTab not available")
 
@@ -1483,7 +1452,6 @@ class NextGenApp:
             if (
                 not use_dotenv_flag
                 and ConfigTab
-                and _want_tab("config")
             ):
                 config_tab = ConfigTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
@@ -1493,19 +1461,17 @@ class NextGenApp:
                 self.tab_instances["config"] = config_tab
             else:
                 _logger.info(
-                    "ConfigTab not shown (CMW_USE_DOTENV is true, CMW_UI_TABS, or tab unavailable)"
+                    "ConfigTab not shown (CMW_USE_DOTENV is true or ConfigTab unavailable)"
                 )
 
             # Downloads tab
-            if DownloadsTab and _want_tab("downloads"):
+            if DownloadsTab:
                 downloads_tab = DownloadsTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
                 downloads_tab.set_main_app(self)
                 tab_modules.append(downloads_tab)
                 self.tab_instances["downloads"] = downloads_tab
-            elif DownloadsTab:
-                _logger.info("DownloadsTab skipped (CMW_UI_TABS)")
             else:
                 _logger.warning("DownloadsTab not available")
         except Exception as e:
@@ -1516,23 +1482,12 @@ class NextGenApp:
         # launched Blocks to receive .queue() or validation fails (streaming / cancel chains).
 
         # Use UI Manager to create interface
-        stack_home_chat = get_ui_stack_home_chat()
-        disable_auto_timers = get_ui_disable_auto_timers()
-        include_sidebar_tab = (
-            ui_allow is None or "sidebar" in ui_allow
-        ) and not stack_home_chat
-        if stack_home_chat:
-            _logger.info(
-                "CMW_UI_STACK_HOME_CHAT: single-column layout; sidebar tab disabled"
-            )
         try:
             demo = self.ui_manager.create_interface(
                 tab_modules,
                 event_handlers,
                 main_app=self,
-                include_sidebar_tab=include_sidebar_tab,
-                stack_home_chat=stack_home_chat,
-                disable_auto_timers=disable_auto_timers,
+                include_sidebar_tab=True,
             )
         except Exception as e:
             _logger.exception("Error creating interface: %s", e)
@@ -1779,32 +1734,29 @@ class NextGenAppWithLanguageDetection(NextGenApp):
 
 # Global demo variable for single port architecture
 demo = None
-# Tracks UI-shaping env (tabs / stack / timers / home order) so cached Blocks rebuild when they change.
-_DEMO_UI_EXPERIMENT_SIG: str | None = None
+# Tracks UI-shaping env (home order, download prep) so cached Blocks rebuild when they change.
+_DEMO_UI_LAYOUT_SIG: str | None = None
 
 
-def _ui_experiment_signature() -> str:
+def _ui_layout_env_signature() -> str:
     """Stable fingerprint for UI layout env vars (same interpreter, e.g. watch / reload)."""
     return "|".join(
         [
-            os.getenv("CMW_UI_TABS") or "",
-            os.getenv("CMW_UI_TAB_LIMIT") or "",
-            os.getenv("CMW_UI_STACK_HOME_CHAT") or "",
-            os.getenv("CMW_UI_DISABLE_AUTO_TIMERS") or "",
             os.getenv("CMW_UI_HOME_FIRST") or "",
+            os.getenv("CMW_UI_DOWNLOAD_PREP_AFTER_STREAM") or "",
         ]
     )
 
 
 def get_demo_with_language_detection():
     """Get or create the demo interface with language detection support"""
-    global demo, _DEMO_UI_EXPERIMENT_SIG
+    global demo, _DEMO_UI_LAYOUT_SIG
 
-    sig = _ui_experiment_signature()
-    if demo is not None and _DEMO_UI_EXPERIMENT_SIG != sig:
+    sig = _ui_layout_env_signature()
+    if demo is not None and _DEMO_UI_LAYOUT_SIG != sig:
         _logger.info(
             "Rebuilding demo: UI layout env changed (%r -> %r)",
-            _DEMO_UI_EXPERIMENT_SIG,
+            _DEMO_UI_LAYOUT_SIG,
             sig,
         )
         demo = None
@@ -1823,7 +1775,7 @@ def get_demo_with_language_detection():
             if not hasattr(demo, "_queue"):
                 demo._queue = None
 
-            _DEMO_UI_EXPERIMENT_SIG = sig
+            _DEMO_UI_LAYOUT_SIG = sig
             _logger.info(f"🌐 Demo created with detected language: {detected_language}")
         except Exception as e:
             _logger.exception("Error creating demo: %s", e)
@@ -1835,7 +1787,7 @@ def get_demo_with_language_detection():
             if not hasattr(fallback_demo, "_queue"):
                 fallback_demo._queue = None
             demo = fallback_demo
-            _DEMO_UI_EXPERIMENT_SIG = sig
+            _DEMO_UI_LAYOUT_SIG = sig
 
     return demo
 

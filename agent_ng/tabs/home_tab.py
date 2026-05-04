@@ -47,7 +47,7 @@ class HomeTab:
         return tab, self.components
 
     def build_ui(self, *, show_stack_heading: bool = False) -> None:
-        """Mount home content (used inside ``TabItem`` or ``CMW_UI_STACK_HOME_CHAT`` column)."""
+        """Mount home content (inside ``TabItem``)."""
         if show_stack_heading:
             gr.Markdown(
                 f"### {self._get_translation('tab_home')}",

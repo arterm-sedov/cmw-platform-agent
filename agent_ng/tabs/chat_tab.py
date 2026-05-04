@@ -21,7 +21,6 @@ import uuid
 import gradio as gr
 import markdown
 
-from agent_ng.agent_config import get_ui_export_html_after_turn
 from agent_ng.history_compression import (
     perform_compression_with_notifications,
     should_compress_on_completion,
@@ -136,7 +135,7 @@ class ChatTab(QuickActionsMixin):
         return tab, self.components
 
     def build_ui(self, *, show_stack_heading: bool = False) -> None:
-        """Mount chat UI (used inside ``TabItem`` or ``CMW_UI_STACK_HOME_CHAT`` column)."""
+        """Mount chat UI (inside ``TabItem``)."""
         if show_stack_heading:
             gr.Markdown(
                 f"### {self._get_translation('tab_chat')}",
@@ -151,6 +150,7 @@ class ChatTab(QuickActionsMixin):
         # In Gradio 6, Chatbot uses messages format by default, so no type parameter is needed
         self.components["chatbot"] = gr.Chatbot(
             label=self._get_translation("chat_label"),
+            value=[],
             height=500,
             show_label=True,
             container=True,
@@ -282,6 +282,10 @@ class ChatTab(QuickActionsMixin):
         cancellation_state = gr.State(value={"cancelled": False})
         self.components["cancellation_state"] = cancellation_state
 
+        # True while the stream generator is running (used to avoid heavy Downloads prep mid-stream).
+        streaming_active = gr.State(value=False)
+        self.components["streaming_active"] = streaming_active
+
         # Step 1: Submit event - simple function that clears textbox
         # Following reference repo pattern: this triggers .success() which shows stop button
         user_submit = self.components["msg"].submit(
@@ -328,6 +332,10 @@ class ChatTab(QuickActionsMixin):
                 cancel_state["cancelled"] = False
             return cancel_state
 
+        def reset_stream_start(cancel_state: dict | None) -> tuple[dict, bool]:
+            """Reset cancel dict and mark streaming active before generator runs."""
+            return reset_cancellation_state(cancel_state), True
+
         # Step 2: Chain streaming handler from user_submit
         # Following reference repo pattern: reset cancellation state first, then chain streaming handler
         if queue_manager:
@@ -352,9 +360,9 @@ class ChatTab(QuickActionsMixin):
             # Chain streaming handler from submit chain (cmw-rag: optional step after submit)
             # Following reference repo pattern: reset cancellation state first, then stream
             streaming_pipeline = submit_chain_root.then(
-                fn=reset_cancellation_state,
+                fn=reset_stream_start,
                 inputs=[cancellation_state],
-                outputs=[cancellation_state],
+                outputs=[cancellation_state, streaming_active],
                 queue=False,
                 api_visibility="private",
             ).then(
@@ -371,9 +379,9 @@ class ChatTab(QuickActionsMixin):
             # Chain streaming handler from user_submit
             # Following reference repo pattern: reset cancellation state first, then stream
             streaming_pipeline = submit_chain_root.then(
-                fn=reset_cancellation_state,
+                fn=reset_stream_start,
                 inputs=[cancellation_state],  # Request is automatically passed to functions that accept it
-                outputs=[cancellation_state],
+                outputs=[cancellation_state, streaming_active],
                 queue=False,
                 api_visibility="private",
             ).then(
@@ -394,13 +402,16 @@ class ChatTab(QuickActionsMixin):
             logging.getLogger(__name__).debug(
                 "Re-enabling textbox and hiding stop button after handler completion"
             )
-            return gr.MultimodalTextbox(
-                value="", interactive=True, submit_btn=True, stop_btn=False
+            return (
+                gr.MultimodalTextbox(
+                    value="", interactive=True, submit_btn=True, stop_btn=False
+                ),
+                False,
             )
 
         self.submit_event = streaming_pipeline.then(
             fn=re_enable_textbox_and_hide_stop,
-            outputs=[self.components["msg"]],
+            outputs=[self.components["msg"], streaming_active],
             queue=False,
             api_visibility="private",
         )
@@ -423,6 +434,11 @@ class ChatTab(QuickActionsMixin):
             outputs=[self.components["msg"]],
             queue=False,
             api_visibility="private",
+        ).then(
+            lambda: False,
+            outputs=[streaming_active],
+            queue=False,
+            api_visibility="private",
         )
 
         # Handle chatbot clear event - clear memory and reset downloads
@@ -442,6 +458,11 @@ class ChatTab(QuickActionsMixin):
                 self.components["chatbot"],
                 self.components["msg"],
             ],
+            api_visibility="private",
+        ).then(
+            lambda: False,
+            outputs=[streaming_active],
+            queue=False,
             api_visibility="private",
         )
 
@@ -1658,10 +1679,28 @@ class ChatTab(QuickActionsMixin):
             chatbot, _msg = clear_handler(request)
             # Return empty MultimodalValue
             empty_multimodal = {"text": "", "files": []}
-            return chatbot, empty_multimodal
+            return chatbot if chatbot is not None else [], empty_multimodal
         # Fallback if clear handler not available
         empty_multimodal = {"text": "", "files": []}
         return [], empty_multimodal
+
+    def get_download_cached_ui_updates(self) -> tuple[Any, Any]:
+        """Reuse last export paths without regenerating files (avoids stalls mid-stream)."""
+        if not CHAT_DOWNLOADS_ENABLED:
+            return gr.update(visible=False), gr.update(visible=False)
+        markdown_file_path = getattr(self, "_last_download_file", None)
+        html_file_path = getattr(self, "_last_download_html_file", None)
+        if markdown_file_path and html_file_path:
+            return (
+                gr.update(value=markdown_file_path, visible=True),
+                gr.update(value=html_file_path, visible=True),
+            )
+        if markdown_file_path:
+            return (
+                gr.update(value=markdown_file_path, visible=True),
+                gr.update(visible=False),
+            )
+        return gr.update(visible=False), gr.update(visible=False)
 
     def get_download_button_updates(
         self,
@@ -1675,8 +1714,7 @@ class ChatTab(QuickActionsMixin):
 
         Args:
             history: Conversation history
-            generate_html: When ``None``, follow ``CMW_UI_EXPORT_HTML_AFTER_TURN``.
-                When ``False``, skip HTML export (fast tab-select prep).
+            generate_html: When ``None``, include HTML export. When ``False``, Markdown only.
 
         Returns:
             Tuple of (markdown_button_update, html_button_update)
@@ -1700,11 +1738,7 @@ class ChatTab(QuickActionsMixin):
                 gr.update(visible=False),
             )
         if history and len(history) > 0:
-            effective_html = (
-                get_ui_export_html_after_turn()
-                if generate_html is None
-                else bool(generate_html)
-            )
+            effective_html = True if generate_html is None else bool(generate_html)
             # Check if conversation has changed since last generation
             history_str = str(history)
             regen = (
@@ -1772,7 +1806,7 @@ class ChatTab(QuickActionsMixin):
 
         Args:
             history: List of conversation messages from Gradio chatbot component
-            generate_html: When ``None``, follow ``CMW_UI_EXPORT_HTML_AFTER_TURN``.
+            generate_html: When ``None``, generate HTML companion export.
 
         Returns:
             File path if successful, None if failed
@@ -1859,11 +1893,7 @@ class ChatTab(QuickActionsMixin):
 
             logger.debug("Created markdown file: %s", clean_file_path)
 
-            _want_html = (
-                get_ui_export_html_after_turn()
-                if generate_html is None
-                else bool(generate_html)
-            )
+            _want_html = True if generate_html is None else bool(generate_html)
             # HTML is optional (can stall Gradio when run on tab.select).
             html_file_path = None
             if _want_html:
