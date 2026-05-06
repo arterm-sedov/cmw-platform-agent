@@ -22,7 +22,6 @@ from agent_ng.openai_compat import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-
 class _ProviderConfig:
     def __init__(self, models: list[dict[str, str]]) -> None:
         self.models = models
@@ -167,6 +166,7 @@ def test_registered_chat_completions_route_returns_non_streaming_response() -> N
 
     response = TestClient(demo.app).post(
         "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-key-polza"},
         json={
             "model": "polza/z-ai/glm-5.1",
             "messages": [{"role": "user", "content": "ping"}],
@@ -194,6 +194,7 @@ def test_registered_chat_completions_route_streams_sse_chunks() -> None:
 
     response = TestClient(demo.app).post(
         "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-key-openrouter"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
             "messages": [{"role": "user", "content": "ping"}],
@@ -204,6 +205,81 @@ def test_registered_chat_completions_route_streams_sse_chunks() -> None:
     assert response.status_code == 200
     assert "data: [DONE]" in response.text
     assert "answer to ping" in response.text
+
+
+def test_registered_chat_completions_route_requires_bearer_token() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+    client = TestClient(demo.app)
+
+    unauthorized = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "ping"}],
+        },
+    )
+    assert unauthorized.status_code == 401
+    assert unauthorized.json()["error"]["message"] == "Missing bearer token"
+
+
+def test_registered_chat_completions_route_accepts_any_bearer_token_as_provider_key() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+    client = TestClient(demo.app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer any-client-supplied-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "ping"}],
+        },
+    )
+    assert response.status_code == 200
+
+
+def test_registered_chat_completions_route_does_not_accept_x_api_key_header() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+    client = TestClient(demo.app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        headers={"X-API-Key": "secret-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "ping"}],
+        },
+    )
+    assert response.status_code == 401
+
+
+def test_registered_chat_completions_route_passes_bearer_as_selected_provider_key() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+
+    response = TestClient(demo.app).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "ping"}],
+            "extra_body": {"session_id": "provider-key-session"},
+        },
+    )
+
+    assert response.status_code == 200
+    from agent_ng.session_manager import get_session_config
+
+    session_config = get_session_config("provider-key-session") or {}
+    assert session_config.get("llm_provider_api_keys") == {
+        "openrouter": "provider-specific-key"
+    }
 
 
 def test_gradio_queue_replaces_app_so_route_must_be_registered_after_queue() -> None:

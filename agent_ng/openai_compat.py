@@ -221,8 +221,22 @@ def _error_response(message: str, status_code: int = 400) -> JSONResponse:
     )
 
 
+def _extract_api_key(request: Request) -> str:
+    """Extract API key from `Authorization: Bearer <token>`."""
+    auth_header = request.headers.get("Authorization")
+    if isinstance(auth_header, str):
+        value = auth_header.strip()
+        bearer_prefix = "bearer "
+        if value.lower().startswith(bearer_prefix):
+            token = value[len(bearer_prefix) :].strip()
+            if token:
+                return token
+
+    return ""
+
+
 def _prepare_request(
-    app: Any, payload: dict[str, Any]
+    app: Any, payload: dict[str, Any], *, provider_api_key: str | None = None
 ) -> tuple[str, str, Any] | JSONResponse:
     from agent_ng.session_manager import set_current_session_id, set_session_config
 
@@ -248,10 +262,6 @@ def _prepare_request(
     set_current_session_id(session_id)
     app.set_session_context(session_id)
 
-    credentials = extract_cmw_credentials(payload)
-    if credentials:
-        set_session_config(session_id, credentials)
-
     if not app.session_manager.update_llm_provider(
         session_id, resolved.provider, resolved.model
     ):
@@ -259,6 +269,15 @@ def _prepare_request(
             f"Failed to initialize model {resolved.provider}/{resolved.model}",
             status_code=500,
         )
+
+    config_update: dict[str, Any] = {}
+    credentials = extract_cmw_credentials(payload)
+    if credentials:
+        config_update.update(credentials)
+    if provider_api_key:
+        config_update["llm_provider_api_keys"] = {resolved.provider: provider_api_key}
+    if config_update:
+        set_session_config(session_id, config_update)
 
     return question, session_id, resolved
 
@@ -323,11 +342,17 @@ def register_openai_chat_completions_on_fastapi(fastapi_app: FastAPI, app: Any) 
     """Register `POST /v1/chat/completions` on a FastAPI app."""
 
     async def chat_completions(request: Request) -> JSONResponse | StreamingResponse:
+        provided_api_key = _extract_api_key(request)
+        if not provided_api_key:
+            return _error_response("Missing bearer token", status_code=401)
+
         payload = await request.json()
         if not isinstance(payload, dict):
             return _error_response("request body must be a JSON object")
 
-        prepared = _prepare_request(app, payload)
+        prepared = _prepare_request(
+            app, payload, provider_api_key=provided_api_key
+        )
         if isinstance(prepared, JSONResponse):
             return prepared
 

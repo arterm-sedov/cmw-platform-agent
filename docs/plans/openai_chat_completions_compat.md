@@ -9,12 +9,14 @@ Chat Completions API while preserving current Gradio UI behavior.
 
 - Add a basic `POST /v1/chat/completions` route.
 - Support request fields: `model`, `messages`, `stream`.
-- Accept non-standard camelCase fields: `cmwBaseUrl`, `cmwLogin`,
-  `cmwPassword`, and `sessionId`.
+- Accept non-standard fields in `extra_body`: `cmw_base_url`, `cmw_login`,
+  `cmw_password`, and `session_id`.
 - Resolve provider/model slugs such as `polza/z-ai/glm-5.1` and
   `openrouter/z-ai/glm-5.1`.
 - Return OpenAI-shaped non-streaming JSON responses and streaming SSE chunks.
 - Ignore unsupported OpenAI fields for this first version.
+- Require `Authorization: Bearer <token>` and use that token as runtime
+  provider API key for the selected provider.
 
 ## Research Notes
 
