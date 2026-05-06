@@ -23,6 +23,9 @@ Chat Completions API while preserving current Gradio UI behavior.
   for downstream compatibility) and return validated JSON in assistant content.
 - Add safe repair/coercion for structured output before validation (string trim,
   conservative primitive coercion), while preserving schema guardrails.
+- When structured output is enabled, add vendor sibling on `message`:
+  `cmw_assistant_last_message` (verbatim agent text before formatting; not part
+  of client JSON schema validation).
 
 ## Research Notes
 

@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from agent_ng.openai_compat import (
+    CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE,
     build_chat_completion_response,
     build_streaming_chat_completion_chunks,
     extract_cmw_credentials,
@@ -22,6 +23,7 @@ from agent_ng.openai_compat import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
+
 
 class _ProviderConfig:
     def __init__(self, models: list[dict[str, str]]) -> None:
@@ -98,6 +100,19 @@ def test_build_chat_completion_response_matches_basic_openai_shape() -> None:
             "finish_reason": "stop",
         }
     ]
+
+
+def test_build_chat_completion_response_adds_optional_cmw_assistant_last_message() -> (
+    None
+):
+    response = build_chat_completion_response(
+        request_model="openrouter/z-ai/glm-5.1",
+        assistant_content='{"objects":[]}',
+        cmw_assistant_last_message="**Raw** agent reply markdown",
+    )
+    msg = response["choices"][0]["message"]
+    assert msg["content"] == '{"objects":[]}'
+    assert msg[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE] == "**Raw** agent reply markdown"
 
 
 def test_build_streaming_chat_completion_chunks_emit_sse_data_and_done() -> None:
@@ -250,6 +265,9 @@ def test_registered_chat_completions_route_returns_non_streaming_response() -> N
     assert payload["object"] == "chat.completion"
     assert payload["model"] == "polza/z-ai/glm-5.1"
     assert payload["choices"][0]["message"]["content"] == "answer to ping"
+    assert (
+        CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE not in payload["choices"][0]["message"]
+    )
     assert app.session_manager.updated == ("test-session", "polza", "z-ai/glm-5.1")
 
 
@@ -290,7 +308,9 @@ def test_registered_chat_completions_route_requires_bearer_token() -> None:
     assert unauthorized.json()["error"]["message"] == "Missing bearer token"
 
 
-def test_registered_chat_completions_route_accepts_any_bearer_token_as_provider_key() -> None:
+def test_registered_chat_completions_route_accepts_any_bearer_token_as_provider_key() -> (
+    None
+):
     demo = _Demo()
     app = _App()
     register_openai_chat_completions_route(demo, app)
@@ -324,7 +344,9 @@ def test_registered_chat_completions_route_does_not_accept_x_api_key_header() ->
     assert response.status_code == 401
 
 
-def test_registered_chat_completions_route_passes_bearer_as_selected_provider_key() -> None:
+def test_registered_chat_completions_route_passes_bearer_as_selected_provider_key() -> (
+    None
+):
     demo = _Demo()
     app = _App()
     register_openai_chat_completions_route(demo, app)
@@ -348,7 +370,9 @@ def test_registered_chat_completions_route_passes_bearer_as_selected_provider_ke
     }
 
 
-def test_registered_chat_completions_route_formats_structured_output_via_tool_call() -> None:
+def test_registered_chat_completions_route_formats_structured_output_via_tool_call() -> (
+    None
+):
     demo = _Demo()
     app = _App()
     register_openai_chat_completions_route(demo, app)
@@ -391,10 +415,15 @@ def test_registered_chat_completions_route_formats_structured_output_via_tool_ca
     )
 
     assert response.status_code == 200
-    content = response.json()["choices"][0]["message"]["content"]
+    payload_msg = response.json()["choices"][0]["message"]
+    content = payload_msg["content"]
     assert json.loads(content) == {
         "objects": [{"id": "obj.1", "system_name": "TestObject"}]
     }
+    assert (
+        payload_msg[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE]
+        == "answer to list worked objects"
+    )
     assert "emit_structured_output" in _FormatterBoundLLM.last_prompt
 
 
@@ -624,7 +653,9 @@ def test_structured_output_does_not_repair_empty_string_for_integer() -> None:
     assert response.status_code == 422
 
 
-def test_registered_chat_completions_route_rejects_invalid_response_format_json() -> None:
+def test_registered_chat_completions_route_rejects_invalid_response_format_json() -> (
+    None
+):
     demo = _Demo()
     app = _App()
     register_openai_chat_completions_route(demo, app)
@@ -643,7 +674,9 @@ def test_registered_chat_completions_route_rejects_invalid_response_format_json(
     assert "response_format" in response.json()["error"]["message"]
 
 
-def test_registered_chat_completions_route_rejects_stream_with_structured_output() -> None:
+def test_registered_chat_completions_route_rejects_stream_with_structured_output() -> (
+    None
+):
     demo = _Demo()
     app = _App()
     register_openai_chat_completions_route(demo, app)
@@ -659,7 +692,11 @@ def test_registered_chat_completions_route_rejects_stream_with_structured_output
                 "type": "json_schema",
                 "json_schema": {
                     "name": "worked_objects",
-                    "schema": {"type": "object", "properties": {}, "additionalProperties": False},
+                    "schema": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
                 },
             },
         },
@@ -722,3 +759,36 @@ def test_handle_chat_completions_payload_returns_openai_json() -> None:
     assert response["object"] == "chat.completion"
     assert response["model"] == "openrouter/z-ai/glm-5.1"
 
+
+def test_handle_chat_completions_payload_structured_has_cmw_assistant_last_message() -> (
+    None
+):
+    _FormatterBoundLLM.next_args = {
+        "objects": [{"id": "obj.1", "system_name": "TestObject"}]
+    }
+    app = _App()
+    payload = {
+        "model": "openrouter/z-ai/glm-5.1",
+        "messages": [{"role": "user", "content": "list"}],
+        "stream": False,
+        "extra_body": {"session_id": "test-session-structured-handle"},
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "worked_objects",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {"objects": {"type": "array"}},
+                    "required": ["objects"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+    }
+    response = asyncio.run(handle_chat_completions_payload(app, payload))
+    msg = response["choices"][0]["message"]
+    assert json.loads(msg["content"]) == {
+        "objects": [{"id": "obj.1", "system_name": "TestObject"}]
+    }
+    assert msg[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE] == "answer to list"

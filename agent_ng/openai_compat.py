@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 
 KNOWN_FINISH_REASON = "stop"
 
+# Vendor extension on `message`: verbatim agent reply before structured formatter.
+CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE = "cmw_assistant_last_message"
+
 
 @dataclass(frozen=True)
 class ResolvedChatModel:
@@ -131,8 +134,16 @@ def build_chat_completion_response(
     request_model: str,
     assistant_content: str,
     finish_reason: str = KNOWN_FINISH_REASON,
+    cmw_assistant_last_message: str | None = None,
 ) -> dict[str, Any]:
     """Build a minimal OpenAI-compatible non-streaming response."""
+
+    message: dict[str, Any] = {
+        "role": "assistant",
+        "content": assistant_content,
+    }
+    if cmw_assistant_last_message is not None:
+        message[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE] = cmw_assistant_last_message
 
     return {
         "id": _response_id(),
@@ -142,7 +153,7 @@ def build_chat_completion_response(
         "choices": [
             {
                 "index": 0,
-                "message": {"role": "assistant", "content": assistant_content},
+                "message": message,
                 "finish_reason": finish_reason,
             }
         ],
@@ -750,9 +761,7 @@ def register_openai_chat_completions_on_fastapi(fastapi_app: FastAPI, app: Any) 
                 status_code=400,
             )
 
-        prepared = _prepare_request(
-            app, payload, provider_api_key=provided_api_key
-        )
+        prepared = _prepare_request(app, payload, provider_api_key=provided_api_key)
         if isinstance(prepared, JSONResponse):
             return prepared
 
@@ -770,7 +779,9 @@ def register_openai_chat_completions_on_fastapi(fastapi_app: FastAPI, app: Any) 
             )
 
         content = await _collect_agent_response(agent, question, session_id)
+        cmw_last: str | None = None
         if structured_spec is not None:
+            cmw_last = content
             structured_result = await _format_structured_output(
                 agent=agent,
                 session_id=session_id,
@@ -786,6 +797,7 @@ def register_openai_chat_completions_on_fastapi(fastapi_app: FastAPI, app: Any) 
                 request_model=resolved.request_model,
                 assistant_content=content,
                 finish_reason=KNOWN_FINISH_REASON,
+                cmw_assistant_last_message=cmw_last,
             )
         )
 
@@ -856,7 +868,9 @@ async def handle_chat_completions_payload(
         }
 
     content = await _collect_agent_response(agent, question, session_id)
+    cmw_last: str | None = None
     if structured_spec is not None:
+        cmw_last = content
         structured_result = await _format_structured_output(
             agent=agent,
             session_id=session_id,
@@ -871,4 +885,5 @@ async def handle_chat_completions_payload(
         request_model=resolved.request_model,
         assistant_content=content,
         finish_reason=KNOWN_FINISH_REASON,
+        cmw_assistant_last_message=cmw_last,
     )
