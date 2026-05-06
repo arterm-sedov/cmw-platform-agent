@@ -140,6 +140,11 @@ try:
     from agent_ng.langchain_agent import ChatMessage
     from agent_ng.langchain_agent import CmwAgent as NextGenAgent
     from agent_ng.llm_manager import get_llm_manager
+    from agent_ng.openai_compat import (
+        handle_chat_completions_payload,
+        register_openai_chat_completions_on_fastapi,
+        register_openai_chat_completions_route,
+    )
 
     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
     from agent_ng.tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
@@ -167,6 +172,11 @@ except ImportError as e1:
         from .langchain_agent import ChatMessage
         from .langchain_agent import CmwAgent as NextGenAgent
         from .llm_manager import get_llm_manager
+        from .openai_compat import (
+            handle_chat_completions_payload,
+            register_openai_chat_completions_on_fastapi,
+            register_openai_chat_completions_route,
+        )
 
         # from .streaming_chat import get_chat_interface  # Module moved to .unused
         from .tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
@@ -190,7 +200,6 @@ class NextGenApp:
     """LangChain-native Gradio application with modular tab architecture and i18n support"""
 
     def __init__(self, language: str = "en"):
-
         # No global agent - only session-specific agents
         self.llm_manager = get_llm_manager()
         self.initialization_logs = []
@@ -1605,6 +1614,17 @@ class NextGenApp:
 
             # Streaming endpoint: generator yields partials; API GET will stream
 
+        def _api_chat_completions(payload: dict[str, Any]) -> dict[str, Any]:
+            """Gradio API wrapper for OpenAI-style chat completions payload."""
+            loop = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(loop)
+                return loop.run_until_complete(
+                    handle_chat_completions_payload(self, payload)
+                )
+            finally:
+                loop.close()
+
         # Register API endpoints using gr.api() - cleaner approach for HF Spaces
         with demo:
             _in = gr.Textbox(label="question", visible=False)
@@ -1624,12 +1644,17 @@ class NextGenApp:
             # Use gr.api() to register API endpoints without fake UI elements
             gr.api(_api_ask, api_name="ask")
             # gr.api(_api_ask_stream, api_name="ask_stream")
+            gr.api(_api_chat_completions, api_name="chat_completions")
 
         # Configure concurrency and queuing AFTER registering named endpoints
         self.queue_manager.configure_queue(demo)
 
+        register_openai_chat_completions_route(demo, self)
+
         # Consolidate all components from UI Manager (single source of truth)
         self.components = self.ui_manager.get_components()
+        # Keep app reference for external FastAPI endpoint registration.
+        demo.cmw_main_app = self
 
         return demo
 
@@ -1860,25 +1885,36 @@ def main():
     # during reloads and multiple interface creations
     demo = initialize_demo()
 
-    _logger.info(
-        "Launching Gradio interface on port %s with language switching...", port
-    )
+    _logger.info("Launching FastAPI + mounted Gradio app on port %s...", port)
+    from fastapi import FastAPI
+    from gradio import mount_gradio_app
+    import uvicorn
 
-    demo.launch(
-        debug=True,
-        share=False,
-        server_name="0.0.0.0",
-        server_port=port,
-        show_error=True,
-        show_api=True,  # Enable API documentation for Hugging Face Spaces
-        # Allow Gradio's /file= endpoint to serve session-registered files
-        # (generated images, extracted assets, etc.) from the cache dir.
-        # Required when GRADIO_TEMP_DIR is set to a non-default path.
-        # Include `resources/` so theme CSS can load logo/fonts via `/gradio_api/file=...`.
+    fastapi_app = FastAPI(title="CMW Platform Agent API")
+    main_app = getattr(demo, "cmw_main_app", None)
+    if main_app is not None:
+        register_openai_chat_completions_on_fastapi(fastapi_app, main_app)
+    else:
+        _logger.warning(
+            "Main app reference unavailable; OpenAI endpoint not registered"
+        )
+
+    app = mount_gradio_app(
+        fastapi_app,
+        demo,
+        path="/",
+        # Keep static paths for files/resources (same intent as launch allowed_paths).
         allowed_paths=[
             str(Path(_GRADIO_CACHE_DIR).resolve()),
             str(_GRADIO_RESOURCES_DIR.resolve()),
         ],
+    )
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        log_level="info",
     )
 
 
