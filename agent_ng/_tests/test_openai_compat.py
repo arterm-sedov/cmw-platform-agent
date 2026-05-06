@@ -177,17 +177,14 @@ def test_build_chat_completion_response_matches_basic_openai_shape() -> None:
     ]
 
 
-def test_build_chat_completion_response_adds_optional_cmw_assistant_last_message() -> (
-    None
-):
+def test_build_chat_completion_response_message_only_role_and_content() -> None:
     response = build_chat_completion_response(
         request_model="openrouter/z-ai/glm-5.1",
         assistant_content='{"objects":[]}',
-        cmw_assistant_last_message="**Raw** agent reply markdown",
     )
     msg = response["choices"][0]["message"]
+    assert set(msg.keys()) == {"role", "content"}
     assert msg["content"] == '{"objects":[]}'
-    assert msg[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE] == "**Raw** agent reply markdown"
 
 
 def test_build_streaming_chat_completion_chunks_emit_sse_data_and_done() -> None:
@@ -523,10 +520,7 @@ def test_agent_completions_route_structured_output_via_tool() -> None:
     assert json.loads(content) == {
         "objects": [{"id": "obj.1", "system_name": "TestObject"}]
     }
-    assert (
-        payload_msg[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE]
-        == "answer to list worked objects"
-    )
+    assert CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE not in payload_msg
     assert "emit_structured_output" in _FormatterBoundLLM.last_prompt
 
 
@@ -931,7 +925,9 @@ def test_handle_agent_completions_payload_returns_openai_json() -> None:
     assert response["model"] == "openrouter/z-ai/glm-5.1"
 
 
-def test_handle_agent_payload_structured_keeps_cmw_last_message() -> None:
+def test_handle_agent_payload_structured_without_slot_has_no_extra_message_keys() -> (
+    None
+):
     _FormatterBoundLLM.next_args = {
         "objects": [{"id": "obj.1", "system_name": "TestObject"}]
     }
@@ -965,7 +961,7 @@ def test_handle_agent_payload_structured_keeps_cmw_last_message() -> None:
     assert json.loads(msg["content"]) == {
         "objects": [{"id": "obj.1", "system_name": "TestObject"}]
     }
-    assert msg[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE] == "answer to list"
+    assert CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE not in msg
 
 
 def test_handle_agent_payload_injects_last_message_in_content_json() -> None:

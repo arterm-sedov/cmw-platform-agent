@@ -18,11 +18,12 @@ if TYPE_CHECKING:
 
 KNOWN_FINISH_REASON = "stop"
 
-# Raw assistant text before structured formatter. Clients may declare this key as a
-# root-level string in `response_format.json_schema.schema`; the server strips it
-# from the tool schema and injects the value into `message.content` JSON instead
-# of using the proprietary message-level sibling when that slot is present.
-CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE = "cmw_assistant_last_message"
+# Root schema property name: verbatim assistant text before structured formatter.
+# Declared as `type: string` in `response_format.json_schema.schema`; stripped from
+# the formatter tool and injected into `message.content` JSON (not sent by the model).
+CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY = "cmw_assistant_last_message"
+# Backward-compatible alias (string value identical).
+CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE = CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY
 
 AGENT_COMPLETIONS_PATH = "/v1/agent_completions"
 
@@ -181,7 +182,6 @@ def build_chat_completion_response(
     request_model: str,
     assistant_content: str,
     finish_reason: str = KNOWN_FINISH_REASON,
-    cmw_assistant_last_message: str | None = None,
 ) -> dict[str, Any]:
     """Build a minimal OpenAI-compatible non-streaming response."""
 
@@ -189,8 +189,6 @@ def build_chat_completion_response(
         "role": "assistant",
         "content": assistant_content,
     }
-    if cmw_assistant_last_message is not None:
-        message[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE] = cmw_assistant_last_message
 
     return {
         "id": _response_id(),
@@ -356,7 +354,7 @@ def _formatter_schema_and_injection_flag(
     assistant reply into the returned JSON object instead.
     """
 
-    key = CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE
+    key = CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY
     out = copy.deepcopy(root_schema)
     if out.get("type") != "object":
         return out, False
@@ -621,19 +619,14 @@ async def _format_structured_output(
     user_question: str,
     assistant_content: str,
     spec: StructuredOutputSpec,
-) -> tuple[dict[str, Any] | JSONResponse, bool]:
-    """Return parsed object or error response, and whether to set the proprietary
-    sibling field on ``message`` (False when injection into ``content`` JSON applies).
-    """
+) -> dict[str, Any] | JSONResponse:
+    """Return structured dict for assistant ``content`` (caller serializes JSON)."""
 
     llm = getattr(getattr(agent, "llm_instance", None), "llm", None)
     if llm is None or not hasattr(llm, "bind_tools"):
-        return (
-            _error_response(
-                "Structured output is not available for this model",
-                status_code=500,
-            ),
-            True,
+        return _error_response(
+            "Structured output is not available for this model",
+            status_code=500,
         )
 
     stripped, inject_into_content = _formatter_schema_and_injection_flag(spec.schema)
@@ -677,56 +670,40 @@ async def _format_structured_output(
     response = await llm_formatter.ainvoke(prompt)
     tool_calls = getattr(response, "tool_calls", None) or []
     if not tool_calls:
-        return (
-            _error_response(
-                "Structured output tool call was not produced", status_code=422
-            ),
-            True,
+        return _error_response(
+            "Structured output tool call was not produced", status_code=422
         )
 
     args = _pick_structured_tool_args(tool_calls, tool_name)
     if args is None:
-        return (
-            _error_response(
-                "Structured output tool call was not produced", status_code=422
-            ),
-            True,
+        return _error_response(
+            "Structured output tool call was not produced", status_code=422
         )
 
     if isinstance(args, str):
         try:
             args = json.loads(args)
         except json.JSONDecodeError:
-            return (
-                _error_response(
-                    "Structured output tool arguments are invalid JSON",
-                    status_code=422,
-                ),
-                True,
+            return _error_response(
+                "Structured output tool arguments are invalid JSON",
+                status_code=422,
             )
     if not isinstance(args, dict):
-        return (
-            _error_response(
-                "Structured output tool arguments must be an object",
-                status_code=422,
-            ),
-            True,
+        return _error_response(
+            "Structured output tool arguments must be an object",
+            status_code=422,
         )
 
     args = _coerce_schema_output(args, stripped)
     validation_error = _validate_schema_output(args, stripped)
     if validation_error:
-        return (
-            _error_response(
-                f"Structured output validation failed: {validation_error}",
-                status_code=422,
-            ),
-            True,
+        return _error_response(
+            f"Structured output validation failed: {validation_error}",
+            status_code=422,
         )
     if inject_into_content:
-        args[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE] = assistant_content
-    emit_message_level_last_message = not inject_into_content
-    return args, emit_message_level_last_message
+        args[CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY] = assistant_content
+    return args
 
 
 def _extract_api_key(request: Request) -> str:
@@ -884,10 +861,8 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
             )
 
         content = await _collect_agent_response(agent, question, session_id)
-        cmw_last: str | None = None
         if structured_spec is not None:
-            cmw_last = content
-            structured_result, emit_last_sibling = await _format_structured_output(
+            structured_result = await _format_structured_output(
                 agent=agent,
                 session_id=session_id,
                 user_question=question,
@@ -897,14 +872,11 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
             if isinstance(structured_result, JSONResponse):
                 return structured_result
             content = json.dumps(structured_result, ensure_ascii=False)
-        else:
-            emit_last_sibling = True
         return JSONResponse(
             content=build_chat_completion_response(
                 request_model=resolved.request_model,
                 assistant_content=content,
                 finish_reason=KNOWN_FINISH_REASON,
-                cmw_assistant_last_message=cmw_last if emit_last_sibling else None,
             )
         )
 
@@ -974,10 +946,8 @@ async def handle_agent_completions_payload(
         }
 
     content = await _collect_agent_response(agent, question, session_id)
-    cmw_last: str | None = None
     if structured_spec is not None:
-        cmw_last = content
-        structured_result, emit_last_sibling = await _format_structured_output(
+        structured_result = await _format_structured_output(
             agent=agent,
             session_id=session_id,
             user_question=question,
@@ -987,11 +957,8 @@ async def handle_agent_completions_payload(
         if isinstance(structured_result, JSONResponse):
             return json.loads(structured_result.body.decode("utf-8"))
         content = json.dumps(structured_result, ensure_ascii=False)
-    else:
-        emit_last_sibling = True
     return build_chat_completion_response(
         request_model=resolved.request_model,
         assistant_content=content,
         finish_reason=KNOWN_FINISH_REASON,
-        cmw_assistant_last_message=cmw_last if emit_last_sibling else None,
     )

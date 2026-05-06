@@ -27,13 +27,11 @@ behavior.
   for downstream compatibility) and return validated JSON in assistant content.
 - Add safe repair/coercion for structured output before validation (string trim,
   conservative primitive coercion), while preserving schema guardrails.
-- When structured output is enabled: if the client **does not** declare root
-  property `cmw_assistant_last_message` (`type: string`) in
-  `response_format.json_schema.schema`, add proprietary sibling
-  `message.cmw_assistant_last_message`. If the client **does** declare that
-  string slot, omit the sibling and **inject** the raw assistant text into
-  `message.content` JSON under that key (the slot is stripped from the
-  formatter tool schema so the model does not fill it).
+- Verbatim pre-format assistant text is **only** included when the client
+  declares root property `cmw_assistant_last_message` (`type: string`) in
+  `response_format.json_schema.schema`; the server strips it from the formatter
+  tool, then **injects** the raw text into `message.content` JSON. There is no
+  proprietary extra field on `message`.
 
 ## Research Notes
 
