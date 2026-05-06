@@ -1,7 +1,8 @@
-"""Minimal OpenAI-compatible Chat Completions adapter for the CMW agent."""
+"""OpenAI-shaped HTTP adapter for CMW agent completions (`/v1/agent_completions`)."""
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 import json
 import time
@@ -17,8 +18,13 @@ if TYPE_CHECKING:
 
 KNOWN_FINISH_REASON = "stop"
 
-# Vendor extension on `message`: verbatim agent reply before structured formatter.
+# Raw assistant text before structured formatter. Clients may declare this key as a
+# root-level string in `response_format.json_schema.schema`; the server strips it
+# from the tool schema and injects the value into `message.content` JSON instead
+# of using the proprietary message-level sibling when that slot is present.
 CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE = "cmw_assistant_last_message"
+
+AGENT_COMPLETIONS_PATH = "/v1/agent_completions"
 
 
 @dataclass(frozen=True)
@@ -86,11 +92,10 @@ def resolve_chat_model(
     raise ValueError(message)
 
 
-def extract_cmw_credentials(payload: dict[str, Any]) -> dict[str, str]:
-    """Extract non-standard CMW credential fields into session config keys."""
+def extract_cmw_credentials(extra_body: dict[str, Any] | None) -> dict[str, str]:
+    """Extract CMW credential fields from agent extra dict (system message JSON)."""
 
-    extra_body = payload.get("extra_body")
-    if not isinstance(extra_body, dict):
+    if not isinstance(extra_body, dict) or not extra_body:
         return {}
 
     mapping = {
@@ -106,6 +111,48 @@ def extract_cmw_credentials(payload: dict[str, Any]) -> dict[str, str]:
                 credentials[target] = value.strip()
                 break
     return credentials
+
+
+def extract_agent_extra_body_from_messages(
+    messages: list[Any],
+) -> tuple[dict[str, Any], JSONResponse | None]:
+    """Build agent extra fields from `role: system` message content (JSON object).
+
+    Later system messages override earlier ones. Top-level request `extra_body`
+    is not used. Non-empty system content that is not a JSON object is rejected.
+    """
+
+    extra: dict[str, Any] = {}
+    for msg in messages:
+        if not isinstance(msg, dict) or msg.get("role") != "system":
+            continue
+        raw = msg.get("content")
+        if raw is None:
+            continue
+        if isinstance(raw, dict):
+            extra = dict(raw)
+            continue
+        if isinstance(raw, list):
+            continue
+        if not isinstance(raw, str):
+            continue
+        text = raw.strip()
+        if not text:
+            continue
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return {}, _error_response(
+                "system message content must be valid JSON for agent extra fields",
+                status_code=400,
+            )
+        if not isinstance(parsed, dict):
+            return {}, _error_response(
+                "system message JSON must be an object",
+                status_code=400,
+            )
+        extra = parsed
+    return extra, None
 
 
 def latest_user_message(messages: list[dict[str, Any]]) -> str:
@@ -296,6 +343,37 @@ def _parse_response_format(
         schema=schema,
         strict=bool(json_schema.get("strict", True)),
     )
+
+
+def _formatter_schema_and_injection_flag(
+    root_schema: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Schema for formatter tool + coerce/validate; True if body injection applies.
+
+    When the client adds root property ``cmw_assistant_last_message`` with
+    ``type: string`` (or omits ``type``), it is omitted from the tool parameters
+    so the model is not prompted to fill it; the HTTP handler injects the raw
+    assistant reply into the returned JSON object instead.
+    """
+
+    key = CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE
+    out = copy.deepcopy(root_schema)
+    if out.get("type") != "object":
+        return out, False
+    props = out.get("properties")
+    if not isinstance(props, dict) or key not in props:
+        return out, False
+    slot = props[key]
+    if not isinstance(slot, dict):
+        return out, False
+    slot_type = slot.get("type")
+    if slot_type not in (None, "string"):
+        return out, False
+    del props[key]
+    req = out.get("required")
+    if isinstance(req, list) and key in req:
+        out["required"] = [r for r in req if r != key]
+    return out, True
 
 
 def _validate_schema_output(
@@ -543,14 +621,22 @@ async def _format_structured_output(
     user_question: str,
     assistant_content: str,
     spec: StructuredOutputSpec,
-) -> dict[str, Any] | JSONResponse:
+) -> tuple[dict[str, Any] | JSONResponse, bool]:
+    """Return parsed object or error response, and whether to set the proprietary
+    sibling field on ``message`` (False when injection into ``content`` JSON applies).
+    """
+
     llm = getattr(getattr(agent, "llm_instance", None), "llm", None)
     if llm is None or not hasattr(llm, "bind_tools"):
-        return _error_response(
-            "Structured output is not available for this model",
-            status_code=500,
+        return (
+            _error_response(
+                "Structured output is not available for this model",
+                status_code=500,
+            ),
+            True,
         )
 
+    stripped, inject_into_content = _formatter_schema_and_injection_flag(spec.schema)
     tool_name = "emit_structured_output"
     schema_description = str(spec.schema.get("description") or "").strip()
     fallback_description = (
@@ -564,7 +650,7 @@ async def _format_structured_output(
         "function": {
             "name": tool_name,
             "description": tool_description,
-            "parameters": spec.schema,
+            "parameters": stripped,
         },
     }
     llm_formatter = llm.bind_tools([tool_def], strict=spec.strict)
@@ -591,37 +677,56 @@ async def _format_structured_output(
     response = await llm_formatter.ainvoke(prompt)
     tool_calls = getattr(response, "tool_calls", None) or []
     if not tool_calls:
-        return _error_response(
-            "Structured output tool call was not produced", status_code=422
+        return (
+            _error_response(
+                "Structured output tool call was not produced", status_code=422
+            ),
+            True,
         )
 
     args = _pick_structured_tool_args(tool_calls, tool_name)
     if args is None:
-        return _error_response(
-            "Structured output tool call was not produced", status_code=422
+        return (
+            _error_response(
+                "Structured output tool call was not produced", status_code=422
+            ),
+            True,
         )
 
     if isinstance(args, str):
         try:
             args = json.loads(args)
         except json.JSONDecodeError:
-            return _error_response(
-                "Structured output tool arguments are invalid JSON",
-                status_code=422,
+            return (
+                _error_response(
+                    "Structured output tool arguments are invalid JSON",
+                    status_code=422,
+                ),
+                True,
             )
     if not isinstance(args, dict):
-        return _error_response(
-            "Structured output tool arguments must be an object",
-            status_code=422,
+        return (
+            _error_response(
+                "Structured output tool arguments must be an object",
+                status_code=422,
+            ),
+            True,
         )
 
-    args = _coerce_schema_output(args, spec.schema)
-    validation_error = _validate_schema_output(args, spec.schema)
+    args = _coerce_schema_output(args, stripped)
+    validation_error = _validate_schema_output(args, stripped)
     if validation_error:
-        return _error_response(
-            f"Structured output validation failed: {validation_error}", status_code=422
+        return (
+            _error_response(
+                f"Structured output validation failed: {validation_error}",
+                status_code=422,
+            ),
+            True,
         )
-    return args
+    if inject_into_content:
+        args[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE] = assistant_content
+    emit_message_level_last_message = not inject_into_content
+    return args, emit_message_level_last_message
 
 
 def _extract_api_key(request: Request) -> str:
@@ -657,9 +762,9 @@ def _prepare_request(
     except ValueError as exc:
         return _error_response(str(exc))
 
-    extra_body = payload.get("extra_body")
-    if not isinstance(extra_body, dict):
-        extra_body = {}
+    extra_body, extra_err = extract_agent_extra_body_from_messages(messages)
+    if extra_err is not None:
+        return extra_err
 
     session_id = str(extra_body.get("session_id") or f"openai_{uuid.uuid4().hex}")
     set_current_session_id(session_id)
@@ -674,7 +779,7 @@ def _prepare_request(
         )
 
     config_update: dict[str, Any] = {}
-    credentials = extract_cmw_credentials(payload)
+    credentials = extract_cmw_credentials(extra_body)
     if credentials:
         config_update.update(credentials)
     if provider_api_key:
@@ -741,10 +846,10 @@ async def _stream_agent_response(
     yield "data: [DONE]\n\n"
 
 
-def register_openai_chat_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> None:
-    """Register `POST /v1/chat/completions` on a FastAPI app."""
+def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> None:
+    """Register `POST /v1/agent_completions` on a FastAPI app."""
 
-    async def chat_completions(request: Request) -> JSONResponse | StreamingResponse:
+    async def agent_completions(request: Request) -> JSONResponse | StreamingResponse:
         provided_api_key = _extract_api_key(request)
         if not provided_api_key:
             return _error_response("Missing bearer token", status_code=401)
@@ -782,7 +887,7 @@ def register_openai_chat_completions_on_fastapi(fastapi_app: FastAPI, app: Any) 
         cmw_last: str | None = None
         if structured_spec is not None:
             cmw_last = content
-            structured_result = await _format_structured_output(
+            structured_result, emit_last_sibling = await _format_structured_output(
                 agent=agent,
                 session_id=session_id,
                 user_question=question,
@@ -792,42 +897,43 @@ def register_openai_chat_completions_on_fastapi(fastapi_app: FastAPI, app: Any) 
             if isinstance(structured_result, JSONResponse):
                 return structured_result
             content = json.dumps(structured_result, ensure_ascii=False)
+        else:
+            emit_last_sibling = True
         return JSONResponse(
             content=build_chat_completion_response(
                 request_model=resolved.request_model,
                 assistant_content=content,
                 finish_reason=KNOWN_FINISH_REASON,
-                cmw_assistant_last_message=cmw_last,
+                cmw_assistant_last_message=cmw_last if emit_last_sibling else None,
             )
         )
 
     route_paths = {getattr(route, "path", None) for route in fastapi_app.routes}
-    if "/v1/chat/completions" not in route_paths:
+    if AGENT_COMPLETIONS_PATH not in route_paths:
         fastapi_app.add_api_route(
-            "/v1/chat/completions",
-            chat_completions,
+            AGENT_COMPLETIONS_PATH,
+            agent_completions,
             methods=["POST"],
             response_model=None,
         )
 
 
-def register_openai_chat_completions_route(demo: Any, app: Any) -> None:
-    """Register `POST /v1/chat/completions` on Gradio's underlying FastAPI app."""
+def register_agent_completions_route(demo: Any, app: Any) -> None:
+    """Register `POST /v1/agent_completions` on Gradio's underlying FastAPI app."""
 
     fastapi_app = getattr(demo, "app", None)
     if fastapi_app is None:
         message = "Gradio demo does not expose a FastAPI app"
         raise RuntimeError(message)
-    register_openai_chat_completions_on_fastapi(fastapi_app, app)
+    register_agent_completions_on_fastapi(fastapi_app, app)
 
 
-async def handle_chat_completions_payload(
+async def handle_agent_completions_payload(
     app: Any, payload: dict[str, Any]
 ) -> dict[str, Any]:
-    """Handle Chat Completions payload and return OpenAI-shaped JSON.
+    """Handle agent completions payload and return OpenAI-shaped JSON.
 
-    This helper is used by Gradio `gr.api` wiring where requests arrive as a
-    plain Python dict argument rather than a FastAPI Request object.
+    Used by Gradio `gr.api` where requests arrive as a plain dict.
     """
     if not isinstance(payload, dict):
         return json.loads(
@@ -871,7 +977,7 @@ async def handle_chat_completions_payload(
     cmw_last: str | None = None
     if structured_spec is not None:
         cmw_last = content
-        structured_result = await _format_structured_output(
+        structured_result, emit_last_sibling = await _format_structured_output(
             agent=agent,
             session_id=session_id,
             user_question=question,
@@ -881,9 +987,11 @@ async def handle_chat_completions_payload(
         if isinstance(structured_result, JSONResponse):
             return json.loads(structured_result.body.decode("utf-8"))
         content = json.dumps(structured_result, ensure_ascii=False)
+    else:
+        emit_last_sibling = True
     return build_chat_completion_response(
         request_model=resolved.request_model,
         assistant_content=content,
         finish_reason=KNOWN_FINISH_REASON,
-        cmw_assistant_last_message=cmw_last,
+        cmw_assistant_last_message=cmw_last if emit_last_sibling else None,
     )

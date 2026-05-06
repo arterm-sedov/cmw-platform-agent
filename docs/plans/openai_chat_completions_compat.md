@@ -2,15 +2,19 @@
 
 ## Goal
 
-Expose the existing CMW Platform Agent chat through a minimal OpenAI-compatible
-Chat Completions API while preserving current Gradio UI behavior.
+Expose the existing CMW Platform Agent chat through a minimal OpenAI-**shaped**
+HTTP API (`POST /v1/agent_completions`) while preserving current Gradio UI
+behavior.
 
 ## Scope
 
-- Add a basic `POST /v1/chat/completions` route.
+- Add `POST /v1/agent_completions` (OpenAI-shaped contract, custom path).
 - Support request fields: `model`, `messages`, `stream`.
-- Accept non-standard fields in `extra_body`: `cmw_base_url`, `cmw_login`,
-  `cmw_password`, and `session_id`.
+- Carry session and CMW/runtime fields only in a **`messages` entry with
+  `role: "system"`** whose `content` is a JSON **object** (or a string that
+  parses to one). Supported keys include `cmw_base_url`, `cmw_login`,
+  `cmw_password`, and `session_id`. Later system carrier messages override
+  earlier ones. Request top-level `extra_body` is **ignored**.
 - Resolve provider/model slugs such as `polza/z-ai/glm-5.1` and
   `openrouter/z-ai/glm-5.1`.
 - Return OpenAI-shaped non-streaming JSON responses and streaming SSE chunks.
@@ -23,9 +27,13 @@ Chat Completions API while preserving current Gradio UI behavior.
   for downstream compatibility) and return validated JSON in assistant content.
 - Add safe repair/coercion for structured output before validation (string trim,
   conservative primitive coercion), while preserving schema guardrails.
-- When structured output is enabled, add vendor sibling on `message`:
-  `cmw_assistant_last_message` (verbatim agent text before formatting; not part
-  of client JSON schema validation).
+- When structured output is enabled: if the client **does not** declare root
+  property `cmw_assistant_last_message` (`type: string`) in
+  `response_format.json_schema.schema`, add proprietary sibling
+  `message.cmw_assistant_last_message`. If the client **does** declare that
+  string slot, omit the sibling and **inject** the raw assistant text into
+  `message.content` JSON under that key (the slot is stripped from the
+  formatter tool schema so the model does not fill it).
 
 ## Research Notes
 
@@ -47,7 +55,7 @@ Chat Completions API while preserving current Gradio UI behavior.
    - `<model_slug>` to the configured default provider.
 4. Collect only `content` and `error` stream events for the OpenAI API surface.
 5. Use the existing session manager to apply CMW credentials, LLM selection,
-   and caller-provided `sessionId` for conversation continuity.
+   and `session_id` from the system JSON carrier for conversation continuity.
 6. Register the exact route from `NextGenApp.create_interface()` after the
    Blocks app exists.
 7. Add structured-output parser/validator for `response_format` object or JSON

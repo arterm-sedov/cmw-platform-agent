@@ -1,4 +1,4 @@
-"""Tests for OpenAI-compatible Chat Completions adapter."""
+"""Tests for OpenAI-shaped agent completions adapter."""
 
 from __future__ import annotations
 
@@ -12,12 +12,15 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from agent_ng.openai_compat import (
+    AGENT_COMPLETIONS_PATH,
     CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE,
+    _formatter_schema_and_injection_flag,
     build_chat_completion_response,
     build_streaming_chat_completion_chunks,
+    extract_agent_extra_body_from_messages,
     extract_cmw_credentials,
-    handle_chat_completions_payload,
-    register_openai_chat_completions_route,
+    handle_agent_completions_payload,
+    register_agent_completions_route,
     resolve_chat_model,
 )
 
@@ -71,17 +74,89 @@ def test_resolve_chat_model_uses_default_provider_for_plain_slug() -> None:
 def test_extract_cmw_credentials_reads_snake_case_fields_from_extra_body() -> None:
     assert extract_cmw_credentials(
         {
-            "extra_body": {
-                "cmw_base_url": " https://example.test ",
-                "cmw_login": " user ",
-                "cmw_password": " secret ",
-            }
+            "cmw_base_url": " https://example.test ",
+            "cmw_login": " user ",
+            "cmw_password": " secret ",
         }
     ) == {
         "url": "https://example.test",
         "username": "user",
         "password": "secret",
     }
+
+
+def test_extract_agent_extra_body_from_messages_empty() -> None:
+    extra, err = extract_agent_extra_body_from_messages([])
+    assert extra == {}
+    assert err is None
+
+
+def test_extract_agent_extra_body_from_messages_last_system_wins() -> None:
+    extra, err = extract_agent_extra_body_from_messages(
+        [
+            {"role": "system", "content": '{"a": 1}'},
+            {"role": "system", "content": '{"b": 2}'},
+        ]
+    )
+    assert err is None
+    assert extra == {"b": 2}
+
+
+def test_extract_agent_extra_body_from_messages_accepts_object_content() -> None:
+    extra, err = extract_agent_extra_body_from_messages(
+        [{"role": "system", "content": {"session_id": "sess-obj"}}]
+    )
+    assert err is None
+    assert extra == {"session_id": "sess-obj"}
+
+
+def test_extract_agent_extra_body_from_messages_rejects_invalid_json() -> None:
+    extra, err = extract_agent_extra_body_from_messages(
+        [{"role": "system", "content": "not-json"}]
+    )
+    assert extra == {}
+    assert err is not None
+
+
+def test_extract_agent_extra_body_from_messages_rejects_non_object_json() -> None:
+    extra, err = extract_agent_extra_body_from_messages(
+        [{"role": "system", "content": "[1, 2]"}]
+    )
+    assert extra == {}
+    assert err is not None
+
+
+def test_formatter_schema_strips_cmw_last_message_string_slot() -> None:
+    schema = {
+        "type": "object",
+        "properties": {
+            "objects": {"type": "array"},
+            CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE: {
+                "type": "string",
+                "description": "injected by server",
+            },
+        },
+        "required": ["objects", CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE],
+        "additionalProperties": False,
+    }
+    stripped, inject = _formatter_schema_and_injection_flag(schema)
+    assert inject is True
+    assert CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE not in stripped["properties"]
+    assert CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE not in stripped.get("required", [])
+    assert "objects" in stripped["properties"]
+
+
+def test_formatter_schema_ignores_slot_when_type_not_string() -> None:
+    schema = {
+        "type": "object",
+        "properties": {
+            CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE: {"type": "integer"},
+        },
+        "additionalProperties": False,
+    }
+    stripped, inject = _formatter_schema_and_injection_flag(schema)
+    assert inject is False
+    assert CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE in stripped["properties"]
 
 
 def test_build_chat_completion_response_matches_basic_openai_shape() -> None:
@@ -240,23 +315,31 @@ class _App:
         return _Agent()
 
 
-def test_registered_chat_completions_route_returns_non_streaming_response() -> None:
+def test_registered_agent_completions_route_returns_non_streaming_response() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-key-polza"},
         json={
             "model": "polza/z-ai/glm-5.1",
-            "messages": [{"role": "user", "content": "ping"}],
-            "extra_body": {
-                "cmw_base_url": "https://example.test",
-                "cmw_login": "user",
-                "cmw_password": "secret",
-                "session_id": "test-session",
-            },
+            "messages": [
+                {
+                    "role": "system",
+                    "content": json.dumps(
+                        {
+                            "cmw_base_url": "https://example.test",
+                            "cmw_login": "user",
+                            "cmw_password": "secret",
+                            "session_id": "test-session",
+                        }
+                    ),
+                },
+                {"role": "user", "content": "ping"},
+            ],
+            "extra_body": {"session_id": "ignored-from-top-level"},
         },
     )
 
@@ -271,13 +354,13 @@ def test_registered_chat_completions_route_returns_non_streaming_response() -> N
     assert app.session_manager.updated == ("test-session", "polza", "z-ai/glm-5.1")
 
 
-def test_registered_chat_completions_route_streams_sse_chunks() -> None:
+def test_registered_agent_completions_route_streams_sse_chunks() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-key-openrouter"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
@@ -291,14 +374,34 @@ def test_registered_chat_completions_route_streams_sse_chunks() -> None:
     assert "answer to ping" in response.text
 
 
-def test_registered_chat_completions_route_requires_bearer_token() -> None:
+def test_registered_agent_completions_route_rejects_invalid_system_json() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
+
+    response = TestClient(demo.app).post(
+        AGENT_COMPLETIONS_PATH,
+        headers={"Authorization": "Bearer token"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [
+                {"role": "system", "content": "{not-json"},
+                {"role": "user", "content": "hi"},
+            ],
+        },
+    )
+
+    assert response.status_code == 400
+
+
+def test_registered_agent_completions_route_requires_bearer_token() -> None:
+    demo = _Demo()
+    app = _App()
+    register_agent_completions_route(demo, app)
     client = TestClient(demo.app)
 
     unauthorized = client.post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         json={
             "model": "openrouter/z-ai/glm-5.1",
             "messages": [{"role": "user", "content": "ping"}],
@@ -308,16 +411,14 @@ def test_registered_chat_completions_route_requires_bearer_token() -> None:
     assert unauthorized.json()["error"]["message"] == "Missing bearer token"
 
 
-def test_registered_chat_completions_route_accepts_any_bearer_token_as_provider_key() -> (
-    None
-):
+def test_agent_completions_route_accepts_any_bearer() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
     client = TestClient(demo.app)
 
     response = client.post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer any-client-supplied-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
@@ -327,14 +428,14 @@ def test_registered_chat_completions_route_accepts_any_bearer_token_as_provider_
     assert response.status_code == 200
 
 
-def test_registered_chat_completions_route_does_not_accept_x_api_key_header() -> None:
+def test_registered_agent_completions_route_does_not_accept_x_api_key_header() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
     client = TestClient(demo.app)
 
     response = client.post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"X-API-Key": "secret-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
@@ -344,20 +445,24 @@ def test_registered_chat_completions_route_does_not_accept_x_api_key_header() ->
     assert response.status_code == 401
 
 
-def test_registered_chat_completions_route_passes_bearer_as_selected_provider_key() -> (
-    None
-):
+def test_agent_completions_route_applies_bearer_as_provider_key() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
-            "messages": [{"role": "user", "content": "ping"}],
-            "extra_body": {"session_id": "provider-key-session"},
+            "messages": [
+                {
+                    "role": "system",
+                    "content": json.dumps({"session_id": "provider-key-session"}),
+                },
+                {"role": "user", "content": "ping"},
+            ],
+            "extra_body": {"session_id": "wrong-session-from-top-level"},
         },
     )
 
@@ -370,15 +475,13 @@ def test_registered_chat_completions_route_passes_bearer_as_selected_provider_ke
     }
 
 
-def test_registered_chat_completions_route_formats_structured_output_via_tool_call() -> (
-    None
-):
+def test_agent_completions_route_structured_output_via_tool() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
@@ -427,10 +530,66 @@ def test_registered_chat_completions_route_formats_structured_output_via_tool_ca
     assert "emit_structured_output" in _FormatterBoundLLM.last_prompt
 
 
+def test_agent_completions_route_structured_injects_last_message_in_json() -> None:
+    demo = _Demo()
+    app = _App()
+    register_agent_completions_route(demo, app)
+    _FormatterBoundLLM.next_args = {
+        "objects": [{"id": "obj.1", "system_name": "TestObject"}]
+    }
+
+    response = TestClient(demo.app).post(
+        AGENT_COMPLETIONS_PATH,
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "list worked objects"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "worked_objects",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "objects": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {"type": "string"},
+                                        "system_name": {"type": "string"},
+                                    },
+                                    "required": ["id", "system_name"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                            CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE: {
+                                "type": "string",
+                                "description": "raw assistant output; set by server",
+                            },
+                        },
+                        "required": ["objects"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload_msg = response.json()["choices"][0]["message"]
+    body = json.loads(payload_msg["content"])
+    assert body["objects"] == [{"id": "obj.1", "system_name": "TestObject"}]
+    raw_key = CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE
+    assert body[raw_key] == "answer to list worked objects"
+    assert raw_key not in payload_msg
+
+
 def test_structured_formatter_uses_compact_context_from_session_history() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
     _Agent.history_messages = [
         _SystemMessage("Root system policy"),
         _HumanMessage("Old user question"),
@@ -443,12 +602,17 @@ def test_structured_formatter_uses_compact_context_from_session_history() -> Non
     ]
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
-            "messages": [{"role": "user", "content": "fresh question"}],
-            "extra_body": {"session_id": "history-session"},
+            "messages": [
+                {
+                    "role": "system",
+                    "content": json.dumps({"session_id": "history-session"}),
+                },
+                {"role": "user", "content": "fresh question"},
+            ],
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -478,10 +642,10 @@ def test_structured_formatter_uses_compact_context_from_session_history() -> Non
 def test_structured_output_uses_root_schema_description_when_present() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
@@ -493,7 +657,9 @@ def test_structured_output_uses_root_schema_description_when_present() -> None:
                     "strict": True,
                     "schema": {
                         "type": "object",
-                        "description": "Use only facts from final answer and conversation",
+                        "description": (
+                            "Use only facts from final answer and conversation"
+                        ),
                         "properties": {"objects": {"type": "array"}},
                         "required": ["objects"],
                         "additionalProperties": False,
@@ -513,10 +679,10 @@ def test_structured_output_uses_root_schema_description_when_present() -> None:
 def test_structured_output_falls_back_to_default_tool_description() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
@@ -544,7 +710,7 @@ def test_structured_output_falls_back_to_default_tool_description() -> None:
 def test_structured_output_repairs_common_primitive_types() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
     _FormatterBoundLLM.next_args = {
         "count": "42",
         "is_valid": "TRUE",
@@ -553,7 +719,7 @@ def test_structured_output_repairs_common_primitive_types() -> None:
     }
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
@@ -591,11 +757,11 @@ def test_structured_output_repairs_common_primitive_types() -> None:
 def test_structured_output_repairs_empty_string_to_null_only_for_null_type() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
     _FormatterBoundLLM.next_args = {"note": ""}
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
@@ -625,11 +791,11 @@ def test_structured_output_repairs_empty_string_to_null_only_for_null_type() -> 
 def test_structured_output_does_not_repair_empty_string_for_integer() -> None:
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
     _FormatterBoundLLM.next_args = {"count": ""}
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
@@ -653,15 +819,15 @@ def test_structured_output_does_not_repair_empty_string_for_integer() -> None:
     assert response.status_code == 422
 
 
-def test_registered_chat_completions_route_rejects_invalid_response_format_json() -> (
+def test_registered_agent_completions_route_rejects_invalid_response_format_json() -> (
     None
 ):
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
@@ -674,15 +840,15 @@ def test_registered_chat_completions_route_rejects_invalid_response_format_json(
     assert "response_format" in response.json()["error"]["message"]
 
 
-def test_registered_chat_completions_route_rejects_stream_with_structured_output() -> (
+def test_registered_agent_completions_route_rejects_stream_with_structured_output() -> (
     None
 ):
     demo = _Demo()
     app = _App()
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
 
     response = TestClient(demo.app).post(
-        "/v1/chat/completions",
+        AGENT_COMPLETIONS_PATH,
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
@@ -710,68 +876,76 @@ def test_gradio_queue_replaces_app_so_route_must_be_registered_after_queue() -> 
     demo = _Demo()
     app = _App()
 
-    register_openai_chat_completions_route(demo, app)
-    assert "/v1/chat/completions" in {
+    register_agent_completions_route(demo, app)
+    assert AGENT_COMPLETIONS_PATH in {
         getattr(route, "path", None) for route in demo.app.routes
     }
 
     demo.app = FastAPI()
 
-    assert "/v1/chat/completions" not in {
+    assert AGENT_COMPLETIONS_PATH not in {
         getattr(route, "path", None) for route in demo.app.routes
     }
 
-    register_openai_chat_completions_route(demo, app)
+    register_agent_completions_route(demo, app)
 
-    assert "/v1/chat/completions" in {
+    assert AGENT_COMPLETIONS_PATH in {
         getattr(route, "path", None) for route in demo.app.routes
     }
 
 
-def test_nextgen_app_registers_openai_route_after_queue_configuration() -> None:
+def test_nextgen_app_registers_agent_route_after_queue_configuration() -> None:
     from agent_ng.app_ng_modular import NextGenApp
 
     source = inspect.getsource(NextGenApp.create_interface)
     queue_pos = source.rfind("self.queue_manager.configure_queue(demo)")
-    route_pos = source.rfind("register_openai_chat_completions_route(demo, self)")
+    route_pos = source.rfind("register_agent_completions_route(demo, self)")
 
     assert queue_pos != -1
     assert route_pos != -1
     assert route_pos > queue_pos
 
 
-def test_nextgen_app_registers_gradio_chat_completions_api_name() -> None:
+def test_nextgen_app_registers_gradio_agent_completions_api_name() -> None:
     from agent_ng.app_ng_modular import NextGenApp
 
     source = inspect.getsource(NextGenApp.create_interface)
-    assert 'api_name="chat_completions"' in source
+    assert 'api_name="agent_completions"' in source
 
 
-def test_handle_chat_completions_payload_returns_openai_json() -> None:
+def test_handle_agent_completions_payload_returns_openai_json() -> None:
     app = _App()
     payload = {
         "model": "openrouter/z-ai/glm-5.1",
-        "messages": [{"role": "user", "content": "ping"}],
+        "messages": [
+            {
+                "role": "system",
+                "content": json.dumps({"session_id": "test-session-plain"}),
+            },
+            {"role": "user", "content": "ping"},
+        ],
         "stream": False,
-        "extra_body": {"session_id": "test-session-plain"},
     }
-    response = asyncio.run(handle_chat_completions_payload(app, payload))
+    response = asyncio.run(handle_agent_completions_payload(app, payload))
     assert response["object"] == "chat.completion"
     assert response["model"] == "openrouter/z-ai/glm-5.1"
 
 
-def test_handle_chat_completions_payload_structured_has_cmw_assistant_last_message() -> (
-    None
-):
+def test_handle_agent_payload_structured_keeps_cmw_last_message() -> None:
     _FormatterBoundLLM.next_args = {
         "objects": [{"id": "obj.1", "system_name": "TestObject"}]
     }
     app = _App()
     payload = {
         "model": "openrouter/z-ai/glm-5.1",
-        "messages": [{"role": "user", "content": "list"}],
+        "messages": [
+            {
+                "role": "system",
+                "content": json.dumps({"session_id": "test-session-structured-handle"}),
+            },
+            {"role": "user", "content": "list"},
+        ],
         "stream": False,
-        "extra_body": {"session_id": "test-session-structured-handle"},
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -786,9 +960,49 @@ def test_handle_chat_completions_payload_structured_has_cmw_assistant_last_messa
             },
         },
     }
-    response = asyncio.run(handle_chat_completions_payload(app, payload))
+    response = asyncio.run(handle_agent_completions_payload(app, payload))
     msg = response["choices"][0]["message"]
     assert json.loads(msg["content"]) == {
         "objects": [{"id": "obj.1", "system_name": "TestObject"}]
     }
     assert msg[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE] == "answer to list"
+
+
+def test_handle_agent_payload_injects_last_message_in_content_json() -> None:
+    _FormatterBoundLLM.next_args = {
+        "objects": [{"id": "obj.1", "system_name": "TestObject"}]
+    }
+    app = _App()
+    payload = {
+        "model": "openrouter/z-ai/glm-5.1",
+        "messages": [
+            {
+                "role": "system",
+                "content": json.dumps({"session_id": "sess-inject"}),
+            },
+            {"role": "user", "content": "list"},
+        ],
+        "stream": False,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "worked_objects",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "objects": {"type": "array"},
+                        CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE: {"type": "string"},
+                    },
+                    "required": ["objects"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+    }
+    response = asyncio.run(handle_agent_completions_payload(app, payload))
+    msg = response["choices"][0]["message"]
+    inner = json.loads(msg["content"])
+    assert inner["objects"] == [{"id": "obj.1", "system_name": "TestObject"}]
+    assert inner[CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE] == "answer to list"
+    assert CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE not in msg
