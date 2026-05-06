@@ -15,6 +15,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
 
+    from agent_ng.token_counter import TokenCount
+
 
 KNOWN_FINISH_REASON = "stop"
 
@@ -26,6 +28,63 @@ CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY = "cmw_assistant_last_message"
 CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE = CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY
 
 AGENT_COMPLETIONS_PATH = "/v1/agent_completions"
+
+
+def usage_from_token_count(tc: TokenCount | None) -> dict[str, Any] | None:
+    """Map ``TokenCount`` to OpenAI-style ``usage`` (optional ``cost``)."""
+
+    if tc is None:
+        return None
+    out: dict[str, Any] = {
+        "prompt_tokens": int(tc.input_tokens),
+        "completion_tokens": int(tc.output_tokens),
+        "total_tokens": int(tc.total_tokens),
+    }
+    if tc.cost is not None:
+        out["cost"] = float(tc.cost)
+    return out
+
+
+def merge_openai_usage(
+    *parts: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Sum token fields and costs (e.g. main agent turn + structured formatter call)."""
+
+    acc_p = acc_c = acc_t = 0
+    cost_sum = 0.0
+    has_cost = False
+    saw = False
+    for p in parts:
+        if not p:
+            continue
+        saw = True
+        acc_p += int(p.get("prompt_tokens", 0) or 0)
+        acc_c += int(p.get("completion_tokens", 0) or 0)
+        acc_t += int(p.get("total_tokens", 0) or 0)
+        raw = p.get("cost")
+        if raw is not None:
+            cost_sum += float(raw)
+            has_cost = True
+    if not saw:
+        return None
+    if acc_p == 0 and acc_c == 0 and acc_t == 0 and not has_cost:
+        return None
+    out: dict[str, Any] = {
+        "prompt_tokens": acc_p,
+        "completion_tokens": acc_c,
+        "total_tokens": acc_t,
+    }
+    if has_cost:
+        out["cost"] = cost_sum
+    return out
+
+
+def _completion_usage(
+    agent: Any, *, pre_structured: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    getter = getattr(agent, "get_last_api_tokens", None)
+    last_tc: TokenCount | None = getter() if callable(getter) else None
+    return merge_openai_usage(pre_structured, usage_from_token_count(last_tc))
 
 
 @dataclass(frozen=True)
@@ -182,6 +241,7 @@ def build_chat_completion_response(
     request_model: str,
     assistant_content: str,
     finish_reason: str = KNOWN_FINISH_REASON,
+    usage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a minimal OpenAI-compatible non-streaming response."""
 
@@ -190,7 +250,7 @@ def build_chat_completion_response(
         "content": assistant_content,
     }
 
-    return {
+    out: dict[str, Any] = {
         "id": _response_id(),
         "object": "chat.completion",
         "created": _now(),
@@ -203,6 +263,9 @@ def build_chat_completion_response(
             }
         ],
     }
+    if usage is not None:
+        out["usage"] = usage
+    return out
 
 
 def _chunk_payload(
@@ -210,8 +273,9 @@ def _chunk_payload(
     request_model: str,
     delta: dict[str, Any],
     finish_reason: str | None,
+    usage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    chunk: dict[str, Any] = {
         "id": _response_id(),
         "object": "chat.completion.chunk",
         "created": _now(),
@@ -224,6 +288,9 @@ def _chunk_payload(
             }
         ],
     }
+    if usage is not None:
+        chunk["usage"] = usage
+    return chunk
 
 
 def _sse(payload: dict[str, Any]) -> str:
@@ -235,6 +302,7 @@ def build_streaming_chat_completion_chunks(
     request_model: str,
     content_parts: Iterable[str],
     finish_reason: str = KNOWN_FINISH_REASON,
+    usage: dict[str, Any] | None = None,
 ) -> Iterable[str]:
     """Build OpenAI-style SSE chunks from text deltas."""
 
@@ -256,6 +324,7 @@ def build_streaming_chat_completion_chunks(
             request_model=request_model,
             delta={},
             finish_reason=finish_reason,
+            usage=usage,
         )
     )
     yield "data: [DONE]\n\n"
@@ -813,11 +882,13 @@ async def _stream_agent_response(
         if event_type == "error":
             break
 
+    usage = _completion_usage(agent)
     yield _sse(
         _chunk_payload(
             request_model=request_model,
             delta={},
             finish_reason=KNOWN_FINISH_REASON,
+            usage=usage,
         )
     )
     yield "data: [DONE]\n\n"
@@ -861,7 +932,12 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
             )
 
         content = await _collect_agent_response(agent, question, session_id)
+        usage_pre: dict[str, Any] | None = None
         if structured_spec is not None:
+            _getter = getattr(agent, "get_last_api_tokens", None)
+            usage_pre = usage_from_token_count(
+                _getter() if callable(_getter) else None
+            )
             structured_result = await _format_structured_output(
                 agent=agent,
                 session_id=session_id,
@@ -872,11 +948,15 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
             if isinstance(structured_result, JSONResponse):
                 return structured_result
             content = json.dumps(structured_result, ensure_ascii=False)
+        turn_usage = _completion_usage(
+            agent, pre_structured=usage_pre if structured_spec is not None else None
+        )
         return JSONResponse(
             content=build_chat_completion_response(
                 request_model=resolved.request_model,
                 assistant_content=content,
                 finish_reason=KNOWN_FINISH_REASON,
+                usage=turn_usage,
             )
         )
 
@@ -939,14 +1019,21 @@ async def handle_agent_completions_payload(
                 request_model=resolved.request_model,
             )
         ]
-        return {
+        out: dict[str, Any] = {
             "object": "chat.completion.stream",
             "model": resolved.request_model,
             "chunks": chunks,
         }
+        stream_usage = _completion_usage(agent)
+        if stream_usage is not None:
+            out["usage"] = stream_usage
+        return out
 
     content = await _collect_agent_response(agent, question, session_id)
+    usage_pre: dict[str, Any] | None = None
     if structured_spec is not None:
+        _getter = getattr(agent, "get_last_api_tokens", None)
+        usage_pre = usage_from_token_count(_getter() if callable(_getter) else None)
         structured_result = await _format_structured_output(
             agent=agent,
             session_id=session_id,
@@ -957,8 +1044,12 @@ async def handle_agent_completions_payload(
         if isinstance(structured_result, JSONResponse):
             return json.loads(structured_result.body.decode("utf-8"))
         content = json.dumps(structured_result, ensure_ascii=False)
+    turn_usage = _completion_usage(
+        agent, pre_structured=usage_pre if structured_spec is not None else None
+    )
     return build_chat_completion_response(
         request_model=resolved.request_model,
         assistant_content=content,
         finish_reason=KNOWN_FINISH_REASON,
+        usage=turn_usage,
     )

@@ -18,6 +18,12 @@ behavior.
 - Resolve provider/model slugs such as `polza/z-ai/glm-5.1` and
   `openrouter/z-ai/glm-5.1`.
 - Return OpenAI-shaped non-streaming JSON responses and streaming SSE chunks.
+- Include **usage** on each completed request: `prompt_tokens`,
+  `completion_tokens`, `total_tokens` from the session token tracker (summed
+  per agent turn), and optional **cost** inside `usage` when available
+  (OpenRouter-compatible). For `response_format`, merge main-turn usage with
+  the formatter LLM call. Attach `usage` on the **last** streaming SSE chunk
+  (and duplicate summary on Gradio stream wrapper objects when applicable).
 - Ignore unsupported OpenAI fields for this first version.
 - Require `Authorization: Bearer <token>` and use that token as runtime
   provider API key for the selected provider.
@@ -72,17 +78,18 @@ behavior.
 1. RED: test model resolution for provider-prefixed and default-provider slugs.
 2. RED: test non-streaming response shape.
 3. RED: test streaming SSE chunk shape and `[DONE]`.
-4. GREEN: implement adapter functions with minimal code.
-5. GREEN: wire the route to the Gradio/FastAPI app.
-6. REFACTOR: remove duplication while keeping tests green.
-7. RED: add failing tests for structured-output coercion/repair rules.
-8. GREEN: implement minimal coercion helper and keep strict validation.
-9. REFACTOR: keep helper DRY and focused with no behavior drift.
+4. RED: test `usage` helpers and optional `usage` on `chat.completion`.
+5. GREEN: implement adapter functions with minimal code.
+6. GREEN: wire the route to the Gradio/FastAPI app.
+7. REFACTOR: remove duplication while keeping tests green.
+8. RED: add failing tests for structured-output coercion/repair rules.
+9. GREEN: implement minimal coercion helper and keep strict validation.
+10. REFACTOR: keep helper DRY and focused with no behavior drift.
 
 ## Verification Commands
 
 ```bash
-python -m pytest agent_ng/_tests/test_openai_compat.py
-ruff check agent_ng/openai_compat.py agent_ng/app_ng_modular.py agent_ng/_tests/test_openai_compat.py
+python -m pytest agent_ng/_tests/test_openai_compat.py agent_ng/_tests/test_openai_compat_usage.py
+ruff check agent_ng/openai_compat.py agent_ng/app_ng_modular.py agent_ng/_tests/test_openai_compat.py agent_ng/_tests/test_openai_compat_usage.py
 python lint.py
 ```
