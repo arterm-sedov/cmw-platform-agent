@@ -17,6 +17,12 @@ Chat Completions API while preserving current Gradio UI behavior.
 - Ignore unsupported OpenAI fields for this first version.
 - Require `Authorization: Bearer <token>` and use that token as runtime
   provider API key for the selected provider.
+- Support optional `response_format` (`json_schema`) for non-stream calls.
+- When `response_format` is present, run a final formatter step: bind a single
+  synthetic tool (prompt instructs the model to call it; no forced `tool_choice`
+  for downstream compatibility) and return validated JSON in assistant content.
+- Add safe repair/coercion for structured output before validation (string trim,
+  conservative primitive coercion), while preserving schema guardrails.
 
 ## Research Notes
 
@@ -41,6 +47,16 @@ Chat Completions API while preserving current Gradio UI behavior.
    and caller-provided `sessionId` for conversation continuity.
 6. Register the exact route from `NextGenApp.create_interface()` after the
    Blocks app exists.
+7. Add structured-output parser/validator for `response_format` object or JSON
+   string payload.
+8. Add synthetic final formatter with one bound tool (`strict` schema when
+   supported); prompt requests the tool call; slice session history for context.
+9. Add a schema-aware normalization pass:
+   - Trim strings.
+   - Coerce obvious primitive forms (`"1"` -> `1`, `"true"` -> `true`,
+     `"3.14"` -> `3.14`) when schema expects those types.
+   - Treat empty string as null only when schema explicitly expects `null`.
+   - Never auto-add required fields and never bypass `additionalProperties`.
 
 ## TDD Checkpoints
 
@@ -50,6 +66,9 @@ Chat Completions API while preserving current Gradio UI behavior.
 4. GREEN: implement adapter functions with minimal code.
 5. GREEN: wire the route to the Gradio/FastAPI app.
 6. REFACTOR: remove duplication while keeping tests green.
+7. RED: add failing tests for structured-output coercion/repair rules.
+8. GREEN: implement minimal coercion helper and keep strict validation.
+9. REFACTOR: keep helper DRY and focused with no behavior drift.
 
 ## Verification Commands
 

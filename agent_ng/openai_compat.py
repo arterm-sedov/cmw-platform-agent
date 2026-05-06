@@ -28,6 +28,13 @@ class ResolvedChatModel:
     request_model: str
 
 
+@dataclass(frozen=True)
+class StructuredOutputSpec:
+    name: str
+    schema: dict[str, Any]
+    strict: bool
+
+
 def _response_id() -> str:
     return f"chatcmpl-{uuid.uuid4().hex}"
 
@@ -221,6 +228,391 @@ def _error_response(message: str, status_code: int = 400) -> JSONResponse:
     )
 
 
+def _parse_response_format(
+    payload: dict[str, Any],
+) -> StructuredOutputSpec | JSONResponse | None:
+    raw = payload.get("response_format")
+    if raw is None:
+        return None
+
+    parsed = raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return _error_response(
+                "response_format must be valid JSON", status_code=400
+            )
+
+    if not isinstance(parsed, dict):
+        return _error_response("response_format must be an object", status_code=400)
+
+    if parsed.get("type") != "json_schema":
+        return _error_response(
+            "response_format.type must be 'json_schema'",
+            status_code=400,
+        )
+
+    json_schema = parsed.get("json_schema")
+    if not isinstance(json_schema, dict):
+        return _error_response(
+            "response_format.json_schema must be an object",
+            status_code=400,
+        )
+
+    name = str(json_schema.get("name") or "structured_output").strip()
+    if not name:
+        name = "structured_output"
+
+    schema = json_schema.get("schema")
+    if isinstance(schema, str):
+        try:
+            schema = json.loads(schema)
+        except json.JSONDecodeError:
+            return _error_response(
+                "response_format.json_schema.schema must be valid JSON",
+                status_code=400,
+            )
+
+    if not isinstance(schema, dict):
+        return _error_response(
+            "response_format.json_schema.schema must be an object",
+            status_code=400,
+        )
+
+    return StructuredOutputSpec(
+        name=name,
+        schema=schema,
+        strict=bool(json_schema.get("strict", True)),
+    )
+
+
+def _validate_schema_output(
+    value: Any, schema: dict[str, Any], path: str = "$"
+) -> str | None:
+    expected_type = schema.get("type")
+    if expected_type == "object":
+        if not isinstance(value, dict):
+            return f"{path} must be an object"
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        for key in required:
+            if key not in value:
+                return f"{path}.{key} is required"
+        if schema.get("additionalProperties") is False:
+            for key in value:
+                if key not in properties:
+                    return f"{path}.{key} is not allowed"
+        for key, sub_schema in properties.items():
+            if key in value and isinstance(sub_schema, dict):
+                err = _validate_schema_output(value[key], sub_schema, f"{path}.{key}")
+                if err:
+                    return err
+        return None
+
+    if expected_type == "array":
+        if not isinstance(value, list):
+            return f"{path} must be an array"
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict):
+            for idx, item in enumerate(value):
+                err = _validate_schema_output(item, item_schema, f"{path}[{idx}]")
+                if err:
+                    return err
+        return None
+
+    type_checks: dict[str, tuple[type, ...]] = {
+        "string": (str,),
+        "integer": (int,),
+        "number": (int, float),
+        "boolean": (bool,),
+        "null": (type(None),),
+    }
+    if expected_type in type_checks and not isinstance(
+        value, type_checks[expected_type]
+    ):
+        return f"{path} must be of type {expected_type}"
+    return None
+
+
+def _coerce_schema_output(value: Any, schema: dict[str, Any]) -> Any:
+    expected_type = schema.get("type")
+
+    if expected_type == "object":
+        if not isinstance(value, dict):
+            return value
+        properties = schema.get("properties", {})
+        if not isinstance(properties, dict):
+            return value
+        return {
+            key: _coerce_schema_output(item, properties[key])
+            if key in properties and isinstance(properties[key], dict)
+            else item
+            for key, item in value.items()
+        }
+
+    if expected_type == "array":
+        if not isinstance(value, list):
+            return value
+        item_schema = schema.get("items")
+        if not isinstance(item_schema, dict):
+            return value
+        return [_coerce_schema_output(item, item_schema) for item in value]
+
+    if expected_type == "string":
+        if isinstance(value, str):
+            return value.strip()
+        if value is None:
+            return value
+        return str(value)
+
+    if expected_type == "integer":
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+        if isinstance(value, str):
+            text = value.strip()
+            if text and text.lstrip("+-").isdigit():
+                return int(text)
+        return value
+
+    if expected_type == "number":
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return value
+            try:
+                return float(text)
+            except ValueError:
+                return value
+        return value
+
+    if expected_type == "boolean":
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int) and value in {0, 1}:
+            return bool(value)
+        if isinstance(value, str):
+            text = value.strip().lower()
+            if text in {"true", "1", "yes"}:
+                return True
+            if text in {"false", "0", "no"}:
+                return False
+        return value
+
+    if expected_type == "null":
+        if value is None:
+            return None
+        if isinstance(value, str):
+            text = value.strip().lower()
+            if text in {"", "null"}:
+                return None
+        return value
+
+    return value
+
+
+def _message_text(message: Any) -> str:
+    content = getattr(message, "content", "")
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") != "text":
+                continue
+            text = item.get("text")
+            if isinstance(text, str) and text.strip():
+                parts.append(text.strip())
+        return "\n".join(parts).strip()
+    return str(content).strip() if content is not None else ""
+
+
+def _message_role(message: Any) -> str:
+    class_name = message.__class__.__name__.lower()
+    if "system" in class_name:
+        return "system"
+    if "human" in class_name:
+        return "user"
+    if "tool" in class_name:
+        return "tool"
+    if "ai" in class_name:
+        return "assistant"
+    return "unknown"
+
+
+def _build_formatter_prompt_from_history(
+    *,
+    history: list[Any],
+    user_question: str,
+    assistant_content: str,
+    tool_name: str,
+) -> str:
+    system_text = ""
+    latest_user = ""
+    latest_assistant = ""
+    last_turn_tools: list[str] = []
+    for msg in history:
+        role = _message_role(msg)
+        text = _message_text(msg)
+        if not text:
+            continue
+        if role == "system" and not system_text:
+            system_text = text
+        elif role == "user":
+            latest_user = text
+        elif role == "assistant":
+            latest_assistant = text
+
+    # Collect tool outputs directly preceding the latest assistant response.
+    last_assistant_index = -1
+    for idx in range(len(history) - 1, -1, -1):
+        if _message_role(history[idx]) == "assistant" and _message_text(history[idx]):
+            last_assistant_index = idx
+            break
+    if last_assistant_index > 0:
+        idx = last_assistant_index - 1
+        while idx >= 0 and _message_role(history[idx]) == "tool":
+            text = _message_text(history[idx])
+            if text:
+                last_turn_tools.append(text)
+            idx -= 1
+        last_turn_tools.reverse()
+
+    selected_user = latest_user or user_question
+    selected_assistant = latest_assistant or assistant_content
+    tools_block = "\n".join(last_turn_tools).strip()
+
+    sections = [
+        f"Call `{tool_name}` and emit JSON strictly matching the provided schema."
+    ]
+    if system_text:
+        sections.append(f"Root system message:\n{system_text}")
+    sections.append(f"Last user message:\n{selected_user}")
+    sections.append(f"Last assistant message:\n{selected_assistant}")
+    if tools_block:
+        sections.append(f"Last turn tool results:\n{tools_block}")
+    return "\n\n".join(sections).strip() + "\n"
+
+
+def _args_from_tool_call(call: Any) -> Any:
+    if isinstance(call, dict):
+        return call.get("args")
+    return getattr(call, "args", None)
+
+
+def _name_from_tool_call(call: Any) -> str | None:
+    if isinstance(call, dict):
+        name = call.get("name")
+        return str(name) if name else None
+    raw = getattr(call, "name", None)
+    return str(raw) if raw else None
+
+
+def _pick_structured_tool_args(tool_calls: list[Any], tool_name: str) -> Any:
+    for tc in tool_calls:
+        if _name_from_tool_call(tc) == tool_name:
+            return _args_from_tool_call(tc)
+    return _args_from_tool_call(tool_calls[0])
+
+
+async def _format_structured_output(
+    *,
+    agent: Any,
+    session_id: str,
+    user_question: str,
+    assistant_content: str,
+    spec: StructuredOutputSpec,
+) -> dict[str, Any] | JSONResponse:
+    llm = getattr(getattr(agent, "llm_instance", None), "llm", None)
+    if llm is None or not hasattr(llm, "bind_tools"):
+        return _error_response(
+            "Structured output is not available for this model",
+            status_code=500,
+        )
+
+    tool_name = "emit_structured_output"
+    schema_description = str(spec.schema.get("description") or "").strip()
+    fallback_description = (
+        "Fill this schema using the latest user request, "
+        "your final answer, "
+        "and relevant conversation context. Do not invent facts."
+    )
+    tool_description = schema_description or fallback_description
+    tool_def = {
+        "type": "function",
+        "function": {
+            "name": tool_name,
+            "description": tool_description,
+            "parameters": spec.schema,
+        },
+    }
+    llm_formatter = llm.bind_tools([tool_def], strict=spec.strict)
+    history: list[Any] = []
+    get_history = getattr(agent, "get_conversation_history", None)
+    if callable(get_history):
+        try:
+            maybe_history = get_history(session_id)
+            if isinstance(maybe_history, list):
+                history = maybe_history
+        except Exception:
+            history = []
+    prompt = _build_formatter_prompt_from_history(
+        history=history,
+        user_question=user_question,
+        assistant_content=assistant_content,
+        tool_name=tool_name,
+    )
+    prompt = (
+        prompt.rstrip()
+        + f"\n\nYou must call the `{tool_name}` tool once with JSON arguments "
+        "that match the schema.\n"
+    )
+    response = await llm_formatter.ainvoke(prompt)
+    tool_calls = getattr(response, "tool_calls", None) or []
+    if not tool_calls:
+        return _error_response(
+            "Structured output tool call was not produced", status_code=422
+        )
+
+    args = _pick_structured_tool_args(tool_calls, tool_name)
+    if args is None:
+        return _error_response(
+            "Structured output tool call was not produced", status_code=422
+        )
+
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except json.JSONDecodeError:
+            return _error_response(
+                "Structured output tool arguments are invalid JSON",
+                status_code=422,
+            )
+    if not isinstance(args, dict):
+        return _error_response(
+            "Structured output tool arguments must be an object",
+            status_code=422,
+        )
+
+    args = _coerce_schema_output(args, spec.schema)
+    validation_error = _validate_schema_output(args, spec.schema)
+    if validation_error:
+        return _error_response(
+            f"Structured output validation failed: {validation_error}", status_code=422
+        )
+    return args
+
+
 def _extract_api_key(request: Request) -> str:
     """Extract API key from `Authorization: Bearer <token>`."""
     auth_header = request.headers.get("Authorization")
@@ -349,6 +741,14 @@ def register_openai_chat_completions_on_fastapi(fastapi_app: FastAPI, app: Any) 
         payload = await request.json()
         if not isinstance(payload, dict):
             return _error_response("request body must be a JSON object")
+        structured_spec = _parse_response_format(payload)
+        if isinstance(structured_spec, JSONResponse):
+            return structured_spec
+        if structured_spec is not None and payload.get("stream") is True:
+            return _error_response(
+                "stream=true is not supported with response_format",
+                status_code=400,
+            )
 
         prepared = _prepare_request(
             app, payload, provider_api_key=provided_api_key
@@ -370,6 +770,17 @@ def register_openai_chat_completions_on_fastapi(fastapi_app: FastAPI, app: Any) 
             )
 
         content = await _collect_agent_response(agent, question, session_id)
+        if structured_spec is not None:
+            structured_result = await _format_structured_output(
+                agent=agent,
+                session_id=session_id,
+                user_question=question,
+                assistant_content=content,
+                spec=structured_spec,
+            )
+            if isinstance(structured_result, JSONResponse):
+                return structured_result
+            content = json.dumps(structured_result, ensure_ascii=False)
         return JSONResponse(
             content=build_chat_completion_response(
                 request_model=resolved.request_model,
@@ -411,6 +822,16 @@ async def handle_chat_completions_payload(
             _error_response("request body must be a JSON object").body.decode("utf-8")
         )
 
+    structured_spec = _parse_response_format(payload)
+    if isinstance(structured_spec, JSONResponse):
+        return json.loads(structured_spec.body.decode("utf-8"))
+    if structured_spec is not None and payload.get("stream") is True:
+        response = _error_response(
+            "stream=true is not supported with response_format",
+            status_code=400,
+        )
+        return json.loads(response.body.decode("utf-8"))
+
     prepared = _prepare_request(app, payload)
     if isinstance(prepared, JSONResponse):
         return json.loads(prepared.body.decode("utf-8"))
@@ -435,6 +856,17 @@ async def handle_chat_completions_payload(
         }
 
     content = await _collect_agent_response(agent, question, session_id)
+    if structured_spec is not None:
+        structured_result = await _format_structured_output(
+            agent=agent,
+            session_id=session_id,
+            user_question=question,
+            assistant_content=content,
+            spec=structured_spec,
+        )
+        if isinstance(structured_result, JSONResponse):
+            return json.loads(structured_result.body.decode("utf-8"))
+        content = json.dumps(structured_result, ensure_ascii=False)
     return build_chat_completion_response(
         request_model=resolved.request_model,
         assistant_content=content,

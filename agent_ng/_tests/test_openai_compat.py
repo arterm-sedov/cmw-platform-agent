@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
-from typing import TYPE_CHECKING
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, ClassVar
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -138,11 +139,76 @@ class _SessionManager:
 
 
 class _Agent:
+    history_messages: ClassVar[list[object]] = []
+
+    def __init__(self) -> None:
+        self.llm_instance = SimpleNamespace(llm=_FormatterLLM())
+
     async def stream_message(
         self, question: str, session_id: str
     ) -> AsyncGenerator[dict[str, object], None]:
         assert session_id
         yield {"type": "content", "content": f"answer to {question}", "metadata": {}}
+
+    def get_conversation_history(self, conversation_id: str) -> list[object]:
+        assert conversation_id
+        return list(_Agent.history_messages)
+
+
+class _SystemMessage:
+    def __init__(self, content: object) -> None:
+        self.content = content
+
+
+class _HumanMessage:
+    def __init__(self, content: object) -> None:
+        self.content = content
+
+
+class _AIMessage:
+    def __init__(self, content: object) -> None:
+        self.content = content
+
+
+class _ToolMessage:
+    def __init__(self, content: object) -> None:
+        self.content = content
+
+
+class _FormatterBoundLLM:
+    last_prompt: str = ""
+    next_args: object = {"objects": [{"id": "obj.1", "system_name": "TestObject"}]}
+
+    async def ainvoke(self, messages: list[object]) -> object:
+        assert messages
+        _FormatterBoundLLM.last_prompt = str(messages)
+        return SimpleNamespace(
+            tool_calls=[
+                {
+                    "id": "tool-call-1",
+                    "name": "emit_structured_output",
+                    "args": _FormatterBoundLLM.next_args,
+                }
+            ]
+        )
+
+
+class _FormatterLLM:
+    last_tool_description: str = ""
+
+    def bind_tools(
+        self,
+        tools: list[dict[str, object]],
+        tool_choice: object = None,
+        strict: object = None,
+    ) -> _FormatterBoundLLM:
+        assert tools
+        assert tool_choice is None
+        assert strict is True
+        _FormatterLLM.last_tool_description = str(
+            tools[0]["function"].get("description", "")
+        )
+        return _FormatterBoundLLM()
 
 
 class _App:
@@ -280,6 +346,327 @@ def test_registered_chat_completions_route_passes_bearer_as_selected_provider_ke
     assert session_config.get("llm_provider_api_keys") == {
         "openrouter": "provider-specific-key"
     }
+
+
+def test_registered_chat_completions_route_formats_structured_output_via_tool_call() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+
+    response = TestClient(demo.app).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "list worked objects"}],
+            "response_format": json.dumps(
+                {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "worked_objects",
+                        "strict": True,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "objects": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id": {"type": "string"},
+                                            "system_name": {"type": "string"},
+                                        },
+                                        "required": ["id", "system_name"],
+                                        "additionalProperties": False,
+                                    },
+                                }
+                            },
+                            "required": ["objects"],
+                            "additionalProperties": False,
+                        },
+                    },
+                }
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+    content = response.json()["choices"][0]["message"]["content"]
+    assert json.loads(content) == {
+        "objects": [{"id": "obj.1", "system_name": "TestObject"}]
+    }
+    assert "emit_structured_output" in _FormatterBoundLLM.last_prompt
+
+
+def test_structured_formatter_uses_compact_context_from_session_history() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+    _Agent.history_messages = [
+        _SystemMessage("Root system policy"),
+        _HumanMessage("Old user question"),
+        _AIMessage("Old assistant response"),
+        _HumanMessage("Latest user question from history"),
+        _AIMessage(""),
+        _ToolMessage('{"id":"obj.2"}'),
+        _ToolMessage('{"system_name":"Object2"}'),
+        _AIMessage("Latest assistant response from history"),
+    ]
+
+    response = TestClient(demo.app).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "fresh question"}],
+            "extra_body": {"session_id": "history-session"},
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "worked_objects",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {"objects": {"type": "array"}},
+                        "required": ["objects"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    prompt = _FormatterBoundLLM.last_prompt
+    assert "Root system policy" in prompt
+    assert "Latest user question from history" in prompt
+    assert "Latest assistant response from history" in prompt
+    assert '{"id":"obj.2"}' in prompt
+    assert "Old user question" not in prompt
+    assert "Old assistant response" not in prompt
+
+
+def test_structured_output_uses_root_schema_description_when_present() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+
+    response = TestClient(demo.app).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "list worked objects"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "worked_objects",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "description": "Use only facts from final answer and conversation",
+                        "properties": {"objects": {"type": "array"}},
+                        "required": ["objects"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert (
+        _FormatterLLM.last_tool_description
+        == "Use only facts from final answer and conversation"
+    )
+
+
+def test_structured_output_falls_back_to_default_tool_description() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+
+    response = TestClient(demo.app).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "list worked objects"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "worked_objects",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {"objects": {"type": "array"}},
+                        "required": ["objects"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Do not invent facts." in _FormatterLLM.last_tool_description
+
+
+def test_structured_output_repairs_common_primitive_types() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+    _FormatterBoundLLM.next_args = {
+        "count": "42",
+        "is_valid": "TRUE",
+        "score": "3.5",
+        "name": "  Alice  ",
+    }
+
+    response = TestClient(demo.app).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "format output"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "coerce_case",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "count": {"type": "integer"},
+                            "is_valid": {"type": "boolean"},
+                            "score": {"type": "number"},
+                            "name": {"type": "string"},
+                        },
+                        "required": ["count", "is_valid", "score", "name"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert json.loads(response.json()["choices"][0]["message"]["content"]) == {
+        "count": 42,
+        "is_valid": True,
+        "score": 3.5,
+        "name": "Alice",
+    }
+
+
+def test_structured_output_repairs_empty_string_to_null_only_for_null_type() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+    _FormatterBoundLLM.next_args = {"note": ""}
+
+    response = TestClient(demo.app).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "format output"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "null_case",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {"note": {"type": "null"}},
+                        "required": ["note"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert json.loads(response.json()["choices"][0]["message"]["content"]) == {
+        "note": None
+    }
+
+
+def test_structured_output_does_not_repair_empty_string_for_integer() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+    _FormatterBoundLLM.next_args = {"count": ""}
+
+    response = TestClient(demo.app).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "format output"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "int_case",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {"count": {"type": "integer"}},
+                        "required": ["count"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_registered_chat_completions_route_rejects_invalid_response_format_json() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+
+    response = TestClient(demo.app).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "test"}],
+            "response_format": "{not-json}",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "response_format" in response.json()["error"]["message"]
+
+
+def test_registered_chat_completions_route_rejects_stream_with_structured_output() -> None:
+    demo = _Demo()
+    app = _App()
+    register_openai_chat_completions_route(demo, app)
+
+    response = TestClient(demo.app).post(
+        "/v1/chat/completions",
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "test"}],
+            "stream": True,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "worked_objects",
+                    "schema": {"type": "object", "properties": {}, "additionalProperties": False},
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 400
+    assert "stream" in response.json()["error"]["message"]
 
 
 def test_gradio_queue_replaces_app_so_route_must_be_registered_after_queue() -> None:
