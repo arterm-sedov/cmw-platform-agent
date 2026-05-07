@@ -312,6 +312,36 @@ def process_folder(folder_name: str, extract_dir: Path, app_name: str) -> tuple[
     return list(deduped.values()), file_count
 
 
+def extract_application_from_root(app: str, extract_dir: Path) -> list:
+    """Extract Application alias from root-level {app}.json file."""
+    app_json_path = extract_dir / f"{app}.json"
+    if not app_json_path.exists():
+        return []
+
+    try:
+        with open(app_json_path, encoding="utf-8") as f:
+            data = json.load(f)
+
+        alias = data.get("cmw.solution.alias", "")
+        display_name = data.get("cmw.solution.name", "")
+
+        if alias:
+            return [{
+                "alias": alias,
+                "type": "Application",
+                "displayName": display_name,
+                "aliasLocked": True,
+                "path": f"{app}.json",
+                "source": "ApplicationRoot",
+                "parent_template": "",
+                "jsonPathOriginal": [f"{app}.json"],
+            }]
+    except (json.JSONDecodeError, OSError):
+        pass
+
+    return []
+
+
 def main(app: str = None, extract_dir: str = None, output_dir: str = None):
     """Main function - can be called with parameters or CLI args."""
     if app is None:
@@ -410,6 +440,26 @@ def main(app: str = None, extract_dir: str = None, output_dir: str = None):
 
         with open(state_file, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2, ensure_ascii=False)
+
+    app_output_file = output_dir / f"{app}_Application_aliases.json"
+    if not app_output_file.exists():
+        print(f"\nExtracting Application alias from root...")
+        app_aliases = extract_application_from_root(app, extract_dir)
+
+        app_output_data = {
+            "app": app,
+            "folder": "Application",
+            "extracted_at": datetime.now().isoformat(),
+            "count": len(app_aliases),
+            "file_count": 1,
+            "aliases": app_aliases,
+        }
+
+        with open(app_output_file, "w", encoding="utf-8") as f:
+            json.dump(app_output_data, f, indent=2, ensure_ascii=False)
+
+        print(f"  Application: {len(app_aliases)} alias extracted")
+        total_aliases += len(app_aliases)
 
     print(f"\n=== Extraction Complete ===")
     print(f"Total aliases: {total_aliases}")

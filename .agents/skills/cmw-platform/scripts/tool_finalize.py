@@ -71,6 +71,20 @@ def main():
         except (json.JSONDecodeError, OSError) as e:
             print(f"  Warning: Failed to load {vf}: {e}")
 
+    app_aliases_file = output_dir / f"{args.app}_Application_aliases.json"
+    if app_aliases_file.exists():
+        try:
+            with open(app_aliases_file, encoding="utf-8") as f:
+                app_data = json.load(f)
+            app_aliases = app_data.get("aliases", [])
+            if app_aliases:
+                print(f"  Application: {len(app_aliases)} aliases (auto-locked)")
+                for alias_entry in app_aliases:
+                    alias_entry["aliasLocked"] = True
+                verified.extend(app_aliases)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"  Warning: Failed to load Application aliases: {e}")
+
     # Load dangerous aliases
     dangerous_file = output_dir / f"{args.app}_dangerous_aliases.json"
     dangerous = set()
@@ -120,7 +134,9 @@ def main():
 
         # aliasLocked logic for verified entries
         alias_locked = obj.get("aliasLocked", False)
-        if alias_locked and is_dangerous:
+        if obj.get("type") == "Application":
+            alias_locked = True  # Always lock Application regardless of expressions
+        elif alias_locked and is_dangerous:
             alias_locked = False  # Unlock dangerous aliases
 
         schema_obj = {
@@ -158,7 +174,9 @@ def main():
 
         is_dangerous = alias in dangerous
 
-        if is_dangerous:
+        if obj.get("type") == "Application":
+            alias_locked = True  # Always lock Application regardless of expressions
+        elif is_dangerous:
             # Skipped but dangerous - unlock for rename
             alias_locked = False
         elif display_name:
