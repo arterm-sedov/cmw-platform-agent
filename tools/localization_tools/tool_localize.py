@@ -394,6 +394,8 @@ def localize_aliases(
         print(f"  ID: {obj.get('ids', [])}")
         print(f"  Display Name: {obj.get('displayNameOriginal', '')}")
         print(f"  Current aliasRenamed: {alias_new}")
+        display_name_orig = obj.get("displayNameOriginal", "")
+        display_name_new = obj.get("displayNameRenamed", "")
 
         if not alias_new:
             suffix = dangerous_suffix if obj.get("expressions") else safe_suffix
@@ -407,12 +409,25 @@ def localize_aliases(
             else:
                 obj["aliasRenamed"] = new_alias
 
+            if display_name_orig:
+                print(f"  Current displayNameRenamed: {display_name_new}")
+                print("  Enter new displayNameRenamed (or press Enter to keep current): ")
+                display_input = input("  > ")
+                obj["displayNameRenamed"] = display_input.strip() if display_input.strip() else display_name_orig
+
             obj["jsonPathRenamed"] = obj.get("jsonPathOriginal", [])[:]
 
+            new_alias = obj["aliasRenamed"]
+            new_display = obj.get("displayNameRenamed", "")
             for expr in obj.get("expressions", []):
                 expr["jsonPathRenamed"] = expr.get("jsonPathOriginal", "")
                 orig_expr = expr.get("expressionOriginal", "")
-                expr["expressionRenamed"] = orig_expr.replace(alias_orig, obj["aliasRenamed"]) if orig_expr else ""
+                if orig_expr:
+                    expr["expressionRenamed"] = orig_expr.replace(alias_orig, new_alias)
+                    if new_display and display_name_orig:
+                        expr["expressionRenamed"] = expr["expressionRenamed"].replace(
+                            display_name_orig, new_display
+                        )
 
             save_resume_state(output_dir, application_system_name, alias_orig, target_index)
 
