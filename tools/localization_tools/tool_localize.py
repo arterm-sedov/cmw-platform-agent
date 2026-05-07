@@ -166,6 +166,11 @@ class LocalizeSchema(BaseModel):
 
 
 @tool("localize_aliases", return_direct=False, args_schema=LocalizeSchema)
+def calculate_new_json_path(original_path: str, old_alias: str, new_alias: str) -> str:
+    """Replace alias in JSON path with new alias."""
+    return original_path.replace(f"/{old_alias}/", f"/{new_alias}/")
+
+
 def localize_aliases(
     application_system_name: str = "",
     json_folder: str = "",
@@ -421,19 +426,19 @@ def localize_aliases(
                 display_input = input("  > ")
                 obj["displayNameRenamed"] = display_input.strip() if display_input.strip() else display_name_orig
 
-            obj["jsonPathRenamed"] = obj.get("jsonPathOriginal", [])[:]
+            obj["jsonPathRenamed"] = [
+                calculate_new_json_path(p, alias_orig, new_alias)
+                for p in obj.get("jsonPathOriginal", [])
+            ]
 
             new_alias = obj["aliasRenamed"]
-            new_display = obj.get("displayNameRenamed", "")
             for expr in obj.get("expressions", []):
-                expr["jsonPathRenamed"] = expr.get("jsonPathOriginal", "")
+                expr["jsonPathRenamed"] = calculate_new_json_path(
+                    expr.get("jsonPathOriginal", ""), alias_orig, new_alias
+                )
                 orig_expr = expr.get("expressionOriginal", "")
                 if orig_expr:
                     expr["expressionRenamed"] = orig_expr.replace(alias_orig, new_alias)
-                    if new_display and display_name_orig:
-                        expr["expressionRenamed"] = expr["expressionRenamed"].replace(
-                            display_name_orig, new_display
-                        )
 
             save_resume_state(output_dir, application_system_name, alias_orig, target_index)
 
@@ -512,7 +517,7 @@ def localize_aliases(
             if not display_name_new:
                 continue
 
-            json_paths = obj.get("jsonPathOriginal", [])
+            json_paths = obj.get("jsonPathRenamed", obj.get("jsonPathOriginal", []))
             if not json_paths:
                 continue
 
@@ -578,7 +583,7 @@ def localize_aliases(
             if not alias_orig or not alias_renamed:
                 continue
 
-            json_paths = obj.get("jsonPathOriginal", [])
+            json_paths = obj.get("jsonPathRenamed", obj.get("jsonPathOriginal", []))
             if not json_paths:
                 continue
 
