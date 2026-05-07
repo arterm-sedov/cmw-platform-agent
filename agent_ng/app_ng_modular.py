@@ -48,7 +48,12 @@ except Exception:
 
 # Import configuration with fallback for direct execution
 try:
-    from agent_ng.agent_config import config, get_language_settings, get_port_settings
+    from agent_ng.agent_config import (
+        config,
+        get_language_settings,
+        get_port_settings,
+        get_ui_gradio_footer_links,
+    )
 except ImportError:
     # Fallback for direct execution
     from pathlib import Path
@@ -59,6 +64,7 @@ except ImportError:
         config,
         get_language_settings,
         get_port_settings,
+        get_ui_gradio_footer_links,
     )
 
 
@@ -1870,6 +1876,61 @@ def find_available_port(start_port=7860, max_attempts=10):
     return None
 
 
+def _log_gradio_public_api_surface(blocks: gr.Blocks) -> None:
+    names = sorted(
+        fn.api_name
+        for fn in blocks.fns.values()
+        if fn.fn and fn.api_visibility == "public" and isinstance(fn.api_name, str)
+    )
+    _logger.info(
+        "Gradio public API endpoints for docs (count=%s): %s",
+        len(names),
+        names,
+    )
+
+
+def _schedule_gradio_api_info_warmup(loopback_port: int) -> None:
+    """Background-prime ``/gradio_api/info`` (launch with ``debug=True`` never returns).
+
+    The first SPA open of the footer API explorer still parses a large Blocks config client-side;
+    priming trims server-side stalls on ``get_api_info()`` for that request.
+    """
+
+    def _run() -> None:
+        from urllib.error import HTTPError, URLError
+        from urllib.request import urlopen
+
+        endpoint = f"http://127.0.0.1:{loopback_port}/gradio_api/info"
+        backoff_s = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 24.0)
+        for delay in backoff_s:
+            time.sleep(delay)
+            try:
+                with urlopen(endpoint, timeout=120) as resp:
+                    payload = resp.read()
+                _logger.info(
+                    "Primed Gradio /gradio_api/info cache (%s bytes, %s)",
+                    len(payload),
+                    endpoint.split("?", 1)[0],
+                )
+                return
+            except (HTTPError, URLError, TimeoutError, OSError) as exc:
+                _logger.debug(
+                    "API info warmup retry after %.1fs: %s",
+                    delay,
+                    exc,
+                )
+        _logger.warning(
+            "Gradio API info warmup gave up (%s)",
+            endpoint.split("?", 1)[0],
+        )
+
+    threading.Thread(
+        target=_run,
+        name="gradio-api-info-warmup",
+        daemon=True,
+    ).start()
+
+
 def main():
     """Main function to run the application with single port and language detection"""
     import argparse
@@ -1954,6 +2015,9 @@ def main():
     # to prevent desynchronization of blocks_config and fn_index
     # during reloads and multiple interface creations
     demo = initialize_demo()
+    _log_gradio_public_api_surface(demo)
+    footer_links_ui = get_ui_gradio_footer_links()
+    _schedule_gradio_api_info_warmup(port)
 
     _logger.info(
         "Launching Gradio interface on port %s with language switching...", port
@@ -1965,7 +2029,7 @@ def main():
         server_port=port,
         show_error=True,
         # Gradio 6: show_api removed — use footer_links (same idea as cmw-rag mount_gradio_app).
-        footer_links=["api"],
+        footer_links=footer_links_ui,
         theme=gr.themes.Soft(),
         css_paths=[
             Path(__file__).resolve().parent.parent

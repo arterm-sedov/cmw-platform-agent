@@ -253,3 +253,16 @@ def get_ui_download_prep_after_stream() -> bool:
     Environment ``CMW_UI_DOWNLOAD_PREP_AFTER_STREAM``: ``1``/``true``/``yes``/``on`` to enable.
     """
     return env_flag_true("CMW_UI_DOWNLOAD_PREP_AFTER_STREAM")
+
+
+def get_ui_gradio_footer_links() -> list[str]:
+    """Return ``footer_links`` for ``demo.launch``.
+
+    The in-app API explorer can hitch on huge ``Blocks``. Set ``CMW_UI_GRADIO_HIDE_API_FOOTER=1``
+    to drop the footer link; use HTTP ``GET /gradio_api/info`` or ``gradio_client`` instead.
+
+    Default matches historical behavior (API link only).
+    """
+    if env_flag_true("CMW_UI_GRADIO_HIDE_API_FOOTER"):
+        return []
+    return ["api"]
