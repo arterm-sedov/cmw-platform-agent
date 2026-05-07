@@ -3,12 +3,12 @@
 ## Goal
 
 Expose the existing CMW Platform Agent chat through a minimal OpenAI-**shaped**
-HTTP API (`POST /v1/agent_completions`) while preserving current Gradio UI
+HTTP API (`POST /api/v1/chat/completions`) while preserving current Gradio UI
 behavior.
 
 ## Scope
 
-- Add `POST /v1/agent_completions` (OpenAI-shaped contract, custom path).
+- Add `POST /api/v1/chat/completions` (OpenAI-shaped contract, custom path).
 - Support request fields: `model`, `messages`, `stream`.
 - Carry session and CMW/runtime fields only in a **`messages` entry with
   `role: "system"`** whose `content` is a JSON **object** (or a string that

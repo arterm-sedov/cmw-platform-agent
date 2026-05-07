@@ -1,4 +1,4 @@
-"""OpenAI-shaped HTTP adapter for CMW agent completions (`/v1/agent_completions`)."""
+"""OpenAI-shaped HTTP adapter for CMW agent completions (`/api/v1/chat/completions`)."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY = "cmw_assistant_last_message"
 # Backward-compatible alias (string value identical).
 CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE = CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY
 
-AGENT_COMPLETIONS_PATH = "/v1/agent_completions"
+AGENT_COMPLETIONS_PATH = "/api/v1/chat/completions"
 
 
 def usage_from_token_count(tc: TokenCount | None) -> dict[str, Any] | None:
@@ -895,7 +895,7 @@ async def _stream_agent_response(
 
 
 def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> None:
-    """Register `POST /v1/agent_completions` on a FastAPI app."""
+    """Register `POST /api/v1/chat/completions` on a FastAPI app."""
 
     async def agent_completions(request: Request) -> JSONResponse | StreamingResponse:
         provided_api_key = _extract_api_key(request)
@@ -971,7 +971,7 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
 
 
 def register_agent_completions_route(demo: Any, app: Any) -> None:
-    """Register `POST /v1/agent_completions` on Gradio's underlying FastAPI app."""
+    """Register `POST /api/v1/chat/completions` on Gradio's underlying FastAPI app."""
 
     fastapi_app = getattr(demo, "app", None)
     if fastapi_app is None:
