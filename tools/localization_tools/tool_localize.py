@@ -168,8 +168,13 @@ class LocalizeSchema(BaseModel):
 
 @tool("localize_aliases", return_direct=False, args_schema=LocalizeSchema)
 def calculate_new_json_path(original_path: str, old_alias: str, new_alias: str) -> str:
-    """Replace alias in JSON path with new alias."""
-    return original_path.replace(f"/{old_alias}/", f"/{new_alias}/")
+    """Replace alias in JSON path with new alias. Handles both /alias/ and /alias.json formats."""
+    result = original_path.replace(f"/{old_alias}/", f"/{new_alias}/")
+    if result == original_path:
+        result = original_path.replace(f"/{old_alias}.json", f"/{new_alias}.json")
+    if result == original_path:
+        result = original_path.replace(f"{old_alias}.json", f"{new_alias}.json")
+    return result
 
 
 def localize_aliases(
