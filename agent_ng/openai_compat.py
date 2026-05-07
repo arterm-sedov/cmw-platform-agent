@@ -693,6 +693,8 @@ def _validate_schema_output(
     value: Any, schema: dict[str, Any], path: str = "$"
 ) -> str | None:
     expected_type = schema.get("type")
+    if value is None:
+        return None if expected_type in (None, "null") else f"{path} must not be null"
     if expected_type == "object":
         if not isinstance(value, dict):
             return f"{path} must be an object"
@@ -735,6 +737,106 @@ def _validate_schema_output(
     ):
         return f"{path} must be of type {expected_type}"
     return None
+
+
+def _repair_schema_output(value: Any, schema: dict[str, Any]) -> Any:
+    """Best-effort schema repair for structured formatter outputs."""
+    return _repair_schema_output_impl(value, schema, required=True)
+
+
+_DROP = object()
+
+
+def _default_for_schema(schema: dict[str, Any]) -> Any:
+    expected_type = schema.get("type")
+    if expected_type == "object":
+        return {}
+    if expected_type == "array":
+        return []
+    if expected_type == "string":
+        return ""
+    if expected_type == "integer":
+        return 0
+    if expected_type == "number":
+        return 0.0
+    if expected_type == "boolean":
+        return False
+    if expected_type == "null":
+        return None
+    return None
+
+
+def _repair_schema_output_impl(
+    value: Any, schema: dict[str, Any], *, required: bool
+) -> Any:
+    """Repair schema output; return `_DROP` for optional unrecoverable values."""
+    expected_type = schema.get("type")
+
+    if expected_type == "object":
+        source = value if isinstance(value, dict) else {}
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            properties = {}
+        required_keys = schema.get("required")
+        if not isinstance(required_keys, list):
+            required_keys = []
+        repaired: dict[str, Any] = {}
+        if schema.get("additionalProperties") is False:
+            for key, sub_schema in properties.items():
+                if key in source:
+                    if isinstance(sub_schema, dict):
+                        is_required = key in required_keys
+                        child = _repair_schema_output_impl(
+                            source[key], sub_schema, required=is_required
+                        )
+                        if child is not _DROP:
+                            repaired[key] = child
+                    else:
+                        repaired[key] = source[key]
+        else:
+            for key, item in source.items():
+                sub_schema = properties.get(key)
+                if isinstance(sub_schema, dict):
+                    is_required = key in required_keys
+                    child = _repair_schema_output_impl(
+                        item, sub_schema, required=is_required
+                    )
+                    if child is not _DROP:
+                        repaired[key] = child
+                else:
+                    repaired[key] = item
+        if required_keys:
+            for key in required_keys:
+                if isinstance(key, str) and key not in repaired:
+                    sub_schema = properties.get(key)
+                    repaired[key] = (
+                        _default_for_schema(sub_schema)
+                        if isinstance(sub_schema, dict)
+                        else None
+                    )
+        return repaired
+
+    if expected_type == "array":
+        item_schema = schema.get("items")
+        if not isinstance(value, list):
+            return []
+        if not isinstance(item_schema, dict):
+            return value
+        repaired_items: list[Any] = []
+        for item in value:
+            child = _repair_schema_output_impl(item, item_schema, required=False)
+            if child is _DROP:
+                continue
+            repaired_items.append(child)
+        return repaired_items
+
+    coerced = _coerce_schema_output(value, schema)
+    validation_error = _validate_schema_output(coerced, schema)
+    if validation_error:
+        if required:
+            return _default_for_schema(schema)
+        return _DROP
+    return coerced
 
 
 def _coerce_schema_output(value: Any, schema: dict[str, Any]) -> Any:
@@ -1008,26 +1110,34 @@ async def _format_structured_output(
         try:
             args = json.loads(args)
         except json.JSONDecodeError:
-            return _error_response(
-                "Structured output tool arguments are invalid JSON",
-                status_code=422,
-            )
+            candidates = _extract_json_object_candidates(args)
+            recovered: dict[str, Any] | None = None
+            for candidate in candidates:
+                try:
+                    parsed_candidate = json.loads(candidate)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(parsed_candidate, dict):
+                    recovered = parsed_candidate
+                    break
+            if recovered is None:
+                return _error_response(
+                    "Structured output tool arguments are invalid JSON",
+                    status_code=422,
+                )
+            args = recovered
     if not isinstance(args, dict):
         return _error_response(
             "Structured output tool arguments must be an object",
             status_code=422,
         )
 
-    args = _coerce_schema_output(args, stripped)
+    args = _repair_schema_output(args, stripped)
     validation_error = _validate_schema_output(args, stripped)
     if validation_error:
         _debug_log_io(
             "structured.formatter.validation_error",
             {"session_id": session_id, "error": validation_error, "args": args},
-        )
-        return _error_response(
-            f"Structured output validation failed: {validation_error}",
-            status_code=422,
         )
     if inject_into_content:
         args[CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY] = assistant_content

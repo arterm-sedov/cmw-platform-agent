@@ -942,7 +942,105 @@ def test_structured_output_does_not_repair_empty_string_for_integer() -> None:
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert json.loads(response.json()["choices"][0]["message"]["content"]) == {
+        "count": 0
+    }
+
+
+def test_structured_output_prunes_additional_properties_in_nested_objects() -> None:
+    demo = _Demo()
+    app = _App()
+    register_agent_completions_route(demo, app)
+    _FormatterBoundLLM.next_args = {
+        "items": [{"name": "n1", "description": "drop-me"}]
+    }
+
+    response = TestClient(demo.app).post(
+        AGENT_COMPLETIONS_PATH,
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "format output"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "prune_case",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {"name": {"type": "string"}},
+                                    "required": ["name"],
+                                    "additionalProperties": False,
+                                },
+                            }
+                        },
+                        "required": ["items"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert json.loads(response.json()["choices"][0]["message"]["content"]) == {
+        "items": [{"name": "n1"}]
+    }
+
+
+def test_structured_output_drops_optional_invalid_non_null_field_in_nested_object() -> None:
+    demo = _Demo()
+    app = _App()
+    register_agent_completions_route(demo, app)
+    _FormatterBoundLLM.next_args = {
+        "items": [{"name": "ok", "number_array": None}]
+    }
+
+    response = TestClient(demo.app).post(
+        AGENT_COMPLETIONS_PATH,
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "format output"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "drop_optional_invalid",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "number_array": {"type": "number"},
+                                    },
+                                    "required": ["name"],
+                                    "additionalProperties": False,
+                                },
+                            }
+                        },
+                        "required": ["items"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert json.loads(response.json()["choices"][0]["message"]["content"]) == {
+        "items": [{"name": "ok"}]
+    }
 
 
 def test_registered_agent_completions_route_rejects_invalid_response_format_json() -> (
