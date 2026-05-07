@@ -157,6 +157,7 @@ class LocalizeSchema(BaseModel):
     fix_expressions: bool = Field(default=False, description="Fix _calc aliases in expressions")
     apply_display_names: bool = Field(default=False, description="Apply displayNameRenamed to CTF JSON files")
     apply_expressions: bool = Field(default=False, description="Apply expressionRenamed to CTF JSON files")
+    update_paths: bool = Field(default=False, description="Regenerate jsonPathRenamed and expressionRenamed from aliasRenamed")
     dry_run: bool = Field(
         default=True,
         description="If True, skip the scripted extract→finalize pipeline (steps 1–6). Set False to run it.",
@@ -182,6 +183,7 @@ def localize_aliases(
     fix_expressions: bool = False,
     apply_display_names: bool = False,
     apply_expressions: bool = False,
+    update_paths: bool = False,
     dry_run: bool = True,
     dangerous_suffix: str = "_calc",
     safe_suffix: str = "_sv",
@@ -210,6 +212,7 @@ def localize_aliases(
     11. --fix-expressions: Fix _calc aliases in expressions
     12. --apply-display-names: Apply displayNameRenamed to CTF JSON files (post-Restart+Export)
     13. --apply-expressions: Apply expressionRenamed to CTF JSON files (post-Restart+Export)
+    14. --update-paths: Regenerate jsonPathRenamed and expressionRenamed from aliasRenamed
     """
     from datetime import datetime
 
@@ -616,6 +619,63 @@ def localize_aliases(
         results["phase"] = "complete"
         return results
 
+    # ========================================================================
+    # STEP 14: UPDATE PATHS (regenerate jsonPathRenamed + expressionRenamed)
+    # ========================================================================
+    if update_paths:
+        results["phase"] = "update_paths"
+
+        domain = get_domain_from_config()
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+
+        if not tr_file.exists():
+            results["success"] = False
+            results["errors"].append("Translation file not found.")
+            return results
+
+        with open(tr_file, encoding="utf-8") as f:
+            tr_data = json.load(f)
+
+        updated_count = 0
+        expression_updated_count = 0
+
+        for obj in tr_data:
+            alias_orig = obj.get("aliasOriginal", "")
+            alias_renamed = obj.get("aliasRenamed", "")
+            if not alias_orig or not alias_renamed:
+                continue
+
+            json_paths_orig = obj.get("jsonPathOriginal", [])
+            if not json_paths_orig:
+                continue
+
+            obj["jsonPathRenamed"] = [
+                calculate_new_json_path(p, alias_orig, alias_renamed)
+                for p in json_paths_orig
+            ]
+            updated_count += 1
+
+            for expr in obj.get("expressions", []):
+                expr_orig_path = expr.get("jsonPathOriginal", "")
+                if expr_orig_path:
+                    expr["jsonPathRenamed"] = calculate_new_json_path(
+                        expr_orig_path, alias_orig, alias_renamed
+                    )
+
+                orig_expr = expr.get("expressionOriginal", "")
+                if orig_expr and alias_orig != alias_renamed:
+                    expr["expressionRenamed"] = orig_expr.replace(alias_orig, alias_renamed)
+                    expression_updated_count += 1
+
+        with open(tr_file, "w", encoding="utf-8") as f:
+            json.dump(tr_data, f, indent=2, ensure_ascii=False)
+
+        results["actions"].append(f"Updated jsonPathRenamed in {updated_count} objects")
+        results["actions"].append(f"Updated expressionRenamed in {expression_updated_count} expressions")
+
+        results["phase"] = "complete"
+        return results
+
     results["phase"] = "complete"
     return results
 
@@ -634,6 +694,7 @@ if __name__ == "__main__":
     parser.add_argument("--fix-expressions", action="store_true", help="Fix _calc aliases in expressions")
     parser.add_argument("--apply-display-names", action="store_true", help="Apply displayNameRenamed to CTF JSON files")
     parser.add_argument("--apply-expressions", action="store_true", help="Apply expressionRenamed to CTF JSON files")
+    parser.add_argument("--update-paths", action="store_true", help="Regenerate jsonPathRenamed and expressionRenamed")
     parser.add_argument(
         "--no-dry-run",
         dest="dry_run",
@@ -656,6 +717,7 @@ if __name__ == "__main__":
         "fix_expressions": args.fix_expressions,
         "apply_display_names": args.apply_display_names,
         "apply_expressions": args.apply_expressions,
+        "update_paths": args.update_paths,
         "dry_run": args.dry_run,
         "dangerous_suffix": args.dangerous_suffix,
         "safe_suffix": args.safe_suffix,
