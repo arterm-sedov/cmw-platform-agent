@@ -1,6 +1,6 @@
 # tool_localize.py - Localization workflow for system names (aliases) and display names
 # Orchestrates helper scripts via direct imports
-# Output format: {domain}_{app}_aliases.json, {domain}_{app}_aliases_tr.json
+# Output format: {domain}_{app}.json, {domain}_{app}_tr.json
 from __future__ import annotations
 
 import sys
@@ -205,7 +205,7 @@ def localize_aliases(
     Set ``dry_run`` to False to run that pipeline.
 
     Follows schema.json specification:
-    - Output files: {domain}_{app}_aliases.json and {domain}_{app}_aliases_tr.json
+    - Output files: {domain}_{app}.json and {domain}_{app}_tr.json
     - Per-object structure with aliasOriginal, aliasRenamed, jsonPathOriginal, jsonPathRenamed, expressions
 
     Workflow (orchestrates helper scripts via import):
@@ -325,7 +325,7 @@ def localize_aliases(
     if create_tr:
         results["phase"] = "create_tr"
         domain = get_domain_from_config()
-        original_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases.json"
+        original_file = Path(output_dir) / f"{domain}_{application_system_name}.json"
 
         if not original_file.exists():
             original_file = Path(output_dir) / f"{application_system_name}_verified_complete.json"
@@ -335,7 +335,7 @@ def localize_aliases(
             results["errors"].append("Original aliases file not found. Run without --create-tr first.")
             return results
 
-        with open(original_file) as f:
+        with open(original_file, encoding="utf-8") as f:
             original_data = json.load(f)
 
         tr_data = []
@@ -355,7 +355,7 @@ def localize_aliases(
 
             tr_data.append(obj_copy)
 
-        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_tr.json"
         with open(tr_file, "w", encoding="utf-8") as f:
             json.dump(tr_data, f, indent=2, ensure_ascii=False)
 
@@ -380,14 +380,14 @@ def localize_aliases(
         results["phase"] = "translate"
 
         domain = get_domain_from_config()
-        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_tr.json"
 
         if not tr_file.exists():
             results["success"] = False
             results["errors"].append("Translation file not found. Run with --create-tr first.")
             return results
 
-        with open(tr_file) as f:
+        with open(tr_file, encoding="utf-8") as f:
             tr_data = json.load(f)
 
         resume_state = load_resume_state(output_dir, application_system_name)
@@ -483,14 +483,14 @@ def localize_aliases(
         results["phase"] = "fix_expressions"
 
         domain = get_domain_from_config()
-        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_tr.json"
 
         if not tr_file.exists():
             results["success"] = False
             results["errors"].append("Translation file not found.")
             return results
 
-        with open(tr_file) as f:
+        with open(tr_file, encoding="utf-8") as f:
             tr_data = json.load(f)
 
         fixed = fix_expressions_in_memory(tr_data, dangerous_suffix)
@@ -511,14 +511,14 @@ def localize_aliases(
         results["phase"] = "apply_display_names"
 
         domain = get_domain_from_config()
-        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_tr.json"
 
         if not tr_file.exists():
             results["success"] = False
             results["errors"].append("Translation file not found.")
             return results
 
-        with open(tr_file) as f:
+        with open(tr_file, encoding="utf-8") as f:
             tr_data = json.load(f)
 
         display_name_fields = ("Name", "DisplayName", "Text", "Description", "Title", "Header", "Tooltip", "Label", "Caption")
@@ -575,14 +575,14 @@ def localize_aliases(
         results["phase"] = "apply_expressions"
 
         domain = get_domain_from_config()
-        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_tr.json"
 
         if not tr_file.exists():
             results["success"] = False
             results["errors"].append("Translation file not found.")
             return results
 
-        with open(tr_file) as f:
+        with open(tr_file, encoding="utf-8") as f:
             tr_data = json.load(f)
 
         import re
@@ -636,7 +636,7 @@ def localize_aliases(
         results["phase"] = "update_paths"
 
         domain = get_domain_from_config()
-        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_tr.json"
 
         if not tr_file.exists():
             results["success"] = False
