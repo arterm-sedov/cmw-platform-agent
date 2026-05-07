@@ -155,6 +155,8 @@ class LocalizeSchema(BaseModel):
     resume: bool = Field(default=False, description="Resume from last translated alias")
     apply_renames: bool = Field(default=False, description="Apply renames to platform")
     fix_expressions: bool = Field(default=False, description="Fix _calc aliases in expressions")
+    apply_display_names: bool = Field(default=False, description="Apply displayNameRenamed to CTF JSON files")
+    apply_expressions: bool = Field(default=False, description="Apply expressionRenamed to CTF JSON files")
     dry_run: bool = Field(
         default=True,
         description="If True, skip the scripted extract→finalize pipeline (steps 1–6). Set False to run it.",
@@ -173,6 +175,8 @@ def localize_aliases(
     resume: bool = False,
     apply_renames: bool = False,
     fix_expressions: bool = False,
+    apply_display_names: bool = False,
+    apply_expressions: bool = False,
     dry_run: bool = True,
     dangerous_suffix: str = "_calc",
     safe_suffix: str = "_sv",
@@ -199,6 +203,8 @@ def localize_aliases(
     9. --resume: Continue from last translated alias
     10. --apply-renames: Rename on platform (apply_renames.py)
     11. --fix-expressions: Fix _calc aliases in expressions
+    12. --apply-display-names: Apply displayNameRenamed to CTF JSON files (post-Restart+Export)
+    13. --apply-expressions: Apply expressionRenamed to CTF JSON files (post-Restart+Export)
     """
     from datetime import datetime
 
@@ -480,6 +486,131 @@ def localize_aliases(
         results["phase"] = "complete"
         return results
 
+    # ========================================================================
+    # STEP 12: APPLY DISPLAY NAMES TO CTF (post-Restart + Export)
+    # ========================================================================
+    if apply_display_names:
+        results["phase"] = "apply_display_names"
+
+        domain = get_domain_from_config()
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+
+        if not tr_file.exists():
+            results["success"] = False
+            results["errors"].append("Translation file not found.")
+            return results
+
+        with open(tr_file) as f:
+            tr_data = json.load(f)
+
+        display_name_fields = ("Name", "DisplayName", "Text", "Description", "Title", "Header", "Tooltip", "Label", "Caption")
+        updated_files = set()
+        updated_count = 0
+
+        for obj in tr_data:
+            display_name_new = obj.get("displayNameRenamed", "")
+            if not display_name_new:
+                continue
+
+            json_paths = obj.get("jsonPathOriginal", [])
+            if not json_paths:
+                continue
+
+            for json_path in json_paths:
+                ctf_path = Path(json_folder) / json_path
+                if not ctf_path.exists():
+                    continue
+
+                content = ctf_path.read_text(encoding="utf-8")
+                original_content = content
+
+                for field in display_name_fields:
+                    import re
+
+                    pattern = rf'"({field})"\s*:\s*"([^"]*)"'
+                    matches = re.findall(pattern, content)
+                    for field_name, field_value in matches:
+                        if field_value.strip():
+                            content = content.replace(
+                                f'"{field_name}": "{field_value}"',
+                                f'"{field_name}": "{display_name_new}"',
+                                1,
+                            )
+
+                if content != original_content:
+                    ctf_path.write_text(content, encoding="utf-8")
+                    updated_files.add(str(ctf_path))
+                    updated_count += 1
+
+        results["actions"].append(f"Updated display names in {updated_count} CTF files")
+
+        if updated_files:
+            results["actions"].append(f"Files: {', '.join(sorted(updated_files)[:5])}...")
+
+        results["phase"] = "complete"
+        return results
+
+    # ========================================================================
+    # STEP 13: APPLY EXPRESSIONS TO CTF (post-Restart + Export)
+    # ========================================================================
+    if apply_expressions:
+        results["phase"] = "apply_expressions"
+
+        domain = get_domain_from_config()
+        tr_file = Path(output_dir) / f"{domain}_{application_system_name}_aliases_tr.json"
+
+        if not tr_file.exists():
+            results["success"] = False
+            results["errors"].append("Translation file not found.")
+            return results
+
+        with open(tr_file) as f:
+            tr_data = json.load(f)
+
+        import re
+
+        updated_files = set()
+        updated_count = 0
+
+        for obj in tr_data:
+            alias_orig = obj.get("aliasOriginal", "")
+            alias_renamed = obj.get("aliasRenamed", "")
+            if not alias_orig or not alias_renamed:
+                continue
+
+            json_paths = obj.get("jsonPathOriginal", [])
+            if not json_paths:
+                continue
+
+            for expr_item in obj.get("expressions", []):
+                orig_expr = expr_item.get("expressionOriginal", "")
+                new_expr = expr_item.get("expressionRenamed", "")
+                if not orig_expr or not new_expr:
+                    continue
+
+                for json_path in json_paths:
+                    ctf_path = Path(json_folder) / json_path
+                    if not ctf_path.exists():
+                        continue
+
+                    content = ctf_path.read_text(encoding="utf-8")
+                    original_content = content
+
+                    content = content.replace(orig_expr, new_expr)
+
+                    if content != original_content:
+                        ctf_path.write_text(content, encoding="utf-8")
+                        updated_files.add(str(ctf_path))
+                        updated_count += 1
+
+        results["actions"].append(f"Updated expressions in {updated_count} CTF files")
+
+        if updated_files:
+            results["actions"].append(f"Files: {', '.join(sorted(updated_files)[:5])}...")
+
+        results["phase"] = "complete"
+        return results
+
     results["phase"] = "complete"
     return results
 
@@ -496,6 +627,8 @@ if __name__ == "__main__":
     parser.add_argument("--resume", action="store_true", help="Resume from last translated alias")
     parser.add_argument("--apply-renames", action="store_true", help="Apply renames to platform")
     parser.add_argument("--fix-expressions", action="store_true", help="Fix _calc aliases in expressions")
+    parser.add_argument("--apply-display-names", action="store_true", help="Apply displayNameRenamed to CTF JSON files")
+    parser.add_argument("--apply-expressions", action="store_true", help="Apply expressionRenamed to CTF JSON files")
     parser.add_argument(
         "--no-dry-run",
         dest="dry_run",
@@ -516,6 +649,8 @@ if __name__ == "__main__":
         "resume": args.resume,
         "apply_renames": args.apply_renames,
         "fix_expressions": args.fix_expressions,
+        "apply_display_names": args.apply_display_names,
+        "apply_expressions": args.apply_expressions,
         "dry_run": args.dry_run,
         "dangerous_suffix": args.dangerous_suffix,
         "safe_suffix": args.safe_suffix,
