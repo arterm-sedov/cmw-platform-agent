@@ -92,9 +92,13 @@ class LogsTab:
         queue_manager = None
         if hasattr(self, "_main_app") and self._main_app:
             queue_manager = getattr(self._main_app, "queue_manager", None)
-            logging.getLogger(__name__).debug(f"LogsTab: Queue manager found: {queue_manager is not None}")
+            logging.getLogger(__name__).debug(
+                f"LogsTab: Queue manager found: {queue_manager is not None}"
+            )
             if queue_manager:
-                logging.getLogger(__name__).debug(f"LogsTab: Queue manager has config: {hasattr(queue_manager, 'config')}")
+                logging.getLogger(__name__).debug(
+                    f"LogsTab: Queue manager has config: {hasattr(queue_manager, 'config')}"
+                )
 
         if queue_manager:
             # Apply concurrency settings to logs events
@@ -125,10 +129,13 @@ class LogsTab:
             self.components["refresh_logs_btn"].click(
                 fn=self.get_initialization_logs,
                 outputs=[self.components["logs_display"]],
+                api_visibility="private",
             )
 
             self.components["clear_logs_btn"].click(
-                fn=self.clear_logs, outputs=[self.components["logs_display"]]
+                fn=self.clear_logs,
+                outputs=[self.components["logs_display"]],
+                api_visibility="private",
             )
 
         logging.getLogger(__name__).debug(

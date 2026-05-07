@@ -48,11 +48,7 @@ except Exception:
 
 # Import configuration with fallback for direct execution
 try:
-    from agent_ng.agent_config import (
-        config,
-        get_language_settings,
-        get_port_settings,
-    )
+    from agent_ng.agent_config import config, get_language_settings, get_port_settings
 except ImportError:
     # Fallback for direct execution
     from pathlib import Path
@@ -214,7 +210,6 @@ class NextGenApp:
     """LangChain-native Gradio application with modular tab architecture and i18n support"""
 
     def __init__(self, language: str = "en"):
-
         # No global agent - only session-specific agents
         self.llm_manager = get_llm_manager()
         self.initialization_logs = []
@@ -761,17 +756,25 @@ class NextGenApp:
             # Helper to check if cancellation was requested (following reference repo pattern)
             def is_cancelled() -> bool:
                 try:
-                    cancel_state = self.session_manager.get_cancellation_state(session_id)
-                    return cancel_state is not None and cancel_state.get("cancelled", False)
+                    cancel_state = self.session_manager.get_cancellation_state(
+                        session_id
+                    )
+                    return cancel_state is not None and cancel_state.get(
+                        "cancelled", False
+                    )
                 except Exception:
                     return False
 
             try:
                 # Pass app's language for proper i18n (iteration messages should match UI language)
-                async for event in user_agent.stream_message(message, session_id, language=self.language):
+                async for event in user_agent.stream_message(
+                    message, session_id, language=self.language
+                ):
                     # Check for cancellation at each iteration (following reference repo pattern)
                     if is_cancelled():
-                        logging.getLogger(__name__).info("Streaming cancelled during execution - stopping")
+                        logging.getLogger(__name__).info(
+                            "Streaming cancelled during execution - stopping"
+                        )
                         break
 
                     # Safety check for None event
@@ -1615,7 +1618,9 @@ class NextGenApp:
                 nonlocal cumulative
                 try:
                     # Pass app's language for proper i18n
-                    async for event in user_agent.stream_message(question, session_id, language=self.language):
+                    async for event in user_agent.stream_message(
+                        question, session_id, language=self.language
+                    ):
                         if not event:
                             continue
                         et = event.get("type")
@@ -1679,10 +1684,11 @@ class NextGenApp:
                 inputs=[_in, _username, _password, _base_url, _session_id],
                 outputs=_out,
                 api_name="ask_stream",
+                api_visibility="public",
             )
 
             # Use gr.api() to register API endpoints without fake UI elements
-            gr.api(_api_ask, api_name="ask")
+            gr.api(_api_ask, api_name="ask", api_visibility="public")
             # gr.api(_api_ask_stream, api_name="ask_stream")
 
         # Configure concurrency and queuing AFTER registering named endpoints
@@ -1757,7 +1763,7 @@ def get_demo_with_language_detection():
     global demo, _DEMO_UI_LAYOUT_SIG
 
     sig = _ui_layout_env_signature()
-    if demo is not None and _DEMO_UI_LAYOUT_SIG != sig:
+    if demo is not None and sig != _DEMO_UI_LAYOUT_SIG:
         _logger.info(
             "Rebuilding demo: UI layout env changed (%r -> %r)",
             _DEMO_UI_LAYOUT_SIG,

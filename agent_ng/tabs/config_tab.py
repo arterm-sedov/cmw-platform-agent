@@ -134,7 +134,9 @@ class ConfigTab:
                 with gr.Row(equal_height=True):
                     with gr.Column(scale=1, min_width="50%"):
                         if platform_from_dotenv:
-                            gr.Markdown(self._get_translation("config_platform_dotenv_notice"))
+                            gr.Markdown(
+                                self._get_translation("config_platform_dotenv_notice")
+                            )
                         else:
                             gr.Markdown(self._get_translation("config_help"))
 
@@ -143,7 +145,6 @@ class ConfigTab:
                         min_width="50%",
                         visible=not platform_from_dotenv,
                     ):
-
                         self.components["platform_url"] = gr.Textbox(
                             label=self._get_translation("config_platform_url"),
                             placeholder="https://your-comindware-host",
@@ -320,6 +321,7 @@ class ConfigTab:
                 self.components["config_state"],
             ],
             outputs=save_outputs,
+            api_visibility="private",
         )
 
         # Load from browser state
@@ -335,6 +337,7 @@ class ConfigTab:
             fn=self._load_from_state,
             inputs=[self.components["config_state"]],
             outputs=load_outputs,
+            api_visibility="private",
         )
 
         # Clear browser storage and reset fields
@@ -351,6 +354,7 @@ class ConfigTab:
             fn=self._clear_browser_storage,
             inputs=[self.components["config_state"]],
             outputs=clear_outputs,
+            api_visibility="private",
         )
 
     @staticmethod

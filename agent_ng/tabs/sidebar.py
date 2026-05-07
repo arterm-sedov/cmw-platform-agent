@@ -254,6 +254,7 @@ class Sidebar(QuickActionsMixin):
                     fn=self._apply_llm_selection_update_stats_and_budget,
                     inputs=[self.components["provider_model_selector"]],
                     outputs=[stats_block, token_budget_comp],
+                    api_visibility="private",
                 )
                 logging.getLogger(__name__).debug(
                     "✅ Model switch: stats + token budget (session agent)"
@@ -263,6 +264,7 @@ class Sidebar(QuickActionsMixin):
                     fn=self._apply_llm_selection_update_stats_only,
                     inputs=[self.components["provider_model_selector"]],
                     outputs=[stats_block],
+                    api_visibility="private",
                 )
                 logging.getLogger(__name__).debug(
                     "✅ Model switch wired to stats from session agent"
@@ -273,6 +275,7 @@ class Sidebar(QuickActionsMixin):
                     fn=refresh_stats_handler,
                     outputs=[stats_detail],
                     queue=False,
+                    api_visibility="private",
                 )
                 logging.getLogger(__name__).debug(
                     "✅ Model switch wired to refresh full stats display"
@@ -283,6 +286,7 @@ class Sidebar(QuickActionsMixin):
                 fn=self._apply_compression_toggle,
                 inputs=[self.components["compression_enabled"]],
                 outputs=[],
+                api_visibility="private",
             )
 
         if (
@@ -293,11 +297,13 @@ class Sidebar(QuickActionsMixin):
                 fn=self._on_fallback_toggle,
                 inputs=[self.components["use_fallback_model"]],
                 outputs=[self.components["fallback_model_selector"]],
+                api_visibility="private",
             )
             self.components["fallback_model_selector"].change(
                 fn=self._apply_fallback_selection,
                 inputs=[self.components["fallback_model_selector"]],
                 outputs=[],
+                api_visibility="private",
             )
 
         logging.getLogger(__name__).debug("✅ Sidebar: LLM handlers wired")
@@ -838,6 +844,7 @@ class Sidebar(QuickActionsMixin):
                     fn=self._handle_quick_action_dropdown,
                     inputs=[self.components["quick_actions_dropdown"]],
                     outputs=[msg_component],  # Output to message input
+                    api_visibility="private",
                 )
                 logging.getLogger(__name__).debug(
                     "✅ Sidebar: Quick action dropdown connected to message input"
