@@ -166,7 +166,7 @@ class ChatTab(QuickActionsMixin):
             self.components["msg"] = gr.MultimodalTextbox(
                 label=self._get_translation("message_label"),
                 placeholder=self._get_translation("message_placeholder"),
-                lines=2,
+                lines=1,  # Enter submits (lines>1 flips to Shift+Enter)
                 scale=4,
                 max_lines=4,
                 elem_id="message-input",
