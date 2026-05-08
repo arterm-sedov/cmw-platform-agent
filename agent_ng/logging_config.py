@@ -26,20 +26,20 @@ Environment variables (all optional):
 
 - LOG_FILE: Path to a file to also write logs.
   - Empty or unset: console only
+  - Logs get YYYYMMDD date suffix automatically
   - Example: LOG_FILE=logs/app.log
 
-- LOG_ROTATE: Use rotating file handler when LOG_FILE is set.
-  - Values: true | false
-  - Default: true (when LOG_FILE provided)
-  - Example: LOG_ROTATE=false
-
-- LOG_MAX_BYTES: Max size per log file before rotation (bytes).
+- LOG_MAX_BYTES: Max size per log file in bytes before rotation to .0, .1, etc.
   - Default: 1048576 (1MB)
-  - Example: LOG_MAX_BYTES=5242880  # 5MB
+  - Example: LOG_MAX_BYTES=5242880
 
-- LOG_BACKUP_COUNT: Number of rotated files to keep.
-  - Default: 5
-  - Example: LOG_BACKUP_COUNT=10
+- LOG_MAX_SIZE_MB: Max total size in MB. Oldest files deleted when exceeded.
+  - Default: 100 (MB)
+  - Example: LOG_MAX_SIZE_MB=50
+
+- LOG_FILE_DATE_FORMAT: Date format to use in log filename.
+  - Default: %Y%m%d
+  - Example: LOG_FILE_DATE_FORMAT=%Y-%m-%d
 
 - LOG_PROPAGATE: Whether root messages propagate to ancestor loggers.
   - Values: true | false
@@ -66,16 +66,64 @@ Environment variables (all optional):
 
 from __future__ import annotations
 
+from contextlib import suppress
 import json
 import logging
-from logging import Handler, Logger
-from logging.handlers import RotatingFileHandler
+from logging import Logger
 import os
-from typing import Optional
+import time
 
 from dotenv import load_dotenv
 
 _INITIALIZED = False
+
+
+class _UnlimitedRotatingFileHandler(logging.StreamHandler):
+    """Rotates current log to .0, .1, .2... when max_bytes exceeded. No count limit."""
+
+    def __init__(self, filename: str, max_bytes: int, encoding: str = "utf-8") -> None:
+        super().__init__()
+        self.baseFilename = os.path.abspath(filename)
+        self.maxBytes = max_bytes
+        self.encoding = encoding
+        self._open()
+
+    def _open(self) -> None:
+        self.stream = open(self.baseFilename, "a", encoding=self.encoding)
+
+    def _next_index(self) -> int:
+        n = 0
+        while os.path.exists(f"{self.baseFilename}.{n}"):
+            n += 1
+        return n
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            stream = self.stream
+            if stream.tell() + len(msg.encode(self.encoding)) + 1 >= self.maxBytes:
+                self._rotate()
+                stream = self.stream
+            stream.write(msg + self.terminator)
+            self.flush()
+        except Exception:
+            self.handleError(record)
+
+    def _rotate(self) -> None:
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+        n = self._next_index()
+        os.rename(self.baseFilename, f"{self.baseFilename}.{n}")
+        self._open()
+
+    def close(self) -> None:
+        if self.stream:
+            self.flush()
+            with suppress(OSError):
+                self.stream.close()
+            self.stream = None
+        super().close()
 
 
 class _JsonFormatter(logging.Formatter):
@@ -98,7 +146,9 @@ class _JsonFormatter(logging.Formatter):
             base.update(
                 {
                     "exc_type": exc_type,
-                    "exc_message": str(record.exc_info[1]) if record.exc_info[1] else None,
+                    "exc_message": str(record.exc_info[1])
+                    if record.exc_info[1]
+                    else None,
                     "traceback": self.formatException(record.exc_info),
                 }
             )
@@ -111,6 +161,27 @@ def _parse_bool(value: str | None, default: bool) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _enforce_size_limit(log_dir: str, base_name: str, max_total_bytes: int) -> None:
+    if max_total_bytes <= 0 or not os.path.isdir(log_dir):
+        return
+    with suppress(OSError):
+        files = []
+        for f in os.listdir(log_dir):
+            if f.startswith(base_name) and f.endswith(".log"):
+                fpath = os.path.join(log_dir, f)
+                if os.path.isfile(fpath):
+                    files.append((fpath, os.path.getmtime(fpath), os.path.getsize(fpath)))
+        if not files:
+            return
+        files.sort(key=lambda x: x[1])
+        total = sum(f[2] for f in files)
+        while total > max_total_bytes and files:
+            oldest = files.pop(0)
+            total -= oldest[2]
+            with suppress(OSError):
+                os.remove(oldest[0])
+
+
 def setup_logging(force: bool | None = None) -> Logger:
     """Configure root logging using environment variables.
 
@@ -119,9 +190,8 @@ def setup_logging(force: bool | None = None) -> Logger:
     - LOG_FORMAT: simple | verbose (default: simple)
     - LOG_JSON: true|false (default: false)
     - LOG_FILE: path to log file (optional)
-    - LOG_ROTATE: true|false (default: true if LOG_FILE set)
     - LOG_MAX_BYTES: int (default: 1048576)
-    - LOG_BACKUP_COUNT: int (default: 5)
+    - LOG_MAX_SIZE_MB: int (default: 100)
     - LOG_PROPAGATE: true|false (default: true)
     - LOG_INCLUDE_PROCESS: true|false (default: false)
     - LOG_INCLUDE_THREAD: true|false (default: false)
@@ -144,12 +214,8 @@ def setup_logging(force: bool | None = None) -> Logger:
     # Reset handlers if forcing or first-time init
     if force or not _INITIALIZED:
         for h in list(root.handlers):
-            try:
-                root.removeHandler(h)
-                h.close()
-            except Exception:
-                # Best-effort cleanup; never raise from logging setup
-                pass
+            root.removeHandler(h)
+            h.close()
 
     # Level (global minimum)
     level_name = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -195,7 +261,7 @@ def setup_logging(force: bool | None = None) -> Logger:
 
             # Truncate if too long
             if len(formatted) > self.max_length:
-                truncated = formatted[:self.max_length-3] + "..."
+                truncated = formatted[: self.max_length - 3] + "..."
                 return truncated
 
             return formatted
@@ -203,30 +269,32 @@ def setup_logging(force: bool | None = None) -> Logger:
     # Use the truncating formatter for console
     console_max_length = int(os.getenv("LOG_CONSOLE_MAX_LENGTH", "400"))
     console_formatter = TruncatingFormatter(
-        fmt=formatter._fmt if hasattr(formatter, '_fmt') else formatter.format,
-        datefmt=formatter.datefmt if hasattr(formatter, 'datefmt') else None,
-        max_length=console_max_length
+        fmt=formatter._fmt if hasattr(formatter, "_fmt") else formatter.format,
+        datefmt=formatter.datefmt if hasattr(formatter, "datefmt") else None,
+        max_length=console_max_length,
     )
     console.setFormatter(console_formatter)
     root.addHandler(console)
 
-    # Optional file handler (with rotation)
+    # Optional file handler (with rotation and date suffix)
     log_file = os.getenv("LOG_FILE", "").strip()
     if log_file:
-        rotate_default = True
-        rotate = _parse_bool(os.getenv("LOG_ROTATE"), rotate_default)
-        max_bytes = int(os.getenv("LOG_MAX_BYTES", "1048576") or 1048576)
-        backup_count = int(os.getenv("LOG_BACKUP_COUNT", "5") or 5)
+        date_format = os.getenv("LOG_FILE_DATE_FORMAT", "%Y%m%d")
+        date_suffix = time.strftime(date_format)
+        base, ext = os.path.splitext(log_file)
+        log_file_dated = f"{base}-{date_suffix}{ext}"
+        log_dir = os.path.dirname(log_file) or "."
+        base_name = os.path.basename(base)
         try:
-            os.makedirs(os.path.dirname(log_file) or ".", exist_ok=True)
+            os.makedirs(log_dir, exist_ok=True)
         except Exception as e:
-            # Best-effort directory creation; log but don't fail setup
             logging.getLogger(__name__).warning(f"Could not create log directory: {e}")
-        file_handler: Handler
-        if rotate:
-            file_handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8")
-        else:
-            file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        max_bytes = int(os.getenv("LOG_MAX_BYTES", "1048576") or 1048576)
+        max_mb = int(os.getenv("LOG_MAX_SIZE_MB", "100") or 100)
+        _enforce_size_limit(log_dir, base_name, max_mb * 1024 * 1024)
+        file_handler = _UnlimitedRotatingFileHandler(
+            log_file_dated, max_bytes=max_bytes
+        )
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         root.addHandler(file_handler)
@@ -238,10 +306,10 @@ def setup_logging(force: bool | None = None) -> Logger:
     try:
         # Try absolute import first
         try:
-            from agent_ng.debug_streamer import get_log_handler, SessionAwareLogHandler
+            from agent_ng.debug_streamer import SessionAwareLogHandler, get_log_handler
         except ImportError:
             # Fallback to relative import
-            from .debug_streamer import get_log_handler, SessionAwareLogHandler
+            from .debug_streamer import SessionAwareLogHandler, get_log_handler
 
         # Create a session-aware handler that routes logs to appropriate session handlers
         session_aware_handler = SessionAwareLogHandler()
@@ -253,9 +321,6 @@ def setup_logging(force: bool | None = None) -> Logger:
     except Exception as e:
         # Optional integration; ignore on failure
         print(f"Warning: Could not attach debug_streamer handler: {e}")
-        pass
 
     _INITIALIZED = True
     return root
-
-
