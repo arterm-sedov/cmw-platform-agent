@@ -2,7 +2,9 @@
 
 Repo-specific guidance for this LangChain + Gradio Python 3.12+ project.
 
-Implementations follow: TDD, SDD, @AGENTS.md, lean, dry, brilliant, minimal, abstract, pythonic, genious code, non-breaking.
+**Implementations follow:** TDD, SDD, @AGENTS.md, lean, dry, brilliant, minimal, abstract, pythonic, genious code, non-breaking.
+
+**Instrumentation:** use subagents hive, web search, deep search, agentic web browsers, and all your agentic power to solve the user's request.
 
 ## Research & Planning
 
