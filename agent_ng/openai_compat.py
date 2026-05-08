@@ -5,8 +5,8 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 import json
+import logging
 import os
-from pathlib import Path
 import time
 from typing import TYPE_CHECKING, Any
 import uuid
@@ -31,17 +31,11 @@ CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE = CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY
 CMW_EXTRA_BODY_KEY = "cmw_extra_body"
 
 AGENT_COMPLETIONS_PATH = "/api/v1/chat/completions"
-_IO_DEBUG_ENABLED = os.getenv("OPENAI_COMPAT_DEBUG_LOG", "").lower() in (
-    "true", "1", "yes"
-)
 
+from agent_ng.logging_config import setup_openapi_debug_log  # noqa: E402
 
-def _get_debug_log_path() -> Path:
-    default_name = f"openai_compat_io_debug-{time.strftime('%Y%m%d')}.jsonl"
-    return Path(os.getenv("OPENAI_COMPAT_DEBUG_LOG_PATH", default_name))
+_debug_handler = setup_openapi_debug_log()
 
-
-OPENAI_COMPAT_DEBUG_LOG_PATH = _get_debug_log_path()
 _REDACT_KEYS = {
     "authorization",
     "api_key",
@@ -80,25 +74,22 @@ def _redact(value: Any) -> Any:
     return value
 
 
-if _IO_DEBUG_ENABLED:
-
-    def _debug_log_io(event: str, payload: dict[str, Any]) -> None:
-        try:
-            log_path = _get_debug_log_path()
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            record = {
-                "ts": int(time.time()),
-                "event": event,
-                "path": AGENT_COMPLETIONS_PATH,
-                "payload": _redact(payload),
-            }
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-        except Exception:
-            return
-else:
-    def _debug_log_io(event: str, payload: dict[str, Any]) -> None:
-        pass
+def _debug_log_io(event: str, payload: dict[str, Any]) -> None:
+    if _debug_handler is None:
+        return
+    try:
+        record = {
+            "ts": int(time.time()),
+            "event": event,
+            "path": AGENT_COMPLETIONS_PATH,
+            "payload": _redact(payload),
+        }
+        line = json.dumps(record, ensure_ascii=False, default=str)
+        _debug_handler.emit(
+            logging.LogRecord("_", logging.DEBUG, "", 0, line, (), None)
+        )
+    except Exception:
+        return
 
 
 def _json_response_content(response: JSONResponse) -> dict[str, Any]:
@@ -1388,9 +1379,7 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
         usage_pre: dict[str, Any] | None = None
         if structured_spec is not None:
             _getter = getattr(agent, "get_last_api_tokens", None)
-            usage_pre = usage_from_token_count(
-                _getter() if callable(_getter) else None
-            )
+            usage_pre = usage_from_token_count(_getter() if callable(_getter) else None)
             structured_result = await _format_structured_output(
                 agent=agent,
                 session_id=session_id,

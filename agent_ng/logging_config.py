@@ -37,10 +37,6 @@ Environment variables (all optional):
   - Default: 100 (MB)
   - Example: LOG_MAX_SIZE_MB=50
 
-- LOG_FILE_DATE_FORMAT: Date format to use in log filename.
-  - Default: %Y%m%d
-  - Example: LOG_FILE_DATE_FORMAT=%Y-%m-%d
-
 - LOG_PROPAGATE: Whether root messages propagate to ancestor loggers.
   - Values: true | false
   - Default: true
@@ -120,10 +116,12 @@ def _enforce_size_limit(log_dir: str, base_name: str, max_total_bytes: int) -> N
     with suppress(OSError):
         files = []
         for f in os.listdir(log_dir):
-            if f.startswith(base_name) and f.endswith(".log"):
+            if f.startswith(base_name):
                 fpath = os.path.join(log_dir, f)
                 if os.path.isfile(fpath):
-                    files.append((fpath, os.path.getmtime(fpath), os.path.getsize(fpath)))
+                    files.append(
+                        (fpath, os.path.getmtime(fpath), os.path.getsize(fpath))
+                    )
         if not files:
             return
         files.sort(key=lambda x: x[1])
@@ -133,6 +131,36 @@ def _enforce_size_limit(log_dir: str, base_name: str, max_total_bytes: int) -> N
             total -= oldest[2]
             with suppress(OSError):
                 os.remove(oldest[0])
+
+
+def _date_suffix(log_file: str) -> str:
+    base, ext = os.path.splitext(log_file)
+    return f"{base}-{time.strftime('%Y%m%d')}{ext}"
+
+
+def _make_file_handler(log_file: str) -> RotatingFileHandler:
+    dated = _date_suffix(log_file)
+    log_dir = os.path.dirname(log_file) or "."
+    base_name = os.path.basename(os.path.splitext(log_file)[0])
+    os.makedirs(log_dir, exist_ok=True)
+    max_bytes = int(os.getenv("LOG_MAX_BYTES", "1048576") or 1048576)
+    max_mb = int(os.getenv("LOG_MAX_SIZE_MB", "100") or 100)
+    _enforce_size_limit(log_dir, base_name, max_mb * 1024 * 1024)
+    backup_count = (max_mb * 1024 * 1024) // max_bytes
+    return RotatingFileHandler(
+        dated, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
+    )
+
+
+def setup_openapi_debug_log() -> RotatingFileHandler | None:
+    if os.getenv("OPENAI_COMPAT_DEBUG_LOG", "").lower() not in ("true", "1", "yes"):
+        return None
+    path = os.getenv(
+        "OPENAI_COMPAT_DEBUG_LOG_PATH", "logs/openai_compat_io_debug.jsonl"
+    )
+    handler = _make_file_handler(path)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    return handler
 
 
 def setup_logging(force: bool | None = None) -> Logger:
@@ -229,29 +257,10 @@ def setup_logging(force: bool | None = None) -> Logger:
     console.setFormatter(console_formatter)
     root.addHandler(console)
 
-    # Optional file handler (with rotation and date suffix)
+    # Optional file handler (rotation, date suffix, size cap)
     log_file = os.getenv("LOG_FILE", "").strip()
     if log_file:
-        date_format = os.getenv("LOG_FILE_DATE_FORMAT", "%Y%m%d")
-        date_suffix = time.strftime(date_format)
-        base, ext = os.path.splitext(log_file)
-        log_file_dated = f"{base}-{date_suffix}{ext}"
-        log_dir = os.path.dirname(log_file) or "."
-        base_name = os.path.basename(base)
-        try:
-            os.makedirs(log_dir, exist_ok=True)
-        except Exception as e:
-            logging.getLogger(__name__).warning(f"Could not create log directory: {e}")
-        max_bytes = int(os.getenv("LOG_MAX_BYTES", "1048576") or 1048576)
-        max_mb = int(os.getenv("LOG_MAX_SIZE_MB", "100") or 100)
-        _enforce_size_limit(log_dir, base_name, max_mb * 1024 * 1024)
-        backup_count = (max_mb * 1024 * 1024) // max_bytes
-        file_handler = RotatingFileHandler(
-            log_file_dated,
-            maxBytes=max_bytes,
-            backupCount=backup_count,
-            encoding="utf-8",
-        )
+        file_handler = _make_file_handler(log_file)
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         root.addHandler(file_handler)
