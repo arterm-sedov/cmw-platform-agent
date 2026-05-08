@@ -1977,7 +1977,7 @@ def main():
         path="/",
         server_name="0.0.0.0",
         server_port=port,
-        footer_links=["api"],
+        footer_links=["gradio", "settings"],
         theme=gr.themes.Soft(),
         css_paths=[_theme_css],
         favicon_path=str(_favicon),
