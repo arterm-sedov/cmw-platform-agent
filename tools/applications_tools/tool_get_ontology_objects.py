@@ -155,13 +155,13 @@ def get_ontology_objects(
     max_count: int = 10000,
 ) -> dict[str, Any]:
     """
-    Get Platform IDs (e.g., oa.193, form.2024, lst.42, event.15199) for entities
+    Get entity IDs (e.g., oa.193, form.2024, lst.42, event.15199) for entities
     within an application via the system-core ontology API.
 
-    Primary use: when you need internal Platform IDs for entities that WebAPI
+    Primary use: when you need internal entity IDs for entities that WebAPI
     list tools (list_applications, list_templates, list_attributes, list_forms,
     list_datasets, list_toolbars, list_buttons) do NOT return — those endpoints
-    only provide system names. Use this tool to get the actual Platform IDs.
+    only provide system names. Use this tool to get the actual entity IDs.
 
     Uses POST /api/public/system/Base/OntologyService/GetWithMultipleValues endpoint.
     Results are filtered by type-specific prefixes and deduplicated.

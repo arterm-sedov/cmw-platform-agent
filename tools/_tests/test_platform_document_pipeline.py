@@ -1,4 +1,4 @@
-"""Tests: platform id extraction, record fields, document download, record coercion, local text."""
+"""Tests: entity ID extraction, record fields, document download, record coercion, local text."""
 
 from __future__ import annotations
 

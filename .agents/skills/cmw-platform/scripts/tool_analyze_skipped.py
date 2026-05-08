@@ -488,7 +488,7 @@ def main():
     print(f"Verified: {len(verified)}")
     print(f"Skipped (not in platform): {len(skipped)}")
     print(f"Objects with multiple IDs: {multi_id}")
-    print(f"Total platform IDs: {total_ids}")
+    print(f"Total entity IDs: {total_ids}")
 
     print(f"\n=== Verified by Type ===")
     for t, c in sorted(verified_types.items()):

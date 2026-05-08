@@ -33,7 +33,7 @@ _FETCH_RECORD_IMAGE_FILE_DESCRIPTION = (
     "Load an **image** that is **already stored** on an **image** attribute of a **record** so it "
     "can be read or sent to a vision or file tool like a user attachment.\n\n"
     + CHAT_FILE_REFERENCE_RESULT_HINT
-    + "\n\nThe result also includes **``image_id``** (platform id of the image).\n\n"
+    + "\n\nThe result also includes **``image_id``** (entity ID of the image).\n\n"
     "If the **attribute** is **multivalue** (more than one file can be stored), set "
     "**``multivalue_index``** to pick one image (0-based; list order, often newest first in the "
     "app)."

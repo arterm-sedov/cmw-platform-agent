@@ -84,7 +84,7 @@ class TestResponseMappingsClean:
 
 
 class TestProcessDataClean:
-    """process_data must not unconditionally rename id→Platform ID."""
+    """process_data must not unconditionally rename id→entity ID."""
 
     def test_process_data_passes_through_non_mapped_keys(self):
         from tools.tool_utils import process_data
@@ -95,4 +95,4 @@ class TestProcessDataClean:
             "isDefault": True,
         }
         result = process_data(data, "list_forms")
-        assert "Platform ID" not in result
+        assert "entity ID" not in result
