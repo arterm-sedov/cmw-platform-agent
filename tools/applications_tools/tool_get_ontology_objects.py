@@ -109,18 +109,18 @@ def get_type_by_prefix(item_id: str, type_prefixes: dict[str, list[str]]) -> str
 def get_axioms_by_predicate(object_id: str, predicate: str) -> list[str]:
     """
     Call /Base/OntologyService/GetAxiomsByPredicate to resolve property values.
-    
+
     Used for Role objects where cmw.role.aliasProperty contains an attribute ID
     that needs to be resolved to get the actual alias value.
-    
+
     Example:
         Request: {"id": "role.2", "predicate": "op.2"}
         Response: ["Администратор"]
-    
+
     Args:
         object_id: Object ID (e.g., "role.2")
         predicate: Predicate/attribute ID (e.g., "op.2")
-    
+
     Returns:
         List of values, empty list on error
     """
@@ -401,14 +401,14 @@ def get_references(
 ) -> dict:
     """
     Get references for an object by predicate.
-    
+
     Used to verify object ownership (e.g., verify Cart belongs to a Solution).
-    
+
     Args:
         object_id: Object ID (e.g., "cart.1")
         predicate: Predicate to query (e.g., "cmw.solution.cart")
         application_system_name: Optional application system name
-    
+
     Returns:
         Dict with references, e.g., {"cmw.solution.cart": ["sln.1"]}
     """
@@ -431,7 +431,7 @@ def get_references(
         response = session.post(url, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
-        
+
         return {
             "success": True,
             "data": data,

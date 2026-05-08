@@ -133,7 +133,7 @@ def fix_expressions_in_memory(objects: list, dangerous_suffix: str = "_calc") ->
 
 def convert_to_schema_format(entries: list, domain: str, app: str, output_dir: str) -> str:
     """Save entries to schema.json format file.
-    
+
     Since tool_finalize.py now outputs in schema format directly,
     this function just saves the entries to the expected filename.
     """

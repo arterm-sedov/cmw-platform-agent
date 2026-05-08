@@ -144,6 +144,11 @@ try:
     from agent_ng.langchain_agent import ChatMessage
     from agent_ng.langchain_agent import CmwAgent as NextGenAgent
     from agent_ng.llm_manager import get_llm_manager
+    from agent_ng.openai_compat import (
+        handle_agent_completions_payload,
+        register_agent_completions_on_fastapi,
+        register_agent_completions_route,
+    )
 
     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
     from agent_ng.tabs import (
@@ -179,6 +184,11 @@ except ImportError as e1:
         from .langchain_agent import ChatMessage
         from .langchain_agent import CmwAgent as NextGenAgent
         from .llm_manager import get_llm_manager
+        from .openai_compat import (
+            handle_agent_completions_payload,
+            register_agent_completions_on_fastapi,
+            register_agent_completions_route,
+        )
 
         # from .streaming_chat import get_chat_interface  # Module moved to .unused
         from .tabs import (
@@ -1670,6 +1680,17 @@ class NextGenApp:
 
             # Streaming endpoint: generator yields partials; API GET will stream
 
+        def _api_agent_completions(payload: dict[str, Any]) -> dict[str, Any]:
+            """Gradio API wrapper for agent completions payload."""
+            loop = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(loop)
+                return loop.run_until_complete(
+                    handle_agent_completions_payload(self, payload)
+                )
+            finally:
+                loop.close()
+
         # Register API endpoints using gr.api() - cleaner approach for HF Spaces
         with demo:
             _in = gr.Textbox(label="question", visible=False)
@@ -1690,6 +1711,7 @@ class NextGenApp:
             # Use gr.api() to register API endpoints without fake UI elements
             gr.api(_api_ask, api_name="ask", api_visibility="public")
             # gr.api(_api_ask_stream, api_name="ask_stream")
+            gr.api(_api_agent_completions, api_name="agent_completions")
 
         # Configure concurrency and queuing AFTER registering named endpoints
         # Always initialize queue (even with minimal settings) to prevent AttributeError.
@@ -1704,8 +1726,13 @@ class NextGenApp:
             demo.queue(default_concurrency_limit=1, status_update_rate="auto")
             _logger.info("Queue initialized with minimal default settings")
 
+        # OpenAI-shaped completions on Gradio's FastAPI app (see also ``main()`` mount path).
+        register_agent_completions_route(demo, self)
+
         # Consolidate all components from UI Manager (single source of truth)
         self.components = self.ui_manager.get_components()
+        # Keep app reference for external FastAPI endpoint registration.
+        demo.cmw_main_app = self
 
         return demo
 
@@ -1956,37 +1983,49 @@ def main():
     demo = initialize_demo()
 
     _logger.info(
-        "Launching Gradio interface on port %s with language switching...", port
+        "Launching FastAPI + mounted Gradio on port %s with language switching...",
+        port,
     )
-    demo.launch(
-        debug=True,
-        share=False,
+    from fastapi import FastAPI
+    from gradio import mount_gradio_app
+    import uvicorn
+
+    fastapi_app = FastAPI(title="CMW Platform Agent API")
+    main_app = getattr(demo, "cmw_main_app", None)
+    if main_app is not None:
+        register_agent_completions_on_fastapi(fastapi_app, main_app)
+    else:
+        _logger.warning(
+            "Main app reference unavailable; agent completions endpoint not registered"
+        )
+
+    _repo_root = Path(__file__).resolve().parent.parent
+    _theme_css = _repo_root / "resources" / "css" / "cmw_copilot_theme.css"
+    _favicon = _repo_root / "resources" / "img" / "comindware_logo.svg"
+
+    app = mount_gradio_app(
+        fastapi_app,
+        demo,
+        path="/",
         server_name="0.0.0.0",
         server_port=port,
-        show_error=True,
-        # Gradio 6: show_api removed — use footer_links (same idea as cmw-rag mount_gradio_app).
         footer_links=["api"],
         theme=gr.themes.Soft(),
-        css_paths=[
-            Path(__file__).resolve().parent.parent
-            / "resources"
-            / "css"
-            / "cmw_copilot_theme.css",
-        ],
-        favicon_path=(
-            Path(__file__).resolve().parent.parent
-            / "resources"
-            / "img"
-            / "comindware_logo.svg"
-        ),
-        # Allow Gradio's /file= endpoint to serve session-registered files
-        # (generated images, extracted assets, etc.) from the cache dir.
-        # Required when GRADIO_TEMP_DIR is set to a non-default path.
-        # Include `resources/` so theme CSS can load logo/fonts via `/gradio_api/file=...`.
+        css_paths=[_theme_css],
+        favicon_path=str(_favicon),
+        show_error=True,
+        # Same intent as ``demo.launch(allowed_paths=...)``: cache + theme/static assets.
         allowed_paths=[
             str(Path(_GRADIO_CACHE_DIR).resolve()),
             str(_GRADIO_RESOURCES_DIR.resolve()),
         ],
+    )
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        log_level="info",
     )
 
 
