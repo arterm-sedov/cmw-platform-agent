@@ -70,6 +70,11 @@ from logging.handlers import RotatingFileHandler
 import os
 import time
 
+try:
+    from concurrent_log_handler import ConcurrentRotatingFileHandler
+except ImportError:
+    ConcurrentRotatingFileHandler = RotatingFileHandler  # type: ignore[assignment,misc]
+
 from dotenv import load_dotenv
 
 _INITIALIZED = False
@@ -138,7 +143,9 @@ def _date_suffix(log_file: str) -> str:
     return f"{base}-{time.strftime('%Y%m%d')}{ext}"
 
 
-def _make_file_handler(log_file: str) -> RotatingFileHandler:
+def _make_file_handler(
+    log_file: str,
+) -> ConcurrentRotatingFileHandler | RotatingFileHandler:
     dated = _date_suffix(log_file)
     log_dir = os.path.dirname(log_file) or "."
     base_name = os.path.basename(os.path.splitext(log_file)[0])
@@ -147,12 +154,14 @@ def _make_file_handler(log_file: str) -> RotatingFileHandler:
     max_mb = int(os.getenv("LOG_MAX_SIZE_MB", "100") or 100)
     _enforce_size_limit(log_dir, base_name, max_mb * 1024 * 1024)
     backup_count = (max_mb * 1024 * 1024) // max_bytes
-    return RotatingFileHandler(
+    return ConcurrentRotatingFileHandler(
         dated, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
     )
 
 
-def setup_openapi_debug_log() -> RotatingFileHandler | None:
+def setup_openapi_debug_log() -> (
+    ConcurrentRotatingFileHandler | RotatingFileHandler | None
+):
     if not os.getenv("OPENAI_COMPAT_DEBUG_LOG", "").lower() in ("true", "1", "yes"):
         return None
     load_dotenv()
