@@ -145,7 +145,6 @@ try:
     from agent_ng.langchain_agent import CmwAgent as NextGenAgent
     from agent_ng.llm_manager import get_llm_manager
     from agent_ng.openai_compat import (
-        handle_agent_completions_payload,
         register_agent_completions_on_fastapi,
         register_agent_completions_route,
     )
@@ -185,7 +184,6 @@ except ImportError as e1:
         from .langchain_agent import CmwAgent as NextGenAgent
         from .llm_manager import get_llm_manager
         from .openai_compat import (
-            handle_agent_completions_payload,
             register_agent_completions_on_fastapi,
             register_agent_completions_route,
         )
@@ -1678,40 +1676,10 @@ class NextGenApp:
             finally:
                 thread.join(timeout=1)
 
-            # Streaming endpoint: generator yields partials; API GET will stream
-
-        def _api_agent_completions(payload: dict[str, Any]) -> dict[str, Any]:
-            """Gradio API wrapper for agent completions payload."""
-            loop = asyncio.new_event_loop()
-            try:
-                asyncio.set_event_loop(loop)
-                return loop.run_until_complete(
-                    handle_agent_completions_payload(self, payload)
-                )
-            finally:
-                loop.close()
-
-        # Register API endpoints using gr.api() - cleaner approach for HF Spaces
+        # Register API endpoints using gr.api().
         with demo:
-            _in = gr.Textbox(label="question", visible=False)
-            _username = gr.Textbox(label="username", visible=False)
-            _password = gr.Textbox(label="password", type="password", visible=False)
-            _base_url = gr.Textbox(label="base_url", visible=False)
-            _session_id = gr.Textbox(label="session_id", type="password", visible=False)
-            _out = gr.Textbox(label="answer", visible=False)
-            # _in.submit(_api_ask, inputs=[_in, _username, _password, _base_url, _session_id], outputs=_out, api_name="ask")
-            _in.submit(
-                _api_ask_stream,
-                inputs=[_in, _username, _password, _base_url, _session_id],
-                outputs=_out,
-                api_name="ask_stream",
-                api_visibility="public",
-            )
-
-            # Use gr.api() to register API endpoints without fake UI elements
-            gr.api(_api_ask, api_name="ask", api_visibility="public")
-            # gr.api(_api_ask_stream, api_name="ask_stream")
-            gr.api(_api_agent_completions, api_name="agent_completions")
+            gr.api(_api_ask, api_name="ask", api_visibility="private")
+            gr.api(_api_ask_stream, api_name="ask_stream", api_visibility="private")
 
         # Configure concurrency and queuing AFTER registering named endpoints
         # Always initialize queue (even with minimal settings) to prevent AttributeError.

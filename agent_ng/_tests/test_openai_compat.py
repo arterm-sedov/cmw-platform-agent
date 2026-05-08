@@ -105,13 +105,20 @@ def test_extract_agent_extra_body_from_messages_last_system_wins() -> None:
 
 def test_extract_agent_extra_body_from_messages_accepts_object_content() -> None:
     extra, err = extract_agent_extra_body_from_messages(
-        [{"role": "system", "content": {CMW_EXTRA_BODY_KEY: {"session_id": "sess-obj"}}}]
+        [
+            {
+                "role": "system",
+                "content": {CMW_EXTRA_BODY_KEY: {"session_id": "sess-obj"}},
+            }
+        ]
     )
     assert err is None
     assert extra == {"session_id": "sess-obj"}
 
 
-def test_extract_agent_extra_body_from_messages_ignores_invalid_json_without_wrapper() -> None:
+def test_extract_agent_extra_body_from_messages_ignores_invalid_json_without_wrapper() -> (
+    None
+):
     extra, err = extract_agent_extra_body_from_messages(
         [{"role": "system", "content": "not-json"}]
     )
@@ -119,7 +126,9 @@ def test_extract_agent_extra_body_from_messages_ignores_invalid_json_without_wra
     assert extra == {}
 
 
-def test_extract_agent_extra_body_from_messages_ignores_non_object_json_without_wrapper() -> None:
+def test_extract_agent_extra_body_from_messages_ignores_non_object_json_without_wrapper() -> (
+    None
+):
     extra, err = extract_agent_extra_body_from_messages(
         [{"role": "system", "content": "[1, 2]"}]
     )
@@ -687,7 +696,9 @@ def test_structured_output_uses_root_schema_description_when_present() -> None:
             "messages": [
                 {
                     "role": "system",
-                    "content": json.dumps({CMW_EXTRA_BODY_KEY: {"session_id": "desc-1"}}),
+                    "content": json.dumps(
+                        {CMW_EXTRA_BODY_KEY: {"session_id": "desc-1"}}
+                    ),
                 },
                 {"role": "user", "content": "list worked objects"},
             ],
@@ -730,7 +741,9 @@ def test_structured_output_falls_back_to_default_tool_description() -> None:
             "messages": [
                 {
                     "role": "system",
-                    "content": json.dumps({CMW_EXTRA_BODY_KEY: {"session_id": "desc-2"}}),
+                    "content": json.dumps(
+                        {CMW_EXTRA_BODY_KEY: {"session_id": "desc-2"}}
+                    ),
                 },
                 {"role": "user", "content": "list worked objects"},
             ],
@@ -754,7 +767,9 @@ def test_structured_output_falls_back_to_default_tool_description() -> None:
     assert "Do not invent facts." in _FormatterLLM.last_tool_description
 
 
-def test_structured_output_uses_injected_standard_schema_when_response_format_is_custom() -> None:
+def test_structured_output_uses_injected_standard_schema_when_response_format_is_custom() -> (
+    None
+):
     demo = _Demo()
     app = _App()
     register_agent_completions_route(demo, app)
@@ -795,7 +810,9 @@ def test_structured_output_uses_injected_standard_schema_when_response_format_is
     assert body == {"summary": "ok"}
 
 
-def test_structured_output_converts_custom_schema_without_injected_standard_schema() -> None:
+def test_structured_output_converts_custom_schema_without_injected_standard_schema() -> (
+    None
+):
     demo = _Demo()
     app = _App()
     register_agent_completions_route(demo, app)
@@ -808,7 +825,9 @@ def test_structured_output_converts_custom_schema_without_injected_standard_sche
             "messages": [
                 {
                     "role": "system",
-                    "content": json.dumps({CMW_EXTRA_BODY_KEY: {"session_id": "conv-1"}}),
+                    "content": json.dumps(
+                        {CMW_EXTRA_BODY_KEY: {"session_id": "conv-1"}}
+                    ),
                 },
                 {"role": "user", "content": "answer"},
             ],
@@ -952,9 +971,7 @@ def test_structured_output_prunes_additional_properties_in_nested_objects() -> N
     demo = _Demo()
     app = _App()
     register_agent_completions_route(demo, app)
-    _FormatterBoundLLM.next_args = {
-        "items": [{"name": "n1", "description": "drop-me"}]
-    }
+    _FormatterBoundLLM.next_args = {"items": [{"name": "n1", "description": "drop-me"}]}
 
     response = TestClient(demo.app).post(
         AGENT_COMPLETIONS_PATH,
@@ -994,13 +1011,13 @@ def test_structured_output_prunes_additional_properties_in_nested_objects() -> N
     }
 
 
-def test_structured_output_drops_optional_invalid_non_null_field_in_nested_object() -> None:
+def test_structured_output_drops_optional_invalid_non_null_field_in_nested_object() -> (
+    None
+):
     demo = _Demo()
     app = _App()
     register_agent_completions_route(demo, app)
-    _FormatterBoundLLM.next_args = {
-        "items": [{"name": "ok", "number_array": None}]
-    }
+    _FormatterBoundLLM.next_args = {"items": [{"name": "ok", "number_array": None}]}
 
     response = TestClient(demo.app).post(
         AGENT_COMPLETIONS_PATH,
@@ -1128,13 +1145,6 @@ def test_nextgen_app_registers_agent_route_after_queue_configuration() -> None:
     assert queue_pos != -1
     assert route_pos != -1
     assert route_pos > queue_pos
-
-
-def test_nextgen_app_registers_gradio_agent_completions_api_name() -> None:
-    from agent_ng.app_ng_modular import NextGenApp
-
-    source = inspect.getsource(NextGenApp.create_interface)
-    assert 'api_name="agent_completions"' in source
 
 
 def test_handle_agent_completions_payload_returns_openai_json() -> None:

@@ -152,9 +152,7 @@ def _make_file_handler(log_file: str) -> RotatingFileHandler:
     )
 
 
-def setup_openapi_debug_log() -> RotatingFileHandler | None:
-    if not os.getenv("OPENAI_COMPAT_DEBUG_LOG", "").lower() in ("true", "1", "yes"):
-        return None
+def setup_openapi_debug_log() -> RotatingFileHandler:
     load_dotenv()
     log_dir = os.path.dirname(os.getenv("LOG_FILE", ".")) or "."
     path = os.path.join(log_dir, "openai_compat_io_debug.jsonl")

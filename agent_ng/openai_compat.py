@@ -75,7 +75,18 @@ def _redact(value: Any) -> Any:
 
 
 def _debug_log_io(event: str, payload: dict[str, Any]) -> None:
-    if _debug_handler is None:
+    try:
+        record = {
+            "ts": int(time.time()),
+            "event": event,
+            "path": AGENT_COMPLETIONS_PATH,
+            "payload": _redact(payload),
+        }
+        line = json.dumps(record, ensure_ascii=False, default=str)
+        _debug_handler.emit(
+            logging.LogRecord("_", logging.DEBUG, "", 0, line, (), None)
+        )
+    except Exception:
         return
     try:
         record = {
