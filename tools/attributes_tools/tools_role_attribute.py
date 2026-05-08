@@ -1,6 +1,6 @@
 from ..tool_utils import *
 
-@tool("edit_or_create_role_attribute", return_direct=False, args_schema=CommonAttributeFields)
+@tool("edit_or_create_role_attribute", return_direct=False, args_schema=RefAttributeFields)
 def edit_or_create_role_attribute(
     operation: str,
     name: str,

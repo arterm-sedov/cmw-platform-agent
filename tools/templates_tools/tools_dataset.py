@@ -1,3 +1,4 @@
+import json
 from typing import Any, Optional
 
 from langchain_core.tools import tool
@@ -85,6 +86,26 @@ class EditOrCreateDatasetSchema(CommonDatasetFields):
             v = v.strip().lower()
             mapping = {"создать": "create", "редактировать": "edit", "create": "create", "edit": "edit"}
             return mapping.get(v, v)
+        return v
+
+    @field_validator("columns", mode="before")
+    @classmethod
+    def _parse_columns(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except (json.JSONDecodeError, TypeError) as err:
+                raise ValueError("columns must be a valid JSON object") from err
+        return v
+
+    @field_validator("sorting", "grouping", "totals", mode="before")
+    @classmethod
+    def _parse_list_fields(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except (json.JSONDecodeError, TypeError) as err:
+                raise ValueError("Value must be a valid JSON array") from err
         return v
 
     @model_validator(mode="after")
