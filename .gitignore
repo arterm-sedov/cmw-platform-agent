@@ -5,8 +5,7 @@
 .venv/**
 .venv*/**
 __pycache__/
-!logs/*.log
-logs/*.lock
+logs/**
 server_config.yml
 .screencasts/
 *.mp4
