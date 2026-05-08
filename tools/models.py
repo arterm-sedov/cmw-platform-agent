@@ -93,12 +93,6 @@ class CommonAttributeFields(BaseModel):
         description="Expression to automatically calculate the attribute value; user-provided. "
                     "RU: Выражение для вычисления",
     )
-    store_multiple_values: bool = Field(
-        default=False,
-        description="Set to `True` to store multiple values. "
-                    "RU: Хранить несколько значений"
-    )
-
     @field_validator("operation", mode="before")
     def normalize_operation_create_edit(cls, v: str) -> str:
         """
@@ -131,6 +125,20 @@ class CommonAttributeFields(BaseModel):
         if isinstance(v, str) and v.strip() == "":
             raise ValueError("must be a non-empty string")
         return v
+
+
+class RefAttributeFields(CommonAttributeFields):
+    """
+    Common fields for reference-type attribute schemas.
+
+    Reference type includes: Document, Image, Role, Account, Record, OrgUnit.
+    Only these types support storing multiple values (isMultiValue).
+    """
+    store_multiple_values: bool = Field(
+        default=False,
+        description="Set to `True` to store multiple values. "
+                    "RU: Хранить несколько значений"
+    )
 
 
 class CommonGetAttributeFields(BaseModel):

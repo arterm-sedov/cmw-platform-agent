@@ -26,13 +26,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Factory = zero-arg callable returning a fresh provider instance. Using a
-# factory (instead of storing an instance) keeps credentials loaded lazily
-# and tests easy to isolate via monkeypatching.
-_FACTORIES: dict[str, Callable[[], ImageProvider]] = {}
+# Factory = callable returning a fresh provider instance.  Using a factory
+# (instead of storing an instance) keeps credentials loaded lazily and tests
+# easy to isolate via monkeypatching.  Factories accept ``**kwargs`` so that
+# callers can inject session-resolved API keys at instantiation time.
+_FACTORIES: dict[str, Callable[..., ImageProvider]] = {}
 
 
-def register_provider(name: str, factory: Callable[[], ImageProvider]) -> None:
+def register_provider(name: str, factory: Callable[..., ImageProvider]) -> None:
     """Register a provider factory under ``name``.
 
     Overwrites any existing registration — useful for tests and for
@@ -46,8 +47,11 @@ def register_provider(name: str, factory: Callable[[], ImageProvider]) -> None:
     _FACTORIES[name] = factory
 
 
-def get_provider(name: str) -> ImageProvider | None:
+def get_provider(name: str, **kwargs: object) -> ImageProvider | None:
     """Instantiate and return the provider registered under ``name``.
+
+    Keyword arguments are forwarded to the provider factory, enabling
+    session-key injection (e.g. ``get_provider("polza", api_key=...)``).
 
     Returns ``None`` when no adapter is registered for that name, so the
     engine can surface a clear error without crashing.
@@ -56,7 +60,7 @@ def get_provider(name: str) -> ImageProvider | None:
     if factory is None:
         return None
     try:
-        return factory()
+        return factory(**kwargs)
     except Exception:
         logger.exception("Image provider %r failed to initialize", name)
         return None

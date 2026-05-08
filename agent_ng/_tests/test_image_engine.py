@@ -89,6 +89,70 @@ def _err_response(status: int, body: str = "forbidden") -> MagicMock:
     return mock
 
 
+class TestRegistryKwargsForwarding:
+    """Session key -> registry -> provider constructor."""
+
+    def test_get_provider_forwards_kwargs_to_factory(self) -> None:
+        from agent_ng.image_providers.base import (
+            ImageGenerationResult,
+            ImageProvider,
+            ImageRequest,
+        )
+        from agent_ng.image_providers.registry import (
+            _FACTORIES,
+            get_provider,
+            register_provider,
+        )
+
+        received: dict[str, object] = {}
+
+        class _KWProvider(ImageProvider):
+            name = "test_kwargs"
+
+            def generate(self, _request: ImageRequest) -> ImageGenerationResult:
+                return ImageGenerationResult(success=True)
+
+            def __init__(self, **kwargs: object) -> None:
+                super().__init__()
+                nonlocal received
+                received = kwargs
+
+        register_provider("test_kwargs", _KWProvider)
+        try:
+            provider = get_provider("test_kwargs", api_key="sk-session")
+            assert provider is not None
+            assert received == {"api_key": "sk-session"}, (
+                f"Expected {{'api_key': 'sk-session'}}, got {received}"
+            )
+        finally:
+            _FACTORIES.pop("test_kwargs", None)
+
+    def test_get_provider_no_kwargs_still_works(self) -> None:
+        from agent_ng.image_providers.base import (
+            ImageGenerationResult,
+            ImageProvider,
+            ImageRequest,
+        )
+        from agent_ng.image_providers.registry import (
+            _FACTORIES,
+            get_provider,
+            register_provider,
+        )
+
+        class _NoKWProvider(ImageProvider):
+            name = "test_no_kwargs"
+
+            def generate(self, _request: ImageRequest) -> ImageGenerationResult:
+                return ImageGenerationResult(success=True)
+
+        register_provider("test_no_kwargs", _NoKWProvider)
+        try:
+            provider = get_provider("test_no_kwargs")
+            assert provider is not None
+        finally:
+            _FACTORIES.pop("test_no_kwargs", None)
+
+
 class TestEngineConstruction:
     def test_no_key_still_constructs(self) -> None:
         # Engine no longer validates keys at construction — each provider
@@ -112,6 +176,98 @@ class TestEngineConstruction:
     def test_default_base_url(self) -> None:
         engine = ImageEngine(api_key="sk-test")
         assert engine.base_url.endswith("/chat/completions")
+
+
+class TestEngineGenerateSessionKey:
+    """ImageEngine.generate() resolves provider API key from session config."""
+
+    def test_resolves_session_key_for_polza_provider(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from agent_ng import session_manager
+        from agent_ng.image_providers.base import (
+            ImageGenerationResult,
+            ImageProvider,
+            ImageRequest,
+        )
+        from agent_ng.image_providers.registry import _FACTORIES, register_provider
+
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "polza")
+        test_sid = "test_img_session_key"
+        session_manager.set_session_config(
+            test_sid,
+            {"llm_provider_api_keys": {"polza": "sk-session-polza"}},
+        )
+
+        received_key: str | None = None
+
+        class _SpyPolza(ImageProvider):
+            name = "polza"
+
+            def generate(self, _request: ImageRequest) -> ImageGenerationResult:
+                return ImageGenerationResult(success=True)
+
+            def __init__(self, api_key: str | None = None, **_kwargs: object) -> None:
+                super().__init__()
+                nonlocal received_key
+                received_key = api_key
+
+        register_provider("polza", _SpyPolza)
+        try:
+            # Simulate active session context
+            from agent_ng.session_manager import _current_session_id
+
+            tok = _current_session_id.set(test_sid)
+            try:
+                engine = ImageEngine(api_key="sk-openrouter-test")
+                result = engine.generate("test", model="bytedance-seed/seedream-4.5")
+                assert result.success is True
+                assert received_key == "sk-session-polza", (
+                    f"Expected session key, got {received_key!r}"
+                )
+            finally:
+                _current_session_id.reset(tok)
+        finally:
+            _FACTORIES.pop("polza", None)
+            register_provider("polza", None)  # restore placeholder
+            session_manager.clear_session_config(test_sid)
+
+    def test_passes_env_key_when_no_session_key(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from agent_ng.image_providers.base import (
+            ImageGenerationResult,
+            ImageProvider,
+            ImageRequest,
+        )
+        from agent_ng.image_providers.registry import _FACTORIES, register_provider
+
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "polza")
+        monkeypatch.setenv("POLZA_API_KEY", "sk-env-polza")
+        received_key: str | None = None
+
+        class _SpyPolza(ImageProvider):
+            name = "polza"
+
+            def generate(self, _request: ImageRequest) -> ImageGenerationResult:
+                return ImageGenerationResult(success=True)
+
+            def __init__(self, api_key: str | None = None, **_kwargs: object) -> None:
+                super().__init__()
+                nonlocal received_key
+                received_key = api_key
+
+        register_provider("polza", _SpyPolza)
+        try:
+            engine = ImageEngine(api_key="sk-openrouter-test")
+            result = engine.generate("test", model="bytedance-seed/seedream-4.5")
+            assert result.success is True
+            assert received_key == "sk-env-polza", (
+                f"Expected env key, got {received_key!r}"
+            )
+        finally:
+            _FACTORIES.pop("polza", None)
+            register_provider("polza", None)
 
 
 class TestSuccessfulGeneration:
@@ -139,9 +295,7 @@ class TestSuccessfulGeneration:
 
     def test_flux_uses_image_only_modalities(self) -> None:
         engine = ImageEngine(api_key="sk-test")
-        with patch(
-            _POST_TARGET, return_value=_ok_response()
-        ) as post:
+        with patch(_POST_TARGET, return_value=_ok_response()) as post:
             engine.generate("a cat", model="black-forest-labs/flux.2-pro")
 
         payload = post.call_args.kwargs["json"]
@@ -150,9 +304,7 @@ class TestSuccessfulGeneration:
 
     def test_gemini_uses_text_and_image_modalities(self) -> None:
         engine = ImageEngine(api_key="sk-test")
-        with patch(
-            _POST_TARGET, return_value=_ok_response()
-        ) as post:
+        with patch(_POST_TARGET, return_value=_ok_response()) as post:
             engine.generate("a cat", model="google/gemini-2.5-flash-image")
 
         payload = post.call_args.kwargs["json"]
@@ -198,9 +350,7 @@ class TestSuccessfulGeneration:
 
     def test_authorization_header_set(self) -> None:
         engine = ImageEngine(api_key="sk-test")
-        with patch(
-            _POST_TARGET, return_value=_ok_response()
-        ) as post:
+        with patch(_POST_TARGET, return_value=_ok_response()) as post:
             engine.generate("a cat", model="google/gemini-2.5-flash-image")
 
         headers = post.call_args.kwargs["headers"]
@@ -217,9 +367,7 @@ class TestImageConfigForwarding:
 
     def test_image_config_forwarded_for_gemini(self) -> None:
         engine = ImageEngine(api_key="sk-test")
-        with patch(
-            _POST_TARGET, return_value=_ok_response()
-        ) as post:
+        with patch(_POST_TARGET, return_value=_ok_response()) as post:
             engine.generate(
                 "a cat",
                 model="google/gemini-2.5-flash-image",
@@ -233,9 +381,7 @@ class TestImageConfigForwarding:
 
     def test_image_config_omitted_for_flux(self) -> None:
         engine = ImageEngine(api_key="sk-test")
-        with patch(
-            _POST_TARGET, return_value=_ok_response()
-        ) as post:
+        with patch(_POST_TARGET, return_value=_ok_response()) as post:
             engine.generate(
                 "a cat",
                 model="black-forest-labs/flux.2-pro",
@@ -248,9 +394,7 @@ class TestImageConfigForwarding:
 
     def test_image_config_omitted_when_no_params_passed(self) -> None:
         engine = ImageEngine(api_key="sk-test")
-        with patch(
-            _POST_TARGET, return_value=_ok_response()
-        ) as post:
+        with patch(_POST_TARGET, return_value=_ok_response()) as post:
             engine.generate("a cat", model="google/gemini-2.5-flash-image")
 
         payload = post.call_args.kwargs["json"]
@@ -259,9 +403,7 @@ class TestImageConfigForwarding:
     def test_partial_image_config_accepted(self) -> None:
         """Only aspect_ratio provided → only aspect_ratio sent."""
         engine = ImageEngine(api_key="sk-test")
-        with patch(
-            _POST_TARGET, return_value=_ok_response()
-        ) as post:
+        with patch(_POST_TARGET, return_value=_ok_response()) as post:
             engine.generate(
                 "a cat",
                 model="google/gemini-2.5-flash-image",

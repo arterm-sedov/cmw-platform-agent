@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 import json
+import os
+from pathlib import Path
 import time
 from typing import TYPE_CHECKING, Any
 import uuid
@@ -26,8 +28,78 @@ KNOWN_FINISH_REASON = "stop"
 CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY = "cmw_assistant_last_message"
 # Backward-compatible alias (string value identical).
 CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE = CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY
+CMW_EXTRA_BODY_KEY = "cmw_extra_body"
 
 AGENT_COMPLETIONS_PATH = "/api/v1/chat/completions"
+_IO_DEBUG_ENABLED = os.getenv("OPENAI_COMPAT_DEBUG_LOG", "").lower() in (
+    "true", "1", "yes"
+)
+OPENAI_COMPAT_DEBUG_LOG_PATH = Path(
+    os.getenv("OPENAI_COMPAT_DEBUG_LOG_PATH", "openai_compat_io_debug.jsonl")
+)
+_REDACT_KEYS = {
+    "authorization",
+    "api_key",
+    "apikey",
+    "token",
+    "password",
+    "cmw_password",
+    "llm_provider_api_keys",
+}
+
+
+def _mask_secret(value: str) -> str:
+    text = value.strip()
+    if len(text) <= 10:
+        return "***"
+    return f"{text[:6]}...{text[-4:]}"
+
+
+def _redact(value: Any) -> Any:
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for k, v in value.items():
+            key = str(k).lower()
+            if key in _REDACT_KEYS:
+                if isinstance(v, dict):
+                    out[k] = dict.fromkeys(v, "***")
+                elif isinstance(v, str):
+                    out[k] = _mask_secret(v)
+                else:
+                    out[k] = "***"
+                continue
+            out[k] = _redact(v)
+        return out
+    if isinstance(value, list):
+        return [_redact(v) for v in value]
+    return value
+
+
+if _IO_DEBUG_ENABLED:
+
+    def _debug_log_io(event: str, payload: dict[str, Any]) -> None:
+        try:
+            OPENAI_COMPAT_DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            record = {
+                "ts": int(time.time()),
+                "event": event,
+                "path": AGENT_COMPLETIONS_PATH,
+                "payload": _redact(payload),
+            }
+            with OPENAI_COMPAT_DEBUG_LOG_PATH.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        except Exception:
+            return
+else:
+    def _debug_log_io(event: str, payload: dict[str, Any]) -> None:
+        pass
+
+
+def _json_response_content(response: JSONResponse) -> dict[str, Any]:
+    try:
+        return json.loads(response.body.decode("utf-8"))
+    except Exception:
+        return {"raw_body": str(response.body)}
 
 
 def usage_from_token_count(tc: TokenCount | None) -> dict[str, Any] | None:
@@ -176,10 +248,10 @@ def extract_cmw_credentials(extra_body: dict[str, Any] | None) -> dict[str, str]
 def extract_agent_extra_body_from_messages(
     messages: list[Any],
 ) -> tuple[dict[str, Any], JSONResponse | None]:
-    """Build agent extra fields from `role: system` message content (JSON object).
+    """Build agent extra fields from `role: system` content via `cmw_extra_body`.
 
     Later system messages override earlier ones. Top-level request `extra_body`
-    is not used. Non-empty system content that is not a JSON object is rejected.
+    is not used.
     """
 
     extra: dict[str, Any] = {}
@@ -189,30 +261,203 @@ def extract_agent_extra_body_from_messages(
         raw = msg.get("content")
         if raw is None:
             continue
+        parsed_wrapper: dict[str, Any] | None = None
+        parse_error: JSONResponse | None = None
         if isinstance(raw, dict):
-            extra = dict(raw)
+            parsed_wrapper, parse_error = _extract_cmw_extra_body_from_obj(raw)
+        elif isinstance(raw, list):
             continue
-        if isinstance(raw, list):
+        elif isinstance(raw, str):
+            parsed_wrapper, parse_error = _extract_cmw_extra_body_from_text(raw)
+        else:
             continue
+        if parse_error is not None:
+            return {}, parse_error
+        if parsed_wrapper is not None:
+            extra = parsed_wrapper
+    return extra, None
+
+
+def _extract_cmw_extra_body_from_obj(
+    parsed: dict[str, Any],
+) -> tuple[dict[str, Any] | None, JSONResponse | None]:
+    if CMW_EXTRA_BODY_KEY not in parsed:
+        return None, None
+    body = parsed.get(CMW_EXTRA_BODY_KEY)
+    if not isinstance(body, dict):
+        return None, _error_response(
+            "system message cmw_extra_body must be a JSON object",
+            status_code=400,
+        )
+    return dict(body), None
+
+
+def _extract_json_object_candidates(text: str) -> list[str]:
+    """Extract top-level JSON object candidates from free-form text."""
+    candidates: list[str] = []
+    depth = 0
+    start: int | None = None
+    in_string = False
+    escaped = False
+    for idx, ch in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+                continue
+            if ch == "\\":
+                escaped = True
+                continue
+            if ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == "{":
+            if depth == 0:
+                start = idx
+            depth += 1
+            continue
+        if ch == "}":
+            if depth == 0:
+                continue
+            depth -= 1
+            if depth == 0 and start is not None:
+                candidates.append(text[start : idx + 1])
+                start = None
+    return candidates
+
+
+def _extract_cmw_extra_body_from_text(
+    text: str,
+) -> tuple[dict[str, Any] | None, JSONResponse | None]:
+    stripped = text.strip()
+    if not stripped:
+        return None, None
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, dict):
+        return _extract_cmw_extra_body_from_obj(parsed)
+    for candidate in _extract_json_object_candidates(stripped):
+        try:
+            obj = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(obj, dict):
+            continue
+        wrapped, err = _extract_cmw_extra_body_from_obj(obj)
+        if err is not None:
+            return None, err
+        if wrapped is not None:
+            return wrapped, None
+    return None, None
+
+
+def _is_standard_json_schema(schema: dict[str, Any]) -> bool:
+    if not isinstance(schema, dict):
+        return False
+    if "type" in schema:
+        return True
+    return any(
+        key in schema for key in ("properties", "items", "required", "allOf", "oneOf")
+    )
+
+
+def _extract_schema_from_injected_system_text(
+    messages: list[Any],
+) -> dict[str, Any] | None:
+    marker = "Target schema (JSON Schema):"
+    for msg in reversed(messages):
+        if not isinstance(msg, dict) or msg.get("role") != "system":
+            continue
+        raw = msg.get("content")
         if not isinstance(raw, str):
             continue
-        text = raw.strip()
-        if not text:
+        idx = raw.find(marker)
+        if idx < 0:
             continue
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError:
-            return {}, _error_response(
-                "system message content must be valid JSON for agent extra fields",
-                status_code=400,
-            )
-        if not isinstance(parsed, dict):
-            return {}, _error_response(
-                "system message JSON must be an object",
-                status_code=400,
-            )
-        extra = parsed
-    return extra, None
+        tail = raw[idx + len(marker) :]
+        for candidate in _extract_json_object_candidates(tail):
+            try:
+                parsed = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict) and _is_standard_json_schema(parsed):
+                return parsed
+    return None
+
+
+def _convert_custom_schema_node(node: dict[str, Any]) -> dict[str, Any]:
+    raw_type = str(node.get("Type") or "String").strip().lower()
+    is_list = bool(node.get("IsList"))
+    attrs = node.get("Attributes")
+    desc = node.get("Description")
+    type_map: dict[str, str] = {
+        "string": "string",
+        "text": "string",
+        "boolean": "boolean",
+        "number": "number",
+        "decimal": "number",
+        "integer": "integer",
+        "datetime": "string",
+        "timespan": "string",
+        "dynamic": "object",
+    }
+    if raw_type == "complex":
+        out: dict[str, Any] = {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        }
+        required: list[str] = []
+        if isinstance(attrs, list):
+            for attr in attrs:
+                if not isinstance(attr, dict):
+                    continue
+                name = str(attr.get("Name") or "").strip()
+                if not name:
+                    continue
+                child = _convert_custom_schema_node(attr)
+                child_desc = attr.get("Description")
+                if isinstance(child_desc, str) and child_desc.strip():
+                    child["description"] = child_desc
+                out["properties"][name] = child
+                if bool(attr.get("Required")):
+                    required.append(name)
+        if required:
+            out["required"] = required
+    else:
+        out = {"type": type_map.get(raw_type, "string")}
+        if raw_type == "datetime":
+            out["format"] = "date-time"
+    if isinstance(desc, str) and desc.strip():
+        out["description"] = desc
+    if is_list:
+        return {"type": "array", "items": out}
+    return out
+
+
+def _normalize_structured_schema(
+    schema: dict[str, Any], messages: list[Any]
+) -> tuple[dict[str, Any], JSONResponse | None]:
+    if _is_standard_json_schema(schema):
+        return schema, None
+    injected = _extract_schema_from_injected_system_text(messages)
+    if isinstance(injected, dict):
+        return injected, None
+    if "Type" in schema:
+        converted = _convert_custom_schema_node(schema)
+        if _is_standard_json_schema(converted):
+            return converted, None
+    return {}, _error_response(
+        (
+            "response_format.json_schema.schema must be standard JSON Schema "
+            "or convertible"
+        ),
+        status_code=400,
+    )
 
 
 def latest_user_message(messages: list[dict[str, Any]]) -> str:
@@ -405,9 +650,17 @@ def _parse_response_format(
             status_code=400,
         )
 
+    messages = payload.get("messages")
+    schema_messages = messages if isinstance(messages, list) else []
+    normalized_schema, schema_err = _normalize_structured_schema(
+        schema, schema_messages
+    )
+    if schema_err is not None:
+        return schema_err
+
     return StructuredOutputSpec(
         name=name,
-        schema=schema,
+        schema=normalized_schema,
         strict=bool(json_schema.get("strict", True)),
     )
 
@@ -447,6 +700,8 @@ def _validate_schema_output(
     value: Any, schema: dict[str, Any], path: str = "$"
 ) -> str | None:
     expected_type = schema.get("type")
+    if value is None:
+        return None if expected_type in (None, "null") else f"{path} must not be null"
     if expected_type == "object":
         if not isinstance(value, dict):
             return f"{path} must be an object"
@@ -489,6 +744,106 @@ def _validate_schema_output(
     ):
         return f"{path} must be of type {expected_type}"
     return None
+
+
+def _repair_schema_output(value: Any, schema: dict[str, Any]) -> Any:
+    """Best-effort schema repair for structured formatter outputs."""
+    return _repair_schema_output_impl(value, schema, required=True)
+
+
+_DROP = object()
+
+
+def _default_for_schema(schema: dict[str, Any]) -> Any:
+    expected_type = schema.get("type")
+    if expected_type == "object":
+        return {}
+    if expected_type == "array":
+        return []
+    if expected_type == "string":
+        return ""
+    if expected_type == "integer":
+        return 0
+    if expected_type == "number":
+        return 0.0
+    if expected_type == "boolean":
+        return False
+    if expected_type == "null":
+        return None
+    return None
+
+
+def _repair_schema_output_impl(
+    value: Any, schema: dict[str, Any], *, required: bool
+) -> Any:
+    """Repair schema output; return `_DROP` for optional unrecoverable values."""
+    expected_type = schema.get("type")
+
+    if expected_type == "object":
+        source = value if isinstance(value, dict) else {}
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            properties = {}
+        required_keys = schema.get("required")
+        if not isinstance(required_keys, list):
+            required_keys = []
+        repaired: dict[str, Any] = {}
+        if schema.get("additionalProperties") is False:
+            for key, sub_schema in properties.items():
+                if key in source:
+                    if isinstance(sub_schema, dict):
+                        is_required = key in required_keys
+                        child = _repair_schema_output_impl(
+                            source[key], sub_schema, required=is_required
+                        )
+                        if child is not _DROP:
+                            repaired[key] = child
+                    else:
+                        repaired[key] = source[key]
+        else:
+            for key, item in source.items():
+                sub_schema = properties.get(key)
+                if isinstance(sub_schema, dict):
+                    is_required = key in required_keys
+                    child = _repair_schema_output_impl(
+                        item, sub_schema, required=is_required
+                    )
+                    if child is not _DROP:
+                        repaired[key] = child
+                else:
+                    repaired[key] = item
+        if required_keys:
+            for key in required_keys:
+                if isinstance(key, str) and key not in repaired:
+                    sub_schema = properties.get(key)
+                    repaired[key] = (
+                        _default_for_schema(sub_schema)
+                        if isinstance(sub_schema, dict)
+                        else None
+                    )
+        return repaired
+
+    if expected_type == "array":
+        item_schema = schema.get("items")
+        if not isinstance(value, list):
+            return []
+        if not isinstance(item_schema, dict):
+            return value
+        repaired_items: list[Any] = []
+        for item in value:
+            child = _repair_schema_output_impl(item, item_schema, required=False)
+            if child is _DROP:
+                continue
+            repaired_items.append(child)
+        return repaired_items
+
+    coerced = _coerce_schema_output(value, schema)
+    validation_error = _validate_schema_output(coerced, schema)
+    if validation_error:
+        if required:
+            return _default_for_schema(schema)
+        return _DROP
+    return coerced
 
 
 def _coerce_schema_output(value: Any, schema: dict[str, Any]) -> Any:
@@ -715,6 +1070,15 @@ async def _format_structured_output(
             "parameters": stripped,
         },
     }
+    _debug_log_io(
+        "structured.formatter.request",
+        {
+            "session_id": session_id,
+            "tool_name": tool_name,
+            "tool_description": tool_description,
+            "schema": stripped,
+        },
+    )
     llm_formatter = llm.bind_tools([tool_def], strict=spec.strict)
     history: list[Any] = []
     get_history = getattr(agent, "get_conversation_history", None)
@@ -753,25 +1117,45 @@ async def _format_structured_output(
         try:
             args = json.loads(args)
         except json.JSONDecodeError:
-            return _error_response(
-                "Structured output tool arguments are invalid JSON",
-                status_code=422,
-            )
+            candidates = _extract_json_object_candidates(args)
+            recovered: dict[str, Any] | None = None
+            for candidate in candidates:
+                try:
+                    parsed_candidate = json.loads(candidate)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(parsed_candidate, dict):
+                    recovered = parsed_candidate
+                    break
+            if recovered is None:
+                return _error_response(
+                    "Structured output tool arguments are invalid JSON",
+                    status_code=422,
+                )
+            args = recovered
     if not isinstance(args, dict):
         return _error_response(
             "Structured output tool arguments must be an object",
             status_code=422,
         )
 
-    args = _coerce_schema_output(args, stripped)
+    args = _repair_schema_output(args, stripped)
     validation_error = _validate_schema_output(args, stripped)
     if validation_error:
-        return _error_response(
-            f"Structured output validation failed: {validation_error}",
-            status_code=422,
+        _debug_log_io(
+            "structured.formatter.validation_error",
+            {"session_id": session_id, "error": validation_error, "args": args},
         )
     if inject_into_content:
         args[CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY] = assistant_content
+    _debug_log_io(
+        "structured.formatter.response",
+        {
+            "session_id": session_id,
+            "args": args,
+            "inject_into_content": inject_into_content,
+        },
+    )
     return args
 
 
@@ -857,8 +1241,10 @@ async def _stream_agent_response(
     question: str,
     session_id: str,
     request_model: str,
+    debug_event_prefix: str | None = None,
 ) -> AsyncGenerator[str, None]:
     first = True
+    chunk_index = 0
     async for event in agent.stream_message(question, session_id):
         if not event:
             continue
@@ -872,18 +1258,30 @@ async def _stream_agent_response(
         if first:
             delta["role"] = "assistant"
             first = False
-        yield _sse(
+        sse_chunk = _sse(
             _chunk_payload(
                 request_model=request_model,
                 delta=delta,
                 finish_reason=None,
             )
         )
+        if debug_event_prefix:
+            _debug_log_io(
+                f"{debug_event_prefix}.stream.chunk",
+                {
+                    "session_id": session_id,
+                    "model": request_model,
+                    "chunk_index": chunk_index,
+                    "chunk": sse_chunk,
+                },
+            )
+        yield sse_chunk
+        chunk_index += 1
         if event_type == "error":
             break
 
     usage = _completion_usage(agent)
-    yield _sse(
+    final_sse = _sse(
         _chunk_payload(
             request_model=request_model,
             delta={},
@@ -891,7 +1289,25 @@ async def _stream_agent_response(
             usage=usage,
         )
     )
-    yield "data: [DONE]\n\n"
+    if debug_event_prefix:
+        _debug_log_io(
+            f"{debug_event_prefix}.stream.final",
+            {
+                "session_id": session_id,
+                "model": request_model,
+                "chunk_index": chunk_index,
+                "chunk": final_sse,
+                "usage": usage,
+            },
+        )
+    yield final_sse
+    done_chunk = "data: [DONE]\n\n"
+    if debug_event_prefix:
+        _debug_log_io(
+            f"{debug_event_prefix}.stream.done",
+            {"session_id": session_id, "model": request_model, "chunk": done_chunk},
+        )
+    yield done_chunk
 
 
 def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> None:
@@ -900,22 +1316,52 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
     async def agent_completions(request: Request) -> JSONResponse | StreamingResponse:
         provided_api_key = _extract_api_key(request)
         if not provided_api_key:
-            return _error_response("Missing bearer token", status_code=401)
+            response = _error_response("Missing bearer token", status_code=401)
+            _debug_log_io(
+                "fastapi.outgoing.error",
+                {"response": _json_response_content(response)},
+            )
+            return response
 
         payload = await request.json()
         if not isinstance(payload, dict):
-            return _error_response("request body must be a JSON object")
+            response = _error_response("request body must be a JSON object")
+            _debug_log_io(
+                "fastapi.outgoing.error",
+                {"response": _json_response_content(response)},
+            )
+            return response
+        _debug_log_io(
+            "fastapi.incoming.request",
+            {
+                "authorization": _mask_secret(provided_api_key),
+                "payload": payload,
+            },
+        )
         structured_spec = _parse_response_format(payload)
         if isinstance(structured_spec, JSONResponse):
+            _debug_log_io(
+                "fastapi.outgoing.error",
+                {"response": _json_response_content(structured_spec)},
+            )
             return structured_spec
         if structured_spec is not None and payload.get("stream") is True:
-            return _error_response(
+            response = _error_response(
                 "stream=true is not supported with response_format",
                 status_code=400,
             )
+            _debug_log_io(
+                "fastapi.outgoing.error",
+                {"response": _json_response_content(response)},
+            )
+            return response
 
         prepared = _prepare_request(app, payload, provider_api_key=provided_api_key)
         if isinstance(prepared, JSONResponse):
+            _debug_log_io(
+                "fastapi.outgoing.error",
+                {"response": _json_response_content(prepared)},
+            )
             return prepared
 
         question, session_id, resolved = prepared
@@ -927,6 +1373,7 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
                     question=question,
                     session_id=session_id,
                     request_model=resolved.request_model,
+                    debug_event_prefix="fastapi.outgoing",
                 ),
                 media_type="text/event-stream",
             )
@@ -946,19 +1393,23 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
                 spec=structured_spec,
             )
             if isinstance(structured_result, JSONResponse):
+                _debug_log_io(
+                    "fastapi.outgoing.error",
+                    {"response": _json_response_content(structured_result)},
+                )
                 return structured_result
             content = json.dumps(structured_result, ensure_ascii=False)
         turn_usage = _completion_usage(
             agent, pre_structured=usage_pre if structured_spec is not None else None
         )
-        return JSONResponse(
-            content=build_chat_completion_response(
-                request_model=resolved.request_model,
-                assistant_content=content,
-                finish_reason=KNOWN_FINISH_REASON,
-                usage=turn_usage,
-            )
+        response_payload = build_chat_completion_response(
+            request_model=resolved.request_model,
+            assistant_content=content,
+            finish_reason=KNOWN_FINISH_REASON,
+            usage=turn_usage,
         )
+        _debug_log_io("fastapi.outgoing.response", {"response": response_payload})
+        return JSONResponse(content=response_payload)
 
     route_paths = {getattr(route, "path", None) for route in fastapi_app.routes}
     if AGENT_COMPLETIONS_PATH not in route_paths:
@@ -988,23 +1439,32 @@ async def handle_agent_completions_payload(
     Used by Gradio `gr.api` where requests arrive as a plain dict.
     """
     if not isinstance(payload, dict):
-        return json.loads(
+        response = json.loads(
             _error_response("request body must be a JSON object").body.decode("utf-8")
         )
+        _debug_log_io("gradio.outgoing.error", {"response": response})
+        return response
+    _debug_log_io("gradio.incoming.request", {"payload": payload})
 
     structured_spec = _parse_response_format(payload)
     if isinstance(structured_spec, JSONResponse):
-        return json.loads(structured_spec.body.decode("utf-8"))
+        response = json.loads(structured_spec.body.decode("utf-8"))
+        _debug_log_io("gradio.outgoing.error", {"response": response})
+        return response
     if structured_spec is not None and payload.get("stream") is True:
         response = _error_response(
             "stream=true is not supported with response_format",
             status_code=400,
         )
-        return json.loads(response.body.decode("utf-8"))
+        out = json.loads(response.body.decode("utf-8"))
+        _debug_log_io("gradio.outgoing.error", {"response": out})
+        return out
 
     prepared = _prepare_request(app, payload)
     if isinstance(prepared, JSONResponse):
-        return json.loads(prepared.body.decode("utf-8"))
+        response = json.loads(prepared.body.decode("utf-8"))
+        _debug_log_io("gradio.outgoing.error", {"response": response})
+        return response
 
     question, session_id, resolved = prepared
     agent = app.get_user_agent(session_id)
@@ -1017,6 +1477,7 @@ async def handle_agent_completions_payload(
                 question=question,
                 session_id=session_id,
                 request_model=resolved.request_model,
+                debug_event_prefix="gradio.outgoing",
             )
         ]
         out: dict[str, Any] = {
@@ -1027,6 +1488,7 @@ async def handle_agent_completions_payload(
         stream_usage = _completion_usage(agent)
         if stream_usage is not None:
             out["usage"] = stream_usage
+        _debug_log_io("gradio.outgoing.response", {"response": out})
         return out
 
     content = await _collect_agent_response(agent, question, session_id)
@@ -1042,14 +1504,18 @@ async def handle_agent_completions_payload(
             spec=structured_spec,
         )
         if isinstance(structured_result, JSONResponse):
-            return json.loads(structured_result.body.decode("utf-8"))
+            response = json.loads(structured_result.body.decode("utf-8"))
+            _debug_log_io("gradio.outgoing.error", {"response": response})
+            return response
         content = json.dumps(structured_result, ensure_ascii=False)
     turn_usage = _completion_usage(
         agent, pre_structured=usage_pre if structured_spec is not None else None
     )
-    return build_chat_completion_response(
+    response_payload = build_chat_completion_response(
         request_model=resolved.request_model,
         assistant_content=content,
         finish_reason=KNOWN_FINISH_REASON,
         usage=turn_usage,
     )
+    _debug_log_io("gradio.outgoing.response", {"response": response_payload})
+    return response_payload

@@ -1219,6 +1219,8 @@ class LLMManager:
             "submit_answer",
             "submit_intermediate_step",
             "web_search_deep_research_exa_ai",
+            "import_application",
+            "update_object_property",
         }
 
         for name, obj in module.__dict__.items():

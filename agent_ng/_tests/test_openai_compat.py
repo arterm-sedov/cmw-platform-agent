@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from agent_ng.openai_compat import (
     AGENT_COMPLETIONS_PATH,
+    CMW_EXTRA_BODY_KEY,
     CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE,
     _formatter_schema_and_injection_flag,
     build_chat_completion_response,
@@ -94,8 +95,8 @@ def test_extract_agent_extra_body_from_messages_empty() -> None:
 def test_extract_agent_extra_body_from_messages_last_system_wins() -> None:
     extra, err = extract_agent_extra_body_from_messages(
         [
-            {"role": "system", "content": '{"a": 1}'},
-            {"role": "system", "content": '{"b": 2}'},
+            {"role": "system", "content": '{"cmw_extra_body": {"a": 1}}'},
+            {"role": "system", "content": '{"cmw_extra_body": {"b": 2}}'},
         ]
     )
     assert err is None
@@ -104,23 +105,43 @@ def test_extract_agent_extra_body_from_messages_last_system_wins() -> None:
 
 def test_extract_agent_extra_body_from_messages_accepts_object_content() -> None:
     extra, err = extract_agent_extra_body_from_messages(
-        [{"role": "system", "content": {"session_id": "sess-obj"}}]
+        [{"role": "system", "content": {CMW_EXTRA_BODY_KEY: {"session_id": "sess-obj"}}}]
     )
     assert err is None
     assert extra == {"session_id": "sess-obj"}
 
 
-def test_extract_agent_extra_body_from_messages_rejects_invalid_json() -> None:
+def test_extract_agent_extra_body_from_messages_ignores_invalid_json_without_wrapper() -> None:
     extra, err = extract_agent_extra_body_from_messages(
         [{"role": "system", "content": "not-json"}]
     )
+    assert err is None
     assert extra == {}
-    assert err is not None
 
 
-def test_extract_agent_extra_body_from_messages_rejects_non_object_json() -> None:
+def test_extract_agent_extra_body_from_messages_ignores_non_object_json_without_wrapper() -> None:
     extra, err = extract_agent_extra_body_from_messages(
         [{"role": "system", "content": "[1, 2]"}]
+    )
+    assert err is None
+    assert extra == {}
+
+
+def test_extract_agent_extra_body_from_mixed_system_content_with_wrapper() -> None:
+    content = (
+        '{"cmw_extra_body":{"session_id":"mixed-1","cmw_login":"user"}}\n'
+        "You must output ONLY JSON."
+    )
+    extra, err = extract_agent_extra_body_from_messages(
+        [{"role": "system", "content": content}]
+    )
+    assert err is None
+    assert extra == {"session_id": "mixed-1", "cmw_login": "user"}
+
+
+def test_extract_agent_extra_body_from_messages_rejects_invalid_wrapper_shape() -> None:
+    extra, err = extract_agent_extra_body_from_messages(
+        [{"role": "system", "content": '{"cmw_extra_body":"oops"}'}]
     )
     assert extra == {}
     assert err is not None
@@ -327,10 +348,12 @@ def test_registered_agent_completions_route_returns_non_streaming_response() -> 
                     "role": "system",
                     "content": json.dumps(
                         {
-                            "cmw_base_url": "https://example.test",
-                            "cmw_login": "user",
-                            "cmw_password": "secret",
-                            "session_id": "test-session",
+                            CMW_EXTRA_BODY_KEY: {
+                                "cmw_base_url": "https://example.test",
+                                "cmw_login": "user",
+                                "cmw_password": "secret",
+                                "session_id": "test-session",
+                            },
                         }
                     ),
                 },
@@ -371,7 +394,9 @@ def test_registered_agent_completions_route_streams_sse_chunks() -> None:
     assert "answer to ping" in response.text
 
 
-def test_registered_agent_completions_route_rejects_invalid_system_json() -> None:
+def test_registered_agent_completions_route_ignores_invalid_system_json_without_wrapper() -> (
+    None
+):
     demo = _Demo()
     app = _App()
     register_agent_completions_route(demo, app)
@@ -388,7 +413,7 @@ def test_registered_agent_completions_route_rejects_invalid_system_json() -> Non
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 200
 
 
 def test_registered_agent_completions_route_requires_bearer_token() -> None:
@@ -455,7 +480,9 @@ def test_agent_completions_route_applies_bearer_as_provider_key() -> None:
             "messages": [
                 {
                     "role": "system",
-                    "content": json.dumps({"session_id": "provider-key-session"}),
+                    "content": json.dumps(
+                        {CMW_EXTRA_BODY_KEY: {"session_id": "provider-key-session"}}
+                    ),
                 },
                 {"role": "user", "content": "ping"},
             ],
@@ -482,7 +509,13 @@ def test_agent_completions_route_structured_output_via_tool() -> None:
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
-            "messages": [{"role": "user", "content": "list worked objects"}],
+            "messages": [
+                {
+                    "role": "system",
+                    "content": json.dumps({CMW_EXTRA_BODY_KEY: {"session_id": "so-1"}}),
+                },
+                {"role": "user", "content": "list worked objects"},
+            ],
             "response_format": json.dumps(
                 {
                     "type": "json_schema",
@@ -537,7 +570,13 @@ def test_agent_completions_route_structured_injects_last_message_in_json() -> No
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
-            "messages": [{"role": "user", "content": "list worked objects"}],
+            "messages": [
+                {
+                    "role": "system",
+                    "content": json.dumps({CMW_EXTRA_BODY_KEY: {"session_id": "so-2"}}),
+                },
+                {"role": "user", "content": "list worked objects"},
+            ],
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -603,7 +642,9 @@ def test_structured_formatter_uses_compact_context_from_session_history() -> Non
             "messages": [
                 {
                     "role": "system",
-                    "content": json.dumps({"session_id": "history-session"}),
+                    "content": json.dumps(
+                        {CMW_EXTRA_BODY_KEY: {"session_id": "history-session"}}
+                    ),
                 },
                 {"role": "user", "content": "fresh question"},
             ],
@@ -643,7 +684,13 @@ def test_structured_output_uses_root_schema_description_when_present() -> None:
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
-            "messages": [{"role": "user", "content": "list worked objects"}],
+            "messages": [
+                {
+                    "role": "system",
+                    "content": json.dumps({CMW_EXTRA_BODY_KEY: {"session_id": "desc-1"}}),
+                },
+                {"role": "user", "content": "list worked objects"},
+            ],
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -680,7 +727,13 @@ def test_structured_output_falls_back_to_default_tool_description() -> None:
         headers={"Authorization": "Bearer provider-specific-key"},
         json={
             "model": "openrouter/z-ai/glm-5.1",
-            "messages": [{"role": "user", "content": "list worked objects"}],
+            "messages": [
+                {
+                    "role": "system",
+                    "content": json.dumps({CMW_EXTRA_BODY_KEY: {"session_id": "desc-2"}}),
+                },
+                {"role": "user", "content": "list worked objects"},
+            ],
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -699,6 +752,85 @@ def test_structured_output_falls_back_to_default_tool_description() -> None:
 
     assert response.status_code == 200
     assert "Do not invent facts." in _FormatterLLM.last_tool_description
+
+
+def test_structured_output_uses_injected_standard_schema_when_response_format_is_custom() -> None:
+    demo = _Demo()
+    app = _App()
+    register_agent_completions_route(demo, app)
+    _FormatterBoundLLM.next_args = {"summary": "ok"}
+    system_content = (
+        '{"cmw_extra_body":{"session_id":"inj-1"}}\n'
+        "Target schema (JSON Schema):\n"
+        '{"type":"object","properties":{"summary":{"type":"string"}},'
+        '"required":["summary"],"additionalProperties":false}'
+    )
+    response = TestClient(demo.app).post(
+        AGENT_COMPLETIONS_PATH,
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": "answer"},
+            ],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "custom_model",
+                    "strict": True,
+                    "schema": {
+                        "Id": "root",
+                        "Type": "Complex",
+                        "Attributes": [
+                            {"Name": "summary", "Type": "String", "Required": False}
+                        ],
+                    },
+                },
+            },
+        },
+    )
+    assert response.status_code == 200
+    body = json.loads(response.json()["choices"][0]["message"]["content"])
+    assert body == {"summary": "ok"}
+
+
+def test_structured_output_converts_custom_schema_without_injected_standard_schema() -> None:
+    demo = _Demo()
+    app = _App()
+    register_agent_completions_route(demo, app)
+    _FormatterBoundLLM.next_args = {"summary": "ok"}
+    response = TestClient(demo.app).post(
+        AGENT_COMPLETIONS_PATH,
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": json.dumps({CMW_EXTRA_BODY_KEY: {"session_id": "conv-1"}}),
+                },
+                {"role": "user", "content": "answer"},
+            ],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "custom_model",
+                    "strict": True,
+                    "schema": {
+                        "Id": "root",
+                        "Type": "Complex",
+                        "Attributes": [
+                            {"Name": "summary", "Type": "String", "Required": False}
+                        ],
+                    },
+                },
+            },
+        },
+    )
+    assert response.status_code == 200
+    body = json.loads(response.json()["choices"][0]["message"]["content"])
+    assert body == {"summary": "ok"}
 
 
 def test_structured_output_repairs_common_primitive_types() -> None:
@@ -810,7 +942,105 @@ def test_structured_output_does_not_repair_empty_string_for_integer() -> None:
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert json.loads(response.json()["choices"][0]["message"]["content"]) == {
+        "count": 0
+    }
+
+
+def test_structured_output_prunes_additional_properties_in_nested_objects() -> None:
+    demo = _Demo()
+    app = _App()
+    register_agent_completions_route(demo, app)
+    _FormatterBoundLLM.next_args = {
+        "items": [{"name": "n1", "description": "drop-me"}]
+    }
+
+    response = TestClient(demo.app).post(
+        AGENT_COMPLETIONS_PATH,
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "format output"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "prune_case",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {"name": {"type": "string"}},
+                                    "required": ["name"],
+                                    "additionalProperties": False,
+                                },
+                            }
+                        },
+                        "required": ["items"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert json.loads(response.json()["choices"][0]["message"]["content"]) == {
+        "items": [{"name": "n1"}]
+    }
+
+
+def test_structured_output_drops_optional_invalid_non_null_field_in_nested_object() -> None:
+    demo = _Demo()
+    app = _App()
+    register_agent_completions_route(demo, app)
+    _FormatterBoundLLM.next_args = {
+        "items": [{"name": "ok", "number_array": None}]
+    }
+
+    response = TestClient(demo.app).post(
+        AGENT_COMPLETIONS_PATH,
+        headers={"Authorization": "Bearer provider-specific-key"},
+        json={
+            "model": "openrouter/z-ai/glm-5.1",
+            "messages": [{"role": "user", "content": "format output"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "drop_optional_invalid",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string"},
+                                        "number_array": {"type": "number"},
+                                    },
+                                    "required": ["name"],
+                                    "additionalProperties": False,
+                                },
+                            }
+                        },
+                        "required": ["items"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert json.loads(response.json()["choices"][0]["message"]["content"]) == {
+        "items": [{"name": "ok"}]
+    }
 
 
 def test_registered_agent_completions_route_rejects_invalid_response_format_json() -> (
@@ -914,7 +1144,9 @@ def test_handle_agent_completions_payload_returns_openai_json() -> None:
         "messages": [
             {
                 "role": "system",
-                "content": json.dumps({"session_id": "test-session-plain"}),
+                "content": json.dumps(
+                    {CMW_EXTRA_BODY_KEY: {"session_id": "test-session-plain"}}
+                ),
             },
             {"role": "user", "content": "ping"},
         ],
@@ -937,7 +1169,13 @@ def test_handle_agent_payload_structured_without_slot_has_no_extra_message_keys(
         "messages": [
             {
                 "role": "system",
-                "content": json.dumps({"session_id": "test-session-structured-handle"}),
+                "content": json.dumps(
+                    {
+                        CMW_EXTRA_BODY_KEY: {
+                            "session_id": "test-session-structured-handle"
+                        }
+                    }
+                ),
             },
             {"role": "user", "content": "list"},
         ],
@@ -974,7 +1212,9 @@ def test_handle_agent_payload_injects_last_message_in_content_json() -> None:
         "messages": [
             {
                 "role": "system",
-                "content": json.dumps({"session_id": "sess-inject"}),
+                "content": json.dumps(
+                    {CMW_EXTRA_BODY_KEY: {"session_id": "sess-inject"}}
+                ),
             },
             {"role": "user", "content": "list"},
         ],

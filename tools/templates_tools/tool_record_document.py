@@ -33,7 +33,7 @@ _FETCH_RECORD_DOCUMENT_FILE_DESCRIPTION = (
     "Load a file that is **already stored** on a **document** attribute of a **record** so it "
     "can be read or passed along like a user attachment.\n\n"
     + CHAT_FILE_REFERENCE_RESULT_HINT
-    + "\n\nThe result also includes **``document_id``** (platform id of the file).\n\n"
+    + "\n\nThe result also includes **``document_id``** (entity ID of the file).\n\n"
     "If the **attribute** is **multivalue** (more than one file can be stored), set "
     "**``multivalue_index``** to pick one file to load (0-based; list order, often newest first "
     "in the app)."

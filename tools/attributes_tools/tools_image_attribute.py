@@ -8,7 +8,7 @@ ALLOWED_EXTENSIONS_SET = {e.lower() for e in ALLOWED_EXTENSIONS_LIST}
 ALLOWED_COLOR_RENDERING_MODES_SET = set(ALLOWED_COLOR_RENDERING_MODES_LIST)
 
 
-class EditOrCreateImageAttributeSchema(CommonAttributeFields):
+class EditOrCreateImageAttributeSchema(RefAttributeFields):
     rendering_color_mode: Optional[str] = Field(
         default=None,
         description="Image color mode. "
