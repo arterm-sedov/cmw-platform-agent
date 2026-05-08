@@ -31,6 +31,9 @@ CMW_PROPRIETARY_ASSISTANT_LAST_MESSAGE = CMW_ASSISTANT_LAST_MESSAGE_SCHEMA_KEY
 CMW_EXTRA_BODY_KEY = "cmw_extra_body"
 
 AGENT_COMPLETIONS_PATH = "/api/v1/chat/completions"
+_IO_DEBUG_ENABLED = os.getenv("OPENAI_COMPAT_DEBUG_LOG", "").lower() in (
+    "true", "1", "yes"
+)
 OPENAI_COMPAT_DEBUG_LOG_PATH = Path(
     os.getenv("OPENAI_COMPAT_DEBUG_LOG_PATH", "openai_compat_io_debug.jsonl")
 )
@@ -72,20 +75,24 @@ def _redact(value: Any) -> Any:
     return value
 
 
-def _debug_log_io(event: str, payload: dict[str, Any]) -> None:
-    """Best-effort endpoint IO logger for temporary diagnostics."""
-    try:
-        OPENAI_COMPAT_DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        record = {
-            "ts": int(time.time()),
-            "event": event,
-            "path": AGENT_COMPLETIONS_PATH,
-            "payload": _redact(payload),
-        }
-        with OPENAI_COMPAT_DEBUG_LOG_PATH.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-    except Exception:
-        return
+if _IO_DEBUG_ENABLED:
+
+    def _debug_log_io(event: str, payload: dict[str, Any]) -> None:
+        try:
+            OPENAI_COMPAT_DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            record = {
+                "ts": int(time.time()),
+                "event": event,
+                "path": AGENT_COMPLETIONS_PATH,
+                "payload": _redact(payload),
+            }
+            with OPENAI_COMPAT_DEBUG_LOG_PATH.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        except Exception:
+            return
+else:
+    def _debug_log_io(event: str, payload: dict[str, Any]) -> None:
+        pass
 
 
 def _json_response_content(response: JSONResponse) -> dict[str, Any]:
