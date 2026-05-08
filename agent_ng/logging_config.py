@@ -29,7 +29,7 @@ Environment variables (all optional):
   - Logs get YYYYMMDD date suffix automatically
   - Example: LOG_FILE=logs/app.log
 
-- LOG_MAX_BYTES: Max size per log file in bytes before rotation to .0, .1, etc.
+- LOG_MAX_BYTES: Max size per log file in bytes before rotation to .1, .2, etc.
   - Default: 1048576 (1MB)
   - Example: LOG_MAX_BYTES=5242880
 
@@ -70,61 +70,13 @@ from contextlib import suppress
 import json
 import logging
 from logging import Logger
+from logging.handlers import RotatingFileHandler
 import os
 import time
 
 from dotenv import load_dotenv
 
 _INITIALIZED = False
-
-
-class _UnlimitedRotatingFileHandler(logging.StreamHandler):
-    """Rotates log to -01.log, -02.log... when max_bytes exceeded. No count limit."""
-
-    def __init__(self, filename: str, max_bytes: int, encoding: str = "utf-8") -> None:
-        super().__init__()
-        self.baseFilename = os.path.abspath(filename)
-        self.maxBytes = max_bytes
-        self.encoding = encoding
-        self._rotated = f"{os.path.splitext(self.baseFilename)[0]}-"
-        self._open()
-
-    def _open(self) -> None:
-        self.stream = open(self.baseFilename, "a", encoding=self.encoding)
-
-    def _next_index(self) -> int:
-        n = 1
-        while os.path.exists(f"{self._rotated}{n:02d}.log"):
-            n += 1
-        return n
-
-    def emit(self, record: logging.LogRecord) -> None:
-        try:
-            msg = self.format(record)
-            stream = self.stream
-            if stream.tell() + len(msg.encode(self.encoding)) + 1 >= self.maxBytes:
-                self._rotate()
-                stream = self.stream
-            stream.write(msg + self.terminator)
-            self.flush()
-        except Exception:
-            self.handleError(record)
-
-    def _rotate(self) -> None:
-        if self.stream:
-            self.stream.close()
-            self.stream = None
-        n = self._next_index()
-        os.rename(self.baseFilename, f"{self._rotated}{n:02d}.log")
-        self._open()
-
-    def close(self) -> None:
-        if self.stream:
-            self.flush()
-            with suppress(OSError):
-                self.stream.close()
-            self.stream = None
-        super().close()
 
 
 class _JsonFormatter(logging.Formatter):
@@ -293,8 +245,12 @@ def setup_logging(force: bool | None = None) -> Logger:
         max_bytes = int(os.getenv("LOG_MAX_BYTES", "1048576") or 1048576)
         max_mb = int(os.getenv("LOG_MAX_SIZE_MB", "100") or 100)
         _enforce_size_limit(log_dir, base_name, max_mb * 1024 * 1024)
-        file_handler = _UnlimitedRotatingFileHandler(
-            log_file_dated, max_bytes=max_bytes
+        backup_count = (max_mb * 1024 * 1024) // max_bytes
+        file_handler = RotatingFileHandler(
+            log_file_dated,
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding="utf-8",
         )
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
