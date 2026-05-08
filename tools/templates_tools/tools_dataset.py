@@ -12,6 +12,7 @@ from tools.tool_utils import (
     build_global_alias,
     execute_edit_or_create_operation,
     execute_get_operation,
+    execute_list_operation,
 )
 
 DATASET_ENDPOINT = "webapi/Dataset"
@@ -404,15 +405,5 @@ def list_datasets(
     """
     template_global_alias = f"Template@{application_system_name}.{template_system_name}"
     endpoint = f"{DATASET_ENDPOINT}/List/{template_global_alias}"
-    # Use GET for list endpoint
     result = requests_._get_request(endpoint)
-
-    if not result.get("success"):
-        return result
-
-    raw = result.get("raw_response", {})
-    return {
-        "success": True,
-        "status_code": result.get("status_code", 200),
-        "data": raw.get("response", []),
-    }
+    return execute_list_operation(response_data=result, result_model=DatasetResult)
