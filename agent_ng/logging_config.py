@@ -79,21 +79,22 @@ _INITIALIZED = False
 
 
 class _UnlimitedRotatingFileHandler(logging.StreamHandler):
-    """Rotates current log to .0, .1, .2... when max_bytes exceeded. No count limit."""
+    """Rotates log to -01.log, -02.log... when max_bytes exceeded. No count limit."""
 
     def __init__(self, filename: str, max_bytes: int, encoding: str = "utf-8") -> None:
         super().__init__()
         self.baseFilename = os.path.abspath(filename)
         self.maxBytes = max_bytes
         self.encoding = encoding
+        self._rotated = f"{os.path.splitext(self.baseFilename)[0]}-"
         self._open()
 
     def _open(self) -> None:
         self.stream = open(self.baseFilename, "a", encoding=self.encoding)
 
     def _next_index(self) -> int:
-        n = 0
-        while os.path.exists(f"{self.baseFilename}.{n}"):
+        n = 1
+        while os.path.exists(f"{self._rotated}{n:02d}.log"):
             n += 1
         return n
 
@@ -114,7 +115,7 @@ class _UnlimitedRotatingFileHandler(logging.StreamHandler):
             self.stream.close()
             self.stream = None
         n = self._next_index()
-        os.rename(self.baseFilename, f"{self.baseFilename}.{n}")
+        os.rename(self.baseFilename, f"{self._rotated}{n:02d}.log")
         self._open()
 
     def close(self) -> None:
