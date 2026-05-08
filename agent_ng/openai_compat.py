@@ -34,9 +34,14 @@ AGENT_COMPLETIONS_PATH = "/api/v1/chat/completions"
 _IO_DEBUG_ENABLED = os.getenv("OPENAI_COMPAT_DEBUG_LOG", "").lower() in (
     "true", "1", "yes"
 )
-OPENAI_COMPAT_DEBUG_LOG_PATH = Path(
-    os.getenv("OPENAI_COMPAT_DEBUG_LOG_PATH", "openai_compat_io_debug.jsonl")
-)
+
+
+def _get_debug_log_path() -> Path:
+    default_name = f"openai_compat_io_debug-{time.strftime('%Y%m%d')}.jsonl"
+    return Path(os.getenv("OPENAI_COMPAT_DEBUG_LOG_PATH", default_name))
+
+
+OPENAI_COMPAT_DEBUG_LOG_PATH = _get_debug_log_path()
 _REDACT_KEYS = {
     "authorization",
     "api_key",
@@ -79,14 +84,15 @@ if _IO_DEBUG_ENABLED:
 
     def _debug_log_io(event: str, payload: dict[str, Any]) -> None:
         try:
-            OPENAI_COMPAT_DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            log_path = _get_debug_log_path()
+            log_path.parent.mkdir(parents=True, exist_ok=True)
             record = {
                 "ts": int(time.time()),
                 "event": event,
                 "path": AGENT_COMPLETIONS_PATH,
                 "payload": _redact(payload),
             }
-            with OPENAI_COMPAT_DEBUG_LOG_PATH.open("a", encoding="utf-8") as f:
+            with log_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
         except Exception:
             return
