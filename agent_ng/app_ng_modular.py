@@ -696,6 +696,11 @@ class NextGenApp:
             self.set_session_context(session_id)
             set_current_session_id(session_id)
 
+            # Reset session-level cancellation flag so a new message after stop
+            # is not immediately cancelled (different from Gradio State cancel_state
+            # which is reset by the UI pipeline).
+            self.session_manager.set_cancellation_state(session_id, False)
+
             # Debug: Check which LLM instance is being used
             if (
                 user_agent

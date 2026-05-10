@@ -25,7 +25,9 @@ from typing import Any
 try:
     from ._file_attachment import build_file_attachment
 except ImportError:
-    from agent_ng._file_attachment import build_file_attachment  # type: ignore[no-redef]
+    from agent_ng._file_attachment import (
+        build_file_attachment,  # type: ignore[no-redef]
+    )
 
 # LangChain imports
 from langchain_core.messages import (
@@ -36,8 +38,8 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
-from .debug_streamer import get_debug_streamer
 from .datetime_context import wrap_user_message
+from .debug_streamer import get_debug_streamer
 from .history_compression import (
     compress_conversation_history,
     emit_compression_notification,
@@ -52,7 +54,6 @@ from .message_content_text import (
     visible_plain_text_from_message,
 )
 from .streaming_config import get_streaming_config
-from .tool_deduplicator import get_deduplicator
 from .token_budget import (
     HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
     HISTORY_COMPRESSION_KEEP_RECENT_TURNS_SUCCESS,
@@ -61,6 +62,7 @@ from .token_budget import (
     MAX_TOOL_RESULT_TOKENS_PCT,
     count_tokens,
 )
+from .tool_deduplicator import get_deduplicator
 
 # LangSmith tracing
 try:
@@ -389,7 +391,7 @@ class NativeLangChainStreaming:
                     )
 
             # Persist chosen fallback model on the agent
-            setattr(agent, "fallback_model_name", selected_name)
+            agent.fallback_model_name = selected_name
 
             self._logger.info(
                 "Switched to fallback model %s/%s for conversation %s (trigger=%s)",
@@ -405,7 +407,11 @@ class NativeLangChainStreaming:
 
     @traceable
     async def stream_agent_response(
-        self, agent, message: str, conversation_id: str = "default", language: str | None = None
+        self,
+        agent,
+        message: str,
+        conversation_id: str = "default",
+        language: str | None = None,
     ) -> AsyncGenerator[StreamingEvent, None]:
         """
         Stream a complete QA turn using native LangChain streaming.
@@ -554,7 +560,11 @@ class NativeLangChainStreaming:
                         switched = self._try_switch_to_fallback_model(
                             agent, conversation_id, trigger="start_of_turn"
                         )
-                        if switched and hasattr(agent, "token_tracker") and agent.token_tracker:
+                        if (
+                            switched
+                            and hasattr(agent, "token_tracker")
+                            and agent.token_tracker
+                        ):
                             agent.token_tracker.refresh_budget_snapshot(
                                 agent=agent,
                                 conversation_id=conversation_id,
@@ -565,7 +575,10 @@ class NativeLangChainStreaming:
                         agent, conversation_id, messages_override=messages
                     ):
                         budget_snapshot = agent.token_tracker.get_budget_snapshot()
-                        success, updated_messages = await perform_compression_with_notifications(
+                        (
+                            success,
+                            updated_messages,
+                        ) = await perform_compression_with_notifications(
                             agent=agent,
                             conversation_id=conversation_id,
                             language=language,
@@ -585,7 +598,9 @@ class NativeLangChainStreaming:
                             )
                             if not user_message_present:
                                 messages.append(user_message)
-                                self._logger.debug("Re-added user message after compression")
+                                self._logger.debug(
+                                    "Re-added user message after compression"
+                                )
             except Exception as comp_exc:
                 # Non-fatal: log and continue
                 self._logger.debug(
@@ -627,7 +642,11 @@ class NativeLangChainStreaming:
                         switched = self._try_switch_to_fallback_model(
                             agent, conversation_id, trigger="mid_turn"
                         )
-                        if switched and hasattr(agent, "token_tracker") and agent.token_tracker:
+                        if (
+                            switched
+                            and hasattr(agent, "token_tracker")
+                            and agent.token_tracker
+                        ):
                             agent.token_tracker.refresh_budget_snapshot(
                                 agent=agent,
                                 conversation_id=conversation_id,
@@ -637,7 +656,10 @@ class NativeLangChainStreaming:
                         agent, conversation_id, messages_override=messages
                     ):
                         budget_snapshot = agent.token_tracker.get_budget_snapshot()
-                        success, updated_messages = await perform_compression_with_notifications(
+                        (
+                            success,
+                            updated_messages,
+                        ) = await perform_compression_with_notifications(
                             agent=agent,
                             conversation_id=conversation_id,
                             language=language,
@@ -674,7 +696,9 @@ class NativeLangChainStreaming:
                 tool_calls_in_progress = {}
                 processed_tools = {}  # Track processed tools to avoid duplicates in same response
                 has_tool_calls = False
-                self._logger.debug("Starting streaming loop for iteration %d", iteration)
+                self._logger.debug(
+                    "Starting streaming loop for iteration %d", iteration
+                )
 
                 # Stream LLM response - tracing handled by @traceable on stream_agent_response
                 # Attach optional Langfuse callback handler when available
@@ -696,9 +720,7 @@ class NativeLangChainStreaming:
                                 "metadata": metadata,
                             }
                     except Exception as exc:
-                        self._logger.debug(
-                            "Failed to get runnable config: %s", exc
-                        )
+                        self._logger.debug("Failed to get runnable config: %s", exc)
                         runnable_config = None
 
                 # Get LLM with tools fresh for this iteration to reflect any fallback switch
@@ -831,11 +853,21 @@ class NativeLangChainStreaming:
                         and hasattr(agent, "token_tracker")
                         and agent.token_tracker
                     ):
-                        usage_source = last_chunk if last_chunk is not None else accumulated_chunk
-                        ok = agent.token_tracker.update_turn_usage_from_api(usage_source)
-                        if not ok and accumulated_chunk is not None and accumulated_chunk is not usage_source:
+                        usage_source = (
+                            last_chunk if last_chunk is not None else accumulated_chunk
+                        )
+                        ok = agent.token_tracker.update_turn_usage_from_api(
+                            usage_source
+                        )
+                        if (
+                            not ok
+                            and accumulated_chunk is not None
+                            and accumulated_chunk is not usage_source
+                        ):
                             # Some providers attach usage only to the final aggregated chunk.
-                            agent.token_tracker.update_turn_usage_from_api(accumulated_chunk)
+                            agent.token_tracker.update_turn_usage_from_api(
+                                accumulated_chunk
+                            )
                 except Exception as exc:
                     # Log directly - if logging fails, let it fail visibly for debugging
                     self._logger.debug("Failed to accumulate iteration usage: %s", exc)
@@ -901,7 +933,10 @@ class NativeLangChainStreaming:
                                             and agent.session_id
                                         ):
                                             # Lazy import to avoid circular dependency
-                                            from .session_manager import set_current_session_id
+                                            from .session_manager import (
+                                                set_current_session_id,
+                                            )
+
                                             set_current_session_id(agent.session_id)
                                     except Exception as exc:
                                         # Log directly - if logging fails, let it fail visibly for debugging
@@ -941,9 +976,7 @@ class NativeLangChainStreaming:
 
                                     # Resolve any file the tool registered so
                                     # the app layer can render it inline.
-                                    file_att = build_file_attachment(
-                                        tool_result, agent
-                                    )
+                                    file_att = build_file_attachment(tool_result, agent)
 
                                     # Extract optional out-of-band tool cost
                                     # (e.g. image generation via direct HTTP).
@@ -980,8 +1013,10 @@ class NativeLangChainStreaming:
                                     del tool_calls_in_progress[tool_call_id]
                                 else:
                                     # Unknown tool - return as tool result instead of error
-                                    unknown_tool_result = self._get_unknown_tool_message(
-                                        tool_name, language
+                                    unknown_tool_result = (
+                                        self._get_unknown_tool_message(
+                                            tool_name, language
+                                        )
                                     )
 
                                     # Cache result for duplicate tool calls
@@ -1003,7 +1038,9 @@ class NativeLangChainStreaming:
 
                                     # Stream unknown tool to debug logs
                                     try:
-                                        debug_streamer = get_debug_streamer(conversation_id)
+                                        debug_streamer = get_debug_streamer(
+                                            conversation_id
+                                        )
                                         debug_streamer.warning(
                                             f"Unknown tool: {tool_name}",
                                             category="tool_execution",
@@ -1048,7 +1085,10 @@ class NativeLangChainStreaming:
                                     debug_streamer.error(
                                         f"Tool execution error: {str(e)}",
                                         category="tool_execution",
-                                        metadata={"tool_name": tool_name, "error": str(e)},
+                                        metadata={
+                                            "tool_name": tool_name,
+                                            "error": str(e),
+                                        },
                                     )
                                 except Exception as exc:
                                     # Log directly - if logging fails, let it fail visibly
@@ -1103,7 +1143,9 @@ class NativeLangChainStreaming:
 
                             if tool_name and tool_call_id:
                                 # Get the tool key for result lookup (exclude agent from key calculation)
-                                cache_args = {k: v for k, v in tool_args.items() if k != "agent"}
+                                cache_args = {
+                                    k: v for k, v in tool_args.items() if k != "agent"
+                                }
                                 try:
                                     tool_key = f"{tool_name}:{hash(json.dumps(cache_args, sort_keys=True, default=str))}"
                                 except Exception:
@@ -1127,7 +1169,9 @@ class NativeLangChainStreaming:
                                     and agent.llm_instance
                                     and hasattr(agent.llm_instance, "config")
                                 ):
-                                    context_window = agent.llm_instance.config.get("token_limit", 0)
+                                    context_window = agent.llm_instance.config.get(
+                                        "token_limit", 0
+                                    )
 
                                 # Only truncate if context window is available (relational threshold)
                                 if context_window > 0:
@@ -1145,7 +1189,7 @@ class NativeLangChainStreaming:
                                             f"[Tool result truncated: {tool_result_tokens:,} tokens → "
                                             f"{count_tokens(truncated_result):,} tokens "
                                             f"(max: {max_tool_result_tokens:,} tokens, "
-                                            f"{MAX_TOOL_RESULT_TOKENS_PCT*100:.0f}% of "
+                                            f"{MAX_TOOL_RESULT_TOKENS_PCT * 100:.0f}% of "
                                             f"{context_window:,} token context window)]"
                                         )
                                         self._logger.warning(
@@ -1176,14 +1220,17 @@ class NativeLangChainStreaming:
                                 )
                                 tool_messages.append(tool_message)
                                 self._logger.debug(
-                                    "Created ToolMessage for %s with ID %s", tool_name, tool_call_id
+                                    "Created ToolMessage for %s with ID %s",
+                                    tool_name,
+                                    tool_call_id,
                                 )
 
                         # CRITICAL: Add ToolMessages to working messages for next LLM call
                         # This ensures proper sequence: AIMessage(with tool_calls) → ToolMessages
                         messages.extend(tool_messages)
                         self._logger.debug(
-                            "Added %d ToolMessages to working messages", len(tool_messages)
+                            "Added %d ToolMessages to working messages",
+                            len(tool_messages),
                         )
 
                         # Check for overflow protection AFTER tool results are added
@@ -1196,18 +1243,24 @@ class NativeLangChainStreaming:
                                     conversation_id=conversation_id,
                                     messages_override=messages,
                                 )
-                                snapshot = agent.token_tracker.get_budget_snapshot() or {}
+                                snapshot = (
+                                    agent.token_tracker.get_budget_snapshot() or {}
+                                )
                                 # Emit budget update event for mid-turn UI refresh (as in Gradio 5)
                                 yield StreamingEvent(
                                     event_type="budget_update",
                                     content="",
-                                    metadata={"iteration": iteration, "trigger": "post_tool"},
+                                    metadata={
+                                        "iteration": iteration,
+                                        "trigger": "post_tool",
+                                    },
                                 )
                                 percentage_used = snapshot.get("percentage_used", 0.0)
                                 # Fallback first when enabled and threshold reached
                                 if (
                                     getattr(agent, "use_fallback_model", False)
-                                    and percentage_used >= HISTORY_COMPRESSION_MID_TURN_THRESHOLD
+                                    and percentage_used
+                                    >= HISTORY_COMPRESSION_MID_TURN_THRESHOLD
                                 ):
                                     switched = self._try_switch_to_fallback_model(
                                         agent, conversation_id, trigger="post_tool"
@@ -1225,8 +1278,13 @@ class NativeLangChainStreaming:
                                 if should_compress_mid_turn(
                                     agent, conversation_id, messages_override=messages
                                 ):
-                                    budget_snapshot = agent.token_tracker.get_budget_snapshot()
-                                    success, updated_messages = await perform_compression_with_notifications(
+                                    budget_snapshot = (
+                                        agent.token_tracker.get_budget_snapshot()
+                                    )
+                                    (
+                                        success,
+                                        updated_messages,
+                                    ) = await perform_compression_with_notifications(
                                         agent=agent,
                                         conversation_id=conversation_id,
                                         language=language,
@@ -1247,12 +1305,16 @@ class NativeLangChainStreaming:
                                         for tool_msg in tool_messages:
                                             if (
                                                 isinstance(tool_msg, ToolMessage)
-                                                and getattr(tool_msg, "tool_call_id", None)
+                                                and getattr(
+                                                    tool_msg, "tool_call_id", None
+                                                )
                                                 not in existing_tool_call_ids
                                             ):
                                                 messages.append(tool_msg)
                                                 existing_tool_call_ids.add(
-                                                    getattr(tool_msg, "tool_call_id", None)
+                                                    getattr(
+                                                        tool_msg, "tool_call_id", None
+                                                    )
                                                 )
                         except Exception as comp_exc:
                             # Non-fatal: log and continue
@@ -1276,7 +1338,8 @@ class NativeLangChainStreaming:
                 # If no tool calls, we're done
                 if not has_tool_calls:
                     self._logger.debug(
-                        "No tool calls in iteration %d, conversation complete", iteration
+                        "No tool calls in iteration %d, conversation complete",
+                        iteration,
                     )
 
                     # Stream conversation completion
@@ -1379,7 +1442,8 @@ class NativeLangChainStreaming:
                             except Exception as exc:
                                 # Log directly - if logging fails, let it fail visibly
                                 self._logger.debug(
-                                    "Failed to snapshot message for turn_complete: %s", exc
+                                    "Failed to snapshot message for turn_complete: %s",
+                                    exc,
                                 )
                                 continue
 
@@ -1513,9 +1577,7 @@ class NativeLangChainStreaming:
                         if normalized or native:
                             return normalized, native
                 except Exception as exc:
-                    self._logger.debug(
-                        "Failed to extract finish reason: %s", exc
-                    )
+                    self._logger.debug("Failed to extract finish reason: %s", exc)
                     return None, None
                 return None, None
 
@@ -1586,9 +1648,7 @@ class NativeLangChainStreaming:
                         snap_content: str | Any = getattr(m, "content", "")
                         if isinstance(m, BaseMessage):
                             snap_content = visible_plain_text_from_message(m) or (
-                                snap_content
-                                if isinstance(snap_content, str)
-                                else ""
+                                snap_content if isinstance(snap_content, str) else ""
                             )
                         ordered_messages_snapshot.append(
                             {
@@ -1601,7 +1661,9 @@ class NativeLangChainStreaming:
                         )
                     except Exception as exc:
                         # Log directly - if logging fails, let it fail visibly for debugging
-                        self._logger.debug("Failed to snapshot message metadata: %s", exc)
+                        self._logger.debug(
+                            "Failed to snapshot message metadata: %s", exc
+                        )
                         continue
 
                 yield StreamingEvent(
@@ -1638,73 +1700,24 @@ class NativeLangChainStreaming:
                 metadata={"conversation_complete": True, "final": True},
             )
 
+        except GeneratorExit:
+            # Stream was cancelled (stop button).  Persist partial turn,
+            # finalize token usage, then return without yielding further events.
+            partial_chunk = locals().get("accumulated_chunk")
+            self._persist_partial(agent, conversation_id, messages, partial_chunk)
+            if hasattr(agent, "token_tracker") and agent.token_tracker:
+                try:
+                    agent.token_tracker.finalize_turn_usage(None, messages)
+                except Exception:
+                    pass
+            return
         except Exception as e:
             # Enhanced error logging for debugging
             self._logger.exception("ERROR in stream_agent_response: %s", e)
 
-            # Persist partial turn: Human already stored; add completed ToolMessages and a truncated AIMessage if available
-            try:
-                current_memory = agent.memory_manager.get_conversation_history(
-                    conversation_id
-                )
-                memory_content = {
-                    memory_dedupe_fingerprint(msg)
-                    for msg in current_memory
-                    if isinstance(msg, BaseMessage)
-                }
-
-                # Collect any ToolMessages and AI messages already in working list
-                partial_messages_to_add = []
-                try:
-                    for m in messages:
-                        if isinstance(m, ToolMessage) or isinstance(m, AIMessage):
-                            key = (
-                                memory_dedupe_fingerprint(m)
-                                if isinstance(m, BaseMessage)
-                                else (type(m).__name__, str(m))
-                            )
-                            if key not in memory_content:
-                                partial_messages_to_add.append(m)
-                except Exception as exc:
-                    # Log directly - if logging fails, let it fail visibly for debugging
-                    self._logger.debug(
-                        "Failed to collect partial messages for persistence: %s", exc
-                    )
-
-                # Add a lean truncated AIMessage if we have partial content
-                try:
-                    partial_text = ""
-                    if "accumulated_chunk" in locals() and accumulated_chunk is not None:
-                        ac = accumulated_chunk
-                        if hasattr(ac, "content") and ac.content:
-                            if isinstance(ac, BaseMessage):
-                                partial_text = visible_plain_text_from_message(ac)
-                            if not partial_text and isinstance(
-                                getattr(ac, "content", None), str
-                            ):
-                                partial_text = ac.content
-                    if partial_text:
-                        truncated_msg = AIMessage(
-                            content=f"{partial_text} [truncated]"
-                        )
-                        key = memory_dedupe_fingerprint(truncated_msg)
-                        if key not in memory_content:
-                            partial_messages_to_add.append(truncated_msg)
-                except Exception as exc:
-                    # Log directly - if logging fails, let it fail visibly for debugging
-                    self._logger.debug(
-                        "Failed to create truncated message for persistence: %s", exc
-                    )
-
-                for m in partial_messages_to_add:
-                    try:
-                        agent.memory_manager.add_message(conversation_id, m)
-                    except Exception as exc:
-                        # Log directly - if logging fails, let it fail visibly for debugging
-                        self._logger.debug("Failed to emit early-finish hint: %s", exc)
-                        continue
-            except Exception as persist_err:
-                self._logger.debug("Failed partial-turn persistence: %s", persist_err)
+            # Persist partial turn via shared helper (DRY with GeneratorExit path)
+            partial_chunk = locals().get("accumulated_chunk")
+            self._persist_partial(agent, conversation_id, messages, partial_chunk)
 
             yield StreamingEvent(
                 event_type="error",
@@ -1767,7 +1780,9 @@ class NativeLangChainStreaming:
                         )
             except Exception as comp_exc:
                 # Non-fatal: log and continue
-                self._logger.debug("Failed to check/perform compression on error: %s", comp_exc)
+                self._logger.debug(
+                    "Failed to check/perform compression on error: %s", comp_exc
+                )
 
             # Error completion for progress display
             yield StreamingEvent(
@@ -1775,6 +1790,51 @@ class NativeLangChainStreaming:
                 content=self._get_processing_failed_message(language),
                 metadata={"error": True, "final": True},
             )
+
+    def _persist_partial(
+        self,
+        agent,
+        conversation_id: str,
+        messages: list,
+        accumulated_chunk: BaseMessage | None = None,
+    ) -> None:
+        """Save partial ToolMessages, AIMessages, and truncated stream text
+        from a cancelled turn."""
+        try:
+            current_memory = agent.memory_manager.get_conversation_history(
+                conversation_id
+            )
+            memory_content = {
+                memory_dedupe_fingerprint(msg)
+                for msg in current_memory
+                if isinstance(msg, BaseMessage)
+            }
+            for m in messages:
+                if isinstance(m, (ToolMessage, AIMessage)):
+                    key = (
+                        memory_dedupe_fingerprint(m)
+                        if isinstance(m, BaseMessage)
+                        else hash(str(m))
+                    )
+                    if key not in memory_content:
+                        agent.memory_manager.add_message(conversation_id, m)
+
+            # Preserve partial streaming text that hasn't been committed to messages yet
+            if accumulated_chunk is not None and hasattr(accumulated_chunk, "content"):
+                partial_text = visible_plain_text_from_message(accumulated_chunk)
+                if not partial_text and isinstance(
+                    getattr(accumulated_chunk, "content", None), str
+                ):
+                    partial_text = accumulated_chunk.content
+                if partial_text:
+                    truncated_msg = AIMessage(
+                        content=f"{partial_text.rstrip()} [truncated]"
+                    )
+                    key = memory_dedupe_fingerprint(truncated_msg)
+                    if key not in memory_content:
+                        agent.memory_manager.add_message(conversation_id, truncated_msg)
+        except Exception as exc:
+            self._logger.debug("Failed partial-turn persistence: %s", exc)
 
 
 # Global streaming instance
