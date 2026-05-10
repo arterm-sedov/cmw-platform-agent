@@ -138,32 +138,23 @@ class ConfigTab:
         # ── Platform credentials ──
         with gr.Row(equal_height=True):
             with gr.Column(scale=1, elem_classes=["model-card"]):
-                with gr.Row():
+                gr.Markdown(
+                    f"### {self._get_translation('config_title')}",
+                    elem_classes=["llm-selection-title"],
+                )
+                if platform_from_dotenv:
                     gr.Markdown(
-                        f"### {self._get_translation('config_title')}",
-                        elem_classes=["llm-selection-title"],
+                        self._get_translation("config_platform_dotenv_notice")
                     )
-                with gr.Row(equal_height=True):
-                    with gr.Column(scale=1, min_width="50%"):
-                        if platform_from_dotenv:
-                            gr.Markdown(
-                                self._get_translation("config_platform_dotenv_notice")
-                            )
-                        else:
-                            gr.Markdown(self._get_translation("config_help"))
-
-                    with gr.Column(
-                        scale=1,
-                        min_width="50%",
-                        visible=not platform_from_dotenv,
-                    ):
+                else:
+                    with gr.Row(equal_height=True):
                         self.components["platform_url"] = gr.Textbox(
                             label=self._get_translation("config_platform_url"),
                             placeholder="https://your-comindware-host",
                             value="",
                             lines=1,
                             max_lines=1,
-                            scale=4,
+                            scale=2,
                         )
                         self.components["username"] = gr.Textbox(
                             label=self._get_translation("config_username"),
