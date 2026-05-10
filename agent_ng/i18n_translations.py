@@ -42,10 +42,9 @@ RUSSIAN_TRANSLATIONS = {
     """,
     "quick_start_title": "Быстрый старт",
     "quick_start_description": """
-    1. Настройте подключение к **Comindware Platform** на вкладке «**Настройки**».
-    2. Перейдите на вкладку «**Чат**» для начала разговора.
-    3. Выберите модель в боковой панели.
-    4. Введите свой вопрос или выберите **заготовку** в левой панели и отредактируйте её, например:
+     1. Настройте подключение к **Comindware Platform** и LLM на вкладке «**Настройки**».
+     2. Перейдите на вкладку «**Чат**» для начала разговора.
+     3. Введите свой вопрос или выберите **заготовку** в левой панели и отредактируйте её, например:
         - Что ты умеешь?
         - Чего ты не умеешь?
         - Перечисли все приложения в платформе в удобном списке.
@@ -57,9 +56,9 @@ RUSSIAN_TRANSLATIONS = {
         - Для атрибута "Контактный телефон" в приложении "CRM", шаблон "Лиды", смени формат отображения на российский телефон.
         - Получи атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
         - Архивируй/разархивируй атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
-    5. Нажмите кнопку «**Отправить**» и дождитесь ответа агента.
-    6. Агент может отвечать некоторое время, особенно если требуется обращение к **Comindware Platform**.  Прогресс отображается в левой панели.
-    7. По окончании работы агент выдаст сообщение «Обработка завершена» в левой панели.
+     4. Нажмите кнопку «**Отправить**» и дождитесь ответа агента.
+     5. Агент может отвечать некоторое время, особенно если требуется обращение к **Comindware Platform**.  Прогресс отображается в левой панели.
+     6. По окончании работы агент выдаст сообщение «Обработка завершена» в левой панели.
     """,
     # Quick actions
     "quick_actions_title": "Заготовки",
@@ -396,10 +395,9 @@ ENGLISH_TRANSLATIONS = {
     """,
     "quick_start_title": "Quick Start",
     "quick_start_description": """
-    1. Configure the connection to the **Comindware Platform** in the **Config** tab.
-    2. Go to the **Chat** tab to start a conversation.
-    3. Select a model in the sidebar.
-    4. Enter your question or select a **template** in the sidebar and edit it, for example:
+     1. Configure the connection to the **Comindware Platform** and LLM in the **Config** tab.
+     2. Go to the **Chat** tab to start a conversation.
+     3. Enter your question or select a **template** in the sidebar and edit it, for example:
         - What can you do?
         - What can't you do?
         - List all applications in the platform in a convenient list.
@@ -411,9 +409,9 @@ ENGLISH_TRANSLATIONS = {
         - For the "Contact Phone" attribute in application "CRM", template "Leads", change the display format to Russian phone
         - Get attribute: system name "Comment", application "HR", template "Candidates"
         - Archive/unarchive attribute, system name "Comment", application "HR", template "Candidates"
-    5. Click **Send** and wait for the agent's response.
-    6. The agent may take some time to respond, especially when accessing the **Comindware Platform**. Progress is displayed in the sidebar.
-    7. When finished, the agent will show **Processing complete** message in the sidebar.
+     4. Click **Send** and wait for the agent's response.
+     5. The agent may take some time to respond, especially when accessing the **Comindware Platform**. Progress is displayed in the sidebar.
+     6. When finished, the agent will show **Processing complete** message in the sidebar.
     """,
     # Quick actions
     "quick_actions_title": "Templates",
