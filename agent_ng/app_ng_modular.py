@@ -1434,27 +1434,25 @@ class NextGenApp:
             else:
                 _logger.warning("ChatTab not available")
 
-            if LogsTab:
-                logs_tab = LogsTab(
-                    event_handlers, language=self.language, i18n_instance=self.i18n
-                )
-                logs_tab.set_main_app(self)  # Pass main app reference
-                tab_modules.append(logs_tab)
-                self.tab_instances["logs"] = logs_tab
-            else:
-                _logger.warning("LogsTab not available")
-
             if StatsTab:
                 stats_tab = StatsTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
-                stats_tab.set_main_app(
-                    self
-                )  # Set reference to main app for session management
+                stats_tab.set_main_app(self)
                 tab_modules.append(stats_tab)
                 self.tab_instances["stats"] = stats_tab
             else:
                 _logger.warning("StatsTab not available")
+
+            if DownloadsTab:
+                downloads_tab = DownloadsTab(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
+                )
+                downloads_tab.set_main_app(self)
+                tab_modules.append(downloads_tab)
+                self.tab_instances["downloads"] = downloads_tab
+            else:
+                _logger.warning("DownloadsTab not available")
 
             # Config tab is always shown. CMW_USE_DOTENV only switches platform
             # credentials: .env vs browser (see ConfigTab).
@@ -1469,16 +1467,15 @@ class NextGenApp:
             else:
                 _logger.info("ConfigTab class unavailable; skipping config tab")
 
-            # Downloads tab
-            if DownloadsTab:
-                downloads_tab = DownloadsTab(
+            if LogsTab:
+                logs_tab = LogsTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
-                downloads_tab.set_main_app(self)
-                tab_modules.append(downloads_tab)
-                self.tab_instances["downloads"] = downloads_tab
+                logs_tab.set_main_app(self)
+                tab_modules.append(logs_tab)
+                self.tab_instances["logs"] = logs_tab
             else:
-                _logger.warning("DownloadsTab not available")
+                _logger.warning("LogsTab not available")
         except Exception as e:
             _logger.exception("Error creating tab modules: %s", e)
             raise
@@ -1984,7 +1981,7 @@ def main():
         path="/",
         server_name="0.0.0.0",
         server_port=port,
-        footer_links=["gradio", "settings"],
+        footer_links=[],
         theme=gr.themes.Soft(),
         css_paths=[_theme_css],
         favicon_path=str(_favicon),
@@ -2002,6 +1999,7 @@ def main():
         host="0.0.0.0",
         port=port,
         log_level="info",
+        timeout_graceful_shutdown=3,
     )
 
 

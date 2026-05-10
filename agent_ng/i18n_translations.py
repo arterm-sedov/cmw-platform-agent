@@ -205,6 +205,12 @@ RUSSIAN_TRANSLATIONS = {
     "unhealthy_status": "❌ Неисправен",
     # Config tab
     "config_title": "Подключение к Comindware Platform",
+    "config_browser_storage_help": (
+        "**Сохранить в браузере** — применить параметры к текущему сеансу.\n\n"
+        "**Загрузить из браузера** — восстановить ранее сохранённые значения.\n\n"
+        "**Очистить хранилище браузера** — удалить сохранённые параметры и очистить поля.\n\n"
+        "Данные сохраняются в браузере и применяются только в пределах текущего сеанса."
+    ),
     "config_platform_url": "Адрес сервера",
     "config_username": "Имя пользователя",
     "config_password": "Пароль",
@@ -228,15 +234,6 @@ RUSSIAN_TRANSLATIONS = {
         например `https://your-host`.
         - **Имя пользователя** и **Пароль** — учетные данные для
         использования API. **Обычный аккаунт не будет работать.**
-        - Нажмите «**Сохранить в браузере**», чтобы применить параметры к
-        текущему сеансу.
-        - Кнопка «**Загрузить из браузера**» восстановит ранее сохранённые
-        значения.
-        - **Очистить хранилище браузера** удалит сохранённые параметры и
-          очистит поля.
-
-        Данные сохраняются в браузере и применяются только в
-        пределах текущего сеанса.
         """
     ),
     # LLM override fields
@@ -563,6 +560,12 @@ ENGLISH_TRANSLATIONS = {
     "unhealthy_status": "❌ Unhealthy",
     # Config tab
     "config_title": "Comindware Platform Connection",
+    "config_browser_storage_help": (
+        "**Save to browser** — apply settings to the current session.\n\n"
+        "**Load from browser** — restore previously saved values.\n\n"
+        "**Clear browser storage** — delete saved settings and clear the fields.\n\n"
+        "Data is stored in the browser and applies only within the current session."
+    ),
     "config_platform_url": "Server URL",
     "config_username": "Username",
     "config_password": "Password",
@@ -586,12 +589,6 @@ ENGLISH_TRANSLATIONS = {
         `https://your-host`.
         - **Username** and **Password** — credentials with API access rights.
         **Regular account won't work.**
-        - Click **Save to browser** to apply settings for the current session.
-        - **Load from browser** restores previously saved values.
-        - **Clear browser storage** removes saved settings and clears the fields.
-
-        Settings are stored in the browser storage and applied within the
-        current session only.
         """
     ),
     # LLM override fields

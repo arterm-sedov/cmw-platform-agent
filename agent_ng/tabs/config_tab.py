@@ -101,10 +101,7 @@ class ConfigTab:
     def _create_config_interface(self) -> None:
         """Create the configuration form with consistent styling"""
 
-        # BrowserState default MUST be all empty strings. Do NOT bake env defaults
-        # here — demo.load() fires before onMount() reads localStorage, so it
-        # receives the default value. If provider is pre-filled, has_any_value
-        # becomes True and url/username/password get cleared.
+        # BrowserState default MUST be all empty strings.
         self.components["config_state"] = gr.BrowserState(
             {
                 "url": "",
@@ -115,14 +112,30 @@ class ConfigTab:
             storage_key="cmw_config_v1",
         )
 
-        # Textbox initial values — always empty, BrowserState handles persistence
-        url_init = ""
-        login_init = ""
-        password_init = ""
-
         platform_from_dotenv = self.use_dotenv_for_platform()
 
-        # Platform: two columns — help/title (left) and credentials (right), like Gradio row+cards.
+        # ── Browser storage controls (top, single pane) ──
+        with gr.Row():
+            with gr.Column(scale=1, elem_classes=["model-card"]):
+                with gr.Row():
+                    self.components["save_btn"] = gr.Button(
+                        self._get_translation("config_save_button"),
+                        variant="primary",
+                        elem_classes=["cmw-button"],
+                    )
+                    self.components["load_btn"] = gr.Button(
+                        self._get_translation("config_load_button"),
+                        variant="secondary",
+                        elem_classes=["cmw-button"],
+                    )
+                    self.components["clear_storage_btn"] = gr.Button(
+                        self._get_translation("config_clear_storage_button"),
+                        variant="secondary",
+                        elem_classes=["cmw-button"],
+                    )
+                gr.Markdown(self._get_translation("config_browser_storage_help"))
+
+        # ── Platform credentials ──
         with gr.Row(equal_height=True):
             with gr.Column(scale=1, elem_classes=["model-card"]):
                 with gr.Row():
@@ -147,14 +160,14 @@ class ConfigTab:
                         self.components["platform_url"] = gr.Textbox(
                             label=self._get_translation("config_platform_url"),
                             placeholder="https://your-comindware-host",
-                            value=url_init,
+                            value="",
                             lines=1,
                             max_lines=1,
                             scale=4,
                         )
                         self.components["username"] = gr.Textbox(
                             label=self._get_translation("config_username"),
-                            value=login_init,
+                            value="",
                             lines=1,
                             max_lines=1,
                             scale=1,
@@ -162,11 +175,13 @@ class ConfigTab:
                         self.components["password"] = gr.Textbox(
                             label=self._get_translation("config_password"),
                             type="password",
-                            value=password_init,
+                            value="",
                             lines=1,
                             max_lines=1,
                             scale=1,
                         )
+
+        # ── LLM selection + provider API keys ──
         with gr.Row(equal_height=True):
             with gr.Column(scale=1):
                 if self.sidebar_instance is not None:
@@ -211,24 +226,7 @@ class ConfigTab:
                     self._llm_provider_key_inputs
                 )
 
-        with gr.Row(equal_height=True):
-            self.components["save_btn"] = gr.Button(
-                self._get_translation("config_save_button"),
-                variant="primary",
-                elem_classes=["cmw-button"],
-            )
-            self.components["load_btn"] = gr.Button(
-                self._get_translation("config_load_button"),
-                variant="secondary",
-                elem_classes=["cmw-button"],
-            )
-            self.components["clear_storage_btn"] = gr.Button(
-                self._get_translation("config_clear_storage_button"),
-                variant="secondary",
-                elem_classes=["cmw-button"],
-            )
-
-        # Status area (not used as output to avoid version mismatches)
+        # Status area
         self.components["config_status_display"] = gr.Markdown("")
 
     @staticmethod
