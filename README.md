@@ -3,7 +3,7 @@ emoji: 🕵🏻‍♂️
 colorFrom: blue
 colorTo: blue
 sdk: gradio
-sdk_version: 5.49.1
+sdk_version: 6.10.0
 app_file: agent_ng/app_ng_modular.py
 pinned: true
 hf_oauth: true
