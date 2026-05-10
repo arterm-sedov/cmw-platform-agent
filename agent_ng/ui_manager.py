@@ -120,7 +120,7 @@ class UIManager:
                 ):
                     sb.create_sidebar_column()
 
-                with gr.Column(scale=1, min_width=0), gr.Tabs():
+                with gr.Column(scale=1, min_width=0), gr.Tabs(selected="home"):
                     for tab_module in tab_modules:
                         if tab_module:
                             try:
@@ -367,47 +367,39 @@ class UIManager:
         refresh_logs_handler = event_handlers.get("refresh_logs")
         update_progress_handler = event_handlers.get("update_progress_display")
 
-        # Load initial UI state once on startup (stats: single demo.load below)
+        # Single composite startup — all initial-state loads fire in one queue event
+        refresh_stats_handler = event_handlers.get("refresh_stats")
+        progress_comp = self.components.get("progress_display")
+        _startup_fns: list[Callable] = []
+        _startup_outputs: list = []
 
         if "token_budget_display" in self.components and update_token_budget_handler:
-            demo.load(
-                fn=update_token_budget_handler,
-                outputs=[self.components["token_budget_display"]],
-                api_visibility="private",
-            )
-
-        # LLM selection components are initialized with static values
-        # and only update when explicitly triggered by user actions
+            _startup_fns.append(update_token_budget_handler)
+            _startup_outputs.append(self.components["token_budget_display"])
 
         if "logs_display" in self.components and refresh_logs_handler:
-            demo.load(
-                fn=refresh_logs_handler,
-                outputs=[self.components["logs_display"]],
-                api_visibility="private",
-            )
+            _startup_fns.append(refresh_logs_handler)
+            _startup_outputs.append(self.components["logs_display"])
 
-        # Progress display - wire to chat events for event-driven updates
-        progress_comp = self.components.get("progress_display")
         if progress_comp and update_progress_handler:
-            # Load initial state
-            demo.load(
-                fn=update_progress_handler,
-                outputs=[progress_comp],
-                api_visibility="private",
-            )
-            # Note: Progress updates are wired to chat events in the main event wiring section
-            # (see submit_event, clear_event, stop_event wiring above)
+            _startup_fns.append(update_progress_handler)
+            _startup_outputs.append(progress_comp)
 
-        refresh_stats_handler = event_handlers.get("refresh_stats")
         if "stats_display" in self.components and refresh_stats_handler:
+            _startup_fns.append(refresh_stats_handler)
+            _startup_outputs.append(self.components["stats_display"])
+
+        if _startup_fns:
+            _fns = tuple(_startup_fns)
+
+            def _startup_composite():
+                return tuple(fn() for fn in _fns)
+
             demo.load(
-                fn=refresh_stats_handler,
-                outputs=[self.components["stats_display"]],
+                fn=_startup_composite,
+                outputs=_startup_outputs,
                 api_visibility="private",
             )
-
-        # Config auto-load is handled by tab.select in config_tab.py.
-        # No demo.load() needed — config loads when user opens the tab.
 
         # Setup auto-refresh timers for real-time updates
         self._setup_auto_refresh_timers(demo, event_handlers)

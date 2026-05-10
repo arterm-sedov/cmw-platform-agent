@@ -9,7 +9,9 @@ This prevents freezes by keeping download button updates separate from the chat 
 from collections.abc import Callable
 import logging
 from typing import Any, Optional
+
 import gradio as gr
+
 from ..i18n_translations import get_translation_key
 
 
@@ -36,12 +38,13 @@ class DownloadsTab:
         Returns:
             Tuple of (TabItem, components_dict)
         """
-        logging.getLogger(__name__).info("✅ DownloadsTab: Creating downloads interface...")
+        logging.getLogger(__name__).info(
+            "✅ DownloadsTab: Creating downloads interface..."
+        )
 
         with gr.TabItem(
             self._get_translation("tab_downloads"),
             id="downloads",
-            render_children=True,
         ) as tab:
             self._tab_item = tab
             # Create downloads interface
@@ -54,7 +57,9 @@ class DownloadsTab:
 
     def _create_downloads_interface(self):
         """Create the downloads interface with download buttons"""
-        logging.getLogger(__name__).debug("📥 DownloadsTab: Creating downloads interface...")
+        logging.getLogger(__name__).debug(
+            "📥 DownloadsTab: Creating downloads interface..."
+        )
 
         with gr.Column(elem_classes=["downloads-container"]):
             # Markdown first, HTML below (export runs when this tab is opened / prep event).
@@ -73,7 +78,9 @@ class DownloadsTab:
 
     def _connect_events(self):
         """Connect event handlers for the downloads tab"""
-        logging.getLogger(__name__).debug("🔗 DownloadsTab: Connecting event handlers...")
+        logging.getLogger(__name__).debug(
+            "🔗 DownloadsTab: Connecting event handlers..."
+        )
 
         # Event handlers will be connected from ui_manager after all tabs are created
         # This tab just provides the UI components

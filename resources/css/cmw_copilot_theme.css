@@ -1346,3 +1346,12 @@ html.dark span[data-testid="block-info"] {
     font-family: var(--cmw-font-family) !important;
     background: var(--theme-colors__highlight) !important;
 }
+
+/* Gradio 6.11+ Tabs.svelte ResizeObserver stabilisation.
+   The overflow handler computes cumulative tab widths; layout changes
+   from overflow-menu mutations can feed back into the observer.
+   `contain: layout style` isolates the nav so internal DOM mutations
+   do not re-trigger the ResizeObserver on the nav itself. */
+.tabs > .tab-nav {
+    contain: layout style;
+}

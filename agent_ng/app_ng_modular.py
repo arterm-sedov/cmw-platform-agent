@@ -1483,19 +1483,10 @@ class NextGenApp:
             _logger.exception("Error creating tab modules: %s", e)
             raise
 
-        # Configure queue manager BEFORE creating interface (matches historical branch wiring).
+        # Configure queue manager once on the real demo (not a throwaway temp Blocks).
         try:
             if hasattr(self, "queue_manager") and self.queue_manager:
-                _logger.info("Configuring queue manager before interface creation...")
-                _logger.debug("Queue manager type: %s", type(self.queue_manager))
-                _logger.debug(
-                    "Queue manager has config: %s",
-                    hasattr(self.queue_manager, "config"),
-                )
-                with gr.Blocks() as temp_demo:
-                    pass
-                self.queue_manager.configure_queue(temp_demo)
-                _logger.info("Queue manager configured successfully")
+                _logger.info("Queue manager ready (configured on demo later)")
             else:
                 _logger.warning("Queue manager not available for configuration")
         except Exception as e:
@@ -1702,9 +1693,13 @@ class NextGenApp:
         # Ensure queue is initialized even if configure_queue didn't call demo.queue()
         # This prevents AttributeError: 'NoneType' object has no attribute 'max_thread_count'
         if demo._queue is None:
-            # Initialize with minimal default settings
             demo.queue(default_concurrency_limit=1, status_update_rate="auto")
             _logger.info("Queue initialized with minimal default settings")
+
+        # Ensure thread-pool limiter is created before server starts.
+        # Gradio 6.11+ runs pre/post processing via anyio.to_thread.run_sync;
+        # a missing limiter can stall SSE-backed initialization.
+        demo.create_limiter()
 
         # OpenAI-shaped completions on Gradio's FastAPI app (see also ``main()`` mount path).
         register_agent_completions_route(demo, self)

@@ -48,8 +48,10 @@ except ImportError:
             build_file_bubbles_for_role,  # type: ignore[no-redef]
         )
     except Exception:  # pragma: no cover
+
         def build_file_bubbles_for_role(_att, role="user"):  # type: ignore[no-redef]
             return []
+
 
 from .sidebar import QuickActionsMixin
 
@@ -115,17 +117,17 @@ class ChatTab(QuickActionsMixin):
             with gr.TabItem(
                 self._get_translation("tab_chat"),
                 id="chat",
-                render_children=True,
             ) as tab:
                 self.build_ui(show_stack_heading=False)
 
                 # Verify tab was created successfully
                 if tab is None:
-                    raise ValueError("gr.TabItem context manager returned None - this should not happen")
+                    raise ValueError(
+                        "gr.TabItem context manager returned None - this should not happen"
+                    )
         except Exception as e:
             logging.getLogger(__name__).error(
-                f"❌ ChatTab: Error in create_tab: {e}",
-                exc_info=True
+                f"❌ ChatTab: Error in create_tab: {e}", exc_info=True
             )
             raise
 
@@ -176,17 +178,80 @@ class ChatTab(QuickActionsMixin):
                 file_types=[
                     ".txt",  # Pasted text files from Gradio
                     "text",  # MIME category for all text/*
-                    ".pdf", ".csv", ".tsv", ".xlsx", ".xls",  # Documents and data
-                    ".docx", ".pptx", ".vsdx", ".msg", ".eml",  # Office documents
-                    ".zip", ".rar", ".tar", ".gz", ".bz2",  # Archives
-                    ".dwg", ".bpmn", ".sql", ".conf", ".ico",  # Other supported formats
-                    ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".xml", ".html",
-                    ".css", ".md", ".ini", ".sh", ".bat", ".ps1", ".c", ".cpp", ".h",
-                    ".hpp", ".java", ".go", ".rs", ".rb", ".php", ".pl", ".swift",
-                    ".kt", ".scala", ".sql", ".toml", ".env",  # Common text-based code formats
-                    ".wav", ".mp3",  ".aiff", ".ogg", ".flac", ".aac",  # Audio files
-                    ".mp4", ".mpeg", ".mpg", ".mov", ".avi", ".flv", ".webm", ".wmv", ".3gp", ".3gpp",  # Video files
-                    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tiff"  # Image files
+                    ".pdf",
+                    ".csv",
+                    ".tsv",
+                    ".xlsx",
+                    ".xls",  # Documents and data
+                    ".docx",
+                    ".pptx",
+                    ".vsdx",
+                    ".msg",
+                    ".eml",  # Office documents
+                    ".zip",
+                    ".rar",
+                    ".tar",
+                    ".gz",
+                    ".bz2",  # Archives
+                    ".dwg",
+                    ".bpmn",
+                    ".sql",
+                    ".conf",
+                    ".ico",  # Other supported formats
+                    ".py",
+                    ".js",
+                    ".ts",
+                    ".json",
+                    ".yaml",
+                    ".yml",
+                    ".xml",
+                    ".html",
+                    ".css",
+                    ".md",
+                    ".ini",
+                    ".sh",
+                    ".bat",
+                    ".ps1",
+                    ".c",
+                    ".cpp",
+                    ".h",
+                    ".hpp",
+                    ".java",
+                    ".go",
+                    ".rs",
+                    ".rb",
+                    ".php",
+                    ".pl",
+                    ".swift",
+                    ".kt",
+                    ".scala",
+                    ".sql",
+                    ".toml",
+                    ".env",  # Common text-based code formats
+                    ".wav",
+                    ".mp3",
+                    ".aiff",
+                    ".ogg",
+                    ".flac",
+                    ".aac",  # Audio files
+                    ".mp4",
+                    ".mpeg",
+                    ".mpg",
+                    ".mov",
+                    ".avi",
+                    ".flv",
+                    ".webm",
+                    ".wmv",
+                    ".3gp",
+                    ".3gpp",  # Video files
+                    ".png",
+                    ".jpg",
+                    ".jpeg",
+                    ".gif",
+                    ".bmp",
+                    ".webp",
+                    ".svg",
+                    ".tiff",  # Image files
                 ],
                 file_count="multiple",
             )
@@ -256,18 +321,27 @@ class ChatTab(QuickActionsMixin):
         # Following reference repo pattern: two-step process
         # Step 1: Simple function to clear textbox and save message (triggers .success())
         # Step 2: Chain streaming handler with .then()
-        def clear_and_save_multimodal_textbox(multimodal_value: dict[str, Any] | None) -> tuple[gr.MultimodalTextbox, dict[str, Any] | None]:
+        def clear_and_save_multimodal_textbox(
+            multimodal_value: dict[str, Any] | None,
+        ) -> tuple[gr.MultimodalTextbox, dict[str, Any] | None]:
             """Clear MultimodalTextbox and save message to state (pattern from reference repo)."""
-            logging.getLogger(__name__).debug("clear_and_save_multimodal_textbox called")
+            logging.getLogger(__name__).debug(
+                "clear_and_save_multimodal_textbox called"
+            )
             # Extract text from MultimodalValue format
             if isinstance(multimodal_value, dict):
                 text = multimodal_value.get("text", "")
                 files = multimodal_value.get("files", [])
                 saved_value = {"text": text, "files": files}
             else:
-                saved_value = {"text": str(multimodal_value) if multimodal_value else "", "files": []}
+                saved_value = {
+                    "text": str(multimodal_value) if multimodal_value else "",
+                    "files": [],
+                }
 
-            logging.getLogger(__name__).debug(f"Saved value: text={saved_value.get('text', '')[:50]}..., files={len(saved_value.get('files', []))}")
+            logging.getLogger(__name__).debug(
+                f"Saved value: text={saved_value.get('text', '')[:50]}..., files={len(saved_value.get('files', []))}"
+            )
             return (
                 gr.MultimodalTextbox(value="", interactive=False, placeholder=""),
                 saved_value,
@@ -291,7 +365,10 @@ class ChatTab(QuickActionsMixin):
         user_submit = self.components["msg"].submit(
             fn=clear_and_save_multimodal_textbox,
             inputs=[self.components["msg"]],
-            outputs=[self.components["msg"], saved_input],  # Clear textbox and save message to state
+            outputs=[
+                self.components["msg"],
+                saved_input,
+            ],  # Clear textbox and save message to state
             queue=False,
             api_visibility="private",
         )
@@ -301,7 +378,9 @@ class ChatTab(QuickActionsMixin):
         # Following reference repo pattern exactly
         def show_stop_button():
             """Show stop button and hide submit button (interchanging buttons)."""
-            logging.getLogger(__name__).debug("show_stop_button: Interchanging buttons - showing stop, hiding submit")
+            logging.getLogger(__name__).debug(
+                "show_stop_button: Interchanging buttons - showing stop, hiding submit"
+            )
             return gr.MultimodalTextbox(submit_btn=False, stop_btn=original_stop_btn)
 
         user_submit.success(
@@ -344,7 +423,11 @@ class ChatTab(QuickActionsMixin):
                 queue_manager,
                 "chat",
                 self._stream_message_wrapper,
-                [saved_input, self.components["chatbot"], cancellation_state],  # Add cancellation_state
+                [
+                    saved_input,
+                    self.components["chatbot"],
+                    cancellation_state,
+                ],  # Add cancellation_state
                 [
                     self.components["chatbot"],
                     self.components["msg"],
@@ -380,13 +463,19 @@ class ChatTab(QuickActionsMixin):
             # Following reference repo pattern: reset cancellation state first, then stream
             streaming_pipeline = submit_chain_root.then(
                 fn=reset_stream_start,
-                inputs=[cancellation_state],  # Request is automatically passed to functions that accept it
+                inputs=[
+                    cancellation_state
+                ],  # Request is automatically passed to functions that accept it
                 outputs=[cancellation_state, streaming_active],
                 queue=False,
                 api_visibility="private",
             ).then(
                 fn=self._stream_message_wrapper,
-                inputs=[saved_input, self.components["chatbot"], cancellation_state],  # Add cancellation_state
+                inputs=[
+                    saved_input,
+                    self.components["chatbot"],
+                    cancellation_state,
+                ],  # Add cancellation_state
                 outputs=[
                     self.components["chatbot"],
                     self.components["msg"],
@@ -418,52 +507,65 @@ class ChatTab(QuickActionsMixin):
 
         # Stop must cancel a queued dependency (Gradio validates cancels -> queue=True).
         # submit_event is the non-queued re-enable tail; streaming_pipeline ends with the stream step.
-        self.stop_event = self.components["msg"].stop(
-            fn=self._handle_stop_click,
-            inputs=[self.components["chatbot"], cancellation_state],
-            outputs=[
-                self.components["chatbot"],
-                cancellation_state,
-            ],
-            cancels=[streaming_pipeline],
-            api_visibility="private",
-        ).then(
-            lambda: gr.MultimodalTextbox(
-                value="", interactive=True, submit_btn=True, stop_btn=False
-            ),
-            outputs=[self.components["msg"]],
-            queue=False,
-            api_visibility="private",
-        ).then(
-            lambda: False,
-            outputs=[streaming_active],
-            queue=False,
-            api_visibility="private",
+        self.stop_event = (
+            self.components["msg"]
+            .stop(
+                fn=self._handle_stop_click,
+                inputs=[self.components["chatbot"], cancellation_state],
+                outputs=[
+                    self.components["chatbot"],
+                    cancellation_state,
+                ],
+                cancels=[streaming_pipeline],
+                api_visibility="private",
+            )
+            .then(
+                lambda: gr.MultimodalTextbox(
+                    value="", interactive=True, submit_btn=True, stop_btn=False
+                ),
+                outputs=[self.components["msg"]],
+                queue=False,
+                api_visibility="private",
+            )
+            .then(
+                lambda: False,
+                outputs=[streaming_active],
+                queue=False,
+                api_visibility="private",
+            )
         )
 
         # Handle chatbot clear event - clear memory and reset downloads
         # Following reference repo pattern: wire chatbot.clear() to handle everything
-        def handle_chatbot_clear(request: gr.Request | None = None) -> tuple[list[dict[str, str]], dict[str, Any]]:
+        def handle_chatbot_clear(
+            request: gr.Request | None = None,
+        ) -> tuple[list[dict[str, str]], dict[str, Any]]:
             """Handle chatbot clear event - clear memory, reset downloads, and clear UI."""
-            logging.getLogger(__name__).info("Chatbot clear event - clearing memory and resetting downloads")
+            logging.getLogger(__name__).info(
+                "Chatbot clear event - clearing memory and resetting downloads"
+            )
             # Use the same clear handler that was used for the separate clear button
             return self._clear_chat_with_download_reset(request)
 
         # Bind to the built-in clear button's clear event
         # This replaces the separate clear button - Gradio's native clear button handles everything
-        self.clear_event = self.components["chatbot"].clear(
-            fn=handle_chatbot_clear,
-            inputs=[],  # Request is automatically passed to functions that accept it
-            outputs=[
-                self.components["chatbot"],
-                self.components["msg"],
-            ],
-            api_visibility="private",
-        ).then(
-            lambda: False,
-            outputs=[streaming_active],
-            queue=False,
-            api_visibility="private",
+        self.clear_event = (
+            self.components["chatbot"]
+            .clear(
+                fn=handle_chatbot_clear,
+                inputs=[],  # Request is automatically passed to functions that accept it
+                outputs=[
+                    self.components["chatbot"],
+                    self.components["msg"],
+                ],
+                api_visibility="private",
+            )
+            .then(
+                lambda: False,
+                outputs=[streaming_active],
+                queue=False,
+                api_visibility="private",
+            )
         )
 
         # Download button uses pre-generated file - no click handler needed
@@ -579,7 +681,10 @@ class ChatTab(QuickActionsMixin):
         return gr.Dropdown(visible=False)
 
     def _handle_stop_click(
-        self, history: list[dict[str, str]], cancel_state: dict | None = None, request: gr.Request | None = None
+        self,
+        history: list[dict[str, str]],
+        cancel_state: dict | None = None,
+        request: gr.Request | None = None,
     ) -> tuple[list[dict[str, str]], dict]:
         """Handle built-in stop button click: set cancellation flag, finalize token tracking, append stats, update UI.
 
@@ -603,11 +708,17 @@ class ChatTab(QuickActionsMixin):
             try:
                 session_id = self.main_app.session_manager.get_session_id(request)
                 self.main_app.session_manager.set_cancellation_state(session_id, True)
-                logging.getLogger(__name__).debug(f"Updated session cancellation state for {session_id[:8]}...")
+                logging.getLogger(__name__).debug(
+                    f"Updated session cancellation state for {session_id[:8]}..."
+                )
             except Exception as exc:
-                logging.getLogger(__name__).debug(f"Failed to update session cancellation state: {exc}")
+                logging.getLogger(__name__).debug(
+                    f"Failed to update session cancellation state: {exc}"
+                )
 
-        logging.getLogger(__name__).info("Stop button clicked - setting cancellation flag")
+        logging.getLogger(__name__).info(
+            "Stop button clicked - setting cancellation flag"
+        )
         try:
             # Attempt to finalize token accounting for this turn even if stream was interrupted
             if (
@@ -702,7 +813,7 @@ class ChatTab(QuickActionsMixin):
                                 "metadata": {
                                     "title": self._get_translation(
                                         "token_statistics_title"
-                                        )
+                                    )
                                 },
                             }
                             # history is a list of messages for chatbot component
@@ -730,15 +841,15 @@ class ChatTab(QuickActionsMixin):
                     )
         except Exception as exc:
             # Non-fatal: UI state update should still proceed
-            logging.getLogger(__name__).debug(
-                "UI state update failed: %s", exc
-            )
+            logging.getLogger(__name__).debug("UI state update failed: %s", exc)
 
         # Return history and cancellation_state - MultimodalTextbox update is handled in .then() chain
         # Following reference repo pattern: return history and cancellation_state
         return history, cancel_state
 
-    def _finalize_tokens_on_stop(self, request: gr.Request, history: list[dict[str, str]]) -> list[dict[str, str]]:
+    def _finalize_tokens_on_stop(
+        self, request: gr.Request, history: list[dict[str, str]]
+    ) -> list[dict[str, str]]:
         """Finalize token tracking and append stats when streaming is stopped"""
         if not (
             hasattr(self, "main_app")
@@ -833,7 +944,9 @@ class ChatTab(QuickActionsMixin):
 
         return history
 
-    def _build_token_stats_message(self, agent, messages: list) -> list[dict[str, str]] | None:
+    def _build_token_stats_message(
+        self, agent, messages: list
+    ) -> list[dict[str, str]] | None:
         """Build and return token statistics message for history"""
         prompt_tokens = agent.token_tracker.get_last_prompt_tokens()
         api_tokens = agent.token_tracker.get_last_api_tokens()
@@ -877,9 +990,7 @@ class ChatTab(QuickActionsMixin):
         token_metadata_message = {
             "role": "assistant",
             "content": token_display,
-            "metadata": {
-                "title": self._get_translation("token_statistics_title")
-            },
+            "metadata": {"title": self._get_translation("token_statistics_title")},
         }
 
         # Return updated history with stats message appended
@@ -905,6 +1016,7 @@ class ChatTab(QuickActionsMixin):
             return "—"  # Unknown (0.0 but not a free model)
         # Use helper to format with minimum necessary decimal places
         from agent_ng.utils import format_cost
+
         return format_cost(cost)
 
     def format_token_budget_display(self, request: gr.Request = None) -> str:
@@ -947,7 +1059,9 @@ class ChatTab(QuickActionsMixin):
             # - sums API usage across iterations when available
             # - otherwise uses a monotonic estimate (snapshot-fed), esp. for interruptions
             try:
-                used_tokens = int(agent.token_tracker.get_message_display_total_tokens() or 0)
+                used_tokens = int(
+                    agent.token_tracker.get_message_display_total_tokens() or 0
+                )
             except Exception as exc:
                 logging.getLogger(__name__).debug(
                     "Failed to compute message display tokens: %s", exc
@@ -989,9 +1103,12 @@ class ChatTab(QuickActionsMixin):
             total_cost_display = self._format_cost_display(agent, total_cost)
             if total_cost_display != "—":
                 cost_str = f" / {total_cost_display}"
-            total = self._get_translation("token_usage_total").format(
-                total_tokens=total_tokens
-            ) + cost_str
+            total = (
+                self._get_translation("token_usage_total").format(
+                    total_tokens=total_tokens
+                )
+                + cost_str
+            )
 
             # Format conversation with cost (precision .4f)
             conv_tokens = cumulative_stats.get("session_tokens", 0)
@@ -999,9 +1116,12 @@ class ChatTab(QuickActionsMixin):
             conv_cost_display = self._format_cost_display(agent, conv_cost)
             if conv_cost_display != "—":
                 conv_cost_str = f" / {conv_cost_display}"
-            conversation = self._get_translation("token_usage_conversation").format(
-                conversation_tokens=conv_tokens
-            ) + conv_cost_str
+            conversation = (
+                self._get_translation("token_usage_conversation").format(
+                    conversation_tokens=conv_tokens
+                )
+                + conv_cost_str
+            )
 
             # Get estimated total for forecast breakdown
             estimated_total = 0
@@ -1029,18 +1149,31 @@ class ChatTab(QuickActionsMixin):
                     tool_tokens = snap.get("tool_tokens", 0)
                     overhead_tokens = snap.get("overhead_tokens", 0)
                     breakdown_info = (
-                        "\n    - " + self._get_translation("token_breakdown_context").format(conv_tokens=conv_tokens_snap)
-                        + "\n    - " + self._get_translation("token_breakdown_tools").format(tool_tokens=tool_tokens)
-                        + "\n    - " + self._get_translation("token_breakdown_overhead").format(overhead_tokens=overhead_tokens)
+                        "\n    - "
+                        + self._get_translation("token_breakdown_context").format(
+                            conv_tokens=conv_tokens_snap
+                        )
+                        + "\n    - "
+                        + self._get_translation("token_breakdown_tools").format(
+                            tool_tokens=tool_tokens
+                        )
+                        + "\n    - "
+                        + self._get_translation("token_breakdown_overhead").format(
+                            overhead_tokens=overhead_tokens
+                        )
                     )
             except Exception as exc:
                 logging.getLogger(__name__).debug(
                     "Failed to get token breakdown: %s", exc
                 )
 
-            estimate_line = "- " + self._get_translation("token_usage_estimate").format(
-                estimated_tokens=estimated_total
-            ) + breakdown_info
+            estimate_line = (
+                "- "
+                + self._get_translation("token_usage_estimate").format(
+                    estimated_tokens=estimated_total
+                )
+                + breakdown_info
+            )
 
             # Message section with context, input/output, and cost (indented sub-items)
             message_section = "- " + self._get_translation("token_usage_last_message")
@@ -1048,7 +1181,9 @@ class ChatTab(QuickActionsMixin):
             output_tokens = cumulative_stats.get("last_output_tokens", 0)
 
             # Message context (percentage)
-            message_context_line = self._get_translation("token_message_context").format(
+            message_context_line = self._get_translation(
+                "token_message_context"
+            ).format(
                 percentage=percentage_for_display,
                 used=used_tokens,
                 context_window=budget_info["context_window"],
@@ -1056,32 +1191,32 @@ class ChatTab(QuickActionsMixin):
             )
 
             # Input/output tokens
-            input_line = self._get_translation("token_message_input").format(tokens=input_tokens)
-            output_line = self._get_translation("token_message_output").format(tokens=output_tokens)
+            input_line = self._get_translation("token_message_input").format(
+                tokens=input_tokens
+            )
+            output_line = self._get_translation("token_message_output").format(
+                tokens=output_tokens
+            )
 
             # Cache details (OpenRouter prompt_tokens_details)
             cached_tokens = cumulative_stats.get("last_cached_tokens")
             cache_write_tokens = cumulative_stats.get("last_cache_write_tokens")
             cache_lines = ""
             if cached_tokens is not None:
-                cache_lines += (
-                    "\n    - "
-                    + self._get_translation("token_message_cached_tokens").format(
-                        tokens=int(cached_tokens or 0)
-                    )
-                )
+                cache_lines += "\n    - " + self._get_translation(
+                    "token_message_cached_tokens"
+                ).format(tokens=int(cached_tokens or 0))
             if cache_write_tokens is not None:
-                cache_lines += (
-                    "\n    - "
-                    + self._get_translation("token_message_cache_write_tokens").format(
-                        tokens=int(cache_write_tokens or 0)
-                    )
-                )
+                cache_lines += "\n    - " + self._get_translation(
+                    "token_message_cache_write_tokens"
+                ).format(tokens=int(cache_write_tokens or 0))
 
             # Cost for current message/turn
             base_cost = turn_cost if (turn_cost is not None) else conv_cost
             message_cost_str = self._format_cost_display(agent, base_cost)
-            cost_line = self._get_translation("token_message_cost").format(cost=message_cost_str)
+            cost_line = self._get_translation("token_message_cost").format(
+                cost=message_cost_str
+            )
 
             message_details = f"\n    - {message_context_line}\n    - {input_line}\n    - {output_line}{cache_lines}\n    - {cost_line}"
 
@@ -1091,20 +1226,25 @@ class ChatTab(QuickActionsMixin):
             avg_cost_str = ""
             if message_count > 0:
                 # Treat 0-cost as "unknown" unless we know we're on a free model.
-                avg_cost = (conv_cost / message_count) if (conv_cost is not None and conv_cost > 0) else None
+                avg_cost = (
+                    (conv_cost / message_count)
+                    if (conv_cost is not None and conv_cost > 0)
+                    else None
+                )
                 avg_cost_display = self._format_cost_display(agent, avg_cost)
                 avg_cost_str = f" / {avg_cost_display}"
-            average = self._get_translation("token_usage_average").format(
-                avg_tokens=avg_tokens
-            ) + avg_cost_str
+            average = (
+                self._get_translation("token_usage_average").format(
+                    avg_tokens=avg_tokens
+                )
+                + avg_cost_str
+            )
 
         except Exception as e:
             print(f"Error formatting token budget: {e}")
             return self._get_translation("token_budget_unknown")
         else:
-            return (
-                f"- {total}\n- {conversation}\n{estimate_line}\n{message_section}{message_details}\n- {average}"
-            )
+            return f"- {total}\n- {conversation}\n{estimate_line}\n{message_section}{message_details}\n- {average}"
 
     def _get_available_providers(self) -> list[str]:
         """Get list of available LLM providers from session manager"""
@@ -1141,11 +1281,7 @@ class ChatTab(QuickActionsMixin):
                 config = self.main_app.llm_manager.get_provider_config(current_provider)
                 if config and config.models:
                     models = [model["model"] for model in config.models]
-                    return (
-                        models
-                        if models
-                        else [self._get_translation("no_models_available")]
-                    )
+                    return models or [self._get_translation("no_models_available")]
                 return [self._get_translation("no_models_available")]
         except Exception as e:
             print(f"Error getting available models: {e}")
@@ -1224,7 +1360,11 @@ class ChatTab(QuickActionsMixin):
         self, request: gr.Request | None = None
     ) -> str:
         """Current ``Provider / Model`` for the active Gradio session."""
-        if request and self.main_app and getattr(self.main_app, "session_manager", None):
+        if (
+            request
+            and self.main_app
+            and getattr(self.main_app, "session_manager", None)
+        ):
             try:
                 sid = self.main_app.session_manager.get_session_id(request)
                 agent = self.main_app.session_manager.get_session_agent(sid)
@@ -1568,7 +1708,11 @@ class ChatTab(QuickActionsMixin):
 
                     # Register file with agent's session-isolated registry
                     _main_app = getattr(self, "main_app", None)
-                    _session_mgr = getattr(_main_app, "session_manager", None) if _main_app else None
+                    _session_mgr = (
+                        getattr(_main_app, "session_manager", None)
+                        if _main_app
+                        else None
+                    )
                     if _main_app and _session_mgr:
                         try:
                             session_id = _session_mgr.get_session_id(request)
@@ -1584,12 +1728,14 @@ class ChatTab(QuickActionsMixin):
                         except Exception as e:
                             logging.getLogger(__name__).error(
                                 "Error registering file %s: %s",
-                                original_filename, e,
+                                original_filename,
+                                e,
                             )
                     else:
                         logging.getLogger(__name__).warning(
                             "Cannot register file: main_app=%s, session_mgr=%s",
-                            _main_app is not None, _session_mgr is not None,
+                            _main_app is not None,
+                            _session_mgr is not None,
                         )
 
                 file_info += ", ".join(file_list) + "]"
@@ -1613,16 +1759,16 @@ class ChatTab(QuickActionsMixin):
                             "path": str(Path(fpath).resolve()),
                             "display_name": fname or os.path.basename(fpath),
                             "size_bytes": (
-                                os.path.getsize(fpath)
-                                if os.path.exists(fpath)
-                                else 0
+                                os.path.getsize(fpath) if os.path.exists(fpath) else 0
                             ),
                         }
                         history = list(history or [])
                         history.extend(build_file_bubbles_for_role(att, role="user"))
 
                 logging.getLogger(__name__).debug(
-                    "Registered %d files: %s", len(current_files), current_files,
+                    "Registered %d files: %s",
+                    len(current_files),
+                    current_files,
                 )
             else:
                 # No files, just use the text message
@@ -1649,7 +1795,9 @@ class ChatTab(QuickActionsMixin):
             # Check for cancellation during streaming (following reference repo pattern)
             # This check happens between yields, so if the generator is yielding frequently, cancellation is detected promptly
             if is_cancelled():
-                logging.getLogger(__name__).info("Streaming cancelled during execution (in internal wrapper)")
+                logging.getLogger(__name__).info(
+                    "Streaming cancelled during execution (in internal wrapper)"
+                )
                 break
             yield result
 
@@ -1850,9 +1998,7 @@ class ChatTab(QuickActionsMixin):
                         provider = llm_info.get("provider", "unknown")
                         model = llm_info.get("model", "unknown")
 
-                        markdown_content += (
-                            f"## Сводка диалога ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n\n"
-                        )
+                        markdown_content += f"## Сводка диалога ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n\n"
                         markdown_content += (
                             "**Всего сообщений:** "
                             f"{message_count} ({user_messages} user, {assistant_messages} assistant)\n\n"
@@ -1914,7 +2060,6 @@ class ChatTab(QuickActionsMixin):
             logger.exception("Error creating markdown file: %s", e)
             return None
 
-
     def _generate_conversation_html(self, markdown_content: str, filename: str) -> str:
         """
         Generate HTML file from markdown content.
@@ -1931,7 +2076,9 @@ class ChatTab(QuickActionsMixin):
 
         try:
             # Convert Markdown to HTML
-            html_body = markdown.markdown(markdown_content, extensions=["tables", "fenced_code"])
+            html_body = markdown.markdown(
+                markdown_content, extensions=["tables", "fenced_code"]
+            )
 
             # Load CSS from external file
             css_content = self._load_export_css()
@@ -2002,8 +2149,12 @@ class ChatTab(QuickActionsMixin):
             CSS content as string
         """
         # Get the path to the CSS file relative to the project root
-        css_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                               "resources", "css", "html_export_theme.css")
+        css_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "resources",
+            "css",
+            "html_export_theme.css",
+        )
 
         with open(css_path, encoding="utf-8") as css_file:
             return css_file.read()

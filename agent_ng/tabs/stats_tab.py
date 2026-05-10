@@ -44,7 +44,6 @@ class StatsTab:
         with gr.TabItem(
             self._get_translation("tab_stats"),
             id="stats",
-            render_children=True,
         ) as tab:
             # Create stats interface
             self._create_stats_interface()

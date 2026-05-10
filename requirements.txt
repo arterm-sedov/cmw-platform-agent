@@ -3,7 +3,7 @@ aiohappyeyeballs==2.6.1
 aiohttp==3.13.0
 aiosignal==1.4.0
 annotated-types==0.7.0
-anyio==4.11.0
+anyio==4.13.0
 arxiv==2.2.0
 asyncio-mqtt==0.16.2
 attrs==25.4.0
@@ -25,7 +25,7 @@ deprecation==2.1.0
 distro==1.9.0
 et_xmlfile==2.0.0
 eval_type_backport==0.2.2
-fastapi==0.119.0
+fastapi==0.136.1
 feedparser==6.0.12
 ffmpy==0.6.3
 filelock==3.20.0
@@ -100,7 +100,7 @@ mdurl==0.1.2
 mistralai==1.9.11
 multidict==6.7.0
 mypy_extensions==1.1.0
-numpy==2.3.3
+numpy==2.4.4
 openai==2.33.0
 openpyxl==3.1.5
 opentelemetry-api==1.37.0
@@ -109,14 +109,14 @@ opentelemetry-exporter-otlp-proto-http==1.37.0
 opentelemetry-proto==1.37.0
 opentelemetry-sdk==1.37.0
 opentelemetry-semantic-conventions==0.58b0
-orjson==3.11.8
+orjson==3.11.9
 ormsgpack==1.12.2
 packaging==25.0
 paho-mqtt==2.1.0
-pandas==2.3.3
+pandas==3.0.2
 pathspec==0.12.1
 pgvector==0.4.1
-pillow==11.3.0
+pillow==12.2.0
 platformdirs==4.5.0
 pluggy==1.6.0
 # Optional Supabase client stack — not used by agent_ng/ or tools/ (legacy .legacy/agent_old only).
@@ -134,9 +134,9 @@ pyasn1==0.6.1
 pyasn1_modules==0.4.2
 pycodestyle==2.14.0
 pycparser==2.23
-pydantic==2.11.10
-pydantic-settings==2.11.0
-pydantic_core==2.33.2
+pydantic==2.13.4
+pydantic-settings==2.14.1
+pydantic_core==2.46.4
 pydub==0.25.1
 pyflakes==3.4.0
 Pygments==2.19.2
@@ -148,7 +148,7 @@ pytest==8.4.2
 pytest-asyncio==1.2.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
-python-multipart==0.0.20
+python-multipart==0.0.28
 pytokens==0.1.10
 pytz==2025.2
 PyYAML==6.0.3
@@ -178,7 +178,7 @@ tiktoken==0.12.0
 tokenizers==0.22.1
 tomlkit==0.13.3
 tqdm==4.67.1
-typer==0.19.2
+typer==0.25.1
 types-requests==2.32.4.20250913
 typing-inspect==0.9.0
 typing-inspection==0.4.2
@@ -187,9 +187,9 @@ tzdata==2025.2
 uritemplate==4.2.0
 urllib3==2.5.0
 uuid_utils==0.14.1
-uvicorn==0.37.0
+uvicorn==0.46.0
 websockets==15.0.1
-markitdown[docx,xlsx,pptx]
+markitdown[docx,xlsx,pptx]==0.1.5
 wheel==0.45.1
 wikipedia==1.4.0
 wrapt==1.17.3

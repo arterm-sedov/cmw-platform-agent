@@ -86,7 +86,6 @@ class ConfigTab:
         with gr.TabItem(
             self._get_translation("tab_config"),
             id="config",
-            render_children=True,
         ) as tab:
             # Create configuration interface
             self._create_config_interface()

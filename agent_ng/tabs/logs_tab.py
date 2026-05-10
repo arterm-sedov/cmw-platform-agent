@@ -40,7 +40,6 @@ class LogsTab:
         with gr.TabItem(
             self._get_translation("tab_logs"),
             id="logs",
-            render_children=True,
         ) as tab:
             # Create logs interface
             self._create_logs_interface()
