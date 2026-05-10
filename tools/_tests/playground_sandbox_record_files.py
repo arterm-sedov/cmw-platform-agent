@@ -113,7 +113,9 @@ def _doc_title_hint(record_id: str, doc: str) -> str:
     m = get_document_model(did)
     if m.get("success") and isinstance(m.get("model"), dict):
         mo = m["model"]
-        reg = display_filename_for_registry(mo) or str(mo.get("title") or mo.get("name") or "")
+        reg = display_filename_for_registry(mo) or str(
+            mo.get("title") or mo.get("name") or ""
+        )
         return f"{reg} id={did[:8]}…" if reg else f"id={did[:12]}…"
     return f"id={did[:12]}…"
 
@@ -145,7 +147,7 @@ def _attach_doc(rid: str, doc: str, path: Path, *, replace: bool) -> bool:
         {
             "record_id": rid,
             "attribute_system_name": doc,
-            "file_reference": str(path.resolve()),
+            "filename": str(path.resolve()),
             "replace": replace,
         }
     )
@@ -169,7 +171,7 @@ def _attach_image(rid: str, img: str, path: Path) -> bool:
         {
             "record_id": rid,
             "attribute_system_name": img,
-            "file_reference": str(path.resolve()),
+            "filename": str(path.resolve()),
         }
     )
     ok = bool(r.get("success"))
@@ -249,7 +251,7 @@ def main() -> int:
         }
     )
     if fdoc.get("success"):
-        _p("fetched last document to local", fdoc.get("file_reference", "")[:64], "…")
+        _p("fetched last document to local", fdoc.get("filename", "")[:64], "…")
     else:
         _p("fetch_record_document_file", fdoc.get("error", fdoc))
 

@@ -1,11 +1,11 @@
 """
-Proves the **agent** is forwarded into **attach** / **read_file_reference_bytes** when the
+Proves the **agent** is forwarded into **attach** / **read_file_bytes** when the
 **args_schema** includes **``agent``** ( :class:`InjectedToolArg` on the Pydantic model ).
 
 **Regression:** If **agent** is only on the @tool function but **omitted** from
 ``AttachFileToRecordDocumentSchema`` / ``AttachImageToRecordSchema``,
 :meth:`langchain_core.tools.base.BaseTool._parse_input` **drops** the injected
-``"agent"`` from ``invoke(…, agent=… )``, so the chat **file_reference** never
+``"agent"`` from ``invoke(…, agent=… )``, so the chat **filename** never
 resolves for upload while **read_text_based_file** still works.
 """
 
@@ -53,13 +53,18 @@ def test_attach_file_to_record_document_receives_injected_agent_for_basename() -
     ag.register_file("upl.txt", p)
     with patch(
         "tools.templates_tools.tool_record_document.set_object_document",
-        return_value={"success": True, "status_code": 200, "error": None, "raw_response": {}},
+        return_value={
+            "success": True,
+            "status_code": 200,
+            "error": None,
+            "raw_response": {},
+        },
     ) as sdoc:
         r = attach_file_to_record_document_attribute.invoke(
             {
                 "record_id": "r1",
                 "attribute_system_name": "Document",
-                "file_reference": "upl.txt",
+                "filename": "upl.txt",
                 "agent": ag,
             }
         )
@@ -70,24 +75,27 @@ def test_attach_file_to_record_document_receives_injected_agent_for_basename() -
 
 
 def test_platform_upload_uses_chat_name_not_gradio_temp_basename() -> None:
-    """**fileName** follows the logical **file_reference**, not the on-disk **gradio_…** name."""
+    """**fileName** follows the logical **filename**, not the on-disk **gradio_…** name."""
     ag = _make_registry_agent()
     d = tempfile.mkdtemp()
-    gradio_like = os.path.join(
-        d, "gradio_crm4r5er04_SGR_1777075419411_93d327c9.docx"
-    )
+    gradio_like = os.path.join(d, "gradio_crm4r5er04_SGR_1777075419411_93d327c9.docx")
     with open(gradio_like, "wb") as f:
         f.write(b"docx")
     ag.register_file("SGR工具链验证.docx", gradio_like)
     with patch(
         "tools.templates_tools.tool_record_document.set_object_document",
-        return_value={"success": True, "status_code": 200, "error": None, "raw_response": {}},
+        return_value={
+            "success": True,
+            "status_code": 200,
+            "error": None,
+            "raw_response": {},
+        },
     ) as sdoc:
         r = attach_file_to_record_document_attribute.invoke(
             {
                 "record_id": "r1",
                 "attribute_system_name": "Document",
-                "file_reference": "SGR工具链验证.docx",
+                "filename": "SGR工具链验证.docx",
                 "agent": ag,
             }
         )
@@ -106,19 +114,24 @@ def test_read_text_and_attach_parity_on_same_reference() -> None:
         f.write("roundtrip line")
     ag.register_file("same_name.txt", p)
     t = read_text_based_file.invoke(
-        {"file_reference": "same_name.txt", "read_html_as_markdown": True, "agent": ag}
+        {"filename": "same_name.txt", "read_html_as_markdown": True, "agent": ag}
     )
     assert isinstance(t, str)
     assert "roundtrip line" in t, t
     with patch(
         "tools.templates_tools.tool_record_document.set_object_document",
-        return_value={"success": True, "status_code": 200, "error": None, "raw_response": {}},
+        return_value={
+            "success": True,
+            "status_code": 200,
+            "error": None,
+            "raw_response": {},
+        },
     ):
         r = attach_file_to_record_document_attribute.invoke(
             {
                 "record_id": "r1",
                 "attribute_system_name": "Document",
-                "file_reference": "same_name.txt",
+                "filename": "same_name.txt",
                 "agent": ag,
             }
         )
@@ -145,7 +158,7 @@ def test_attach_file_to_record_image_receives_injected_agent() -> None:
             {
                 "record_id": "r1",
                 "attribute_system_name": "Img",
-                "file_reference": "z.png",
+                "filename": "z.png",
                 "agent": ag,
             }
         )
@@ -156,9 +169,7 @@ def test_attach_file_to_record_image_receives_injected_agent() -> None:
 def test_image_platform_upload_uses_chat_name_not_gradio_temp_basename() -> None:
     ag = _make_registry_agent()
     d = tempfile.mkdtemp()
-    gradio_like = os.path.join(
-        d, f"gradio_x_img_{os.getpid()}_abc12345.png"
-    )
+    gradio_like = os.path.join(d, f"gradio_x_img_{os.getpid()}_abc12345.png")
     with open(gradio_like, "wb") as f:
         f.write(b"\x89PNG\r\n\x1a\n")
     ag.register_file("z.png", gradio_like)
@@ -176,7 +187,7 @@ def test_image_platform_upload_uses_chat_name_not_gradio_temp_basename() -> None
             {
                 "record_id": "r1",
                 "attribute_system_name": "Img",
-                "file_reference": "z.png",
+                "filename": "z.png",
                 "agent": ag,
             }
         )
@@ -202,13 +213,18 @@ def test_attach_with_optional_user_pdf_path_if_present() -> None:
     ag.register_file(name, p)
     with patch(
         "tools.templates_tools.tool_record_document.set_object_document",
-        return_value={"success": True, "status_code": 200, "error": None, "raw_response": {}},
+        return_value={
+            "success": True,
+            "status_code": 200,
+            "error": None,
+            "raw_response": {},
+        },
     ) as sdoc:
         r = attach_file_to_record_document_attribute.invoke(
             {
                 "record_id": "r-local-harness",
                 "attribute_system_name": "Document",
-                "file_reference": name,
+                "filename": name,
                 "agent": ag,
             }
         )

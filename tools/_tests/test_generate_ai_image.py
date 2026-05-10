@@ -6,11 +6,11 @@ Behavior contracts:
 - Invoked with ``agent`` injection, saves image to session-isolated directory
   and calls ``agent.register_file(display_name, disk_path)``.
 - Without an agent (e.g. unit-test harness), returns the raw absolute path as
-  ``file_reference`` and skips registration.
+  ``generated_filename`` and skips registration.
 - Pydantic schema validates required ``prompt``; exposes optional ``model``,
   ``aspect_ratio``, ``image_size``, ``reference_images``; hides ``agent``
   via ``InjectedToolArg`` (so args_schema must declare it).
-- Returns a dict with ``success``, ``file_reference``, ``cost``,
+- Returns a dict with ``success``, ``generated_filename``, ``cost``,
   ``mime_type``, ``size_bytes``, ``reference_images_warning``.
 - On engine failure, returns ``success=False`` with the engine's ``error``
   string and no file side effects.
@@ -101,15 +101,13 @@ class TestInvocationWithAgent:
             ),
             patch("tools.tools._IMAGE_OUTPUT_ROOT", str(tmp_path)),
         ):
-            out = generate_ai_image.invoke(
-                {"prompt": "a blue circle", "agent": agent}
-            )
+            out = generate_ai_image.invoke({"prompt": "a blue circle", "agent": agent})
 
         assert isinstance(out, dict)
         assert out["success"] is True
         assert out["error"] is None
-        # file_reference is the logical display name
-        ref = out["file_reference"]
+        # generated_filename is the logical display name
+        ref = out["generated_filename"]
         assert isinstance(ref, str)
         assert ref.endswith(".png")
         # Agent registry should contain that name
@@ -129,9 +127,7 @@ class TestInvocationWithAgent:
             ),
             patch("tools.tools._IMAGE_OUTPUT_ROOT", str(tmp_path)),
         ):
-            out = generate_ai_image.invoke(
-                {"prompt": "a blue circle", "agent": agent}
-            )
+            out = generate_ai_image.invoke({"prompt": "a blue circle", "agent": agent})
 
         assert out["cost"] == 0.042
         assert out["mime_type"] == "image/png"
@@ -141,9 +137,7 @@ class TestInvocationWithAgent:
         assert "generation_id" not in out
         assert "prompt_tokens" not in out
 
-    def test_image_config_parameters_forwarded_to_engine(
-        self, tmp_path: Path
-    ) -> None:
+    def test_image_config_parameters_forwarded_to_engine(self, tmp_path: Path) -> None:
         agent = _make_registry_agent()
         with (
             patch(
@@ -180,8 +174,8 @@ class TestInvocationWithoutAgent:
             out = generate_ai_image.invoke({"prompt": "a blue circle"})
 
         assert out["success"] is True
-        ref = out["file_reference"]
-        # Without an agent, file_reference is an absolute on-disk path
+        ref = out["generated_filename"]
+        # Without an agent, generated_filename is an absolute on-disk path
         assert os.path.isabs(ref)
         assert os.path.isfile(ref)
         try:
@@ -202,9 +196,7 @@ class TestErrorPropagation:
                 success=False, error="HTTP 403: region blocked"
             ),
         ):
-            out = generate_ai_image.invoke(
-                {"prompt": "a cat", "agent": agent}
-            )
+            out = generate_ai_image.invoke({"prompt": "a cat", "agent": agent})
 
         assert out["success"] is False
         assert "403" in out["error"]
@@ -269,46 +261,58 @@ class TestReferenceImagesCoercion:
     """Some chat models send JSON-encoded arrays as strings; coerce before validation."""
 
     def test_json_array_string_becomes_list(self) -> None:
-        m = GenerateAIImageParams.model_validate({
-            "prompt": "edit frame",
-            "reference_images": '["llm_image_20260503_132734_247787ca.jpg"]',
-        })
+        m = GenerateAIImageParams.model_validate(
+            {
+                "prompt": "edit frame",
+                "reference_images": '["llm_image_20260503_132734_247787ca.jpg"]',
+            }
+        )
         assert m.reference_images == ["llm_image_20260503_132734_247787ca.jpg"]
 
     def test_single_filename_string_becomes_singleton_list(self) -> None:
-        m = GenerateAIImageParams.model_validate({
-            "prompt": "x",
-            "reference_images": "photo.png",
-        })
+        m = GenerateAIImageParams.model_validate(
+            {
+                "prompt": "x",
+                "reference_images": "photo.png",
+            }
+        )
         assert m.reference_images == ["photo.png"]
 
     def test_list_passes_through(self) -> None:
-        m = GenerateAIImageParams.model_validate({
-            "prompt": "x",
-            "reference_images": ["a.jpg", "b.jpg"],
-        })
+        m = GenerateAIImageParams.model_validate(
+            {
+                "prompt": "x",
+                "reference_images": ["a.jpg", "b.jpg"],
+            }
+        )
         assert m.reference_images == ["a.jpg", "b.jpg"]
 
     def test_tuple_becomes_list(self) -> None:
-        m = GenerateAIImageParams.model_validate({
-            "prompt": "x",
-            "reference_images": ("a.jpg",),
-        })
+        m = GenerateAIImageParams.model_validate(
+            {
+                "prompt": "x",
+                "reference_images": ("a.jpg",),
+            }
+        )
         assert m.reference_images == ["a.jpg"]
 
     def test_numeric_elements_coerced_to_string_filenames(self) -> None:
-        m = GenerateAIImageParams.model_validate({
-            "prompt": "x",
-            "reference_images": ["ok.jpg", 7],
-        })
+        m = GenerateAIImageParams.model_validate(
+            {
+                "prompt": "x",
+                "reference_images": ["ok.jpg", 7],
+            }
+        )
         assert m.reference_images == ["ok.jpg", "7"]
 
     def test_wrong_top_level_type_raises(self) -> None:
         with pytest.raises(ValidationError):
-            GenerateAIImageParams.model_validate({
-                "prompt": "x",
-                "reference_images": 99,
-            })
+            GenerateAIImageParams.model_validate(
+                {
+                    "prompt": "x",
+                    "reference_images": 99,
+                }
+            )
 
 
 class TestLLMFacingDescription:
@@ -404,9 +408,7 @@ class TestResolveReferenceImages:
 
         assert result[0].startswith("data:image/jpeg;base64,")
 
-    def test_unknown_extension_falls_back_to_jpeg_mime(
-        self, tmp_path: Path
-    ) -> None:
+    def test_unknown_extension_falls_back_to_jpeg_mime(self, tmp_path: Path) -> None:
         # .xyz is not in mimetypes — should fall back to image/jpeg.
         img_path = tmp_path / "mystery.xyz"
         img_path.write_bytes(_PNG_1PX_BYTES)
@@ -448,9 +450,7 @@ class TestResolveReferenceImages:
         assert result[1].startswith("data:image/jpeg;base64,")
         assert result[2] == "data:image/jpeg;base64,/9j/abc"
 
-    def test_unresolvable_items_do_not_block_valid_ones(
-        self, tmp_path: Path
-    ) -> None:
+    def test_unresolvable_items_do_not_block_valid_ones(self, tmp_path: Path) -> None:
         good_path = tmp_path / "good.png"
         good_path.write_bytes(_PNG_1PX_BYTES)
 

@@ -35,8 +35,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # Try to import matplotlib, but make it optional
 try:
     import matplotlib
+
     matplotlib.use("Agg")  # Use non-interactive backend
     import matplotlib.pyplot as plt
+
     MATPLOTLIB_AVAILABLE = True
 except (ImportError, Exception) as e:
     MATPLOTLIB_AVAILABLE = False
@@ -115,46 +117,60 @@ from .templates_tools.tools_record_template import edit_or_create_record_templat
 # Transfer tools
 from .transfer_tools.tool_export_application import export_application
 from .transfer_tools.tool_import_application import import_application
+
 # NOTE: Browser automation tools (tools/browser_tools.py, agent_ng/browser_session.py)
 # are intentionally NOT bound to the agent. They are kept for external/standalone use.
 # See .agents/skills/cmw-platform/SKILL.md section "Browser Automation"
 # Global configuration for search tools
-SEARCH_LIMIT = 5  # Maximum number of results for all search tools (Tavily, Wikipedia, Arxiv)
+SEARCH_LIMIT = 5  # Max results for Tavily, Wikipedia, Arxiv search tools
 
 # LangChain imports for search tools
 try:
     from langchain_tavily import TavilySearch
+
     TAVILY_AVAILABLE = True
 except ImportError:
     TAVILY_AVAILABLE = False
-    print("Warning: TavilySearch not available. Install with: pip install langchain-tavily")
+    print(
+        "Warning: TavilySearch not available. Install with: pip install langchain-tavily"
+    )
 
 # Try to import wikipedia-api as it's a common dependency
 try:
     import wikipedia
+
     WIKIPEDIA_AVAILABLE = True
 except ImportError as e:
     WIKIPEDIA_AVAILABLE = False
-    print(f"Wikipedia search requires additional dependencies. Install with: pip install wikipedia-api. Error: {str(e)}")
+    print(
+        f"Wikipedia search requires additional dependencies. Install with: pip install wikipedia-api. Error: {str(e)}"
+    )
 
 try:
     from langchain_community.document_loaders import WikipediaLoader
+
     WIKILOADER_AVAILABLE = True
 except ImportError:
     WIKILOADER_AVAILABLE = False
-    print("Warning: WikipediaLoader not available. Install with: pip install langchain-community")
+    print(
+        "Warning: WikipediaLoader not available. Install with: pip install langchain-community"
+    )
 
 # Try to import arxiv as it's a common dependency
 try:
     import arxiv
+
     ARXIV_AVAILABLE = True
 except ImportError as e:
     ARXIV_AVAILABLE = False
-    print(f"Arxiv search requires additional dependencies. Install with: pip install arxiv. Error: {str(e)}")
+    print(
+        f"Arxiv search requires additional dependencies. Install with: pip install arxiv. Error: {str(e)}"
+    )
 
 # Try to import PyMuPDF for PDF processing
 try:
     import fitz  # PyMuPDF
+
     PYMUPDF_AVAILABLE = True
 except ImportError:
     PYMUPDF_AVAILABLE = False
@@ -162,14 +178,18 @@ except ImportError:
 
 try:
     from langchain_community.document_loaders import ArxivLoader
+
     ARXIVLOADER_AVAILABLE = True
 except ImportError:
     ARXIVLOADER_AVAILABLE = False
-    print("Warning: ArxivLoader not available. Install with: pip install langchain-community")
+    print(
+        "Warning: ArxivLoader not available. Install with: pip install langchain-community"
+    )
 
 # Optional: Exa deep research (web_search_deep_research_exa_ai returns a clear JSON error if exa-py is missing)
 try:
     from exa_py import Exa
+
     EXA_AVAILABLE = True
 except ImportError:
     EXA_AVAILABLE = False
@@ -178,10 +198,14 @@ except ImportError:
 try:
     from google import genai
     from google.genai import types
+
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
-    print("Warning: Google Gemini not available. Install with: pip install google-genai")
+    print(
+        "Warning: Google Gemini not available. Install with: pip install google-genai"
+    )
+
 
 # ========== GEMINI HELPER FUNCTIONS ==========
 def _get_gemini_client():
@@ -193,7 +217,9 @@ def _get_gemini_client():
         client or None: The Gemini client if initialization succeeds, None otherwise.
     """
     if not GEMINI_AVAILABLE:
-        print("Warning: Google Gemini not available. Install with: pip install google-genai")
+        print(
+            "Warning: Google Gemini not available. Install with: pip install google-genai"
+        )
         return None
     try:
         gemini_key = os.environ.get("GEMINI_KEY")
@@ -205,6 +231,7 @@ def _get_gemini_client():
     except Exception as e:
         print(f"Error initializing Gemini client: {str(e)}")
         return None
+
 
 def _get_gemini_response(prompt, error_prefix="Gemini", model_name="gemini-2.5-flash"):
     """
@@ -220,13 +247,11 @@ def _get_gemini_response(prompt, error_prefix="Gemini", model_name="gemini-2.5-f
     if not client:
         return f"{error_prefix} client not available. Check installation and API key configuration."
     try:
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt
-        )
+        response = client.models.generate_content(model=model_name, contents=prompt)
         return response.text
     except Exception as e:
         return f"Error in {error_prefix.lower()} request: {str(e)}"
+
 
 # ========== IMAGE PROCESSING HELPERS ==========
 def encode_image(image_path: str) -> str:
@@ -242,6 +267,7 @@ def encode_image(image_path: str) -> str:
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
+
 def decode_image(base64_string: str) -> Any:
     """
     Convert a base64-encoded string to a PIL Image object.
@@ -254,6 +280,7 @@ def decode_image(base64_string: str) -> Any:
     """
     image_data = base64.b64decode(base64_string)
     return Image.open(io.BytesIO(image_data))
+
 
 def save_image(image: Any, directory: str = "image_outputs") -> str:
     """
@@ -272,6 +299,7 @@ def save_image(image: Any, directory: str = "image_outputs") -> str:
     image.save(image_path)
     return image_path
 
+
 # ========== CODE INTERPRETER ==========
 class CodeInterpreter:
     """
@@ -286,13 +314,35 @@ class CodeInterpreter:
         globals (dict): Global variables for code execution.
         temp_sqlite_db (str): Path to a temporary SQLite database for SQL code.
     """
-    def __init__(self, allowed_modules=None, max_execution_time=30, working_directory=None):
+
+    def __init__(
+        self, allowed_modules=None, max_execution_time=30, working_directory=None
+    ):
         self.allowed_modules = allowed_modules or [
-            "numpy", "pandas", "matplotlib", "scipy", "sklearn",
-            "math", "random", "statistics", "datetime", "collections",
-            "itertools", "functools", "operator", "re", "json",
-            "sympy", "networkx", "nltk", "PIL",
-            "cmath", "uuid", "tempfile", "requests", "urllib"
+            "numpy",
+            "pandas",
+            "matplotlib",
+            "scipy",
+            "sklearn",
+            "math",
+            "random",
+            "statistics",
+            "datetime",
+            "collections",
+            "itertools",
+            "functools",
+            "operator",
+            "re",
+            "json",
+            "sympy",
+            "networkx",
+            "nltk",
+            "PIL",
+            "cmath",
+            "uuid",
+            "tempfile",
+            "requests",
+            "urllib",
         ]
         self.max_execution_time = max_execution_time
         self.working_directory = working_directory or os.path.join(os.getcwd())
@@ -309,6 +359,7 @@ class CodeInterpreter:
         if MATPLOTLIB_AVAILABLE:
             self.globals["plt"] = plt
         self.temp_sqlite_db = os.path.join(tempfile.gettempdir(), "code_exec.db")
+
     def execute_code(self, code: str, language: str = "python") -> dict[str, Any]:
         """
         Execute code in the specified language with safety controls.
@@ -330,9 +381,13 @@ class CodeInterpreter:
             elif language.lower() == "java":
                 return self._execute_java(code)
             else:
-                return {"status": "error", "stderr": f"Unsupported language: {language}"}
+                return {
+                    "status": "error",
+                    "stderr": f"Unsupported language: {language}",
+                }
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
+
     def _execute_python(self, code: str) -> dict[str, Any]:
         """Execute Python code with safety controls."""
         try:
@@ -356,16 +411,23 @@ class CodeInterpreter:
                 stdout_content = stdout_buffer.getvalue()
                 stderr_content = stderr_buffer.getvalue()
                 # Capture any variables that might be dataframes or plots
-                result = {"status": "success", "stdout": stdout_content, "stderr": stderr_content, "result": None}
+                result = {
+                    "status": "success",
+                    "stdout": stdout_content,
+                    "stderr": stderr_content,
+                    "result": None,
+                }
                 # Check for dataframes
                 dataframes = []
                 for name, value in local_globals.items():
                     if isinstance(value, pd.DataFrame):
-                        dataframes.append({
-                            "name": name,
-                            "shape": value.shape,
-                            "head": value.head().to_dict("records")
-                        })
+                        dataframes.append(
+                            {
+                                "name": name,
+                                "shape": value.shape,
+                                "head": value.head().to_dict("records"),
+                            }
+                        )
                 if dataframes:
                     result["dataframes"] = dataframes
 
@@ -377,7 +439,9 @@ class CodeInterpreter:
                         if plt.get_fignums():
                             for fig_num in plt.get_fignums():
                                 fig = plt.figure(fig_num)
-                                plot_path = os.path.join(self.working_directory, f"plot_{fig_num}.png")
+                                plot_path = os.path.join(
+                                    self.working_directory, f"plot_{fig_num}.png"
+                                )
                                 fig.savefig(plot_path)
                                 plots.append(plot_path)
                                 plt.close(fig)
@@ -395,28 +459,34 @@ class CodeInterpreter:
                 stderr_buffer.close()
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
+
     def _execute_bash(self, code: str) -> dict[str, Any]:
         """Execute Bash code."""
         if HF_SPACES:
-            return {"status": "error", "stderr": "Bash execution not available on Hugging Face Spaces"}
+            return {
+                "status": "error",
+                "stderr": "Bash execution not available on Hugging Face Spaces",
+            }
         try:
             result = subprocess.run(
                 code,
-                check=False, shell=True,
+                check=False,
+                shell=True,
                 capture_output=True,
                 text=True,
-                timeout=self.max_execution_time
+                timeout=self.max_execution_time,
             )
             return {
                 "status": "success" if result.returncode == 0 else "error",
                 "stdout": result.stdout,
                 "stderr": result.stderr,
-                "returncode": result.returncode
+                "returncode": result.returncode,
             }
         except subprocess.TimeoutExpired:
             return {"status": "error", "stderr": "Execution timed out"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
+
     def _execute_sql(self, code: str) -> dict[str, Any]:
         """Execute SQL code using SQLite."""
         try:
@@ -436,10 +506,14 @@ class CodeInterpreter:
             return result
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
+
     def _execute_c(self, code: str) -> dict[str, Any]:
         """Execute C code by compiling and running."""
         if HF_SPACES:
-            return {"status": "error", "stderr": "C code execution not available on Hugging Face Spaces"}
+            return {
+                "status": "error",
+                "stderr": "C code execution not available on Hugging Face Spaces",
+            }
         try:
             # Create temporary C file
             c_file = os.path.join(self.working_directory, "temp_code.c")
@@ -447,33 +521,47 @@ class CodeInterpreter:
                 f.write(code)
             # Compile
             compile_result = subprocess.run(
-                ["gcc", "-o", os.path.join(self.working_directory, "temp_program"), c_file],
-                check=False, capture_output=True,
-                text=True
+                [
+                    "gcc",
+                    "-o",
+                    os.path.join(self.working_directory, "temp_program"),
+                    c_file,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
             )
             if compile_result.returncode != 0:
-                return {"status": "error", "stderr": f"Compilation failed: {compile_result.stderr}"}
+                return {
+                    "status": "error",
+                    "stderr": f"Compilation failed: {compile_result.stderr}",
+                }
             # Run
             run_result = subprocess.run(
                 [os.path.join(self.working_directory, "temp_program")],
-                check=False, capture_output=True,
+                check=False,
+                capture_output=True,
                 text=True,
-                timeout=self.max_execution_time
+                timeout=self.max_execution_time,
             )
             return {
                 "status": "success",
                 "stdout": run_result.stdout,
                 "stderr": run_result.stderr,
-                "returncode": run_result.returncode
+                "returncode": run_result.returncode,
             }
         except subprocess.TimeoutExpired:
             return {"status": "error", "stderr": "Execution timed out"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
+
     def _execute_java(self, code: str) -> dict[str, Any]:
         """Execute Java code by compiling and running."""
         if HF_SPACES:
-            return {"status": "error", "stderr": "Java code execution not available on Hugging Face Spaces"}
+            return {
+                "status": "error",
+                "stderr": "Java code execution not available on Hugging Face Spaces",
+            }
         try:
             # Create temporary Java file
             java_file = os.path.join(self.working_directory, "TempCode.java")
@@ -481,32 +569,36 @@ class CodeInterpreter:
                 f.write(code)
             # Compile
             compile_result = subprocess.run(
-                ["javac", java_file],
-                check=False, capture_output=True,
-                text=True
+                ["javac", java_file], check=False, capture_output=True, text=True
             )
             if compile_result.returncode != 0:
-                return {"status": "error", "stderr": f"Compilation failed: {compile_result.stderr}"}
+                return {
+                    "status": "error",
+                    "stderr": f"Compilation failed: {compile_result.stderr}",
+                }
             # Run
             run_result = subprocess.run(
                 ["java", "-cp", self.working_directory, "TempCode"],
-                check=False, capture_output=True,
+                check=False,
+                capture_output=True,
                 text=True,
-                timeout=self.max_execution_time
+                timeout=self.max_execution_time,
             )
             return {
                 "status": "success",
                 "stdout": run_result.stdout,
                 "stderr": run_result.stderr,
-                "returncode": run_result.returncode
+                "returncode": run_result.returncode,
             }
         except subprocess.TimeoutExpired:
             return {"status": "error", "stderr": "Execution timed out"}
         except Exception as e:
             return {"status": "error", "stderr": str(e)}
 
+
 # Create a global instance for use by tools
 interpreter_instance = CodeInterpreter()
+
 
 @tool
 def execute_code_multilang(
@@ -525,15 +617,18 @@ def execute_code_multilang(
         A string summarizing the execution results (stdout, stderr, errors, plots, dataframes if any).
     """
     from .file_utils import FileUtils
+
     # Resolve code reference (code content, filename, or URL)
-    code_content, detected_language = FileUtils.resolve_code_input(code_reference, agent)
+    code_content, detected_language = FileUtils.resolve_code_input(
+        code_reference, agent
+    )
     # Use detected language or provided language
     final_language = (detected_language or language).lower()
     supported_languages = ["python", "bash", "sql", "c", "java"]
     if final_language not in supported_languages:
         return FileUtils.create_tool_response(
             "execute_code_multilang",
-            error=f"❌ Unsupported language: {final_language}. Supported languages are: {', '.join(supported_languages)}"
+            error=f"❌ Unsupported language: {final_language}. Supported languages are: {', '.join(supported_languages)}",
         )
 
     result = interpreter_instance.execute_code(code_content, language=final_language)
@@ -541,7 +636,9 @@ def execute_code_multilang(
     response = []
 
     if result["status"] == "success":
-        response.append(f"✅ Code executed successfully in **{final_language.upper()}**")
+        response.append(
+            f"✅ Code executed successfully in **{final_language.upper()}**"
+        )
 
         if result.get("stdout"):
             response.append(
@@ -582,7 +679,10 @@ def execute_code_multilang(
                 "\n**Error Log:**\n```\n" + result["stderr"].strip() + "\n```"
             )
 
-    return FileUtils.create_tool_response("execute_code_multilang", result="\n".join(response))
+    return FileUtils.create_tool_response(
+        "execute_code_multilang", result="\n".join(response)
+    )
+
 
 # ========== MATH TOOLS ==========
 @tool
@@ -599,6 +699,7 @@ def multiply(a: float, b: float) -> float:
     """
     return a * b
 
+
 @tool
 def add(a: float, b: float) -> float:
     """
@@ -613,6 +714,7 @@ def add(a: float, b: float) -> float:
     """
     return a + b
 
+
 @tool
 def subtract(a: float, b: float) -> float:
     """
@@ -626,6 +728,7 @@ def subtract(a: float, b: float) -> float:
         float: The result of a - b.
     """
     return a - b
+
 
 @tool
 def divide(a: float, b: float) -> float:
@@ -643,6 +746,7 @@ def divide(a: float, b: float) -> float:
         raise ValueError("Cannot divide by zero")
     return a / b
 
+
 @tool
 def modulus(a: int, b: int) -> int:
     """
@@ -659,6 +763,7 @@ def modulus(a: int, b: int) -> int:
         raise ValueError("Cannot divide by zero")
     return a % b
 
+
 @tool
 def power(a: float, b: float) -> float:
     """
@@ -671,7 +776,8 @@ def power(a: float, b: float) -> float:
     Returns:
         float: a raised to the power of b.
     """
-    return a ** b
+    return a**b
+
 
 @tool
 def square_root(a: float) -> float:
@@ -685,8 +791,9 @@ def square_root(a: float) -> float:
         float or complex: The square root of a. If a < 0, returns a complex number.
     """
     if a >= 0:
-        return a ** 0.5
+        return a**0.5
     return cmath.sqrt(a)
+
 
 # ========== WEB/SEARCH TOOLS ==========
 @tool
@@ -702,11 +809,13 @@ def wiki_search(input: str) -> str:
     """
     try:
         if not WIKILOADER_AVAILABLE:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "wiki_search",
-                "error": "Wikipedia search not available. Install with: pip install langchain-community"
-            })
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "wiki_search",
+                    "error": "Wikipedia search not available. Install with: pip install langchain-community",
+                }
+            )
         search_docs = WikipediaLoader(query=input, load_max_docs=SEARCH_LIMIT).load()
         formatted_results = "\n\n---\n\n".join(
             [
@@ -714,17 +823,22 @@ def wiki_search(input: str) -> str:
                 for doc in search_docs
             ]
         )
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "wiki_search",
-            "wiki_results": formatted_results
-        })
+        return json.dumps(
+            {
+                "type": "tool_response",
+                "tool_name": "wiki_search",
+                "wiki_results": formatted_results,
+            }
+        )
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "wiki_search",
-            "error": f"Error in Wikipedia search: {str(e)}"
-        })
+        return json.dumps(
+            {
+                "type": "tool_response",
+                "tool_name": "wiki_search",
+                "error": f"Error in Wikipedia search: {str(e)}",
+            }
+        )
+
 
 @tool
 def web_search(input: str) -> str:
@@ -745,27 +859,33 @@ def web_search(input: str) -> str:
 
     """
     if not TAVILY_AVAILABLE:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "web_search",
-            "error": "Tavily search not available. Install with: pip install langchain-tavily"
-        })
-    try:
-        if not os.environ.get("TAVILY_API_KEY"):
-            return json.dumps({
+        return json.dumps(
+            {
                 "type": "tool_response",
                 "tool_name": "web_search",
-                "error": "TAVILY_API_KEY not found in environment variables. Please set it in your .env file."
-            })
+                "error": "Tavily search not available. Install with: pip install langchain-tavily",
+            }
+        )
+    try:
+        if not os.environ.get("TAVILY_API_KEY"):
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "web_search",
+                    "error": "TAVILY_API_KEY not found in environment variables. Please set it in your .env file.",
+                }
+            )
         search_result = TavilySearch(max_results=SEARCH_LIMIT).invoke(input)
         # Handle different response types
         if isinstance(search_result, str):
             # If Tavily returned a string (error message or direct answer)
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "web_search",
-                "web_results": search_result
-            })
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "web_search",
+                    "web_results": search_result,
+                }
+            )
         elif isinstance(search_result, list):
             # If Tavily returned a list of Document objects
             formatted_results = "\n\n---\n\n".join(
@@ -774,23 +894,30 @@ def web_search(input: str) -> str:
                     for doc in search_result
                 ]
             )
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "web_search",
-                "web_results": formatted_results
-            })
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "web_search",
+                    "web_results": formatted_results,
+                }
+            )
         else:
-            return json.dumps({
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "web_search",
+                    "web_results": str(search_result),
+                }
+            )
+    except Exception as e:
+        return json.dumps(
+            {
                 "type": "tool_response",
                 "tool_name": "web_search",
-                    "web_results": str(search_result)
-            })
-    except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "web_search",
-            "error": f"Error in web search: {str(e)}"
-        })
+                "error": f"Error in web search: {str(e)}",
+            }
+        )
+
 
 @tool
 def arxiv_search(input: str) -> str:
@@ -805,17 +932,21 @@ def arxiv_search(input: str) -> str:
     """
     try:
         if not ARXIVLOADER_AVAILABLE:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "arxiv_search",
-                "error": "Arxiv search not available. Install with: pip install langchain-community"
-            })
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "arxiv_search",
+                    "error": "Arxiv search not available. Install with: pip install langchain-community",
+                }
+            )
         if not PYMUPDF_AVAILABLE:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "arxiv_search",
-                "error": "PyMuPDF package not found, please install it with pip install pymupdf"
-            })
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "arxiv_search",
+                    "error": "PyMuPDF package not found, please install it with pip install pymupdf",
+                }
+            )
         search_docs = ArxivLoader(query=input, load_max_docs=SEARCH_LIMIT).load()
         formatted_results = "\n\n---\n\n".join(
             [
@@ -823,21 +954,27 @@ def arxiv_search(input: str) -> str:
                 for doc in search_docs
             ]
         )
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "arxiv_search",
-            "arxiv_results": formatted_results
-        })
+        return json.dumps(
+            {
+                "type": "tool_response",
+                "tool_name": "arxiv_search",
+                "arxiv_results": formatted_results,
+            }
+        )
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "arxiv_search",
-            "error": f"Error in Arxiv search: {str(e)}"
-        })
+        return json.dumps(
+            {
+                "type": "tool_response",
+                "tool_name": "arxiv_search",
+                "error": f"Error in Arxiv search: {str(e)}",
+            }
+        )
+
+
 # ========== FILE/DATA TOOLS ==========
 @tool
 def read_text_based_file(
-    file_reference: str,
+    filename: str,
     read_html_as_markdown: bool = True,
     extract_images: bool = False,
     agent: Annotated[Any | None, InjectedToolArg] = None,
@@ -881,7 +1018,7 @@ def read_text_based_file(
     - Provides file metadata (name, size, encoding) in results
 
     Args:
-        file_reference (str): Original filename from user upload OR URL to download
+        filename (str): Original filename from user upload OR URL to download
         read_html_as_markdown (bool): For HTML files. If True (default), converts HTML to
             Markdown for token efficiency and readability. Set False only when raw HTML
             structure is needed.
@@ -895,16 +1032,23 @@ def read_text_based_file(
     from .file_utils import FileUtils
     from .local_path_text import read_local_path_to_plain_text
 
-    ref = (file_reference or "").strip()
-    file_path = FileUtils.resolve_file_reference(ref, agent)
+    ref = (filename or "").strip()
+    file_path = FileUtils.resolve_filename(ref, agent)
     if not file_path:
-        return FileUtils.create_tool_response("read_text_based_file", error=f"File not found: {ref}")
+        return FileUtils.create_tool_response(
+            "read_text_based_file", error=f"File not found: {ref}"
+        )
     file_info = FileUtils.get_file_info(file_path)
     if not file_info.exists:
-        return FileUtils.create_tool_response("read_text_based_file", error=file_info.error)
+        return FileUtils.create_tool_response(
+            "read_text_based_file", error=file_info.error
+        )
 
     content, read_err, enc, image_paths, markdown_path = read_local_path_to_plain_text(
-        file_path, read_html_as_markdown=read_html_as_markdown, extract_images=extract_images, _file_info=file_info
+        file_path,
+        read_html_as_markdown=read_html_as_markdown,
+        extract_images=extract_images,
+        _file_info=file_info,
     )
     if read_err:
         return FileUtils.create_tool_response(
@@ -935,7 +1079,9 @@ def read_text_based_file(
                 logical_name = f"{base_name}_image_{idx + 1}{Path(abs_path).suffix}"
                 agent.register_file(logical_name, abs_path)
                 registered_names.append(logical_name)
-                logger.debug("Registered extracted image: %s -> %s", logical_name, abs_path)
+                logger.debug(
+                    "Registered extracted image: %s -> %s", logical_name, abs_path
+                )
             except Exception as reg_err:
                 logger.warning("Failed to register image %s: %s", abs_path, reg_err)
         if registered_names:
@@ -963,6 +1109,7 @@ def read_text_based_file(
         extra=extra if extra else None,
     )
 
+
 # ========== PANDAS QUERY/PIPELINE HELPERS ==========
 def _safe_to_markdown(df: pd.DataFrame, max_rows: int = 10, max_cols: int = 20) -> str:
     preview_df = df.head(max_rows)
@@ -978,10 +1125,13 @@ def _dataframe_schema(df: pd.DataFrame) -> dict[str, str]:
     return {str(col): str(dtype) for col, dtype in df.dtypes.items()}
 
 
-def _truncate_records(df: pd.DataFrame, max_rows: int = 100, max_cols: int = 50, max_cell_chars: int = 500) -> list[dict[str, Any]]:
+def _truncate_records(
+    df: pd.DataFrame, max_rows: int = 100, max_cols: int = 50, max_cell_chars: int = 500
+) -> list[dict[str, Any]]:
     limited = df.head(max_rows)
     if max_cols is not None:
         limited = limited.iloc[:, :max_cols]
+
     def _truncate_val(v: Any) -> Any:
         try:
             s = str(v)
@@ -990,7 +1140,11 @@ def _truncate_records(df: pd.DataFrame, max_rows: int = 100, max_cols: int = 50,
         if len(s) > max_cell_chars:
             return s[: max_cell_chars - 1] + "…"
         return v
-    return [{k: _truncate_val(v) for k, v in row.items()} for row in limited.to_dict(orient="records")]
+
+    return [
+        {k: _truncate_val(v) for k, v in row.items()}
+        for row in limited.to_dict(orient="records")
+    ]
 
 
 _ALLOWED_OPS: dict[str, Literal["df_method", "special"]] = {
@@ -1102,13 +1256,19 @@ def _apply_pandas_query(
             ax = fig.gca()
             data = transformed
             if x is None and y is None and kind in ("bar", "barh"):
-                non_numeric = [c for c in data.columns if not pd.api.types.is_numeric_dtype(data[c])]
+                non_numeric = [
+                    c
+                    for c in data.columns
+                    if not pd.api.types.is_numeric_dtype(data[c])
+                ]
                 target_col = non_numeric[0] if non_numeric else data.columns[0]
                 vc = data[target_col].value_counts().head(20)
                 vc.plot(kind=kind, ax=ax)
             else:
                 data.plot(kind=kind, x=x, y=y, ax=ax)
-            plot_path = os.path.join(tempfile.gettempdir(), f"df_plot_{uuid.uuid4().hex}.png")
+            plot_path = os.path.join(
+                tempfile.gettempdir(), f"df_plot_{uuid.uuid4().hex}.png"
+            )
             fig.savefig(plot_path, bbox_inches="tight")
             plt.close(fig)
             plots.append(encode_image(plot_path))
@@ -1120,7 +1280,9 @@ def _apply_pandas_query(
     include_schema = bool(preview.get("include_schema", True))
 
     table_markdown = _safe_to_markdown(transformed, rows, cols)
-    table_records = _truncate_records(transformed, max_rows=min(rows, 1000), max_cols=min(cols, 100))
+    table_records = _truncate_records(
+        transformed, max_rows=min(rows, 1000), max_cols=min(cols, 100)
+    )
     payload: dict[str, Any] = {
         "original_shape": original_shape,
         "shape": tuple(transformed.shape),
@@ -1131,7 +1293,9 @@ def _apply_pandas_query(
         payload["schema"] = _dataframe_schema(transformed)
     try:
         if transformed.shape[0] <= 5000 and transformed.shape[1] <= 50:
-            payload["describe_summary"] = str(transformed.describe(include="all", datetime_is_numeric=True))
+            payload["describe_summary"] = str(
+                transformed.describe(include="all", datetime_is_numeric=True)
+            )
     except Exception:
         pass
     if plots:
@@ -1141,7 +1305,7 @@ def _apply_pandas_query(
 
 @tool
 def analyze_csv_file(
-    file_reference: str,
+    filename: str,
     query: str,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> str:
@@ -1157,7 +1321,7 @@ def analyze_csv_file(
     - Downloads files from URLs automatically
     - Provides comprehensive analysis including data types, statistics, and column information
     Args:
-        file_reference (str): Original filename from user upload OR URL to download
+        filename (str): Original filename from user upload OR URL to download
         query (str): A question or description of the analysis to perform (currently unused)
         agent: Agent instance for file resolution (injected automatically)
 
@@ -1165,10 +1329,13 @@ def analyze_csv_file(
         str: Summary statistics and column information, or an error message if analysis fails.
     """
     from .file_utils import FileUtils
+
     # Resolve file reference (filename or URL) to full path
-    file_path = FileUtils.resolve_file_reference(file_reference, agent)
+    file_path = FileUtils.resolve_filename(filename, agent)
     if not file_path:
-        return FileUtils.create_tool_response("analyze_csv_file", error=f"File not found: {file_reference}")
+        return FileUtils.create_tool_response(
+            "analyze_csv_file", error=f"File not found: {filename}"
+        )
     # Check file exists using utilities with Pydantic validation
     file_info = FileUtils.get_file_info(file_path)
     if not file_info.exists:
@@ -1189,7 +1356,9 @@ def analyze_csv_file(
         if payload.get("table_markdown"):
             result_parts.append("Preview:\n" + payload["table_markdown"])
         if payload.get("describe_summary"):
-            result_parts.append("\n\nSummary statistics:\n" + str(payload["describe_summary"]))
+            result_parts.append(
+                "\n\nSummary statistics:\n" + str(payload["describe_summary"])
+            )
         result_text = "\n".join(result_parts)
         return FileUtils.create_tool_response(
             "analyze_csv_file",
@@ -1198,11 +1367,14 @@ def analyze_csv_file(
             extra=payload,
         )
     except Exception as e:
-        return FileUtils.create_tool_response("analyze_csv_file", error=f"Error analyzing CSV file: {str(e)}")
+        return FileUtils.create_tool_response(
+            "analyze_csv_file", error=f"Error analyzing CSV file: {str(e)}"
+        )
+
 
 @tool
 def analyze_excel_file(
-    file_reference: str,
+    filename: str,
     query: str,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> str:
@@ -1225,7 +1397,7 @@ def analyze_excel_file(
     - Downloads files from URLs automatically
     - Provides data types, statistics, column information, and sheet details
     Args:
-        file_reference (str): Original filename from user upload OR URL to download
+        filename (str): Original filename from user upload OR URL to download
         query (str): A question or description of the analysis to perform (currently unused)
         agent: Agent instance for file resolution (injected automatically)
 
@@ -1233,14 +1405,19 @@ def analyze_excel_file(
         str: Summary statistics and column information, or an error message if analysis fails.
     """
     from .file_utils import FileUtils
+
     # Resolve file reference (filename or URL) to full path
-    file_path = FileUtils.resolve_file_reference(file_reference, agent)
+    file_path = FileUtils.resolve_filename(filename, agent)
     if not file_path:
-        return FileUtils.create_tool_response("analyze_excel_file", error=f"File not found: {file_reference}")
+        return FileUtils.create_tool_response(
+            "analyze_excel_file", error=f"File not found: {filename}"
+        )
     # Check file exists using utilities with Pydantic validation
     file_info = FileUtils.get_file_info(file_path)
     if not file_info.exists:
-        return FileUtils.create_tool_response("analyze_excel_file", error=file_info.error)
+        return FileUtils.create_tool_response(
+            "analyze_excel_file", error=file_info.error
+        )
     try:
         df = pd.read_excel(file_path)
         _, payload = _apply_pandas_query(
@@ -1257,7 +1434,9 @@ def analyze_excel_file(
         if payload.get("table_markdown"):
             result_parts.append("Preview:\n" + payload["table_markdown"])
         if payload.get("describe_summary"):
-            result_parts.append("\n\nSummary statistics:\n" + str(payload["describe_summary"]))
+            result_parts.append(
+                "\n\nSummary statistics:\n" + str(payload["describe_summary"])
+            )
         result_text = "\n".join(result_parts)
         return FileUtils.create_tool_response(
             "analyze_excel_file",
@@ -1276,10 +1455,11 @@ def analyze_excel_file(
             error_details = f"Error analyzing Excel file: {str(e)}\nAdditionally, failed to read columns/head: {str(inner_e)}"
         return FileUtils.create_tool_response("analyze_excel_file", error=error_details)
 
+
 # ========== IMAGE ANALYSIS/GENERATION TOOLS ==========
 @tool
 def analyze_image(
-    file_reference: str,
+    filename: str,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> str:
     """
@@ -1302,18 +1482,21 @@ def analyze_image(
     - Provides comprehensive image analysis including dimensions, color analysis, and thumbnails
 
     Args:
-        file_reference (str): Original filename from user upload OR URL to download
+        filename (str): Original filename from user upload OR URL to download
         agent: Agent instance for file resolution (injected automatically)
 
     Returns:
         str: JSON string with analysis results including dimensions, mode, color_analysis, and thumbnail.
     """
     from .file_utils import FileUtils
+
     try:
         # Resolve file reference (filename or URL) to full path
-        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        file_path = FileUtils.resolve_filename(filename, agent)
         if not file_path:
-            return FileUtils.create_tool_response("analyze_image", error=f"File not found: {file_reference}")
+            return FileUtils.create_tool_response(
+                "analyze_image", error=f"File not found: {filename}"
+            )
         # Open image from file path
         img = Image.open(file_path)
         width, height = img.size
@@ -1340,14 +1523,16 @@ def analyze_image(
             "color_analysis": color_analysis,
             "thumbnail": thumbnail_base64,
         }
-        return FileUtils.create_tool_response("analyze_image", result=json.dumps(result))
+        return FileUtils.create_tool_response(
+            "analyze_image", result=json.dumps(result)
+        )
     except Exception as e:
         return FileUtils.create_tool_response("analyze_image", error=str(e))
 
 
 @tool
 def analyze_image_ai(
-    file_reference: str,
+    filename: str,
     prompt: str,
     system_prompt: str = None,
     agent: Annotated[Any | None, InjectedToolArg] = None,
@@ -1366,7 +1551,7 @@ def analyze_image_ai(
     For basic metadata (dimensions, colors), use the legacy analyze_image() instead.
 
     Args:
-        file_reference (str): Uploaded image filename, or a URL to an image.
+        filename (str): Uploaded image filename, or a URL to an image.
         prompt (str): Question or instruction about the image (e.g., "What's in this image?")
         system_prompt (str, optional): System instruction for the model
         agent: Agent instance for file resolution (injected automatically)
@@ -1380,21 +1565,21 @@ def analyze_image_ai(
         from agent_ng.vision_input import VisionInput
         from agent_ng.vision_tool_manager import VisionToolManager
 
-        lowered_ref = file_reference.strip().lower()
+        lowered_ref = filename.strip().lower()
         is_direct_url = lowered_ref.startswith("http://") or lowered_ref.startswith(
             "https://"
         )
         if is_direct_url:
             vision_input = VisionInput(
                 prompt=prompt,
-                image_url=file_reference.strip(),
+                image_url=filename.strip(),
             )
         else:
-            file_path = FileUtils.resolve_file_reference(file_reference, agent)
+            file_path = FileUtils.resolve_filename(filename, agent)
             if not file_path:
                 return FileUtils.create_tool_response(
                     "analyze_image_ai",
-                    error=f"File not found: {file_reference}",
+                    error=f"File not found: {filename}",
                 )
 
             if file_path.lower().endswith(".pdf"):
@@ -1403,7 +1588,7 @@ def analyze_image_ai(
                     error="PDF files cannot be analyzed directly as images. "
                     "Most vision models don't support PDFs natively. "
                     "To analyze visual PDF content:\n"
-                    "1. First: read_text_based_file(file_reference='DOC.pdf', extract_images=True)\n"
+                    "1. First: read_text_based_file(filename='DOC.pdf', extract_images=True)\n"
                     "   - This extracts images from PDF pages\n"
                     "2. Then: analyze the extracted images individually\n"
                     "   - Use analyze_image_ai for each extracted image path",
@@ -1413,6 +1598,7 @@ def analyze_image_ai(
 
         # Initialize VisionToolManager
         import os
+
         os.environ["OPENROUTER_FETCH_PRICING_AT_STARTUP"] = "false"
         manager = VisionToolManager()
 
@@ -1423,28 +1609,32 @@ def analyze_image_ai(
         return FileUtils.create_tool_response(
             "analyze_image_ai",
             result=result,
-            extra={
-                "file": file_reference,
-                "model_used": manager.vl_model
-            }
+            extra={"file": filename, "model_used": manager.vl_model},
         )
 
     except Exception as e:
         return FileUtils.create_tool_response(
-            "analyze_image_ai",
-            error=f"Analysis failed: {str(e)}"
+            "analyze_image_ai", error=f"Analysis failed: {str(e)}"
         )
+
 
 class TransformImageParams(BaseModel):
     width: int | None = Field(None, description="New width for resize operation")
     height: int | None = Field(None, description="New height for resize operation")
     angle: int | None = Field(None, description="Rotation angle in degrees")
-    direction: Literal["horizontal", "vertical"] | None = Field(None, description="Flip direction")
+    direction: Literal["horizontal", "vertical"] | None = Field(
+        None, description="Flip direction"
+    )
     radius: float | None = Field(None, description="Blur radius")
-    factor: float | None = Field(None, description="Enhancement factor for brightness/contrast")
+    factor: float | None = Field(
+        None, description="Enhancement factor for brightness/contrast"
+    )
+
 
 @tool(args_schema=TransformImageParams)
-def transform_image(image_base64: str, operation: str, params: dict[str, Any] | None = None) -> str:
+def transform_image(
+    image_base64: str, operation: str, params: dict[str, Any] | None = None
+) -> str:
     """
     Transform an image using various operations like resize, rotate, filter, etc.
 
@@ -1476,7 +1666,9 @@ def transform_image(image_base64: str, operation: str, params: dict[str, Any] | 
             radius = params.get("radius", 2)
             img = img.filter(ImageFilter.GaussianBlur(radius=radius))
         elif operation == "sharpen":
-            img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+            img = img.filter(
+                ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3)
+            )
         elif operation == "brightness":
             factor = params.get("factor", 1.0)
             enhancer = ImageEnhance.Brightness(img)
@@ -1486,39 +1678,53 @@ def transform_image(image_base64: str, operation: str, params: dict[str, Any] | 
             enhancer = ImageEnhance.Contrast(img)
             img = enhancer.enhance(factor)
         else:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "transform_image",
-                "error": f"Unsupported operation: {operation}"
-            }, indent=2)
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "transform_image",
+                    "error": f"Unsupported operation: {operation}",
+                },
+                indent=2,
+            )
         result_path = save_image(img)
         result_base64 = encode_image(result_path)
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "transform_image",
-            "transformed_image": result_base64
-        }, indent=2)
+        return json.dumps(
+            {
+                "type": "tool_response",
+                "tool_name": "transform_image",
+                "transformed_image": result_base64,
+            },
+            indent=2,
+        )
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "transform_image",
-            "error": str(e)
-        }, indent=2)
+        return json.dumps(
+            {"type": "tool_response", "tool_name": "transform_image", "error": str(e)},
+            indent=2,
+        )
+
 
 class DrawOnImageParams(BaseModel):
     text: str | None = Field(None, description="Text to draw")
     position: list[int] | None = Field(None, description="Text position [x, y]")
-    color: str | None = Field(None, description="Color name (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')")
+    color: str | None = Field(
+        None,
+        description="Color name (e.g., 'red', 'blue') or RGB string (e.g., '255,0,0')",
+    )
     size: int | None = Field(None, description="Font size for text")
-    coords: list[int] | None = Field(None, description="Rectangle coordinates [x1, y1, x2, y2]")
+    coords: list[int] | None = Field(
+        None, description="Rectangle coordinates [x1, y1, x2, y2]"
+    )
     center: list[int] | None = Field(None, description="Circle center [x, y]")
     radius: int | None = Field(None, description="Circle radius")
     start: list[int] | None = Field(None, description="Line start [x, y]")
     end: list[int] | None = Field(None, description="Line end [x, y]")
     width: int | None = Field(None, description="Stroke width")
 
+
 @tool(args_schema=DrawOnImageParams)
-def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParams) -> str:
+def draw_on_image(
+    image_base64: str, drawing_type: str, params: DrawOnImageParams
+) -> str:
     """
     Draw shapes, text, or other elements on an image.
 
@@ -1533,12 +1739,16 @@ def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParam
     try:
         img = decode_image(image_base64)
         draw = ImageDraw.Draw(img)
+
         def parse_color(color_str):
             """Parse color string to RGB tuple or color name"""
             if not color_str:
                 return "black"
             # Check if it's RGB values as comma-separated string
-            if "," in color_str and color_str.replace(",", "").replace(" ", "").isdigit():
+            if (
+                "," in color_str
+                and color_str.replace(",", "").replace(" ", "").isdigit()
+            ):
                 try:
                     rgb_values = [int(x.strip()) for x in color_str.split(",")]
                     if len(rgb_values) == 3 and all(0 <= v <= 255 for v in rgb_values):
@@ -1568,8 +1778,12 @@ def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParam
             radius = params.radius or 30
             color = parse_color(params.color) or "blue"
             width = params.width or 2
-            bbox = [center[0] - radius, center[1] - radius,
-                   center[0] + radius, center[1] + radius]
+            bbox = [
+                center[0] - radius,
+                center[1] - radius,
+                center[0] + radius,
+                center[1] + radius,
+            ]
             draw.ellipse(bbox, outline=color, width=width)
         elif drawing_type == "line":
             start = params.start or [10, 10]
@@ -1578,24 +1792,30 @@ def draw_on_image(image_base64: str, drawing_type: str, params: DrawOnImageParam
             width = params.width or 2
             draw.line([tuple(start), tuple(end)], fill=color, width=width)
         else:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "draw_on_image",
-                "error": f"Unsupported drawing type: {drawing_type}"
-            }, indent=2)
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "draw_on_image",
+                    "error": f"Unsupported drawing type: {drawing_type}",
+                },
+                indent=2,
+            )
         result_path = save_image(img)
         result_base64 = encode_image(result_path)
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "draw_on_image",
-            "modified_image": result_base64
-        }, indent=2)
+        return json.dumps(
+            {
+                "type": "tool_response",
+                "tool_name": "draw_on_image",
+                "modified_image": result_base64,
+            },
+            indent=2,
+        )
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "draw_on_image",
-            "error": str(e)
-        }, indent=2)
+        return json.dumps(
+            {"type": "tool_response", "tool_name": "draw_on_image", "error": str(e)},
+            indent=2,
+        )
+
 
 # ------------------------------------------------------------------------- #
 # AI image generation (OpenRouter)                                           #
@@ -1639,14 +1859,13 @@ def _build_generate_ai_image_description() -> str:
         )
 
     body = (
-        "Create or edit an image from a text description.\n\n"
-        "Use this when the user asks for an illustration, icon, "
-        "diagram, business infographic, logo, banner, social-media "
-        "graphic, or any other visual — either generating from scratch "
-        "or editing/restyling an existing image via `reference_images`. "
-        "The result comes back as a chat attachment reference that you "
-        "can pass to other tools (for example, to attach the image to "
-        "a record, analyze it, or transform it further).\n\n"
+        "Generate an image from a text description — illustrations, "
+        "icons, diagrams, infographics, logos, banners, social-media "
+        "graphics, and more.\n\n"
+        "On success the result includes `generated_filename` — use "
+        "that name in follow-up tools (attach to a record, analyze, "
+        "transform). On failure the result includes an `error` "
+        "message — modify the prompt and retry.\n\n"
         "`aspect_ratio` lets you request a specific shape (for example "
         "`16:9` for a banner, `9:16` for a mobile story, `1:1` for a "
         "square icon). `image_size` lets you request a resolution tier "
@@ -1654,10 +1873,9 @@ def _build_generate_ai_image_description() -> str:
         "print-quality). Only set these when the composition really "
         "depends on shape or size.\n\n"
         f"{ref_note}\n\n"
-        "Returns a structured result containing the image reference "
-        "and the generation cost. If the call fails, the result "
-        "contains an `error` message explaining why — simplify the "
-        "prompt and try again."
+        "Pass `reference_images` to edit or restyle an existing "
+        "picture (URL or data-URI format). The active model determines "
+        "whether reference images are supported and how many."
     )
     if get_default_prompt_style_hint is None:
         return body
@@ -1769,8 +1987,8 @@ def generate_ai_image(
     ``IMAGE_GEN_DEFAULT_MODEL``); the calling LLM only decides on the
     prompt, aspect ratio, size, and optional reference images.
 
-    Returns a structured result. On success it includes a
-    ``file_reference`` (an attachment name usable by other chat tools),
+    Returns a structured result. On success it includes
+    ``generated_filename`` — the name of the newly created image file —
     the ``cost`` in USD, the output ``mime_type`` and ``size_bytes``. On
     failure it includes an ``error`` string and no attachment.
     """
@@ -1778,7 +1996,7 @@ def generate_ai_image(
         return {
             "success": False,
             "error": "Image generation engine is not available.",
-            "file_reference": None,
+            "generated_filename": None,
             "cost": None,
         }
 
@@ -1788,7 +2006,7 @@ def generate_ai_image(
         return {
             "success": False,
             "error": str(exc),
-            "file_reference": None,
+            "generated_filename": None,
             "cost": None,
         }
 
@@ -1801,7 +2019,11 @@ def generate_ai_image(
     # supports.  The engine clips silently; we surface that here so the
     # agent can inform the user or adjust on the next call.
     ref_images_warning: str | None = None
-    if reference_images and get_default_model is not None and get_model_config is not None:
+    if (
+        reference_images
+        and get_default_model is not None
+        and get_model_config is not None
+    ):
         _cfg = get_model_config(get_default_model())
         if _cfg is not None:
             _max = _cfg.max_reference_images
@@ -1829,7 +2051,7 @@ def generate_ai_image(
         return {
             "success": False,
             "error": result.error or "image generation failed",
-            "file_reference": None,
+            "generated_filename": None,
             "cost": result.cost,
             "reference_images_warning": ref_images_warning,
         }
@@ -1853,7 +2075,7 @@ def generate_ai_image(
         return {
             "success": False,
             "error": f"Failed to write image bytes: {exc}",
-            "file_reference": None,
+            "generated_filename": None,
             "cost": result.cost,
         }
 
@@ -1870,17 +2092,17 @@ def generate_ai_image(
             return {
                 "success": False,
                 "error": f"register_file failed: {exc}",
-                "file_reference": None,
+                "generated_filename": None,
                 "cost": result.cost,
             }
-        file_reference = display_name
+        _ref = display_name
     else:
-        file_reference = os.path.abspath(disk_path)
+        _ref = os.path.abspath(disk_path)
 
     return {
         "success": True,
         "error": None,
-        "file_reference": file_reference,
+        "generated_filename": _ref,
         "cost": result.cost,
         "mime_type": result.mime_type,
         "size_bytes": len(result.image_bytes),
@@ -1902,7 +2124,7 @@ def _resolve_reference_images(
     accepts both formats directly.
 
     Everything else is treated as a logical filename and looked up via
-    ``FileUtils.read_file_reference_bytes``, which consults
+    ``FileUtils.read_file_bytes``, which consults
     ``agent.get_file_path`` when an agent is present.  On success the
     bytes are base64-encoded and wrapped in a ``data:<mime>;base64,…``
     URI.  MIME type is guessed from the file extension; unknowns fall
@@ -1930,7 +2152,7 @@ def _resolve_reference_images(
             continue
 
         # Filename — look up in agent's registry and encode as data URI.
-        data, err = FileUtils.read_file_reference_bytes(item, agent)
+        data, err = FileUtils.read_file_bytes(item, agent)
         if err or data is None:
             logger.warning(
                 "generate_ai_image: cannot resolve reference image %r: %s",
@@ -1994,15 +2216,25 @@ def _write_image_bytes(
         raise
     return tmp
 
+
 class CombineImagesParams(BaseModel):
     spacing: int | None = Field(None, description="Spacing between images in pixels")
-    background_color: str | None = Field(None, description="Background color for collage (e.g., 'white', 'black') or RGB string (e.g., '255,255,255')")
-    blend_mode: str | None = Field(None, description="Blend mode for blending operations")
-    opacity: float | None = Field(None, description="Opacity for overlay operations (0.0-1.0)")
+    background_color: str | None = Field(
+        None,
+        description="Background color for collage (e.g., 'white', 'black') or RGB string (e.g., '255,255,255')",
+    )
+    blend_mode: str | None = Field(
+        None, description="Blend mode for blending operations"
+    )
+    opacity: float | None = Field(
+        None, description="Opacity for overlay operations (0.0-1.0)"
+    )
+
 
 @tool(args_schema=CombineImagesParams)
-def combine_images(images_base64: list[str], operation: str,
-                  params: CombineImagesParams | None = None) -> str:
+def combine_images(
+    images_base64: list[str], operation: str, params: CombineImagesParams | None = None
+) -> str:
     """
     Combine multiple images using various operations (collage, stack, blend, horizontal, vertical, overlay, etc.).
 
@@ -2016,11 +2248,14 @@ def combine_images(images_base64: list[str], operation: str,
     """
     try:
         if len(images_base64) < 2:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "combine_images",
-                "error": "At least 2 images required for combination"
-            }, indent=2)
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "combine_images",
+                    "error": "At least 2 images required for combination",
+                },
+                indent=2,
+            )
         images = [decode_image(b64) for b64 in images_base64]
         if params is None:
             params = CombineImagesParams()
@@ -2047,8 +2282,12 @@ def combine_images(images_base64: list[str], operation: str,
             base_img = images[0]
             for overlay_img in images[1:]:
                 if overlay_img.size != base_img.size:
-                    overlay_img = overlay_img.resize(base_img.size, Image.Resampling.LANCZOS)
-                base_img = Image.alpha_composite(base_img.convert("RGBA"), overlay_img.convert("RGBA"))
+                    overlay_img = overlay_img.resize(
+                        base_img.size, Image.Resampling.LANCZOS
+                    )
+                base_img = Image.alpha_composite(
+                    base_img.convert("RGBA"), overlay_img.convert("RGBA")
+                )
             result = base_img.convert("RGB")
         elif operation == "stack":
             # Original stack operation with direction parameter
@@ -2070,29 +2309,35 @@ def combine_images(images_base64: list[str], operation: str,
                     result.paste(img, (0, y))
                     y += img.height
         else:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "combine_images",
-                "error": f"Unsupported combination operation: {operation}"
-            }, indent=2)
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "combine_images",
+                    "error": f"Unsupported combination operation: {operation}",
+                },
+                indent=2,
+            )
         result_path = save_image(result)
         result_base64 = encode_image(result_path)
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "combine_images",
-            "combined_image": result_base64
-        }, indent=2)
+        return json.dumps(
+            {
+                "type": "tool_response",
+                "tool_name": "combine_images",
+                "combined_image": result_base64,
+            },
+            indent=2,
+        )
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "combine_images",
-            "error": str(e)
-        }, indent=2)
+        return json.dumps(
+            {"type": "tool_response", "tool_name": "combine_images", "error": str(e)},
+            indent=2,
+        )
+
 
 # ========== VIDEO/AUDIO UNDERSTANDING TOOLS ==========
 @tool
 def understand_video(
-    file_reference: str,
+    filename: str,
     prompt: str,
     system_prompt: str = None,
     agent: Annotated[Any | None, InjectedToolArg] = None,
@@ -2112,7 +2357,7 @@ def understand_video(
     - YouTube URLs (routed per VL_YOUTUBE_MODEL, VL_YOUTUBE_GEMINI_PROVIDER, VL_GEMINI_PROVIDER in .env)
 
     Args:
-        file_reference (str): Original filename from user upload OR direct video URL 
+        filename (str): Original filename from user upload OR direct video URL
                              OR YouTube URL
         prompt (str): A question or request regarding the video content
         system_prompt (str, optional): System instruction (not used currently)
@@ -2131,29 +2376,28 @@ def understand_video(
         from agent_ng.vision_tool_manager import VisionToolManager
 
         # Handle direct URLs without forcing local download first
-        lowered_ref = file_reference.strip().lower()
-        is_direct_url = lowered_ref.startswith("http://") or lowered_ref.startswith("https://")
+        lowered_ref = filename.strip().lower()
+        is_direct_url = lowered_ref.startswith("http://") or lowered_ref.startswith(
+            "https://"
+        )
         if is_direct_url:
-            vision_input = VisionInput(prompt=prompt, video_url=file_reference.strip())
+            vision_input = VisionInput(prompt=prompt, video_url=filename.strip())
             file_path = None
         else:
             # Resolve uploaded/local file reference
-            file_path = FileUtils.resolve_file_reference(file_reference, agent)
+            file_path = FileUtils.resolve_filename(filename, agent)
             if not file_path:
                 return FileUtils.create_tool_response(
-                    "understand_video",
-                    error=f"File not found: {file_reference}"
+                    "understand_video", error=f"File not found: {filename}"
                 )
-            vision_input = VisionInput(
-                prompt=prompt,
-                video_path=file_path
-            )
+            vision_input = VisionInput(prompt=prompt, video_path=file_path)
 
         # Validate input
         vision_input.validate()
 
         # Initialize VisionToolManager
         import os
+
         os.environ["OPENROUTER_FETCH_PRICING_AT_STARTUP"] = "false"
         manager = VisionToolManager()
 
@@ -2165,21 +2409,17 @@ def understand_video(
         return FileUtils.create_tool_response(
             "understand_video",
             result=result,
-            extra={
-                "file": file_reference,
-                "model_used": selected_model
-            }
+            extra={"file": filename, "model_used": selected_model},
         )
     except Exception as e:
         return FileUtils.create_tool_response(
-            "understand_video",
-            error=f"Video analysis failed: {str(e)}"
+            "understand_video", error=f"Video analysis failed: {str(e)}"
         )
 
 
 @tool
 def understand_audio(
-    file_reference: str,
+    filename: str,
     prompt: str,
     system_prompt: str = None,
     agent: Annotated[Any | None, InjectedToolArg] = None,
@@ -2193,7 +2433,7 @@ def understand_audio(
     Automatically uses Gemini 2.5 Flash (only model with audio support).
 
     Args:
-        file_reference (str): Original filename from user upload OR URL to download
+        filename (str): Original filename from user upload OR URL to download
         prompt (str): A question or request regarding the audio content
         system_prompt (str, optional): System instruction (not used currently)
         agent: Agent instance for file resolution (injected automatically)
@@ -2210,21 +2450,18 @@ def understand_audio(
         from agent_ng.vision_tool_manager import VisionToolManager
 
         # Resolve file reference to full path
-        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        file_path = FileUtils.resolve_filename(filename, agent)
         if not file_path:
             return FileUtils.create_tool_response(
-                "understand_audio",
-                error=f"File not found: {file_reference}"
+                "understand_audio", error=f"File not found: {filename}"
             )
 
         # Create VisionInput
-        vision_input = VisionInput(
-            prompt=prompt,
-            audio_path=file_path
-        )
+        vision_input = VisionInput(prompt=prompt, audio_path=file_path)
 
         # Initialize VisionToolManager
         import os
+
         os.environ["OPENROUTER_FETCH_PRICING_AT_STARTUP"] = "false"
         manager = VisionToolManager()
 
@@ -2235,16 +2472,12 @@ def understand_audio(
         return FileUtils.create_tool_response(
             "understand_audio",
             result=result,
-            extra={
-                "file": file_reference,
-                "model_used": manager.vl_audio_model
-            }
+            extra={"file": filename, "model_used": manager.vl_audio_model},
         )
 
     except Exception as e:
         return FileUtils.create_tool_response(
-            "understand_audio",
-            error=f"Audio analysis failed: {str(e)}"
+            "understand_audio", error=f"Audio analysis failed: {str(e)}"
         )
 
 
@@ -2262,63 +2495,71 @@ def web_search_deep_research_exa_ai(instructions: str) -> str:
         The results of the deep research as a string.
     """
     if not EXA_AVAILABLE:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "web_search_deep_research_exa_ai",
-            "error": "Exa not available. Install with: pip install exa-py"
-        })
+        return json.dumps(
+            {
+                "type": "tool_response",
+                "tool_name": "web_search_deep_research_exa_ai",
+                "error": "Exa not available. Install with: pip install exa-py",
+            }
+        )
     try:
         exa_api_key = os.environ.get("EXA_API_KEY")
         if not exa_api_key:
-            return json.dumps({
-                "type": "tool_response",
-                "tool_name": "web_search_deep_research_exa_ai",
-                "error": "EXA_API_KEY not found in environment variables. Please set it in your .env file."
-            })
+            return json.dumps(
+                {
+                    "type": "tool_response",
+                    "tool_name": "web_search_deep_research_exa_ai",
+                    "error": "EXA_API_KEY not found in environment variables. Please set it in your .env file.",
+                }
+            )
         exa = Exa(exa_api_key)
         task_stub = exa.research.create_task(
             instructions=instructions,
             model="exa-research-pro",
-            output_infer_schema = True
+            output_infer_schema=True,
         )
         task = exa.research.poll_task(task_stub.id)
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "web_search_deep_research_exa_ai",
-            "result": str(task)
-        })
+        return json.dumps(
+            {
+                "type": "tool_response",
+                "tool_name": "web_search_deep_research_exa_ai",
+                "result": str(task),
+            }
+        )
     except Exception as e:
-        return json.dumps({
-            "type": "tool_response",
-            "tool_name": "web_search_deep_research_exa_ai",
-            "error": f"Error in Exa research: {str(e)}"
-        })
+        return json.dumps(
+            {
+                "type": "tool_response",
+                "tool_name": "web_search_deep_research_exa_ai",
+                "error": f"Error in Exa research: {str(e)}",
+            }
+        )
 
 
 # ========== PYDANTIC SCHEMAS ==========
+
 
 class SubmitAnswerSchema(BaseModel):
     """
     Schema for submitting final answers with structured metadata.
     Use this when ready to provide a final answer and the analysis is complete.
     """
+
     answer: str = Field(
-        description="The final answer to the user's question",
-        min_length=1
+        description="The final answer to the user's question", min_length=1
     )
     confidence: float = Field(
         default=1.0,
         ge=0.0,
         le=1.0,
-        description="Confidence level from 0.0 to 1.0 (default: 1.0)"
+        description="Confidence level from 0.0 to 1.0 (default: 1.0)",
     )
     sources: list[str] | None = Field(
         default=None,
-        description="List of sources or tools used to generate this answer"
+        description="List of sources or tools used to generate this answer",
     )
     reasoning: str | None = Field(
-        default=None,
-        description="Brief explanation of the reasoning process"
+        default=None, description="Brief explanation of the reasoning process"
     )
 
     @field_validator("sources")
@@ -2328,42 +2569,42 @@ class SubmitAnswerSchema(BaseModel):
             return None
         return v
 
+
 class SubmitIntermediateStepSchema(BaseModel):
     """
     Schema for submitting intermediate reasoning steps or progress updates.
-    Use this to document intermediate steps in your reasoning process, 
+    Use this to document intermediate steps in your reasoning process,
     progress updates, or partial findings before reaching a final conclusion.
     """
+
     step_name: str = Field(
         description="Short name/identifier for this step (e.g., 'data_analysis', 'search_results')",
         min_length=1,
-        max_length=100
+        max_length=100,
     )
     description: str = Field(
         description="Detailed description of what was accomplished in this step",
-        min_length=1
+        min_length=1,
     )
     status: Literal["in_progress", "completed", "failed", "blocked"] = Field(
-        default="in_progress",
-        description="Current status of this step"
+        default="in_progress", description="Current status of this step"
     )
     data: dict[str, Any] | None = Field(
         default=None,
-        description="Optional dictionary containing relevant data, findings, or results from this step"
+        description="Optional dictionary containing relevant data, findings, or results from this step",
     )
     next_steps: list[str] | None = Field(
-        default=None,
-        description="Optional list of planned next steps or actions"
+        default=None, description="Optional list of planned next steps or actions"
     )
     confidence: float | None = Field(
         default=None,
         ge=0.0,
         le=1.0,
-        description="Optional confidence level from 0.0 to 1.0 for this step's results"
+        description="Optional confidence level from 0.0 to 1.0 for this step's results",
     )
     issues: list[str] | None = Field(
         default=None,
-        description="Optional list of issues, concerns, or limitations encountered"
+        description="Optional list of issues, concerns, or limitations encountered",
     )
 
     @field_validator("next_steps", "issues")
@@ -2373,16 +2614,19 @@ class SubmitIntermediateStepSchema(BaseModel):
             return None
         return v
 
+
 class SubmitAnswerResult(BaseModel):
     """
     Structured result model for submit_answer operations.
     This model standardizes the response format for final answer submissions,
     providing consistent success/error handling and response structure.
     """
+
     success: bool
     status_code: int = Field(default=200)
     raw_response: dict | str | None = Field(default=None)
     error: str | None = Field(default=None)
+
 
 class SubmitIntermediateStepResult(BaseModel):
     """
@@ -2390,15 +2634,23 @@ class SubmitIntermediateStepResult(BaseModel):
     This model standardizes the response format for intermediate step submissions,
     providing consistent success/error handling and response structure.
     """
+
     success: bool
     status_code: int = Field(default=200)
     raw_response: dict | str | None = Field(default=None)
     error: str | None = Field(default=None)
 
+
 # ========== TOOL FUNCTIONS ==========
 
+
 @tool("submit_answer", return_direct=False, args_schema=SubmitAnswerSchema)
-def submit_answer(answer: str, confidence: float = 1.0, sources: list[str] = None, reasoning: str = None) -> dict[str, Any]:
+def submit_answer(
+    answer: str,
+    confidence: float = 1.0,
+    sources: list[str] = None,
+    reasoning: str = None,
+) -> dict[str, Any]:
     """
     Submit a final answer using Schema-Guided Reasoning (SGR).
     This tool forces the LLM to explicitly state its conclusion rather than leaving it implicit.
@@ -2420,23 +2672,34 @@ def submit_answer(answer: str, confidence: float = 1.0, sources: list[str] = Non
             "sources": sources or [],
             "reasoning": reasoning or "",
             "timestamp": time.time(),
-            "type": "final_answer"
+            "type": "final_answer",
         }
         return result
     except Exception as e:
         return {
             "success": False,
             "error": f"Error submitting answer: {str(e)}",
-            "type": "error"
+            "type": "error",
         }
 
-@tool("submit_intermediate_step", return_direct=False, args_schema=SubmitIntermediateStepSchema)
-def submit_intermediate_step(step_name: str, description: str, status: str = "in_progress",
-                           data: dict[str, Any] = None, next_steps: list[str] = None,
-                           confidence: float = None, issues: list[str] = None) -> dict[str, Any]:
+
+@tool(
+    "submit_intermediate_step",
+    return_direct=False,
+    args_schema=SubmitIntermediateStepSchema,
+)
+def submit_intermediate_step(
+    step_name: str,
+    description: str,
+    status: str = "in_progress",
+    data: dict[str, Any] = None,
+    next_steps: list[str] = None,
+    confidence: float = None,
+    issues: list[str] = None,
+) -> dict[str, Any]:
     """
     Submit an intermediate reasoning step using Schema-Guided Reasoning (SGR).
-    Use this tool to document intermediate steps in your reasoning process, 
+    Use this tool to document intermediate steps in your reasoning process,
     progress updates, or partial findings before reaching a final conclusion.
     This tool helps track the agent's thought process and enables better debugging.
     It helps guide structured thinking and makes the reasoning process transparent and debuggable.
@@ -2455,13 +2718,15 @@ def submit_intermediate_step(step_name: str, description: str, status: str = "in
             "confidence": confidence,
             "issues": issues or [],
             "timestamp": time.time(),
-            "type": "intermediate_step"
+            "type": "intermediate_step",
         }
         return result
     except Exception as e:
         return {
             "success": False,
             "error": f"Error submitting step: {str(e)}",
-            "type": "error"
+            "type": "error",
         }
+
+
 # ========== END OF TOOLS.PY ==========

@@ -1676,10 +1676,22 @@ class NextGenApp:
             finally:
                 thread.join(timeout=1)
 
-        # Register API endpoints using gr.api().
+        # Register API endpoints: streaming via hidden submit (generator SSE); ask via gr.api().
         with demo:
+            _in = gr.Textbox(label="question", visible=False)
+            _username = gr.Textbox(label="username", visible=False)
+            _password = gr.Textbox(label="password", type="password", visible=False)
+            _base_url = gr.Textbox(label="base_url", visible=False)
+            _session_id = gr.Textbox(label="session_id", type="password", visible=False)
+            _out = gr.Textbox(label="answer", visible=False)
+            _in.submit(
+                _api_ask_stream,
+                inputs=[_in, _username, _password, _base_url, _session_id],
+                outputs=_out,
+                api_name="ask_stream",
+                api_visibility="private",
+            )
             gr.api(_api_ask, api_name="ask", api_visibility="private")
-            gr.api(_api_ask_stream, api_name="ask_stream", api_visibility="private")
 
         # Configure concurrency and queuing AFTER registering named endpoints
         # Always initialize queue (even with minimal settings) to prevent AttributeError.
@@ -1982,7 +1994,8 @@ def main():
         css_paths=[_theme_css],
         favicon_path=str(_favicon),
         show_error=True,
-        # Same intent as ``demo.launch(allowed_paths=...)``: cache + theme/static assets.
+        ssr_mode=False,
+        # Cache + theme/static assets (same intent as ``demo.launch(allowed_paths=...)``).
         allowed_paths=[
             str(Path(_GRADIO_CACHE_DIR).resolve()),
             str(_GRADIO_RESOURCES_DIR.resolve()),

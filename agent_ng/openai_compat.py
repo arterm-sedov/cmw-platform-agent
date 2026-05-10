@@ -90,19 +90,6 @@ def _debug_log_io(event: str, payload: dict[str, Any]) -> None:
         )
     except Exception:
         return
-    try:
-        record = {
-            "ts": int(time.time()),
-            "event": event,
-            "path": AGENT_COMPLETIONS_PATH,
-            "payload": _redact(payload),
-        }
-        line = json.dumps(record, ensure_ascii=False, default=str)
-        _debug_handler.emit(
-            logging.LogRecord("_", logging.DEBUG, "", 0, line, (), None)
-        )
-    except Exception:
-        return
 
 
 def _json_response_content(response: JSONResponse) -> dict[str, Any]:
@@ -1437,8 +1424,7 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
                                     "model": {
                                         "type": "string",
                                         "description": (
-                                            "Provider/model slug,"
-                                            " e.g. openai/gpt-4o"
+                                            "Provider/model slug, e.g. openai/gpt-4o"
                                         ),
                                         "example": "openai/gpt-4o",
                                     },
@@ -1480,9 +1466,7 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
                             },
                             "example": {
                                 "model": "openai/gpt-4o",
-                                "messages": [
-                                    {"role": "user", "content": "Hello!"}
-                                ],
+                                "messages": [{"role": "user", "content": "Hello!"}],
                                 "stream": False,
                             },
                         }

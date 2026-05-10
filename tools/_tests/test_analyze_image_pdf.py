@@ -5,10 +5,10 @@ TDD tests for analyze_image_ai PDF handling.
 Tests that PDFs are properly rejected with helpful guidance.
 """
 
-import sys
 import os
-import tempfile
 from pathlib import Path
+import sys
+import tempfile
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -56,17 +56,20 @@ class TestAnalyzeImageAIPDFHandling:
             return
 
         try:
-            result = analyze_image_ai.invoke({
-                "file_reference": pdf_path,
-                "prompt": "What is in this image?"
-            })
+            result = analyze_image_ai.invoke(
+                {"filename": pdf_path, "prompt": "What is in this image?"}
+            )
             result_parsed = json.loads(result)
 
             assert result_parsed.get("error"), "Expected error for PDF"
             error_msg = result_parsed.get("error", "")
 
-            assert "read_text_based_file" in error_msg, "Expected guidance to use read_text_based_file"
-            assert "extract_images" in error_msg, "Expected guidance to use extract_images"
+            assert "read_text_based_file" in error_msg, (
+                "Expected guidance to use read_text_based_file"
+            )
+            assert "extract_images" in error_msg, (
+                "Expected guidance to use extract_images"
+            )
 
             print("✅ test_pdf_rejected_with_helpful_message: PASSED")
         except Exception as e:
@@ -77,8 +80,9 @@ class TestAnalyzeImageAIPDFHandling:
     @staticmethod
     def test_pdf_with_uppercase_extension():
         """PDF extension case-insensitive."""
-        from tools.tools import analyze_image_ai
         import json
+
+        from tools.tools import analyze_image_ai
 
         pdf_path = create_test_pdf()
         if not pdf_path:
@@ -89,10 +93,9 @@ class TestAnalyzeImageAIPDFHandling:
             renamed = pdf_path.replace(".pdf", ".PDF")
             os.rename(pdf_path, renamed)
 
-            result = analyze_image_ai.invoke({
-                "file_reference": renamed,
-                "prompt": "What is in this image?"
-            })
+            result = analyze_image_ai.invoke(
+                {"filename": renamed, "prompt": "What is in this image?"}
+            )
             result_parsed = json.loads(result)
 
             assert result_parsed.get("error"), "Expected error for .PDF"

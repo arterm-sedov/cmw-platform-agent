@@ -72,9 +72,7 @@ pytestmark = [
 ]
 
 # Minimal 1x1 PNG (89 bytes) — no external file dependency.
-TINY_PNG_B64 = (
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-)
+TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
 
 def test_create_record_attach_image_fetch_roundtrip(tmp_path: Path) -> None:
@@ -98,7 +96,7 @@ def test_create_record_attach_image_fetch_roundtrip(tmp_path: Path) -> None:
         {
             "record_id": rid,
             "attribute_system_name": img,
-            "file_reference": str(png),
+            "filename": str(png),
         }
     )
     assert up.get("success"), up
@@ -112,7 +110,7 @@ def test_create_record_attach_image_fetch_roundtrip(tmp_path: Path) -> None:
         }
     )
     assert fetch.get("success"), fetch
-    fr = str(fetch.get("file_reference") or "")
+    fr = str(fetch.get("filename") or "")
     assert os.path.isabs(fr)
     assert os.path.isfile(fr)
 

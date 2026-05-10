@@ -9,7 +9,7 @@ names; not committed in the repo). Optional: **``CMW_INTEGRATION_DOCUMENT_ATTR``
 - **Direct (same HTTP as tools use):** ``get_document_model`` + ``get_document_content`` on
   each document id (no agent).
 - **Tool path (what the agent uses):** ``fetch_record_document_file`` + ``read_text_based_file``;
-  and ``attach_file_to_record_*_attribute`` with ``file_reference`` = absolute local path (or
+  and ``attach_file_to_record_*_attribute`` with ``filename`` = absolute local path (or
   chat file handle with an agent).
 - **Image:** ``attach_file_to_record_image_attribute`` + ``fetch_record_image_file``;
   **``CMW_INTEGRATION_IMAGE_ATTR``** (default **``IntegrationTestImage``** via setdefault, see
@@ -137,7 +137,7 @@ def _image_harness() -> int:
         {
             "record_id": rid,
             "attribute_system_name": img_sys,
-            "file_reference": str(IMAGE_FILE_PATH.resolve()),
+            "filename": str(IMAGE_FILE_PATH.resolve()),
         }
     )
     print("  attach:", up.get("success"), up.get("error") or "")
@@ -154,7 +154,7 @@ def _image_harness() -> int:
     if not fet.get("success"):
         print("  fetch image failed:", fet)
         return 1
-    ref = fet.get("file_reference")
+    ref = fet.get("filename")
     iid = fet.get("image_id")
     g = get_image_model(iid) if iid else {"success": False}
     c_b64 = (g.get("model") or {}).get("content") if g.get("success") else None
@@ -166,8 +166,8 @@ def _image_harness() -> int:
     jpg_hdr = raw.startswith(b"\xff\xd8\xff")
     ref_s = str(ref) if ref is not None else ""
     print(
-        f"  image_id={iid!r}  file_reference_is_abs={os.path.isabs(ref_s)}  "
-        f"GetImage JPEG header ok={jpg_hdr}  file_reference={ref_s!r}",
+        f"  image_id={iid!r}  filename_is_abs={os.path.isabs(ref_s)}  "
+        f"GetImage JPEG header ok={jpg_hdr}  filename={ref_s!r}",
     )
     return 0
 
@@ -179,7 +179,9 @@ def _row_document_field(row: dict) -> list[Any]:
     return []
 
 
-def _direct_get_document_probes(dids: list[str], upload_names: list[str] | None) -> None:
+def _direct_get_document_probes(
+    dids: list[str], upload_names: list[str] | None
+) -> None:
     """GET ``/webapi/Document/{{id}}`` (authoritative name) and ``/Content`` (body)."""
     print("\n--- direct API: GetDocument (model) + get_document_content ---")
     for i, did in enumerate(dids):
@@ -273,11 +275,13 @@ def main() -> int:
             {
                 "record_id": rid,
                 "attribute_system_name": DOC_SYS,
-                "file_reference": str(p.resolve()),
+                "filename": str(p.resolve()),
                 "replace": i == 0,
             }
         )
-        print(f"  attach [{i}] {p.name!r} -> {ar.get('success')} {ar.get('error') or ''}")
+        print(
+            f"  attach [{i}] {p.name!r} -> {ar.get('success')} {ar.get('error') or ''}"
+        )
         if not ar.get("success"):
             return 1
 
@@ -297,12 +301,12 @@ def main() -> int:
             dids.append(eid)
     print("  document id list (platform order):", dids)
     order_newest_first = list(reversed(files))
-    _direct_get_document_probes(
-        dids, [p.name for p in order_newest_first[: len(dids)]]
-    )
+    _direct_get_document_probes(dids, [p.name for p in order_newest_first[: len(dids)]])
 
     n = min(len(dids), len(order_newest_first), 8)
-    print("\n--- fetch_record_document_file + read_text_based_file (no agent = abs path) ---")
+    print(
+        "\n--- fetch_record_document_file + read_text_based_file (no agent = abs path) ---"
+    )
     for i in range(n):
         p = order_newest_first[i]
         loc = _local_preview(p, 400)
@@ -317,10 +321,10 @@ def main() -> int:
         if not reg.get("success"):
             print(f"  [idx {i}] {p.name!r}  register: {reg}")
             return 1
-        ref = reg.get("file_reference")
+        ref = reg.get("filename")
         rtxt = read_text_based_file.invoke(
             {
-                "file_reference": ref,
+                "filename": ref,
                 "read_html_as_markdown": True,
                 "agent": None,
             }

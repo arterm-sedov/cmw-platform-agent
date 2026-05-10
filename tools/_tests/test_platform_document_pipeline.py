@@ -12,12 +12,12 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from tools import requests_
-from tools.local_path_text import read_local_path_to_plain_text
 from tools.cmw_webapi import (
     extract_created_id,
     extract_platform_document_id,
     unwrap_webapi_payload,
 )
+from tools.local_path_text import read_local_path_to_plain_text
 from tools.platform_record_document import (
     SET_OBJECT_DOCUMENT,
     display_filename_for_registry,
@@ -319,7 +319,7 @@ class TestFetchRecordDocumentFile:
                 }
             )
         assert out.get("success") is True
-        ref = out.get("file_reference")
+        ref = out.get("filename")
         assert isinstance(ref, str)
         assert os.path.isabs(ref)
         try:
@@ -381,11 +381,11 @@ class TestFetchRecordDocumentFile:
                 }
             )
         assert out.get("success") is True
-        fr = out.get("file_reference")
+        fr = out.get("filename")
         assert isinstance(fr, str)
         assert fr == "RegistryLine.txt"
         rjson = read_text_based_file.invoke(
-            {"file_reference": fr, "read_html_as_markdown": True, "agent": ag}
+            {"filename": fr, "read_html_as_markdown": True, "agent": ag}
         )
         assert isinstance(rjson, str)
         assert "registry line" in rjson
@@ -464,7 +464,7 @@ class TestFetchRecordImageFile:
                 }
             )
         assert out.get("success") is True
-        ref = out.get("file_reference")
+        ref = out.get("filename")
         assert isinstance(ref, str)
         assert os.path.isabs(ref)
         try:
