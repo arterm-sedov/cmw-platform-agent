@@ -141,7 +141,6 @@ try:
     from agent_ng.langchain_agent import CmwAgent as NextGenAgent
     from agent_ng.llm_manager import get_llm_manager
     from agent_ng.openai_compat import (
-        handle_agent_completions_payload,
         register_agent_completions_on_fastapi,
         register_agent_completions_route,
     )
@@ -173,7 +172,6 @@ except ImportError as e1:
         from .langchain_agent import CmwAgent as NextGenAgent
         from .llm_manager import get_llm_manager
         from .openai_compat import (
-            handle_agent_completions_payload,
             register_agent_completions_on_fastapi,
             register_agent_completions_route,
         )
@@ -1614,17 +1612,6 @@ class NextGenApp:
 
             # Streaming endpoint: generator yields partials; API GET will stream
 
-        def _api_agent_completions(payload: dict[str, Any]) -> dict[str, Any]:
-            """Gradio API wrapper for agent completions payload."""
-            loop = asyncio.new_event_loop()
-            try:
-                asyncio.set_event_loop(loop)
-                return loop.run_until_complete(
-                    handle_agent_completions_payload(self, payload)
-                )
-            finally:
-                loop.close()
-
         # Register API endpoints using gr.api() - cleaner approach for HF Spaces
         with demo:
             _in = gr.Textbox(label="question", visible=False)
@@ -1644,7 +1631,6 @@ class NextGenApp:
             # Use gr.api() to register API endpoints without fake UI elements
             gr.api(_api_ask, api_name="ask")
             # gr.api(_api_ask_stream, api_name="ask_stream")
-            gr.api(_api_agent_completions, api_name="agent_completions")
 
         # Configure concurrency and queuing AFTER registering named endpoints
         self.queue_manager.configure_queue(demo)
@@ -1903,6 +1889,9 @@ def main():
         fastapi_app,
         demo,
         path="/",
+        server_name="0.0.0.0",
+        server_port=port,
+        ssr_mode=False,
         # Keep static paths for files/resources (same intent as launch allowed_paths).
         allowed_paths=[
             str(Path(_GRADIO_CACHE_DIR).resolve()),
