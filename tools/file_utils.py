@@ -124,13 +124,13 @@ class FileUtils:
         )
 
     @staticmethod
-    def upload_basename_from_reference(file_reference: str) -> str | None:
+    def upload_basename(filename: str) -> str | None:
         """
-        **fileName** for CMW upload: basename from **file_reference** only (chat/registry
+        **fileName** for CMW upload: basename from **filename** only (chat/registry
         name, absolute local path, or **http(s)/ftp** URL path) — not from the resolved
         temp path, so a **Gradio** cache name is never used as the product filename.
         """
-        ref = (file_reference or "").strip()
+        ref = (filename or "").strip()
         if not ref:
             return None
         rlow = ref.lower()
@@ -507,55 +507,55 @@ class FileUtils:
         return tempfile.gettempdir()
 
     @staticmethod
-    def resolve_file_reference(file_reference: str, agent=None) -> str:
+    def resolve_filename(filename: str, agent=None) -> str:
         """
-        Resolve file reference (filename or URL) to full file path.
+        Resolve filename or URL to full file path.
 
         Args:
-            file_reference (str): Original filename from user upload OR URL
+            filename (str): Original filename from user upload OR URL
             agent: Agent instance with file registry (optional)
 
         Returns:
             str: Full path to the file, or None if not found
         """
         # Check if it's a URL
-        if file_reference.startswith(("http://", "https://", "ftp://")):
+        if filename.startswith(("http://", "https://", "ftp://")):
             try:
                 # Download URL to temp file
-                return FileUtils.download_file_to_path(file_reference)
+                return FileUtils.download_file_to_path(filename)
             except Exception as e:
                 import logging
 
                 logger = logging.getLogger(__name__)
-                logger.exception(f"Failed to download URL {file_reference}: {e}")
+                logger.exception(f"Failed to download URL {filename}: {e}")
                 logger.exception(f"Error type: {type(e).__name__}")
                 # Re-raise the exception to get more details
                 raise
 
-        if os.path.isabs(file_reference) and os.path.isfile(file_reference):
-            return file_reference
+        if os.path.isabs(filename) and os.path.isfile(filename):
+            return filename
 
         # It's a filename - resolve using agent's file registry
         if agent and hasattr(agent, "get_file_path"):
-            return agent.get_file_path(file_reference)
+            return agent.get_file_path(filename)
 
         return None
 
     @staticmethod
-    def read_file_reference_bytes(
-        file_reference: str, agent=None
+    def read_file_bytes(
+        filename: str, agent=None
     ) -> tuple[bytes | None, str | None]:
         """
-        Resolve a file reference to a local path and read its bytes.
+        Resolve a filename to a local path and read its bytes.
 
         Returns:
             ``(data, error)`` — on success *error* is ``None``; on failure *data* is
             ``None`` and *error* is a message. The resolved on-disk path is an
             implementation detail and is not returned.
         """
-        path = FileUtils.resolve_file_reference(file_reference, agent)
+        path = FileUtils.resolve_filename(filename, agent)
         if not path:
-            return None, f"Could not resolve file reference: {file_reference!r}"
+            return None, f"Could not resolve filename: {filename!r}"
         if not os.path.isfile(path):
             return None, f"Not a file: {path!r}"
         try:

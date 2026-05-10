@@ -47,11 +47,11 @@ def test_memory_fingerprint_set_no_unhashable_error() -> None:
 def test_visible_text_tool_message_string_body() -> None:
     """LC 1.x ToolMessage payloads are usually plain strings, not blocks."""
     msg = ToolMessage(
-        content='{"success": true, "file_reference": "out.png"}',
+        content='{"success": true, "generated_filename": "out.png"}',
         tool_call_id="call_abc",
         name="generate_ai_image",
     )
-    assert "file_reference" in visible_plain_text_from_message(msg)
+    assert "generated_filename" in visible_plain_text_from_message(msg)
 
 
 def test_tool_message_fingerprints_differ_by_tool_call_id() -> None:

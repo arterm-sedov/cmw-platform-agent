@@ -145,7 +145,7 @@ def _attach_doc(rid: str, doc: str, path: Path, *, replace: bool) -> bool:
         {
             "record_id": rid,
             "attribute_system_name": doc,
-            "file_reference": str(path.resolve()),
+            "filename": str(path.resolve()),
             "replace": replace,
         }
     )
@@ -169,7 +169,7 @@ def _attach_image(rid: str, img: str, path: Path) -> bool:
         {
             "record_id": rid,
             "attribute_system_name": img,
-            "file_reference": str(path.resolve()),
+            "filename": str(path.resolve()),
         }
     )
     ok = bool(r.get("success"))
@@ -249,7 +249,7 @@ def main() -> int:
         }
     )
     if fdoc.get("success"):
-        _p("fetched last document to local", fdoc.get("file_reference", "")[:64], "…")
+        _p("fetched last document to local", fdoc.get("filename", "")[:64], "…")
     else:
         _p("fetch_record_document_file", fdoc.get("error", fdoc))
 

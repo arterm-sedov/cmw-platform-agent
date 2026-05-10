@@ -2,8 +2,8 @@
 File-attachment helpers for inline chat rendering.
 
 These functions are the single source of truth for converting a tool's
-``file_reference`` result into the Gradio 5 ``{"path": …, "alt_text": …}``
-dict-content format that renders images (and other files) inline in the chat.
+``generated_filename`` / ``filename`` result into the Gradio 5 file-attachment
+dict format that renders images (and other files) inline in the chat.
 
 Used by:
 - ``agent_ng/native_langchain_streaming.py`` — enriches ``tool_end`` event
@@ -53,9 +53,9 @@ def build_file_attachment(
     """Try to resolve a tool result into a file-attachment descriptor.
 
     Returns a dict ``{"path": <abs_str>, "display_name": <str>, "size_bytes":
-    <int>}`` when the result carries a resolvable, on-disk ``file_reference``.
-    Returns ``None`` in all other cases — callers must treat ``None`` as "no
-    attachment" and behave exactly as before.
+    <int>}`` when the result carries a resolvable ``generated_filename`` or
+    ``filename`` key. Returns ``None`` in all other cases — callers must treat
+    ``None`` as "no attachment" and behave exactly as before.
 
     Args:
         tool_result: The raw return value of a LangChain tool invocation.
@@ -63,12 +63,12 @@ def build_file_attachment(
             the tool call. Must have a ``get_file_path(name) -> str | None``
             method.
     """
-    # Only dicts with success=True and a non-empty file_reference qualify.
+    # Only dicts with success=True and a non-empty generated_filename/filename qualify.
     if not isinstance(tool_result, dict):
         return None
     if not tool_result.get("success"):
         return None
-    ref = tool_result.get("file_reference")
+    ref = tool_result.get("generated_filename") or tool_result.get("filename")
     if not ref or not isinstance(ref, str):
         return None
 

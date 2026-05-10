@@ -5,13 +5,13 @@ Behavior contracts
 ------------------
 
 Streaming layer (native_langchain_streaming.py):
-- When a tool returns ``{"success": True, "file_reference": "<name>", ...}``,
+- When a tool returns ``{"success": True, "generated_filename": "<name>", ...}``,
   the ``tool_end`` event's ``metadata`` gains a ``file_attachment`` dict:
   ``{"path": <abs_path>, "display_name": <name>, "size_bytes": <int>}``.
 - ``file_attachment`` is absent (or None) when:
   - the tool result has ``success=False``,
-  - the result carries no ``file_reference``,
-  - the ``file_reference`` can't be resolved (no agent, or file missing on disk),
+  - the result carries no ``generated_filename``,
+  - the ``generated_filename`` can't be resolved (no agent, or file missing on disk),
   - the tool returns a non-dict (string, None).
 - The existing ``content`` / ``tool_output`` strings are unaffected — the LLM
   still sees the same stringified dict it always did.
@@ -117,14 +117,14 @@ def _fmt_size(num_bytes: int) -> str:
 class TestBuildFileAttachment:
     """Contracts for ``_build_file_attachment(tool_result, agent)``."""
 
-    def test_success_with_file_reference_and_existing_file(
+    def test_success_with_generated_filename_and_existing_file(
         self, tmp_path: Path
     ) -> None:
         png = _make_png(tmp_path, "llm_image_123.png")
         agent = _make_agent()
         agent.register_file("llm_image_123.png", str(png))
 
-        result = {"success": True, "file_reference": "llm_image_123.png"}
+        result = {"success": True, "generated_filename": "llm_image_123.png"}
         att = build_file_attachment(result, agent)
 
         assert att is not None
@@ -138,12 +138,12 @@ class TestBuildFileAttachment:
         agent.register_file("test.png", str(png))
 
         att = build_file_attachment(
-            {"success": False, "file_reference": "test.png", "error": "failed"},
+            {"success": False, "generated_filename": "test.png", "error": "failed"},
             agent,
         )
         assert att is None
 
-    def test_returns_none_when_no_file_reference(self) -> None:
+    def test_returns_none_when_no_generated_filename(self) -> None:
         att = build_file_attachment({"success": True, "result": "text"}, _make_agent())
         assert att is None
 
@@ -152,13 +152,13 @@ class TestBuildFileAttachment:
         # Register a path that doesn't actually exist on disk
         agent.register_file("ghost.png", str(tmp_path / "ghost.png"))
         att = build_file_attachment(
-            {"success": True, "file_reference": "ghost.png"}, agent
+            {"success": True, "generated_filename": "ghost.png"}, agent
         )
         assert att is None
 
     def test_returns_none_when_agent_is_none(self) -> None:
         att = build_file_attachment(
-            {"success": True, "file_reference": "x.png"}, agent=None
+            {"success": True, "generated_filename": "x.png"}, agent=None
         )
         assert att is None
 
@@ -167,7 +167,7 @@ class TestBuildFileAttachment:
             session_id = "sess"
 
         att = build_file_attachment(
-            {"success": True, "file_reference": "x.png"}, agent=_BareAgent()
+            {"success": True, "generated_filename": "x.png"}, agent=_BareAgent()
         )
         assert att is None
 
@@ -175,9 +175,9 @@ class TestBuildFileAttachment:
         for result in ["some text", None, 42, ["a", "b"]]:
             assert build_file_attachment(result, _make_agent()) is None  # type: ignore[arg-type]
 
-    def test_returns_none_for_empty_file_reference(self) -> None:
+    def test_returns_none_for_empty_generated_filename(self) -> None:
         att = build_file_attachment(
-            {"success": True, "file_reference": ""}, _make_agent()
+            {"success": True, "generated_filename": ""}, _make_agent()
         )
         assert att is None
 
@@ -443,7 +443,7 @@ class TestAddToolCost:
         tc = ConversationTokenTracker.__new__(ConversationTokenTracker)
         tc.session_cost = 0.0
         tc.conversation_cost = 0.0
-        tc._turn_cost = None  # noqa: SLF001 — test-only state seeding
+        tc._turn_cost = None
         return tc
 
     def test_positive_amount_added_to_both_accumulators(self) -> None:
@@ -497,7 +497,7 @@ class TestToolCostExtractedFromToolResult:
         )
 
     def test_image_result_cost_extracted(self) -> None:
-        result = {"success": True, "file_reference": "x.png", "cost": 0.067}
+        result = {"success": True, "generated_filename": "x.png", "cost": 0.067}
         assert abs(self._extract_tool_cost(result) - 0.067) < 1e-9
 
     def test_zero_cost_returns_none(self) -> None:
