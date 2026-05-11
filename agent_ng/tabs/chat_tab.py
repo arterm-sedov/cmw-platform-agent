@@ -53,9 +53,28 @@ except ImportError:
             return []
 
 
-from .sidebar import QuickActionsMixin
-
 CHAT_DOWNLOADS_ENABLED = True  # Enable chat export/download functionality
+
+QUICK_ACTIONS_CONFIG: dict[str, str] = {
+    "quick_what_can_do": "quick_what_can_do_message",
+    "quick_what_cannot_do": "quick_what_cannot_do_message",
+    "quick_list_apps": "quick_list_apps_message",
+    "quick_math": "quick_math_message",
+    "quick_code": "quick_code_message",
+    "quick_explain": "quick_explain_message",
+    "quick_full_audit": "quick_full_audit_message",
+    "quick_templates_erp": "quick_templates_erp_message",
+    "quick_attributes_contractors": "quick_attributes_contractors_message",
+    "quick_edit_date_time": "quick_edit_date_time_message",
+    "quick_create_comment_attr": "quick_create_comment_attr_message",
+    "quick_create_id_attr": "quick_create_id_attr_message",
+    "quick_edit_phone_mask": "quick_edit_phone_mask_message",
+    "quick_edit_enum": "quick_edit_enum_message",
+    "quick_get_comment_attr": "quick_get_comment_attr_message",
+    "quick_create_attr": "quick_create_attr_message",
+    "quick_edit_mask": "quick_edit_mask_message",
+    "quick_archive_attr": "quick_archive_attr_message",
+}
 
 
 def _chatbot_message_content_to_export_text(content: Any) -> str | None:
@@ -89,7 +108,25 @@ def _chatbot_message_content_to_export_text(content: Any) -> str | None:
     return text or None
 
 
-class ChatTab(QuickActionsMixin):
+def _build_chatbot_examples(language: str) -> list[dict[str, str]]:
+    """Build gr.Chatbot examples list from QUICK_ACTIONS_CONFIG."""
+    return [
+        {
+            "display_text": get_translation_key(action_key, language),
+            "text": get_translation_key(message_key, language),
+        }
+        for action_key, message_key in QUICK_ACTIONS_CONFIG.items()
+    ]
+
+
+def _handle_example_select(example: gr.SelectData) -> dict:
+    """Handle example_select — populate textbox without auto-submit."""
+    return gr.MultimodalTextbox(
+        value={"text": example.value.get("text", ""), "files": []}
+    )
+
+
+class ChatTab:
     """Chat tab component with interface and quick actions"""
 
     def __init__(
@@ -148,6 +185,9 @@ class ChatTab(QuickActionsMixin):
 
     def _create_chat_interface(self):
         """Create the main chat interface with proper layout"""
+        # Build quick-action examples for the empty chatbot (replaces old dropdown)
+        chatbot_examples = _build_chatbot_examples(self.language)
+
         # Chat interface with metadata support for thinking transparency
         # In Gradio 6, Chatbot uses messages format by default, so no type parameter is needed
         self.components["chatbot"] = gr.Chatbot(
@@ -157,6 +197,7 @@ class ChatTab(QuickActionsMixin):
             show_label=True,
             container=True,
             buttons=["copy", "copy_all"],
+            examples=chatbot_examples,
             elem_id="chatbot-main",
             elem_classes=["chatbot-card"],
         )
@@ -431,7 +472,6 @@ class ChatTab(QuickActionsMixin):
                 [
                     self.components["chatbot"],
                     self.components["msg"],
-                    self._get_quick_actions_dropdown(),
                 ],
                 api_visibility="private",
             )
@@ -479,7 +519,6 @@ class ChatTab(QuickActionsMixin):
                 outputs=[
                     self.components["chatbot"],
                     self.components["msg"],
-                    self._get_quick_actions_dropdown(),
                 ],
                 api_visibility="private",
             )
@@ -570,10 +609,19 @@ class ChatTab(QuickActionsMixin):
 
         # Download button uses pre-generated file - no click handler needed
 
+        # Wire example_select to populate textbox without auto-submit
+        # (replaces the old quick-actions dropdown)
+        self.components["chatbot"].example_select(
+            fn=_handle_example_select,
+            inputs=[],
+            outputs=[self.components["msg"]],
+            api_visibility="private",
+        )
+
         # Trigger UI updates after chat events
         self._setup_chat_event_triggers()
 
-        # Note: Sidebar components (token_budget_display, quick_actions_dropdown, provider_model_selector, progress_display)
+        # Note: Sidebar components (token_budget_display, provider_model_selector, progress_display)
         # are now handled by the UI Manager and will be connected there
 
         logging.getLogger(__name__).debug(
@@ -659,26 +707,6 @@ class ChatTab(QuickActionsMixin):
         """Get the message input component (stop button is now built-in)"""
         # Stop button is now built-in to MultimodalTextbox, return the textbox component
         return self.components["msg"]
-
-    def _get_quick_actions_dropdown(self) -> gr.Dropdown:
-        """Get the quick actions dropdown from the sidebar"""
-        # The dropdown is now in the sidebar, so we need to get it from the main app
-        if (
-            hasattr(self, "main_app")
-            and self.main_app
-            and hasattr(self.main_app, "ui_manager")
-            and self.main_app.ui_manager
-        ):
-            # Try to get from UI Manager components
-            components = self.main_app.ui_manager.get_components()
-            dropdown = components.get("quick_actions_dropdown")
-            # Ensure we always return a valid component, never None
-            if dropdown is not None:
-                return dropdown
-
-        # Fallback - return a dummy component that won't cause errors
-        # This ensures we never return None, which would cause '_id' attribute errors
-        return gr.Dropdown(visible=False)
 
     def _handle_stop_click(
         self,
@@ -1578,10 +1606,6 @@ class ChatTab(QuickActionsMixin):
         """Get a translation for a specific key"""
         # Always use direct translation for now to avoid i18n metadata issues
         return get_translation_key(key, self.language)
-
-    def _reset_quick_actions_dropdown(self) -> str:
-        """Reset the quick actions dropdown to None"""
-        return None
 
     def _stream_message_wrapper(
         self,

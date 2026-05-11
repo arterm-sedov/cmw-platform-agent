@@ -62,8 +62,6 @@ RUSSIAN_TRANSLATIONS = {
     """,
     # Quick actions
     "quick_actions_title": "Заготовки",
-    "quick_actions_dropdown_placeholder": "Выберите быструю команду...",
-    "quick_actions_dropdown_label": "Быстрые команды",
     # History compression
     "compression_enabled_label": "При переполнении сжимать диалог",
     "quick_list_apps": "🔎 Список всех приложений",
@@ -415,8 +413,6 @@ ENGLISH_TRANSLATIONS = {
     """,
     # Quick actions
     "quick_actions_title": "Templates",
-    "quick_actions_dropdown_placeholder": "Select a quick command...",
-    "quick_actions_dropdown_label": "Quick Commands",
     # History compression
     "compression_enabled_label": "Щn overflow сompress conversation",
     "use_fallback_model_label": "On overflow use larger model",

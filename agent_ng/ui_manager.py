@@ -155,8 +155,6 @@ class UIManager:
 
             sb.ensure_llm_events_wired()
 
-            sb.connect_quick_action_dropdown()
-
             # Connect DownloadsTab to update from chat streaming events
             chat_tab_instance = self.components.get("chattab_tab")
             downloads_tab_instance = self.components.get("downloadstab_tab")

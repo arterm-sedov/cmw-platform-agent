@@ -3,14 +3,14 @@ Sidebar Module for App NG
 =========================
 
 Handles the common sidebar components that are shared across all tabs.
-This module provides a unified sidebar with LLM selection, quick actions,
+This module provides a unified sidebar with LLM selection,
 status, and monitoring components.
 Supports internationalization (i18n) with Russian and English translations.
 """
 
 import logging
 import os
-from typing import Any, ClassVar, Optional
+from typing import Any
 
 import gradio as gr
 
@@ -18,69 +18,7 @@ from agent_ng.i18n_translations import get_translation_key
 from agent_ng.utils import parse_env_bool
 
 
-class QuickActionsMixin:
-    """Mixin class providing quick action methods for UI components"""
-
-    # Configuration for all quick actions - eliminates repetitive code
-    QUICK_ACTIONS_CONFIG: ClassVar[dict[str, str]] = {
-        "quick_what_can_do": "quick_what_can_do_message",
-        "quick_what_cannot_do": "quick_what_cannot_do_message",
-        "quick_list_apps": "quick_list_apps_message",
-        "quick_math": "quick_math_message",
-        "quick_code": "quick_code_message",
-        "quick_explain": "quick_explain_message",
-        "quick_full_audit": "quick_full_audit_message",
-        "quick_templates_erp": "quick_templates_erp_message",
-        "quick_attributes_contractors": "quick_attributes_contractors_message",
-        "quick_edit_date_time": "quick_edit_date_time_message",
-        "quick_create_comment_attr": "quick_create_comment_attr_message",
-        "quick_create_id_attr": "quick_create_id_attr_message",
-        "quick_edit_phone_mask": "quick_edit_phone_mask_message",
-        "quick_edit_enum": "quick_edit_enum_message",
-        "quick_get_comment_attr": "quick_get_comment_attr_message",
-        "quick_create_attr": "quick_create_attr_message",
-        "quick_edit_mask": "quick_edit_mask_message",
-        "quick_archive_attr": "quick_archive_attr_message",
-    }
-
-    def _get_translation(self, key: str) -> str:
-        """Get a translation for a specific key - must be implemented by the class using this mixin"""
-        error_msg = (
-            "Classes using QuickActionsMixin must implement _get_translation method"
-        )
-        raise NotImplementedError(error_msg)
-
-    def _get_quick_action_choices(self) -> list[tuple[str, str]]:
-        """Get list of quick action choices for the dropdown"""
-        choices = [("", "")]  # Empty first option to allow proper dropdown behavior
-
-        choices.extend(
-            (self._get_translation(action_key), action_key)
-            for action_key in self.QUICK_ACTIONS_CONFIG
-        )
-
-        return choices
-
-    def _handle_quick_action_dropdown(self, selected_action: str) -> str:
-        """Handle quick action dropdown selection and return appropriate message text"""
-        if not selected_action or selected_action not in self.QUICK_ACTIONS_CONFIG:
-            return ""
-
-        message_key = self.QUICK_ACTIONS_CONFIG[selected_action]
-        return self._get_translation(message_key)
-
-    def _handle_quick_action_dropdown_multimodal(
-        self, selected_action: str
-    ) -> dict[str, Any]:
-        """Handle quick action dropdown selection and return appropriate message in MultimodalValue format"""
-        if not selected_action or selected_action not in self.QUICK_ACTIONS_CONFIG:
-            return {"text": "", "files": []}
-
-        message_key = self.QUICK_ACTIONS_CONFIG[selected_action]
-        return {"text": self._get_translation(message_key), "files": []}
-
-
-class Sidebar(QuickActionsMixin):
+class Sidebar:
     """Common sidebar component for all tabs"""
 
     def __init__(
@@ -162,22 +100,7 @@ class Sidebar(QuickActionsMixin):
             )
 
     def mount_sidebar_body_without_llm(self) -> None:
-        """Quick actions + progress + token budget (status lives in Stats tab)."""
-        with gr.Column(elem_classes=["model-card"]):
-            gr.Markdown(
-                f"### {self._get_translation('quick_actions_title')}",
-                elem_classes=["llm-selection-title"],
-            )
-
-            self.components["quick_actions_dropdown"] = gr.Dropdown(
-                choices=self._get_quick_action_choices(),
-                value=None,
-                show_label=False,
-                interactive=True,
-                allow_custom_value=False,
-                elem_classes=["provider-model-selector"],
-            )
-
+        """Progress + token budget (status lives in Stats tab)."""
         with gr.Column(elem_classes=["model-card"]):
             gr.Markdown(
                 f"### {self._get_translation('progress_title')}",
@@ -332,7 +255,6 @@ class Sidebar(QuickActionsMixin):
         """Get LLM selection components for UI updates"""
         return {
             "provider_model_selector": self.components.get("provider_model_selector"),
-            "quick_actions_dropdown": self.components.get("quick_actions_dropdown"),
         }
 
     def _get_translation(self, key: str) -> str:
@@ -824,36 +746,3 @@ class Sidebar(QuickActionsMixin):
         except Exception as e:
             print(f"Error applying Mistral with clear: {e}")
             return self._get_translation("llm_apply_error")
-
-    def _get_message_input_component(self) -> gr.Textbox:
-        """Get the message input component from the main app"""
-        if hasattr(self, "main_app") and self.main_app:
-            # Try to get from UI Manager components
-            if hasattr(self.main_app, "ui_manager") and self.main_app.ui_manager:
-                components = self.main_app.ui_manager.get_components()
-                return components.get("msg")
-        return None
-
-    def connect_quick_action_dropdown(self):
-        """Connect the quick action dropdown after all components are available"""
-        if "quick_actions_dropdown" in self.components:
-            # Get the message input component from the main app
-            msg_component = self._get_message_input_component()
-            if msg_component:
-                self.components["quick_actions_dropdown"].change(
-                    fn=self._handle_quick_action_dropdown,
-                    inputs=[self.components["quick_actions_dropdown"]],
-                    outputs=[msg_component],  # Output to message input
-                    api_visibility="private",
-                )
-                logging.getLogger(__name__).debug(
-                    "✅ Sidebar: Quick action dropdown connected to message input"
-                )
-            else:
-                logging.getLogger(__name__).warning(
-                    "⚠️ Sidebar: Message input component not found for quick actions"
-                )
-
-    def _update_download_button_visibility(self):
-        """Update download button visibility - handled by main app"""
-        # This will be handled by the main app's event system
