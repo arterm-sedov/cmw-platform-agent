@@ -3,13 +3,11 @@
 # Output format: {domain}_{app}.json, {domain}_{app}_tr.json
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 import json
 import os
+import re
+import sys
+from pathlib import Path
 from typing import Any
 
 try:
@@ -58,13 +56,28 @@ def run_via_import(script_name: str, args: list[str], description: str = "") -> 
 
 def get_domain_from_config() -> str:
     """Extract domain from config URL."""
-    try:
-        from tools.config import get_config
-        base_url = get_config().get("base_url", "")
-        from urllib.parse import urlparse
-        return urlparse(base_url).netloc.split('.')[0] or "cmw"
-    except Exception:
-        return "cmw"
+    import os
+    from urllib.parse import urlparse
+
+    domain = os.environ.get("CMW_DOMAIN", "")
+    if domain:
+        return domain
+
+    base_url = os.environ.get("CMW_BASE_URL", "")
+    if not base_url:
+        env_path = Path(__file__).parent.parent.parent / ".env"
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                if line.startswith("CMW_BASE_URL="):
+                    base_url = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+
+    if base_url:
+        netloc = urlparse(base_url).netloc
+        if netloc:
+            return netloc.rstrip("/")
+
+    return "cmw"
 
 
 def load_resume_state(output_dir: str, app: str) -> dict | None:
@@ -167,18 +180,47 @@ class LocalizeSchema(BaseModel):
 
 
 @tool("localize_aliases", return_direct=False, args_schema=LocalizeSchema)
-def calculate_new_json_path(original_path: str, old_alias: str, new_alias: str) -> str:
-    """Replace alias in JSON path with new alias. Handles all formats:
+def calculate_new_json_path(
+    original_path: str,
+    old_alias: str,
+    new_alias: str,
+    tr_data: list | None = None,
+) -> str:
+    """Replace alias in JSON path with new alias. When tr_data is provided, also
+    replaces any OTHER renamed containers found in path segments (parent folders)
+    by looking up single-target aliases in tr_data.
+
+    Handles all formats:
     - /old_alias/ (folder)
     - /old_alias.json (file)
     - old_alias.json (file with internal path like #InstanceGlobalAlias)
     - Replaces ALL occurrences of old_alias in path (for nested paths)
     """
-    if old_alias == new_alias:
+    if old_alias == new_alias and not tr_data:
         return original_path
-    result = original_path.replace(f"/{old_alias}/", f"/{new_alias}/")
+
+    result = original_path
+    result = result.replace(f"/{old_alias}/", f"/{new_alias}/")
     result = result.replace(f"/{old_alias}.json", f"/{new_alias}.json")
     result = result.replace(f"{old_alias}.json", f"{new_alias}.json")
+
+    if tr_data:
+        from collections import defaultdict
+
+        alias_targets: dict[str, set[str]] = defaultdict(set)
+        for entry in tr_data:
+            ao = entry.get("aliasOriginal", "")
+            ar = entry.get("aliasRenamed", "")
+            if ao and ar:
+                alias_targets[ao].add(ar)
+
+        parts = result.split("/")
+        for i, part in enumerate(parts):
+            clean = part.replace(".json", "")
+            if clean in alias_targets and clean != old_alias and len(alias_targets[clean]) == 1:
+                parts[i] = next(iter(alias_targets[clean]))
+        result = "/".join(parts)
+
     return result
 
 
@@ -535,7 +577,7 @@ def localize_aliases(
                 continue
 
             for json_path in json_paths:
-                ctf_path = Path(json_folder) / json_path
+                ctf_path = Path(json_folder) / application_system_name / json_path
                 if not ctf_path.exists():
                     continue
 
@@ -585,41 +627,34 @@ def localize_aliases(
         with open(tr_file, encoding="utf-8") as f:
             tr_data = json.load(f)
 
-        import re
-
-        updated_files = set()
-        updated_count = 0
-
+        expr_fixes: dict[str, str] = {}
         for obj in tr_data:
             alias_orig = obj.get("aliasOriginal", "")
             alias_renamed = obj.get("aliasRenamed", "")
             if not alias_orig or not alias_renamed:
                 continue
-
-            json_paths = obj.get("jsonPathRenamed", obj.get("jsonPathOriginal", []))
-            if not json_paths:
-                continue
-
             for expr_item in obj.get("expressions", []):
                 orig_expr = expr_item.get("expressionOriginal", "")
                 new_expr = expr_item.get("expressionRenamed", "")
-                if not orig_expr or not new_expr:
-                    continue
+                if orig_expr and new_expr and orig_expr != new_expr:
+                    expr_fixes[orig_expr] = new_expr
 
-                for json_path in json_paths:
-                    ctf_path = Path(json_folder) / json_path
-                    if not ctf_path.exists():
-                        continue
+        updated_files = set()
+        updated_count = 0
 
-                    content = ctf_path.read_text(encoding="utf-8")
-                    original_content = content
-
+        ctf_root = Path(json_folder) / application_system_name
+        for json_path in ctf_root.rglob("*.json"):
+            if not json_path.is_file():
+                continue
+            content = json_path.read_text(encoding="utf-8")
+            original_content = content
+            for orig_expr, new_expr in expr_fixes.items():
+                if orig_expr in content:
                     content = content.replace(orig_expr, new_expr)
-
-                    if content != original_content:
-                        ctf_path.write_text(content, encoding="utf-8")
-                        updated_files.add(str(ctf_path))
-                        updated_count += 1
+            if content != original_content:
+                json_path.write_text(content, encoding="utf-8")
+                updated_files.add(str(json_path))
+                updated_count += 1
 
         results["actions"].append(f"Updated expressions in {updated_count} CTF files")
 
@@ -660,7 +695,7 @@ def localize_aliases(
                 continue
 
             obj["jsonPathRenamed"] = [
-                calculate_new_json_path(p, alias_orig, alias_renamed)
+                calculate_new_json_path(p, alias_orig, alias_renamed, tr_data)
                 for p in json_paths_orig
             ]
             updated_count += 1
@@ -669,7 +704,7 @@ def localize_aliases(
                 expr_orig_path = expr.get("jsonPathOriginal", "")
                 if expr_orig_path:
                     expr["jsonPathRenamed"] = calculate_new_json_path(
-                        expr_orig_path, alias_orig, alias_renamed
+                        expr_orig_path, alias_orig, alias_renamed, tr_data
                     )
 
                 orig_expr = expr.get("expressionOriginal", "")
