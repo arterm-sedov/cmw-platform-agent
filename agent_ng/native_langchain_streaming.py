@@ -1704,7 +1704,23 @@ class NativeLangChainStreaming:
             # Stream was cancelled (stop button).  Persist partial turn,
             # finalize token usage, then return without yielding further events.
             partial_chunk = locals().get("accumulated_chunk")
-            self._persist_partial(agent, conversation_id, messages, partial_chunk)
+            has_content = partial_chunk is not None and hasattr(
+                partial_chunk, "content"
+            )
+            lang = getattr(agent, "language", "en")
+            suffix = (
+                f"\n\n{get_translation_key('streaming_interrupted', lang)}"
+                if has_content
+                else " [truncated]"
+            )
+            agent._pending_partial_text = self._persist_partial(  # noqa: SLF001
+                agent, conversation_id, messages, partial_chunk, suffix
+            )
+            self._logger.info(
+                "GeneratorExit: persisted partial turn (len=%d), pending=%s",
+                len(agent._pending_partial_text or ""),
+                bool(agent._pending_partial_text),
+            )
             if hasattr(agent, "token_tracker") and agent.token_tracker:
                 try:
                     agent.token_tracker.finalize_turn_usage(None, messages)
@@ -1797,9 +1813,10 @@ class NativeLangChainStreaming:
         conversation_id: str,
         messages: list,
         accumulated_chunk: BaseMessage | None = None,
-    ) -> None:
+        suffix: str = " [truncated]",
+    ) -> str | None:
         """Save partial ToolMessages, AIMessages, and truncated stream text
-        from a cancelled turn."""
+        from a cancelled turn.  Returns the saved content string (or None)."""
         try:
             current_memory = agent.memory_manager.get_conversation_history(
                 conversation_id
@@ -1820,21 +1837,28 @@ class NativeLangChainStreaming:
                         agent.memory_manager.add_message(conversation_id, m)
 
             # Preserve partial streaming text that hasn't been committed to messages yet
-            if accumulated_chunk is not None and hasattr(accumulated_chunk, "content"):
-                partial_text = visible_plain_text_from_message(accumulated_chunk)
-                if not partial_text and isinstance(
-                    getattr(accumulated_chunk, "content", None), str
-                ):
-                    partial_text = accumulated_chunk.content
-                if partial_text:
-                    truncated_msg = AIMessage(
-                        content=f"{partial_text.rstrip()} [truncated]"
-                    )
-                    key = memory_dedupe_fingerprint(truncated_msg)
-                    if key not in memory_content:
-                        agent.memory_manager.add_message(conversation_id, truncated_msg)
+            partial_text = self._extract_partial_text(accumulated_chunk)
+            if partial_text:
+                content = f"{partial_text}{suffix}"
+                truncated_msg = AIMessage(content=content)
+                key = memory_dedupe_fingerprint(truncated_msg)
+                if key not in memory_content:
+                    agent.memory_manager.add_message(conversation_id, truncated_msg)
+                return content
         except Exception as exc:
             self._logger.debug("Failed partial-turn persistence: %s", exc)
+        return None
+
+    @staticmethod
+    def _extract_partial_text(chunk) -> str | None:
+        """Extract plain text from a partially accumulated chunk."""
+        if chunk is None or not hasattr(chunk, "content"):
+            return None
+        text = visible_plain_text_from_message(chunk)
+        if not text and isinstance(getattr(chunk, "content", None), str):
+            text = chunk.content
+        stripped = text.rstrip() if text else ""
+        return stripped or None
 
 
 # Global streaming instance

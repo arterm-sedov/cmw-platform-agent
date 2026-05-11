@@ -780,9 +780,10 @@ class NextGenApp:
 
             try:
                 # Pass app's language for proper i18n (iteration messages should match UI language)
-                async for event in user_agent.stream_message(
+                _stream = user_agent.stream_message(
                     message, session_id, language=self.language
-                ):
+                )
+                async for event in _stream:
                     # Check for cancellation at each iteration (following reference repo pattern)
                     if is_cancelled():
                         logging.getLogger(__name__).info(
@@ -1038,6 +1039,26 @@ class NextGenApp:
                 streaming_error_handled = True
                 # print(f"🔍 DEBUG: Set streaming_error_handled to True in streaming loop")
                 # Continue with the rest of the processing even if streaming fails
+            finally:
+                _stream = locals().get("_stream")
+                if _stream is not None:
+                    try:
+                        await _stream.aclose()
+                    except Exception:
+                        pass
+
+            # Append partial text from interrupted stream so the UI
+            # shows every received chunk + the interruption marker.
+            pending = getattr(user_agent, "_pending_partial_text", None)
+            if pending:
+                response_content += pending
+                if assistant_message_index >= 0 and assistant_message_index < len(
+                    working_history
+                ):
+                    working_history[assistant_message_index]["content"] = (
+                        response_content
+                    )
+                user_agent._pending_partial_text = None  # noqa: SLF001
 
             # Add API token count to final response
             # Add token counts below assistant response
