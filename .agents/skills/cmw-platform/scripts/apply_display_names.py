@@ -77,15 +77,17 @@ def main(app: str, json_folder: str, output_dir: str, path_mode: str = "renamed"
             content = ctf_path.read_text(encoding="utf-8")
             original_content = content
 
+            try:
+                json_data = json.loads(content)
+            except json.JSONDecodeError:
+                continue
+
             for field in display_name_fields:
-                pattern = rf'"({field})"\s*:\s*"([^"]*)"'
-                matches = re.findall(pattern, content)
-                for field_name, field_value in matches:
-                    if field_value.strip():
-                        content = content.replace(
-                            f'"{field_name}": "{field_value}"',
-                            f'"{field_name}": "{display_name_new}"',
-                        )
+                if field in json_data and json_data[field] and isinstance(json_data[field], str):
+                    json_data[field] = display_name_new
+                    break
+
+            content = json.dumps(json_data, ensure_ascii=False, indent=2)
 
             if content != original_content:
                 ctf_path.write_text(content, encoding="utf-8")
