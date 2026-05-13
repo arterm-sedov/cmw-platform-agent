@@ -171,6 +171,7 @@ class LocalizeSchema(BaseModel):
     apply_display_names: bool = Field(default=False, description="Apply displayNameRenamed to CTF JSON files")
     apply_expressions: bool = Field(default=False, description="Apply expressionRenamed to CTF JSON files")
     update_paths: bool = Field(default=False, description="Regenerate jsonPathRenamed and expressionRenamed from aliasRenamed")
+    path_mode: str = Field(default="renamed", description="Which path to use: 'original' or 'renamed'")
     dry_run: bool = Field(
         default=True,
         description="If True, skip the scripted extract→finalize pipeline (steps 1–6). Set False to run it.",
@@ -179,7 +180,6 @@ class LocalizeSchema(BaseModel):
     safe_suffix: str = Field(default="_sv", description="Suffix for safe system names")
 
 
-@tool("localize_aliases", return_direct=False, args_schema=LocalizeSchema)
 def calculate_new_json_path(
     original_path: str,
     old_alias: str,
@@ -236,6 +236,7 @@ def localize_aliases(
     apply_display_names: bool = False,
     apply_expressions: bool = False,
     update_paths: bool = False,
+    path_mode: str = "renamed",
     dry_run: bool = True,
     dangerous_suffix: str = "_calc",
     safe_suffix: str = "_sv",
@@ -572,7 +573,10 @@ def localize_aliases(
             if not display_name_new:
                 continue
 
-            json_paths = obj.get("jsonPathRenamed", obj.get("jsonPathOriginal", []))
+            if path_mode == "renamed":
+                json_paths = obj.get("jsonPathRenamed", [])
+            else:
+                json_paths = obj.get("jsonPathOriginal", [])
             if not json_paths:
                 continue
 
@@ -740,6 +744,7 @@ if __name__ == "__main__":
     parser.add_argument("--apply-display-names", action="store_true", help="Apply displayNameRenamed to CTF JSON files")
     parser.add_argument("--apply-expressions", action="store_true", help="Apply expressionRenamed to CTF JSON files")
     parser.add_argument("--update-paths", action="store_true", help="Regenerate jsonPathRenamed and expressionRenamed")
+    parser.add_argument("--path-mode", default="renamed", choices=["original", "renamed"], help="Which path to use for applying fixes")
     parser.add_argument(
         "--no-dry-run",
         dest="dry_run",
@@ -751,20 +756,21 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    result = localize_aliases.invoke({
-        "application_system_name": args.app,
-        "json_folder": args.json_folder,
-        "output_dir": args.output_dir,
-        "create_tr": args.create_tr,
-        "translate_one": args.translate_one,
-        "resume": args.resume,
-        "apply_renames": args.apply_renames,
-        "fix_expressions": args.fix_expressions,
-        "apply_display_names": args.apply_display_names,
-        "apply_expressions": args.apply_expressions,
-        "update_paths": args.update_paths,
-        "dry_run": args.dry_run,
-        "dangerous_suffix": args.dangerous_suffix,
-        "safe_suffix": args.safe_suffix,
-    })
+    result = localize_aliases(
+        application_system_name=args.app,
+        json_folder=args.json_folder,
+        output_dir=args.output_dir,
+        create_tr=args.create_tr,
+        translate_one=args.translate_one,
+        resume=args.resume,
+        apply_renames=args.apply_renames,
+        fix_expressions=args.fix_expressions,
+        apply_display_names=args.apply_display_names,
+        apply_expressions=args.apply_expressions,
+        update_paths=args.update_paths,
+        path_mode=args.path_mode,
+        dry_run=args.dry_run,
+        dangerous_suffix=args.dangerous_suffix,
+        safe_suffix=args.safe_suffix,
+    )
     print(json.dumps(result, indent=2, ensure_ascii=False))
