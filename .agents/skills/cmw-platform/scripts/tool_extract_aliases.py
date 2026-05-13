@@ -101,12 +101,12 @@ def should_skip_alias(alias: str, obj_type: str, displayName: str = "", parent_t
 
     has_display_name = bool(displayName)
 
-    # SKIP_ATTRIBUTES - always skip (no displayName check)
+    # SKIP_ATTRIBUTES - always lock (no displayName check)
     if obj_type == "Attribute":
         global_skip = SKIP_ATTRIBUTES["default"]
         parent_skip = SKIP_ATTRIBUTES.get(parent_type, set()) if parent_type else set()
         if alias in global_skip or alias in parent_skip:
-            return True
+            return "locked"
 
     # SKIP_TYPES - always skip
     if obj_type in SKIP_TYPES:

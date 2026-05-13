@@ -115,9 +115,15 @@ def main(app: str, output_dir: str, alias: str | None = None, resume: bool = Fal
 
         new_input = input("  > ")
         if new_input.strip():
-            obj["aliasRenamed"] = new_input.strip()
+            raw_alias = new_input.strip()
         else:
-            obj["aliasRenamed"] = new_alias
+            raw_alias = alias_orig
+
+        # Auto-add _calc suffix if object has non-empty expressions
+        if obj.get("expressions"):
+            obj["aliasRenamed"] = raw_alias + dangerous_suffix
+        else:
+            obj["aliasRenamed"] = raw_alias
 
         if display_name_orig:
             print(f"  Current displayNameRenamed: {display_name_new}")
