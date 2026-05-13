@@ -85,14 +85,22 @@ def main(app: str, output_dir: str) -> int:
             continue
 
         json_paths_orig = obj.get("jsonPathOriginal", [])
-        if not json_paths_orig:
-            continue
+        if json_paths_orig:
+            obj["jsonPathRenamed"] = [
+                calculate_new_json_path(p, alias_orig, alias_renamed, tr_data)
+                for p in json_paths_orig
+            ]
+            updated_count += 1
 
-        obj["jsonPathRenamed"] = [
-            calculate_new_json_path(p, alias_orig, alias_renamed, tr_data)
-            for p in json_paths_orig
-        ]
-        updated_count += 1
+        # Update jsonPathRenamed for each displayName in displayNames array
+        display_names = obj.get("displayNames", [])
+        for dn in display_names:
+            dn_orig_paths = dn.get("jsonPathOriginal", [])
+            if dn_orig_paths:
+                dn["jsonPathRenamed"] = [
+                    calculate_new_json_path(p, alias_orig, alias_renamed, tr_data)
+                    for p in dn_orig_paths
+                ]
 
     with open(tr_file, "w", encoding="utf-8") as f:
         json.dump(tr_data, f, indent=2, ensure_ascii=False)
