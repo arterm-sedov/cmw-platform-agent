@@ -194,6 +194,12 @@ def scan_json_recursive(obj, path="root", parent_type=None, results=None):
                     "parent_type": parent_type,
                 }
 
+                owner = ga.get("Owner", "")
+                if owner:
+                    result_entry["parent_template"] = owner
+                elif parent_type:
+                    result_entry["parent_template"] = parent_type
+
                 if not skip_result or skip_result == "locked":
                     results.append(result_entry)
 
@@ -327,7 +333,7 @@ def scan_json_recursive(obj, path="root", parent_type=None, results=None):
                 alias = inst["Alias"]
                 obj_type = inst.get("Type", "Unknown")
                 if not should_skip_alias(alias, obj_type, "", parent_type):
-                    results.append({
+                    result_entry = {
                         "alias": alias,
                         "type": obj_type,
                         "aliasOriginal": alias,
@@ -338,7 +344,11 @@ def scan_json_recursive(obj, path="root", parent_type=None, results=None):
                         "aliasLocked": False,
                         "source": "InstanceGlobalAlias",
                         "parent_type": parent_type,
-                    })
+                    }
+                    owner = inst.get("Owner", "")
+                    if owner:
+                        result_entry["parent_template"] = owner
+                    results.append(result_entry)
 
         if "Root" in obj and isinstance(obj["Root"], dict):
             container_type = None

@@ -27,18 +27,51 @@ APP_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(APP_DIR))
 
 
+def extract_template_from_path(path: str) -> str:
+    """Extract template name from JSON path.
+    Example: 'Volga/RecordTemplates/ProvedenieTO/Attributes/x.json' -> 'ProvedenieTO'
+    """
+    normalized = path.replace("\\", "/")
+    parts = [p for p in normalized.split("/") if p and not p.endswith(".json")]
+    for i, part in enumerate(parts):
+        if part in ("RecordTemplates", "ProcessTemplates", "Workspaces", "Pages", 
+                   "Toolbars", "Datasets", "Forms", "Attributes", "UserCommands", 
+                   "Cards", "Carts", "Roles", "Triggers", "WidgetConfigs"):
+            if i + 1 < len(parts):
+                return parts[i + 1]
+    return ""
+
+
 def match_expressions_to_entry(entry_paths: list, dangerous_expressions: list) -> list:
     """Match expressions to an entry based on jsonPathOriginal.
-    Expressions whose jsonPathOriginal starts with any of entry_paths belong to this entry.
+    Matches by template name - expressions belonging to the same template as the entry.
     """
     matched = []
-    for expr in dangerous_expressions:
-        expr_path = expr.get("jsonPathOriginal", "")
-        for entry_path in entry_paths:
-            if expr_path.startswith(entry_path):
+    for entry_path in entry_paths:
+        template_name = extract_template_from_path(entry_path)
+        if not template_name:
+            continue
+        for expr in dangerous_expressions:
+            expr_path = expr.get("jsonPathOriginal", "")
+            expr_template = extract_template_from_path(expr_path)
+            if expr_template == template_name:
                 matched.append(expr)
-                break
     return matched
+
+
+def get_server_url(output_dir: Path, app: str) -> str:
+    """Read metadata.json to get server URL.
+    Looks in output_dir/{app}/ (extracted CTF root).
+    """
+    extract_dir = output_dir.parent / app
+    metadata_file = extract_dir / "metadata.json"
+    if metadata_file.exists():
+        with open(metadata_file, encoding="utf-8") as f:
+            data = json.load(f)
+        server = data.get("Server", "")
+        if server:
+            return server.replace("https://", "").replace("http://", "").rstrip("/")
+    return "unknown"
 
 
 def main():
@@ -111,6 +144,13 @@ def main():
         alias = obj.get("alias", obj.get("aliasOriginal", ""))
         display_name = obj.get("displayName", obj.get("displayNameOriginal", ""))
         parent_template = obj.get("parent_template", "")
+
+        # Fallback: extract parent_template from path if not set
+        if not parent_template:
+            json_path = obj.get("jsonPathOriginal", obj.get("json_file", ""))
+            if isinstance(json_path, list) and json_path:
+                json_path = json_path[0]
+            parent_template = extract_template_from_path(json_path)
 
         # Get ids (handle both "ids" and "id")
         obj_ids = obj.get("ids", obj.get("id", []))
@@ -213,7 +253,8 @@ def main():
     print(f"  aliasLocked=false (will rename): {len(verified_normal)}")
 
     # Output single file in schema format
-    verified_file = output_dir / f"{args.app}_verified_complete.json"
+    server_url = get_server_url(output_dir, args.app)
+    verified_file = output_dir / f"{server_url}_{args.app}_tr.json"
     with open(verified_file, "w", encoding="utf-8") as f:
         json.dump(all_entries, f, indent=2, ensure_ascii=False)
 
