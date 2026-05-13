@@ -148,99 +148,140 @@ def scan_json_recursive(obj, path="root", parent_type=None, results=None):
                 obj_type = ga.get("Type")
                 if not obj_type:
                     obj_type = obj.get("Type", "Unknown")
+
                 display_name = ""
+                display_name_json_path = ""
                 if ga.get("Name"):
                     if isinstance(ga["Name"], dict):
                         display_name = ga["Name"].get("Ru", "") or ga["Name"].get("En", "")
                     else:
                         display_name = str(ga["Name"])
+                    display_name_json_path = f"{path}/GlobalAlias/Name"
                 elif ga.get("DisplayName"):
                     display_name = str(ga["DisplayName"])
+                    display_name_json_path = f"{path}/GlobalAlias/DisplayName"
                 elif obj.get("Name"):
                     if isinstance(obj["Name"], dict):
                         display_name = obj["Name"].get("Ru", "") or obj["Name"].get("En", "")
                     else:
                         display_name = str(obj["Name"])
+                    display_name_json_path = f"{path}/Name"
                 elif obj.get("DisplayName"):
                     display_name = str(obj["DisplayName"])
+                    display_name_json_path = f"{path}/DisplayName"
+
                 skip_result = should_skip_alias(alias, obj_type, display_name)
 
-                if skip_result == "locked":
-                    results.append({
-                        "alias": alias,
-                        "type": obj_type,
-                        "displayName": display_name,
-                        "aliasLocked": True,
-                        "path": path,
-                        "source": "GlobalAlias",
-                        "parent_type": parent_type,
+                display_names = []
+                if display_name:
+                    display_names.append({
+                        "displayNameOriginal": display_name,
+                        "displayNameRenamed": "",
+                        "jsonPathOriginal": [display_name_json_path] if display_name_json_path else [],
+                        "jsonPathRenamed": []
                     })
-                elif not skip_result:
-                    results.append({
-                        "alias": alias,
-                        "type": obj_type,
-                        "displayName": display_name,
-                        "aliasLocked": False,
-                        "path": path,
-                        "source": "GlobalAlias",
-                        "parent_type": parent_type,
-                    })
+
+                result_entry = {
+                    "alias": alias,
+                    "type": obj_type,
+                    "aliasOriginal": alias,
+                    "aliasRenamed": "",
+                    "jsonPathOriginal": [f"{path}/GlobalAlias"],
+                    "jsonPathRenamed": [],
+                    "displayNames": display_names,
+                    "aliasLocked": skip_result == "locked",
+                    "source": "GlobalAlias",
+                    "parent_type": parent_type,
+                }
+
+                if not skip_result or skip_result == "locked":
+                    results.append(result_entry)
 
         if "Alias" in obj and "GlobalAlias" not in obj:
             alias = obj.get("Alias", "")
             if isinstance(alias, str) and alias and not alias.startswith("_"):
                 obj_type = obj.get("Type", "Unknown")
                 display_name = ""
+                display_name_json_path = ""
                 if "Name" in obj:
                     if isinstance(obj["Name"], dict):
                         display_name = obj["Name"].get("Ru", "") or obj["Name"].get("En", "")
                     else:
                         display_name = str(obj.get("Name", "") or obj.get("DisplayName", ""))
+                    display_name_json_path = f"{path}/Name"
+                elif obj.get("DisplayName"):
+                    display_name = str(obj.get("DisplayName", ""))
+                    display_name_json_path = f"{path}/DisplayName"
+
                 skip_result = should_skip_alias(alias, obj_type, display_name)
 
-                if skip_result == "locked":
-                    results.append({
-                        "alias": alias,
-                        "type": obj_type,
-                        "displayName": display_name,
-                        "aliasLocked": True,
-                        "path": path,
-                        "source": "DirectAlias",
-                        "parent_type": parent_type,
+                display_names = []
+                if display_name:
+                    display_names.append({
+                        "displayNameOriginal": display_name,
+                        "displayNameRenamed": "",
+                        "jsonPathOriginal": [display_name_json_path] if display_name_json_path else [],
+                        "jsonPathRenamed": []
                     })
-                elif not skip_result:
-                    results.append({
-                        "alias": alias,
-                        "type": obj_type,
-                        "displayName": display_name,
-                        "aliasLocked": False,
-                        "path": path,
-                        "source": "DirectAlias",
-                        "parent_type": parent_type,
-                    })
+
+                result_entry = {
+                    "alias": alias,
+                    "type": obj_type,
+                    "aliasOriginal": alias,
+                    "aliasRenamed": "",
+                    "jsonPathOriginal": [f"{path}/Alias"],
+                    "jsonPathRenamed": [],
+                    "displayNames": display_names,
+                    "aliasLocked": skip_result == "locked",
+                    "source": "DirectAlias",
+                    "parent_type": parent_type,
+                }
+
+                if not skip_result or skip_result == "locked":
+                    results.append(result_entry)
 
         if "Alias" in obj and isinstance(obj["Alias"], dict) and "GlobalAlias" not in obj:
             inner_alias = obj["Alias"].get("Alias", "")
             if isinstance(inner_alias, str) and inner_alias and not inner_alias.startswith("_"):
                 obj_type = obj["Alias"].get("Type", "Unknown")
                 display_name = ""
+                display_name_json_path = ""
                 if "Name" in obj:
                     if isinstance(obj["Name"], dict):
                         display_name = obj["Name"].get("Ru", "")
                     else:
                         display_name = str(obj["Name"])
+                    display_name_json_path = f"{path}/Name"
+                elif obj.get("DisplayName"):
+                    display_name = str(obj.get("DisplayName", ""))
+                    display_name_json_path = f"{path}/DisplayName"
+
                 skip_result = should_skip_alias(inner_alias, obj_type, display_name)
 
-                if not skip_result:
-                    results.append({
-                        "alias": inner_alias,
-                        "type": obj_type,
-                        "displayName": display_name,
-                        "aliasLocked": False,
-                        "path": path,
-                        "source": "AliasAsDict",
-                        "parent_type": parent_type,
+                display_names = []
+                if display_name:
+                    display_names.append({
+                        "displayNameOriginal": display_name,
+                        "displayNameRenamed": "",
+                        "jsonPathOriginal": [display_name_json_path] if display_name_json_path else [],
+                        "jsonPathRenamed": []
                     })
+
+                result_entry = {
+                    "alias": inner_alias,
+                    "type": obj_type,
+                    "aliasOriginal": inner_alias,
+                    "aliasRenamed": "",
+                    "jsonPathOriginal": [f"{path}/Alias"],
+                    "jsonPathRenamed": [],
+                    "displayNames": display_names,
+                    "aliasLocked": skip_result == "locked",
+                    "source": "AliasAsDict",
+                    "parent_type": parent_type,
+                }
+
+                if not skip_result or skip_result == "locked":
+                    results.append(result_entry)
 
         if "Container" in obj and isinstance(obj["Container"], dict):
             container = obj["Container"]
@@ -251,9 +292,12 @@ def scan_json_recursive(obj, path="root", parent_type=None, results=None):
                     results.append({
                         "alias": alias,
                         "type": obj_type,
-                        "displayName": "",
+                        "aliasOriginal": alias,
+                        "aliasRenamed": "",
+                        "jsonPathOriginal": [f"{path}/Container"],
+                        "jsonPathRenamed": [],
+                        "displayNames": [],
                         "aliasLocked": False,
-                        "path": f"{path}/Container",
                         "source": "Container",
                         "parent_type": parent_type,
                     })
@@ -267,9 +311,12 @@ def scan_json_recursive(obj, path="root", parent_type=None, results=None):
                     results.append({
                         "alias": alias,
                         "type": obj_type,
-                        "displayName": "",
+                        "aliasOriginal": alias,
+                        "aliasRenamed": "",
+                        "jsonPathOriginal": [f"{path}/Template"],
+                        "jsonPathRenamed": [],
+                        "displayNames": [],
                         "aliasLocked": False,
-                        "path": f"{path}/Template",
                         "source": "Template",
                         "parent_type": parent_type,
                     })
@@ -283,9 +330,12 @@ def scan_json_recursive(obj, path="root", parent_type=None, results=None):
                     results.append({
                         "alias": alias,
                         "type": obj_type,
-                        "displayName": "",
+                        "aliasOriginal": alias,
+                        "aliasRenamed": "",
+                        "jsonPathOriginal": [f"{path}/InstanceGlobalAlias"],
+                        "jsonPathRenamed": [],
+                        "displayNames": [],
                         "aliasLocked": False,
-                        "path": f"{path}/InstanceGlobalAlias",
                         "source": "InstanceGlobalAlias",
                         "parent_type": parent_type,
                     })
@@ -378,11 +428,46 @@ def process_folder(folder_name: str, extract_dir: Path, app_name: str) -> tuple[
         key = (a.get("parent_template", ""), a.get("type"), a.get("alias"))
         if key not in deduped:
             deduped[key] = {
-                **a,
-                "jsonPathOriginal": [a.get("path", "")],
+                "alias": a.get("alias"),
+                "type": a.get("type"),
+                "aliasOriginal": a.get("aliasOriginal"),
+                "aliasRenamed": a.get("aliasRenamed", ""),
+                "jsonPathOriginal": list(a.get("jsonPathOriginal", [])),
+                "jsonPathRenamed": list(a.get("jsonPathRenamed", [])),
+                "displayNames": list(a.get("displayNames", [])),
+                "aliasLocked": a.get("aliasLocked", False),
+                "source": a.get("source"),
+                "parent_type": a.get("parent_type"),
+                "json_file": a.get("json_file", ""),
+                "parent_template": a.get("parent_template", ""),
             }
         else:
-            deduped[key]["jsonPathOriginal"].append(a.get("path", ""))
+            # Merge jsonPathOriginal
+            for p in a.get("jsonPathOriginal", []):
+                if p not in deduped[key]["jsonPathOriginal"]:
+                    deduped[key]["jsonPathOriginal"].append(p)
+
+            # Merge displayNames - group by displayNameOriginal
+            for dn in a.get("displayNames", []):
+                dn_original = dn.get("displayNameOriginal", "")
+                existing = next(
+                    (d for d in deduped[key]["displayNames"] 
+                     if d.get("displayNameOriginal") == dn_original),
+                    None
+                )
+                if existing:
+                    for p in dn.get("jsonPathOriginal", []):
+                        if p not in existing.get("jsonPathOriginal", []):
+                            existing.setdefault("jsonPathOriginal", []).append(p)
+                else:
+                    deduped[key]["displayNames"].append({
+                        "displayNameOriginal": dn.get("displayNameOriginal", ""),
+                        "displayNameRenamed": dn.get("displayNameRenamed", ""),
+                        "jsonPathOriginal": list(dn.get("jsonPathOriginal", [])),
+                        "jsonPathRenamed": list(dn.get("jsonPathRenamed", [])),
+                    })
+
+            # aliasLocked = true если хотя бы один locked
             if a.get("aliasLocked"):
                 deduped[key]["aliasLocked"] = True
 
@@ -403,15 +488,25 @@ def extract_application_from_root(app: str, extract_dir: Path) -> list:
         display_name = data.get("cmw.solution.name", "")
 
         if alias:
+            display_names = []
+            if display_name:
+                display_names.append({
+                    "displayNameOriginal": display_name,
+                    "displayNameRenamed": "",
+                    "jsonPathOriginal": [f"{app}.json/cmw.solution.name"],
+                    "jsonPathRenamed": []
+                })
             return [{
                 "alias": alias,
                 "type": "Application",
-                "displayName": display_name,
+                "aliasOriginal": alias,
+                "aliasRenamed": "",
+                "jsonPathOriginal": [f"{app}.json/cmw.solution.alias"],
+                "jsonPathRenamed": [],
+                "displayNames": display_names,
                 "aliasLocked": True,
-                "path": f"{app}.json",
                 "source": "ApplicationRoot",
                 "parent_template": "",
-                "jsonPathOriginal": [f"{app}.json"],
             }]
     except (json.JSONDecodeError, OSError):
         pass
