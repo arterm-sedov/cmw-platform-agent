@@ -7,14 +7,45 @@ Usage:
 """
 import argparse
 import base64
-import json
 import os
 import sys
 import uuid
 from pathlib import Path
 
+sys.stdout.reconfigure(encoding='utf-8')
+
 APP_DIR = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(APP_DIR))
+
+
+def get_credentials() -> tuple[str, str]:
+    """Get login and password from .env file."""
+    env_path = APP_DIR / ".env"
+    login = ""
+    password = ""
+
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            if line.startswith("CMW_LOGIN="):
+                login = line.split("=", 1)[1].strip().strip('"').strip("'")
+            elif line.startswith("CMW_PASSWORD="):
+                password = line.split("=", 1)[1].strip().strip('"').strip("'")
+
+    return login, password
+
+
+def get_basic_auth_header() -> dict:
+    """Get headers with Basic auth."""
+    login, password = get_credentials()
+    if not login or not password:
+        return {"Accept": "application/json"}
+
+    credentials = base64.b64encode(f"{login}:{password}".encode("ascii")).decode("ascii")
+    return {
+        "Authorization": f"Basic {credentials}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
 
 
 def get_base_url() -> str:
@@ -23,7 +54,7 @@ def get_base_url() -> str:
     if base_url:
         return base_url.rstrip("/")
 
-    env_path = Path(__file__).parent.parent.parent.parent / ".env"
+    env_path = APP_DIR / ".env"
     if env_path.exists():
         for line in env_path.read_text().splitlines():
             if line.startswith("CMW_BASE_URL="):
@@ -35,18 +66,11 @@ def get_base_url() -> str:
 
 def main(app: str, output_dir: str, save_to_file: bool = True) -> int:
     """Export application to CTF."""
-    base_url = get_base_url()
-    endpoint = f"{base_url}/webapi/Transfer/{app}"
-
     import requests
 
-    headers = {
-        "Accept": "application/json",
-    }
-
-    session_token = os.environ.get("CMW_SESSION_TOKEN", "")
-    if session_token:
-        headers["Authorization"] = f"Bearer {session_token}"
+    base_url = get_base_url()
+    endpoint = f"{base_url}/webapi/Transfer/{app}"
+    headers = get_basic_auth_header()
 
     try:
         response = requests.get(endpoint, headers=headers, timeout=120)
@@ -57,30 +81,28 @@ def main(app: str, output_dir: str, save_to_file: bool = True) -> int:
 
     result = response.json()
 
+    # Extract CTF data - same logic as tool_export_application
     if not result.get("success", False):
-        error_msg = result.get("error", "Unknown error")
+        error_msg = result.get("error", {}).get("message", "Unknown error")
         print(f"Error: API export failed: {error_msg}")
         return 1
 
-    raw_response = result.get("raw_response", {})
+    raw_response = result.get("response", {})
     if isinstance(raw_response, dict):
-        response_data = raw_response.get("response", {})
+        ctf_data = raw_response.get("data", "") or raw_response.get("ctf", "")
     else:
-        response_data = raw_response
-
-    ctf_data = response_data.get("data", "") or response_data.get("ctf", "")
-    if not ctf_data:
-        ctf_data = str(response_data)
+        ctf_data = str(raw_response) if raw_response else ""
 
     if not ctf_data:
         print("Error: No CTF data in response")
         return 1
 
-    if not save_to_file:
-        print(ctf_data)
-        return 0
-
-    ctf_bytes = base64.b64decode(ctf_data)
+    # Decode base64 and save to file
+    try:
+        ctf_bytes = base64.b64decode(ctf_data)
+    except Exception as e:
+        print(f"Error: Failed to decode CTF data: {e}")
+        return 1
 
     os.makedirs(output_dir, exist_ok=True)
 

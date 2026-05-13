@@ -17,16 +17,25 @@ sys.path.insert(0, str(APP_DIR))
 
 def get_domain() -> str:
     import os
+    from urllib.parse import urlparse
+
     domain = os.environ.get("CMW_DOMAIN", "")
     if domain:
         return domain
-    try:
-        base_url = os.environ.get("CMW_BASE_URL", "")
-        if base_url:
-            from urllib.parse import urlparse
-            return urlparse(base_url).netloc.split(".")[0] or "cmw"
-    except Exception:
-        pass
+
+    base_url = os.environ.get("CMW_BASE_URL", "")
+    if not base_url:
+        env_path = APP_DIR / ".env"
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                if line.startswith("CMW_BASE_URL="):
+                    base_url = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+
+    if base_url:
+        netloc = urlparse(base_url).netloc
+        return netloc if netloc else "cmw"
+
     return "cmw"
 
 
