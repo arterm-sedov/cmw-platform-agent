@@ -99,32 +99,38 @@ def should_skip_alias(alias: str, obj_type: str, displayName: str = "", parent_t
     """Check if alias should be skipped based on filtering rules."""
     import re
 
-    if obj_type in SKIP_TYPES:
-        return True
+    has_display_name = bool(displayName)
 
-    if obj_type == "FormComponent":
-        if re.match(UUID_32_PATTERN, alias, re.I):
-            return True
-
-    if obj_type == "Form":
-        if re.match(FORM_INT_PATTERN, alias, re.I):
-            return True
-
-    if obj_type == "Toolbar":
-        if re.match(TOOLBAR_UUID_PATTERN, alias, re.I):
-            return True
-
+    # SKIP_ATTRIBUTES - always skip (no displayName check)
     if obj_type == "Attribute":
         global_skip = SKIP_ATTRIBUTES["default"]
         parent_skip = SKIP_ATTRIBUTES.get(parent_type, set()) if parent_type else set()
         if alias in global_skip or alias in parent_skip:
             return True
 
+    # SKIP_TYPES - always skip
+    if obj_type in SKIP_TYPES:
+        return True
+
+    # FormComponent UUID - apply "locked" rule if has displayName
+    if obj_type == "FormComponent":
+        if re.match(UUID_32_PATTERN, alias, re.I):
+            return "locked" if has_display_name else True
+
+    # Toolbar UUID - apply "locked" rule if has displayName
+    if obj_type == "Toolbar":
+        if re.match(TOOLBAR_UUID_PATTERN, alias, re.I):
+            return "locked" if has_display_name else True
+
+    # Form with numeric pattern - apply "locked" rule if has displayName
+    if obj_type == "Form":
+        if re.match(FORM_INT_PATTERN, alias, re.I):
+            return "locked" if has_display_name else True
+
+    # SKIP_TYPE_PREFIXES - apply "locked" rule if has displayName
     for prefix, types in SKIP_TYPE_PREFIXES.items():
         if obj_type in types and alias.startswith(prefix):
-            if displayName:
-                return "locked"
-            return True
+            return "locked" if has_display_name else True
 
     return False
 
@@ -135,13 +141,28 @@ def scan_json_recursive(obj, path="root", parent_type=None, results=None):
         results = []
 
     if isinstance(obj, dict):
-        display_name = obj.get("Name", "")
-
         if "GlobalAlias" in obj and isinstance(obj["GlobalAlias"], dict):
             ga = obj["GlobalAlias"]
             if "Alias" in ga and ga["Alias"]:
                 alias = ga["Alias"]
-                obj_type = ga.get("Type", "Unknown")
+                obj_type = ga.get("Type")
+                if not obj_type:
+                    obj_type = obj.get("Type", "Unknown")
+                display_name = ""
+                if ga.get("Name"):
+                    if isinstance(ga["Name"], dict):
+                        display_name = ga["Name"].get("Ru", "") or ga["Name"].get("En", "")
+                    else:
+                        display_name = str(ga["Name"])
+                elif ga.get("DisplayName"):
+                    display_name = str(ga["DisplayName"])
+                elif obj.get("Name"):
+                    if isinstance(obj["Name"], dict):
+                        display_name = obj["Name"].get("Ru", "") or obj["Name"].get("En", "")
+                    else:
+                        display_name = str(obj["Name"])
+                elif obj.get("DisplayName"):
+                    display_name = str(obj["DisplayName"])
                 skip_result = should_skip_alias(alias, obj_type, display_name)
 
                 if skip_result == "locked":
@@ -162,6 +183,62 @@ def scan_json_recursive(obj, path="root", parent_type=None, results=None):
                         "aliasLocked": False,
                         "path": path,
                         "source": "GlobalAlias",
+                        "parent_type": parent_type,
+                    })
+
+        if "Alias" in obj and "GlobalAlias" not in obj:
+            alias = obj.get("Alias", "")
+            if isinstance(alias, str) and alias and not alias.startswith("_"):
+                obj_type = obj.get("Type", "Unknown")
+                display_name = ""
+                if "Name" in obj:
+                    if isinstance(obj["Name"], dict):
+                        display_name = obj["Name"].get("Ru", "") or obj["Name"].get("En", "")
+                    else:
+                        display_name = str(obj.get("Name", "") or obj.get("DisplayName", ""))
+                skip_result = should_skip_alias(alias, obj_type, display_name)
+
+                if skip_result == "locked":
+                    results.append({
+                        "alias": alias,
+                        "type": obj_type,
+                        "displayName": display_name,
+                        "aliasLocked": True,
+                        "path": path,
+                        "source": "DirectAlias",
+                        "parent_type": parent_type,
+                    })
+                elif not skip_result:
+                    results.append({
+                        "alias": alias,
+                        "type": obj_type,
+                        "displayName": display_name,
+                        "aliasLocked": False,
+                        "path": path,
+                        "source": "DirectAlias",
+                        "parent_type": parent_type,
+                    })
+
+        if "Alias" in obj and isinstance(obj["Alias"], dict) and "GlobalAlias" not in obj:
+            inner_alias = obj["Alias"].get("Alias", "")
+            if isinstance(inner_alias, str) and inner_alias and not inner_alias.startswith("_"):
+                obj_type = obj["Alias"].get("Type", "Unknown")
+                display_name = ""
+                if "Name" in obj:
+                    if isinstance(obj["Name"], dict):
+                        display_name = obj["Name"].get("Ru", "")
+                    else:
+                        display_name = str(obj["Name"])
+                skip_result = should_skip_alias(inner_alias, obj_type, display_name)
+
+                if not skip_result:
+                    results.append({
+                        "alias": inner_alias,
+                        "type": obj_type,
+                        "displayName": display_name,
+                        "aliasLocked": False,
+                        "path": path,
+                        "source": "AliasAsDict",
                         "parent_type": parent_type,
                     })
 
