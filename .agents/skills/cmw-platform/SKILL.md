@@ -411,6 +411,58 @@ After `AccountService` creates a login, link it to a **Staff** employee row via 
 
 ---
 
+## 9. Growing platform skills
+
+**Policy:** When you solve a repeatable platform workflow (API or UI), capture it for the next agent — do not leave the recipe only in chat or scratch scripts.
+
+### Where to save
+
+| Kind | Location |
+|------|----------|
+| Multi-step API workflow (own trigger) | `.agents/skills/cmw-platform-<topic>/SKILL.md` |
+| Detail, OpenAPI shapes, UI steps for one entity | `.agents/skills/cmw-platform/references/<topic>.md` |
+| Browser-only entity recipe | Extend [references/browser_automation.md](references/browser_automation.md) or the relevant reference (e.g. [employee_account_attach.md](references/employee_account_attach.md)) |
+
+Do **not** scatter one-off notes in `docs/_scratch/` or commit empty stub skills. Prefer enriching an existing reference over duplicating a thin skill.
+
+### Order of approach (reinforced)
+
+1. **OpenAPI** — `cmw_open_api/web_api_v1.json` and public Object API where documented.
+2. **Existing agent tools** — `tools/` and [references/tool_inventory.md](references/tool_inventory.md).
+3. **Existing skills/references** — search `.agents/skills/cmw-platform*` before inventing HTTP.
+4. **Browser last** — only when API/tools cannot do the job (see § Browser Automation vs API).
+
+### API skill examples (companion skills)
+
+| Topic | Skill / reference |
+|-------|-------------------|
+| Configuration backup launch | [cmw-platform-backup-launch](../cmw-platform-backup-launch/SKILL.md) |
+| Host / tenant switch | [cmw-platform-instance-switch](../cmw-platform-instance-switch/SKILL.md) |
+| Account create, password, groups | [cmw-platform-account-bootstrap](../cmw-platform-account-bootstrap/SKILL.md) |
+| Employee row ↔ login (Include) | [references/employee_account_attach.md](references/employee_account_attach.md) — dedicated `cmw-platform-staff-account-link` skill only when the workflow is stable enough to warrant its own trigger |
+
+### Browser recipes (entity-specific)
+
+Refine **existing** skills/references with tested selectors and hash routes — do not fork parallel docs.
+
+| Entity / flow | Where to extend |
+|---------------|-----------------|
+| Employees → Attach account modal | [references/employee_account_attach.md](references/employee_account_attach.md) |
+| Backup → checkbox + Start backup | [cmw-platform-backup-launch](../cmw-platform-backup-launch/SKILL.md) UI fallback |
+| Datasets, toolbars, buttons | [references/ui_components.md](references/ui_components.md), [references/browser_automation.md](references/browser_automation.md) |
+| Processes / scenarios | [references/browser_automation.md](references/browser_automation.md) URL patterns |
+
+### Naming
+
+- Companion skills: `cmw-platform-<topic>` in kebab-case (directory name matches).
+- References: `snake_case.md` under `references/`, linked from this skill’s index.
+
+### Authoring new skills
+
+Follow Cursor’s [create-skill](file:///C:/Users/ased/.cursor/skills-cursor/create-skill/SKILL.md) skill (`~/.cursor/skills-cursor/create-skill/SKILL.md`) for frontmatter, description triggers, and progressive disclosure. Instance-specific migration progress stays in the **my-building** project repo; reusable platform recipes stay in **cmw-platform-agent**.
+
+---
+
 ## Reference Index
 
 | Document | Purpose |
@@ -433,6 +485,7 @@ After `AccountService` creates a login, link it to a **Staff** employee row via 
 | [references/workflow_sequences.md](references/workflow_sequences.md) | Reusable code patterns |
 | [references/localization.md](references/localization.md) | Both localization workflows: alias rename (9-phase) + RU→EN UI text translation |
 | [references/browser_automation.md](references/browser_automation.md) | Browser automation guide |
+| § [Growing platform skills](#9-growing-platform-skills) | Policy: capture repeatable API/UI workflows as skills or references |
 
 ## Optional companion skills (GitHub)
 

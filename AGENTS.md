@@ -226,6 +226,8 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 
 **Toolbar-Dataset Link:** Toolbars link to datasets via toolbar's `IsDefaultForLists` flag.
 
+**Growing platform skills:** Reusable API and browser recipes belong in this repo (`.agents/skills/cmw-platform*` and `references/` — see [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills)). Per-instance migration progress and batch state stay in the **my-building** project, not here.
+
 ### Key Dependencies
 
 - Source of truth: `requirements.txt` (versions may change over time).

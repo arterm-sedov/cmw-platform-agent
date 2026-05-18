@@ -1,5 +1,7 @@
 # Employee record ↔ platform account (Attach account)
 
+> **Entity recipe pattern:** Browser steps for this modal belong here (and in [browser_automation.md](browser_automation.md)); future entity-specific UI flows should follow the same reference-first pattern — see [cmw-platform SKILL §9](../SKILL.md#9-growing-platform-skills).
+
 Link an existing **platform login** to an **employee row** in the Volga **Staff** account template (`Sotrudniki` system name). This is **not** account creation — use [account_bootstrap_api.md](account_bootstrap_api.md) / [cmw-platform-account-bootstrap](../../cmw-platform-account-bootstrap/SKILL.md) for `AccountService/Create` first.
 
 ## UI workflow (instance-agnostic)
