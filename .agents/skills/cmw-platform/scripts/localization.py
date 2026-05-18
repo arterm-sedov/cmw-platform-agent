@@ -44,6 +44,7 @@ def main():
     parser.add_argument("--fix-expressions", action="store_true", help="Fix _calc aliases in expressions")
     parser.add_argument("--apply-display-names", action="store_true", help="Apply displayNameRenamed to CTF JSON files")
     parser.add_argument("--apply-expressions", action="store_true", help="Apply expressionRenamed to CTF JSON files")
+    parser.add_argument("--build-expressions-index", action="store_true", help="Build expressions index from _tr.json")
     parser.add_argument("--update-path", action="store_true", help="Regenerate jsonPathRenamed from aliasRenamed")
     parser.add_argument("--path-mode", default="renamed", choices=["original", "renamed"], help="Which path to use")
     parser.add_argument("--dangerous-suffix", default="_calc", help="Suffix for dangerous aliases")
@@ -114,6 +115,15 @@ def main():
             "apply_expressions.py",
             ["--app", args.app, "--json-folder", args.json_folder, "--output-dir", output_dir],
             "Apply expressions"
+        )
+        if exit_code != 0:
+            return exit_code
+
+    if args.build_expressions_index:
+        exit_code = run_script(
+            "build_expressions_index.py",
+            ["--app", args.app, "--output-dir", output_dir],
+            "Build expressions index"
         )
         if exit_code != 0:
             return exit_code

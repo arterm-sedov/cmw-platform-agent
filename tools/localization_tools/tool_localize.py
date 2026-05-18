@@ -28,6 +28,7 @@ class LocalizeSchema(BaseModel):
     fix_expressions: bool = Field(default=False, description="Fix _calc aliases in expressions")
     apply_display_names: bool = Field(default=False, description="Apply displayNameRenamed to CTF JSON files")
     apply_expressions: bool = Field(default=False, description="Apply expressionRenamed to CTF JSON files")
+    build_expressions_index: bool = Field(default=False, description="Build expressions index from _tr.json")
     update_paths: bool = Field(default=False, description="Regenerate jsonPathRenamed from aliasRenamed")
     path_mode: str = Field(default="renamed", description="Which path to use: 'original' or 'renamed'")
     dry_run: bool = Field(
@@ -51,6 +52,7 @@ def localize_aliases(
     fix_expressions: bool = False,
     apply_display_names: bool = False,
     apply_expressions: bool = False,
+    build_expressions_index: bool = False,
     update_paths: bool = False,
     path_mode: str = "renamed",
     dry_run: bool = True,
@@ -101,6 +103,8 @@ def localize_aliases(
         cmd.append("--apply-display-names")
     if apply_expressions:
         cmd.append("--apply-expressions")
+    if build_expressions_index:
+        cmd.append("--build-expressions-index")
     if update_paths:
         cmd.append("--update-path")
 
@@ -168,6 +172,7 @@ if __name__ == "__main__":
     parser.add_argument("--fix-expressions", action="store_true", help="Fix _calc aliases in expressions")
     parser.add_argument("--apply-display-names", action="store_true", help="Apply displayNameRenamed to CTF JSON files")
     parser.add_argument("--apply-expressions", action="store_true", help="Apply expressionRenamed to CTF JSON files")
+    parser.add_argument("--build-expressions-index", action="store_true", help="Build expressions index from _tr.json")
     parser.add_argument("--update-paths", action="store_true", help="Regenerate jsonPathRenamed from aliasRenamed")
     parser.add_argument("--path-mode", default="renamed", choices=["original", "renamed"], help="Which path to use for applying fixes")
     parser.add_argument(
@@ -192,6 +197,7 @@ if __name__ == "__main__":
         "fix_expressions": args.fix_expressions,
         "apply_display_names": args.apply_display_names,
         "apply_expressions": args.apply_expressions,
+        "build_expressions_index": args.build_expressions_index,
         "update_paths": args.update_paths,
         "path_mode": args.path_mode,
         "dry_run": args.dry_run,
