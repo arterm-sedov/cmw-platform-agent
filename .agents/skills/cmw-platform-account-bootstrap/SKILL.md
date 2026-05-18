@@ -22,7 +22,7 @@ Create or update **one** platform login account on any Comindware instance using
 - Script account + password + group membership
 - Verify account exists after migration
 
-**Do not use this skill for:** multi-account batch migration, instance-specific progress JSON, or host-specific inventories — keep those in the owning project repo (e.g. Volga TR→FR migration).
+**Do not use this skill for:** multi-account batch migration, instance-specific progress JSON, or host-specific inventories — keep those in the owning project repo (e.g. Volga TR→FR migration in **my-building**: [`docs/20260519_migration_status_and_roadmap.md`](file:///D:/Repo/my-building/docs/20260519_migration_status_and_roadmap.md), `localization/migration_progress/`).
 
 **Post-batch configuration backup (UI):** After several account or security changes, use [cmw-platform-backup-launch](../cmw-platform-backup-launch/SKILL.md) — do not duplicate backup steps here.
 

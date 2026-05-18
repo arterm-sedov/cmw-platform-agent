@@ -17,6 +17,8 @@ Link a **platform security account** (`account.N`) to an **employee row** on the
 
 **Do not** rename usernames during attach. Account creation is [cmw-platform-account-bootstrap](../cmw-platform-account-bootstrap/SKILL.md).
 
+**Instance migration progress (Volga TR→FR):** log outcomes in **my-building** — [`docs/20260519_migration_status_and_roadmap.md`](file:///D:/Repo/my-building/docs/20260519_migration_status_and_roadmap.md), `localization/migration_progress/` (not this repo).
+
 ## Discovery (find the link field)
 
 1. Switch host: [cmw-platform-instance-switch](../cmw-platform-instance-switch/SKILL.md).
