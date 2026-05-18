@@ -223,6 +223,10 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 | property | attribute |
 | dataset | table |
 
+### CMW Platform workflow
+
+For platform tasks: consult **OpenAPI** in `cmw_open_api/` and KB MCP first, then **`tools/`** and **`.agents/skills/`**, then **browser** only when API cannot complete the job. See `.agents/skills/cmw-platform/SKILL.md` § Workflow order.
+
 ### CMW Platform Architecture
 
 **Key Concept:** Datasets, Toolbars, and Buttons are separate API entities with different endpoints:

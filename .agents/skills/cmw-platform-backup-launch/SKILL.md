@@ -11,7 +11,11 @@ description: >-
 
 # CMW Platform — Launch configuration backup (API preferred)
 
-Start an **existing** configuration backup on any Comindware instance. **Prefer the Web API** (`Backup_CreateSession`); use **browser automation** only when API is unavailable or the user requests UI.
+Start an **existing** configuration backup on any Comindware instance.
+
+**Workflow order:** OpenAPI (`cmw_open_api/web_api_v1.json`) → agent tools / HTTP → **browser last resort** (admin UI). Same order as [cmw-platform](../cmw-platform/SKILL.md) § Workflow order.
+
+**Prefer the Web API** (`Backup_CreateSession`); use **browser automation** only when API is unavailable or the user requests UI.
 
 **Do not use** backup/restore to clone data between instances; this skill is for **rollback snapshots** on the target host only.
 

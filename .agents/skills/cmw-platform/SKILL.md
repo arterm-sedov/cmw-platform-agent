@@ -51,6 +51,14 @@ Persist Context. Read Before Write. Idempotent Operations. Explicit Over Implici
 
 Always follow: `Intent → Plan → Validate → Execute → Result`
 
+### Workflow order: API → tools → browser
+
+1. **OpenAPI / KB** — `cmw_open_api/web_api_v1.json`, `system_core_api.json`, `solition_api.json`; MCP `get_knowledge_base_articles` when behavior is unclear.
+2. **Agent tools** — `tools/` (`create_edit_record`, `list_template_records`, `requests_` helpers) before raw HTTP or UI.
+3. **Browser** — only for UI-only actions, visual proof, or when API paths fail after spec review (e.g. Staff **Attach account** on mz-fr when `IncludeInContainer` returns 500).
+
+→ Staff login link: [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md)
+
 ### Tool Usage Discipline
 
 - Check for duplicate calls before invoking
@@ -407,7 +415,7 @@ After multi-entity or security batches — and **between major themed migration 
 
 After `AccountService` creates a login, link it to a **Staff** employee row via the Volga **Employees** list → **Attach account** modal (select existing account(s)). This is record-level **Include**, not account create.
 
-→ [references/employee_account_attach.md](references/employee_account_attach.md) — UI flow, Phase 0 vs employee seeding, `AccountTemplate@…` read, optional `IncludeInContainer1` API, browser fallback.
+→ [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md) — link field, API order, mz-fr blockers; [references/employee_account_attach.md](references/employee_account_attach.md) — UI modal steps.
 
 ---
 
@@ -448,7 +456,7 @@ Do **not** scatter one-off notes in `docs/_scratch/` or commit empty stub skills
 | Configuration backup launch | [cmw-platform-backup-launch](../cmw-platform-backup-launch/SKILL.md) |
 | Host / tenant switch | [cmw-platform-instance-switch](../cmw-platform-instance-switch/SKILL.md) |
 | Account create, password, groups | [cmw-platform-account-bootstrap](../cmw-platform-account-bootstrap/SKILL.md) |
-| Employee row ↔ login (Include) | [references/employee_account_attach.md](references/employee_account_attach.md) — dedicated `cmw-platform-staff-account-link` skill only when the workflow is stable enough to warrant its own trigger |
+| Employee row ↔ login (Include) | [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md) + [references/employee_account_attach.md](references/employee_account_attach.md) |
 
 ### Browser recipes (entity-specific)
 

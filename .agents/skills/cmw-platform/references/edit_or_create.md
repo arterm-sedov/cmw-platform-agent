@@ -128,3 +128,15 @@ edit_or_create_dataset.invoke({
     # Other fields omitted - will be fetched and preserved
 })
 ```
+
+## Dataset filters (account id literals and other `filter` JSON)
+
+The `edit_or_create_dataset` tool does **not** expose `filter` as a parameter. To change filter `value` (e.g. remap TR `account.168` → FR `account.5`):
+
+1. **GET first** — `get_dataset` or `GET {CMW_BASE_URL}webapi/Dataset/{app}/Dataset@{template}.{dataset}` and keep the **full** payload (columns, toolbar, paging, `filter`, `globalAlias`, …).
+2. **Edit in memory** — update only `filter.value` (or nested filter tree); preserve all other keys.
+3. **PUT** — `PUT {CMW_BASE_URL}webapi/Dataset/{app}` with the merged body (same contract as `edit_or_create_dataset` internal edit path via `execute_edit_or_create_operation`).
+
+**Do not** `POST` a partial dataset body to `webapi/Dataset/{app}` for filter edits — use **GET → merge → PUT**. Saving a copy under `cmw-platform-workspace/` before PUT is recommended (see cmw-platform skill § Save Before Edit).
+
+For name/columns/toolbar-only edits, prefer `edit_or_create_dataset` (`operation: "edit"`), which already GET-merges before PUT.

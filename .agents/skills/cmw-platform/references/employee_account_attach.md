@@ -4,6 +4,8 @@
 
 Link an existing **platform login** to an **employee row** in the Volga **Staff** account template (`Sotrudniki` system name). This is **not** account creation — use [account_bootstrap_api.md](account_bootstrap_api.md) / [cmw-platform-account-bootstrap](../../cmw-platform-account-bootstrap/SKILL.md) for `AccountService/Create` first.
 
+**Workflow order:** OpenAPI (`cmw_open_api/`) → agent `tools/` → browser last resort. Full attach recipe (field names, PUT/Include, mz-fr blockers): [cmw-platform-staff-account-link](../../cmw-platform-staff-account-link/SKILL.md).
+
 ## UI workflow (instance-agnostic)
 
 1. Open the **Employees** list in the Volga app (hash pattern `#data/aa.{N}/lst.{M}` — dataset is usually `defaultList` on the Staff account template; **UI entity ids differ per host**, e.g. FR `lst.279` / TR `lst.399`).
@@ -31,6 +33,16 @@ Do **not** assume `AccountService/Create` attaches the account to Staff — that
 
 If employee seeding is deferred, you can still link Phase 0 accounts as soon as a minimal employee row exists (create empty row → Attach account).
 
+## Link field (verified Volga / Sotrudniki)
+
+| Read/write | Name |
+|------------|------|
+| `GET webapi/Records/...` / `PUT webapi/Record/{id}` | `username` |
+| `ObjectService/Get` + `accountTemplateId` | `cmw.account.username` |
+| List UI column | **Full name** (`fullName` from account profile when linked) |
+
+**Employee row id:** numeric string on mz-fr Phase 0 (`182`…`191`), not `account.182`. John Demonstrator (`demo`) shows **Full name** in `#data/aa.2/lst.279`; card URL may use `account.2`.
+
 ## API (when field names unknown)
 
 Prefer **read** via records list:
@@ -54,9 +66,9 @@ POST api/public/system/TeamNetwork/ObjectService/IncludeInContainer1
 
 Body shape (OpenAPI): `accountIds` (array of account ids), `accountTemplateId` (Staff template id, e.g. `aa.2` on a given host — **resolve per instance**, do not copy from another host).
 
-Single-account variant: `IncludeInContainer` with `accountId` + `containerId`.
+Single-account variant: `IncludeInContainer` with `accountId` + `containerId` (employee numeric id). **mz-fr:** per-row Include often returns **500**; `IncludeInContainer1` alone does not set `username` on pre-created rows.
 
-When list/get payloads are unclear, use **browser MCP** (cmw-platform § Browser) on the Employees list and Attach account modal.
+When list/get payloads are unclear, use **browser MCP** (cmw-platform § Browser) on the Employees list and Attach account modal — SPA: `User/GetAccountsToInclude`, `UserCommandExecution/PerformUserAction`.
 
 ## Verification checklist
 
@@ -66,5 +78,6 @@ When list/get payloads are unclear, use **browser MCP** (cmw-platform § Browser
 
 ## Related
 
+- [cmw-platform-staff-account-link](../../cmw-platform-staff-account-link/SKILL.md) — discovery, API order, persona table
 - [cmw-platform-instance-switch](../../cmw-platform-instance-switch/SKILL.md) — switch `CMW_BASE_URL` before TR vs FR compare
 - [browser_automation.md](browser_automation.md) — SPA hash routes, snapshots
