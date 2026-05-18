@@ -391,6 +391,18 @@ Exit code `0` = pass, `1` = fail.
 
 → See also: [references/errors.md](references/errors.md) — diagnostic command and recovery guidance.
 
+### Switching platform instance (host / tenant)
+
+Before cross-host work or comparing reference vs target (e.g. TR vs FR), switch `CMW_BASE_URL`, force dotenv for scripts, and verify connectivity — **read-only first** when diffing instances.
+
+→ [cmw-platform-instance-switch/SKILL.md](../cmw-platform-instance-switch/SKILL.md) — `CMW_BASE_URL`, `load_dotenv(override=True)`, `CMW_USE_DOTENV=true`, verify, repo boundaries.
+
+### Configuration backup (post-change)
+
+After multi-entity or security batches on a target instance, launch an **existing** configuration backup from the UI. **Do not create new backup configurations** unless the user explicitly asks.
+
+→ [cmw-platform-backup-launch/SKILL.md](../cmw-platform-backup-launch/SKILL.md) — checkbox on existing row at `#Settings/Backup/Configurations`, then **Run**.
+
 ---
 
 ## Reference Index
@@ -404,7 +416,10 @@ Exit code `0` = pass, `1` = fail.
 | [references/system_prompt_alignment.md](references/system_prompt_alignment.md) | `system_prompt.json` vs `AGENTS.md` precedence |
 | [references/tool_inventory.md](references/tool_inventory.md) | Complete tool catalog with signatures |
 | [references/api_endpoints.md](references/api_endpoints.md) | HTTP endpoint reference |
-| [references/account_bootstrap_api.md](references/account_bootstrap_api.md) | System Core account create, password, group membership |
+| [references/account_bootstrap_api.md](references/account_bootstrap_api.md) | System Core account create, update, password, group (OpenAPI detail) |
+| [../cmw-platform-instance-switch/SKILL.md](../cmw-platform-instance-switch/SKILL.md) | Switch host/tenant (`CMW_BASE_URL`, dotenv, verify, read-only compare) |
+| [../cmw-platform-account-bootstrap/SKILL.md](../cmw-platform-account-bootstrap/SKILL.md) | Account create/update (Create or Edit → password → group) |
+| [../cmw-platform-backup-launch/SKILL.md](../cmw-platform-backup-launch/SKILL.md) | Launch existing configuration backup (UI checkbox → Run) |
 | [references/import_export.md](references/import_export.md) | Full import/export application reference |
 | [references/ui_components.md](references/ui_components.md) | Full UI components reference: toolbars, buttons, datasets, forms |
 | [references/errors.md](references/errors.md) | Error handling playbook |

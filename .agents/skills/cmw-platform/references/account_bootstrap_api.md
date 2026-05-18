@@ -1,6 +1,12 @@
 # Account bootstrap (System Core API)
 
-Create platform **accounts** on any CMW instance via **System Core** services (`api/public/system/...`). Use when admin UI is slow or for scripted UAT seeding.
+Create or update platform **accounts** on any CMW instance via **System Core** services (`api/public/system/...`).
+
+**Agent skills:**
+
+- [cmw-platform-instance-switch/SKILL.md](../../cmw-platform-instance-switch/SKILL.md) — switch `CMW_BASE_URL` / verify target host
+- [cmw-platform-account-bootstrap/SKILL.md](../../cmw-platform-account-bootstrap/SKILL.md) — create/update workflow
+- [cmw-platform-backup-launch/SKILL.md](../../cmw-platform-backup-launch/SKILL.md) — post-batch configuration backup (UI)
 
 **OpenAPI:** `cmw_open_api/system_core_api.json` — `Base/AccountService/*`, `Base/AccountGroupService/*`.
 
@@ -15,18 +21,29 @@ From `.env` (never log or commit secrets):
 | `CMW_USE_DOTENV` | Set `true` for scripted runs |
 | `UAT_ACCOUNT_PASSWORD_PREFIX` | Optional prefix for new account passwords |
 
-**UAT password pattern (test env):** `final = {UAT_ACCOUNT_PASSWORD_PREFIX}{CMW_PASSWORD}` — log `password_set: true` in project progress only; never log the composed password.
+**UAT password pattern (test env):** `final = {UAT_ACCOUNT_PASSWORD_PREFIX}{CMW_PASSWORD}` — log `password_set: true` in project progress only.
 
 ## HTTP pattern
 
 All calls: `POST {CMW_BASE_URL}api/public/system/{Service}/{Action}` with JSON body and Basic auth.
 
-In Python (cmw-platform-agent):
+Direct HTTP (recommended for scripts — avoids heavy `tools` package import):
 
 ```python
-from tools import requests_ as requests_
+import base64, json, os, requests
+from dotenv import load_dotenv
 
-requests_._post_request(body, "api/public/system/Base/AccountService/Create")
+load_dotenv()
+base = os.environ["CMW_BASE_URL"].rstrip("/")
+auth = base64.b64encode(
+    f'{os.environ["CMW_LOGIN"]}:{os.environ["CMW_PASSWORD"]}'.encode()
+).decode()
+headers = {"Authorization": f"Basic {auth}", "Content-Type": "application/json"}
+
+def post(path: str, body: dict | None = None):
+    r = requests.post(f"{base}/api/public/system/{path}", headers=headers, json=body or {}, timeout=60)
+    r.raise_for_status()
+    return r.json() if r.text.strip() else []
 ```
 
 ## Create account
@@ -53,13 +70,29 @@ requests_._post_request(body, "api/public/system/Base/AccountService/Create")
 
 **Response:** account id string (e.g. `account.N`).
 
+## Edit account (update)
+
+**Path:** `Base/AccountService/Edit`
+
+**Body:** full `ComindwarePlatformApiDataAccount` (PascalCase), including **`Id`**.
+
+1. `POST .../Base/AccountService/Get` with `{"id": "<account_id>"}`.
+2. Merge `Username`, `FullName`, `Mbox` (and other fields as needed).
+3. `POST .../Base/AccountService/Edit` with the merged object.
+
+| Field | Typical rule (EN target instance) |
+|-------|-----------------------------------|
+| Username | Latin; match reference login when applicable |
+| FullName | US FM English persona label; no Cyrillic from RU reference |
+| Mbox | `{username}@example.test`; no Cyrillic |
+
+There is no separate `SetUsername` path in OpenAPI — username changes go through **Edit**.
+
 ## Set password
 
 **Path:** `Base/AccountService/SetAccountPassword`
 
 **Body:** `{"id": "<account_id>", "password": "<final_password>"}`
-
-Requires admin-capable credentials.
 
 ## Add to group
 
@@ -67,24 +100,20 @@ Requires admin-capable credentials.
 
 **Body:** `{"groupId": "<group.id>", "memberIds": ["<account_id>"]}`
 
-Discover groups: `POST .../Base/AccountGroupService/List` (empty body). Resolve `groupId` by `name` on the target instance.
+Discover groups: `POST .../Base/AccountGroupService/List` (empty body).
 
-**Get group detail:** `POST .../Base/AccountGroupService/Get` with body `{"groupId": "<id>"}` (not `id`).
+**Get group detail:** `POST .../Base/AccountGroupService/Get` with body `{"groupId": "<id>"}`.
 
 ## Verify
 
-- `POST .../Base/AccountService/List` — count and username
-- `POST .../Base/AccountService/Get` — body `{"id": "<account_id>"}`
+- `POST .../Base/AccountService/List`
+- `POST .../Base/AccountService/Get` — `{"id": "<account_id>"}`
+- `POST .../Base/AccountService/FindByUsername` — `{"user": "<username>"}`
 
-## Checklist
+## Post-change backup (UI only)
 
-1. Set `CMW_BASE_URL` to target instance.
-2. Confirm target **group** exists (create via admin or `AccountGroupService/Create` if needed).
-3. `Create` → capture returned id.
-4. `SetAccountPassword`.
-5. `IncludeMembers` for business group(s).
-6. List/Get to verify.
+Configuration backups are started from **Settings → Backup → Configurations**. **Do not create new backup configurations** unless the user asks. Check the **checkbox** on an **existing** row, then click **Run**. See [cmw-platform-backup-launch/SKILL.md](../../cmw-platform-backup-launch/SKILL.md).
 
 ## Instance-specific migration artifacts
 
-Progress JSON, inventories, and host-specific harvest files belong in the **project repo** that owns that migration (not in cmw-platform-agent). This reference stays generic.
+Progress JSON and host-specific inventories belong in the **project repo** that owns the migration (not in cmw-platform-agent).
