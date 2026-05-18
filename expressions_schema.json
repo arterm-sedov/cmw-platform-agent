@@ -1,0 +1,16 @@
+{
+    "objects": [
+        {
+            "expression_original": "str",
+            "expression_renamed": "str",
+            "aliases": [
+                {
+                    "aliasOriginal": "str",
+                    "aliasRenamed": "str"
+                }
+            ],
+            "jsonPathOriginal": ["str"],
+            "jsonPathRenamed": ["str"]
+        }
+    ]
+}
