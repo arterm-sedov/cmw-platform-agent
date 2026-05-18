@@ -403,6 +403,12 @@ After multi-entity or security batches on a target instance, launch an **existin
 
 → [cmw-platform-backup-launch/SKILL.md](../cmw-platform-backup-launch/SKILL.md) — checkbox on existing row at `#Settings/Backup/Configurations`, then **Run**.
 
+### Employee record ↔ platform account (Attach account)
+
+After `AccountService` creates a login, link it to a **Staff** employee row via the Volga **Employees** list → **Attach account** modal (select existing account(s)). This is record-level **Include**, not account create.
+
+→ [references/employee_account_attach.md](references/employee_account_attach.md) — UI flow, Phase 0 vs employee seeding, `AccountTemplate@…` read, optional `IncludeInContainer1` API, browser fallback.
+
 ---
 
 ## Reference Index
@@ -417,6 +423,7 @@ After multi-entity or security batches on a target instance, launch an **existin
 | [references/tool_inventory.md](references/tool_inventory.md) | Complete tool catalog with signatures |
 | [references/api_endpoints.md](references/api_endpoints.md) | HTTP endpoint reference |
 | [references/account_bootstrap_api.md](references/account_bootstrap_api.md) | System Core account create, update, password, group (OpenAPI detail) |
+| [references/employee_account_attach.md](references/employee_account_attach.md) | Staff employee row ↔ platform account (Attach account UI / Include API) |
 | [../cmw-platform-instance-switch/SKILL.md](../cmw-platform-instance-switch/SKILL.md) | Switch host/tenant (`CMW_BASE_URL`, dotenv, verify, read-only compare) |
 | [../cmw-platform-account-bootstrap/SKILL.md](../cmw-platform-account-bootstrap/SKILL.md) | Account create/update (Create or Edit → password → group) |
 | [../cmw-platform-backup-launch/SKILL.md](../cmw-platform-backup-launch/SKILL.md) | Launch existing configuration backup (UI checkbox → Run) |

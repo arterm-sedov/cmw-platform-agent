@@ -169,6 +169,8 @@ Full catalog: `cmw_open_api/system_core_api.json`.
 5. List/Get verify; log `password_set: true` in project progress only.
 6. If project plan requires post-batch backup → [cmw-platform-backup-launch](../cmw-platform-backup-launch/SKILL.md).
 
+**Staff employee link (separate step):** Creating the login does **not** attach it to the **Employees** (Staff / `Sotrudniki`) template. After the account exists, use the app **Attach account** modal on an employee row, or the Object **Include** API — see [employee_account_attach.md](../cmw-platform/references/employee_account_attach.md).
+
 ## Checklist (update)
 
 1. `Get` / `FindByUsername` → capture full account payload.
