@@ -404,6 +404,7 @@ Exit code `0` = pass, `1` = fail.
 | [references/system_prompt_alignment.md](references/system_prompt_alignment.md) | `system_prompt.json` vs `AGENTS.md` precedence |
 | [references/tool_inventory.md](references/tool_inventory.md) | Complete tool catalog with signatures |
 | [references/api_endpoints.md](references/api_endpoints.md) | HTTP endpoint reference |
+| [references/account_bootstrap_api.md](references/account_bootstrap_api.md) | System Core account create, password, group membership |
 | [references/import_export.md](references/import_export.md) | Full import/export application reference |
 | [references/ui_components.md](references/ui_components.md) | Full UI components reference: toolbars, buttons, datasets, forms |
 | [references/errors.md](references/errors.md) | Error handling playbook |
