@@ -36,6 +36,7 @@ class LocalizeSchema(BaseModel):
     )
     dangerous_suffix: str = Field(default="_calc", description="Suffix for dangerous system names")
     safe_suffix: str = Field(default="_sv", description="Suffix for safe system names")
+    rename_mode: str = Field(default="safe", description="Rename mode: 'all', 'safe' (no expressions), 'danger' (has expressions)")
 
 
 @tool("localize_aliases", return_direct=False, args_schema=LocalizeSchema)
@@ -55,6 +56,7 @@ def localize_aliases(
     dry_run: bool = True,
     dangerous_suffix: str = "_calc",
     safe_suffix: str = "_sv",
+    rename_mode: str = "safe",
 ) -> dict[str, any]:
     """
     Localization workflow for system names (aliases) and display names.
@@ -110,7 +112,7 @@ def localize_aliases(
         results["phase"] = "apply_renames"
 
         old_argv = sys.argv
-        sys.argv = ["apply_renames.py", "--app", application_system_name, "--output-dir", output_dir]
+        sys.argv = ["apply_renames.py", "--app", application_system_name, "--output-dir", output_dir, "--mode", rename_mode]
 
         try:
             script_path = SCRIPTS_DIR / "apply_renames.py"
@@ -119,7 +121,7 @@ def localize_aliases(
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
 
-            exit_code = module.main(application_system_name, output_dir)
+            exit_code = module.main(application_system_name, output_dir, mode=rename_mode)
             if exit_code != 0:
                 results["success"] = False
                 results["errors"].append(f"apply_renames.py failed (exit {exit_code})")

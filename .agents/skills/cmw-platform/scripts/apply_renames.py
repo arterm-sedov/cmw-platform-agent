@@ -72,7 +72,31 @@ def get_domain() -> str:
     return "cmw"
 
 
-def main(app: str, output_dir: str, reverse: bool = False, resume: bool = True, force: bool = False):
+def filter_by_expressions(rows: list, mode: str) -> list:
+    """Filter rows by expressions presence.
+
+    Args:
+        rows: List of row dicts with optional 'expressions' field
+        mode: 'all' - all rows, 'safe' - no expressions, 'danger' - has expressions
+
+    Returns:
+        Filtered list of rows
+    """
+    if mode == "all":
+        return rows
+    if mode == "safe":
+        return [r for r in rows if not r.get("expressions")]
+    return [r for r in rows if r.get("expressions")]
+
+
+def main(
+    app: str,
+    output_dir: str,
+    reverse: bool = False,
+    resume: bool = True,
+    force: bool = False,
+    mode: str = "safe",
+):
     output_path = Path(output_dir)
     domain = get_domain()
 
@@ -114,6 +138,20 @@ def main(app: str, output_dir: str, reverse: bool = False, resume: bool = True, 
         filtered_indices.append(idx)
 
     print(f"Processing {len(filtered_table)} entries after filtering")
+
+    filtered_table = filter_by_expressions(filtered_table, mode)
+    print(f"After mode filter ({mode}): {len(filtered_table)} entries")
+
+    if mode == "danger":
+        print("\nWARNING: Running in DANGER mode!")
+        print("This will process aliases with expressions, which may have dependencies.")
+        try:
+            confirm = input("Are you sure you want to continue? (yes/no): ").strip().lower()
+            if confirm not in ("yes", "y"):
+                print("Aborted by user.")
+                return
+        except EOFError:
+            print("Interactive input not available, proceeding...")
 
     unique_renames = {}
     for row in filtered_table:
@@ -191,7 +229,7 @@ def main(app: str, output_dir: str, reverse: bool = False, resume: bool = True, 
     with open(tr_file, "w", encoding="utf-8") as f:
         json.dump(table, f, indent=2, ensure_ascii=False)
 
-    print(f"\n=== Complete ===")
+    print("\n=== Complete ===")
     print(f"Unique aliases renamed: {len(unique_renames)}")
     print(f"Total IDs processed: {processed_ids}")
     print(f"Success: {success}")
@@ -222,7 +260,13 @@ if __name__ == "__main__":
         default=False,
         help="Force reprocess all entries, ignore applied status",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["all", "safe", "danger"],
+        default="safe",
+        help="Filter aliases by expressions: 'all' - all, 'safe' - no expressions, 'danger' - has expressions (default: safe)",
+    )
     args = parser.parse_args()
 
     output_dir = args.output_dir or f"/tmp/cmw-transfer/{args.app}_tr"
-    main(args.app, output_dir, args.reverse, args.resume, args.force)
+    main(args.app, output_dir, args.reverse, args.resume, args.force, args.mode)
