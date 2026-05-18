@@ -427,3 +427,7 @@ Application/
 ```
 исходное название (RU);Системное имя (RU);Английское название (EN);Системное имя (EN);Исходный JSON-Path
 ```
+
+### Before renaming platform accounts
+
+After a CTF or solution export, **grep the application model** (datasets, workspaces, process tasks, role members) for the login **and** for hardcoded `account.{id}` literals in filters and URLs. Usernames rarely appear in expressions; **instance-specific account ids** in dataset filters and nav links often survive import and break on another host when ids differ. Fix or re-map those artifacts on the target instance; role/group-based assignees are usually unaffected by a username change. Full tenant-specific audits belong in the **my-building** repo, not here.

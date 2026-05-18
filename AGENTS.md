@@ -140,6 +140,15 @@ Before considering work complete:
 - Keep sections action-oriented: each section should clearly imply a decision or next step.
 - Documentation files go to `docs/`.
 - Progress reports go to `docs/**/progress_reports/` with `YYYYMMDD_` prefix.
+
+### Where findings belong (repo boundary)
+
+| Scope | Repository | Examples |
+|-------|------------|----------|
+| **Instance-specific** | **my-building** (`D:\Repo\my-building`) | mz-tr / mz-fr migration, Volga TR→FR progress, TR record/account ids, harvest JSON, gap analyses, operator checklists |
+| **Platform-generic** | **cmw-platform-agent** (this repo) | API patterns, OpenAPI shapes, `.agents/skills/cmw-platform*`, reusable browser/API workflows in `docs/` |
+
+Do **not** copy long-form instance audits into this repo; add a short generic lesson in a skill reference when it helps any tenant, and link to my-building for the full report.
 - Generate `YYYYMMDD` timestamps with native commands:
   - PowerShell: `Get-Date -Format "yyyyMMdd"`
   - Bash/WSL: `date +%Y%m%d`
@@ -226,7 +235,7 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 
 **Toolbar-Dataset Link:** Toolbars link to datasets via toolbar's `IsDefaultForLists` flag.
 
-**Growing platform skills:** Reusable API and browser recipes belong in this repo (`.agents/skills/cmw-platform*` and `references/` — see [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills)). Per-instance migration progress and batch state stay in the **my-building** project, not here.
+**Growing platform skills:** Reusable API and browser recipes belong in this repo (`.agents/skills/cmw-platform*` and `references/` — see [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills)). Per-instance migration progress, harvest outputs, and Volga/mz-tr/mz-fr audits stay in [**my-building**](file:///D:/Repo/my-building) (`D:\Repo\my-building`) — see [Where findings belong](#where-findings-belong-repo-boundary) under Documentation Guidelines.
 
 ### Key Dependencies
 

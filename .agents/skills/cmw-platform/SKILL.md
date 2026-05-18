@@ -425,6 +425,15 @@ After `AccountService` creates a login, link it to a **Staff** employee row via 
 
 Do **not** scatter one-off notes in `docs/_scratch/` or commit empty stub skills. Prefer enriching an existing reference over duplicating a thin skill.
 
+### Where to document findings
+
+| Scope | Repository | Put it here |
+|-------|------------|-------------|
+| **Instance-specific** | [**my-building**](file:///D:/Repo/my-building) (`D:\Repo\my-building`) | Migration progress JSON (`localization/migration_progress/`), Volga TR→FR plans, gap analyses, harvest outputs, operator checklists, model-export audits tied to mz-tr / mz-fr |
+| **Platform-generic** | **cmw-platform-agent** (this repo) | `.agents/skills/cmw-platform*` and `references/`, companion skills, `docs/` runbooks — reusable API/UI/OpenAPI patterns |
+
+**Do not duplicate** long-form instance audits here; capture a **one-paragraph generic lesson** in a reference (e.g. [localization.md](references/localization.md) — account rename vs model export) and link to my-building for the full report.
+
 ### Order of approach (reinforced)
 
 1. **OpenAPI** — `cmw_open_api/web_api_v1.json` and public Object API where documented.
@@ -459,7 +468,9 @@ Refine **existing** skills/references with tested selectors and hash routes — 
 
 ### Authoring new skills
 
-Follow Cursor’s [create-skill](file:///C:/Users/ased/.cursor/skills-cursor/create-skill/SKILL.md) skill (`~/.cursor/skills-cursor/create-skill/SKILL.md`) for frontmatter, description triggers, and progressive disclosure. Instance-specific migration progress stays in the **my-building** project repo; reusable platform recipes stay in **cmw-platform-agent**.
+Follow Cursor’s [create-skill](file:///C:/Users/ased/.cursor/skills-cursor/create-skill/SKILL.md) skill (`~/.cursor/skills-cursor/create-skill/SKILL.md`) for frontmatter, description triggers, and progressive disclosure.
+
+**Repo boundary:** [my-building](file:///D:/Repo/my-building) owns instance migration state and audits; **cmw-platform-agent** owns repeatable platform recipes — see [Where to document findings](#where-to-document-findings) above.
 
 ---
 
