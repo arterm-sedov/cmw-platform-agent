@@ -11,9 +11,17 @@ description: >-
 
 # CMW Platform — Launch configuration backup (UI)
 
-Run an **existing** configuration backup on any Comindware instance. There is **no** reliable public API documented in `cmw_open_api` for starting configuration backups — use **browser automation** (cursor-ide-browser MCP or agent-browser).
+Start an **existing** configuration backup on any Comindware instance. There is **no** reliable public API documented in `cmw_open_api` for starting configuration backups — use **browser automation** (cursor-ide-browser MCP or agent-browser).
 
 **Do not use** backup/restore to clone data between instances; this skill is for **rollback snapshots** on the target host only.
+
+## UI layout (Configurations tab)
+
+Typical page: breadcrumb **Administration** → title **Backup**; tabs **Configurations** (active) and **Log**. The configurations grid has a **checkbox** column, then **ID**, **Name**, and other columns. Rows are often named like **Backup по умолчанию** (default backup configuration) — use an **existing** row; do not add a new one.
+
+**Toolbar after selection:** Checking a row’s checkbox enables toolbar actions. The primary action is **Start backup** (play icon) — **not** labeled “Run” on current builds. **Delete** may also appear when a row is selected; **do not** click Delete unless the user explicitly asks to remove a configuration.
+
+Reference screenshot (workspace, for maintainers): `assets/c__Users_ased_AppData_Roaming_Cursor_User_workspaceStorage_empty-window_images_image-1b10a211-6af1-4c18-8490-ef4d83eafe46.png` — describes the above layout; agents should rely on live snapshots, not the image file at runtime.
 
 ## Configuration
 
@@ -31,44 +39,45 @@ Backup URL (typical): `{CMW_BASE_URL}#Settings/Backup/Configurations`
 ## Critical rules
 
 1. **Do NOT create new backup configurations** unless the user **explicitly** asks to add one.
-2. Use **existing** entries in the configurations list only.
+2. Use **existing** entries in the configurations list only (e.g. default row **Backup по умолчанию**).
 3. **Selection is via checkbox** — check the box next to one **existing** configuration row first.
-4. **Run is hidden until a row is checked** — the **Run** control does not appear in the toolbar until at least one configuration checkbox is selected. Do not search for Run before checking a box; take a fresh snapshot after the checkbox click.
+4. **Start backup is hidden until a row is checked** — the **Start backup** control does not appear in the toolbar until at least one configuration checkbox is selected. Do not search for Start backup before checking a box; take a fresh snapshot after the checkbox click.
 5. Do not click Add / New / **Create** configuration controls unless the user requested a new config.
+6. Do not click **Delete** unless the user explicitly asks to remove a backup configuration.
 
 ## Workflow (browser)
 
 ```text
-Navigate → Login (if needed) → Backup/Configurations → Checkbox on existing row → Run visible → Run → Verify acknowledged
+Navigate → Login (if needed) → Configurations tab → Checkbox on existing row → Start backup visible → Start backup → Verify acknowledged
 ```
 
 ### 1. Open Configurations
 
-1. Set browser to `{CMW_BASE_URL}#Settings/Backup/Configurations` (or navigate Settings → Backup → Configurations).
+1. Set browser to `{CMW_BASE_URL}#Settings/Backup/Configurations` (or navigate Settings → Backup → **Configurations** tab).
 2. `browser_lock` after navigation if using cursor-ide-browser; take `browser_snapshot` before interacting.
 
 ### 2. Select existing configuration (checkbox first)
 
-1. In the configurations list, locate an **existing** backup row (project docs may name a preferred config; otherwise pick the standard/default configuration already on the instance, e.g. default/manual backup for that host).
+1. In the configurations list, locate an **existing** backup row (e.g. **Backup по умолчанию** / default backup for that host).
 2. **Check the checkbox** in the first column on that row (not merely highlighting the row or clicking the name).
-3. **Re-snapshot** — confirm the row is selected and the toolbar now shows **Run** (English UI). If **Run** is still missing, the checkbox was not toggled; try the row checkbox again (grid cells may not expose `role=checkbox` in accessibility trees — use coordinates from a fresh screenshot if needed).
+3. **Re-snapshot** — confirm the row is selected and the toolbar now shows **Start backup** (play icon). Labels may be localized (e.g. RU UI on an EN host); older docs may say “Run” — treat **Start backup** as the correct control. If it is still missing, the checkbox was not toggled; try the row checkbox again (grid cells may not expose `role=checkbox` in accessibility trees — use coordinates from a fresh screenshot if needed).
 
-### 3. Run (only after checkbox)
+### 3. Start backup (only after checkbox)
 
-1. Click **Run** in the toolbar (label may be localized; English UI: **Run**). It is **not** available before step 2.
+1. Click **Start backup** in the toolbar. It is **not** available before step 2.
 2. Confirm any benign confirmation dialog if shown (accept only when intent is to start backup).
 
 ### 4. Verify
 
-- UI shows the job was accepted: progress indicator, success toast, status change on the row, or backup history entry — **confirm Run was acknowledged**.
+- UI shows the job was accepted: progress indicator, success toast, status change on the row, or entry on the **Log** tab — **confirm Start backup was acknowledged**.
 - If the UI gives no clear signal, note in project progress: `fr_backup_launched: true` with `fr_backup_note` describing what was observed.
-- Record optional `fr_backup_configuration_name` (display name of the **existing** config used) in project progress JSON — not secrets.
+- Record optional `fr_backup_configuration_name` (display name of the **existing** config used, e.g. `Backup по умолчанию`) in project progress JSON — not secrets.
 
 ## MCP preference
 
 | Tool | When |
 |------|------|
-| **cursor-ide-browser** | Default in Cursor: snapshot → checkbox → re-snapshot (Run visible) → Run |
+| **cursor-ide-browser** | Default in Cursor: snapshot → checkbox → re-snapshot (Start backup visible) → Start backup |
 | **agent-browser** | Headless/scripted runs outside IDE |
 
 Follow each MCP server's lock/navigate/snapshot rules; re-snapshot after every click.
@@ -78,7 +87,7 @@ Follow each MCP server's lock/navigate/snapshot rules; re-snapshot after every c
 Instance-specific progress files (e.g. `localization/migration_progress/*.json`) live in the **migration project repo**, not cmw-platform-agent. After backup:
 
 - `meta.fr_backup_status`: `required` or `launched`
-- `meta.fr_backup_launched`: `true` when Run succeeded
+- `meta.fr_backup_launched`: `true` when Start backup succeeded
 - `meta.fr_backup_url`: backup Configurations deep link
 - Optional: `meta.fr_backup_configuration_name` (existing config display name)
 
@@ -97,4 +106,4 @@ Instance-specific progress files (e.g. `localization/migration_progress/*.json`)
 
 ## Maintaining this skill
 
-When CMW backup UI changes (control labels, layout), update the checkbox → **Run** steps only; keep the **no new configurations** rule unless product policy changes.
+When CMW backup UI changes (control labels, layout), update the checkbox → **Start backup** steps only; keep the **no new configurations** and **no Delete** rules unless product policy changes.

@@ -112,7 +112,7 @@ Discover groups: `POST .../Base/AccountGroupService/List` (empty body).
 
 ## Post-change backup (UI only)
 
-After account/security batches on the target host, launch an **existing** configuration backup via UI — see [cmw-platform-backup-launch/SKILL.md](../../cmw-platform-backup-launch/SKILL.md) (checkbox on existing row first; **Run** appears only after selection; do not create new backup configurations unless the user asks).
+After account/security batches on the target host, launch an **existing** configuration backup via UI — see [cmw-platform-backup-launch/SKILL.md](../../cmw-platform-backup-launch/SKILL.md) (checkbox on existing row → **Start backup**; do not create or delete backup configurations unless the user asks).
 
 ## Instance-specific migration artifacts
 
