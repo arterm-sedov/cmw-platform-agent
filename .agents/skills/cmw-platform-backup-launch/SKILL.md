@@ -1,109 +1,193 @@
 ---
 name: cmw-platform-backup-launch
 description: >-
-  Launch an existing Comindware Platform configuration backup from the admin UI
-  (Settings → Backup → Configurations). Use when the user or migration plan
-  requires a post-change backup, configuration backup, FR rollback snapshot,
-  Settings/Backup, run backup, or after-batch safety backup. Agnostic for any
+  Launch an existing Comindware Platform configuration backup via Web API
+  (preferred) or admin UI fallback. Use when the user or migration plan requires
+  a post-change backup, configuration backup, FR rollback snapshot, or
+  after-batch safety backup between major themed migration edits. Agnostic for any
   instance via CMW_BASE_URL. Does not create backup configurations unless the
   user explicitly asks.
 ---
 
-# CMW Platform — Launch configuration backup (UI)
+# CMW Platform — Launch configuration backup (API preferred)
 
-Start an **existing** configuration backup on any Comindware instance. There is **no** reliable public API documented in `cmw_open_api` for starting configuration backups — use **browser automation** (cursor-ide-browser MCP or agent-browser).
+Start an **existing** configuration backup on any Comindware instance. **Prefer the Web API** (`Backup_CreateSession`); use **browser automation** only when API is unavailable or the user requests UI.
 
 **Do not use** backup/restore to clone data between instances; this skill is for **rollback snapshots** on the target host only.
 
-## UI layout (Configurations tab)
+**OpenAPI source of truth:** [`cmw_open_api/web_api_v1.json`](../../../cmw_open_api/web_api_v1.json) — operations `Backup_ListConfigurations`, `Backup_CreateSession`, `Backup_GetSession`, `Backup_ListSessions`.
 
-Typical page: breadcrumb **Administration** → title **Backup**; tabs **Configurations** (active) and **Log**. The configurations grid has a **checkbox** column, then **ID**, **Name**, and other columns. Rows are often named like **Backup по умолчанию** (default backup configuration) — use an **existing** row; do not add a new one.
+## When to run
 
-**Toolbar after selection:** Checking a row’s checkbox enables toolbar actions. The primary action is **Start backup** (play icon) — **not** labeled “Run” on current builds. **Delete** may also appear when a row is selected; **do not** click Delete unless the user explicitly asks to remove a configuration.
+Run a configuration backup **after meaningful batches**, not after every single field change.
 
-Reference screenshot (workspace, for maintainers): `assets/c__Users_ased_AppData_Roaming_Cursor_User_workspaceStorage_empty-window_images_image-1b10a211-6af1-4c18-8490-ef4d83eafe46.png` — describes the above layout; agents should rely on live snapshots, not the image file at runtime.
+| Situation | Action |
+|-----------|--------|
+| **Between major themed migration edits** — accounts/groups batch, employee ↔ account linking, a record phase (e.g. all Phase 0 roles, a Phase 1 template group, Phase 2 hub) | **Required** — launch backup before starting the next theme |
+| Multi-change batch (`meta.changes_in_batch` ≥ 2, multi-entity Phase 0, Phase 2 hubs) | **Required** after commit, per project master plan |
+| Single small change (one UAT account, one attribute tweak) | Often `recommended_not_required` — follow project plan; document in `meta.notes` |
+| User says "take a backup" / "run configuration backup" | Run this skill |
+
+**Cadence rule:** Think in **migration themes** (security, accounts, employees, record phases) — one backup checkpoint between themes, not per tool call or per row.
 
 ## Configuration
 
 Load from `cmw-platform-agent/.env` with `CMW_USE_DOTENV=true`. **Never log or commit** secrets.
 
-Wrong host → [cmw-platform-instance-switch](../cmw-platform-instance-switch/SKILL.md) (`CMW_BASE_URL`, verify) before opening backup UI.
+Wrong host → [cmw-platform-instance-switch](../cmw-platform-instance-switch/SKILL.md) (`CMW_BASE_URL`, verify) before any backup call or UI.
 
 | Variable | Purpose |
 |----------|---------|
-| `CMW_BASE_URL` | Target instance root, e.g. `https://{your-host}/` |
-| `CMW_LOGIN` / `CMW_PASSWORD` | Credentials for UI login if prompted |
+| `CMW_BASE_URL` | Target instance root, e.g. `https://{your-host}/` (trailing slash optional) |
+| `CMW_LOGIN` / `CMW_PASSWORD` | HTTP Basic auth for Web API |
 
-Backup URL (typical): `{CMW_BASE_URL}#Settings/Backup/Configurations`
+## Prohibitions
 
-## Critical rules
+1. **Do NOT create new backup configurations** (`POST /webapi/Backup/Configuration`, UI **Add/New**) unless the user **explicitly** asks.
+2. Use **existing** configurations only (e.g. display name **Backup по умолчанию** / default row on that host).
+3. **Do NOT delete** configurations or sessions (`DELETE` endpoints, UI **Delete**) unless the user explicitly asks.
+4. Do not use backup/restore to copy data between TR and FR hosts.
 
-1. **Do NOT create new backup configurations** unless the user **explicitly** asks to add one.
-2. Use **existing** entries in the configurations list only (e.g. default row **Backup по умолчанию**).
-3. **Selection is via checkbox** — check the box next to one **existing** configuration row first.
-4. **Start backup is hidden until a row is checked** — the **Start backup** control does not appear in the toolbar until at least one configuration checkbox is selected. Do not search for Start backup before checking a box; take a fresh snapshot after the checkbox click.
-5. Do not click Add / New / **Create** configuration controls unless the user requested a new config.
-6. Do not click **Delete** unless the user explicitly asks to remove a backup configuration.
+## Preferred: API workflow
 
-## Workflow (browser)
+Auth: **HTTP Basic** with `CMW_LOGIN` and `CMW_PASSWORD`. Base URL: `{CMW_BASE_URL}` (normalize: strip trailing slash before appending paths).
+
+```text
+Verify CMW_BASE_URL → GET configurations → pick existing configurationId → POST create session → (optional) poll session until terminal status
+```
+
+### 1. Instance and credentials
+
+1. Confirm [cmw-platform-instance-switch](../cmw-platform-instance-switch/SKILL.md) — correct `CMW_BASE_URL` for the target (e.g. FR during migration).
+2. Load `.env`; never echo passwords in logs or progress JSON.
+
+### 2. List configurations
+
+- **GET** `{CMW_BASE_URL}/webapi/Backup/Configuration`
+- **OperationId:** `Backup_ListConfigurations`
+- Response: `WebApiResponse` with a list of `BackupConfigurationModel` — each item has `id`, `description`, `fileName`, flags (`withStreams`, `withScripts`, …).
+
+Pick an **existing** row (commonly the default **Backup по умолчанию**). Record `configurationId` = model `id`.
+
+### 3. Create backup session
+
+- **POST** `{CMW_BASE_URL}/webapi/Backup/Session/{configurationId}`
+- **OperationId:** `Backup_CreateSession`
+- Path parameter `configurationId` = id from step 2 (not the display name).
+- Response: `BackupSessionModel` with `id` (session id), `sessionStatus`, timestamps.
+
+### 4. Optional: poll until complete
+
+- **GET** `{CMW_BASE_URL}/webapi/Backup/Session/{sessionId}`
+- **OperationId:** `Backup_GetSession`
+- Poll until `sessionStatus` is terminal: `Completed`, `Failed`, `Aborted`, or other failure enum (see OpenAPI `BackupSessionModel.sessionStatus`).
+- For history/audit: **POST** `{CMW_BASE_URL}/webapi/Backup/Session` — `Backup_ListSessions` with filter body per `BackupFilterModel`.
+
+### Example (curl — placeholders only)
+
+```bash
+export CMW_BASE_URL="https://example-fr.test/"
+export CMW_LOGIN="admin@example.test"
+export CMW_PASSWORD="your-secret-from-env"
+
+# List configurations
+curl -sS -u "${CMW_LOGIN}:${CMW_PASSWORD}" \
+  "${CMW_BASE_URL%/}/webapi/Backup/Configuration"
+
+# Create session (replace CONFIGURATION_ID from list response)
+curl -sS -u "${CMW_LOGIN}:${CMW_PASSWORD}" -X POST \
+  "${CMW_BASE_URL%/}/webapi/Backup/Session/CONFIGURATION_ID"
+
+# Poll session (replace SESSION_ID from create response)
+curl -sS -u "${CMW_LOGIN}:${CMW_PASSWORD}" \
+  "${CMW_BASE_URL%/}/webapi/Backup/Session/SESSION_ID"
+```
+
+### Example (Python — env vars, no secrets in code)
+
+```python
+import os
+import time
+import requests
+from requests.auth import HTTPBasicAuth
+
+base = os.environ["CMW_BASE_URL"].rstrip("/")
+auth = HTTPBasicAuth(os.environ["CMW_LOGIN"], os.environ["CMW_PASSWORD"])
+
+configs = requests.get(f"{base}/webapi/Backup/Configuration", auth=auth, timeout=60)
+configs.raise_for_status()
+body = configs.json()
+items = body.get("result") or body.get("data") or body  # unwrap WebApiResponse if needed
+configuration_id = items[0]["id"]  # prefer known default by description/fileName in real runs
+
+session = requests.post(
+    f"{base}/webapi/Backup/Session/{configuration_id}",
+    auth=auth,
+    timeout=60,
+)
+session.raise_for_status()
+session_id = session.json().get("result", session.json()).get("id")
+
+terminal = {"Completed", "Failed", "Aborted"}
+for _ in range(120):
+    st = requests.get(f"{base}/webapi/Backup/Session/{session_id}", auth=auth, timeout=60)
+    st.raise_for_status()
+    status = st.json().get("result", st.json()).get("sessionStatus")
+    if status in terminal:
+        break
+    time.sleep(5)
+```
+
+Adapt response unwrapping to the instance’s `WebApiResponse` shape (`result` vs nested `data`).
+
+### API verify / logging
+
+- Success: `sessionStatus` → `Completed` (or job accepted if you stop after POST when project plan only requires launch).
+- Log in migration project JSON (no secrets): `meta.fr_backup_status`, `meta.fr_backup_launched`, optional `meta.fr_backup_configuration_name`, `meta.fr_backup_session_id`.
+
+## Fallback: UI workflow
+
+Use when API returns errors, auth blocks automation, or the user insists on UI verification.
+
+**Deep link:** `{CMW_BASE_URL}#Settings/Backup/Configurations`
+
+Typical page: **Administration** → **Backup** → tab **Configurations**. Grid: checkbox column, **ID**, **Name**, … Rows often include **Backup по умолчанию**.
 
 ```text
 Navigate → Login (if needed) → Configurations tab → Checkbox on existing row → Start backup visible → Start backup → Verify acknowledged
 ```
 
-### 1. Open Configurations
-
-1. Set browser to `{CMW_BASE_URL}#Settings/Backup/Configurations` (or navigate Settings → Backup → **Configurations** tab).
-2. `browser_lock` after navigation if using cursor-ide-browser; take `browser_snapshot` before interacting.
-
-### 2. Select existing configuration (checkbox first)
-
-1. In the configurations list, locate an **existing** backup row (e.g. **Backup по умолчанию** / default backup for that host).
-2. **Check the checkbox** in the first column on that row (not merely highlighting the row or clicking the name).
-3. **Re-snapshot** — confirm the row is selected and the toolbar now shows **Start backup** (play icon). Labels may be localized (e.g. RU UI on an EN host); older docs may say “Run” — treat **Start backup** as the correct control. If it is still missing, the checkbox was not toggled; try the row checkbox again (grid cells may not expose `role=checkbox` in accessibility trees — use coordinates from a fresh screenshot if needed).
-
-### 3. Start backup (only after checkbox)
-
-1. Click **Start backup** in the toolbar. It is **not** available before step 2.
-2. Confirm any benign confirmation dialog if shown (accept only when intent is to start backup).
-
-### 4. Verify
-
-- UI shows the job was accepted: progress indicator, success toast, status change on the row, or entry on the **Log** tab — **confirm Start backup was acknowledged**.
-- If the UI gives no clear signal, note in project progress: `fr_backup_launched: true` with `fr_backup_note` describing what was observed.
-- Record optional `fr_backup_configuration_name` (display name of the **existing** config used, e.g. `Backup по умолчанию`) in project progress JSON — not secrets.
-
-## MCP preference
+1. Open Configurations tab (`browser_lock` / snapshot per MCP rules).
+2. **Check the checkbox** on one **existing** row (not only row highlight).
+3. **Re-snapshot** — toolbar shows **Start backup** (play icon); localized labels may differ; older docs say "Run".
+4. Click **Start backup**; confirm dialog only when starting backup.
+5. Verify: progress, toast, **Log** tab entry, or row status change.
 
 | Tool | When |
 |------|------|
-| **cursor-ide-browser** | Default in Cursor: snapshot → checkbox → re-snapshot (Start backup visible) → Start backup |
-| **agent-browser** | Headless/scripted runs outside IDE |
+| **cursor-ide-browser** | Default in Cursor |
+| **agent-browser** | Headless/scripted outside IDE |
 
-Follow each MCP server's lock/navigate/snapshot rules; re-snapshot after every click.
+Reference layout (maintainers): `assets/c__Users_ased_AppData_Roaming_Cursor_User_workspaceStorage_empty-window_images_image-1b10a211-6af1-4c18-8490-ef4d83eafe46.png` — agents use live snapshots at runtime.
 
 ## Project-repo logging
 
-Instance-specific progress files (e.g. `localization/migration_progress/*.json`) live in the **migration project repo**, not cmw-platform-agent. After backup:
+Progress files (e.g. `localization/migration_progress/*.json`) live in the **migration project repo**, not cmw-platform-agent. After backup:
 
-- `meta.fr_backup_status`: `required` or `launched`
-- `meta.fr_backup_launched`: `true` when Start backup succeeded
-- `meta.fr_backup_url`: backup Configurations deep link
-- Optional: `meta.fr_backup_configuration_name` (existing config display name)
-
-## When to run
-
-| Situation | Action |
-|-----------|--------|
-| Multi-change batch (several accounts, roles, records) | **Required** after commit, per project master plan |
-| Single small change | Often `recommended_not_required` — follow project plan |
-| User says "take a backup" / "run configuration backup" | Run this skill |
+| Field | Meaning |
+|-------|---------|
+| `meta.fr_backup_status` | `required`, `launched`, or `recommended_not_required` |
+| `meta.fr_backup_launched` | `true` when session created / backup acknowledged |
+| `meta.fr_backup_url` | Configurations deep link (UI) or note `api:Backup_CreateSession` |
+| `meta.fr_backup_configuration_name` | Display name of existing config used |
+| `meta.fr_backup_session_id` | Optional API session id |
 
 ## Related skills
 
-- [cmw-platform-account-bootstrap](../cmw-platform-account-bootstrap/SKILL.md) — account create/update; points here after batch account work
+- [cmw-platform-instance-switch](../cmw-platform-instance-switch/SKILL.md) — correct host before backup
+- [cmw-platform-account-bootstrap](../cmw-platform-account-bootstrap/SKILL.md) — account batches; points here after themed account work
 - [cmw-platform](../cmw-platform/SKILL.md) — general platform operations
 
 ## Maintaining this skill
 
-When CMW backup UI changes (control labels, layout), update the checkbox → **Start backup** steps only; keep the **no new configurations** and **no Delete** rules unless product policy changes.
+When OpenAPI or UI changes, update API paths/operationIds from `cmw_open_api/web_api_v1.json` first; adjust UI checkbox → **Start backup** steps only as needed. Keep **no new configurations** and **no Delete** unless product policy changes.
