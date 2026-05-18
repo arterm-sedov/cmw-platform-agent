@@ -32,13 +32,14 @@ Backup URL (typical): `{CMW_BASE_URL}#Settings/Backup/Configurations`
 
 1. **Do NOT create new backup configurations** unless the user **explicitly** asks to add one.
 2. Use **existing** entries in the configurations list only.
-3. **Selection is via checkbox** — check the box next to one existing configuration, then click **Run**.
-4. Do not click Add / New / Create configuration controls unless the user requested a new config.
+3. **Selection is via checkbox** — check the box next to one **existing** configuration row first.
+4. **Run is hidden until a row is checked** — the **Run** control does not appear in the toolbar until at least one configuration checkbox is selected. Do not search for Run before checking a box; take a fresh snapshot after the checkbox click.
+5. Do not click Add / New / **Create** configuration controls unless the user requested a new config.
 
 ## Workflow (browser)
 
 ```text
-Navigate → Login (if needed) → Backup/Configurations → Checkbox on existing row → Run → Verify acknowledged
+Navigate → Login (if needed) → Backup/Configurations → Checkbox on existing row → Run visible → Run → Verify acknowledged
 ```
 
 ### 1. Open Configurations
@@ -46,14 +47,15 @@ Navigate → Login (if needed) → Backup/Configurations → Checkbox on existin
 1. Set browser to `{CMW_BASE_URL}#Settings/Backup/Configurations` (or navigate Settings → Backup → Configurations).
 2. `browser_lock` after navigation if using cursor-ide-browser; take `browser_snapshot` before interacting.
 
-### 2. Select existing configuration
+### 2. Select existing configuration (checkbox first)
 
-1. In the configurations list, locate an **existing** backup row (project docs may name a preferred config; otherwise pick the standard/manual configuration already on the instance).
-2. **Check the checkbox** on that row (not merely highlighting the row).
+1. In the configurations list, locate an **existing** backup row (project docs may name a preferred config; otherwise pick the standard/default configuration already on the instance, e.g. default/manual backup for that host).
+2. **Check the checkbox** in the first column on that row (not merely highlighting the row or clicking the name).
+3. **Re-snapshot** — confirm the row is selected and the toolbar now shows **Run** (English UI). If **Run** is still missing, the checkbox was not toggled; try the row checkbox again (grid cells may not expose `role=checkbox` in accessibility trees — use coordinates from a fresh screenshot if needed).
 
-### 3. Run
+### 3. Run (only after checkbox)
 
-1. Click **Run** (toolbar or row action — label may be localized; English UI: **Run**).
+1. Click **Run** in the toolbar (label may be localized; English UI: **Run**). It is **not** available before step 2.
 2. Confirm any benign confirmation dialog if shown (accept only when intent is to start backup).
 
 ### 4. Verify
@@ -66,7 +68,7 @@ Navigate → Login (if needed) → Backup/Configurations → Checkbox on existin
 
 | Tool | When |
 |------|------|
-| **cursor-ide-browser** | Default in Cursor: snapshot → checkbox ref → Run ref |
+| **cursor-ide-browser** | Default in Cursor: snapshot → checkbox → re-snapshot (Run visible) → Run |
 | **agent-browser** | Headless/scripted runs outside IDE |
 
 Follow each MCP server's lock/navigate/snapshot rules; re-snapshot after every click.

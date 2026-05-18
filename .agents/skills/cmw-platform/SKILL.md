@@ -399,9 +399,9 @@ Before cross-host work or comparing reference vs target (e.g. TR vs FR), switch 
 
 ### Configuration backup (post-change)
 
-After multi-entity or security batches on a target instance, launch an **existing** configuration backup from the UI. **Do not create new backup configurations** unless the user explicitly asks.
+After multi-entity or security batches on a target instance, launch an **existing** configuration backup from the UI (browser only; no public start API).
 
-→ [cmw-platform-backup-launch/SKILL.md](../cmw-platform-backup-launch/SKILL.md) — checkbox on existing row at `#Settings/Backup/Configurations`, then **Run**.
+→ [cmw-platform-backup-launch/SKILL.md](../cmw-platform-backup-launch/SKILL.md) — full workflow: existing row **checkbox** first (**Run** appears only after selection), then **Run**; do not create new backup configurations unless the user asks.
 
 ### Employee record ↔ platform account (Attach account)
 
@@ -426,7 +426,7 @@ After `AccountService` creates a login, link it to a **Staff** employee row via 
 | [references/employee_account_attach.md](references/employee_account_attach.md) | Staff employee row ↔ platform account (Attach account UI / Include API) |
 | [../cmw-platform-instance-switch/SKILL.md](../cmw-platform-instance-switch/SKILL.md) | Switch host/tenant (`CMW_BASE_URL`, dotenv, verify, read-only compare) |
 | [../cmw-platform-account-bootstrap/SKILL.md](../cmw-platform-account-bootstrap/SKILL.md) | Account create/update (Create or Edit → password → group) |
-| [../cmw-platform-backup-launch/SKILL.md](../cmw-platform-backup-launch/SKILL.md) | Launch existing configuration backup (UI checkbox → Run) |
+| [../cmw-platform-backup-launch/SKILL.md](../cmw-platform-backup-launch/SKILL.md) | Launch existing configuration backup (UI; Run after checkbox) |
 | [references/import_export.md](references/import_export.md) | Full import/export application reference |
 | [references/ui_components.md](references/ui_components.md) | Full UI components reference: toolbars, buttons, datasets, forms |
 | [references/errors.md](references/errors.md) | Error handling playbook |
