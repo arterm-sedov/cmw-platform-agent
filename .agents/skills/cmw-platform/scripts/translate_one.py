@@ -73,6 +73,8 @@ def main(app: str, output_dir: str, alias: str | None = None, resume: bool = Fal
     with open(tr_file, encoding="utf-8") as f:
         tr_data = json.load(f)
 
+    dangerous_aliases = {obj.get("aliasOriginal") for obj in tr_data if obj.get("expressions")}
+
     resume_state = load_resume_state(output_dir, app)
     start_index = 0
 
@@ -108,7 +110,8 @@ def main(app: str, output_dir: str, alias: str | None = None, resume: bool = Fal
     display_name_new = obj.get("displayNameRenamed", "")
 
     if not alias_new:
-        suffix = dangerous_suffix if obj.get("expressions") else safe_suffix
+        is_dangerous = bool(obj.get("expressions")) or obj.get("aliasOriginal") in dangerous_aliases
+        suffix = dangerous_suffix if is_dangerous else safe_suffix
         new_alias = alias_orig + suffix
         print(f"  Suggested: {new_alias}")
         print("  Enter new aliasRenamed (or press Enter to accept suggested): ")
@@ -120,7 +123,7 @@ def main(app: str, output_dir: str, alias: str | None = None, resume: bool = Fal
             raw_alias = alias_orig
 
         # Auto-add _calc suffix if object has non-empty expressions
-        if obj.get("expressions"):
+        if is_dangerous:
             obj["aliasRenamed"] = raw_alias + dangerous_suffix
         else:
             obj["aliasRenamed"] = raw_alias
