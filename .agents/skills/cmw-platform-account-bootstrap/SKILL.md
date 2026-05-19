@@ -39,7 +39,7 @@ Switching reference vs target host → [cmw-platform-instance-switch](../cmw-pla
 | `CMW_BASE_URL` | Target instance root, e.g. `https://{your-host}/` |
 | `CMW_LOGIN` / `CMW_PASSWORD` | Basic auth for API calls |
 | `CMW_USE_DOTENV` | `true` for scripted runs |
-| `CMW_EMAIL_DOMAIN` | Optional; Mbox domain for batch Mbox script (default `facility-demo.example`) |
+| `CMW_EMAIL_DOMAIN` | Optional; script-only Mbox domain for [account_update_mbox_batch.py](../cmw-platform/scripts/account_update_mbox_batch.py) (default `facility-demo.example`; not required for Gradio agent — see [scripts_index.md](../cmw-platform/references/scripts_index.md)) |
 | `UAT_ACCOUNT_PASSWORD_PREFIX` | Optional; composed password below |
 
 **Password (test env):** `final_password = {UAT_ACCOUNT_PASSWORD_PREFIX}{CMW_PASSWORD}` — record only `password_set: true` in project progress files; never log prefix, base password, or composed value.

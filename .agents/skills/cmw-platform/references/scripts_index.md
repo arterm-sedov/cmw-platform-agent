@@ -2,6 +2,14 @@
 
 Agnostic scripts under [`.agents/skills/cmw-platform/scripts/`](../scripts/). Load credentials from `cmw-platform-agent/.env` (`CMW_BASE_URL`, `CMW_LOGIN`, `CMW_PASSWORD`). Use `--base-url` to override the host. **Do not commit** harvest outputs or progress JSON with PII — write them in the **project repo** (e.g. my-building `localization/migration_progress/`).
 
+## Script-only environment variables
+
+Not listed in the root agent `.env.example` (Gradio app does not use them). Set in the shell, a local `.env` for scripted runs (`CMW_USE_DOTENV=true`), or via CLI flags where supported.
+
+| Variable | Scripts | Default | Purpose |
+|----------|---------|---------|---------|
+| `CMW_EMAIL_DOMAIN` | [account_update_mbox_batch.py](../scripts/account_update_mbox_batch.py) | `facility-demo.example` | Synthetic Mbox domain: `{username}@{CMW_EMAIL_DOMAIN}` |
+
 | Script | Purpose | Env vars | Example |
 |--------|---------|----------|---------|
 | [backup_configuration_session.py](../scripts/backup_configuration_session.py) | List backup configs, POST session, optional poll | `CMW_BASE_URL`, `CMW_LOGIN`, `CMW_PASSWORD` | `python .agents/skills/cmw-platform/scripts/backup_configuration_session.py --poll` |
