@@ -103,9 +103,31 @@ def resolve_parent_template(obj: dict) -> str:
     return parent_template
 
 
-def match_expressions_to_entry(entry_paths: list, dangerous_expressions: list) -> list:
+import re
+
+PATTERNS = [
+    r"\$" + r"{alias}\b",  # $alias - variable reference
+    r"->" + r"{alias}\b",  # ->alias - method call
+    r"{alias}" + r"->",    # alias-> - object as target
+    r'"' + r"{alias}" + r'"',  # "alias" - string literal
+]
+
+
+def alias_used_in_expression(alias: str, expression: str) -> bool:
+    """Check if alias is actually used in the expression via precise patterns."""
+    if not expression:
+        return False
+    for pattern_template in PATTERNS:
+        pattern = pattern_template.format(alias=re.escape(alias))
+        if re.search(pattern, expression):
+            return True
+    return False
+
+
+def match_expressions_to_entry(entry_paths: list, dangerous_expressions: list, alias: str = None) -> list:
     """Match expressions to an entry based on jsonPathOriginal.
     Matches by template name - expressions belonging to the same template as the entry.
+    Optionally filters by alias if provided - only includes expressions where alias is actually used.
     """
     matched = []
     for entry_path in entry_paths:
@@ -116,6 +138,8 @@ def match_expressions_to_entry(entry_paths: list, dangerous_expressions: list) -
             expr_path = expr.get("jsonPathOriginal", "")
             expr_template = extract_template_from_path(expr_path)
             if expr_template == template_name:
+                if alias and not alias_used_in_expression(alias, expr.get("expressionOriginal", "")):
+                    continue
                 matched.append(expr)
     return matched
 
@@ -269,7 +293,7 @@ def main():
             json_path = []
 
         # Get expressions for this alias
-        expressions = match_expressions_to_entry(json_path, dangerous_expressions)
+        expressions = match_expressions_to_entry(json_path, dangerous_expressions, alias)
 
         # Check if dangerous
         is_dangerous = alias in dangerous
@@ -314,7 +338,7 @@ def main():
             json_path = []
 
         # Get expressions for this alias
-        expressions = match_expressions_to_entry(json_path, dangerous_expressions)
+        expressions = match_expressions_to_entry(json_path, dangerous_expressions, alias)
 
         is_dangerous = alias in dangerous
 
