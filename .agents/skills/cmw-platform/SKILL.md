@@ -429,6 +429,7 @@ After `AccountService` creates a login, link it to a **Staff** employee row via 
 |------|----------|
 | Multi-step API workflow (own trigger) | `.agents/skills/cmw-platform-<topic>/SKILL.md` |
 | Detail, OpenAPI shapes, UI steps for one entity | `.agents/skills/cmw-platform/references/<topic>.md` |
+| Repeatable CLI (backup, accounts, harvest/seed) | `.agents/skills/cmw-platform/scripts/` — index [references/scripts_index.md](references/scripts_index.md) |
 | Browser-only entity recipe | Extend [references/browser_automation.md](references/browser_automation.md) or the relevant reference (e.g. [employee_account_attach.md](references/employee_account_attach.md)) |
 
 Do **not** scatter one-off notes in `docs/_scratch/` or commit empty stub skills. Prefer enriching an existing reference over duplicating a thin skill.

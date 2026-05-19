@@ -36,6 +36,10 @@ Optional: cmw-platform-backup-launch between themed batches
 
 `GET /webapi/Backup/Configuration` returns `{ "response": [ BackupConfigurationModel, ... ], "success": true }` — not always `result`. Then `POST /webapi/Backup/Session/{configurationId}`.
 
+## CLI scripts (agnostic)
+
+Use [scripts_index.md](scripts_index.md) — `harvest_template_records.py` (read-only), `seed_records_from_harvest.py` (apply `operations` / `map`), `backup_configuration_session.py` between themed batches. Pass `--base-url` or set `CMW_BASE_URL`; store JSON under the **project repo**, not cmw-platform-agent.
+
 ## Related
 
 - [process_record_demo_fill.md](process_record_demo_fill.md) — process-owned form rows

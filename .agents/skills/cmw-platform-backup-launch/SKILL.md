@@ -146,6 +146,8 @@ for _ in range(120):
 
 Adapt response unwrapping to the instance’s `WebApiResponse` shape (`result` vs nested `data`).
 
+**Maintained CLI:** [backup_configuration_session.py](../cmw-platform/scripts/backup_configuration_session.py) — list configs, create session, `--poll`. Index: [scripts_index.md](../cmw-platform/references/scripts_index.md).
+
 ### API verify / logging
 
 - Success: `sessionStatus` → `Completed` (or job accepted if you stop after POST when project plan only requires launch).
