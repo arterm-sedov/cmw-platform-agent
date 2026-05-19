@@ -57,7 +57,8 @@ Always follow: `Intent → Plan → Validate → Execute → Result`
 2. **Agent tools** — `tools/` (`create_edit_record`, `list_template_records`, `requests_` helpers) before raw HTTP or UI.
 3. **Browser** — only for UI-only actions, visual proof, or when API paths fail after spec review (e.g. Staff **Attach account** on mz-fr when `IncludeInContainer` returns 500).
 
-→ Staff login link: [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md)
+→ Staff login link: [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md)  
+→ Process instance demo fill: [cmw-platform-process-record-fill](../cmw-platform-process-record-fill/SKILL.md)
 
 ### Tool Usage Discipline
 
@@ -458,6 +459,7 @@ Do **not** scatter one-off notes in `docs/_scratch/` or commit empty stub skills
 | Host / tenant switch | [cmw-platform-instance-switch](../cmw-platform-instance-switch/SKILL.md) |
 | Account create, password, groups | [cmw-platform-account-bootstrap](../cmw-platform-account-bootstrap/SKILL.md) |
 | Employee row ↔ login (Include) | [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md) + [references/employee_account_attach.md](references/employee_account_attach.md) |
+| Running process / work order row fill | [cmw-platform-process-record-fill](../cmw-platform-process-record-fill/SKILL.md) + [references/process_record_demo_fill.md](references/process_record_demo_fill.md) |
 
 ### Browser recipes (entity-specific)
 
