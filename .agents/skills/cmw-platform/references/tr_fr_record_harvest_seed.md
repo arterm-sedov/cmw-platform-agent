@@ -2,14 +2,26 @@
 
 Generic pattern for Volga-style demo data migration: read subset on TR, create or edit on FR, store id map in the **project repo** (not cmw-platform-agent).
 
+## JSON source of truth (required)
+
+| Rule | Detail |
+|------|--------|
+| **Durable state** | [**my-building**](file:///D:/Repo/my-building) `localization/migration_progress/YYYYMMDD_phaseN_{template}.json` — not agent chat memory |
+| **Before done** | Update batch JSON: `meta.status`, `meta.template`, root `map[]`, `meta.errors`, `meta.backup_pending`, `meta.retry_count`, `meta.agent_wave`, `started_at` / `updated_at` |
+| **Resume** | Read existing `map[]`; skip creates when `fr_record_id` already present (idempotent) |
+| **Failure** | `meta.status`: `partial` or `failed`; retry agents use JSON only |
+| **Scratch** | `harvest_template_records.py` output under project `docs/_scratch/` — link via `meta.harvest_path`; promote into `migration_progress/` before closing batch |
+
+Schema: [my-building `migration_progress/README.md`](file:///D:/Repo/my-building/localization/migration_progress/README.md).
+
 ## Workflow
 
 ```text
 CMW_BASE_URL = TR → list_template_records (harvest count + field keys, no PII in git)
 Transform → US FM EN display values (whole phrase; serious-only)
 CMW_BASE_URL = FR → create_edit_record (create missing rows OR edit pre-existing)
-Write localization/migration_progress/YYYYMMDD_phaseN_{template}.json
-Optional: cmw-platform-backup-launch between themed batches
+Write/update localization/migration_progress/YYYYMMDD_phaseN_{template}.json (meta.status, map[], errors) BEFORE claiming done
+Optional: cmw-platform-backup-launch between themed batches; set meta.backup_pending until coordinator clears
 ```
 
 ## Tools
