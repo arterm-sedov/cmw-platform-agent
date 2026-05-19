@@ -53,10 +53,12 @@ type_map = {
 }
 
 
-def get_domain() -> str:
+def get_domain(domain: str | None = None) -> str:
     """Extract domain from config URL or environment."""
-    import os
+    if domain:
+        return domain
 
+    import os
     domain = os.environ.get("CMW_DOMAIN", "")
     if domain:
         return domain
@@ -96,9 +98,10 @@ def main(
     resume: bool = True,
     force: bool = False,
     mode: str = "safe",
+    domain: str | None = None,
 ):
     output_path = Path(output_dir)
-    domain = get_domain()
+    domain = get_domain(domain)
 
     tr_file = output_path / f"{domain}_{app}_tr.json"
     if not tr_file.exists():
@@ -266,7 +269,12 @@ if __name__ == "__main__":
         default="safe",
         help="Filter aliases by expressions: 'all' - all, 'safe' - no expressions, 'danger' - has expressions (default: safe)",
     )
+    parser.add_argument(
+        "--domain",
+        default=None,
+        help="Domain (e.g., mz-fr.test.cbap.ru)",
+    )
     args = parser.parse_args()
 
     output_dir = args.output_dir or f"/tmp/cmw-transfer/{args.app}_tr"
-    main(args.app, output_dir, args.reverse, args.resume, args.force, args.mode)
+    main(args.app, output_dir, args.reverse, args.resume, args.force, args.mode, args.domain)
