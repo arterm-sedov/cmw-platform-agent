@@ -424,6 +424,8 @@ After `AccountService` creates a login, link it to a **Staff** employee row via 
 
 **Policy:** When you solve a repeatable platform workflow (API or UI), capture it for the next agent — do not leave the recipe only in chat or scratch scripts.
 
+- **Parent agents** delegate long-running execution to **background subagents**; the parent coordinates and merges results. **Instance migration progress** (themed batch JSON, TR→FR id maps, operator checklists) lives in [**my-building**](file:///D:/Repo/my-building) only — not in cmw-platform-agent `docs/_scratch/`.
+
 ### Where to save
 
 | Kind | Location |
