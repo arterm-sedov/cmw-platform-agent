@@ -149,6 +149,8 @@ Before considering work complete:
 | **Platform-generic** | **cmw-platform-agent** (this repo) | API patterns, OpenAPI shapes, `.agents/skills/cmw-platform*`, reusable browser/API workflows in `docs/` |
 
 Do **not** copy long-form instance audits into this repo; add a short generic lesson in a skill reference when it helps any tenant, and link to my-building for the full report.
+
+**No instance scratch in this repo:** Do **not** use `docs/_scratch/` for Volga mz-tr/mz-fr migration (harvest JSON, phase scripts, batch runners). That path is reserved empty here (see `docs/_scratch/README.md`). Instance artifacts live in [**my-building**](file:///D:/Repo/my-building) `docs/_scratch/`; progress JSON in `localization/migration_progress/`.
 - Generate `YYYYMMDD` timestamps with native commands:
   - PowerShell: `Get-Date -Format "yyyyMMdd"`
   - Bash/WSL: `date +%Y%m%d`

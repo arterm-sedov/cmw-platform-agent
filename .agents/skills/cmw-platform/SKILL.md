@@ -436,7 +436,7 @@ After `AccountService` creates a login, link it to a **Staff** employee row via 
 | Repeatable CLI (backup, accounts, harvest/seed) | `.agents/skills/cmw-platform/scripts/` — index [references/scripts_index.md](references/scripts_index.md) |
 | Browser-only entity recipe | Extend [references/browser_automation.md](references/browser_automation.md) or the relevant reference (e.g. [employee_account_attach.md](references/employee_account_attach.md)) |
 
-Do **not** scatter one-off notes in `docs/_scratch/` or commit empty stub skills. Prefer enriching an existing reference over duplicating a thin skill.
+Do **not** use **cmw-platform-agent** `docs/_scratch/` for instance migration (Volga TR→FR harvest JSON, phase `phase*_*.py`, batch results). That folder stays empty; instance scratch is [**my-building**](file:///D:/Repo/my-building) `docs/_scratch/` only. Do **not** scatter one-off notes in platform `docs/_scratch/` or commit empty stub skills. Prefer enriching an existing reference over duplicating a thin skill.
 
 ### Where to document findings
 

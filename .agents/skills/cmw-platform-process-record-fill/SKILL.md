@@ -103,7 +103,7 @@ Usually **no API action** on `dwc.*` — populate underlying `Sobytiya` rows so 
 | Resource | Location |
 |----------|----------|
 | Slim API cheat sheet | [references/process_record_demo_fill.md](../cmw-platform/references/process_record_demo_fill.md) |
-| One-off batch example (scratch) | `docs/_scratch/phase1_process_demo_fill.py` (not production; pattern reference) |
+| One-off batch example (scratch) | [**my-building**](file:///D:/Repo/my-building) `docs/_scratch/phase1_process_demo_fill.py` (not production; pattern reference) |
 | Harvest / seed index | [references/scripts_index.md](../cmw-platform/references/scripts_index.md) |
 
 ## Cross-links

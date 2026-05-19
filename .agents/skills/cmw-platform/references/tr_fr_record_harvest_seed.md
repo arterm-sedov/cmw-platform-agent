@@ -10,7 +10,7 @@ Generic pattern for Volga-style demo data migration: read subset on TR, create o
 | **Before done** | Update batch JSON: `meta.status`, `meta.template`, root `map[]`, `meta.errors`, `meta.backup_pending`, `meta.retry_count`, `meta.agent_wave`, `started_at` / `updated_at` |
 | **Resume** | Read existing `map[]`; skip creates when `fr_record_id` already present (idempotent) |
 | **Failure** | `meta.status`: `partial` or `failed`; retry agents use JSON only |
-| **Scratch** | `harvest_template_records.py` output under project `docs/_scratch/` — link via `meta.harvest_path`; promote into `migration_progress/` before closing batch |
+| **Scratch** | `harvest_template_records.py` output under **my-building** `docs/_scratch/` (not cmw-platform-agent) — link via `meta.harvest_path`; promote into `migration_progress/` before closing batch |
 
 Schema: [my-building `migration_progress/README.md`](file:///D:/Repo/my-building/localization/migration_progress/README.md).
 
