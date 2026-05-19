@@ -210,6 +210,14 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 - Reanalyze changes twice for introduced issues.
 - Compact/summarize working context proactively during long sessions.
 
+### TR→FR migration coordination (parent agents)
+
+When driving Volga mz-tr→mz-fr demo fill as **parent coordinator**:
+
+- Delegate to **up to 6 parallel background subagents** (one independent template per agent); do **not** repeat harvest/seed in parent chat.
+- **Instance progress** (batch JSON, roadmap, id maps) lives in [**my-building**](file:///D:/Repo/my-building) only — reconcile [`docs/20260519_migration_status_and_roadmap.md`](file:///D:/Repo/my-building/docs/20260519_migration_status_and_roadmap.md) after each wave; see [Autonomous migration execution](file:///D:/Repo/my-building/localization/AGENTS.md#autonomous-migration-execution).
+- **Long platform CLI** — prefer **background shell** for `.agents/skills/cmw-platform/scripts/harvest_template_records.py`, `seed_records_from_harvest.py`, `backup_configuration_session.py --poll`, and multi-record migrate scripts; poll progress JSON or terminal output (see [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills)).
+
 ### CMW Platform Terminology
 
 **Critical:** Never expose legacy API terms to LLMs. Use human-readable terms:

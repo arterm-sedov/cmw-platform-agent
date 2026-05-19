@@ -468,6 +468,21 @@ When templates or entity groups have **no cross-record dependencies**, the paren
 
 **Prefer subagent hives over foreground duplication** — delegate independent template work to background subagents rather than repeating harvest/seed/API steps in the parent chat.
 
+**Autonomous migration waves (instance work):** Parent runs **up to 6 parallel background subagents** per wave, then reconciles roadmap, **one** FR backup, and commits **my-building** only. Full loop: [my-building `localization/AGENTS.md` — Autonomous migration execution](file:///D:/Repo/my-building/localization/AGENTS.md#autonomous-migration-execution) · [operator spec](file:///D:/Repo/my-building/docs/20260519_autonomous_migration_runner.md).
+
+### Background shell (long platform scripts)
+
+For better async, run long CLI in **background** (Shell `run_in_background` or adequate `block_until_ms`), then poll outputs — do not block the parent chat on harvest/seed/backup.
+
+| Script (under `.agents/skills/cmw-platform/scripts/`) | Typical use |
+|--------------------------------------------------------|-------------|
+| `harvest_template_records.py` | TR read-only template harvest |
+| `seed_records_from_harvest.py` | FR create/update from harvest JSON |
+| `backup_configuration_session.py` | FR config backup (`--poll` until complete) |
+| Multi-record migrate helpers | Themed batch API writes |
+
+**Within a subagent:** parallel subagents for independent templates; **inside** one agent, long scripts → background terminal + poll `migration_progress/*.json` or script stdout until done.
+
 ### API skill examples (companion skills)
 
 | Topic | Skill / reference |
