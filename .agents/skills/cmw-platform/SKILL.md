@@ -484,6 +484,8 @@ For better async, run long CLI in **background** (Shell `run_in_background` or a
 
 **Within a subagent:** parallel subagents for independent templates; **inside** one agent, long scripts → background terminal + poll `migration_progress/*.json` or script stdout until done.
 
+**High-concurrency note:** when several agents run in parallel, avoid importing the full `tools` package for tiny one-off maintenance jobs if a lightweight Web API script is enough. Full tool imports may compete on `cmw-agent.log` rollover in busy waves. Prefer direct `requests` + dotenv + explicit `--base-url` for simple harvest/seed/backup helpers, write durable JSON progress, and rotate or ignore local log files rather than blocking the wave.
+
 ### API skill examples (companion skills)
 
 | Topic | Skill / reference |
