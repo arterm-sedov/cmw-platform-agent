@@ -451,6 +451,21 @@ Do **not** scatter one-off notes in `docs/_scratch/` or commit empty stub skills
 3. **Existing skills/references** — search `.agents/skills/cmw-platform*` before inventing HTTP.
 4. **Browser last** — only when API/tools cannot do the job (see § Browser Automation vs API).
 
+### Parallel subagents (independent templates)
+
+When templates or entity groups have **no cross-record dependencies**, the parent coordinator may run **parallel background subagents** (one template per agent) for speed. Instance migration waves: [my-building `localization/AGENTS.md`](file:///D:/Repo/my-building/localization/AGENTS.md#parallel-subagents-independent-templates).
+
+**Avoid parallel** on:
+
+- **Same template writes** — concurrent PUT/POST on the same dataset or records risks races and partial state.
+- **Backup POST** — configuration backup launch ([cmw-platform-backup-launch](../cmw-platform-backup-launch/SKILL.md)); serialize with other instance-wide mutations.
+- **AccountService bulk on the same accounts** — create, edit, password, group membership on overlapping login ids.
+- **Single process instance** — one running work order / Sobytiya row (workflow state, transitions, form fill).
+
+**Backup:** **One backup per milestone** after the parallel wave completes, not one per subagent. Coordinator or last finishing agent sets `backup_pending: true` in instance `migration_progress/` JSON; one agent runs backup before the next milestone.
+
+**Prefer subagent hives over foreground duplication** — delegate independent template work to background subagents rather than repeating harvest/seed/API steps in the parent chat.
+
 ### API skill examples (companion skills)
 
 | Topic | Skill / reference |
