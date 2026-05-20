@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import json
+import re
 import sys
 import time
 from collections import Counter
@@ -19,6 +20,100 @@ from pathlib import Path
 
 APP_DIR = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(APP_DIR))
+
+SKIP_TYPES = {
+    "ClientActivity",
+    "Image",
+    "ReferenceToConnection",
+}
+
+SKIP_ATTRIBUTES = {
+    "AccountTemplate": {"active", "departament", "fullName", "language", "lastLoginDate",
+                         "manager", "mbox", "office", "phone", "skype", "timeZone", "title", "username"},
+    "OrgStructureTemplate": {"alias", "unitName", "subordinateUnit", "superiorUnit",
+                            "unitDescription", "unitType"},
+    "RoleTemplate": {"alias", "roleDescription", "roleIsActive", "roleName",
+                     "subordinateRole", "superiorRole"},
+    "ModelTemplate": {"description", "name", "order", "parentProcessModelNone",
+                      "parentSubprocessEmbedded"},
+    "default": {"_color", "_conversation", "_creationDate", "_creator", "_isDisabled",
+                "_lastWriteDate", "_processes", "id"},
+}
+
+UUID_32_PATTERN = "^[0-9a-f]{32}$"
+FORM_INT_PATTERN = r"^form\d+$"
+TOOLBAR_UUID_PATTERN = r"^toolbar[0-9a-f]{32}$"
+
+SKIP_TYPE_PREFIXES = {
+    "Component_": ["DesktopComponent"],
+    "WidgetConfig_": ["DesktopComponent", "DesktopWidgetConfig"],
+    "form_": ["ProcessForm"],
+    "form_userTask": ["ProcessForm"],
+    "Page_": ["SimplePage"],
+    "VerticalLayout": ["DesktopComponent"],
+    "HorizontalLayout": ["DesktopComponent"],
+    "myTaskList": ["DesktopComponent"],
+    "myTasksList": ["DesktopComponent"],
+    "_ReassignTask": ["MessageTemplate"],
+    "OrgStructureTemplate": ["OrgStructureTemplate"],
+    "_Account": ["RecordTemplate"],
+    "RoleTemplate": ["RoleTemplate"],
+    "systemPage_": ["SimplePage"],
+    "workspace": ["RoleWorkspace"],
+    "defaultList": ["Dataset"],
+    "list": ["Dataset"],
+    "unitForm": ["Form"],
+    "roleForm": ["Form"],
+    "accountForm": ["Form"],
+    "defaultForm": ["Form"],
+    "defaultFormToolbar": ["Toolbar"],
+    "defaultListToolbar": ["Toolbar"],
+    "defaultModelToolbar": ["Toolbar"],
+    "defaultTaskToolbar": ["Toolbar"],
+    "defaultProcessToolbar": ["Toolbar"],
+    "defaultDiagramToolbar": ["Toolbar"],
+    "ToolbarComponent": ["Toolbar"],
+    "newToolbar": ["Toolbar"],
+    "Token": ["Trigger"],
+}
+
+
+def should_skip_alias(alias: str, obj_type: str, displayName: str = "", parent_type: str = None) -> bool | str:
+    """Check if alias should be skipped based on filtering rules."""
+    has_display_name = bool(displayName)
+
+    # SKIP_ATTRIBUTES - locked если есть displayName, иначе skip
+    if obj_type == "Attribute":
+        global_skip = SKIP_ATTRIBUTES["default"]
+        parent_skip = SKIP_ATTRIBUTES.get(parent_type, set()) if parent_type else set()
+        if alias in global_skip or alias in parent_skip:
+            return "locked" if has_display_name else True
+
+    # SKIP_TYPES - always skip
+    if obj_type in SKIP_TYPES:
+        return True
+
+    # FormComponent UUID - apply "locked" rule if has displayName
+    if obj_type == "FormComponent":
+        if re.match(UUID_32_PATTERN, alias, re.I):
+            return "locked" if has_display_name else True
+
+    # Toolbar UUID - apply "locked" rule if has displayName
+    if obj_type == "Toolbar":
+        if re.match(TOOLBAR_UUID_PATTERN, alias, re.I):
+            return "locked" if has_display_name else True
+
+    # Form with numeric pattern - apply "locked" rule if has displayName
+    if obj_type == "Form":
+        if re.match(FORM_INT_PATTERN, alias, re.I):
+            return "locked" if has_display_name else True
+
+    # SKIP_TYPE_PREFIXES - apply "locked" rule if has displayName
+    for prefix, types in SKIP_TYPE_PREFIXES.items():
+        if obj_type in types and alias.startswith(prefix):
+            return "locked" if has_display_name else True
+
+    return False
 
 
 def verify_folder(folder_name: str, app_name: str, aliases_data: dict, cache: dict, output_dir: Path) -> tuple[list, list]:
@@ -62,7 +157,24 @@ def verify_folder(folder_name: str, app_name: str, aliases_data: dict, cache: di
             obj["ids"] = found_ids
             verified.append(obj)
         else:
-            skipped.append(obj)
+            # Получить displayName для проверки skip rules
+            display_names = obj.get("displayNames", [])
+            display_name = display_names[0].get("displayNameOriginal", "") if display_names else ""
+            parent_type = obj.get("parent_type")
+
+            # Проверить skip rules
+            skip_result = should_skip_alias(alias, obj_type, display_name, parent_type)
+
+            if skip_result == "locked":
+                # Alias попадает под правила блокировки - добавить в verified с aliasLocked=True
+                obj["aliasLocked"] = True
+                verified.append(obj)
+            elif skip_result == True:
+                # Alias должен быть пропущен полностью
+                skipped.append(obj)
+            else:
+                # Не найден в кэше, но не попадает под skip rules - добавить в verified
+                verified.append(obj)
 
     return verified, skipped
 

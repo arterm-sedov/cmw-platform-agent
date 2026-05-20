@@ -7,7 +7,6 @@ Merges all folder verified files into complete output in schema.json format:
 Output fields (schema.json compliant):
   - type (str)
   - ids (array of str)
-  - parent_template (str)
   - aliasOriginal (str)
   - aliasRenamed (str, empty by default)
   - displayNames (array of {displayNameOriginal, displayNameRenamed, jsonPathOriginal, jsonPathRenamed})
@@ -18,11 +17,19 @@ Output fields (schema.json compliant):
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
 APP_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(APP_DIR))
+
+PATTERNS = [
+    r"\$" + r"{alias}\b",  # $alias - variable reference
+    r"->" + r"{alias}\b",  # ->alias - method call
+    r"{alias}" + r"->",    # alias-> - object as target
+    r'"' + r"{alias}" + r'"',  # "alias" - string literal
+]
 
 
 def get_display_names(obj: dict) -> list:
@@ -57,62 +64,6 @@ def has_display_name(obj: dict) -> bool:
     return False
 
 
-def extract_template_from_path(path: str) -> str:
-    """Extract template name from JSON path.
-    Example: 'Volga/RecordTemplates/ProvedenieTO/Attributes/x.json' -> 'ProvedenieTO'
-    """
-    normalized = path.replace("\\", "/")
-    parts = [p for p in normalized.split("/") if p and not p.endswith(".json")]
-    for i, part in enumerate(parts):
-        if part in ("RecordTemplates", "ProcessTemplates", "Workspaces", "Pages",
-                   "Toolbars", "Datasets", "Forms", "Attributes", "UserCommands",
-                   "Cards", "Carts", "Roles", "Triggers", "WidgetConfigs"):
-            if i + 1 < len(parts):
-                return parts[i + 1]
-    return ""
-
-
-def resolve_parent_template(obj: dict) -> str:
-    """Resolve parent_template with special cases.
-    
-    - GlobalAlias, InstanceGlobalAlias: return empty ( Owner is inside these params)
-    - Container: for Template types return empty
-    - Root, Columns, Items: extract from path
-    """
-    parent_template = obj.get("parent_template", "")
-    obj_type = obj.get("type", "")
-
-    special_parents = {"GlobalAlias", "InstanceGlobalAlias"}
-    container_parents = {"Container", "Root", "Columns", "Items"}
-
-    if parent_template in special_parents:
-        return ""
-
-    if parent_template in container_parents:
-        json_path = obj.get("jsonPathOriginal", [])
-        if isinstance(json_path, list) and json_path:
-            json_path = json_path[0]
-        return extract_template_from_path(json_path)
-
-    if not parent_template:
-        json_path = obj.get("jsonPathOriginal", [])
-        if isinstance(json_path, list) and json_path:
-            json_path = json_path[0]
-        return extract_template_from_path(json_path)
-
-    return parent_template
-
-
-import re
-
-PATTERNS = [
-    r"\$" + r"{alias}\b",  # $alias - variable reference
-    r"->" + r"{alias}\b",  # ->alias - method call
-    r"{alias}" + r"->",    # alias-> - object as target
-    r'"' + r"{alias}" + r'"',  # "alias" - string literal
-]
-
-
 def alias_used_in_expression(alias: str, expression: str) -> bool:
     """Check if alias is actually used in the expression via precise patterns."""
     if not expression:
@@ -124,23 +75,38 @@ def alias_used_in_expression(alias: str, expression: str) -> bool:
     return False
 
 
+def extract_template_from_path(path: str) -> str:
+    """Extract template name from JSON path.
+    Example: 'Volga/RecordTemplates/ProvedenieTO/Attributes/x.json' -> 'ProvedenieTO'
+    """
+    if not path:
+        return ""
+    normalized = path.replace("\\", "/")
+    parts = [p for p in normalized.split("/") if p and not p.endswith(".json")]
+    template_folders = {"RecordTemplates", "ProcessTemplates", "Workspaces", "Pages",
+               "Toolbars", "Datasets", "Forms", "Attributes", "UserCommands",
+               "Cards", "Carts", "Roles", "Triggers", "WidgetConfigs", "AccountTemplates"}
+    not_template = {"GlobalAlias", "InstanceGlobalAlias", "RootResource", "Container", "Root", "Columns", "Items"}
+    
+    for i, part in enumerate(parts):
+        if part in template_folders:
+            if i + 1 < len(parts):
+                result = parts[i + 1]
+                if result in not_template:
+                    continue
+                return result
+    return ""
+
+
 def match_expressions_to_entry(entry_paths: list, dangerous_expressions: list, alias: str = None) -> list:
-    """Match expressions to an entry based on jsonPathOriginal.
-    Matches by template name - expressions belonging to the same template as the entry.
-    Optionally filters by alias if provided - only includes expressions where alias is actually used.
+    """Match expressions to an entry based on alias usage.
+    Only includes expressions where alias is actually used ($alias, ->alias, alias->, "alias").
     """
     matched = []
-    for entry_path in entry_paths:
-        template_name = extract_template_from_path(entry_path)
-        if not template_name:
+    for expr in dangerous_expressions:
+        if alias and not alias_used_in_expression(alias, expr.get("expressionOriginal", "")):
             continue
-        for expr in dangerous_expressions:
-            expr_path = expr.get("jsonPathOriginal", "")
-            expr_template = extract_template_from_path(expr_path)
-            if expr_template == template_name:
-                if alias and not alias_used_in_expression(alias, expr.get("expressionOriginal", "")):
-                    continue
-                matched.append(expr)
+        matched.append(expr)
     return matched
 
 
@@ -276,7 +242,6 @@ def main():
     for obj in verified:
         alias = obj.get("alias", obj.get("aliasOriginal", ""))
         display_name = obj.get("displayName", obj.get("displayNameOriginal", ""))
-        parent_template = resolve_parent_template(obj)
 
         # Get ids (handle both "ids" and "id")
         obj_ids = obj.get("ids", obj.get("id", []))
@@ -312,7 +277,6 @@ def main():
         schema_obj = {
             "type": obj.get("type", ""),
             "ids": obj_ids,
-            "parent_template": parent_template,
             "aliasOriginal": alias,
             "aliasRenamed": "",
             "displayNames": get_display_names(obj),
@@ -328,7 +292,6 @@ def main():
     schema_skipped = []
     for obj in skipped:
         alias = obj.get("alias", obj.get("aliasOriginal", ""))
-        parent_template = resolve_parent_template(obj)
 
         # Get jsonPathOriginal
         json_path = obj.get("jsonPathOriginal", obj.get("path", obj.get("json_file", "")))
@@ -349,7 +312,6 @@ def main():
         schema_obj = {
             "type": obj.get("type", ""),
             "ids": [],
-            "parent_template": parent_template,
             "aliasOriginal": alias,
             "aliasRenamed": "",
             "displayNames": get_display_names(obj),

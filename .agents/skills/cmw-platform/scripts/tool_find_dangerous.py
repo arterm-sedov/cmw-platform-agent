@@ -327,11 +327,6 @@ def main():
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
 
-    # Clean up state file on successful completion
-    state_file = output_dir / f"{args.app}_dangerous_state.json"
-    if state_file.exists():
-        state_file.unlink()
-
     print(f"\n=== Dangerous Aliases Found ===")
     print(f"Dangerous aliases: {len(dangerous)}")
     print(f"Expression matches: {output_data['match_count']}")

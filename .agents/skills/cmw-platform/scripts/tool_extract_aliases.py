@@ -18,11 +18,6 @@ from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
 
-APP_DIR = Path(__file__).parent.parent.parent.parent.parent
-sys.path.insert(0, str(APP_DIR))
-
-from tools.applications_tools.tool_get_ontology_objects import get_ontology_objects
-
 SKIP_TYPES = {
     "ClientActivity",
     "Image",
@@ -101,12 +96,12 @@ def should_skip_alias(alias: str, obj_type: str, displayName: str = "", parent_t
 
     has_display_name = bool(displayName)
 
-    # SKIP_ATTRIBUTES - always lock (no displayName check)
+    # SKIP_ATTRIBUTES - locked если есть displayName, иначе skip
     if obj_type == "Attribute":
         global_skip = SKIP_ATTRIBUTES["default"]
         parent_skip = SKIP_ATTRIBUTES.get(parent_type, set()) if parent_type else set()
         if alias in global_skip or alias in parent_skip:
-            return "locked"
+            return "locked" if has_display_name else True
 
     # SKIP_TYPES - always skip
     if obj_type in SKIP_TYPES:
@@ -193,12 +188,6 @@ def scan_json_recursive(obj, path="root", parent_type=None, results=None):
                     "source": "GlobalAlias",
                     "parent_type": parent_type,
                 }
-
-                owner = ga.get("Owner", "")
-                if owner:
-                    result_entry["parent_template"] = owner
-                elif parent_type:
-                    result_entry["parent_template"] = parent_type
 
                 if not skip_result or skip_result == "locked":
                     results.append(result_entry)
@@ -345,9 +334,6 @@ def scan_json_recursive(obj, path="root", parent_type=None, results=None):
                         "source": "InstanceGlobalAlias",
                         "parent_type": parent_type,
                     }
-                    owner = inst.get("Owner", "")
-                    if owner:
-                        result_entry["parent_template"] = owner
                     results.append(result_entry)
 
         if "Root" in obj and isinstance(obj["Root"], dict):
@@ -402,15 +388,6 @@ def process_folder(folder_name: str, extract_dir: Path, app_name: str) -> tuple[
     all_aliases = []
     file_count = 0
 
-    def extract_parent_template(json_path: str) -> str:
-        """Extract parent template name from JSON path.
-        Example: 'Volga/RecordTemplates/Schetchiki/Attributes/Year.json' -> 'Schetchiki'
-        """
-        parts = json_path.split("/")
-        if len(parts) >= 2:
-            return parts[-2] if parts[-1] == "" else parts[1]
-        return ""
-
     def scan_folder(folder: Path):
         nonlocal file_count
         for item in folder.iterdir():
@@ -421,21 +398,19 @@ def process_folder(folder_name: str, extract_dir: Path, app_name: str) -> tuple[
                 try:
                     data = json.loads(item.read_text(encoding="utf-8"))
                     relative_path = str(item.relative_to(extract_dir))
-                    parent_template = extract_parent_template(relative_path)
                     aliases = scan_json_recursive(data, relative_path)
                     for a in aliases:
                         a["json_file"] = relative_path
-                        a["parent_template"] = parent_template
                     all_aliases.extend(aliases)
                 except (json.JSONDecodeError, OSError):
                     pass
 
     scan_folder(folder_path)
 
-    # Deduplicate by (parent_template, type, alias)
+    # Deduplicate by (type, alias)
     deduped = {}
     for a in all_aliases:
-        key = (a.get("parent_template", ""), a.get("type"), a.get("alias"))
+        key = (a.get("type"), a.get("alias"))
         if key not in deduped:
             deduped[key] = {
                 "alias": a.get("alias"),
@@ -449,7 +424,6 @@ def process_folder(folder_name: str, extract_dir: Path, app_name: str) -> tuple[
                 "source": a.get("source"),
                 "parent_type": a.get("parent_type"),
                 "json_file": a.get("json_file", ""),
-                "parent_template": a.get("parent_template", ""),
             }
         else:
             # Merge jsonPathOriginal
@@ -516,7 +490,6 @@ def extract_application_from_root(app: str, extract_dir: Path) -> list:
                 "displayNames": display_names,
                 "aliasLocked": True,
                 "source": "ApplicationRoot",
-                "parent_template": "",
             }]
     except (json.JSONDecodeError, OSError):
         pass
