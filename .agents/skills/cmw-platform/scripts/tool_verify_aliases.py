@@ -28,21 +28,89 @@ SKIP_TYPES = {
 }
 
 SKIP_ATTRIBUTES = {
-    "AccountTemplate": {"active", "departament", "fullName", "language", "lastLoginDate",
+    "AccountTemplate": {"active", "department", "departament", "fullName", "language", "lastLoginDate",
                          "manager", "mbox", "office", "phone", "skype", "timeZone", "title", "username"},
     "OrgStructureTemplate": {"alias", "unitName", "subordinateUnit", "superiorUnit",
                             "unitDescription", "unitType"},
     "RoleTemplate": {"alias", "roleDescription", "roleIsActive", "roleName",
                      "subordinateRole", "superiorRole"},
+    "ProcessTemplate": {"status", "currentLifetimeStatus", "name", "minDueDate", "object",
+                       "hasTokenError", "activeVersion", "currentActivity"},
+    "DesktopWidgetConfig": {"fullName", "title", "name"},
     "ModelTemplate": {"description", "name", "order", "parentProcessModelNone",
                       "parentSubprocessEmbedded"},
     "default": {"_color", "_conversation", "_creationDate", "_creator", "_isDisabled",
-                "_lastWriteDate", "_processes", "id"},
+                "_lastWriteDate", "_processes", "id", "_creator", "_creationDate", "_isDisabled", 
+                "_processes", "_color"},
 }
 
 UUID_32_PATTERN = "^[0-9a-f]{32}$"
 FORM_INT_PATTERN = r"^form\d+$"
 TOOLBAR_UUID_PATTERN = r"^toolbar[0-9a-f]{32}$"
+
+ALIAS_MAPPING = {
+    # AccountTemplate attributes (cmw_account_* -> *)
+    "cmw_account_department": "department",
+    "cmw_account_departament": "departament",
+    "cmw_account_fullName": "fullName",
+    "cmw_account_title": "title",
+    "cmw_account_mbox": "mbox",
+    "cmw_account_skype": "skype",
+    "cmw_account_username": "username",
+    "cmw_account_active": "active",
+    "cmw_account_phone": "phone",
+    "cmw_account_manager": "manager",
+    "cmw_account_office": "office",
+    "cmw_account_lastLoginDate": "lastLoginDate",
+    # OrgStructureTemplate attributes
+    "cmw_ou_type": "unitType",
+    "cmw_ou_name": "unitName",
+    "cmw_ou_description": "unitDescription",
+    "superiorUnit": "superiorUnit",
+    "subordinateUnit": "subordinateUnit",
+    # ProcessTemplate attributes (cmw_process_*, cmw_task_* -> *)
+    "cmw_process_status": "status",
+    "cmw_process_currentLifetimeStatus": "currentLifetimeStatus",
+    "cmw_process_name": "name",
+    "cmw_process_minDueDate": "minDueDate",
+    "cmw_process_businessObject": "object",
+    "cmw_process_hasTokenError": "hasTokenError",
+    "cmw_process_activeVersion": "activeVersion",
+    "cmw_process_currentActivity": "currentActivity",
+    "cmw_task_planEndDate": "planEndDate",
+    "cmw_task_objectId": "objectId",
+    "cmw_task_displayId": "displayId",
+    "cmw_task_owner": "owner",
+    # RoleTemplate attributes
+    "cmw_role_name": "roleName",
+    "cmw_role_description": "roleDescription",
+    "superiorRole": "superiorRole",
+    "subordinateRole": "subordinateRole",
+    # Common attribute mappings
+    "creator": "_creator",
+    "creationDate": "_creationDate",
+    "isDisabled": "_isDisabled",
+    "processes": "_processes",
+    "color": "_color",
+}
+
+FOLDER_TO_PARENT_TYPE = {
+    "AccountTemplates": "AccountTemplate",
+    "OrgStructureTemplates": "OrgStructureTemplate",
+    "ProcessTemplates": "ProcessTemplate",
+    "RoleTemplates": "RoleTemplate",
+    "RecordTemplates": "RecordTemplate",
+    "MessageTemplates": "MessageTemplate",
+    "Triggers": "Trigger",
+    "Workspaces": "Workspace",
+    "Pages": "Page",
+    "WidgetConfigs": "DesktopWidgetConfig",
+    "Routes": "Route",
+    "Streams": "Stream",
+    "Carts": "Cart",
+    "Roles": "Role",
+    "Application": "Application",
+}
 
 SKIP_TYPE_PREFIXES = {
     "Component_": ["DesktopComponent"],
@@ -78,20 +146,49 @@ SKIP_TYPE_PREFIXES = {
 }
 
 
-def should_skip_alias(alias: str, obj_type: str, displayName: str = "", parent_type: str = None) -> bool | str:
-    """Check if alias should be skipped based on filtering rules."""
+def apply_alias_mapping(alias: str, obj_type: str, parent_type: str = None) -> str:
+    """Apply alias mapping before cache lookup and skip rules.
+    
+    Maps aliases with prefixes to their canonical form:
+    - cmw_account_* -> * (AccountTemplate attributes)
+    - cmw_ou_* -> * (OrgStructureTemplate attributes)
+    - cmw_process_* -> * (ProcessTemplate attributes)
+    - cmw_task_* -> * (ProcessTemplate task attributes)
+    - cmw_role_* -> * (RoleTemplate attributes)
+    - creator -> _creator, etc. (common attributes)
+    """
+    return ALIAS_MAPPING.get(alias, alias)
+
+
+def should_skip_alias(alias: str, obj_type: str, displayName: str = "", parent_type: str = None, from_mapping: bool = False) -> bool | str:
+    """Check if alias should be skipped based on filtering rules.
+    
+    Args:
+        alias: The alias to check
+        obj_type: The object type (Attribute, etc.)
+        displayName: The display name if any
+        parent_type: The parent type (AccountTemplate, etc.)
+        from_mapping: If True, this alias came from ALIAS_MAPPING - always locked
+    """
     has_display_name = bool(displayName)
 
-    # SKIP_ATTRIBUTES - locked если есть displayName, иначе skip
+    # SKIP_ATTRIBUTES - for mapped aliases, always locked; otherwise depends on displayName
     if obj_type == "Attribute":
         global_skip = SKIP_ATTRIBUTES["default"]
         parent_skip = SKIP_ATTRIBUTES.get(parent_type, set()) if parent_type else set()
         if alias in global_skip or alias in parent_skip:
+            # If this came from alias mapping, always locked
+            if from_mapping:
+                return "locked"
             return "locked" if has_display_name else True
 
     # SKIP_TYPES - always skip
     if obj_type in SKIP_TYPES:
         return True
+
+    # FormComponent - always locked (they are UI components, not real aliases)
+    if obj_type == "FormComponent":
+        return "locked"
 
     # FormComponent UUID - apply "locked" rule if has displayName
     if obj_type == "FormComponent":
@@ -136,12 +233,20 @@ def verify_folder(folder_name: str, app_name: str, aliases_data: dict, cache: di
         obj_type = obj["type"]
         alias = obj["alias"]
         parent_template = obj.get("parent_template", "")
+        parent_type = obj.get("parent_type")
+        
+        # Fallback: determine parent_type from folder_name if not set
+        if not parent_type and folder_name in FOLDER_TO_PARENT_TYPE:
+            parent_type = FOLDER_TO_PARENT_TYPE[folder_name]
+        
+        # Apply alias mapping before cache lookup and skip rules
+        mapped_alias = apply_alias_mapping(alias, obj_type, parent_type)
         platform_type = TYPE_TO_PLATFORM.get(obj_type, obj_type)
 
         found_ids = []
 
-        if platform_type in cache and alias in cache[platform_type]:
-            found_ids = cache[platform_type][alias].get("ids", [])
+        if platform_type in cache and mapped_alias in cache[platform_type]:
+            found_ids = cache[platform_type][mapped_alias].get("ids", [])
 
         if not found_ids and obj_type in ("OrgStructureTemplate", "RoleTemplate"):
             if obj_type == "RoleTemplate":
@@ -160,20 +265,25 @@ def verify_folder(folder_name: str, app_name: str, aliases_data: dict, cache: di
             # Получить displayName для проверки skip rules
             display_names = obj.get("displayNames", [])
             display_name = display_names[0].get("displayNameOriginal", "") if display_names else ""
-            parent_type = obj.get("parent_type")
 
-            # Проверить skip rules
-            skip_result = should_skip_alias(alias, obj_type, display_name, parent_type)
+            # Check if alias was mapped
+            alias_was_mapped = (mapped_alias != alias)
+            
+            # Проверить skip rules using MAPPED alias
+            skip_result = should_skip_alias(mapped_alias, obj_type, display_name, parent_type, alias_was_mapped)
 
             if skip_result == "locked":
                 # Alias попадает под правила блокировки - добавить в verified с aliasLocked=True
                 obj["aliasLocked"] = True
+                # Store the mapped alias for reference
+                obj["aliasMapped"] = mapped_alias
                 verified.append(obj)
             elif skip_result == True:
                 # Alias должен быть пропущен полностью
                 skipped.append(obj)
             else:
                 # Не найден в кэше, но не попадает под skip rules - добавить в verified
+                obj["aliasMapped"] = mapped_alias
                 verified.append(obj)
 
     return verified, skipped
