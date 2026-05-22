@@ -30,24 +30,44 @@ def get_domain() -> str:
     return "cmw"
 
 
-def calculate_new_json_path(original_path: str, old_alias: str, new_alias: str, tr_data: list | None = None) -> str:
-    """Replace alias in JSON path with new alias."""
-    if old_alias == new_alias and not tr_data:
+def build_alias_map(tr_data: list) -> dict[str, str]:
+    """Build mapping of aliasOriginal -> aliasRenamed from tr_data."""
+    alias_map = {}
+    for entry in tr_data:
+        ao = entry.get("aliasOriginal", "")
+        ar = entry.get("aliasRenamed", "")
+        if ao and ar and ao not in alias_map:
+            alias_map[ao] = ar
+    return alias_map
+
+
+def calculate_new_json_path(original_path: str, tr_data: list | None = None) -> str:
+    """Replace ALL aliases in JSON path with their aliasRenamed."""
+    if not tr_data:
         return original_path
 
     # Determine separator from original path
     sep = "\\" if "\\" in original_path else "/"
 
-    # Split path into parts
+    # Build alias mapping
+    alias_map = build_alias_map(tr_data)
+
+    # Split path into parts (folders and filename)
     parts = original_path.split(sep)
 
-    # Replace alias in each part (folder names and filenames)
+    # Replace each part if it exists in alias map
     result_parts = []
     for part in parts:
-        if part == old_alias:
-            result_parts.append(new_alias)
-        elif part == f"{old_alias}.json":
-            result_parts.append(f"{new_alias}.json")
+        # Check if part is a folder name (no .json)
+        if part in alias_map:
+            result_parts.append(alias_map[part])
+        # Check if part is a filename (has .json)
+        elif part.endswith(".json"):
+            base_name = part[:-5]  # Remove .json
+            if base_name in alias_map:
+                result_parts.append(f"{alias_map[base_name]}.json")
+            else:
+                result_parts.append(part)
         else:
             result_parts.append(part)
 
@@ -66,8 +86,13 @@ def main(app: str, output_dir: str) -> int:
     with open(tr_file, encoding="utf-8") as f:
         tr_data = json.load(f)
 
+    # Build alias map once
+    alias_map = build_alias_map(tr_data)
+    print(f"Built alias map with {len(alias_map)} entries")
+
     updated_count = 0
 
+    # First pass: update jsonPathRenamed for entries that have aliasRenamed
     for obj in tr_data:
         alias_orig = obj.get("aliasOriginal", "")
         alias_renamed = obj.get("aliasRenamed", "")
@@ -77,7 +102,7 @@ def main(app: str, output_dir: str) -> int:
         json_paths_orig = obj.get("jsonPathOriginal", [])
         if json_paths_orig:
             obj["jsonPathRenamed"] = [
-                calculate_new_json_path(p, alias_orig, alias_renamed, tr_data)
+                calculate_new_json_path(p, tr_data)
                 for p in json_paths_orig
             ]
             updated_count += 1
@@ -88,17 +113,19 @@ def main(app: str, output_dir: str) -> int:
             dn_orig_paths = dn.get("jsonPathOriginal", [])
             if dn_orig_paths:
                 dn["jsonPathRenamed"] = [
-                    calculate_new_json_path(p, alias_orig, alias_renamed, tr_data)
+                    calculate_new_json_path(p, tr_data)
                     for p in dn_orig_paths
                 ]
 
-        # Update jsonPathRenamed for each expression in expressions array
+    # Second pass: update expressions for ALL entries (even without aliasRenamed)
+    # because expressions may reference OTHER aliases that were renamed
+    for obj in tr_data:
         expressions = obj.get("expressions", [])
         for expr in expressions:
             expr_orig_path = expr.get("jsonPathOriginal", "")
             if expr_orig_path:
                 expr["jsonPathRenamed"] = calculate_new_json_path(
-                    expr_orig_path, alias_orig, alias_renamed, tr_data
+                    expr_orig_path, tr_data
                 )
 
     with open(tr_file, "w", encoding="utf-8") as f:
