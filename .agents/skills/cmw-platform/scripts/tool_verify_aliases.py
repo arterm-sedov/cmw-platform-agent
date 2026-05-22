@@ -84,11 +84,13 @@ ALIAS_MAPPING = {
     # RoleTemplate attributes
     "cmw_role_name": "roleName",
     "cmw_role_description": "roleDescription",
+    "cmw_role_isActive": "isActive",
     "superiorRole": "superiorRole",
     "subordinateRole": "subordinateRole",
     # Common attribute mappings
     "creator": "_creator",
     "creationDate": "_creationDate",
+    "lastWriteDate": "_lastWriteDate",
     "isDisabled": "_isDisabled",
     "processes": "_processes",
     "color": "_color",

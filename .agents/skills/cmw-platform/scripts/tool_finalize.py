@@ -226,7 +226,14 @@ def main():
         try:
             with open(dangerous_file, encoding="utf-8") as f:
                 dangerous_data = json.load(f)
-            dangerous = set(dangerous_data.get("dangerous_aliases", []))
+            dangerous_list = dangerous_data.get("dangerous_aliases", [])
+            # Handle both old format (list of strings) and new format (list of dicts)
+            dangerous = set()
+            for d in dangerous_list:
+                if isinstance(d, dict):
+                    dangerous.add(d.get("alias", ""))
+                else:
+                    dangerous.add(d)
             # Load expressions
             dangerous_expressions = dangerous_data.get("expressions", [])
             print(f"Loaded {len(dangerous)} dangerous aliases with {len(dangerous_expressions)} expressions")

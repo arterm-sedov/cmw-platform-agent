@@ -37,6 +37,7 @@ TYPE_PREDICATE_MAPPING: dict[str, dict[str, str]] = {
     "ExportTemplate": {"alias": "cmw.alias"},
     "DesktopComponent": {"alias": "cmw.desktopPage.component.alias"},
     "Application": {"alias": "cmw.solution.alias", "name": "cmw.solution.name"},
+    "Variant": {"alias": "cmw.variantAlias"},
 }
 
 TYPE_PREFIX_MAPPING: dict[str, list[str]] = {
@@ -60,6 +61,7 @@ TYPE_PREFIX_MAPPING: dict[str, list[str]] = {
     "ExportTemplate": ["exportTemplate."],
     "DesktopComponent": ["component."],
     "Application": ["sln."],
+    "Variant": ["vv."],
 }
 
 DEFAULT_PARAMETER = "alias"
@@ -81,7 +83,7 @@ class GetOntologyObjectsSchema(BaseModel):
         description="Minimum number of objects to return per type"
     )
     max_count: int = Field(
-        default=10000,
+        default=1000000,
         description="Maximum number of objects to return per type"
     )
 
