@@ -35,33 +35,23 @@ def calculate_new_json_path(original_path: str, old_alias: str, new_alias: str, 
     if old_alias == new_alias and not tr_data:
         return original_path
 
-    result = original_path
-    result = result.replace(f"/{old_alias}/", f"/{new_alias}/")
-    result = result.replace(f"/{old_alias}.json", f"/{new_alias}.json")
-    result = result.replace(f"{old_alias}.json", f"{new_alias}.json")
+    # Determine separator from original path
+    sep = "\\" if "\\" in original_path else "/"
 
-    if tr_data:
-        from collections import defaultdict
+    # Split path into parts
+    parts = original_path.split(sep)
 
-        alias_targets: dict[str, set[str]] = defaultdict(set)
-        for entry in tr_data:
-            ao = entry.get("aliasOriginal", "")
-            ar = entry.get("aliasRenamed", "")
-            if ao and ar:
-                alias_targets[ao].add(ar)
+    # Replace alias in each part (folder names and filenames)
+    result_parts = []
+    for part in parts:
+        if part == old_alias:
+            result_parts.append(new_alias)
+        elif part == f"{old_alias}.json":
+            result_parts.append(f"{new_alias}.json")
+        else:
+            result_parts.append(part)
 
-        parts = result.split("/")
-        for i, part in enumerate(parts):
-            clean = part.replace(".json", "")
-            if clean in alias_targets:
-                new_targets = alias_targets[clean]
-                if len(new_targets) == 1:
-                    new_target = next(iter(new_targets))
-                    if clean != new_target:
-                        parts[i] = part.replace(clean, new_target)
-        result = "/".join(parts)
-
-    return result
+    return sep.join(result_parts)
 
 
 def main(app: str, output_dir: str) -> int:
