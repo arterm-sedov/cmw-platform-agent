@@ -50,6 +50,7 @@ type_map = {
     "RoleConfiguration": "Attribute",
     "RoleWorkspace": "Workspace",
     "MessageTemplateProperty": "Attribute",
+    "Variant": "cmw.variantAlias",
 }
 
 
@@ -87,7 +88,7 @@ def filter_by_expressions(rows: list, mode: str) -> list:
     if mode == "all":
         return rows
     if mode == "safe":
-        return [r for r in rows if not r.get("expressions")]
+        return [r for r in rows if not r.get("expressions") and not r.get("aliasRenamed", "").endswith("_calc")]
     return [r for r in rows if r.get("expressions")]
 
 

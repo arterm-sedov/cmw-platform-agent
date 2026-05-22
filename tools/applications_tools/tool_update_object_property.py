@@ -30,6 +30,7 @@ TYPE_PREDICATE_MAPPING: dict[str, str] = {
     "Trigger": "cmw.trigger.alias",
     "Role": "cmw.role.alias",
     "WidgetConfig": "cmw.form.alias",
+    "DesktopWidgetConfig": "cmw.desktopPage.widget.config.alias",
 }
 
 
