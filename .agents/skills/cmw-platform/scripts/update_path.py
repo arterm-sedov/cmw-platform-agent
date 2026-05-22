@@ -102,6 +102,15 @@ def main(app: str, output_dir: str) -> int:
                     for p in dn_orig_paths
                 ]
 
+        # Update jsonPathRenamed for each expression in expressions array
+        expressions = obj.get("expressions", [])
+        for expr in expressions:
+            expr_orig_path = expr.get("jsonPathOriginal", "")
+            if expr_orig_path:
+                expr["jsonPathRenamed"] = calculate_new_json_path(
+                    expr_orig_path, alias_orig, alias_renamed, tr_data
+                )
+
     with open(tr_file, "w", encoding="utf-8") as f:
         json.dump(tr_data, f, indent=2, ensure_ascii=False)
 
