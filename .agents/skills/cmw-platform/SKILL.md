@@ -55,7 +55,7 @@ Always follow: `Intent → Plan → Validate → Execute → Result`
 
 1. **OpenAPI / KB** — `cmw_open_api/web_api_v1.json`, `system_core_api.json`, `solition_api.json`; MCP `get_knowledge_base_articles` when behavior is unclear.
 2. **Agent tools** — `tools/` (`create_edit_record`, `list_template_records`, `requests_` helpers) before raw HTTP or UI.
-3. **Browser** — only for UI-only actions, visual proof, or when API paths fail after spec review (e.g. Staff **Attach account** on mz-fr when `IncludeInContainer` returns 500).
+3. **Browser** — only for UI-only actions, visual proof, or when API paths fail after spec review (e.g. Staff **Attach account** when `IncludeInContainer` returns 500 on some hosts).
 
 → Staff login link: [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md)  
 → Process instance demo fill: [cmw-platform-process-record-fill](../cmw-platform-process-record-fill/SKILL.md)
@@ -414,9 +414,9 @@ After multi-entity or security batches — and **between major themed migration 
 
 ### Employee record ↔ platform account (Attach account)
 
-After `AccountService` creates a login, link it to a **Staff** employee row via the Volga **Employees** list → **Attach account** modal (select existing account(s)). This is record-level **Include**, not account create.
+After `AccountService` creates a login, link it to a **Staff** employee row via the **Employees** list → **Attach account** modal (select existing account(s)). This is record-level **Include**, not account create.
 
-→ [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md) — link field, API order, mz-fr blockers; [references/employee_account_attach.md](references/employee_account_attach.md) — UI modal steps.
+→ [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md) — link field, API order, host caveats; [references/employee_account_attach.md](references/employee_account_attach.md) — UI modal steps.
 
 ---
 
@@ -424,8 +424,9 @@ After `AccountService` creates a login, link it to a **Staff** employee row via 
 
 **Policy:** When you solve a repeatable platform workflow (API or UI), capture it for the next agent — do not leave the recipe only in chat or scratch scripts.
 
-- **Parent agents** delegate long-running execution to **background subagents**; the parent coordinates and merges results. **Instance migration progress** (themed batch JSON, TR→FR id maps, operator checklists) lives in [**my-building**](file:///D:/Repo/my-building) only — not in cmw-platform-agent `docs/_scratch/`.
-- **JSON over agent memory:** Read and write [**my-building**](file:///D:/Repo/my-building) `localization/migration_progress/*.json` for every batch — `meta.status`, root `map[]`, `meta.errors`, `backup_pending`, `retry_count`, `agent_wave`, timestamps. **Never** rely on a prior chat turn for `fr_id` / `tr_id` maps. Harvest/seed detail: [references/tr_fr_record_harvest_seed.md](references/tr_fr_record_harvest_seed.md).
+- **Parent agents** delegate long-running execution to **background subagents**; the parent coordinates and merges results. **Instance migration progress** (themed batch JSON, id maps, operator checklists) lives in **`{instance_progress_dir}`** only — not in cmw-platform-agent `docs/_scratch/`.
+- **JSON over agent memory:** Read and write `{instance_progress_dir}/localization/migration_progress/*.json` for every batch — `meta.status`, root `map[]`, `meta.errors`, `backup_pending`, `retry_count`, `agent_wave`, timestamps. **Never** rely on a prior chat turn for record id maps. Harvest/seed detail: [references/tr_fr_record_harvest_seed.md](references/tr_fr_record_harvest_seed.md).
+- **Mandatory progress flush:** After each batch/wave, also write `{instance_progress_dir}/docs/localization/progress_reports/YYYYMMDD_*.md` — instance FM rules: `{instance_progress_dir}/.agents/skills/cmw-platform-fm-hierarchy-seed/SKILL.md` and `{instance_progress_dir}/.agents/skills/cmw-platform/references/us_fm_ru_to_en_replication.md`.
 
 ### Where to save
 
@@ -436,16 +437,16 @@ After `AccountService` creates a login, link it to a **Staff** employee row via 
 | Repeatable CLI (backup, accounts, harvest/seed) | `.agents/skills/cmw-platform/scripts/` — index [references/scripts_index.md](references/scripts_index.md) |
 | Browser-only entity recipe | Extend [references/browser_automation.md](references/browser_automation.md) or the relevant reference (e.g. [employee_account_attach.md](references/employee_account_attach.md)) |
 
-Do **not** use **cmw-platform-agent** `docs/_scratch/` for instance migration (Volga TR→FR harvest JSON, phase `phase*_*.py`, batch results). That folder stays empty; instance scratch is [**my-building**](file:///D:/Repo/my-building) `docs/_scratch/` only. Do **not** scatter one-off notes in platform `docs/_scratch/` or commit empty stub skills. Prefer enriching an existing reference over duplicating a thin skill.
+Do **not** use **cmw-platform-agent** `docs/_scratch/` for instance migration (harvest JSON, phase runners, batch results). That folder stays empty; instance scratch is `{instance_progress_dir}/docs/_scratch/` only. Do **not** scatter one-off notes in platform `docs/_scratch/` or commit empty stub skills. Prefer enriching an existing reference over duplicating a thin skill.
 
 ### Where to document findings
 
 | Scope | Repository | Put it here |
 |-------|------------|-------------|
-| **Instance-specific** | [**my-building**](file:///D:/Repo/my-building) (`D:\Repo\my-building`) | Migration progress JSON (`localization/migration_progress/`), Volga TR→FR plans, gap analyses, harvest outputs, operator checklists, model-export audits tied to mz-tr / mz-fr |
-| **Platform-generic** | **cmw-platform-agent** (this repo) | `.agents/skills/cmw-platform*` and `references/`, companion skills, `docs/` runbooks — reusable API/UI/OpenAPI patterns |
+| **Instance-specific** | `{instance_progress_dir}` | Migration progress JSON, plans, gap analyses, harvest outputs, operator checklists, model-export audits |
+| **Platform-generic** | **cmw-platform-agent** (this repo) | `.agents/skills/cmw-platform*` and `references/`, companion skills, `docs/` — reusable API/UI/OpenAPI patterns |
 
-**Do not duplicate** long-form instance audits here; capture a **one-paragraph generic lesson** in a reference (e.g. [localization.md](references/localization.md) — account rename vs model export) and link to my-building for the full report.
+**Do not duplicate** long-form instance audits here; capture a **one-paragraph generic lesson** in a reference (e.g. [localization.md](references/localization.md)).
 
 ### Order of approach (reinforced)
 
@@ -456,7 +457,7 @@ Do **not** use **cmw-platform-agent** `docs/_scratch/` for instance migration (V
 
 ### Parallel subagents (independent templates)
 
-When templates or entity groups have **no cross-record dependencies**, the parent coordinator may run **parallel background subagents** (one template per agent) for speed. Instance migration waves: [my-building `localization/AGENTS.md`](file:///D:/Repo/my-building/localization/AGENTS.md#parallel-subagents-independent-templates).
+When templates or entity groups have **no cross-record dependencies**, the parent coordinator may run **parallel background subagents** (one template per agent) for speed. **Every spawn prompt: source-form-first** — open read-only **source record form** before API; datamodel alone is insufficient ([ralph_loop_goal_autonomy.md](references/ralph_loop_goal_autonomy.md#source-form-first-replication-subagents)). Instance waves: `{instance_progress_dir}/localization/AGENTS.md`.
 
 **Avoid parallel** on:
 
@@ -469,7 +470,9 @@ When templates or entity groups have **no cross-record dependencies**, the paren
 
 **Prefer subagent hives over foreground duplication** — delegate independent template work to background subagents rather than repeating harvest/seed/API steps in the parent chat.
 
-**Autonomous migration waves (instance work):** Parent runs **up to 6 parallel background subagents** per wave, then reconciles roadmap, **one** FR backup, and commits **my-building** only. Full loop: [my-building `localization/AGENTS.md` — Autonomous migration execution](file:///D:/Repo/my-building/localization/AGENTS.md#autonomous-migration-execution) · [operator spec](file:///D:/Repo/my-building/docs/20260519_autonomous_migration_runner.md).
+**Autonomous migration waves (instance work):** Parent runs **up to 6 parallel background subagents** per wave, then reconciles roadmap and **one** target backup; commit **instance repo** only. Full loop: `{instance_progress_dir}/localization/AGENTS.md` · `{instance_progress_dir}/.agents/skills/ralph-loop-instance/SKILL.md`.
+
+**Ralph-style iteration (goal autonomy):** Fresh context + disk JSON verification + same wave prompt — [references/ralph_loop_goal_autonomy.md](references/ralph_loop_goal_autonomy.md). Instance example runbook: `{instance_progress_dir}/docs/localization/ralph_loop_us_fm_autonomous_runbook.md`. Do **not** enable Ralph Loop plugin stop-hook while parallel subagents are active.
 
 ### Background shell (long platform scripts)
 
@@ -495,6 +498,7 @@ For better async, run long CLI in **background** (Shell `run_in_background` or a
 | Account create, password, groups | [cmw-platform-account-bootstrap](../cmw-platform-account-bootstrap/SKILL.md) |
 | Employee row ↔ login (Include) | [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md) + [references/employee_account_attach.md](references/employee_account_attach.md) |
 | Running process / work order row fill | [cmw-platform-process-record-fill](../cmw-platform-process-record-fill/SKILL.md) + [references/process_record_demo_fill.md](references/process_record_demo_fill.md) |
+| FM hierarchy Property→Spaces (instance) | `{instance_progress_dir}/.agents/skills/cmw-platform-fm-hierarchy-seed/SKILL.md` + `{instance_progress_dir}/.agents/skills/cmw-platform/references/fm_hierarchy_ru_to_us_seed.md`, `us_fm_ru_to_en_replication.md` |
 
 ### Browser recipes (entity-specific)
 
@@ -506,6 +510,7 @@ Refine **existing** skills/references with tested selectors and hash routes — 
 | Backup → checkbox + Start backup | [cmw-platform-backup-launch](../cmw-platform-backup-launch/SKILL.md) UI fallback |
 | Datasets, toolbars, buttons | [references/ui_components.md](references/ui_components.md), [references/browser_automation.md](references/browser_automation.md) |
 | Processes / scenarios | [references/browser_automation.md](references/browser_automation.md) URL patterns |
+| RU FM structure forms (read-only business context) | `{instance_progress_dir}/.agents/skills/cmw-platform-fm-hierarchy-seed/SKILL.md` — RU forms before data model |
 
 ### Naming
 
@@ -514,9 +519,9 @@ Refine **existing** skills/references with tested selectors and hash routes — 
 
 ### Authoring new skills
 
-Follow Cursor’s [create-skill](file:///C:/Users/ased/.cursor/skills-cursor/create-skill/SKILL.md) skill (`~/.cursor/skills-cursor/create-skill/SKILL.md`) for frontmatter, description triggers, and progressive disclosure.
+Follow Cursor’s create-skill guidance for frontmatter, description triggers, and progressive disclosure.
 
-**Repo boundary:** [my-building](file:///D:/Repo/my-building) owns instance migration state and audits; **cmw-platform-agent** owns repeatable platform recipes — see [Where to document findings](#where-to-document-findings) above.
+**Repo boundary:** `{instance_progress_dir}` owns instance migration state and audits; **cmw-platform-agent** owns repeatable platform recipes — see [Where to document findings](#where-to-document-findings) above.
 
 ---
 

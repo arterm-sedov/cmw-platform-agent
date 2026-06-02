@@ -1,6 +1,6 @@
 # Platform maintenance CLI scripts
 
-Agnostic scripts under [`.agents/skills/cmw-platform/scripts/`](../scripts/). Load credentials from `cmw-platform-agent/.env` (`CMW_BASE_URL`, `CMW_LOGIN`, `CMW_PASSWORD`). Use `--base-url` to override the host. **Do not commit** harvest outputs or progress JSON with PII — write them in the **project repo** (e.g. my-building `localization/migration_progress/`).
+Agnostic scripts under [`.agents/skills/cmw-platform/scripts/`](../scripts/). Load credentials from `cmw-platform-agent/.env` (`CMW_BASE_URL`, `CMW_LOGIN`, `CMW_PASSWORD`). Use `--base-url` to override the host. **Do not commit** harvest outputs or progress JSON with PII — write them in `{instance_progress_dir}/localization/migration_progress/`.
 
 ## Script-only environment variables
 

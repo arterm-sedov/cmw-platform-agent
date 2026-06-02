@@ -3,7 +3,7 @@ name: cmw-platform-account-bootstrap
 description: >-
   Create or update platform login accounts via System Core AccountService —
   Create, Edit, SetAccountPassword, AccountGroupService IncludeMembers, optional
-  Volga role. Triggers on seed users, administration accounts, AccountService,
+  solution role. Triggers on seed users, administration accounts, AccountService,
   SetAccountPassword, SetUsername, account rename, Mbox, FullName, UAT login
   bootstrap. Agnostic for any CMW instance (CMW_BASE_URL). Does not cover batch
   migration workflows (those live in the project repo).
@@ -22,7 +22,7 @@ Create or update **one** platform login account on any Comindware instance using
 - Script account + password + group membership
 - Verify account exists after migration
 
-**Do not use this skill for:** multi-account batch migration, instance-specific progress JSON, or host-specific inventories — keep those in the owning project repo (e.g. Volga TR→FR migration in **my-building**: [`docs/20260519_migration_status_and_roadmap.md`](file:///D:/Repo/my-building/docs/20260519_migration_status_and_roadmap.md), `localization/migration_progress/`).
+**Do not use this skill for:** multi-account batch migration, instance-specific progress JSON, or host-specific inventories — keep those in `{instance_progress_dir}` (`localization/migration_progress/`, instance `docs/`).
 
 **Post-batch configuration backup (UI):** After several account or security changes, use [cmw-platform-backup-launch](../cmw-platform-backup-launch/SKILL.md) — do not duplicate backup steps here.
 

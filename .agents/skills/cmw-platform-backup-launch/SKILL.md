@@ -19,7 +19,7 @@ Start an **existing** configuration backup on any Comindware instance.
 
 **Do not use** backup/restore to clone data between instances; this skill is for **rollback snapshots** on the target host only.
 
-**Instance migration progress (Volga TR→FR):** record `meta.fr_backup_*` in **my-building** [`localization/migration_progress/`](file:///D:/Repo/my-building/localization/migration_progress/) and [`docs/20260519_migration_status_and_roadmap.md`](file:///D:/Repo/my-building/docs/20260519_migration_status_and_roadmap.md) — not in cmw-platform-agent.
+**Instance migration progress:** record `meta.fr_backup_*` in `{instance_progress_dir}/localization/migration_progress/` and the instance roadmap doc — not in cmw-platform-agent.
 
 **OpenAPI source of truth:** [`cmw_open_api/web_api_v1.json`](../../../cmw_open_api/web_api_v1.json) — operations `Backup_ListConfigurations`, `Backup_CreateSession`, `Backup_GetSession`, `Backup_ListSessions`.
 

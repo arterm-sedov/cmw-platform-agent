@@ -6,4 +6,4 @@ Quick reminders:
 
 - URL `#form/oa.{N}/form.{F}/{recordId}` → edit existing row; GET before PUT.
 - `Attribute/List` → PascalCase for `create_edit_record` / PUT; GET Record uses lowercase keys.
-- Instance progress: **my-building** `localization/migration_progress/YYYYMMDD_phase1_process_demo_fill.json`.
+- Instance progress: `{instance_progress_dir}/localization/migration_progress/YYYYMMDD_phase1_process_demo_fill.json`.

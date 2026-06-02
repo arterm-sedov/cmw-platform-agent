@@ -3,7 +3,7 @@ name: cmw-platform-instance-switch
 description: >-
   Switch Comindware Platform target instance (host/tenant) via CMW_BASE_URL and
   dotenv. Use when the user asks to switch instance, change host, connect to a
-  different server, update CMW_BASE_URL, work on mz-tr vs mz-fr, edit .env for
+  different server, update CMW_BASE_URL, switch source vs target host, edit .env for
   another tenant, or verify credentials before bulk platform work. Agnostic for
   any instance pair. Does not duplicate general platform CRUD — see
   cmw-platform skill.
@@ -11,7 +11,7 @@ description: >-
 
 # CMW Platform — Instance switching
 
-Point scripts, tools, and browser automation at a **different** Comindware host without changing workflows. Pair examples: reference TR vs target FR (`mz-tr` / `mz-fr` placeholders only — use your real hosts in `.env`).
+Point scripts, tools, and browser automation at a **different** Comindware host without changing workflows. Typical pairs: read-only **source** host (`CMW_BASE_URL_RU`) and **write target** (`CMW_BASE_URL_EN` / `CMW_BASE_URL`) — set real URLs in `.env` only.
 
 **Related:** [cmw-platform](../cmw-platform/SKILL.md) (operations), [cmw-platform-account-bootstrap](../cmw-platform-account-bootstrap/SKILL.md), [cmw-platform-backup-launch](../cmw-platform-backup-launch/SKILL.md).
 
@@ -22,7 +22,7 @@ Point scripts, tools, and browser automation at a **different** Comindware host 
 - Before a migration batch: confirm you are on the **intended** target
 - After editing `.env` / `CMW_BASE_URL` — re-verify connection
 
-**Out of scope:** instance-specific progress JSON, TR→FR matrices, inventories — keep in the owning project repo (e.g. **my-building** `localization/migration_progress/`), not in `cmw-platform-agent`.
+**Out of scope:** instance-specific progress JSON, TR→FR matrices, inventories — keep in `{instance_progress_dir}/localization/migration_progress/`, not in `cmw-platform-agent`.
 
 ## Configuration (never commit secrets)
 
@@ -102,19 +102,19 @@ On **401**: fix credentials for **this** host, not the previous instance.
 | Changes per instance | Stays the same (typical) |
 |----------------------|---------------------------|
 | `CMW_BASE_URL`, browser base URL, backup deep links | API path patterns (`webapi/...`, `api/public/system/...`) |
-| Display names (EN vs RU UI), localized app titles | Application **system name** / alias (e.g. `Volga`) |
+| Display names (EN vs RU UI), localized app titles | Application **system name** / alias (resolve via `list_applications`) |
 | Record IDs, template instance IDs, hash-route entity IDs | Tool names and invoke patterns in `tools/` |
 | Host-specific seed data, accounts, groups | Skill workflows (account bootstrap, backup launch) |
 | Project progress JSON path (see below) | `cmw-platform-agent` skills and agent code |
 
-**Volga note:** The solution **display name** may be Russian or English per instance; the **system name** alias (`Volga`) is what tools use — always resolve via `list_applications` after a switch.
+**Application alias:** UI display names may differ by locale; tools use the **system name** from `list_applications` — re-resolve after every host switch.
 
 ## Repo boundaries
 
 | Artifact | Repository |
 |----------|------------|
 | Skills, `diagnose_connection.py`, generic tools | `cmw-platform-agent` |
-| `migration_progress/*.json`, inventories, TR→FR matrices | **my-building** (or other migration project) |
+| `migration_progress/*.json`, inventories, TR→FR matrices | `{instance_progress_dir}` |
 | Per-instance backup launch notes (`fr_backup_*` meta) | Migration project progress files |
 
 When switching hosts, update **project** progress `meta` with the active `CMW_BASE_URL` (host only, no secrets) — not committed platform-agent docs.
@@ -125,7 +125,7 @@ When switching hosts, update **project** progress `meta` with the active `CMW_BA
 - [ ] `load_dotenv(override=True)` and `CMW_USE_DOTENV=true` for scripts
 - [ ] `diagnose_connection.py` or `list_applications` succeeds
 - [ ] For comparisons: read-only pass complete before writes
-- [ ] Migration logs updated in **my-building**, not this repo
+- [ ] Migration logs updated in `{instance_progress_dir}`, not this repo
 
 ## Maintaining this skill
 

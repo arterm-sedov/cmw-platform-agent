@@ -3,50 +3,49 @@ name: cmw-platform-staff-account-link
 description: >-
   Links an existing platform login to a Staff (Sotrudniki) account-template employee
   row on Comindware Platform. Use when attaching accounts, Staff, Sotrudniki, account
-  template records, John Demonstrator, employee login link, Phase 0 staff personas,
-  or mz-fr/mz-tr employee seeding. Instance-agnostic via CMW_BASE_URL. Prefer OpenAPI
-  and agent tools before browser; UI Attach account modal is last resort on mz-fr when
-  IncludeInContainer returns 500.
+  template records, employee login link, or UAT persona attach after account bootstrap.
+  Instance-agnostic via CMW_BASE_URL. Prefer OpenAPI and agent tools before browser;
+  UI Attach account modal is last resort when IncludeInContainer fails on a host.
 ---
 
 # CMW Platform — Staff account link
 
-Link a **platform security account** (`account.N`) to an **employee row** on the Volga **Staff** account template (`Sotrudniki`, template id often `aa.2` on a host — resolve per instance).
+Link a **platform security account** (`account.N`) to an **employee row** on the **Staff** account template (`Sotrudniki` system name is common — resolve template id per host).
 
 **Workflow order:** OpenAPI (`cmw_open_api/`) → agent `tools/` → browser (last resort). See [cmw-platform](../cmw-platform/SKILL.md) § Workflow order.
 
 **Do not** rename usernames during attach. Account creation is [cmw-platform-account-bootstrap](../cmw-platform-account-bootstrap/SKILL.md).
 
-**Instance migration progress (Volga TR→FR):** log outcomes in **my-building** — [`docs/20260519_migration_status_and_roadmap.md`](file:///D:/Repo/my-building/docs/20260519_migration_status_and_roadmap.md), `localization/migration_progress/` (not this repo).
+**Instance migration progress:** log outcomes in `{instance_progress_dir}` — instance roadmap under `docs/`, `localization/migration_progress/` (not this repo).
 
 ## Discovery (find the link field)
 
-1. Switch host: [cmw-platform-instance-switch](../cmw-platform-instance-switch/SKILL.md).
-2. Open a **linked** reference row (e.g. John Demonstrator / `demo` on FR) and an **unlinked** row in the same template.
+1. Switch host: [cmw-platform-instance-switch](../cmw-platform-instance-switch/SKILL.md) — set `CMW_BASE_URL` to `{CMW_BASE_URL}`.
+2. Open a **linked** reference row and an **unlinked** row in the same Staff template.
 3. Compare payloads:
 
 | Source | Endpoint | Linked signal |
 |--------|----------|----------------|
-| Records list | `GET webapi/Records/AccountTemplate@{App}.Sotrudniki` | `username` non-empty; `fullName` / `mbox` populated from account profile |
-| Single record | `GET webapi/Record/{id}` | Same fields (`username`, `fullName`, …) |
-| TeamNetwork | `POST api/public/system/TeamNetwork/ObjectService/Get` body `{"objectId":"<id>","accountTemplateId":"aa.2"}` | `cmw.account.username`, `cmw.account.fullName`, … |
+| Records list | `GET webapi/Records/AccountTemplate@{App}.{StaffTemplate}` | `username` non-empty; `fullName` / `mbox` populated from account profile |
+| Single record | `GET webapi/Record/{employeeId}` | Same fields (`username`, `fullName`, …) |
+| TeamNetwork | `POST api/public/system/TeamNetwork/ObjectService/Get` body `{"objectId":"<id>","accountTemplateId":"<templateId>"}` | `cmw.account.username`, `cmw.account.fullName`, … |
 
-**Field names (verified on Volga / Sotrudniki):**
+**Field names (typical Staff / Sotrudniki):**
 
-| Layer | System name | Type | Example (John Demonstrator / demo) |
-|-------|-------------|------|-----------------------------------|
-| Web API Records | `username` | string | `demo` (when linked) |
-| TeamNetwork Get | `cmw.account.username` | string | `demo` |
-| Display | `fullName` / `cmw.account.fullName` | string | `John Demonstrator` |
+| Layer | System name | Type | Example (linked) |
+|-------|-------------|------|------------------|
+| Web API Records | `username` | string | `{login_name}` |
+| TeamNetwork Get | `cmw.account.username` | string | `{login_name}` |
+| Display | `fullName` / `cmw.account.fullName` | string | `{display_name}` |
 
-**Employee record id:** On mz-fr Phase 0 rows, list/API ids are **numeric strings** (`182`, `183`, …), not `account.182`. Form/card links may use `#form/.../account.{N}` only after attach. Do not assume progress JSON `account.182` works as `webapi/Record/account.182`.
+**Employee record id:** Often a **numeric string** (`{employee_row_id}`), not `account.{N}`. Form/card links may use `#form/.../account.{N}` only after attach. Do not assume progress JSON `account.{N}` works as `webapi/Record/account.{N}`.
 
-Attribute metadata: `GET webapi/Attribute/List/Template@{App}.Sotrudniki` → `cmw_account_username` (system string; `create_edit_record` skips system fields).
+Attribute metadata: `GET webapi/Attribute/List/Template@{App}.{StaffTemplate}` → `cmw_account_username` (system string; `create_edit_record` skips system fields).
 
 ## Read path (verify link)
 
 ```http
-GET webapi/Records/AccountTemplate@Volga.Sotrudniki
+GET webapi/Records/AccountTemplate@{Application}.{StaffTemplate}
 ```
 
 Row is linked when `username` (or list column **Full name** / account profile fields) is populated.
@@ -57,7 +56,7 @@ Optional:
 POST api/public/system/TeamNetwork/ObjectService/GetPropertyValues
 ```
 
-Body: `objects: ["183"]`, `propertiesByAlias: ["username", "cmw_account_username"]`.
+Body: `objects: ["{employee_row_id}"]`, `propertiesByAlias: ["username", "cmw_account_username"]`.
 
 ## Write path (API — try in order)
 
@@ -67,26 +66,26 @@ Body: `objects: ["183"]`, `propertiesByAlias: ["username", "cmw_account_username
 PUT webapi/Record/{employeeId}
 Content-Type: application/json
 
-{"username": "engineer"}
+{"username": "{login_name}"}
 ```
 
-- `{employeeId}` = numeric id (`183`), not `account.183`.
-- On mz-fr, may return **200** with error: `triple uniqueness - {id} cmw.account.username {value}` if the login is already reserved in the template without a proper Include.
+- `{employeeId}` = employee row id from list/Get, not `account.{N}`.
+- May return **200** with error: `triple uniqueness - {id} cmw.account.username {value}` if the login is already reserved in the template without a proper Include.
 - `create_edit_record` **does not** set `cmw_account_username` (system field skipped).
 
-### 2. TeamNetwork Include (per-row — preferred in OpenAPI, blocked on mz-fr)
+### 2. TeamNetwork Include (per-row — preferred in OpenAPI when supported)
 
 ```http
 POST api/public/system/TeamNetwork/ObjectService/IncludeInContainer
 ```
 
 ```json
-{"accountId": "account.4", "containerId": "183"}
+{"accountId": "account.{N}", "containerId": "{employee_row_id}"}
 ```
 
 OpenAPI: `system_core_api.json` → `TeamNetworkObjectServiceIncludeInContainerParameters`.
 
-**mz-fr (2026-05):** HTTP **500** for `containerId` = numeric employee id, `account.{id}`, or `aa.{id}`. Do not use as primary on FR until fixed.
+**Host caveat:** Some instances return HTTP **500** for certain `containerId` shapes (numeric employee id, `account.{id}`, or `aa.{id}`). Verify on `{CMW_BASE_URL}` before batch automation; fall back to UI.
 
 ### 3. IncludeInContainer1 (template-level only)
 
@@ -95,40 +94,34 @@ POST api/public/system/TeamNetwork/ObjectService/IncludeInContainer1
 ```
 
 ```json
-{"accountIds": ["account.3", "account.4"], "accountTemplateId": "aa.2"}
+{"accountIds": ["account.{N}"], "accountTemplateId": "{account_template_id}"}
 ```
 
-Returns **200** but does **not** set `username` on pre-created empty rows `182`–`191`; may surface accounts in filtered Staff lists (UI **Full name** from account profile).
+Returns **200** on some hosts but may **not** set `username` on pre-created empty employee rows; may surface accounts in filtered Staff lists (UI **Full name** from account profile).
 
-## Write path (UI — last resort on mz-fr)
+## Write path (UI — last resort)
 
-1. Employees / Staff list: `#data/aa.2/lst.{M}` (verify `lst` id on host; FR often `lst.279`).
+1. Employees / Staff list: `#data/aa.{N}/lst.{M}` (verify `lst` id on host via `list_datasets` or UI).
 2. Select employee row → toolbar **Attach account** (user command kind **Include**).
 3. Modal: search platform login → confirm.
 
-Observed SPA calls:
+Observed SPA calls (not always in `web_api_v1.json` snapshot):
 
 - `POST /User/GetAccountsToInclude`
 - `POST /UserCommandExecution/PerformUserAction`
 
-Capture payload from browser network if automating; not in `web_api_v1.json` snapshot in repo.
+Capture payload from browser network if automating.
 
 → UI details: [employee_account_attach.md](../cmw-platform/references/employee_account_attach.md)
 
-## Phase 0 persona table (FR reference)
+## Example mapping table (instance — replace placeholders)
+
+Store real ids in `{instance_progress_dir}/localization/migration_progress/` — do not copy from another host.
 
 | Username | Platform account id | Employee row id (API) |
 |----------|---------------------|------------------------|
-| dispatcher01 | account.3 | 182 |
-| engineer | account.4 | 183 |
-| techniktest | account.5 | 184 |
-| clean_manager | account.8 | 185 |
-| manager | account.9 | 186 |
-| ingeneer | account.10 | 187 |
-| expluatation | account.12 | 188 |
-| smirnova | account.13 | 189 |
-| serov | account.14 | 190 |
-| isaeva | account.15 | 191 |
+| `{user_a}` | `account.{id_a}` | `{row_a}` |
+| `{user_b}` | `account.{id_b}` | `{row_b}` |
 
 ## Related
 

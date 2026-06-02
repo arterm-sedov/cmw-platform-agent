@@ -4,7 +4,7 @@
 
 Link an existing **platform login** to an **employee row** in the Volga **Staff** account template (`Sotrudniki` system name). This is **not** account creation — use [account_bootstrap_api.md](account_bootstrap_api.md) / [cmw-platform-account-bootstrap](../../cmw-platform-account-bootstrap/SKILL.md) for `AccountService/Create` first.
 
-**Workflow order:** OpenAPI (`cmw_open_api/`) → agent `tools/` → browser last resort. Full attach recipe (field names, PUT/Include, mz-fr blockers): [cmw-platform-staff-account-link](../../cmw-platform-staff-account-link/SKILL.md).
+**Workflow order:** OpenAPI (`cmw_open_api/`) → agent `tools/` → browser last resort. Full attach recipe (field names, PUT/Include, host-specific blockers): [cmw-platform-staff-account-link](../../cmw-platform-staff-account-link/SKILL.md).
 
 ## UI workflow (instance-agnostic)
 
@@ -41,7 +41,7 @@ If employee seeding is deferred, you can still link Phase 0 accounts as soon as 
 | `ObjectService/Get` + `accountTemplateId` | `cmw.account.username` |
 | List UI column | **Full name** (`fullName` from account profile when linked) |
 
-**Employee row id:** numeric string on mz-fr Phase 0 (`182`…`191`), not `account.182`. John Demonstrator (`demo`) shows **Full name** in `#data/aa.2/lst.279`; card URL may use `account.2`.
+**Employee row id:** numeric string on the target host for Phase 0 (example range `182`…`191`), not `account.182`. Demo persona rows show **Full name** in `#data/aa.{N}/lst.{M}` — **resolve list ids per host**; card URL may use `account.{N}`.
 
 ## API (when field names unknown)
 
@@ -66,7 +66,7 @@ POST api/public/system/TeamNetwork/ObjectService/IncludeInContainer1
 
 Body shape (OpenAPI): `accountIds` (array of account ids), `accountTemplateId` (Staff template id, e.g. `aa.2` on a given host — **resolve per instance**, do not copy from another host).
 
-Single-account variant: `IncludeInContainer` with `accountId` + `containerId` (employee numeric id). **mz-fr:** per-row Include often returns **500**; `IncludeInContainer1` alone does not set `username` on pre-created rows.
+Single-account variant: `IncludeInContainer` with `accountId` + `containerId` (employee numeric id). On some hosts, per-row Include returns **500**; `IncludeInContainer1` alone may not set `username` on pre-created rows — verify on `{CMW_BASE_URL}`.
 
 When list/get payloads are unclear, use **browser MCP** (cmw-platform § Browser) on the Employees list and Attach account modal — SPA: `User/GetAccountsToInclude`, `UserCommandExecution/PerformUserAction`.
 

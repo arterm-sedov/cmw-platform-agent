@@ -14,7 +14,7 @@ Update **existing** process-owned template rows (e.g. Volga **Sobytiya** / Work 
 
 **Workflow order:** OpenAPI → `get` record tools → `Attribute/List` → PUT/`create_edit_record` → verify GET → browser only for workflow buttons/transitions. See [cmw-platform](../cmw-platform/SKILL.md) § Workflow order.
 
-**Instance progress (Volga TR→FR):** log in **my-building** — `localization/migration_progress/YYYYMMDD_phase1_process_demo_fill.json`, findings in `docs/YYYYMMDD_phase1_process_demo_fill_findings.md`. Do not store instance batch JSON in cmw-platform-agent.
+**Instance progress:** log in `{instance_progress_dir}` — `localization/migration_progress/YYYYMMDD_phase1_process_demo_fill.json`, findings in `docs/YYYYMMDD_phase1_process_demo_fill_findings.md`. Do not store instance batch JSON in cmw-platform-agent.
 
 ## How it works (technical)
 
@@ -96,14 +96,14 @@ Usually **no API action** on `dwc.*` — populate underlying `Sobytiya` rows so 
 
 1. `GET webapi/Record/{id}` for each edited id.
 2. Open form URLs and optional `#indicator/id=dwc.{N}` for visual proof.
-3. Append `fr_edits[]` and `verification_urls` to my-building progress JSON.
+3. Append `fr_edits[]` and `verification_urls` to instance progress JSON.
 
 ## Scripts and references
 
 | Resource | Location |
 |----------|----------|
 | Slim API cheat sheet | [references/process_record_demo_fill.md](../cmw-platform/references/process_record_demo_fill.md) |
-| One-off batch example (scratch) | [**my-building**](file:///D:/Repo/my-building) `docs/_scratch/phase1_process_demo_fill.py` (not production; pattern reference) |
+| One-off batch example (scratch) | `{instance_progress_dir}/docs/_scratch/phase1_process_demo_fill.py` (not production; pattern reference) |
 | Harvest / seed index | [references/scripts_index.md](../cmw-platform/references/scripts_index.md) |
 
 ## Cross-links
