@@ -145,14 +145,12 @@ Before considering work complete:
 
 | Scope | Repository | Examples |
 |-------|------------|----------|
-| **Instance-specific** | **my-building** (`D:\Repo\my-building`) | mz-tr / mz-fr migration, Volga TR→FR progress, TR record/account ids, harvest JSON, gap analyses, operator checklists, **all** `docs/_scratch/` migration scripts and harvest JSON |
+| **Instance-specific** | **Instance repo** (`{instance_progress_dir}`) | Migration progress JSON, harvest outputs, gap analyses, operator checklists, `docs/_scratch/` runners |
 | **Platform-generic** | **cmw-platform-agent** (this repo) | API patterns, OpenAPI shapes, `.agents/skills/cmw-platform*`, reusable browser/API workflows in `docs/` |
 
-Do **not** copy long-form instance audits into this repo; add a short generic lesson in a skill reference when it helps any tenant, and link to my-building for the full report.
+Do **not** copy long-form instance audits into this repo; add a short generic lesson in a skill reference when it helps any tenant.
 
-**Scratch boundary:** Do **not** store Volga/mz-tr/mz-fr migration harvest JSON, progress runners, or id maps under `docs/_scratch/` in **cmw-platform-agent**. Use [**my-building**](file:///D:/Repo/my-building) `docs/_scratch/` only; link paths from `localization/migration_progress/*.json` via `meta.harvest_path` / `meta.seed_path`.
-
-**No instance scratch in this repo:** Do **not** use `docs/_scratch/` for Volga mz-tr/mz-fr migration (harvest JSON, phase scripts, batch runners). That path is reserved empty here (see `docs/_scratch/README.md`). Instance artifacts live in [**my-building**](file:///D:/Repo/my-building) `docs/_scratch/`; progress JSON in `localization/migration_progress/`.
+**Scratch boundary:** Do **not** store instance migration harvest JSON, progress runners, or id maps under `docs/_scratch/` in **cmw-platform-agent** (see `docs/_scratch/README.md`). Instance artifacts belong under `{instance_progress_dir}/docs/_scratch/` and `{instance_progress_dir}/localization/migration_progress/`; link via `meta.harvest_path` / `meta.seed_path`.
 - Generate `YYYYMMDD` timestamps with native commands:
   - PowerShell: `Get-Date -Format "yyyyMMdd"`
   - Bash/WSL: `date +%Y%m%d`
@@ -214,14 +212,9 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 - Reanalyze changes twice for introduced issues.
 - Compact/summarize working context proactively during long sessions.
 
-### TR→FR migration coordination (parent agents)
+### Instance progress (parent agents)
 
-When driving Volga mz-tr→mz-fr demo fill as **parent coordinator**:
-
-- Delegate to **up to 6 parallel background subagents** (one independent template per agent); do **not** repeat harvest/seed in parent chat.
-- **Instance progress** (batch JSON, roadmap, id maps) lives in [**my-building**](file:///D:/Repo/my-building) only — reconcile [`docs/20260519_migration_status_and_roadmap.md`](file:///D:/Repo/my-building/docs/20260519_migration_status_and_roadmap.md) after each wave; see [Autonomous migration execution](file:///D:/Repo/my-building/localization/AGENTS.md#autonomous-migration-execution).
-- **Long platform CLI** — prefer **background shell** for `.agents/skills/cmw-platform/scripts/harvest_template_records.py`, `seed_records_from_harvest.py`, `backup_configuration_session.py --poll`, and multi-record migrate scripts; poll progress JSON or terminal output (see [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills)).
-- **JSON over memory** — read/write [**my-building**](file:///D:/Repo/my-building) `localization/migration_progress/*.json` for ids and batch status; never assume prior-turn chat retained `map[]` or `fr_id` values ([tr_fr_record_harvest_seed.md](.agents/skills/cmw-platform/references/tr_fr_record_harvest_seed.md)).
+**Instance-specific** batch JSON, roadmaps, harvest outputs, and operator runbooks live in the **instance repository** at `{instance_progress_dir}` (e.g. `localization/migration_progress/`, `docs/localization/`). Platform agents use skills and references in **this repo** only; read instance state from disk there — never from chat memory ([tr_fr_record_harvest_seed.md](.agents/skills/cmw-platform/references/tr_fr_record_harvest_seed.md), [ralph_loop_goal_autonomy.md](.agents/skills/cmw-platform/references/ralph_loop_goal_autonomy.md), [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills)).
 
 ### CMW Platform Terminology
 
@@ -252,7 +245,7 @@ For platform tasks: consult **OpenAPI** in `cmw_open_api/` and KB MCP first, the
 
 **Toolbar-Dataset Link:** Toolbars link to datasets via toolbar's `IsDefaultForLists` flag.
 
-**Growing platform skills:** Reusable API and browser recipes belong in this repo (`.agents/skills/cmw-platform*` and `references/` — see [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills)). Per-instance migration progress, harvest outputs, and Volga/mz-tr/mz-fr audits stay in [**my-building**](file:///D:/Repo/my-building) (`D:\Repo\my-building`) — see [Where findings belong](#where-findings-belong-repo-boundary) under Documentation Guidelines.
+**Growing platform skills:** Reusable API and browser recipes belong in this repo (`.agents/skills/cmw-platform*` and `references/` — see [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills)). Per-instance migration progress and audits stay in `{instance_progress_dir}` — see [Where findings belong](#where-findings-belong-repo-boundary) under Documentation Guidelines.
 
 ### Key Dependencies
 
