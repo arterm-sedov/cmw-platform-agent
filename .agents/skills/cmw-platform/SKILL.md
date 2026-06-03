@@ -422,6 +422,8 @@ After `AccountService` creates a login, link it to a **Staff** employee row via 
 
 ## 9. Growing platform skills
 
+**Repo boundary (required):** [references/instance_repo_documentation_boundary.md](references/instance_repo_documentation_boundary.md) — what lives in **cmw-platform-agent** vs `{instance_progress_dir}`; scratch rules; stubs for moved instance playbooks; `RecordType` / `doc.*` scope for process-model docs.
+
 **Policy:** When you solve a repeatable platform workflow (API or UI), capture it for the next agent — do not leave the recipe only in chat or scratch scripts.
 
 - **Mandatory wave-end documentation:** After any batch/wave that discovers **new** API or UI manipulation patterns, append an agnostic subsection to [references/platform_usage_discoveries.md](references/platform_usage_discoveries.md) (or extend an existing reference) **before** ending the session wave or claiming done. Placeholders only (`{source_host}`, `{target_host}`, `{instance_progress_dir}`) — **no** tenant hosts or record ids in skill bodies. Instance `operations[]` flush stays mandatory in parallel. Recent wave examples: grouped **MaintenanceExecution** lists vs API count, **MyMaintenance** dataset PUT path (**405** on `Dataset@`), staff id vs platform account for **USER()** filters, **StatusBoost** legacy `OBJECT()` expressions, **ServiceRequestTypes** SLA remap, **PMPlans** seed-driven equipment create-link, **Spaces** semi-empty hierarchy gap-fill.
@@ -499,8 +501,10 @@ For better async, run long CLI in **background** (Shell `run_in_background` or a
 | Account create, password, groups | [cmw-platform-account-bootstrap](../cmw-platform-account-bootstrap/SKILL.md) |
 | Employee row ↔ login (Include) | [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md) + [references/employee_account_attach.md](references/employee_account_attach.md) |
 | Running process / work order row fill | [cmw-platform-process-record-fill](../cmw-platform-process-record-fill/SKILL.md) + [references/process_record_demo_fill.md](references/process_record_demo_fill.md) |
-| Tenant hierarchy / themed migration (instance) | `{instance_progress_dir}/.agents/skills/` and `{instance_progress_dir}/localization/AGENTS.md` |
+| Tenant hierarchy / themed migration (instance) | `{instance_progress_dir}/.agents/skills/` (e.g. `cmw-platform-fm-hierarchy-seed`, `ralph-loop-instance`) and `{instance_progress_dir}/localization/AGENTS.md` — stubs: [tr_fr_record_harvest_seed.md](references/tr_fr_record_harvest_seed.md), [us_fm_ru_to_en_replication.md](references/us_fm_ru_to_en_replication.md) |
 | Demo fill / migration usage (indicators, Code_calc, gap-fill, multi-list WO orchestration, Administration sweep, inspection form vs API, **cross-instance id rule**, **MaintenanceExecution grouped lists**, **MyMaintenance dataset PUT**, **staff vs account assignee**, **StatusBoost legacy expr**, **ServiceRequestTypes SLA remap**, **PMPlans equipment seed-link**, **Spaces semi-empty**) | [references/platform_usage_discoveries.md](references/platform_usage_discoveries.md) |
+| Process model templates (`doc.XXXX`), full RecordType tree | [references/process_model_template_localization.md](references/process_model_template_localization.md) |
+| EN target RU leftovers (Operations, `lst.*`, orgStructureApps, roleApps) | [references/en_template_ru_leftover_cleanup.md](references/en_template_ru_leftover_cleanup.md) |
 
 ### Browser recipes (entity-specific)
 
@@ -523,7 +527,7 @@ Refine **existing** skills/references with tested selectors and hash routes — 
 
 Follow Cursor’s create-skill guidance for frontmatter, description triggers, and progressive disclosure.
 
-**Repo boundary:** `{instance_progress_dir}` owns instance migration state and audits; **cmw-platform-agent** owns repeatable platform recipes — see [Where to document findings](#where-to-document-findings) above.
+**Repo boundary:** `{instance_progress_dir}` owns instance migration state and audits; **cmw-platform-agent** owns repeatable platform recipes — see [Where to document findings](#where-to-document-findings) and [instance_repo_documentation_boundary.md](references/instance_repo_documentation_boundary.md).
 
 ---
 
@@ -550,6 +554,9 @@ Follow Cursor’s create-skill guidance for frontmatter, description triggers, a
 | [references/workflow_sequences.md](references/workflow_sequences.md) | Reusable code patterns |
 | [references/localization.md](references/localization.md) | Both localization workflows: alias rename (9-phase) + RU→EN UI text translation |
 | [references/browser_automation.md](references/browser_automation.md) | Browser automation guide |
+| [references/instance_repo_documentation_boundary.md](references/instance_repo_documentation_boundary.md) | Platform vs instance repo: decision table, scratch, stubs, `doc.*` process model scope |
+| [references/process_model_template_localization.md](references/process_model_template_localization.md) | Localize all `doc.XXXX` process model templates: enumerate, checklist, dataset PUT pitfalls |
+| [references/en_template_ru_leftover_cleanup.md](references/en_template_ru_leftover_cleanup.md) | RU→EN on EN instance: Operations, lists, orgStructureApps, roleApps |
 | § [Growing platform skills](#9-growing-platform-skills) | Policy: capture repeatable API/UI workflows as skills or references |
 
 ## Optional companion skills (GitHub)

@@ -156,7 +156,7 @@ Before considering work complete:
 | **Instance-specific** | **Instance repo** (`{instance_progress_dir}`) | Migration progress JSON, harvest outputs, gap analyses, operator checklists, `docs/_scratch/` runners |
 | **Platform-generic** | **cmw-platform-agent** (this repo) | API patterns, OpenAPI shapes, `.agents/skills/cmw-platform*`, reusable browser/API workflows in `docs/` |
 
-Do **not** copy long-form instance audits into this repo; add a short generic lesson in a skill reference when it helps any tenant.
+Do **not** copy long-form instance audits into this repo; add a short generic lesson in a skill reference when it helps any tenant. **Full rules:** [.agents/skills/cmw-platform/references/instance_repo_documentation_boundary.md](.agents/skills/cmw-platform/references/instance_repo_documentation_boundary.md).
 
 **Scratch boundary:** Do **not** store instance migration harvest JSON, progress runners, or id maps under `docs/_scratch/` in **cmw-platform-agent** (see `docs/_scratch/README.md`). Instance artifacts belong under `{instance_progress_dir}/docs/_scratch/` and `{instance_progress_dir}/localization/migration_progress/`; link via `meta.harvest_path` / `meta.seed_path`.
 - Generate `YYYYMMDD` timestamps with native commands:
@@ -222,7 +222,7 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 
 ### Instance progress (parent agents)
 
-**Instance-specific** batch JSON, roadmaps, harvest outputs, and operator runbooks live in the **instance repository** at `{instance_progress_dir}` (e.g. `localization/migration_progress/`, `docs/localization/`). Platform agents use skills and references in **this repo** only; read instance state from disk there — never from chat memory. Harvest/seed patterns: [record_harvest_seed.md](.agents/skills/cmw-platform/references/record_harvest_seed.md); instance schema and tenant checklists under `{instance_progress_dir}`. Progress loops: [ralph_loop_goal_autonomy.md](.agents/skills/cmw-platform/references/ralph_loop_goal_autonomy.md), [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills).
+**Instance-specific** batch JSON, roadmaps, harvest outputs, and operator runbooks live in the **instance repository** at `{instance_progress_dir}` (e.g. `localization/migration_progress/`, `docs/localization/`). Platform agents use skills and references in **this repo** only; read instance state from disk there — never from chat memory. Harvest/seed patterns: [record_harvest_seed.md](.agents/skills/cmw-platform/references/record_harvest_seed.md) (platform-generic); instance playbook [tr_fr_record_harvest_seed.md](.agents/skills/cmw-platform/references/tr_fr_record_harvest_seed.md) → `{instance_progress_dir}/.agents/skills/cmw-platform/references/tr_fr_record_harvest_seed.md`; instance schema and tenant checklists under `{instance_progress_dir}/localization/migration_progress/`. Progress loops: [ralph_loop_goal_autonomy.md](.agents/skills/cmw-platform/references/ralph_loop_goal_autonomy.md), [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills).
 
 ### CMW Platform Terminology
 

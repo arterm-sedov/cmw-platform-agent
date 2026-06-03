@@ -2,7 +2,7 @@
 
 Generic dual-host pattern: read a bounded subset on the **source** host, create or update rows on the **target** host, persist id maps in the **instance repository** (`{instance_progress_dir}`) — not in cmw-platform-agent.
 
-**Instance schema and tenant checklists:** `{instance_progress_dir}/localization/migration_progress/README.md` and instance skills under `{instance_progress_dir}/.agents/skills/`.
+**Instance schema and tenant checklists:** `{instance_progress_dir}/localization/migration_progress/README.md` and instance skills under `{instance_progress_dir}/.agents/skills/`. Repo boundary: [instance_repo_documentation_boundary.md](instance_repo_documentation_boundary.md).
 
 ## JSON source of truth (required)
 
@@ -78,6 +78,10 @@ Same as rule 2 — expanded checklist for replay agents:
 ## CLI scripts (agnostic)
 
 See [scripts_index.md](scripts_index.md) — `harvest_template_records.py` (read-only), `seed_records_from_harvest.py` (apply `operations` / `map`), `backup_configuration_session.py` between themed batches. Pass `--base-url` or set `CMW_BASE_URL`; store JSON under `{instance_progress_dir}`, not cmw-platform-agent.
+
+## Instance playbook (not in this repo)
+
+Tenant-specific TR→FR / US FM batch detail (Volga, mz-tr/mz-fr, `tr_record_id` / `fr_record_id` naming): `{instance_progress_dir}/.agents/skills/cmw-platform/references/tr_fr_record_harvest_seed.md`. Stub redirect: [tr_fr_record_harvest_seed.md](tr_fr_record_harvest_seed.md).
 
 ## Related
 
