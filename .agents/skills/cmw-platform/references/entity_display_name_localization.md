@@ -2,7 +2,7 @@
 
 Translate **user-visible** labels (names, titles, column headers, button labels) on any Comindware tenant while keeping **system names** unchanged: `globalAlias`, technical aliases, `cmw.container.alias`, filter attribute keys, and BPMN technical ids.
 
-**Instance playbooks** (concrete designer URLs, first-wave targets, tenant batch notes): `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — platform stub: [en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md).
+**Instance playbooks** (concrete designer URLs, first-wave targets, tenant batch notes): `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md`.
 
 **Related:** [localization.md](localization.md) Workflow B · [documentation_template_localization.md](documentation_template_localization.md) (`doc.XXXX` trees) · [platform_usage_discoveries.md](platform_usage_discoveries.md) (dataset PUT, `globalAlias`) · [ui_components.md](ui_components.md) · [instance_repo_documentation_boundary.md](instance_repo_documentation_boundary.md).
 
@@ -116,5 +116,5 @@ After a tenant batch, append `operations[]` in `{instance_progress_dir}/localiza
 ## Related platform docs
 
 - [documentation_template_localization.md](documentation_template_localization.md) — enumerate all `doc.XXXX`, per-template checklist
-- [en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md) — stub → instance playbook
+- `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — instance playbook (EN target RU leftovers)
 - [browser_automation.md](browser_automation.md) — `#RecordType/…` hash patterns

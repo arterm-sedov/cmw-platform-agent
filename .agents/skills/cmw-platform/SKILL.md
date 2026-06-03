@@ -505,7 +505,7 @@ For better async, run long CLI in **background** (Shell `run_in_background` or a
 | Demo fill / migration usage (indicators, Code_calc, gap-fill, multi-list WO orchestration, Administration sweep, inspection form vs API, **cross-instance id rule**, **MaintenanceExecution grouped lists**, **MyMaintenance dataset PUT**, **staff vs account assignee**, **StatusBoost legacy expr**, **ServiceRequestTypes SLA remap**, **PMPlans equipment seed-link**, **Spaces semi-empty**) | [references/platform_usage_discoveries.md](references/platform_usage_discoveries.md) |
 | Documentation templates (`doc.XXXX`), full RecordType tree | [references/documentation_template_localization.md](references/documentation_template_localization.md) |
 | Entity display names (any tenant; aliases unchanged) | [references/entity_display_name_localization.md](references/entity_display_name_localization.md) |
-| EN target RU leftovers (instance playbook; Operations, registries) | Stub [references/en_template_ru_leftover_cleanup.md](references/en_template_ru_leftover_cleanup.md) → `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` |
+| EN target RU leftovers (instance playbook; Operations, registries) | `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` (instance repo only — no platform copy) |
 
 ### Browser recipes (entity-specific)
 
@@ -558,8 +558,7 @@ Follow Cursor’s create-skill guidance for frontmatter, description triggers, a
 | [references/instance_repo_documentation_boundary.md](references/instance_repo_documentation_boundary.md) | Platform vs instance repo: decision table, scratch, stubs, `doc.*` documentation template scope |
 | [references/entity_display_name_localization.md](references/entity_display_name_localization.md) | Display-name localization for templates, datasets, toolbars, buttons, forms, context (API + ontology; aliases unchanged) |
 | [references/documentation_template_localization.md](references/documentation_template_localization.md) | Localize all `doc.XXXX` documentation templates: enumerate, checklist, dataset PUT pitfalls |
-| [references/en_template_ru_leftover_cleanup.md](references/en_template_ru_leftover_cleanup.md) | Stub → instance RU leftover playbook (mz-fr first wave; not duplicated in platform repo) |
-| § [Growing platform skills](#9-growing-platform-skills) | Policy: capture repeatable API/UI workflows as skills or references |
+| § [Growing platform skills](#9-growing-platform-skills) | Policy: capture repeatable API/UI workflows as skills or references; instance RU leftover playbook: `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` |
 
 ## Optional companion skills (GitHub)
 

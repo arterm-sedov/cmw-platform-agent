@@ -52,7 +52,6 @@ Use placeholder `{instance_progress_dir}` in platform docs — never hardcode te
 | Platform stub (redirect only) | Canonical instance path |
 |------------------------------|-------------------------|
 | [tr_fr_record_harvest_seed.md](tr_fr_record_harvest_seed.md) | `{instance_progress_dir}/.agents/skills/cmw-platform/references/tr_fr_record_harvest_seed.md` |
-| [en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md) | `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` |
 | [us_fm_ru_to_en_replication.md](us_fm_ru_to_en_replication.md) | `{instance_progress_dir}/.agents/skills/cmw-platform/references/us_fm_ru_to_en_replication.md` |
 | [fm_hierarchy_ru_to_us_seed.md](fm_hierarchy_ru_to_us_seed.md) | `{instance_progress_dir}/.agents/skills/cmw-platform/references/fm_hierarchy_ru_to_us_seed.md` |
 | [cmw-platform-fm-hierarchy-seed/SKILL.md](../../cmw-platform-fm-hierarchy-seed/SKILL.md) | `{instance_progress_dir}/.agents/skills/cmw-platform-fm-hierarchy-seed/SKILL.md` |
@@ -91,7 +90,7 @@ Platform-generic hash patterns: [browser_automation.md](browser_automation.md) (
 - [record_harvest_seed.md](record_harvest_seed.md) — agnostic harvest/seed contract
 - [documentation_template_localization.md](documentation_template_localization.md) — `doc.XXXX` enumeration and per-template checklist
 - [entity_display_name_localization.md](entity_display_name_localization.md) — display names for any entity type (API + ontology)
-- [en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md) — stub → instance RU leftover playbook (Operations, solution dataset grids)
+- `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — instance RU leftover playbook (Operations, solution dataset grids; no platform file)
 - [ralph_loop_goal_autonomy.md](ralph_loop_goal_autonomy.md) — platform-generic Ralph loop
 - [SKILL.md §9](../SKILL.md#9-growing-platform-skills) — growing skills policy
 - [AGENTS.md](../../../../AGENTS.md) — short “Where findings belong” summary
