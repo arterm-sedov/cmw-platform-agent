@@ -36,6 +36,7 @@ TYPE_PREDICATE_MAPPING: dict[str, dict[str, str]] = {
     "DesktopWidgetConfig": {"alias": "cmw.desktopPage.widget.config.alias"},
     "ExportTemplate": {"alias": "cmw.alias"},
     "DesktopComponent": {"alias": "cmw.desktopPage.component.alias"},
+    "Application": {"alias": "cmw.solution.alias", "name": "cmw.solution.name"},
 }
 
 TYPE_PREFIX_MAPPING: dict[str, list[str]] = {
@@ -58,6 +59,7 @@ TYPE_PREFIX_MAPPING: dict[str, list[str]] = {
     "DesktopWidgetConfig": ["dwc."],
     "ExportTemplate": ["exportTemplate."],
     "DesktopComponent": ["component."],
+    "Application": ["sln."],
 }
 
 DEFAULT_PARAMETER = "alias"
@@ -303,6 +305,92 @@ def get_ontology_objects(
                 errors[f"{obj_type}_aliasProperty"] = str(e)
             except Exception as e:
                 errors[f"{obj_type}_aliasProperty"] = f"Parse error: {e}"
+
+            continue
+
+        # Special handling for Application type with both alias and name
+        if obj_type == "Application" and parameter == "alias":
+            alias_results = {}
+            name_results = {}
+
+            # Query cmw.solution.alias for alias
+            predicate_alias = type_mapping["alias"]
+            request_body_alias: dict[str, Any] = {
+                "predicate": predicate_alias,
+                "min": min_count,
+                "max": max_count,
+            }
+
+            try:
+                resp = requests.post(endpoint, headers=headers, json=request_body_alias, timeout=cfg.timeout)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    items_to_process = []
+                    if isinstance(data, list):
+                        items_to_process = data
+                    elif isinstance(data, dict):
+                        items_to_process = data.get("items", []) or data.get("data", []) or data.get("results", [])
+
+                    for item in items_to_process:
+                        if isinstance(item, dict):
+                            item_id = item.get("key", "") or item.get("id", "")
+                            clean_id = extract_id(item_id)
+                            system_name = extract_system_name(item)
+                            if clean_id:
+                                alias_results[clean_id] = system_name
+                        elif isinstance(item, str):
+                            clean_id = extract_id(item)
+                            if clean_id:
+                                alias_results[clean_id] = clean_id
+            except requests.RequestException as e:
+                errors[f"{obj_type}_alias"] = str(e)
+            except Exception as e:
+                errors[f"{obj_type}_alias"] = f"Parse error: {e}"
+
+            # Query cmw.solution.name for display name
+            if "name" in type_mapping:
+                predicate_name = type_mapping["name"]
+                request_body_name: dict[str, Any] = {
+                    "predicate": predicate_name,
+                    "min": min_count,
+                    "max": max_count,
+                }
+
+                try:
+                    resp = requests.post(endpoint, headers=headers, json=request_body_name, timeout=cfg.timeout)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        items_to_process = []
+                        if isinstance(data, list):
+                            items_to_process = data
+                        elif isinstance(data, dict):
+                            items_to_process = data.get("items", []) or data.get("data", []) or data.get("results", [])
+
+                        for item in items_to_process:
+                            if isinstance(item, dict):
+                                item_id = item.get("key", "") or item.get("id", "")
+                                clean_id = extract_id(item_id)
+                                display_name = extract_system_name(item)
+                                if clean_id:
+                                    name_results[clean_id] = display_name
+                            elif isinstance(item, str):
+                                clean_id = extract_id(item)
+                                if clean_id:
+                                    name_results[clean_id] = clean_id
+                except requests.RequestException as e:
+                    errors[f"{obj_type}_name"] = str(e)
+                except Exception as e:
+                    errors[f"{obj_type}_name"] = f"Parse error: {e}"
+
+            # Merge alias and name results
+            all_ids = set(alias_results.keys()) | set(name_results.keys())
+            for obj_id in all_ids:
+                raw_results.append({
+                    "id": obj_id,
+                    "systemName": alias_results.get(obj_id, obj_id),
+                    "displayName": name_results.get(obj_id, ""),
+                    "original_type": obj_type,
+                })
 
             continue
 

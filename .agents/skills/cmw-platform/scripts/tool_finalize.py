@@ -10,8 +10,7 @@ Output fields (schema.json compliant):
   - parent_template (str)
   - aliasOriginal (str)
   - aliasRenamed (str, empty by default)
-  - displayNameOriginal (str)
-  - displayNameRenamed (str, empty by default)
+  - displayNames (array of {displayNameOriginal, displayNameRenamed, jsonPathOriginal, jsonPathRenamed})
   - jsonPathOriginal (array of str)
   - jsonPathRenamed (array of str, empty by default)
   - expressions (array of {jsonPathOriginal, jsonPathRenamed, expressionOriginal, expressionRenamed})
@@ -19,7 +18,6 @@ Output fields (schema.json compliant):
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -27,18 +25,162 @@ APP_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(APP_DIR))
 
 
+def get_display_names(obj: dict) -> list:
+    """Extract displayNames array from verified/skipped entry."""
+    display_names = obj.get("displayNames", [])
+    if display_names:
+        return display_names
+
+    display_name = obj.get("displayNameOriginal") or obj.get("displayName", "")
+    if display_name:
+        json_path = obj.get("jsonPathOriginal", obj.get("json_file", ""))
+        if isinstance(json_path, list):
+            dn_paths = [p for p in json_path if "/Name" in p or "/DisplayName" in p]
+        else:
+            dn_paths = [json_path] if json_path else []
+
+        return [{
+            "displayNameOriginal": display_name,
+            "displayNameRenamed": "",
+            "jsonPathOriginal": dn_paths,
+            "jsonPathRenamed": [],
+        }]
+
+    return []
+
+
+def has_display_name(obj: dict) -> bool:
+    """Check if entry has any non-empty displayName."""
+    for dn in get_display_names(obj):
+        if dn.get("displayNameOriginal", ""):
+            return True
+    return False
+
+
+def extract_template_from_path(path: str) -> str:
+    """Extract template name from JSON path.
+    Example: 'Volga/RecordTemplates/ProvedenieTO/Attributes/x.json' -> 'ProvedenieTO'
+    """
+    normalized = path.replace("\\", "/")
+    parts = [p for p in normalized.split("/") if p and not p.endswith(".json")]
+    for i, part in enumerate(parts):
+        if part in ("RecordTemplates", "ProcessTemplates", "Workspaces", "Pages",
+                   "Toolbars", "Datasets", "Forms", "Attributes", "UserCommands",
+                   "Cards", "Carts", "Roles", "Triggers", "WidgetConfigs"):
+            if i + 1 < len(parts):
+                return parts[i + 1]
+    return ""
+
+
+def resolve_parent_template(obj: dict) -> str:
+    """Resolve parent_template with special cases.
+
+    - GlobalAlias, InstanceGlobalAlias: return empty ( Owner is inside these params)
+    - Container: for Template types return empty
+    - Root, Columns, Items: extract from path
+    """
+    parent_template = obj.get("parent_template", "")
+    obj_type = obj.get("type", "")
+
+    special_parents = {"GlobalAlias", "InstanceGlobalAlias"}
+    container_parents = {"Container", "Root", "Columns", "Items"}
+
+    if parent_template in special_parents:
+        return ""
+
+    if parent_template in container_parents:
+        json_path = obj.get("jsonPathOriginal", [])
+        if isinstance(json_path, list) and json_path:
+            json_path = json_path[0]
+        return extract_template_from_path(json_path)
+
+    if not parent_template:
+        json_path = obj.get("jsonPathOriginal", [])
+        if isinstance(json_path, list) and json_path:
+            json_path = json_path[0]
+        return extract_template_from_path(json_path)
+
+    return parent_template
+
+
 def match_expressions_to_entry(entry_paths: list, dangerous_expressions: list) -> list:
     """Match expressions to an entry based on jsonPathOriginal.
-    Expressions whose jsonPathOriginal starts with any of entry_paths belong to this entry.
+    Matches by template name - expressions belonging to the same template as the entry.
     """
     matched = []
-    for expr in dangerous_expressions:
-        expr_path = expr.get("jsonPathOriginal", "")
-        for entry_path in entry_paths:
-            if expr_path.startswith(entry_path):
+    for entry_path in entry_paths:
+        template_name = extract_template_from_path(entry_path)
+        if not template_name:
+            continue
+        for expr in dangerous_expressions:
+            expr_path = expr.get("jsonPathOriginal", "")
+            expr_template = extract_template_from_path(expr_path)
+            if expr_template == template_name:
                 matched.append(expr)
-                break
     return matched
+
+
+def get_server_url(output_dir: Path, app: str) -> str:
+    """Read metadata.json to get server URL."""
+    candidates = [
+        output_dir.parent / f"{app}_json",
+        output_dir.parent / app,
+    ]
+    for extract_dir in candidates:
+        metadata_file = extract_dir / "metadata.json"
+        if metadata_file.exists():
+            with open(metadata_file, encoding="utf-8") as f:
+                data = json.load(f)
+            server = data.get("Server", "")
+            if server:
+                return server.replace("https://", "").replace("http://", "").rstrip("/")
+    return "unknown"
+
+
+def deduplicate_by_ids(entries: list) -> list:
+    """Merge entries with same (aliasOriginal, type, ids).
+
+    Merge strategy:
+    - ids: union of all non-empty ids arrays
+    - displayNames: first non-empty displayNames
+    - aliasLocked: True if ANY entry is True (locked wins)
+    - jsonPathOriginal: union of all paths
+    - expressions: union of all expressions (dedup by jsonPathOriginal)
+    """
+    dedup_map = {}
+
+    for obj in entries:
+        ids_tuple = tuple(sorted(obj.get("ids", []))) if obj.get("ids") else ()
+        key = (obj.get("aliasOriginal", ""), obj.get("type", ""), ids_tuple)
+
+        if key not in dedup_map:
+            dedup_map[key] = obj.copy()
+        else:
+            existing = dedup_map[key]
+
+            if not existing.get("ids") and obj.get("ids"):
+                existing["ids"] = obj["ids"]
+            elif obj.get("ids") and existing.get("ids"):
+                existing["ids"] = list(set(existing["ids"] + obj["ids"]))
+
+            if obj.get("aliasLocked") and not existing.get("aliasLocked"):
+                existing["aliasLocked"] = True
+
+            if not existing.get("displayNames") and obj.get("displayNames"):
+                existing["displayNames"] = obj["displayNames"]
+
+            existing_paths = set(existing.get("jsonPathOriginal", []))
+            for path in obj.get("jsonPathOriginal", []):
+                if path not in existing_paths:
+                    existing.setdefault("jsonPathOriginal", []).append(path)
+
+            existing_expr = {e.get("jsonPathOriginal", "") for e in existing.get("expressions", [])}
+            for expr in obj.get("expressions", []):
+                key_expr = expr.get("jsonPathOriginal", "")
+                if key_expr and key_expr not in existing_expr:
+                    existing.setdefault("expressions", []).append(expr)
+
+    return list(dedup_map.values())
 
 
 def main():
@@ -71,6 +213,20 @@ def main():
         except (json.JSONDecodeError, OSError) as e:
             print(f"  Warning: Failed to load {vf}: {e}")
 
+    app_aliases_file = output_dir / f"{args.app}_Application_aliases.json"
+    if app_aliases_file.exists():
+        try:
+            with open(app_aliases_file, encoding="utf-8") as f:
+                app_data = json.load(f)
+            app_aliases = app_data.get("aliases", [])
+            if app_aliases:
+                print(f"  Application: {len(app_aliases)} aliases (auto-locked)")
+                for alias_entry in app_aliases:
+                    alias_entry["aliasLocked"] = True
+                verified.extend(app_aliases)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"  Warning: Failed to load Application aliases: {e}")
+
     # Load dangerous aliases
     dangerous_file = output_dir / f"{args.app}_dangerous_aliases.json"
     dangerous = set()
@@ -96,7 +252,7 @@ def main():
     for obj in verified:
         alias = obj.get("alias", obj.get("aliasOriginal", ""))
         display_name = obj.get("displayName", obj.get("displayNameOriginal", ""))
-        parent_template = obj.get("parent_template", "")
+        parent_template = resolve_parent_template(obj)
 
         # Get ids (handle both "ids" and "id")
         obj_ids = obj.get("ids", obj.get("id", []))
@@ -120,8 +276,14 @@ def main():
 
         # aliasLocked logic for verified entries
         alias_locked = obj.get("aliasLocked", False)
-        if alias_locked and is_dangerous:
-            alias_locked = False  # Unlock dangerous aliases
+        obj_type = obj.get("type", "")
+        if obj_type == "Application":
+            alias_locked = True
+        elif alias_locked and is_dangerous:
+            if obj_type in ("UserCommand", "Attribute"):
+                pass
+            else:
+                alias_locked = False
 
         schema_obj = {
             "type": obj.get("type", ""),
@@ -129,8 +291,7 @@ def main():
             "parent_template": parent_template,
             "aliasOriginal": alias,
             "aliasRenamed": "",
-            "displayNameOriginal": display_name,
-            "displayNameRenamed": "",
+            "displayNames": get_display_names(obj),
             "jsonPathOriginal": json_path,
             "jsonPathRenamed": [],
             "expressions": expressions,
@@ -139,12 +300,11 @@ def main():
 
         schema_verified.append(schema_obj)
 
-    # Process skipped entries with new logic
+    # Process skipped entries
     schema_skipped = []
     for obj in skipped:
         alias = obj.get("alias", obj.get("aliasOriginal", ""))
-        display_name = obj.get("displayName", obj.get("displayNameOriginal", ""))
-        parent_template = obj.get("parent_template", "")
+        parent_template = resolve_parent_template(obj)
 
         # Get jsonPathOriginal
         json_path = obj.get("jsonPathOriginal", obj.get("path", obj.get("json_file", "")))
@@ -158,15 +318,9 @@ def main():
 
         is_dangerous = alias in dangerous
 
-        if is_dangerous:
-            # Skipped but dangerous - unlock for rename
-            alias_locked = False
-        elif display_name:
-            # Has displayName - lock for rename
+        alias_locked = obj.get("aliasLocked", False)
+        if obj.get("type") == "Application":
             alias_locked = True
-        else:
-            # No displayName - allow rename
-            alias_locked = False
 
         schema_obj = {
             "type": obj.get("type", ""),
@@ -174,8 +328,7 @@ def main():
             "parent_template": parent_template,
             "aliasOriginal": alias,
             "aliasRenamed": "",
-            "displayNameOriginal": display_name,
-            "displayNameRenamed": "",
+            "displayNames": get_display_names(obj),
             "jsonPathOriginal": json_path,
             "jsonPathRenamed": [],
             "expressions": expressions,
@@ -187,6 +340,10 @@ def main():
     # Merge all entries
     all_entries = schema_verified + schema_skipped
 
+    print(f"\nDeduplicating {len(all_entries)} entries by ids...")
+    all_entries = deduplicate_by_ids(all_entries)
+    print(f"After dedup: {len(all_entries)} entries")
+
     verified_locked = [v for v in all_entries if v.get("aliasLocked")]
     verified_normal = [v for v in all_entries if not v.get("aliasLocked")]
 
@@ -195,7 +352,8 @@ def main():
     print(f"  aliasLocked=false (will rename): {len(verified_normal)}")
 
     # Output single file in schema format
-    verified_file = output_dir / f"{args.app}_verified_complete.json"
+    server_url = get_server_url(output_dir, args.app)
+    verified_file = output_dir / f"{server_url}_{args.app}_tr.json"
     with open(verified_file, "w", encoding="utf-8") as f:
         json.dump(all_entries, f, indent=2, ensure_ascii=False)
 

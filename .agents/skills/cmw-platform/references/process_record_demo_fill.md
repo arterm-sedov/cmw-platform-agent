@@ -1,0 +1,11 @@
+# Process record demo fill (reference)
+
+**Canonical skill:** [cmw-platform-process-record-fill](../../cmw-platform-process-record-fill/SKILL.md) — running process instances, PascalCase aliases, TR harvest read-only, indicator KPIs.
+
+**Indicators, status Code_calc, conflicting list filters:** [platform_usage_discoveries.md](platform_usage_discoveries.md)
+
+Quick reminders:
+
+- URL `#form/oa.{N}/form.{F}/{recordId}` → edit existing row; GET before PUT.
+- `Attribute/List` → PascalCase for `create_edit_record` / PUT; GET Record uses lowercase keys.
+- Instance progress: `{instance_progress_dir}/localization/migration_progress/YYYYMMDD_phase1_process_demo_fill.json`.
