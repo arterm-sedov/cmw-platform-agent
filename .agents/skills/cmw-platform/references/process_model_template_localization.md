@@ -1,10 +1,10 @@
-# Documentation template localization (`doc.XXXX`)
+# Process model template localization (`doc.XXXX`)
 
-Platform-generic workflow for localizing **documentation templates** on an EN target instance (`{target_host}`). UI navigation uses **`#RecordType/doc.{N}/…`** — treat **`doc.XXXX` as a family** (`doc.1`, `doc.2`, …), not a single template.
+Platform-generic workflow for localizing **process model templates** on an EN target instance (`{target_host}`). UI navigation uses **`#RecordType/doc.{N}/…`** — treat **`doc.XXXX` as a family** (`doc.1`, `doc.2`, …), not a single template.
 
 **Instance scope:** concrete `doc.*` ids, wave results, and `operations[]` live in `{instance_progress_dir}/localization/migration_progress/` — see [instance_repo_documentation_boundary.md](instance_repo_documentation_boundary.md).
 
-**Related:** [en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md) (solution-level dataset grids + first-wave targets) · [platform_usage_discoveries.md](platform_usage_discoveries.md) (dataset PUT, filters) · [ui_components.md](ui_components.md) · [localization.md](localization.md) Workflow B.
+**Related:** `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` (solution-level dataset grids + first-wave targets) · [platform_usage_discoveries.md](platform_usage_discoveries.md) (dataset PUT, filters) · [ui_components.md](ui_components.md) · [localization.md](localization.md) Workflow B.
 
 ---
 
@@ -12,12 +12,15 @@ Platform-generic workflow for localizing **documentation templates** on an EN ta
 
 | Term | Meaning |
 |------|---------|
-| **Documentation template** | `DocumentationTemplate` container in the **RecordType** admin tree (`#RecordType/doc.{N}/…`) — **not** a generic document file template and **not** a BPMN process model alias |
+| **Process model template** | UI alias `doc.{N}` in the **RecordType** admin tree (`#RecordType/doc.{N}/…`) — the operator-facing name for this scope |
+| **DocumentationTemplate** | Platform API/container **type name** only (`container.type`, ontology) — map in terminology tables; **do not** call `doc.*` a "documentation template" in prose |
 | **`doc.{N}`** | Platform **template id** in URLs (`#RecordType/doc.1/Operations`) — enumerate **all** `doc.*` on the target host |
 | **`pa.{N}`** | Separate id family for **process templates** in TemplateService (`Type: Process`) — do not assume `doc.N` equals `pa.N` without GetAxioms |
 | **`oa.{N}`** | **Record template** (business data templates) — different scope; see boundary doc |
 
-**Rule:** Batch JSON and operator notes must record `meta.record_type_id: "doc.1"` (or `doc.2`, …) when the fix is **documentation-template** scoped — do not file under unrelated `oa.*` batches unless the wave explicitly spans both.
+**API name mapping:** UI alias **`doc.N`** = **process model template** (user-facing). Web API owner type may still be **`DocumentationTemplate`** with system names such as `template_ProcessModelNone_systemSolution` and toolbar/dataset owner **`ProcessModelNone`**. These names are not interchangeable — use **process model template** in skills and operator docs; cite **`DocumentationTemplate`** only when describing API payloads or `container.type`.
+
+**Rule:** Batch JSON and operator notes must record `meta.record_type_id: "doc.1"` (or `doc.2`, …) when the fix is **process-model-template** scoped — do not file under unrelated `oa.*` record-template batches unless the wave explicitly spans both.
 
 ---
 
@@ -25,7 +28,7 @@ Platform-generic workflow for localizing **documentation templates** on an EN ta
 
 Use **read-only** discovery first (`CMW_USE_DOTENV=true`, `{target_host}` in `.env`). Never write to `{source_host}` (RU reference).
 
-Sort by numeric suffix (`doc.1` … `doc.N`); localize **each** id independently. On a typical FM EN target, expect **~69** documentation templates (`doc.1`–`doc.69`) — not a single `doc.1`.
+Sort by numeric suffix (`doc.1` … `doc.N`); localize **each** id independently. On a typical FM EN target, expect **~69** process model templates (`doc.1`–`doc.69`) — not a single `doc.1`.
 
 ### 1. Ontology alias scan (preferred — complete `doc.*` set)
 
@@ -77,7 +80,7 @@ Child APIs (`webapi/Dataset/List/Template@{app}.{template}`, buttons, forms) nee
 | Hash **RecordType id** | `doc.1` |
 | Administration **system name** field | `template_ProcessModelNone_systemSolution` |
 | Toolbar/dataset **owner** in GET body | `ProcessModelNone` |
-| `container.type` in Web API | `DocumentationTemplate` (not `RecordTemplate`) |
+| `container.type` in Web API | `DocumentationTemplate` (API type — not user-facing "documentation template") |
 
 List/get children with **`template_ProcessModelNone_systemSolution`** (or per-item alias from GetAxioms). PUT bodies must keep **`DocumentationTemplate`** on `container` — `edit_or_create_toolbar` defaults to `RecordTemplate` and fails.
 
@@ -85,7 +88,7 @@ List/get children with **`template_ProcessModelNone_systemSolution`** (or per-it
 
 **Display-name PUT (batch-friendly):** `edit_or_create_record_template` with `application_system_name: "CMW_FM"`, `operation: "edit"`, `system_name` = value from `cmw.container.alias`, `name` = EN string. Under the hood: `PUT webapi/RecordTemplate/CMW_FM` with `globalAlias.type: DocumentationTemplate`. **Do not** pass `sln.1` as application — PUT fails with “Cannot get id for solution by solution alias: sln.1”.
 
-Alternative for single fields: `AddStatement` on `cmw.object.name` ([en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md) Pattern A).
+Alternative for single fields: `AddStatement` on `cmw.object.name` (instance playbook Pattern A in `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md`).
 
 Optional: `get_platform_entity_url` / `platform_entity_resolver` when the id is indexed — confirm `application` + `parent_system_name` before list/edit calls.
 
@@ -97,7 +100,7 @@ Optional: `get_platform_entity_url` / `platform_entity_resolver` when the id is 
 
 Navigate `#RecordType/doc.{N}/Administration` per discovered id; note sibling areas (**Operations**, **Lists**, **Forms**, **Context**). Use browser only to **discover** missing ids or verify labels — prefer API PUT for bulk renames.
 
-**Do not** commit host-specific id tables to this repo; flush discovered `doc.*` list to instance progress JSON `documentation_templates[]` (or `meta.documentation_template_count`).
+**Do not** commit host-specific id tables to this repo; flush discovered `doc.*` list to instance progress JSON `process_model_templates[]` (or `meta.process_model_template_count`).
 
 ---
 
@@ -132,7 +135,7 @@ Use US FM facility-management English on `{target_host}`; `{source_host}` read-o
 
 ## Dataset PUT pitfalls (`globalAlias`, filters)
 
-Documentation-template lists almost always bind to **Dataset** entities — same rules as record templates:
+Process model template lists almost always bind to **Dataset** entities — same rules as record templates:
 
 | Pitfall | Remediation |
 |---------|-------------|
@@ -185,13 +188,13 @@ Independent **`doc.{N}`** trees (no shared dataset writes) may run in **parallel
 
 1. Re-GET each edited dataset/button; confirm Cyrillic gone from user-visible fields.
 2. Open UI list/Operations tabs under each `doc.XXXX` (or snapshot) for regressions.
-3. Flush instance `operations[]` / `documentation_templates[]` — not platform `docs/_scratch/`.
+3. Flush instance `operations[]` / `process_model_templates[]` — not platform `docs/_scratch/`.
 
 ---
 
 ## Related platform docs
 
 - [instance_repo_documentation_boundary.md](instance_repo_documentation_boundary.md) — `doc.*` vs `oa.*`, scratch, promotion
-- [en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md) — stub → instance playbook (orgStructureApps, roleApps, first-wave URLs)
+- `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — instance playbook (orgStructureApps, roleApps, first-wave URLs)
 - [browser_automation.md](browser_automation.md) — `#RecordType/…` hash patterns
 - [api_endpoints.md](api_endpoints.md) — Template list endpoints
