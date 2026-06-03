@@ -76,7 +76,7 @@ Preferred for bulk, repeatable edits when PUT succeeds:
 | Hash segment (pattern) | Entity kind | Typical work |
 |------------------------|-------------|--------------|
 | `#RecordType/doc.{N}/Operations` | Process model template + Operations buttons | Pattern A on `event.*` or Pattern B on buttons |
-| `#RecordType/doc.{N}/Lists/lst.{M}` | Table on documentation template | Dataset PUT |
+| `#RecordType/doc.{N}/Lists/lst.{M}` | Table on process model template | Dataset PUT |
 | `#RecordType/oa.{N}/Lists/lst.{M}` | Table on record template | Dataset PUT |
 | `#solutions/sln.{N}/templates/showall/cmw.container.dataset.*` | Registry / solution dataset grid | Ontology on `lst.*` or catalog template names |
 
