@@ -115,7 +115,7 @@ For **each** `doc.XXXX`, walk the tree in this order (re-verify with GET after e
 | **Lists** | `#RecordType/doc.{N}/Lists/lst.{M}` | Dataset GET/PUT per list’s backing table | Column **name**, dataset **name**, filters |
 | **Linked tables** | Resolver / dataset aliases under template | `get_dataset` → merge → `edit_or_create_dataset` | Column headers, `systemFilterExpression`, scalar `filter` |
 | **Toolbars** | Linked to datasets/lists | `get_toolbar` + raw `PUT webapi/Toolbar/{app}` (preserve `DocumentationTemplate`) | Toolbar title, item display names — **system-solution toolbars may ignore PUT** (verify GET); use designer if labels stay RU |
-| **Forms / cards** | `#form/...` under template | `list_forms`, form edit tools | Titles, section labels (non-calculated) |
+| **Forms / cards** | `#RecordType/doc.{N}/Forms` | `list_forms` → `GET/PUT webapi/Form/CMW_FM` (`edit_or_create_form`) | Form **name**, section `displayName`, widget `label.text` (plain string on system-solution BPMN forms — do **not** rewrite `label.text` to `{en,de,ru}` dicts; breaks GET/List with `PropertyPathConvertException`) |
 
 **Cyrillic scan:** walk JSON from GET responses; flag strings matching `[\u0400-\u04FF]`. Skip **system names** unless the migration wave explicitly renames aliases (Workflow A — [localization.md](localization.md)).
 
@@ -144,6 +144,8 @@ Process model template lists almost always bind to **Dataset** entities — same
 | **`systemFilterExpression`** still references RU status words or `{source_host}` ids | GET status/catalog rows on **target** → remap expression literals and ids |
 | **`FilterTree` `children: []`** after PUT | Some hosts **strip** FilterTree children via API — use **designer UI** for list tab filters ([platform_usage_discoveries.md](platform_usage_discoveries.md) § Cancellation / Terminate lists) |
 | Partial PUT drops columns/toolbar | Merge **full** GET body; change only intended keys |
+| Form PUT converts `label.text` string → i18n dict | Keep **plain EN string** for `label.text` on `template_*_systemSolution` forms; verify `GET webapi/Form/...` after batch |
+| Form GET/List `PropertyPathConvertException` after bad PUT | **Minimal repair:** `PUT webapi/Form/CMW_FM` with `{globalAlias, name}` EN only (restores export; may clear `root` layout — restore field layout from FR config backup / designer) |
 
 → Detail: [platform_usage_discoveries.md](platform_usage_discoveries.md#dataset-put-endpoint-globalalias-and-full-body)
 
