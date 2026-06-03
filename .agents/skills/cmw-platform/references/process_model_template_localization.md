@@ -104,18 +104,47 @@ Navigate `#RecordType/doc.{N}/Administration` per discovered id; note sibling ar
 
 ---
 
-## Per-template localization checklist
+## Per-template localization checklist (five areas)
 
-For **each** `doc.XXXX`, walk the tree in this order (re-verify with GET after each wave):
+For **each** `doc.XXXX`, walk these **five RecordType areas** in order (re-verify with GET after each wave). **Administration** (template root display name) is a sixth pass — often batched first via `edit_or_create_record_template` / `cmw.object.name`.
 
-| Area | UI hash (pattern) | API / tools | What to translate |
-|------|-------------------|-------------|-------------------|
-| **Administration** | `#RecordType/doc.{N}/Administration` | Template metadata via GetAxioms / template GET | Display name, description fields with Cyrillic |
-| **Operations** | `#RecordType/doc.{N}/Operations` | `webapi/UserCommand/List/Template@{app}.{tmpl}` · `edit_or_create_button` | Button **name**, **description**, toolbar item **name** overrides |
-| **Lists** | `#RecordType/doc.{N}/Lists/lst.{M}` | Dataset GET/PUT per list’s backing table | Column **name**, dataset **name**, filters |
-| **Linked tables** | Resolver / dataset aliases under template | `get_dataset` → merge → `edit_or_create_dataset` | Column headers, `systemFilterExpression`, scalar `filter` |
-| **Toolbars** | Linked to datasets/lists | `get_toolbar` + raw `PUT webapi/Toolbar/{app}` (preserve `DocumentationTemplate`) | Toolbar title, item display names — **system-solution toolbars may ignore PUT** (verify GET); use designer if labels stay RU |
-| **Forms / cards** | `#RecordType/doc.{N}/Forms` | `list_forms` → `GET/PUT webapi/Form/CMW_FM` (`edit_or_create_form`) | Form **name**, section `displayName`, widget `label.text` (plain string on system-solution BPMN forms — do **not** rewrite `label.text` to `{en,de,ru}` dicts; breaks GET/List with `PropertyPathConvertException`) |
+| # | Area | UI hash (pattern) | API / tools | What to translate |
+|---|------|-------------------|-------------|-------------------|
+| 1 | **Context** | `#RecordType/doc.{N}/Context` | `list_attributes` · attribute PUT · ontology fallback | Attribute **display names** in context UI (property/column captions) — **not** attribute aliases |
+| 2 | **Forms** | `#RecordType/doc.{N}/Forms` | `list_forms` → `GET/PUT webapi/Form/{app}` | Form **title** (`name`); field labels only with [Form PUT safe patterns](#form-put-safe-patterns) |
+| 3 | **Operations** | `#RecordType/doc.{N}/Operations` | `webapi/UserCommand/List/Template@{app}.{tmpl}` · `edit_or_create_button` · `AddStatement` on `cmw.eventTrigger.name` | Button **name**, **description** — aliases (`event.*`) frozen |
+| 4 | **Toolbar** | `#RecordType/doc.{N}/Toolbar/` | `get_toolbar` + `PUT webapi/Toolbar/{app}` (`DocumentationTemplate` owner) | Toolbar title, item labels — expect **PUT no-op** on system-solution toolbars ([entity_display_name_localization.md](entity_display_name_localization.md#pattern-b--web-api-get--merge--put)) |
+| 5 | **Lists** | `#RecordType/doc.{N}/Lists/lst.{M}` | Dataset GET/PUT (`defaultList` or named alias) | Dataset **name**, column **name**, filter display literals — use dataset **`alias`** from `list_datasets`, not assumed `lst.M` |
+
+**Also (same template, different layer):**
+
+| Layer | UI hash | Doc |
+|-------|---------|-----|
+| **Instance rows** in list grid | `#data/doc.{N}/lst.{M}/` | [record_instance_field_localization.md](record_instance_field_localization.md) — Records API, not dataset metadata |
+| **Linked tables** under template | Resolver / dataset aliases | `get_dataset` → merge → `edit_or_create_dataset` — column headers, `systemFilterExpression`, scalar `filter` |
+
+---
+
+## Form PUT safe patterns
+
+System-solution BPMN forms (`template_*_systemSolution`) are fragile under full-body PUT.
+
+| Safe | Unsafe |
+|------|--------|
+| `PUT webapi/Form/{app}` with **`{ "globalAlias": {…}, "name": "EN title" }`** only | Full GET body with hundreds of `label.text` edits in one PUT |
+| Plain **string** `label.text` when host already stores strings | Converting `label.text` from string → **`{ "en", "de", "ru" }`** i18n dict |
+| Scan with read-only GET / list_forms before apply | Assuming list_forms `alias` alone without GET verify |
+
+**Regression signal:** `PropertyPathConvertException` on Form GET/List after a batch apply.
+
+**Repair sequence:**
+
+1. Stop further full-body form PUTs.
+2. For each form: minimal PUT `{ globalAlias, name }` with EN title (preserves export path).
+3. If `root` / field layout empty in GET — restore from **configuration backup** taken before the wave, then re-apply labels **one form at a time** with plain-string `label.text` only.
+4. Re-GET every form; confirm `name` has no Cyrillic before claiming Forms area done.
+
+Detail: [entity_display_name_localization.md](entity_display_name_localization.md) · instance wave notes in `{instance_progress_dir}/localization/migration_progress/*_doc_forms_*.json`.
 
 **Cyrillic scan:** walk JSON from GET responses; flag strings matching `[\u0400-\u04FF]`. Skip **system names** unless the migration wave explicitly renames aliases (Workflow A — [localization.md](localization.md)).
 
@@ -197,6 +226,8 @@ Independent **`doc.{N}`** trees (no shared dataset writes) may run in **parallel
 ## Related platform docs
 
 - [instance_repo_documentation_boundary.md](instance_repo_documentation_boundary.md) — `doc.*` vs `oa.*`, scratch, promotion
-- `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — instance playbook (orgStructureApps, roleApps, first-wave URLs)
+- [record_instance_field_localization.md](record_instance_field_localization.md) — instance **data** in `#data/doc.N/lst.M/`
+- [entity_display_name_localization.md](entity_display_name_localization.md) — datasets, toolbars, buttons, ontology fallbacks
+- `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — instance playbook (wave outcomes; no platform copy)
 - [browser_automation.md](browser_automation.md) — `#RecordType/…` hash patterns
-- [api_endpoints.md](api_endpoints.md) — Template list endpoints
+- [api_endpoints.md](api_endpoints.md) — Template and Records endpoints

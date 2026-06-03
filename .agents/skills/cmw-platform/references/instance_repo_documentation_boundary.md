@@ -16,6 +16,7 @@ Use placeholder `{instance_progress_dir}` in platform docs — never hardcode te
 | Volga/mz-tr/mz-fr audits, TR→FR maps, gap analyses, roadmaps | — | `docs/`, `docs/localization/`, `localization/AGENTS.md` |
 | US FM replication, hierarchy seed order, Ralph instance consumer | Stub only (see below) | `.agents/skills/cmw-platform/references/us_fm_ru_to_en_replication.md`, `fm_hierarchy_ru_to_us_seed.md`, `cmw-platform-fm-hierarchy-seed/`, `ralph-loop-instance/` |
 | Repeatable API/UI lesson (any tenant) | `references/platform_usage_discoveries.md` or extend an existing reference | One-line pointer + link to platform ref after wave flush |
+| EN-target RU leftover **playbook** (concrete designer URLs, Pattern A–E outcomes) | **Stub only** in platform (`en_template_ru_leftover_cleanup.md` → moved) | Full playbook under `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — **never** duplicate into platform `references/` |
 | CLI scripts (harvest, seed, backup) | `.agents/skills/cmw-platform/scripts/` | Invoke from instance; **write outputs** under instance paths only |
 | OpenAPI, tool inventory, browser hash patterns | `cmw_open_api/`, `references/*` | Cite platform paths; do not fork OpenAPI into instance |
 | Localization of Volga CTF / translation memory | — | `localization/`, `comindware-l10n` skills in instance |
@@ -88,9 +89,10 @@ Platform-generic hash patterns: [browser_automation.md](browser_automation.md) (
 ## Related platform docs
 
 - [record_harvest_seed.md](record_harvest_seed.md) — agnostic harvest/seed contract
-- [process_model_template_localization.md](process_model_template_localization.md) — `doc.XXXX` enumeration and per-template checklist
-- [entity_display_name_localization.md](entity_display_name_localization.md) — display names for any entity type (API + ontology)
-- `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — instance RU leftover playbook (Operations, solution dataset grids; no platform file)
+- [process_model_template_localization.md](process_model_template_localization.md) — `doc.XXXX` enumeration, five-area checklist, form PUT safety
+- [entity_display_name_localization.md](entity_display_name_localization.md) — display names for any entity type (API + ontology; PUT no-op)
+- [record_instance_field_localization.md](record_instance_field_localization.md) — Records API for `#data/…/lst.M/` rows
+- `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — **instance-only** RU leftover playbook (Patterns A–E; link from platform stub)
 - [ralph_loop_goal_autonomy.md](ralph_loop_goal_autonomy.md) — platform-generic Ralph loop
 - [SKILL.md §9](../SKILL.md#9-growing-platform-skills) — growing skills policy
 - [AGENTS.md](../../../../AGENTS.md) — short “Where findings belong” summary

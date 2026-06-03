@@ -64,10 +64,25 @@ Map `event.{id}` to parent process model template via `cmw.eventTrigger.containe
 Preferred for bulk, repeatable edits when PUT succeeds:
 
 1. **Dataset:** `get_dataset` → merge `name` + `columns` keyed by **attribute alias** → `edit_or_create_dataset` with full body and `globalAlias` ([platform_usage_discoveries.md](platform_usage_discoveries.md)).
-2. **Button:** `list_buttons` → `edit_or_create_button` with merged GET body.
-3. **Process model template (`doc.*`):** `edit_or_create_record_template` with `application_system_name` = app alias (not solution id `sln.*`), `system_name` from `cmw.container.alias` (API `globalAlias.type` may be `DocumentationTemplate`).
+2. **Toolbar:** `get_toolbar` → merge `name` + item display fields → raw `PUT webapi/Toolbar/{app}` with `globalAlias` and owner type **`DocumentationTemplate`** for `doc.*` parents (not `RecordTemplate`).
+3. **Button:** `list_buttons` → `edit_or_create_button` with merged GET body.
+4. **Form:** `list_forms` → GET form → **minimal** title PUT only when repairing breakage — see [Form PUT safe patterns](#form-put-safe-patterns) in [process_model_template_localization.md](process_model_template_localization.md#form-put-safe-patterns).
+5. **Context attributes:** `list_attributes` on template system name → PUT attribute `displayName` / `name` when host allows; else ontology on attribute subject if exposed.
+6. **Process model template (`doc.*`):** `edit_or_create_record_template` with `application_system_name` = app alias (not solution id `sln.*`), `system_name` from `cmw.container.alias` (API `globalAlias.type` may be `DocumentationTemplate`).
 
 **Pitfall:** PUT `webapi/Dataset/{app}/Dataset@…` may return **405** — PUT to `webapi/Dataset/{app}` with injected `globalAlias` instead.
+
+### Pattern B′ — PUT accepted but display unchanged (no-op)
+
+Common on **system-solution** toolbars and guarded metadata:
+
+| Signal | Meaning | Next step |
+|--------|---------|-----------|
+| HTTP **200** + `success: true` but re-GET shows same Cyrillic | Server **ignored** body (guard / invalid inner alias) | Do not retry identical PUT in a loop |
+| `InterceptedException`, `Alias  is invalid`, `RequestedOperationFailedException` | Toolbar/button PUT blocked | Ontology `AddStatement` on `cmw.eventTrigger.name` (buttons) or designer UI for toolbar titles |
+| Dataset PUT OK, designer list tab still RU | Stale UI cache or personal `lst.*` title via ontology | Re-GET API; `GetAxioms` on `lst.*` for `cmw.dataset.name` |
+
+Always **re-GET** after PUT; do not trust status code alone ([errors.md](errors.md#pascalcase-alias-no-op-http-200-field-unchanged)).
 
 ---
 
@@ -115,6 +130,7 @@ After a tenant batch, append `operations[]` in `{instance_progress_dir}/localiza
 
 ## Related platform docs
 
-- [process_model_template_localization.md](process_model_template_localization.md) — enumerate all `doc.XXXX`, per-template checklist
+- [process_model_template_localization.md](process_model_template_localization.md) — enumerate all `doc.XXXX`, five-area checklist, form PUT safety
+- [record_instance_field_localization.md](record_instance_field_localization.md) — **data rows** in `#data/…/lst.M/` (Records API), not list metadata
 - `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — instance playbook (EN target RU leftovers)
 - [browser_automation.md](browser_automation.md) — `#RecordType/…` hash patterns
