@@ -66,11 +66,11 @@ When documenting UI or API fixes in an **instance** repo, state the **template c
 | Hash / id prefix | Typical meaning | Example doc scope |
 |------------------|-----------------|-------------------|
 | `oa.{N}` | Record template (datasets, forms, lists on a business template) | Property, Space, Work order templates |
-| `doc.{N}` | **Documentation template** (`DocumentationTemplate` / `#RecordType/doc.{N}/…`) | e.g. `doc.1`–`doc.69` on FM hosts — enumerate all `doc.*`, not only `doc.1` |
+| `doc.{N}` | **Documentation template** (`#RecordType/doc.{N}/…`; API type **`DocumentationTemplate`**) | e.g. `doc.1`–`doc.69` on FM hosts — enumerate all `doc.*`, not only `doc.1` |
 | `event.{M}` / Operations under `oa` or `doc` | User command (button), scenario step | Button/filter fixes tied to parent template |
 | `aa.{N}` | Account template | Administration / account lists |
 
-**Rule:** `doc.*`-scoped work (Operations, Lists, Forms, Context on a documentation template) belongs with the **`doc.*`** id in the instance playbook or progress JSON `meta.template` / `documentation_templates[]` — not mixed into unrelated `oa.*` record-template batches unless the batch explicitly spans both.
+**Rule:** `doc.*`-scoped work (Operations, Lists, Forms, Context on a **documentation template**) belongs with the **`doc.*`** id in the instance playbook or progress JSON `meta.template` / `documentation_templates[]` — not mixed into unrelated `oa.*` record-template batches unless the batch explicitly spans both.
 
 Platform-generic hash patterns: [browser_automation.md](browser_automation.md) (`#RecordType/oa.{N}/…`). Instance playbooks name the concrete `oa.*` / `doc.*` ids for that tenant.
 
@@ -89,7 +89,7 @@ Platform-generic hash patterns: [browser_automation.md](browser_automation.md) (
 ## Related platform docs
 
 - [record_harvest_seed.md](record_harvest_seed.md) — agnostic harvest/seed contract
-- [process_model_template_localization.md](process_model_template_localization.md) — `doc.XXXX` enumeration and per-template checklist
+- [documentation_template_localization.md](documentation_template_localization.md) — `doc.XXXX` enumeration and per-template checklist
 - [entity_display_name_localization.md](entity_display_name_localization.md) — display names for any entity type (API + ontology)
 - [en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md) — stub → instance RU leftover playbook (Operations, solution dataset grids)
 - [ralph_loop_goal_autonomy.md](ralph_loop_goal_autonomy.md) — platform-generic Ralph loop
