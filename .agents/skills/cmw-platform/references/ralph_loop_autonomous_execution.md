@@ -4,8 +4,8 @@ Companion for long-running CMW work when agents should **iterate until externall
 
 **Full guardrails:** [ralph_loop_goal_autonomy.md](ralph_loop_goal_autonomy.md)  
 **Instance consumer:** `{instance_progress_dir}/.agents/skills/ralph-loop-instance/SKILL.md`  
-**Example instance runbook:** `{instance_progress_dir}/docs/localization/ralph_loop_us_fm_autonomous_runbook.md`  
-**Instance process plan:** `{instance_progress_dir}/docs/plans/20260602_ralph_loop_fm_fill_process.md`
+**Instance runbooks:** `{instance_progress_dir}/docs/localization/`  
+**Instance process plans:** `{instance_progress_dir}/docs/plans/`
 
 ## Core idea (Ralph Wiggum)
 

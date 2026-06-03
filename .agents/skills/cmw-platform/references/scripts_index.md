@@ -23,7 +23,7 @@ Shared helper: [`_cmw_cli.py`](../scripts/_cmw_cli.py) (import only; not run dir
 
 ## JSON contracts
 
-- **Harvest output:** `meta`, `hosts.primary.records`, `field_inventory` — see [tr_fr_record_harvest_seed.md](tr_fr_record_harvest_seed.md).
+- **Harvest output:** `meta`, `hosts.primary.records`, `field_inventory` — see [record_harvest_seed.md](record_harvest_seed.md) and `{instance_progress_dir}/localization/migration_progress/README.md`.
 - **Seed input:** `operations` array with `operation` (`create`/`edit`), `values` (PascalCase attribute aliases), optional `record_id`; or `map[]` with `fr_record_id` + `values`.
 
 ## Related skills

@@ -2,9 +2,8 @@
 
 Use when an agent must **repeat the same scoped goal** until **external verification** passes — not when the model says it is done.
 
-**Instance example (non-normative):** `{instance_progress_dir}/docs/localization/ralph_loop_us_fm_autonomous_runbook.md`  
 **Instance consumer skill:** `{instance_progress_dir}/.agents/skills/ralph-loop-instance/SKILL.md`  
-**Emulation scratchpad template:** `{instance_progress_dir}/docs/localization/ralph_scratchpad.example.md`
+**Instance runbooks / scratchpad:** `{instance_progress_dir}/docs/localization/` (e.g. `ralph_scratchpad.example.md` — copy locally to `.cursor/ralph/scratchpad.md` when using the plugin)
 
 External references: [ghuntley.com/ralph](https://ghuntley.com/ralph/), [Cursor Directory — Ralph Loop](https://cursor.directory/plugins/ralph-loop), [forum guide](https://forum.cursor.com/t/ralph-cursor-guide/149998), [ralph-cursor](https://github.com/danielsinewe/ralph-cursor).
 
@@ -23,7 +22,7 @@ External references: [ghuntley.com/ralph](https://ghuntley.com/ralph/), [Cursor 
 | **Spawn prompts** | Parent coordinators must paste Step 0 as the **first numbered step** in every per-scope worker prompt (one template, floor, or list batch per agent). |
 | **After Step 0** | Source API read → map to target attribute aliases → target write → target form verify → flush progress JSON in `{instance_progress_dir}`. |
 
-Instance-specific checklist text (tenant hosts, template names): `{instance_progress_dir}/.agents/skills/cmw-platform/references/us_fm_ru_to_en_replication.md`.
+Instance-specific checklist text (tenant hosts, template names): `{instance_progress_dir}/localization/AGENTS.md` and instance skills under `{instance_progress_dir}/.agents/skills/`.
 
 ## When to use
 
@@ -112,7 +111,7 @@ Do not paste full `map[]` into chat; verify in instance working tree.
 
 Flush to **`{instance_progress_dir}`** after each wave; harvest complete (`meta.harvest_path`); every N records; wave timeout (`partial` + `retry_count`); **before session end**.
 
-Required JSON shape: `meta`, `map[]` (or level-keyed map), `operations[]`, `errors[]`, counts. Instance FM/US FM detail: `{instance_progress_dir}/.agents/skills/cmw-platform/references/us_fm_ru_to_en_replication.md`. Generic contract: [tr_fr_record_harvest_seed.md](tr_fr_record_harvest_seed.md).
+Required JSON shape: `meta`, `map[]` (or level-keyed map), `operations[]`, `errors[]`, counts — see [record_harvest_seed.md](record_harvest_seed.md) and `{instance_progress_dir}/localization/migration_progress/README.md`. Platform usage patterns (indicators, Code_calc, gap-fill): [platform_usage_discoveries.md](platform_usage_discoveries.md).
 
 ## Environment placeholders (no absolute paths in git)
 
@@ -135,15 +134,16 @@ Required JSON shape: `meta`, `map[]` (or level-keyed map), `operations[]`, `erro
 
 ## Instance fill agreements (not in this repo)
 
-Tenant-specific goals (US FM hierarchy, stand ids, naming, RU-form-first rules) live in the **instance repository** — not here. Start with:
+Tenant-specific goals (hierarchy seed order, stand ids, naming, source-form-first rules) live in the **instance repository** — not here. Start with:
 
 - `{instance_progress_dir}/.agents/skills/ralph-loop-instance/SKILL.md`
 - `{instance_progress_dir}/localization/AGENTS.md` (operating agreements)
-- `{instance_progress_dir}/docs/localization/ralph_loop_us_fm_autonomous_runbook.md` (one example runbook)
-- `{instance_progress_dir}/docs/plans/20260602_ralph_loop_fm_fill_process.md` (instance process plan)
+- `{instance_progress_dir}/docs/localization/` (runbooks and scratchpad templates)
+- `{instance_progress_dir}/docs/plans/` (instance process plans)
 
 ## Related
 
 - [ralph_loop_autonomous_execution.md](ralph_loop_autonomous_execution.md) — short index
 - [cmw-platform SKILL §9](../SKILL.md#9-growing-platform-skills) — parallel subagents, JSON over memory
-- [tr_fr_record_harvest_seed.md](tr_fr_record_harvest_seed.md) — harvest/seed JSON contract
+- [record_harvest_seed.md](record_harvest_seed.md) — harvest/seed JSON patterns
+- [platform_usage_discoveries.md](platform_usage_discoveries.md) — indicators, Code_calc, gap-fill, list API fallback

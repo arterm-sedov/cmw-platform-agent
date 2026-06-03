@@ -127,7 +127,7 @@ Typical updates:
 | Field | Guidance |
 |-------|----------|
 | **Username** | Latin only; align with reference login when fixing FR seeds (e.g. `dispetcher` → `dispatcher01` only when project matrix says so) |
-| **FullName** | Whole-phrase US FM English on EN instances (e.g. `Engineer on Duty`, `Tenant`) — project repo defines persona labels |
+| **FullName** | Target-locale persona label (e.g. `Engineer on Duty`, `Tenant`) — instance repo defines persona matrix |
 | **Mbox** | `{username}@example.test` after any username change; no Cyrillic, no RU freemail domains on EN demo hosts |
 
 Preserve required booleans from **Get** (`IsSystemAdministrator`, `IsAnonymous`, `Role`, etc.) — do not strip fields unless OpenAPI marks them optional and you know defaults.

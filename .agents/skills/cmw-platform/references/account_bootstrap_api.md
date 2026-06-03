@@ -83,7 +83,7 @@ def post(path: str, body: dict | None = None):
 | Field | Typical rule (EN target instance) |
 |-------|-----------------------------------|
 | Username | Latin; match reference login when applicable |
-| FullName | US FM English persona label; no Cyrillic from RU reference |
+| FullName | Target-locale persona label; no unintended source-locale text on target host |
 | Mbox | `{username}@example.test`; no Cyrillic |
 
 There is no separate `SetUsername` path in OpenAPI — username changes go through **Edit**.

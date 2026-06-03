@@ -214,7 +214,7 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 
 ### Instance progress (parent agents)
 
-**Instance-specific** batch JSON, roadmaps, harvest outputs, and operator runbooks live in the **instance repository** at `{instance_progress_dir}` (e.g. `localization/migration_progress/`, `docs/localization/`). Platform agents use skills and references in **this repo** only; read instance state from disk there — never from chat memory ([tr_fr_record_harvest_seed.md](.agents/skills/cmw-platform/references/tr_fr_record_harvest_seed.md), [ralph_loop_goal_autonomy.md](.agents/skills/cmw-platform/references/ralph_loop_goal_autonomy.md), [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills)).
+**Instance-specific** batch JSON, roadmaps, harvest outputs, and operator runbooks live in the **instance repository** at `{instance_progress_dir}` (e.g. `localization/migration_progress/`, `docs/localization/`). Platform agents use skills and references in **this repo** only; read instance state from disk there — never from chat memory. Harvest/seed patterns: [record_harvest_seed.md](.agents/skills/cmw-platform/references/record_harvest_seed.md); instance schema and tenant checklists under `{instance_progress_dir}`. Progress loops: [ralph_loop_goal_autonomy.md](.agents/skills/cmw-platform/references/ralph_loop_goal_autonomy.md), [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills).
 
 ### CMW Platform Terminology
 

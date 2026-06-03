@@ -424,9 +424,10 @@ After `AccountService` creates a login, link it to a **Staff** employee row via 
 
 **Policy:** When you solve a repeatable platform workflow (API or UI), capture it for the next agent — do not leave the recipe only in chat or scratch scripts.
 
+- **Mandatory wave-end documentation:** After any batch/wave that discovers **new** API or UI manipulation patterns, append an agnostic subsection to [references/platform_usage_discoveries.md](references/platform_usage_discoveries.md) (or extend an existing reference) **before** ending the session wave or claiming done. Placeholders only (`{source_host}`, `{target_host}`, `{instance_progress_dir}`) — **no** tenant hosts or record ids in skill bodies. Instance `operations[]` flush stays mandatory in parallel. Recent wave examples: grouped **MaintenanceExecution** lists vs API count, **MyMaintenance** dataset PUT path (**405** on `Dataset@`), staff id vs platform account for **USER()** filters, **StatusBoost** legacy `OBJECT()` expressions, **ServiceRequestTypes** SLA remap, **PMPlans** seed-driven equipment create-link, **Spaces** semi-empty hierarchy gap-fill.
 - **Parent agents** delegate long-running execution to **background subagents**; the parent coordinates and merges results. **Instance migration progress** (themed batch JSON, id maps, operator checklists) lives in **`{instance_progress_dir}`** only — not in cmw-platform-agent `docs/_scratch/`.
-- **JSON over agent memory:** Read and write `{instance_progress_dir}/localization/migration_progress/*.json` for every batch — `meta.status`, root `map[]`, `meta.errors`, `backup_pending`, `retry_count`, `agent_wave`, timestamps. **Never** rely on a prior chat turn for record id maps. Harvest/seed detail: [references/tr_fr_record_harvest_seed.md](references/tr_fr_record_harvest_seed.md).
-- **Mandatory progress flush:** After each batch/wave, also write `{instance_progress_dir}/docs/localization/progress_reports/YYYYMMDD_*.md` — instance FM rules: `{instance_progress_dir}/.agents/skills/cmw-platform-fm-hierarchy-seed/SKILL.md` and `{instance_progress_dir}/.agents/skills/cmw-platform/references/us_fm_ru_to_en_replication.md`.
+- **JSON over agent memory:** Read and write `{instance_progress_dir}/localization/migration_progress/*.json` for every batch — `meta.status`, root `map[]`, `meta.errors`, `backup_pending`, `retry_count`, `agent_wave`, timestamps. **Never** rely on a prior chat turn for record id maps. Harvest/seed patterns: [references/record_harvest_seed.md](references/record_harvest_seed.md); instance batch schema in `{instance_progress_dir}/localization/migration_progress/README.md`.
+- **Mandatory progress flush:** After each batch/wave, also write `{instance_progress_dir}/docs/localization/progress_reports/YYYYMMDD_*.md` — tenant rules and checklists live under `{instance_progress_dir}/.agents/skills/` and `{instance_progress_dir}/localization/AGENTS.md`.
 
 ### Where to save
 
@@ -446,7 +447,7 @@ Do **not** use **cmw-platform-agent** `docs/_scratch/` for instance migration (h
 | **Instance-specific** | `{instance_progress_dir}` | Migration progress JSON, plans, gap analyses, harvest outputs, operator checklists, model-export audits |
 | **Platform-generic** | **cmw-platform-agent** (this repo) | `.agents/skills/cmw-platform*` and `references/`, companion skills, `docs/` — reusable API/UI/OpenAPI patterns |
 
-**Do not duplicate** long-form instance audits here; capture a **one-paragraph generic lesson** in a reference (e.g. [localization.md](references/localization.md)).
+**Do not duplicate** long-form instance audits here; capture a **one-paragraph generic lesson** in a reference (e.g. [localization.md](references/localization.md), consolidated FM/demo lessons in [references/platform_usage_discoveries.md](references/platform_usage_discoveries.md)).
 
 ### Order of approach (reinforced)
 
@@ -472,7 +473,7 @@ When templates or entity groups have **no cross-record dependencies**, the paren
 
 **Autonomous migration waves (instance work):** Parent runs **up to 6 parallel background subagents** per wave, then reconciles roadmap and **one** target backup; commit **instance repo** only. Full loop: `{instance_progress_dir}/localization/AGENTS.md` · `{instance_progress_dir}/.agents/skills/ralph-loop-instance/SKILL.md`.
 
-**Ralph-style iteration (goal autonomy):** Fresh context + disk JSON verification + same wave prompt — [references/ralph_loop_goal_autonomy.md](references/ralph_loop_goal_autonomy.md). Instance example runbook: `{instance_progress_dir}/docs/localization/ralph_loop_us_fm_autonomous_runbook.md`. Do **not** enable Ralph Loop plugin stop-hook while parallel subagents are active.
+**Ralph-style iteration (goal autonomy):** Fresh context + disk JSON verification + same wave prompt — [references/ralph_loop_goal_autonomy.md](references/ralph_loop_goal_autonomy.md). Instance runbooks: `{instance_progress_dir}/docs/localization/` and `{instance_progress_dir}/.agents/skills/ralph-loop-instance/SKILL.md`. Do **not** enable Ralph Loop plugin stop-hook while parallel subagents are active.
 
 ### Background shell (long platform scripts)
 
@@ -498,7 +499,8 @@ For better async, run long CLI in **background** (Shell `run_in_background` or a
 | Account create, password, groups | [cmw-platform-account-bootstrap](../cmw-platform-account-bootstrap/SKILL.md) |
 | Employee row ↔ login (Include) | [cmw-platform-staff-account-link](../cmw-platform-staff-account-link/SKILL.md) + [references/employee_account_attach.md](references/employee_account_attach.md) |
 | Running process / work order row fill | [cmw-platform-process-record-fill](../cmw-platform-process-record-fill/SKILL.md) + [references/process_record_demo_fill.md](references/process_record_demo_fill.md) |
-| FM hierarchy Property→Spaces (instance) | `{instance_progress_dir}/.agents/skills/cmw-platform-fm-hierarchy-seed/SKILL.md` + `{instance_progress_dir}/.agents/skills/cmw-platform/references/fm_hierarchy_ru_to_us_seed.md`, `us_fm_ru_to_en_replication.md` |
+| Tenant hierarchy / themed migration (instance) | `{instance_progress_dir}/.agents/skills/` and `{instance_progress_dir}/localization/AGENTS.md` |
+| Demo fill / migration usage (indicators, Code_calc, gap-fill, multi-list WO orchestration, Administration sweep, inspection form vs API, **cross-instance id rule**, **MaintenanceExecution grouped lists**, **MyMaintenance dataset PUT**, **staff vs account assignee**, **StatusBoost legacy expr**, **ServiceRequestTypes SLA remap**, **PMPlans equipment seed-link**, **Spaces semi-empty**) | [references/platform_usage_discoveries.md](references/platform_usage_discoveries.md) |
 
 ### Browser recipes (entity-specific)
 
@@ -510,7 +512,7 @@ Refine **existing** skills/references with tested selectors and hash routes — 
 | Backup → checkbox + Start backup | [cmw-platform-backup-launch](../cmw-platform-backup-launch/SKILL.md) UI fallback |
 | Datasets, toolbars, buttons | [references/ui_components.md](references/ui_components.md), [references/browser_automation.md](references/browser_automation.md) |
 | Processes / scenarios | [references/browser_automation.md](references/browser_automation.md) URL patterns |
-| RU FM structure forms (read-only business context) | `{instance_progress_dir}/.agents/skills/cmw-platform-fm-hierarchy-seed/SKILL.md` — RU forms before data model |
+| Source structure forms (read-only business context) | Instance skills under `{instance_progress_dir}/.agents/skills/` — open source forms before datamodel-only reads ([ralph_loop_goal_autonomy.md](references/ralph_loop_goal_autonomy.md#source-form-first-replication-subagents)) |
 
 ### Naming
 
@@ -544,6 +546,7 @@ Follow Cursor’s create-skill guidance for frontmatter, description triggers, a
 | [references/import_export.md](references/import_export.md) | Full import/export application reference |
 | [references/ui_components.md](references/ui_components.md) | Full UI components reference: toolbars, buttons, datasets, forms |
 | [references/errors.md](references/errors.md) | Error handling playbook |
+| [references/platform_usage_discoveries.md](references/platform_usage_discoveries.md) | Agnostic FM/demo lessons: indicators, Code_calc, gap-fill, dataset PUT endpoint + `globalAlias` + composite filters, MyMaintenance USER(), MaintenanceExecution grouped lists, staff vs account assignee, StatusBoost legacy expr, ServiceRequestTypes SLA remap, PMPlans equipment seed-link, Spaces semi-empty, contract/annual-plan/inspection patterns, WorkStatus id collision, multi-list WO orchestration, location calc, maintenance/PM/SOP, `operations[]` flush |
 | [references/workflow_sequences.md](references/workflow_sequences.md) | Reusable code patterns |
 | [references/localization.md](references/localization.md) | Both localization workflows: alias rename (9-phase) + RU→EN UI text translation |
 | [references/browser_automation.md](references/browser_automation.md) | Browser automation guide |

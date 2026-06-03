@@ -2,13 +2,13 @@
 
 > **Entity recipe pattern:** Browser steps for this modal belong here (and in [browser_automation.md](browser_automation.md)); future entity-specific UI flows should follow the same reference-first pattern — see [cmw-platform SKILL §9](../SKILL.md#9-growing-platform-skills).
 
-Link an existing **platform login** to an **employee row** in the Volga **Staff** account template (`Sotrudniki` system name). This is **not** account creation — use [account_bootstrap_api.md](account_bootstrap_api.md) / [cmw-platform-account-bootstrap](../../cmw-platform-account-bootstrap/SKILL.md) for `AccountService/Create` first.
+Link an existing **platform login** to an **employee row** in the **Staff** account template (system name varies by solution, e.g. `Sotrudniki`). This is **not** account creation — use [account_bootstrap_api.md](account_bootstrap_api.md) / [cmw-platform-account-bootstrap](../../cmw-platform-account-bootstrap/SKILL.md) for `AccountService/Create` first.
 
 **Workflow order:** OpenAPI (`cmw_open_api/`) → agent `tools/` → browser last resort. Full attach recipe (field names, PUT/Include, host-specific blockers): [cmw-platform-staff-account-link](../../cmw-platform-staff-account-link/SKILL.md).
 
 ## UI workflow (instance-agnostic)
 
-1. Open the **Employees** list in the Volga app (hash pattern `#data/aa.{N}/lst.{M}` — dataset is usually `defaultList` on the Staff account template; **UI entity ids differ per host**, e.g. FR `lst.279` / TR `lst.399`).
+1. Open the **Employees** list (hash pattern `#data/aa.{account_template_id}/lst.{list_id}` — dataset is usually `defaultList` on the Staff account template; **UI entity ids differ per host**).
 2. Select an employee row (or open the record), or use the list toolbar action **Attach account** (CTF user command `include`, kind **Include**; legacy export name may show as “Follow record”).
 3. In the **modal**, pick one or more **existing** platform accounts (created earlier via administration or `AccountService`).
 4. Confirm — the employee record is now linked; account profile fields (`fullName`, `mbox`, `username`, …) surface on the employee card.
@@ -33,7 +33,7 @@ Do **not** assume `AccountService/Create` attaches the account to Staff — that
 
 If employee seeding is deferred, you can still link Phase 0 accounts as soon as a minimal employee row exists (create empty row → Attach account).
 
-## Link field (verified Volga / Sotrudniki)
+## Link field (Staff account template)
 
 | Read/write | Name |
 |------------|------|
@@ -41,7 +41,7 @@ If employee seeding is deferred, you can still link Phase 0 accounts as soon as 
 | `ObjectService/Get` + `accountTemplateId` | `cmw.account.username` |
 | List UI column | **Full name** (`fullName` from account profile when linked) |
 
-**Employee row id:** numeric string on the target host for Phase 0 (example range `182`…`191`), not `account.182`. Demo persona rows show **Full name** in `#data/aa.{N}/lst.{M}` — **resolve list ids per host**; card URL may use `account.{N}`.
+**Employee row id:** numeric string on the target host, distinct from `account.{N}` platform login ids. Demo persona rows show **Full name** in `#data/aa.{account_template_id}/lst.{list_id}` — **resolve list ids per host**; card URL may use `account.{N}`.
 
 ## API (when field names unknown)
 
@@ -51,7 +51,7 @@ Prefer **read** via records list:
 GET webapi/Records/AccountTemplate@{Application}.{StaffTemplateSystemName}
 ```
 
-Example: `AccountTemplate@Volga.Sotrudniki` (system name often unchanged after EN display rename to “Staff”).
+Example: `AccountTemplate@{App}.{StaffTemplateSystemName}` (display name may differ from system name after localization).
 
 **Linked record heuristics** (verify on your instance):
 
