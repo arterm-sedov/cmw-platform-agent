@@ -87,7 +87,7 @@ class OpenRouterProvider(ImageProvider):
             return ImageGenerationResult(
                 success=False,
                 model=request.config.name,
-                error=f"Non-JSON response from OpenRouter: {exc}",
+                error=f"Non-JSON response from image API: {exc}",
             )
 
         return self._parse_response(payload, request.config.name)

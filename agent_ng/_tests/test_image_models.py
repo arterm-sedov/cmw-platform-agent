@@ -22,6 +22,7 @@ from agent_ng.image_models import (
     IMAGE_MODELS,
     ImageModelConfig,
     get_default_model,
+    get_default_prompt_style_hint,
     get_image_models,
     get_model_config,
 )
@@ -71,8 +72,23 @@ class TestRegistryShape:
         assert set(gemini.modalities) == {"image", "text"}
 
     def test_supports_image_config_set(self) -> None:
-        """Models that document aspect_ratio/image_resolution have the flag set."""
-        _supports = {
+        """OpenRouter image_config: Gemini, Seedream, gpt-5.4 — not Flux."""
+        _supports_or = {
+            "google/",
+            "bytedance-seed/",
+            "openai/gpt-5.4-image-2",
+        }
+        for slug, cfg in get_image_models().items():
+            expected = any(
+                cfg.name.startswith(p) or cfg.name == p for p in _supports_or
+            )
+            assert cfg.supports_image_config is expected, (
+                f"{slug}: supports_image_config should be {expected}"
+            )
+
+    def test_supports_polza_sizing_set(self) -> None:
+        """Polza aspect_ratio/quality: Gemini, Seedream, Flux flex/pro."""
+        _supports_polza = {
             "google/",
             "bytedance-seed/",
             "black-forest-labs/flux.2-flex",
@@ -80,10 +96,22 @@ class TestRegistryShape:
             "openai/gpt-5.4-image-2",
         }
         for slug, cfg in get_image_models().items():
-            expected = any(cfg.name.startswith(p) or cfg.name == p for p in _supports)
-            assert cfg.supports_image_config is expected, (
-                f"{slug}: supports_image_config should be {expected}"
+            expected = any(
+                cfg.name.startswith(p) or cfg.name == p for p in _supports_polza
             )
+            assert cfg.supports_polza_sizing is expected, (
+                f"{slug}: supports_polza_sizing should be {expected}"
+            )
+
+    def test_flux_decoupled_sizing_flags(self) -> None:
+        """Flux: Polza sizing on, OpenRouter image_config off."""
+        for slug in (
+            "black-forest-labs/flux.2-flex",
+            "black-forest-labs/flux.2-pro",
+        ):
+            cfg = get_image_models()[slug]
+            assert cfg.supports_image_config is False
+            assert cfg.supports_polza_sizing is True
 
     def test_every_config_has_known_providers(self) -> None:
         known = {"openrouter", "polza", "google"}
@@ -126,6 +154,36 @@ class TestRegistryShape:
                 f"{slug}: missing price_per_generation_usd for google provider"
             )
             assert cfg.price_per_generation_usd > 0
+
+
+class TestLlmFacingCopy:
+    """Prompt hints and default hint must not leak provider routing."""
+
+    _FORBIDDEN = (
+        "Polza",
+        "polza",
+        "OpenRouter",
+        "openrouter",
+        "fallback",
+        "supports_image_config",
+        "supports_polza",
+        "IMAGE_GEN_PROVIDER",
+    )
+
+    def test_prompt_style_hints_have_no_provider_leaks(self) -> None:
+        for slug, cfg in get_image_models().items():
+            hint = cfg.prompt_style_hint
+            if not hint:
+                continue
+            leaks = [s for s in self._FORBIDDEN if s in hint]
+            assert not leaks, f"{slug} prompt_style_hint leaks: {leaks}"
+
+    def test_default_prompt_style_hint_has_no_provider_leaks(self) -> None:
+        hint = get_default_prompt_style_hint()
+        if not hint:
+            return
+        leaks = [s for s in self._FORBIDDEN if s in hint]
+        assert not leaks, f"default prompt_style_hint leaks: {leaks}"
 
 
 class TestDefaultSelection:

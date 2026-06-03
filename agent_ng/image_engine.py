@@ -160,9 +160,8 @@ class ImageEngine:
                     success=False,
                     model=resolved_model,
                     error=(
-                        f"Provider {forced!r} (IMAGE_GEN_PROVIDER) is not available "
-                        f"for model {resolved_model!r}. "
-                        f"Available providers: {config.providers}"
+                        f"The configured image backend is not available for "
+                        f"model {resolved_model!r}."
                     ),
                 )
             provider_name = forced
@@ -185,8 +184,8 @@ class ImageEngine:
                 success=False,
                 model=resolved_model,
                 error=(
-                    f"No adapter registered for provider {provider_name!r}. "
-                    "See agent_ng/image_providers for how to add one."
+                    "Image generation backend is not configured for this "
+                    "deployment."
                 ),
             )
 

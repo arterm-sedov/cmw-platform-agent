@@ -320,6 +320,13 @@ class TestLLMFacingDescription:
 
     _FORBIDDEN_LEAKS = (
         "OpenRouter",
+        "Polza",
+        "polza",
+        "openrouter",
+        "fallback",
+        "supports_image_config",
+        "supports_polza",
+        "IMAGE_GEN_PROVIDER",
         "file_registry",
         "file registry",
         "ImageEngine",

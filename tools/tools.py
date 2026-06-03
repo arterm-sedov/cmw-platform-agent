@@ -1818,7 +1818,7 @@ def draw_on_image(
 
 
 # ------------------------------------------------------------------------- #
-# AI image generation (OpenRouter)                                           #
+# AI image generation                                                        #
 # ------------------------------------------------------------------------- #
 
 # Root for session-isolated image outputs. Patched in tests. Matches the
