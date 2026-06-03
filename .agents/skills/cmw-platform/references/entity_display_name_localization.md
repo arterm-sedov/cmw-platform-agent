@@ -4,7 +4,7 @@ Translate **user-visible** labels (names, titles, column headers, button labels)
 
 **Instance playbooks** (concrete designer URLs, first-wave targets, tenant batch notes): `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md`.
 
-**Related:** [localization.md](localization.md) Workflow B · [process_model_template_localization.md](process_model_template_localization.md) (`doc.XXXX` trees) · [platform_usage_discoveries.md](platform_usage_discoveries.md) (dataset PUT, `globalAlias`) · [ui_components.md](ui_components.md) · [instance_repo_documentation_boundary.md](instance_repo_documentation_boundary.md).
+**Related:** [localization.md](localization.md) Workflow B · [documentation_template_localization.md](documentation_template_localization.md) (`doc.XXXX` trees) · [platform_usage_discoveries.md](platform_usage_discoveries.md) (dataset PUT, `globalAlias`) · [ui_components.md](ui_components.md) · [instance_repo_documentation_boundary.md](instance_repo_documentation_boundary.md).
 
 ---
 
@@ -25,7 +25,7 @@ Use [localization.md](localization.md) **Workflow A** only when the migration ex
 | Entity kind | Designer / id hint | Primary localization surface | Tools / endpoints |
 |-------------|-------------------|-------------------------------|-------------------|
 | **Record template** (`oa.*`) | `#RecordType/oa.{N}/…` | `name`, description | `edit_or_create_record_template` → `PUT webapi/RecordTemplate/{app}` |
-| **Process model template** (`doc.*`) | `#RecordType/doc.{N}/…` | Display via ontology or RecordTemplate PUT | `edit_or_create_record_template` with `globalAlias.type: DocumentationTemplate` **or** `AddStatement` on `cmw.object.name` — see [process_model_template_localization.md](process_model_template_localization.md) |
+| **Documentation template** (`doc.*`) | `#RecordType/doc.{N}/…` | Display via ontology or RecordTemplate PUT | `edit_or_create_record_template` with `globalAlias.type: DocumentationTemplate` **or** `AddStatement` on `cmw.object.name` — see [documentation_template_localization.md](documentation_template_localization.md) |
 | **Dataset / table** | Lists tab `lst.{M}` | `name`, column `name`, filters (display literals) | `get_dataset` → merge → `edit_or_create_dataset` → `PUT webapi/Dataset/{app}` (preserve `globalAlias`) |
 | **Toolbar** | Linked to dataset/list | Toolbar `name`, item display names | `list_toolbars` / `edit_or_create_toolbar` |
 | **Button (user command)** | Operations tab | `name`, `description` | `list_buttons` / `edit_or_create_button` → `PUT webapi/UserCommand/…` |
@@ -34,7 +34,7 @@ Use [localization.md](localization.md) **Workflow A** only when the migration ex
 | **Role / org catalog templates** | `ra.*`, `os.*` in TemplateService | Template display name | `AddStatement` `cmw.object.name` on subject id |
 | **Ontology predicates** | Any entity id | Single-field display override | `POST …/OntologyService/AddStatement` + verify `GetAxioms` |
 
-Resolve `sln.{N}` → application system name (e.g. `CMW_FM`) via `GetAxioms` / `resolve_entity` before `webapi/*` calls. Resolve `doc.{N}` → `cmw.container.alias` (template system name) via `GetAxioms` — enumerate **all** `doc.*` process model templates; do not assume a single id covers the family.
+Resolve `sln.{N}` → application system name (e.g. `CMW_FM`) via `GetAxioms` / `resolve_entity` before `webapi/*` calls. Resolve `doc.{N}` → `cmw.container.alias` (template system name) via `GetAxioms` — enumerate **all** `doc.*` documentation templates; do not assume a single id covers the family.
 
 ---
 
@@ -55,7 +55,7 @@ POST {base}/api/public/system/Base/OntologyService/AddStatement
 
 Verify: `POST …/GetAxioms` with raw body = entity id (same as `resolve_entity`).
 
-Map `event.{id}` to parent process model template via `cmw.eventTrigger.container` = `doc.{N}` when renaming Operations buttons under `#RecordType/doc.{N}/Operations`.
+Map `event.{id}` to parent documentation template via `cmw.eventTrigger.container` = `doc.{N}` when renaming Operations buttons under `#RecordType/doc.{N}/Operations`.
 
 ---
 
@@ -65,7 +65,7 @@ Preferred for bulk, repeatable edits when PUT succeeds:
 
 1. **Dataset:** `get_dataset` → merge `name` + `columns` keyed by **attribute alias** → `edit_or_create_dataset` with full body and `globalAlias` ([platform_usage_discoveries.md](platform_usage_discoveries.md)).
 2. **Button:** `list_buttons` → `edit_or_create_button` with merged GET body.
-3. **Process model template (`doc.*`):** `edit_or_create_record_template` with `application_system_name` = app alias (not solution id `sln.*`), `system_name` from `cmw.container.alias` (API `globalAlias.type` may be `DocumentationTemplate`).
+3. **Documentation template (`doc.*`):** `edit_or_create_record_template` with `application_system_name` = app alias (not solution id `sln.*`), `system_name` from `cmw.container.alias` (API `globalAlias.type` may be `DocumentationTemplate`).
 
 **Pitfall:** PUT `webapi/Dataset/{app}/Dataset@…` may return **405** — PUT to `webapi/Dataset/{app}` with injected `globalAlias` instead.
 
@@ -75,12 +75,12 @@ Preferred for bulk, repeatable edits when PUT succeeds:
 
 | Hash segment (pattern) | Entity kind | Typical work |
 |------------------------|-------------|--------------|
-| `#RecordType/doc.{N}/Operations` | Process model template + Operations buttons | Pattern A on `event.*` or Pattern B on buttons |
+| `#RecordType/doc.{N}/Operations` | Documentation template + Operations buttons | Pattern A on `event.*` or Pattern B on buttons |
 | `#RecordType/doc.{N}/Lists/lst.{M}` | Table on documentation template | Dataset PUT |
 | `#RecordType/oa.{N}/Lists/lst.{M}` | Table on record template | Dataset PUT |
 | `#solutions/sln.{N}/templates/showall/cmw.container.dataset.*` | Registry / solution dataset grid | Ontology on `lst.*` or catalog template names |
 
-Enumerate **all** ids in a family (`doc.1` … `doc.{N}`) — not a single example id. Per-template checklist: [process_model_template_localization.md](process_model_template_localization.md).
+Enumerate **all** ids in a family (`doc.1` … `doc.{N}`) — not a single example id. Per-template checklist: [documentation_template_localization.md](documentation_template_localization.md).
 
 ---
 
@@ -115,6 +115,6 @@ After a tenant batch, append `operations[]` in `{instance_progress_dir}/localiza
 
 ## Related platform docs
 
-- [process_model_template_localization.md](process_model_template_localization.md) — enumerate all `doc.XXXX`, per-template checklist
+- [documentation_template_localization.md](documentation_template_localization.md) — enumerate all `doc.XXXX`, per-template checklist
 - `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — instance playbook (EN target RU leftovers)
 - [browser_automation.md](browser_automation.md) — `#RecordType/…` hash patterns
