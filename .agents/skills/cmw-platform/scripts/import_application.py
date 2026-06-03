@@ -30,7 +30,7 @@ def get_base_url() -> str:
                 base_url = line.split("=", 1)[1].strip().strip('"').strip("'")
                 return base_url.rstrip("/")
 
-    return "https://mz-fr.test.cbap.ru"
+    raise RuntimeError("CMW_BASE_URL is not set (environment or .env)")
 
 
 def main(app: str, ctf_file: str | None = None, ctf_data: str | None = None) -> int:
