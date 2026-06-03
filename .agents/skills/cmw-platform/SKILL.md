@@ -503,7 +503,7 @@ For better async, run long CLI in **background** (Shell `run_in_background` or a
 | Running process / work order row fill | [cmw-platform-process-record-fill](../cmw-platform-process-record-fill/SKILL.md) + [references/process_record_demo_fill.md](references/process_record_demo_fill.md) |
 | Tenant hierarchy / themed migration (instance) | `{instance_progress_dir}/.agents/skills/` (e.g. `cmw-platform-fm-hierarchy-seed`, `ralph-loop-instance`) and `{instance_progress_dir}/localization/AGENTS.md` — stubs: [tr_fr_record_harvest_seed.md](references/tr_fr_record_harvest_seed.md), [us_fm_ru_to_en_replication.md](references/us_fm_ru_to_en_replication.md) |
 | Demo fill / migration usage (indicators, Code_calc, gap-fill, multi-list WO orchestration, Administration sweep, inspection form vs API, **cross-instance id rule**, **MaintenanceExecution grouped lists**, **MyMaintenance dataset PUT**, **staff vs account assignee**, **StatusBoost legacy expr**, **ServiceRequestTypes SLA remap**, **PMPlans equipment seed-link**, **Spaces semi-empty**) | [references/platform_usage_discoveries.md](references/platform_usage_discoveries.md) |
-| Process model templates (`doc.XXXX`), full RecordType tree | [references/process_model_template_localization.md](references/process_model_template_localization.md) |
+| Documentation templates (`doc.XXXX`), full RecordType tree | [references/documentation_template_localization.md](references/documentation_template_localization.md) |
 | Entity display names (any tenant; aliases unchanged) | [references/entity_display_name_localization.md](references/entity_display_name_localization.md) |
 | EN target RU leftovers (instance playbook; Operations, registries) | `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` (instance repo only — no platform copy) |
 
@@ -555,9 +555,9 @@ Follow Cursor’s create-skill guidance for frontmatter, description triggers, a
 | [references/workflow_sequences.md](references/workflow_sequences.md) | Reusable code patterns |
 | [references/localization.md](references/localization.md) | Both localization workflows: alias rename (9-phase) + RU→EN UI text translation |
 | [references/browser_automation.md](references/browser_automation.md) | Browser automation guide |
-| [references/instance_repo_documentation_boundary.md](references/instance_repo_documentation_boundary.md) | Platform vs instance repo: decision table, scratch, stubs, `doc.*` process model template scope |
+| [references/instance_repo_documentation_boundary.md](references/instance_repo_documentation_boundary.md) | Platform vs instance repo: decision table, scratch, stubs, `doc.*` documentation template scope |
 | [references/entity_display_name_localization.md](references/entity_display_name_localization.md) | Display-name localization for templates, datasets, toolbars, buttons, forms, context (API + ontology; aliases unchanged) |
-| [references/process_model_template_localization.md](references/process_model_template_localization.md) | Localize all `doc.XXXX` process model templates: enumerate, checklist, dataset PUT pitfalls |
+| [references/documentation_template_localization.md](references/documentation_template_localization.md) | Localize all `doc.XXXX` documentation templates: enumerate, checklist, dataset PUT pitfalls |
 | § [Growing platform skills](#9-growing-platform-skills) | Policy: capture repeatable API/UI workflows as skills or references; instance RU leftover playbook: `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` |
 
 ## Optional companion skills (GitHub)

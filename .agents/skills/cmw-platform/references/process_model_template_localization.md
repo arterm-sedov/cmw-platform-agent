@@ -4,7 +4,7 @@ Platform-generic workflow for localizing **documentation templates** on an EN ta
 
 **Instance scope:** concrete `doc.*` ids, wave results, and `operations[]` live in `{instance_progress_dir}/localization/migration_progress/` — see [instance_repo_documentation_boundary.md](instance_repo_documentation_boundary.md).
 
-**Related:** `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` (solution-level dataset grids + first-wave targets) · [platform_usage_discoveries.md](platform_usage_discoveries.md) (dataset PUT, filters) · [ui_components.md](ui_components.md) · [localization.md](localization.md) Workflow B.
+**Related:** [en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md) (solution-level dataset grids + first-wave targets) · [platform_usage_discoveries.md](platform_usage_discoveries.md) (dataset PUT, filters) · [ui_components.md](ui_components.md) · [localization.md](localization.md) Workflow B.
 
 ---
 
@@ -12,13 +12,10 @@ Platform-generic workflow for localizing **documentation templates** on an EN ta
 
 | Term | Meaning |
 |------|---------|
-| **Documentation template** | `doc.{N}` in the **RecordType** admin tree (`#RecordType/doc.{N}/Operations`, Lists, Forms, Context) — user-facing scope name |
-| **`DocumentationTemplate`** | Platform API/container **type** (`container.type`, ontology) — aligns with `doc.*`; cite when describing PUT payloads |
-| **`doc.{N}`** | Platform **template id** in URLs — enumerate **all** `doc.*` on the target host |
+| **Documentation template** | `DocumentationTemplate` container in the **RecordType** admin tree (`#RecordType/doc.{N}/…`) — **not** a generic document file template and **not** a BPMN process model alias |
+| **`doc.{N}`** | Platform **template id** in URLs (`#RecordType/doc.1/Operations`) — enumerate **all** `doc.*` on the target host |
 | **`pa.{N}`** | Separate id family for **process templates** in TemplateService (`Type: Process`) — do not assume `doc.N` equals `pa.N` without GetAxioms |
 | **`oa.{N}`** | **Record template** (business data templates) — different scope; see boundary doc |
-
-**API mapping:** User-facing **`doc.N`** = **documentation template**. Web API may use system names such as `template_ProcessModelNone_systemSolution`, owner **`ProcessModelNone`**, and `container.type: DocumentationTemplate` — do not change platform **aliases**; only fix documentation text.
 
 **Rule:** Batch JSON and operator notes must record `meta.record_type_id: "doc.1"` (or `doc.2`, …) when the fix is **documentation-template** scoped — do not file under unrelated `oa.*` batches unless the wave explicitly spans both.
 
@@ -80,7 +77,7 @@ Child APIs (`webapi/Dataset/List/Template@{app}.{template}`, buttons, forms) nee
 | Hash **RecordType id** | `doc.1` |
 | Administration **system name** field | `template_ProcessModelNone_systemSolution` |
 | Toolbar/dataset **owner** in GET body | `ProcessModelNone` |
-| `container.type` in Web API | `DocumentationTemplate` |
+| `container.type` in Web API | `DocumentationTemplate` (not `RecordTemplate`) |
 
 List/get children with **`template_ProcessModelNone_systemSolution`** (or per-item alias from GetAxioms). PUT bodies must keep **`DocumentationTemplate`** on `container` — `edit_or_create_toolbar` defaults to `RecordTemplate` and fails.
 
@@ -88,7 +85,7 @@ List/get children with **`template_ProcessModelNone_systemSolution`** (or per-it
 
 **Display-name PUT (batch-friendly):** `edit_or_create_record_template` with `application_system_name: "CMW_FM"`, `operation: "edit"`, `system_name` = value from `cmw.container.alias`, `name` = EN string. Under the hood: `PUT webapi/RecordTemplate/CMW_FM` with `globalAlias.type: DocumentationTemplate`. **Do not** pass `sln.1` as application — PUT fails with “Cannot get id for solution by solution alias: sln.1”.
 
-Alternative for single fields: `AddStatement` on `cmw.object.name` (instance playbook Pattern A in `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md`).
+Alternative for single fields: `AddStatement` on `cmw.object.name` ([en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md) Pattern A).
 
 Optional: `get_platform_entity_url` / `platform_entity_resolver` when the id is indexed — confirm `application` + `parent_system_name` before list/edit calls.
 
@@ -154,7 +151,7 @@ Documentation-template lists almost always bind to **Dataset** entities — same
 | Item | Why |
 |------|-----|
 | **Calculated fields** (`*_calc`, expressions, indicators) | Renaming or retyping breaks lists and KPIs — translate **display** on non-calculated attributes only unless a dedicated expression migration wave |
-| **Embedded BPMN diagram** layout, gateway conditions in designer | Often no safe public PUT — browser verification only (runtime process designer — separate from `doc.*` template metadata) |
+| **Embedded BPMN diagram** layout, gateway conditions in designer | Often no safe public PUT — browser verification only (separate from `doc.*` template metadata) |
 | **FilterTree children** when API returns empty after PUT | Tables → tab filter UI |
 | **Scenario / route** wiring inside process designer | Extend [browser_automation.md](browser_automation.md) when API lacks coverage |
 
@@ -171,7 +168,7 @@ Need to fix RU display strings on doc.XXXX?
 │  ├─ TemplateService lists doc.* → API
 │  └─ Missing from API → RecordType Administration UI pass
 └─ Process designer / transition guard (BPMN runtime)?
-   └─ Browser (API last) — not the same as doc.* documentation template localization
+   └─ Browser (API last) — not the same as doc.* template localization
 ```
 
 **Order:** OpenAPI → `tools/` → skills → browser ([SKILL.md §9](../SKILL.md#9-growing-platform-skills)).
@@ -195,6 +192,6 @@ Independent **`doc.{N}`** trees (no shared dataset writes) may run in **parallel
 ## Related platform docs
 
 - [instance_repo_documentation_boundary.md](instance_repo_documentation_boundary.md) — `doc.*` vs `oa.*`, scratch, promotion
-- `{instance_progress_dir}/.agents/skills/cmw-platform/references/en_template_ru_leftover_cleanup.md` — instance playbook (orgStructureApps, roleApps, first-wave URLs)
+- [en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md) — stub → instance playbook (orgStructureApps, roleApps, first-wave URLs)
 - [browser_automation.md](browser_automation.md) — `#RecordType/…` hash patterns
 - [api_endpoints.md](api_endpoints.md) — Template list endpoints
