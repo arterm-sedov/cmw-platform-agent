@@ -89,7 +89,7 @@ Platform-generic hash patterns: [browser_automation.md](browser_automation.md) (
 ## Related platform docs
 
 - [record_harvest_seed.md](record_harvest_seed.md) — agnostic harvest/seed contract
-- [documentation_template_localization.md](documentation_template_localization.md) — `doc.XXXX` enumeration and per-template checklist
+- [process_model_template_localization.md](process_model_template_localization.md) — `doc.XXXX` enumeration and per-template checklist
 - [entity_display_name_localization.md](entity_display_name_localization.md) — display names for any entity type (API + ontology)
 - [en_template_ru_leftover_cleanup.md](en_template_ru_leftover_cleanup.md) — stub → instance RU leftover playbook (Operations, solution dataset grids)
 - [ralph_loop_goal_autonomy.md](ralph_loop_goal_autonomy.md) — platform-generic Ralph loop
