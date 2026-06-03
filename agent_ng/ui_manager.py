@@ -163,11 +163,20 @@ class UIManager:
                 download_html_btn = downloads_tab_instance.components.get(
                     "download_html_btn"
                 )
-                if download_btn and download_html_btn:
+                download_artifacts_zip_btn = downloads_tab_instance.components.get(
+                    "download_artifacts_zip_btn"
+                )
+                if download_btn and download_html_btn and download_artifacts_zip_btn:
                     # Wire download buttons to update after streaming completes
-                    def _update_downloads_from_chat(history):
+                    def _update_downloads_from_chat(
+                        history: Any,
+                        request: gr.Request | None = None,
+                    ) -> tuple[Any, Any, Any]:
                         """Update download buttons from chat tab"""
-                        return chat_tab_instance.get_download_button_updates(history)
+                        return chat_tab_instance.get_download_button_updates(
+                            history,
+                            request,
+                        )
 
                     if (
                         hasattr(chat_tab_instance, "streaming_event")
@@ -176,7 +185,11 @@ class UIManager:
                         chat_tab_instance.streaming_event.then(
                             fn=_update_downloads_from_chat,
                             inputs=[chat_tab_instance.components.get("chatbot")],
-                            outputs=[download_btn, download_html_btn],
+                            outputs=[
+                                download_btn,
+                                download_html_btn,
+                                download_artifacts_zip_btn,
+                            ],
                             api_visibility="private",
                         )
                     if (
@@ -186,8 +199,13 @@ class UIManager:
                         chat_tab_instance.submit_event.then(
                             fn=_update_downloads_from_chat,
                             inputs=[chat_tab_instance.components.get("chatbot")],
-                            outputs=[download_btn, download_html_btn],
-                            queue=False,  # Don't queue file generation to prevent blocking
+                            outputs=[
+                                download_btn,
+                                download_html_btn,
+                                download_artifacts_zip_btn,
+                            ],
+                            # Keep download prep off the main queue.
+                            queue=False,
                             api_visibility="private",
                         )
                     # Also wire clear event to hide download buttons
@@ -198,11 +216,19 @@ class UIManager:
 
                         def _hide_downloads_on_clear():
                             """Hide download buttons when chat is cleared"""
-                            return gr.update(visible=False), gr.update(visible=False)
+                            return (
+                                gr.update(visible=False),
+                                gr.update(visible=False),
+                                gr.update(visible=False),
+                            )
 
                         chat_tab_instance.clear_event.then(
                             fn=_hide_downloads_on_clear,
-                            outputs=[download_btn, download_html_btn],
+                            outputs=[
+                                download_btn,
+                                download_html_btn,
+                                download_artifacts_zip_btn,
+                            ],
                             api_visibility="private",
                         )
                     logging.getLogger(__name__).info(

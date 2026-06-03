@@ -75,6 +75,12 @@ class DownloadsTab:
                 elem_classes=["cmw-button"],
                 visible=False,
             )
+            self.components["download_artifacts_zip_btn"] = gr.DownloadButton(
+                label=self._get_translation("download_artifacts_zip_button"),
+                variant="secondary",
+                elem_classes=["cmw-button"],
+                visible=False,
+            )
 
     def _connect_events(self):
         """Connect event handlers for the downloads tab"""

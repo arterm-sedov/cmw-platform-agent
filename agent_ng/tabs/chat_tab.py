@@ -21,6 +21,7 @@ import uuid
 import gradio as gr
 import markdown
 
+from agent_ng.artifacts_export import build_registered_artifacts_zip
 from agent_ng.history_compression import (
     perform_compression_with_notifications,
     should_compress_on_completion,
@@ -1839,6 +1840,8 @@ class ChatTab:
             delattr(self, "_last_download_file")
         if hasattr(self, "_last_download_html_file"):
             delattr(self, "_last_download_html_file")
+        if hasattr(self, "_last_artifacts_zip_file"):
+            delattr(self, "_last_artifacts_zip_file")
         if hasattr(self, "_last_export_include_html"):
             delattr(self, "_last_export_include_html")
         if hasattr(self, "_last_html_file_path"):
@@ -1877,6 +1880,7 @@ class ChatTab:
     def get_download_button_updates(
         self,
         history,
+        request: gr.Request | None = None,
         *,
         generate_html: bool | None = None,
     ):
@@ -1886,15 +1890,58 @@ class ChatTab:
 
         Args:
             history: Conversation history
+            request: Active Gradio request, used for session-scoped artifact ZIPs.
             generate_html: When ``None``, include HTML export. When ``False``, Markdown only.
 
         Returns:
-            Tuple of (markdown_button_update, html_button_update)
+            Tuple of (markdown_button_update, html_button_update, artifacts_zip_update)
         """
-        return self._update_download_button_visibility(
+        markdown_update, html_update = self._update_download_button_visibility(
             history,
             generate_html=generate_html,
         )
+        return markdown_update, html_update, self.get_artifacts_zip_update(request)
+
+    def get_artifacts_zip_update(
+        self,
+        request: gr.Request | None = None,
+    ) -> Any:
+        """Build/update the registered-artifacts ZIP button for the active session."""
+        zip_path = self._build_registered_artifacts_zip(request)
+        if zip_path:
+            self._last_artifacts_zip_file = zip_path
+            return gr.update(value=zip_path, visible=True)
+        if hasattr(self, "_last_artifacts_zip_file"):
+            delattr(self, "_last_artifacts_zip_file")
+        return gr.update(visible=False)
+
+    def _build_registered_artifacts_zip(
+        self,
+        request: gr.Request | None = None,
+    ) -> str | None:
+        main_app = getattr(self, "main_app", None)
+        session_manager = (
+            getattr(main_app, "session_manager", None) if main_app else None
+        )
+        if session_manager is None:
+            return None
+
+        try:
+            if request is not None:
+                session_id = session_manager.get_session_id(request)
+            else:
+                session_id = (get_current_session_id() or "").strip()
+            if not session_id:
+                return None
+            agent = session_manager.get_session_agent(session_id)
+            return build_registered_artifacts_zip(agent, session_id)
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "Failed to generate registered artifacts ZIP: %s",
+                exc,
+                exc_info=True,
+            )
+            return None
 
     def _update_download_button_visibility(
         self,

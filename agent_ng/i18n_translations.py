@@ -80,6 +80,7 @@ RUSSIAN_TRANSLATIONS = {
     "clear_button": "Очистить диалог",
     "download_button": "📥 Скачать диалог (Markdown)",
     "download_html_button": "🌐 Скачать диалог (HTML)",
+    "download_artifacts_zip_button": "📦 Скачать артефакты (ZIP)",
     "download_file_label": "Скачать Markdown",
     # LLM Selection section
     "llm_selection_title": "Выберите LLM",
@@ -433,6 +434,7 @@ ENGLISH_TRANSLATIONS = {
     "clear_button": "Clear conversation",
     "download_button": "📥 Download conversation (Markdown)",
     "download_html_button": "🌐 Download conversation (HTML)",
+    "download_artifacts_zip_button": "📦 Download artifacts (ZIP)",
     "download_file_label": "Download Markdown",
     # LLM Selection section
     "llm_selection_title": "Select LLM",
