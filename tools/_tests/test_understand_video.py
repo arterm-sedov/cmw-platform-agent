@@ -34,7 +34,7 @@ class TestUnderstandVideo:
                 mock_analyze.return_value = "This video shows a person walking"
 
                 result = understand_video(
-                    file_reference=Path(video_path).name,
+                    filename=Path(video_path).name,
                     prompt="What's happening in this video?",
                     agent=mock_agent
                 )
@@ -52,7 +52,7 @@ class TestUnderstandVideo:
         """Test analyzing video from URL"""
         mock_agent = Mock()
 
-        with patch("tools.file_utils.FileUtils.resolve_file_reference") as mock_resolve:
+        with patch("tools.file_utils.FileUtils.resolve_filename") as mock_resolve:
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
                 f.write(b"fake video")
                 temp_path = f.name
@@ -64,7 +64,7 @@ class TestUnderstandVideo:
                     mock_analyze.return_value = "Video analysis result"
 
                     result = understand_video(
-                        file_reference="https://example.com/video.mp4",
+                        filename="https://example.com/video.mp4",
                         prompt="Describe this video",
                         agent=mock_agent
                     )
@@ -81,11 +81,11 @@ class TestUnderstandVideo:
         """Test error handling when file not found"""
         mock_agent = Mock()
 
-        with patch("tools.file_utils.FileUtils.resolve_file_reference") as mock_resolve:
+        with patch("tools.file_utils.FileUtils.resolve_filename") as mock_resolve:
             mock_resolve.return_value = None
 
             result = understand_video(
-                file_reference="nonexistent.mp4",
+                filename="nonexistent.mp4",
                 prompt="Describe",
                 agent=mock_agent
             )
@@ -108,7 +108,7 @@ class TestUnderstandVideo:
                 mock_analyze.return_value = "Detailed video analysis"
 
                 result = understand_video(
-                    file_reference=Path(video_path).name,
+                    filename=Path(video_path).name,
                     prompt="Analyze this video",
                     system_prompt="You are a video expert",
                     agent=mock_agent
@@ -136,7 +136,7 @@ class TestUnderstandVideo:
                 mock_analyze.return_value = "Video segment analysis"
 
                 result = understand_video(
-                    file_reference=Path(video_path).name,
+                    filename=Path(video_path).name,
                     prompt="What happens in this segment?",
                     start_time="00:30",
                     end_time="01:00",

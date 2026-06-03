@@ -837,7 +837,7 @@ def arxiv_search(input: str) -> str:
 # ========== FILE/DATA TOOLS ==========
 @tool
 def read_text_based_file(
-    file_reference: str,
+    filename: str,
     read_html_as_markdown: bool = True,
     extract_images: bool = False,
     agent: Annotated[Any | None, InjectedToolArg] = None,
@@ -881,7 +881,7 @@ def read_text_based_file(
     - Provides file metadata (name, size, encoding) in results
 
     Args:
-        file_reference (str): Original filename from user upload OR URL to download
+        filename (str): Original filename from user upload OR URL to download
         read_html_as_markdown (bool): For HTML files. If True (default), converts HTML to
             Markdown for token efficiency and readability. Set False only when raw HTML
             structure is needed.
@@ -895,8 +895,8 @@ def read_text_based_file(
     from .file_utils import FileUtils
     from .local_path_text import read_local_path_to_plain_text
 
-    ref = (file_reference or "").strip()
-    file_path = FileUtils.resolve_file_reference(ref, agent)
+    ref = (filename or "").strip()
+    file_path = FileUtils.resolve_filename(ref, agent)
     if not file_path:
         return FileUtils.create_tool_response("read_text_based_file", error=f"File not found: {ref}")
     file_info = FileUtils.get_file_info(file_path)
@@ -1141,7 +1141,7 @@ def _apply_pandas_query(
 
 @tool
 def analyze_csv_file(
-    file_reference: str,
+    filename: str,
     query: str,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> str:
@@ -1157,7 +1157,7 @@ def analyze_csv_file(
     - Downloads files from URLs automatically
     - Provides comprehensive analysis including data types, statistics, and column information
     Args:
-        file_reference (str): Original filename from user upload OR URL to download
+        filename (str): Original filename from user upload OR URL to download
         query (str): A question or description of the analysis to perform (currently unused)
         agent: Agent instance for file resolution (injected automatically)
 
@@ -1166,9 +1166,9 @@ def analyze_csv_file(
     """
     from .file_utils import FileUtils
     # Resolve file reference (filename or URL) to full path
-    file_path = FileUtils.resolve_file_reference(file_reference, agent)
+    file_path = FileUtils.resolve_filename(filename, agent)
     if not file_path:
-        return FileUtils.create_tool_response("analyze_csv_file", error=f"File not found: {file_reference}")
+        return FileUtils.create_tool_response("analyze_csv_file", error=f"File not found: {filename}")
     # Check file exists using utilities with Pydantic validation
     file_info = FileUtils.get_file_info(file_path)
     if not file_info.exists:
@@ -1202,7 +1202,7 @@ def analyze_csv_file(
 
 @tool
 def analyze_excel_file(
-    file_reference: str,
+    filename: str,
     query: str,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> str:
@@ -1225,7 +1225,7 @@ def analyze_excel_file(
     - Downloads files from URLs automatically
     - Provides data types, statistics, column information, and sheet details
     Args:
-        file_reference (str): Original filename from user upload OR URL to download
+        filename (str): Original filename from user upload OR URL to download
         query (str): A question or description of the analysis to perform (currently unused)
         agent: Agent instance for file resolution (injected automatically)
 
@@ -1234,9 +1234,9 @@ def analyze_excel_file(
     """
     from .file_utils import FileUtils
     # Resolve file reference (filename or URL) to full path
-    file_path = FileUtils.resolve_file_reference(file_reference, agent)
+    file_path = FileUtils.resolve_filename(filename, agent)
     if not file_path:
-        return FileUtils.create_tool_response("analyze_excel_file", error=f"File not found: {file_reference}")
+        return FileUtils.create_tool_response("analyze_excel_file", error=f"File not found: {filename}")
     # Check file exists using utilities with Pydantic validation
     file_info = FileUtils.get_file_info(file_path)
     if not file_info.exists:
@@ -1279,7 +1279,7 @@ def analyze_excel_file(
 # ========== IMAGE ANALYSIS/GENERATION TOOLS ==========
 @tool
 def analyze_image(
-    file_reference: str,
+    filename: str,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> str:
     """
@@ -1302,7 +1302,7 @@ def analyze_image(
     - Provides comprehensive image analysis including dimensions, color analysis, and thumbnails
 
     Args:
-        file_reference (str): Original filename from user upload OR URL to download
+        filename (str): Original filename from user upload OR URL to download
         agent: Agent instance for file resolution (injected automatically)
 
     Returns:
@@ -1311,9 +1311,9 @@ def analyze_image(
     from .file_utils import FileUtils
     try:
         # Resolve file reference (filename or URL) to full path
-        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        file_path = FileUtils.resolve_filename(filename, agent)
         if not file_path:
-            return FileUtils.create_tool_response("analyze_image", error=f"File not found: {file_reference}")
+            return FileUtils.create_tool_response("analyze_image", error=f"File not found: {filename}")
         # Open image from file path
         img = Image.open(file_path)
         width, height = img.size
@@ -1347,7 +1347,7 @@ def analyze_image(
 
 @tool
 def analyze_image_ai(
-    file_reference: str,
+    filename: str,
     prompt: str,
     system_prompt: str = None,
     agent: Annotated[Any | None, InjectedToolArg] = None,
@@ -1366,7 +1366,7 @@ def analyze_image_ai(
     For basic metadata (dimensions, colors), use the legacy analyze_image() instead.
 
     Args:
-        file_reference (str): Uploaded image filename, or a URL to an image.
+        filename (str): Uploaded image filename, or a URL to an image.
         prompt (str): Question or instruction about the image (e.g., "What's in this image?")
         system_prompt (str, optional): System instruction for the model
         agent: Agent instance for file resolution (injected automatically)
@@ -1380,21 +1380,21 @@ def analyze_image_ai(
         from agent_ng.vision_input import VisionInput
         from agent_ng.vision_tool_manager import VisionToolManager
 
-        lowered_ref = file_reference.strip().lower()
+        lowered_ref = filename.strip().lower()
         is_direct_url = lowered_ref.startswith("http://") or lowered_ref.startswith(
             "https://"
         )
         if is_direct_url:
             vision_input = VisionInput(
                 prompt=prompt,
-                image_url=file_reference.strip(),
+                image_url=filename.strip(),
             )
         else:
-            file_path = FileUtils.resolve_file_reference(file_reference, agent)
+            file_path = FileUtils.resolve_filename(filename, agent)
             if not file_path:
                 return FileUtils.create_tool_response(
                     "analyze_image_ai",
-                    error=f"File not found: {file_reference}",
+                    error=f"File not found: {filename}",
                 )
 
             if file_path.lower().endswith(".pdf"):
@@ -1403,7 +1403,7 @@ def analyze_image_ai(
                     error="PDF files cannot be analyzed directly as images. "
                     "Most vision models don't support PDFs natively. "
                     "To analyze visual PDF content:\n"
-                    "1. First: read_text_based_file(file_reference='DOC.pdf', extract_images=True)\n"
+                    "1. First: read_text_based_file(filename='DOC.pdf', extract_images=True)\n"
                     "   - This extracts images from PDF pages\n"
                     "2. Then: analyze the extracted images individually\n"
                     "   - Use analyze_image_ai for each extracted image path",
@@ -1424,7 +1424,7 @@ def analyze_image_ai(
             "analyze_image_ai",
             result=result,
             extra={
-                "file": file_reference,
+                "file": filename,
                 "model_used": manager.vl_model
             }
         )
@@ -1639,14 +1639,13 @@ def _build_generate_ai_image_description() -> str:
         )
 
     body = (
-        "Create or edit an image from a text description.\n\n"
-        "Use this when the user asks for an illustration, icon, "
-        "diagram, business infographic, logo, banner, social-media "
-        "graphic, or any other visual — either generating from scratch "
-        "or editing/restyling an existing image via `reference_images`. "
-        "The result comes back as a chat attachment reference that you "
-        "can pass to other tools (for example, to attach the image to "
-        "a record, analyze it, or transform it further).\n\n"
+        "Generate an image from a text description — illustrations, "
+        "icons, diagrams, infographics, logos, banners, social-media "
+        "graphics, and more.\n\n"
+        "On success the result includes `generated_filename` — use "
+        "that name in follow-up tools (attach to a record, analyze, "
+        "transform). On failure the result includes an `error` "
+        "message — modify the prompt and retry.\n\n"
         "`aspect_ratio` lets you request a specific shape (for example "
         "`16:9` for a banner, `9:16` for a mobile story, `1:1` for a "
         "square icon). `image_size` lets you request a resolution tier "
@@ -1654,10 +1653,9 @@ def _build_generate_ai_image_description() -> str:
         "print-quality). Only set these when the composition really "
         "depends on shape or size.\n\n"
         f"{ref_note}\n\n"
-        "Returns a structured result containing the image reference "
-        "and the generation cost. If the call fails, the result "
-        "contains an `error` message explaining why — simplify the "
-        "prompt and try again."
+        "Pass `reference_images` to edit or restyle an existing "
+        "picture (URL or data-URI format). The active model determines "
+        "whether reference images are supported and how many."
     )
     if get_default_prompt_style_hint is None:
         return body
@@ -1769,8 +1767,8 @@ def generate_ai_image(
     ``IMAGE_GEN_DEFAULT_MODEL``); the calling LLM only decides on the
     prompt, aspect ratio, size, and optional reference images.
 
-    Returns a structured result. On success it includes a
-    ``file_reference`` (an attachment name usable by other chat tools),
+    Returns a structured result. On success it includes
+    ``generated_filename`` — the name of the newly created image file —
     the ``cost`` in USD, the output ``mime_type`` and ``size_bytes``. On
     failure it includes an ``error`` string and no attachment.
     """
@@ -1778,7 +1776,7 @@ def generate_ai_image(
         return {
             "success": False,
             "error": "Image generation engine is not available.",
-            "file_reference": None,
+            "generated_filename": None,
             "cost": None,
         }
 
@@ -1788,7 +1786,7 @@ def generate_ai_image(
         return {
             "success": False,
             "error": str(exc),
-            "file_reference": None,
+            "generated_filename": None,
             "cost": None,
         }
 
@@ -1829,7 +1827,7 @@ def generate_ai_image(
         return {
             "success": False,
             "error": result.error or "image generation failed",
-            "file_reference": None,
+            "generated_filename": None,
             "cost": result.cost,
             "reference_images_warning": ref_images_warning,
         }
@@ -1853,7 +1851,7 @@ def generate_ai_image(
         return {
             "success": False,
             "error": f"Failed to write image bytes: {exc}",
-            "file_reference": None,
+            "generated_filename": None,
             "cost": result.cost,
         }
 
@@ -1870,17 +1868,17 @@ def generate_ai_image(
             return {
                 "success": False,
                 "error": f"register_file failed: {exc}",
-                "file_reference": None,
+                "generated_filename": None,
                 "cost": result.cost,
             }
-        file_reference = display_name
+        _ref = display_name
     else:
-        file_reference = os.path.abspath(disk_path)
+        _ref = os.path.abspath(disk_path)
 
     return {
         "success": True,
         "error": None,
-        "file_reference": file_reference,
+        "generated_filename": _ref,
         "cost": result.cost,
         "mime_type": result.mime_type,
         "size_bytes": len(result.image_bytes),
@@ -1902,7 +1900,7 @@ def _resolve_reference_images(
     accepts both formats directly.
 
     Everything else is treated as a logical filename and looked up via
-    ``FileUtils.read_file_reference_bytes``, which consults
+    ``FileUtils.read_file_bytes``, which consults
     ``agent.get_file_path`` when an agent is present.  On success the
     bytes are base64-encoded and wrapped in a ``data:<mime>;base64,…``
     URI.  MIME type is guessed from the file extension; unknowns fall
@@ -1930,7 +1928,7 @@ def _resolve_reference_images(
             continue
 
         # Filename — look up in agent's registry and encode as data URI.
-        data, err = FileUtils.read_file_reference_bytes(item, agent)
+        data, err = FileUtils.read_file_bytes(item, agent)
         if err or data is None:
             logger.warning(
                 "generate_ai_image: cannot resolve reference image %r: %s",
@@ -2092,7 +2090,7 @@ def combine_images(images_base64: list[str], operation: str,
 # ========== VIDEO/AUDIO UNDERSTANDING TOOLS ==========
 @tool
 def understand_video(
-    file_reference: str,
+    filename: str,
     prompt: str,
     system_prompt: str = None,
     agent: Annotated[Any | None, InjectedToolArg] = None,
@@ -2112,7 +2110,7 @@ def understand_video(
     - YouTube URLs (routed per VL_YOUTUBE_MODEL, VL_YOUTUBE_GEMINI_PROVIDER, VL_GEMINI_PROVIDER in .env)
 
     Args:
-        file_reference (str): Original filename from user upload OR direct video URL 
+        filename (str): Original filename from user upload OR direct video URL 
                              OR YouTube URL
         prompt (str): A question or request regarding the video content
         system_prompt (str, optional): System instruction (not used currently)
@@ -2131,18 +2129,18 @@ def understand_video(
         from agent_ng.vision_tool_manager import VisionToolManager
 
         # Handle direct URLs without forcing local download first
-        lowered_ref = file_reference.strip().lower()
+        lowered_ref = filename.strip().lower()
         is_direct_url = lowered_ref.startswith("http://") or lowered_ref.startswith("https://")
         if is_direct_url:
-            vision_input = VisionInput(prompt=prompt, video_url=file_reference.strip())
+            vision_input = VisionInput(prompt=prompt, video_url=filename.strip())
             file_path = None
         else:
             # Resolve uploaded/local file reference
-            file_path = FileUtils.resolve_file_reference(file_reference, agent)
+            file_path = FileUtils.resolve_filename(filename, agent)
             if not file_path:
                 return FileUtils.create_tool_response(
                     "understand_video",
-                    error=f"File not found: {file_reference}"
+                    error=f"File not found: {filename}"
                 )
             vision_input = VisionInput(
                 prompt=prompt,
@@ -2166,7 +2164,7 @@ def understand_video(
             "understand_video",
             result=result,
             extra={
-                "file": file_reference,
+                "file": filename,
                 "model_used": selected_model
             }
         )
@@ -2179,7 +2177,7 @@ def understand_video(
 
 @tool
 def understand_audio(
-    file_reference: str,
+    filename: str,
     prompt: str,
     system_prompt: str = None,
     agent: Annotated[Any | None, InjectedToolArg] = None,
@@ -2193,7 +2191,7 @@ def understand_audio(
     Automatically uses Gemini 2.5 Flash (only model with audio support).
 
     Args:
-        file_reference (str): Original filename from user upload OR URL to download
+        filename (str): Original filename from user upload OR URL to download
         prompt (str): A question or request regarding the audio content
         system_prompt (str, optional): System instruction (not used currently)
         agent: Agent instance for file resolution (injected automatically)
@@ -2210,11 +2208,11 @@ def understand_audio(
         from agent_ng.vision_tool_manager import VisionToolManager
 
         # Resolve file reference to full path
-        file_path = FileUtils.resolve_file_reference(file_reference, agent)
+        file_path = FileUtils.resolve_filename(filename, agent)
         if not file_path:
             return FileUtils.create_tool_response(
                 "understand_audio",
-                error=f"File not found: {file_reference}"
+                error=f"File not found: {filename}"
             )
 
         # Create VisionInput
@@ -2236,7 +2234,7 @@ def understand_audio(
             "understand_audio",
             result=result,
             extra={
-                "file": file_reference,
+                "file": filename,
                 "model_used": manager.vl_audio_model
             }
         )

@@ -57,7 +57,7 @@ class TestAnalyzeImageAIPDFHandling:
 
         try:
             result = analyze_image_ai.invoke({
-                "file_reference": pdf_path,
+                "filename": pdf_path,
                 "prompt": "What is in this image?"
             })
             result_parsed = json.loads(result)
@@ -90,7 +90,7 @@ class TestAnalyzeImageAIPDFHandling:
             os.rename(pdf_path, renamed)
 
             result = analyze_image_ai.invoke({
-                "file_reference": renamed,
+                "filename": renamed,
                 "prompt": "What is in this image?"
             })
             result_parsed = json.loads(result)

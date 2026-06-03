@@ -3,21 +3,21 @@
 Tests for read_text_based_file tool with MarkItDown support (DOCX, XLSX, PPTX, HTML)
 """
 
-import sys
-import os
 import json
-import tempfile
+import os
 from pathlib import Path
+import sys
+import tempfile
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
-def create_test_file(extension: str, content: str = None) -> str:
+def create_test_file(extension: str, content: str | None = None) -> str:
     """Create a temporary test file with given extension and content."""
     fd, path = tempfile.mkstemp(suffix=extension)
     if content:
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(content)
     else:
         os.close(fd)
@@ -49,10 +49,10 @@ class TestReadTextBasedFileMarkitdown:
 </body>
 </html>"""
 
-        path = create_test_file('.html', html_content)
+        path = create_test_file(".html", html_content)
         try:
             result = read_text_based_file.invoke({
-                "file_reference": path,
+                "filename": path,
                 "read_html_as_markdown": True
             })
             parsed = parse_tool_response(result)
@@ -82,10 +82,10 @@ class TestReadTextBasedFileMarkitdown:
 </body>
 </html>"""
 
-        path = create_test_file('.html', html_content)
+        path = create_test_file(".html", html_content)
         try:
             result = read_text_based_file.invoke({
-                "file_reference": path,
+                "filename": path,
                 "read_html_as_markdown": False
             })
             parsed = parse_tool_response(result)
@@ -110,26 +110,26 @@ class TestReadTextBasedFileMarkitdown:
             print("⚠️  test_read_docx: SKIPPED (markitdown not installed)")
             return True
 
-        from tools.tools import read_text_based_file
-
         # Create a minimal DOCX file (ZIP with Word document)
         import zipfile
-        docx_path = create_test_file('.docx')
-        with zipfile.ZipFile(docx_path, 'w') as zf:
+
+        from tools.tools import read_text_based_file
+        docx_path = create_test_file(".docx")
+        with zipfile.ZipFile(docx_path, "w") as zf:
             # Minimal document.xml content
-            word_doc = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            word_doc = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
 <w:body><w:p><w:r><w:t>Hello from DOCX</w:t></w:r></w:p></w:body>
-</w:document>'''
-            zf.writestr('word/document.xml', word_doc)
-            zf.writestr('[Content_Types].xml', '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+</w:document>"""
+            zf.writestr("word/document.xml", word_doc)
+            zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="xml" ContentType="application/xml"/>
-</Types>''')
+</Types>""")
 
         try:
             result = read_text_based_file.invoke({
-                "file_reference": docx_path,
+                "filename": docx_path,
                 "read_html_as_markdown": True
             })
             parsed = parse_tool_response(result)
@@ -154,29 +154,29 @@ class TestReadTextBasedFileMarkitdown:
             print("⚠️  test_read_xlsx: SKIPPED (markitdown not installed)")
             return True
 
-        from tools.tools import read_text_based_file
-
         # Create a minimal XLSX file
         import zipfile
-        xlsx_path = create_test_file('.xlsx')
-        with zipfile.ZipFile(xlsx_path, 'w') as zf:
+
+        from tools.tools import read_text_based_file
+        xlsx_path = create_test_file(".xlsx")
+        with zipfile.ZipFile(xlsx_path, "w") as zf:
             # Minimal sheet1.xml content
-            sheet_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            sheet_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <sheetData>
 <row><c r="A1"><v>Name</v></c><c r="B1"><v>Value</v></c></row>
 <row><c r="A2"><v>Test</v></c><c r="B2"><v>42</v></c></row>
 </sheetData>
-</worksheet>'''
-            zf.writestr('xl/worksheets/sheet1.xml', sheet_xml)
-            zf.writestr('[Content_Types].xml', '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+</worksheet>"""
+            zf.writestr("xl/worksheets/sheet1.xml", sheet_xml)
+            zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="xml" ContentType="application/xml"/>
-</Types>''')
+</Types>""")
 
         try:
             result = read_text_based_file.invoke({
-                "file_reference": xlsx_path,
+                "filename": xlsx_path,
                 "read_html_as_markdown": True
             })
             parsed = parse_tool_response(result)
@@ -201,31 +201,31 @@ class TestReadTextBasedFileMarkitdown:
             print("⚠️  test_read_pptx: SKIPPED (markitdown not installed)")
             return True
 
-        from tools.tools import read_text_based_file
-
         # Create a minimal PPTX file
         import zipfile
-        pptx_path = create_test_file('.pptx')
-        with zipfile.ZipFile(pptx_path, 'w') as zf:
+
+        from tools.tools import read_text_based_file
+        pptx_path = create_test_file(".pptx")
+        with zipfile.ZipFile(pptx_path, "w") as zf:
             # Minimal slide1.xml content
-            slide_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            slide_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
 <slides><sldId id="1" r:id="rId1"/></slides>
-</p:presentation>'''
-            slide_content = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+</p:presentation>"""
+            slide_content = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
 <sp><p:txBody><a:p><a:r><a:t>Hello from PPTX</a:t></a:r></a:p></p:txBody></sp>
-</p:sld>'''
-            zf.writestr('ppt/presentation.xml', slide_xml)
-            zf.writestr('ppt/slides/slide1.xml', slide_content)
-            zf.writestr('[Content_Types].xml', '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+</p:sld>"""
+            zf.writestr("ppt/presentation.xml", slide_xml)
+            zf.writestr("ppt/slides/slide1.xml", slide_content)
+            zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="xml" ContentType="application/xml"/>
-</Types>''')
+</Types>""")
 
         try:
             result = read_text_based_file.invoke({
-                "file_reference": pptx_path,
+                "filename": pptx_path,
                 "read_html_as_markdown": True
             })
             parsed = parse_tool_response(result)
@@ -244,21 +244,21 @@ class TestReadTextBasedFileMarkitdown:
     @staticmethod
     def test_markitdown_not_available():
         """Test graceful handling when markitdown is not available."""
-        import sys
         import importlib
+        import sys
 
         from tools.tools import read_text_based_file
 
         # Create a minimal HTML file
-        path = create_test_file('.html', '<html><body>Test</body></html>')
+        path = create_test_file(".html", "<html><body>Test</body></html>")
 
         # Mock markitdown as not available
-        original_markitdown = sys.modules.get('markitdown')
-        sys.modules['markitdown'] = None
+        original_markitdown = sys.modules.get("markitdown")
+        sys.modules["markitdown"] = None
 
         try:
             result = read_text_based_file.invoke({
-                "file_reference": path,
+                "filename": path,
                 "read_html_as_markdown": True
             })
             parsed = parse_tool_response(result)
@@ -274,9 +274,9 @@ class TestReadTextBasedFileMarkitdown:
         finally:
             os.unlink(path)
             if original_markitdown:
-                sys.modules['markitdown'] = original_markitdown
-            elif 'markitdown' in sys.modules:
-                del sys.modules['markitdown']
+                sys.modules["markitdown"] = original_markitdown
+            elif "markitdown" in sys.modules:
+                del sys.modules["markitdown"]
 
 
 def run_all_tests():

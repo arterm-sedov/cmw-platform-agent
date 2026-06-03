@@ -38,7 +38,7 @@ class TestAnalyzeImageAI:
 
             # Call tool
             result = analyze_image_ai(
-                file_reference=Path(image_path).name,
+                filename=Path(image_path).name,
                 prompt="What color is this image?",
                 agent=mock_agent
             )
@@ -61,14 +61,14 @@ class TestAnalyzeImageAI:
         mock_agent = Mock()
         test_url = "https://example.com/image.jpg"
 
-        with patch("tools.file_utils.FileUtils.resolve_file_reference") as mock_resolve, patch(
+        with patch("tools.file_utils.FileUtils.resolve_filename") as mock_resolve, patch(
             "agent_ng.vision_tool_manager.VisionToolManager"
         ) as MockMgr:
             inst = MockMgr.return_value
             inst.vl_model = "qwen/qwen3.6-plus"
             inst.analyze = Mock(return_value="ok")
             result = analyze_image_ai(
-                file_reference=test_url,
+                filename=test_url,
                 prompt="Describe this image",
                 agent=mock_agent,
             )
@@ -96,7 +96,7 @@ class TestAnalyzeImageAI:
 
             # Call tool
             result = analyze_image_ai(
-                file_reference=Path(image_path).name,
+                filename=Path(image_path).name,
                 prompt="Quick description",
                 agent=mock_agent
             )
@@ -123,7 +123,7 @@ class TestAnalyzeImageAI:
 
             # Call with system prompt
             result = analyze_image_ai(
-                file_reference=Path(image_path).name,
+                filename=Path(image_path).name,
                 prompt="Detailed analysis",
                 system_prompt="Analyze carefully",
                 agent=mock_agent
@@ -141,12 +141,12 @@ class TestAnalyzeImageAI:
         """Test error handling when file not found"""
         mock_agent = Mock()
 
-        with patch("tools.file_utils.FileUtils.resolve_file_reference") as mock_resolve:
+        with patch("tools.file_utils.FileUtils.resolve_filename") as mock_resolve:
             # Mock file not found
             mock_resolve.return_value = None
 
             result = analyze_image_ai(
-                file_reference="nonexistent.jpg",
+                filename="nonexistent.jpg",
                 prompt="Describe",
                 agent=mock_agent
             )
@@ -168,7 +168,7 @@ class TestAnalyzeImageAI:
             mock_agent.file_registry = {Path(file_path).name: file_path}
 
             result = analyze_image_ai(
-                file_reference=Path(file_path).name,
+                filename=Path(file_path).name,
                 prompt="Describe",
                 agent=mock_agent
             )
@@ -193,7 +193,7 @@ class TestAnalyzeImageAI:
             mock_agent.file_registry = {Path(image_path).name: image_path}
 
             result = analyze_image_ai(
-                file_reference=Path(image_path).name,
+                filename=Path(image_path).name,
                 prompt="Describe colors",
                 system_prompt="You are a color expert",
                 agent=mock_agent
@@ -227,7 +227,7 @@ class TestAnalyzeImageAIIntegration:
         mock_agent.file_registry = {test_image.name: str(test_image)}
 
         result = analyze_image_ai(
-            file_reference=test_image.name,
+            filename=test_image.name,
             prompt="Describe the shapes and colors in this image",
             agent=mock_agent
         )

@@ -103,7 +103,7 @@ def test_new_record_document_model_matches_upload(tmp_path: Path) -> None:
         {
             "record_id": rid,
             "attribute_system_name": doc,
-            "file_reference": str(tiny),
+            "filename": str(tiny),
             "replace": True,
         }
     )
@@ -133,7 +133,7 @@ def test_fetch_record_document_file_after_attach_roundtrip(tmp_path: Path) -> No
         {
             "record_id": rid,
             "attribute_system_name": doc,
-            "file_reference": str(tiny.resolve()),
+            "filename": str(tiny.resolve()),
             "replace": True,
         }
     )
@@ -147,11 +147,11 @@ def test_fetch_record_document_file_after_attach_roundtrip(tmp_path: Path) -> No
         }
     )
     assert out.get("success"), out
-    fr = str(out.get("file_reference") or "")
+    fr = str(out.get("filename") or "")
     assert os.path.isabs(fr)
     assert os.path.isfile(fr)
     rtxt = read_text_based_file.invoke(
-        {"file_reference": fr, "read_html_as_markdown": True, "agent": None}
+        {"filename": fr, "read_html_as_markdown": True, "agent": None}
     )
     s = str(rtxt or "")
     assert "probe" in s.lower()
@@ -204,7 +204,7 @@ def test_document_get_model_re_read_by_record_id_after_attach(tmp_path: Path) ->
         {
             "record_id": rid,
             "attribute_system_name": doc,
-            "file_reference": str(f.resolve()),
+            "filename": str(f.resolve()),
             "replace": True,
         }
     )

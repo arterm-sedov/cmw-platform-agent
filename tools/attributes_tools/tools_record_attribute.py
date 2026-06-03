@@ -1,7 +1,7 @@
 from ..tool_utils import *
 
 
-class EditOrCreateRecordAttributeSchema(CommonAttributeFields):
+class EditOrCreateRecordAttributeSchema(RefAttributeFields):
     related_template_system_name: Optional[str] = Field(
         default=None,
         description="System name of the template to link with the attribute. For edit operations, leave empty to preserve current link."

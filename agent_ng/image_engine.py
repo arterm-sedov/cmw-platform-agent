@@ -172,7 +172,13 @@ class ImageEngine:
         if self._instance_openrouter is not None and provider_name == "openrouter":
             provider = self._instance_openrouter
         else:
-            provider = get_provider(provider_name)
+            provider = get_provider(
+                provider_name,
+                api_key=get_provider_api_key(
+                    provider=provider_name,
+                    session_id=get_current_session_id(),
+                ),
+            )
 
         if provider is None:
             return ImageGenerationResult(
@@ -201,8 +207,7 @@ class ImageEngine:
                     )
             else:
                 logger.warning(
-                    "Model %s does not support reference images; "
-                    "ignoring %d provided.",
+                    "Model %s does not support reference images; ignoring %d provided.",
                     resolved_model,
                     len(reference_images),
                 )

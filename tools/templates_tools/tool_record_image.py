@@ -13,8 +13,8 @@ from langchain_core.tools import InjectedToolArg, tool
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from tools.file_reference_tool_text import (
-    CHAT_FILE_REFERENCE_DESCRIPTION,
-    CHAT_FILE_REFERENCE_RESULT_HINT,
+    CHAT_FILENAME_DESCRIPTION,
+    CHAT_FILENAME_RESULT_HINT,
 )
 from tools.file_utils import FileUtils
 from tools.platform_record_document import resolve_id_from_record_property
@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 _FETCH_RECORD_IMAGE_FILE_DESCRIPTION = (
     "Load an **image** that is **already stored** on an **image** attribute of a **record** so it "
     "can be read or sent to a vision or file tool like a user attachment.\n\n"
-    + CHAT_FILE_REFERENCE_RESULT_HINT
-    + "\n\nThe result also includes **``image_id``** (platform id of the image).\n\n"
+    + CHAT_FILENAME_RESULT_HINT
+    + "\n\nThe result also includes **``image_id``** (entity ID of the image).\n\n"
     "If the **attribute** is **multivalue** (more than one file can be stored), set "
     "**``multivalue_index``** to pick one image (0-based; list order, often newest first in the "
     "app)."
@@ -51,7 +51,7 @@ def fetch_record_image_file(
     multivalue_index: int = 0,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
-    """Load a stored image; see the tool description for file_reference."""
+    """Load a stored image; see the tool description for filename."""
     record_id = record_id.strip() if isinstance(record_id, str) else ""
     image_attribute_system_name = (
         image_attribute_system_name.strip()
@@ -62,20 +62,20 @@ def fetch_record_image_file(
         return {
             "success": False,
             "error": "record_id and image_attribute_system_name must be non-empty.",
-            "file_reference": None,
+            "filename": None,
             "image_id": None,
         }
     err, img_id = resolve_id_from_record_property(
         record_id, image_attribute_system_name, multivalue_index
     )
     if err is not None:
-        return {**err, "file_reference": None, "image_id": None}
+        return {**err, "filename": None, "image_id": None}
     gimg = get_image_model(img_id)
     if not gimg.get("success"):
         return {
             "success": False,
             "error": gimg.get("error", "Get Image (metadata) failed"),
-            "file_reference": None,
+            "filename": None,
             "image_id": img_id,
         }
     model = gimg.get("model")
@@ -83,7 +83,7 @@ def fetch_record_image_file(
         return {
             "success": False,
             "error": "Get Image returned no model object.",
-            "file_reference": None,
+            "filename": None,
             "image_id": img_id,
         }
     display = display_filename_for_image_model(model)
@@ -91,7 +91,7 @@ def fetch_record_image_file(
         return {
             "success": False,
             "error": "Could not determine a file name from the image metadata.",
-            "file_reference": None,
+            "filename": None,
             "image_id": img_id,
         }
     pres = get_image_file_payload(img_id, image_model=model)
@@ -99,7 +99,7 @@ def fetch_record_image_file(
         return {
             "success": False,
             "error": pres.get("error", "Image payload failed"),
-            "file_reference": None,
+            "filename": None,
             "image_id": img_id,
         }
     b64c = pres.get("content")
@@ -107,7 +107,7 @@ def fetch_record_image_file(
         return {
             "success": False,
             "error": "Image body was not base64 text.",
-            "file_reference": None,
+            "filename": None,
             "image_id": img_id,
         }
     raw = base64.b64decode(b64c, validate=False)
@@ -120,7 +120,7 @@ def fetch_record_image_file(
         return {
             "success": False,
             "error": str(e),
-            "file_reference": None,
+            "filename": None,
             "image_id": img_id,
         }
 
@@ -136,19 +136,19 @@ def fetch_record_image_file(
             return {
                 "success": False,
                 "error": f"register_file failed: {str(e)}",
-                "file_reference": None,
+                "filename": None,
                 "image_id": img_id,
             }
         return {
             "success": True,
             "error": None,
-            "file_reference": display,
+            "filename": display,
             "image_id": img_id,
         }
     return {
         "success": True,
         "error": None,
-        "file_reference": os.path.abspath(tpath),
+        "filename": os.path.abspath(tpath),
         "image_id": img_id,
         "display_filename": display,
     }
@@ -162,15 +162,15 @@ class AttachImageToRecordSchema(BaseModel):
     attribute_system_name: str = Field(
         description="System name of the image attribute in the record template.",
     )
-    file_reference: str = Field(
-        description=CHAT_FILE_REFERENCE_DESCRIPTION,
+    filename: str = Field(
+        description=CHAT_FILENAME_DESCRIPTION,
     )
     agent: Annotated[Any | None, InjectedToolArg] = Field(
         default=None,
         description="Session agent for chat file registry; injected by the app, not the LLM.",
     )
 
-    @field_validator("record_id", "attribute_system_name", "file_reference", mode="before")
+    @field_validator("record_id", "attribute_system_name", "filename", mode="before")
     @classmethod
     def strip_req(cls, v: Any) -> str:
         if not isinstance(v, str) or not v.strip():
@@ -187,14 +187,14 @@ class AttachImageToRecordSchema(BaseModel):
 def attach_file_to_record_image_attribute(
     record_id: str,
     attribute_system_name: str,
-    file_reference: str,
+    filename: str,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
     """
-    Upload an image to a record image attribute (file_reference). The stored filename comes from
+    Upload an image to a record image attribute. The stored filename comes from
     the path or URL basename. Returns success, status_code, error, raw_response, image_id.
     """
-    raw, rerr = FileUtils.read_file_reference_bytes(file_reference, agent)
+    raw, rerr = FileUtils.read_file_bytes(filename, agent)
     if rerr is not None or raw is None:
         return {
             "success": False,
@@ -203,7 +203,7 @@ def attach_file_to_record_image_attribute(
             "raw_response": None,
             "image_id": None,
         }
-    display_name = FileUtils.upload_basename_from_reference(file_reference)
+    display_name = FileUtils.upload_basename(filename)
     if not display_name:
         return {
             "success": False,

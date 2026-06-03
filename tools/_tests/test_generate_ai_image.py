@@ -6,11 +6,11 @@ Behavior contracts:
 - Invoked with ``agent`` injection, saves image to session-isolated directory
   and calls ``agent.register_file(display_name, disk_path)``.
 - Without an agent (e.g. unit-test harness), returns the raw absolute path as
-  ``file_reference`` and skips registration.
+  ``generated_filename`` and skips registration.
 - Pydantic schema validates required ``prompt``; exposes optional ``model``,
   ``aspect_ratio``, ``image_size``, ``reference_images``; hides ``agent``
   via ``InjectedToolArg`` (so args_schema must declare it).
-- Returns a dict with ``success``, ``file_reference``, ``cost``,
+- Returns a dict with ``success``, ``generated_filename``, ``cost``,
   ``mime_type``, ``size_bytes``, ``reference_images_warning``.
 - On engine failure, returns ``success=False`` with the engine's ``error``
   string and no file side effects.
@@ -108,8 +108,8 @@ class TestInvocationWithAgent:
         assert isinstance(out, dict)
         assert out["success"] is True
         assert out["error"] is None
-        # file_reference is the logical display name
-        ref = out["file_reference"]
+        # generated_filename is the logical display name
+        ref = out["generated_filename"]
         assert isinstance(ref, str)
         assert ref.endswith(".png")
         # Agent registry should contain that name
@@ -180,8 +180,8 @@ class TestInvocationWithoutAgent:
             out = generate_ai_image.invoke({"prompt": "a blue circle"})
 
         assert out["success"] is True
-        ref = out["file_reference"]
-        # Without an agent, file_reference is an absolute on-disk path
+        ref = out["generated_filename"]
+        # Without an agent, generated_filename is an absolute on-disk path
         assert os.path.isabs(ref)
         assert os.path.isfile(ref)
         try:

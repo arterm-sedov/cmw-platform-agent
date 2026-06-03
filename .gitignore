@@ -2,7 +2,7 @@
 .venv/**
 .venv*/**
 __pycache__/
-!logs/*.log
+logs/**
 server_config.yml
 .screencasts/
 *.mp4

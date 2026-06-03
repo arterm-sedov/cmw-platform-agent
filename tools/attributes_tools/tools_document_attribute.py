@@ -36,7 +36,7 @@ ALLOWED_EXTENSIONS = Literal[tuple(ALLOWED_EXTENSIONS_LIST)]
 ALLOWED_EXTENSIONS_SET = {e.lower() for e in ALLOWED_EXTENSIONS_LIST}
 
 
-class EditOrCreateDocumentAttributeSchema(CommonAttributeFields):
+class EditOrCreateDocumentAttributeSchema(RefAttributeFields):
     display_format: Optional[
         Literal["Attachment", "SignedDocument", "InlineDocument"]
     ] = Field(

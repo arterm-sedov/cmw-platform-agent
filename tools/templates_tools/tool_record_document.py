@@ -13,8 +13,8 @@ from langchain_core.tools import InjectedToolArg, tool
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from tools.file_reference_tool_text import (
-    CHAT_FILE_REFERENCE_DESCRIPTION,
-    CHAT_FILE_REFERENCE_RESULT_HINT,
+    CHAT_FILENAME_DESCRIPTION,
+    CHAT_FILENAME_RESULT_HINT,
 )
 from tools.file_utils import FileUtils
 from tools.platform_record_document import (
@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 _FETCH_RECORD_DOCUMENT_FILE_DESCRIPTION = (
     "Load a file that is **already stored** on a **document** attribute of a **record** so it "
     "can be read or passed along like a user attachment.\n\n"
-    + CHAT_FILE_REFERENCE_RESULT_HINT
-    + "\n\nThe result also includes **``document_id``** (platform id of the file).\n\n"
+    + CHAT_FILENAME_RESULT_HINT
+    + "\n\nThe result also includes **``document_id``** (entity ID of the file).\n\n"
     "If the **attribute** is **multivalue** (more than one file can be stored), set "
     "**``multivalue_index``** to pick one file to load (0-based; list order, often newest first "
     "in the app)."
@@ -51,7 +51,7 @@ def fetch_record_document_file(
     multivalue_index: int = 0,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
-    """Load a stored document file; see the tool description for file_reference."""
+    """Load a stored document file; see the tool description for filename."""
     record_id = record_id.strip() if isinstance(record_id, str) else ""
     document_attribute_system_name = (
         document_attribute_system_name.strip()
@@ -62,20 +62,20 @@ def fetch_record_document_file(
         return {
             "success": False,
             "error": "record_id and document_attribute_system_name must be non-empty.",
-            "file_reference": None,
+            "filename": None,
             "document_id": None,
         }
     err, doc_id = resolve_id_from_record_property(
         record_id, document_attribute_system_name, multivalue_index
     )
     if err is not None:
-        return {**err, "file_reference": None, "document_id": None}
+        return {**err, "filename": None, "document_id": None}
     gmod = get_document_model(doc_id)
     if not gmod.get("success"):
         return {
             "success": False,
             "error": gmod.get("error", "GetDocument (metadata) failed"),
-            "file_reference": None,
+            "filename": None,
             "document_id": doc_id,
         }
     model = gmod.get("model")
@@ -83,7 +83,7 @@ def fetch_record_document_file(
         return {
             "success": False,
             "error": "GetDocument returned no model object.",
-            "file_reference": None,
+            "filename": None,
             "document_id": doc_id,
         }
     display = display_filename_for_registry(model)
@@ -93,7 +93,7 @@ def fetch_record_document_file(
             "error": (
                 "Could not determine the file name for this document on the platform."
             ),
-            "file_reference": None,
+            "filename": None,
             "document_id": doc_id,
         }
     dres = get_document_content(doc_id, document_model=model)
@@ -101,7 +101,7 @@ def fetch_record_document_file(
         return {
             "success": False,
             "error": dres.get("error", "Document download failed"),
-            "file_reference": None,
+            "filename": None,
             "document_id": doc_id,
         }
     b64c = dres.get("content")
@@ -109,7 +109,7 @@ def fetch_record_document_file(
         return {
             "success": False,
             "error": "Document body was not base64 text.",
-            "file_reference": None,
+            "filename": None,
             "document_id": doc_id,
         }
     # :func:`get_document_content` encodes raw ``/Content`` bytes; CMW test runs used non-empty files.
@@ -124,7 +124,7 @@ def fetch_record_document_file(
         return {
             "success": False,
             "error": str(e),
-            "file_reference": None,
+            "filename": None,
             "document_id": doc_id,
         }
 
@@ -142,20 +142,20 @@ def fetch_record_document_file(
             return {
                 "success": False,
                 "error": f"register_file failed: {str(e)}",
-                "file_reference": None,
+                "filename": None,
                 "document_id": doc_id,
             }
         return {
             "success": True,
             "error": None,
-            "file_reference": display,
+            "filename": display,
             "document_id": doc_id,
         }
     # No agent (tests/headless): path resolution only; normal chat agent always has agent.
     return {
         "success": True,
         "error": None,
-        "file_reference": os.path.abspath(tpath),
+        "filename": os.path.abspath(tpath),
         "document_id": doc_id,
         "display_filename": display,
     }
@@ -170,8 +170,8 @@ class AttachFileToRecordDocumentSchema(BaseModel):
     attribute_system_name: str = Field(
         description="System name of the document attribute in the record template.",
     )
-    file_reference: str = Field(
-        description=CHAT_FILE_REFERENCE_DESCRIPTION,
+    filename: str = Field(
+        description=CHAT_FILENAME_DESCRIPTION,
     )
     replace: bool = Field(
         default=True,
@@ -185,7 +185,7 @@ class AttachFileToRecordDocumentSchema(BaseModel):
         description="Session agent for chat file registry; injected by the app, not the LLM.",
     )
 
-    @field_validator("record_id", "attribute_system_name", "file_reference", mode="before")
+    @field_validator("record_id", "attribute_system_name", "filename", mode="before")
     @classmethod
     def strip_req(cls, v: Any) -> str:
         if not isinstance(v, str) or not v.strip():
@@ -202,15 +202,15 @@ class AttachFileToRecordDocumentSchema(BaseModel):
 def attach_file_to_record_document_attribute(
     record_id: str,
     attribute_system_name: str,
-    file_reference: str,
+    filename: str,
     replace: bool = True,
     agent: Annotated[Any | None, InjectedToolArg] = None,
 ) -> dict[str, Any]:
     """
-    Upload a file to a document attribute (file_reference). The stored filename is the path or URL
+    Upload a file to a document attribute. The stored filename is the path or URL
     basename. Returns success, status_code, error, raw_response.
     """
-    raw, rerr = FileUtils.read_file_reference_bytes(file_reference, agent)
+    raw, rerr = FileUtils.read_file_bytes(filename, agent)
     if rerr is not None or raw is None:
         return {
             "success": False,
@@ -218,7 +218,7 @@ def attach_file_to_record_document_attribute(
             "error": rerr or "Failed to read file for upload",
             "raw_response": None,
         }
-    display_name = FileUtils.upload_basename_from_reference(file_reference)
+    display_name = FileUtils.upload_basename(filename)
     if not display_name:
         return {
             "success": False,

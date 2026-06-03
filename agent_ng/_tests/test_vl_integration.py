@@ -9,12 +9,13 @@ Test files (set VL_TEST_* to override; defaults under experiments/test_files/):
   VL_TEST_VIDEO  - MP4 (default: test_video.mp4, optional — see test_files/README.md)
   VL_TEST_AUDIO  - MP3 (default: test_audio.mp3, optional)
 """
-import os
 import json
-import pytest
+import os
 from pathlib import Path
 from unittest.mock import patch
+
 from dotenv import load_dotenv
+import pytest
 
 # Load .env so real API keys are available
 load_dotenv()
@@ -123,8 +124,8 @@ class TestVisionToolManagerRouting:
         os.environ["OPENROUTER_FETCH_PRICING_AT_STARTUP"] = "false"
 
     def test_audio_routes_to_gemini(self):
+        from agent_ng.vision_input import MediaType, VisionInput
         from agent_ng.vision_tool_manager import VisionToolManager
-        from agent_ng.vision_input import VisionInput, MediaType
         with patch.dict(
             os.environ,
             {"VL_AUDIO_MODEL": "gemini-2.5-flash"},
@@ -136,24 +137,24 @@ class TestVisionToolManagerRouting:
         assert "gemini" in model.lower(), f"Audio should route to Gemini, got: {model}"
 
     def test_image_routes_to_default_model(self):
-        from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.vision_input import VisionInput
+        from agent_ng.vision_tool_manager import VisionToolManager
         mgr = VisionToolManager()
         vi = VisionInput(prompt="describe", image_url="http://example.com/x.jpg")
         model = mgr.get_model_for_input(vi)
         assert model == os.getenv("VL_DEFAULT_MODEL", "qwen/qwen3.6-plus")
 
     def test_video_routes_to_default_model(self):
-        from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.vision_input import VisionInput
+        from agent_ng.vision_tool_manager import VisionToolManager
         mgr = VisionToolManager()
         vi = VisionInput(prompt="describe", video_url="http://example.com/x.mp4")
         model = mgr.get_model_for_input(vi)
         assert model == os.getenv("VL_DEFAULT_MODEL", "qwen/qwen3.6-plus")
 
     def test_youtube_VL_YOUTUBE_GEMINI_PROVIDER_google_bypasses_openrouter_id(self):
-        from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.vision_input import VisionInput
+        from agent_ng.vision_tool_manager import VisionToolManager
         with patch.dict(
             os.environ,
             {
@@ -171,8 +172,8 @@ class TestVisionToolManagerRouting:
             assert mgr.get_model_for_input(vi) == "gemini-2.5-flash"
 
     def test_youtube_uses_VL_GEMINI_PROVIDER_when_youtube_override_unset(self):
-        from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.vision_input import VisionInput
+        from agent_ng.vision_tool_manager import VisionToolManager
         with patch.dict(
             os.environ,
             {
@@ -221,8 +222,8 @@ class TestVisionToolManagerRouting:
 
     def test_polza_adapter_has_polza_provider(self):
         """Polza adapter carries LLMProvider.POLZA, not OPENROUTER."""
-        from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.llm_manager import LLMProvider
+        from agent_ng.vision_tool_manager import VisionToolManager
         mgr = VisionToolManager()
         adapter = mgr.adapters["polza"]
         assert adapter.provider == LLMProvider.POLZA
@@ -286,8 +287,8 @@ class TestImageAnalysisAPI:
     @pytest.mark.skipif(not TEST_IMAGE.exists(), reason=f"Test image not found: {TEST_IMAGE}")
     def test_analyze_image_with_qwen(self):
         """Qwen 3.6 Plus analyzes a local image."""
-        from agent_ng.vision_tool_manager import VisionToolManager
         from agent_ng.vision_input import VisionInput
+        from agent_ng.vision_tool_manager import VisionToolManager
         mgr = VisionToolManager()
         vi = VisionInput(prompt="Describe the shapes and colors in this image.", image_path=str(TEST_IMAGE))
         result = mgr.analyze(vi)
@@ -299,7 +300,7 @@ class TestImageAnalysisAPI:
         """analyze_image_ai tool wrapper works end-to-end."""
         from tools.tools import analyze_image_ai
         raw = analyze_image_ai.func(
-            file_reference=str(TEST_IMAGE),
+            filename=str(TEST_IMAGE),
             prompt="What shapes do you see?",
             agent=None
         )
@@ -329,7 +330,7 @@ class TestVideoAnalysisAPI:
         """understand_video tool wrapper works end-to-end."""
         from tools.tools import understand_video
         raw = understand_video.func(
-            file_reference=str(TEST_VIDEO),
+            filename=str(TEST_VIDEO),
             prompt="What is happening in this video?",
             agent=None
         )
@@ -359,7 +360,7 @@ class TestAudioAnalysisAPI:
         """understand_audio tool wrapper works end-to-end."""
         from tools.tools import understand_audio
         raw = understand_audio.func(
-            file_reference=str(TEST_AUDIO),
+            filename=str(TEST_AUDIO),
             prompt="What do you hear?",
             agent=None
         )

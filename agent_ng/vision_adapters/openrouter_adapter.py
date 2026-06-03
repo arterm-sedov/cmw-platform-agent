@@ -4,18 +4,22 @@ OpenRouter Vision Adapter - Provider-specific implementation for OpenRouter API
 Handles multimodal inputs (image, video, audio) for OpenRouter models
 """
 
-from typing import Dict, Any, Optional, Tuple
 import base64
+from typing import Any, Dict, Optional, Tuple
 import urllib.request
 
 try:
-    from ..vision_input import VisionInput, MediaType
-    from ..vision_tool_manager import VisionProviderAdapter
+    from ..key_resolution import get_provider_api_key
     from ..llm_manager import LLMManager, LLMProvider
+    from ..session_manager import get_current_session_id
+    from ..vision_input import MediaType, VisionInput
+    from ..vision_tool_manager import VisionProviderAdapter
 except ImportError:
-    from agent_ng.vision_input import VisionInput, MediaType
-    from agent_ng.vision_tool_manager import VisionProviderAdapter
+    from agent_ng.key_resolution import get_provider_api_key
     from agent_ng.llm_manager import LLMManager, LLMProvider
+    from agent_ng.session_manager import get_current_session_id
+    from agent_ng.vision_input import MediaType, VisionInput
+    from agent_ng.vision_tool_manager import VisionProviderAdapter
 
 
 class OpenRouterVisionAdapter(VisionProviderAdapter):
@@ -24,7 +28,7 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
 
     Supports:
     - Images (via base64 or URL)
-    - Videos (via base64 or URL) 
+    - Videos (via base64 or URL)
     - Audio (via base64 or URL)
 
     OpenRouter uses OpenAI-compatible format for multimodal inputs.
@@ -35,7 +39,7 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
 
     @staticmethod
     def _openrouter_audio_format(
-        mime_type: Optional[str], path_hint: Optional[str] = None
+        mime_type: str | None, path_hint: str | None = None
     ) -> str:
         """Map MIME or path to OpenRouter ``input_audio.format`` id."""
         m = (mime_type or "").lower()
@@ -61,7 +65,7 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
     @classmethod
     def _openrouter_audio_b64_and_format(
         cls, vision_input: VisionInput
-    ) -> Optional[Tuple[str, str]]:
+    ) -> tuple[str, str] | None:
         """
         (raw_base64, format) for OpenRouter ``input_audio``, or None.
         Supports path, base64, data: URLs; fetches http(s) URLs to bytes.
@@ -129,9 +133,14 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
 
         OpenRouter supports: image, video, audio (model-dependent)
         """
-        return media_type in [MediaType.IMAGE, MediaType.VIDEO, MediaType.AUDIO, MediaType.TEXT]
+        return media_type in [
+            MediaType.IMAGE,
+            MediaType.VIDEO,
+            MediaType.AUDIO,
+            MediaType.TEXT,
+        ]
 
-    def format_input(self, vision_input: VisionInput) -> Dict[str, Any]:
+    def format_input(self, vision_input: VisionInput) -> dict[str, Any]:
         """
         Format VisionInput into OpenRouter API format
 
@@ -153,29 +162,20 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
         content = []
 
         # Add text prompt
-        content.append({
-            "type": "text",
-            "text": vision_input.prompt
-        })
+        content.append({"type": "text", "text": vision_input.prompt})
 
         # Add media based on type
         if vision_input.media_type == MediaType.IMAGE:
             image_data = self._get_image_data(vision_input)
             if image_data:
-                content.append({
-                    "type": "image_url",
-                    "image_url": {"url": image_data}
-                })
+                content.append({"type": "image_url", "image_url": {"url": image_data}})
 
         elif vision_input.media_type == MediaType.VIDEO:
             video_data = self._get_video_data(vision_input)
             if video_data:
                 # OpenRouter uses "video_url" type (not "image_url")
                 # https://openrouter.ai/docs/guides/overview/multimodal/videos
-                content.append({
-                    "type": "video_url",
-                    "video_url": {"url": video_data}
-                })
+                content.append({"type": "video_url", "video_url": {"url": video_data}})
 
         elif vision_input.media_type == MediaType.AUDIO:
             ap = self._openrouter_audio_b64_and_format(vision_input)
@@ -191,12 +191,9 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
                     }
                 )
 
-        return {
-            "role": "user",
-            "content": content
-        }
+        return {"role": "user", "content": content}
 
-    def _get_image_data(self, vision_input: VisionInput) -> Optional[str]:
+    def _get_image_data(self, vision_input: VisionInput) -> str | None:
         """Get image data as data URL"""
         # Prefer URL if available
         if vision_input.image_url:
@@ -215,7 +212,7 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
 
         return None
 
-    def _get_video_data(self, vision_input: VisionInput) -> Optional[str]:
+    def _get_video_data(self, vision_input: VisionInput) -> str | None:
         """Get video data as data URL"""
         # Prefer URL if available
         if vision_input.video_url:
@@ -234,7 +231,7 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
 
         return None
 
-    def invoke(self, vision_input: VisionInput, model: Optional[str] = None) -> str:
+    def invoke(self, vision_input: VisionInput, model: str | None = None) -> str:
         """
         Invoke OpenRouter model with vision input
 
@@ -252,7 +249,8 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
         if not model:
             # Use default from environment or Qwen 3.6 Plus
             import os
-            model = os.getenv('VL_DEFAULT_MODEL', 'qwen/qwen3.6-plus')
+
+            model = os.getenv("VL_DEFAULT_MODEL", "qwen/qwen3.6-plus")
 
         # Get LLM - find model index for the specified model
         config = self.llm_manager.LLM_CONFIGS.get(self.provider)
@@ -266,7 +264,15 @@ class OpenRouterVisionAdapter(VisionProviderAdapter):
                 model_index = idx
                 break
 
-        llm_instance = self.llm_manager.get_llm(self.provider.value, use_tools=False, model_index=model_index)
+        llm_instance = self.llm_manager.get_llm(
+            self.provider.value,
+            use_tools=False,
+            model_index=model_index,
+            api_key_override=get_provider_api_key(
+                provider=self.provider.value,
+                session_id=get_current_session_id(),
+            ),
+        )
         if not llm_instance:
             raise RuntimeError(f"Failed to load model: {model}")
 
