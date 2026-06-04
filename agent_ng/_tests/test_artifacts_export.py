@@ -9,6 +9,7 @@ import zipfile
 
 from agent_ng.artifacts_export import (
     build_registered_artifacts_zip,
+    collect_export_files,
     collect_registered_artifacts,
 )
 
@@ -86,6 +87,91 @@ def test_build_registered_artifacts_zip_packages_files_and_manifest(
         "second.bin",
     }
     assert all(item["sha256"] for item in manifest["artifacts"])
+
+
+def test_build_registered_artifacts_zip_includes_markdown_and_html_exports(
+    tmp_path: Path,
+) -> None:
+    markdown = tmp_path / "CMW_Copilot_20260604_120000.md"
+    html = tmp_path / "CMW_Copilot_20260604_120000.html"
+    markdown.write_text("# Export\n\n![img](artifacts/chart.png)", encoding="utf-8")
+    html.write_text("<html><body>Export</body></html>", encoding="utf-8")
+
+    zip_path = build_registered_artifacts_zip(
+        DummyAgent(),
+        "session-a",
+        export_files=[
+            ("conversation.md", markdown),
+            ("conversation.html", html),
+        ],
+    )
+
+    assert zip_path is not None
+    with zipfile.ZipFile(zip_path) as zf:
+        names = set(zf.namelist())
+        assert names == {
+            "conversations/conversation.md",
+            "conversations/conversation.html",
+            "manifest.json",
+        }
+        manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
+
+    assert manifest["artifact_count"] == 0
+    assert manifest["conversation_count"] == 2
+    assert {item["zip_path"] for item in manifest["conversations"]} == {
+        "conversations/conversation.md",
+        "conversations/conversation.html",
+    }
+
+
+def test_build_registered_artifacts_zip_includes_exports_and_linked_artifacts(
+    tmp_path: Path,
+) -> None:
+    agent = DummyAgent()
+    markdown = tmp_path / "conversation.md"
+    image = tmp_path / "chart.png"
+    markdown.write_text("![chart](chart.png)", encoding="utf-8")
+    image.write_bytes(b"png")
+    agent.register_file("session-a", "chart.png", image)
+
+    zip_path = build_registered_artifacts_zip(
+        agent,
+        "session-a",
+        export_files=[("conversation.md", markdown)],
+    )
+
+    assert zip_path is not None
+    with zipfile.ZipFile(zip_path) as zf:
+        names = set(zf.namelist())
+        assert names == {
+            "conversations/conversation.md",
+            "artifacts/chart.png",
+            "manifest.json",
+        }
+        manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
+
+    assert manifest["conversation_count"] == 1
+    assert manifest["artifact_count"] == 1
+    assert manifest["conversations"][0]["zip_path"] == (
+        "conversations/conversation.md"
+    )
+    assert manifest["artifacts"][0]["zip_path"] == "artifacts/chart.png"
+
+
+def test_collect_export_files_skips_missing_files(tmp_path: Path) -> None:
+    existing = tmp_path / "existing.md"
+    existing.write_text("ok", encoding="utf-8")
+
+    exports = collect_export_files(
+        [
+            ("existing.md", existing),
+            ("missing.md", tmp_path / "missing.md"),
+            ("", existing),
+        ]
+    )
+
+    assert [item.logical_name for item in exports] == ["existing.md"]
+    assert exports[0].source_path == existing.resolve()
 
 
 def test_build_registered_artifacts_zip_deduplicates_internal_names(
