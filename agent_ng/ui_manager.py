@@ -11,7 +11,7 @@ from collections.abc import Callable
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import gradio as gr
 
@@ -20,14 +20,17 @@ from .tabs.sidebar import Sidebar as SidebarPanel
 
 # Import configuration with fallback for direct execution
 try:
-    from agent_ng.agent_config import get_refresh_intervals
+    from agent_ng.agent_config import (
+        get_refresh_intervals,
+        get_ui_download_prep_after_stream,
+    )
 except ImportError:
     # Fallback for direct execution
     from pathlib import Path
     import sys
 
     sys.path.append(str(Path(__file__).parent))
-    from agent_config import get_refresh_intervals
+    from agent_config import get_refresh_intervals, get_ui_download_prep_after_stream
 
 
 class UIManager:
@@ -155,7 +158,7 @@ class UIManager:
 
             sb.ensure_llm_events_wired()
 
-            # Connect DownloadsTab to update from chat streaming events
+            # Connect DownloadsTab to update from chat history on demand.
             chat_tab_instance = self.components.get("chattab_tab")
             downloads_tab_instance = self.components.get("downloadstab_tab")
             if chat_tab_instance and downloads_tab_instance:
@@ -167,45 +170,56 @@ class UIManager:
                     "download_artifacts_zip_btn"
                 )
                 if download_btn and download_html_btn and download_artifacts_zip_btn:
-                    # Wire download buttons to update after streaming completes
                     def _update_downloads_from_chat(
                         history: Any,
+                        streaming_active: bool | None = None,
                         request: gr.Request | None = None,
                     ) -> tuple[Any, Any, Any]:
                         """Update download buttons from chat tab"""
+                        if streaming_active:
+                            return chat_tab_instance.get_download_cached_ui_updates()
                         return chat_tab_instance.get_download_button_updates(
                             history,
                             request,
                         )
 
+                    downloads_tab_item = getattr(
+                        downloads_tab_instance,
+                        "_tab_item",
+                        None,
+                    )
+                    if downloads_tab_item:
+                        downloads_tab_item.select(
+                            fn=_update_downloads_from_chat,
+                            inputs=[
+                                chat_tab_instance.components.get("chatbot"),
+                                chat_tab_instance.components.get("streaming_active"),
+                            ],
+                            outputs=[
+                                download_btn,
+                                download_html_btn,
+                                download_artifacts_zip_btn,
+                            ],
+                            queue=True,
+                            show_progress="hidden",
+                            api_visibility="private",
+                        )
                     if (
-                        hasattr(chat_tab_instance, "streaming_event")
+                        get_ui_download_prep_after_stream()
+                        and hasattr(chat_tab_instance, "streaming_event")
                         and chat_tab_instance.streaming_event
                     ):
                         chat_tab_instance.streaming_event.then(
                             fn=_update_downloads_from_chat,
-                            inputs=[chat_tab_instance.components.get("chatbot")],
+                            inputs=[
+                                chat_tab_instance.components.get("chatbot"),
+                                chat_tab_instance.components.get("streaming_active"),
+                            ],
                             outputs=[
                                 download_btn,
                                 download_html_btn,
                                 download_artifacts_zip_btn,
                             ],
-                            api_visibility="private",
-                        )
-                    if (
-                        hasattr(chat_tab_instance, "submit_event")
-                        and chat_tab_instance.submit_event
-                    ):
-                        chat_tab_instance.submit_event.then(
-                            fn=_update_downloads_from_chat,
-                            inputs=[chat_tab_instance.components.get("chatbot")],
-                            outputs=[
-                                download_btn,
-                                download_html_btn,
-                                download_artifacts_zip_btn,
-                            ],
-                            # Keep download prep off the main queue.
-                            queue=False,
                             api_visibility="private",
                         )
                     # Also wire clear event to hide download buttons
@@ -215,11 +229,11 @@ class UIManager:
                     ):
 
                         def _hide_downloads_on_clear():
-                            """Hide download buttons when chat is cleared"""
+                            """Disable download buttons when chat is cleared"""
                             return (
-                                gr.update(visible=False),
-                                gr.update(visible=False),
-                                gr.update(visible=False),
+                                gr.update(value=None, visible=True, interactive=False),
+                                gr.update(value=None, visible=True, interactive=False),
+                                gr.update(value=None, visible=True, interactive=False),
                             )
 
                         chat_tab_instance.clear_event.then(
@@ -232,7 +246,7 @@ class UIManager:
                             api_visibility="private",
                         )
                     logging.getLogger(__name__).info(
-                        "✅ Connected DownloadsTab to chat streaming events"
+                        "✅ Connected DownloadsTab automatic download preparation"
                     )
 
             # Wire end-of-turn event-driven refresh using existing chat events
@@ -386,7 +400,6 @@ class UIManager:
     def _setup_auto_refresh(self, demo: gr.Blocks, event_handlers: dict[str, Callable]):
         """Setup auto-refresh timers for status and logs - matches original behavior exactly"""
         # Get handlers with validation
-        update_status_handler = event_handlers.get("update_status")
         update_token_budget_handler = event_handlers.get("update_token_budget")
         refresh_logs_handler = event_handlers.get("refresh_logs")
         update_progress_handler = event_handlers.get("update_progress_display")

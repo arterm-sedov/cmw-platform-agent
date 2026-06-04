@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -244,12 +244,12 @@ def env_flag_true(name: str) -> bool:
 
 
 def get_ui_download_prep_after_stream() -> bool:
-    """Run download-file preparation chained on streaming end (in addition to submit tail).
+    """Run download-file preparation chained on streaming end.
 
-    When ``False`` (default), Markdown/HTML export refresh still runs on ``submit_event`` and
-    when opening the Downloads tab. Turning this on adds the same refresh on the streaming
-    completion event (both Markdown and HTML).
+    When ``False`` (default), Markdown/HTML/artifacts export refresh runs when opening
+    the Downloads tab. Turning this on also refreshes downloads on streaming completion.
 
-    Environment ``CMW_UI_DOWNLOAD_PREP_AFTER_STREAM``: ``1``/``true``/``yes``/``on`` to enable.
+    Environment ``CMW_UI_DOWNLOAD_PREP_AFTER_STREAM``:
+    ``1``/``true``/``yes``/``on`` to enable.
     """
     return env_flag_true("CMW_UI_DOWNLOAD_PREP_AFTER_STREAM")

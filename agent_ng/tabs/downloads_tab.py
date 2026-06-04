@@ -8,7 +8,7 @@ This prevents freezes by keeping download button updates separate from the chat 
 
 from collections.abc import Callable
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import gradio as gr
 
@@ -62,24 +62,28 @@ class DownloadsTab:
         )
 
         with gr.Column(elem_classes=["downloads-container"]):
-            # Markdown first, HTML below (export runs when this tab is opened / prep event).
+            # Keep buttons rendered so tab selection never shows a blank panel.
+            # File values are prepared on tab select, then buttons become active.
             self.components["download_btn"] = gr.DownloadButton(
                 label=self._get_translation("download_button"),
                 variant="secondary",
                 elem_classes=["cmw-button"],
-                visible=False,
+                visible=True,
+                interactive=False,
             )
             self.components["download_html_btn"] = gr.DownloadButton(
                 label=self._get_translation("download_html_button"),
                 variant="secondary",
                 elem_classes=["cmw-button"],
-                visible=False,
+                visible=True,
+                interactive=False,
             )
             self.components["download_artifacts_zip_btn"] = gr.DownloadButton(
                 label=self._get_translation("download_artifacts_zip_button"),
                 variant="secondary",
                 elem_classes=["cmw-button"],
-                visible=False,
+                visible=True,
+                interactive=False,
             )
 
     def _connect_events(self):

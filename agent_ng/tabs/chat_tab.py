@@ -8,14 +8,14 @@ Supports internationalization (i18n) with Russian and English translations.
 """
 
 import asyncio
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable, Generator
 from datetime import datetime
 import logging
 import os
 from pathlib import Path
 import tempfile
 import time
-from typing import Any, Optional
+from typing import Any
 import uuid
 
 import gradio as gr
@@ -27,10 +27,7 @@ from agent_ng.history_compression import (
     should_compress_on_completion,
 )
 from agent_ng.i18n_translations import get_translation_key
-from agent_ng.queue_manager import (
-    apply_concurrency_to_click_event,
-    apply_concurrency_to_submit_event,
-)
+from agent_ng.queue_manager import apply_concurrency_to_click_event
 from agent_ng.session_manager import get_current_session_id
 from agent_ng.token_budget import (
     HISTORY_COMPRESSION_KEEP_RECENT_TURNS_MID_TURN,
@@ -639,7 +636,6 @@ class ChatTab:
         return (
             ui_history,
             "",
-            None,
         )
 
     def _setup_chat_event_triggers(self):
@@ -979,7 +975,6 @@ class ChatTab:
         """Build and return token statistics message for history"""
         prompt_tokens = agent.token_tracker.get_last_prompt_tokens()
         api_tokens = agent.token_tracker.get_last_api_tokens()
-        cumulative_stats = agent.token_tracker.get_cumulative_stats()
 
         stats_lines = []
         if prompt_tokens:
@@ -1614,9 +1609,12 @@ class ChatTab:
         history: list[dict[str, str]],
         cancel_state: dict | None = None,
         request: gr.Request | None = None,
-    ) -> tuple[
-        list[dict[str, str]],
-        str,
+    ) -> Generator[
+        tuple[
+            list[dict[str, str]],
+            str,
+        ],
+        None,
         None,
     ]:
         """Wrapper for concurrent processing with Gradio's native queue feedback
@@ -1639,7 +1637,7 @@ class ChatTab:
         # Check for cancellation before starting
         if is_cancelled():
             logging.getLogger(__name__).info("Streaming cancelled before start")
-            yield (history, "", None)
+            yield (history, "")
             return
 
         # Process message with original wrapper
@@ -1657,7 +1655,6 @@ class ChatTab:
             yield (
                 result[0],
                 result[1],
-                None,
             )
 
         # Hide stop button at end of processing (via .then() on submit_event)
@@ -1666,13 +1663,11 @@ class ChatTab:
             yield (
                 last_result[0],
                 last_result[1],
-                None,
             )
         else:
             yield (
                 history,
                 "",
-                None,
             )
 
     def _stream_message_wrapper_internal(
@@ -1859,23 +1854,39 @@ class ChatTab:
         empty_multimodal = {"text": "", "files": []}
         return [], empty_multimodal
 
-    def get_download_cached_ui_updates(self) -> tuple[Any, Any]:
+    def get_download_cached_ui_updates(self) -> tuple[Any, Any, Any]:
         """Reuse last export paths without regenerating files (avoids stalls mid-stream)."""
         if not CHAT_DOWNLOADS_ENABLED:
-            return gr.update(visible=False), gr.update(visible=False)
+            return (
+                gr.update(value=None, visible=True, interactive=False),
+                gr.update(value=None, visible=True, interactive=False),
+                gr.update(value=None, visible=True, interactive=False),
+            )
         markdown_file_path = getattr(self, "_last_download_file", None)
         html_file_path = getattr(self, "_last_download_html_file", None)
+        artifacts_zip_path = getattr(self, "_last_artifacts_zip_file", None)
+        zip_update = (
+            gr.update(value=artifacts_zip_path, visible=True, interactive=True)
+            if artifacts_zip_path
+            else gr.update(value=None, visible=True, interactive=False)
+        )
         if markdown_file_path and html_file_path:
             return (
-                gr.update(value=markdown_file_path, visible=True),
-                gr.update(value=html_file_path, visible=True),
+                gr.update(value=markdown_file_path, visible=True, interactive=True),
+                gr.update(value=html_file_path, visible=True, interactive=True),
+                zip_update,
             )
         if markdown_file_path:
             return (
-                gr.update(value=markdown_file_path, visible=True),
-                gr.update(visible=False),
+                gr.update(value=markdown_file_path, visible=True, interactive=True),
+                gr.update(value=None, visible=True, interactive=False),
+                zip_update,
             )
-        return gr.update(visible=False), gr.update(visible=False)
+        return (
+            gr.update(value=None, visible=True, interactive=False),
+            gr.update(value=None, visible=True, interactive=False),
+            zip_update,
+        )
 
     def get_download_button_updates(
         self,
@@ -1910,10 +1921,10 @@ class ChatTab:
         zip_path = self._build_registered_artifacts_zip(request)
         if zip_path:
             self._last_artifacts_zip_file = zip_path
-            return gr.update(value=zip_path, visible=True)
+            return gr.update(value=zip_path, visible=True, interactive=True)
         if hasattr(self, "_last_artifacts_zip_file"):
             delattr(self, "_last_artifacts_zip_file")
-        return gr.update(visible=False)
+        return gr.update(value=None, visible=True, interactive=False)
 
     def _build_registered_artifacts_zip(
         self,
@@ -1934,7 +1945,18 @@ class ChatTab:
             if not session_id:
                 return None
             agent = session_manager.get_session_agent(session_id)
-            return build_registered_artifacts_zip(agent, session_id)
+            export_files: list[tuple[str, str]] = []
+            markdown_file_path = getattr(self, "_last_download_file", None)
+            if markdown_file_path:
+                export_files.append((Path(markdown_file_path).name, markdown_file_path))
+            html_file_path = getattr(self, "_last_download_html_file", None)
+            if html_file_path:
+                export_files.append((Path(html_file_path).name, html_file_path))
+            return build_registered_artifacts_zip(
+                agent,
+                session_id,
+                export_files=export_files,
+            )
         except Exception as exc:
             logging.getLogger(__name__).warning(
                 "Failed to generate registered artifacts ZIP: %s",
@@ -1951,10 +1973,10 @@ class ChatTab:
     ):
         """Update download button visibility and file based on conversation history"""
         if not CHAT_DOWNLOADS_ENABLED:
-            # Downloads are globally disabled via feature flag
+            # Downloads are globally disabled via feature flag.
             return (
-                gr.update(visible=False),
-                gr.update(visible=False),
+                gr.update(value=None, visible=True, interactive=False),
+                gr.update(value=None, visible=True, interactive=False),
             )
         if history and len(history) > 0:
             effective_html = True if generate_html is None else bool(generate_html)
@@ -1994,24 +2016,32 @@ class ChatTab:
                 # Show both download buttons with pre-generated files
                 # Use gr.update() instead of creating new components (Gradio 6 pattern)
                 return (
-                    gr.update(value=markdown_file_path, visible=True),
-                    gr.update(value=html_file_path, visible=True),
+                    gr.update(
+                        value=markdown_file_path,
+                        visible=True,
+                        interactive=True,
+                    ),
+                    gr.update(value=html_file_path, visible=True, interactive=True),
                 )
             if markdown_file_path:
                 # MD-only when HTML export is disabled or HTML build failed
                 return (
-                    gr.update(value=markdown_file_path, visible=True),
-                    gr.update(visible=False),
+                    gr.update(
+                        value=markdown_file_path,
+                        visible=True,
+                        interactive=True,
+                    ),
+                    gr.update(value=None, visible=True, interactive=False),
                 )
             # Hide buttons if generation fails
             return (
-                gr.update(visible=False),
-                gr.update(visible=False),
+                gr.update(value=None, visible=True, interactive=False),
+                gr.update(value=None, visible=True, interactive=False),
             )
-        # Hide download buttons when there's no conversation history
+        # Disable download buttons when there's no conversation history.
         return (
-            gr.update(visible=False),
-            gr.update(visible=False),
+            gr.update(value=None, visible=True, interactive=False),
+            gr.update(value=None, visible=True, interactive=False),
         )
 
     def _download_conversation_as_markdown(
