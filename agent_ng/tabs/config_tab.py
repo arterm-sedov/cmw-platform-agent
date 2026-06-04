@@ -115,25 +115,24 @@ class ConfigTab:
         platform_from_dotenv = self.use_dotenv_for_platform()
 
         # ── Browser storage controls (top, single pane) ──
-        with gr.Row():
-            with gr.Column(scale=1, elem_classes=["model-card"]):
-                with gr.Row():
-                    self.components["save_btn"] = gr.Button(
-                        self._get_translation("config_save_button"),
-                        variant="primary",
-                        elem_classes=["cmw-button"],
-                    )
-                    self.components["load_btn"] = gr.Button(
-                        self._get_translation("config_load_button"),
-                        variant="secondary",
-                        elem_classes=["cmw-button"],
-                    )
-                    self.components["clear_storage_btn"] = gr.Button(
-                        self._get_translation("config_clear_storage_button"),
-                        variant="secondary",
-                        elem_classes=["cmw-button"],
-                    )
-                gr.Markdown(self._get_translation("config_browser_storage_help"))
+        with gr.Row(), gr.Column(scale=1, elem_classes=["model-card"]):
+            with gr.Row():
+                self.components["save_btn"] = gr.Button(
+                    self._get_translation("config_save_button"),
+                    variant="primary",
+                    elem_classes=["cmw-button"],
+                )
+                self.components["load_btn"] = gr.Button(
+                    self._get_translation("config_load_button"),
+                    variant="secondary",
+                    elem_classes=["cmw-button"],
+                )
+                self.components["clear_storage_btn"] = gr.Button(
+                    self._get_translation("config_clear_storage_button"),
+                    variant="secondary",
+                    elem_classes=["cmw-button"],
+                )
+            gr.Markdown(self._get_translation("config_browser_storage_help"))
 
         # ── Platform credentials ──
         with gr.Row(equal_height=True):
@@ -146,31 +145,30 @@ class ConfigTab:
                     gr.Markdown(
                         self._get_translation("config_platform_dotenv_notice")
                     )
-                else:
-                    with gr.Row(equal_height=True):
-                        self.components["platform_url"] = gr.Textbox(
-                            label=self._get_translation("config_platform_url"),
-                            placeholder="https://your-comindware-host",
-                            value="",
-                            lines=1,
-                            max_lines=1,
-                            scale=2,
-                        )
-                        self.components["username"] = gr.Textbox(
-                            label=self._get_translation("config_username"),
-                            value="",
-                            lines=1,
-                            max_lines=1,
-                            scale=1,
-                        )
-                        self.components["password"] = gr.Textbox(
-                            label=self._get_translation("config_password"),
-                            type="password",
-                            value="",
-                            lines=1,
-                            max_lines=1,
-                            scale=1,
-                        )
+                with gr.Row(equal_height=True, visible=not platform_from_dotenv):
+                    self.components["platform_url"] = gr.Textbox(
+                        label=self._get_translation("config_platform_url"),
+                        placeholder="https://your-comindware-host",
+                        value="",
+                        lines=1,
+                        max_lines=1,
+                        scale=2,
+                    )
+                    self.components["username"] = gr.Textbox(
+                        label=self._get_translation("config_username"),
+                        value="",
+                        lines=1,
+                        max_lines=1,
+                        scale=1,
+                    )
+                    self.components["password"] = gr.Textbox(
+                        label=self._get_translation("config_password"),
+                        type="password",
+                        value="",
+                        lines=1,
+                        max_lines=1,
+                        scale=1,
+                    )
 
         # ── LLM selection + provider API keys ──
         with gr.Row(equal_height=True):

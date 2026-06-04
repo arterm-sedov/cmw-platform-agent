@@ -3,6 +3,8 @@
 import os
 from unittest.mock import patch
 
+import gradio as gr
+
 from agent_ng.tabs.config_tab import ConfigTab
 
 
@@ -66,3 +68,15 @@ def test_browser_state_public_snapshot_strips_platform_when_dotenv(monkeypatch):
     assert pub["username"] == ""
     assert pub["password"] == ""
     assert pub["llm_provider_api_keys"]["a"] == "1"
+
+
+def test_config_tab_creates_hidden_platform_fields_when_dotenv(monkeypatch):
+    monkeypatch.setenv("CMW_USE_DOTENV", "true")
+    tab = ConfigTab(event_handlers={}, language="en")
+
+    with gr.Blocks():
+        tab._create_config_interface()
+
+    assert "platform_url" in tab.components
+    assert "username" in tab.components
+    assert "password" in tab.components
