@@ -760,9 +760,7 @@ class NextGenApp:
                 message,
                 bubble_id=generating_answer_id,
                 title=format_translation("generating_answer", self.language),
-                content=format_translation(
-                    "generating_answer_subtitle", self.language
-                ),
+                content=format_translation("generating_answer_subtitle", self.language),
             )
             generating_answer_pending = True
 
@@ -948,12 +946,7 @@ class NextGenApp:
                         yield working_history, ""
 
                     elif event_type == "tool_start":
-                        # Tool is starting - render one pending UI-only bubble.
-                        if generating_answer_pending:
-                            complete_generating_answer_bubble(
-                                working_history, generating_answer_id
-                            )
-                            generating_answer_pending = False
+                        # generating_answer survives tool calls; cleanup at turn end only.
                         tool_name = (
                             metadata.get("tool_name", "unknown")
                             if metadata
@@ -1164,9 +1157,7 @@ class NextGenApp:
                 user_agent._pending_partial_text = None  # noqa: SLF001
 
             if generating_answer_pending:
-                complete_generating_answer_bubble(
-                    working_history, generating_answer_id
-                )
+                complete_generating_answer_bubble(working_history, generating_answer_id)
                 generating_answer_pending = False
             elif response_content.strip():
                 complete_generating_answer_bubble(working_history, None)
