@@ -1,7 +1,7 @@
 # External MCP Tools Support — Analysis & Implementation Plan
 
 **Date:** 2026-06-04  
-**Status:** Analysis + transport decision (no implementation in this change)  
+**Status:** Phase 0 + Phase 1 MVP implemented (HTTP consumer, default off)  
 **Repo:** cmw-platform-agent (platform-generic)
 
 ---
@@ -11,7 +11,10 @@
 | Date | Decision |
 |------|----------|
 | 2026-06-04 | **Primary MCP consumer transport:** remote **HTTP (Streamable HTTP)** to Gradio-style MCP endpoints (`/gradio_api/mcp/`), not stdio-first. |
-| 2026-06-04 | **Phase 1 MVP:** one or more HTTP MCP server entries in env/JSON config; merge at startup via `langchain-mcp-adapters`. |
+| 2026-06-04 | **Phase 1 MVP:** HTTP MCP entries in `config/mcp_servers.yaml`; merge at startup via `langchain-mcp-adapters`. |
+| 2026-06-04 | **Registry:** fixed path `config/mcp_servers.yaml` only (no `CMW_MCP_SERVERS_FILE` path override). |
+| 2026-06-04 | **Secrets in registry:** `${VAR}` expansion in loader for string fields (e.g. `headers`); missing env → empty string; tokens stay in `.env`. |
+| 2026-06-04 | **YAML comments:** short operator hints OK; no path-override or git-tracked boilerplate. |
 | 2026-06-04 | **stdio:** secondary — operator desktop / Cursor-parity only; not the default for shared deployments. |
 
 ---
@@ -63,12 +66,12 @@ Per [LangChain MCP docs](https://docs.langchain.com/oss/python/langchain/mcp), [
 - **Network:** Agent host must reach the remote URL (egress firewall, TLS, DNS). Browser CORS does not apply to Python `httpx` client calls, but **server-to-server** connectivity and certificate trust do.
 - **Producer vs consumer:** Remote URL is another app’s MCP *producer*; this repo implements the *consumer* only in Phase 1.
 
-### Configuration sources (operator)
+### Configuration sources (operator) — implemented 2026-06-04
 
 Align with familiar **Cursor / VS Code MCP** patterns without requiring Cursor:
 
-1. **Environment** — `CMW_MCP_ENABLED`, `CMW_MCP_CONFIG_PATH`, per-server secrets via `*_env` keys or header env vars.
-2. **JSON file** — e.g. `mcp_servers.json` (gitignored) mapping server name → **HTTP** connection block (MVP); stdio blocks optional later.
+1. **YAML registry** — `config/mcp_servers.yaml` (`servers:` map with HTTP URLs).
+2. **Environment toggles** — `CMW_MCP_ENABLED` (default off), `CMW_MCP_ALLOWED_SERVERS`, `CMW_MCP_ALLOWED_HOSTS`, `CMW_MCP_MAX_TOOLS`, `CMW_MCP_TOOL_NAME_PREFIX`.
 3. **Not in MVP:** per-Gradio-session MCP config (would need session-scoped tool lists and LLM rebind).
 
 ---
@@ -167,37 +170,36 @@ flowchart TD
 ### Proposed env vars (`.env.example` placeholders only)
 
 ```bash
-# External MCP tools (off by default)
+# External MCP tools (off by default; registry: config/mcp_servers.yaml)
 # CMW_MCP_ENABLED=false
-# CMW_MCP_CONFIG_PATH=./mcp_servers.json
 # CMW_MCP_TOOL_NAME_PREFIX=true
-# CMW_MCP_ALLOWED_SERVERS=kb,filesystem
-# CMW_MCP_CONNECT_TIMEOUT_SEC=30
+# CMW_MCP_ALLOWED_SERVERS=ennoia_kb
+# CMW_MCP_ALLOWED_HOSTS=ennoia.slickjump.org
+# CMW_MCP_MAX_TOOLS=20
+REMOTE_MCP_BEARER_TOKEN=
 ```
 
-### JSON file shape (illustrative — HTTP-first MVP)
+### YAML registry (`config/mcp_servers.yaml`)
 
-```json
-{
-  "comindware_kb": {
-    "transport": "http",
-    "url": "https://example-host/gradio_api/mcp/?tools=ask_comindware",
-    "headers": {
-      "Authorization": "Bearer ${REMOTE_MCP_BEARER_TOKEN}"
-    }
-  },
-  "rag_tools": {
-    "transport": "streamable_http",
-    "url": "https://example-host/gradio_api/mcp/"
-  }
-}
+Fixed path: `config/mcp_servers.yaml`. Lists deployment MCP producers (team test URLs in git).
+
+```yaml
+# External MCP servers — set CMW_MCP_ENABLED=true in .env to load at startup.
+servers:
+  comindware_kb:
+    transport: streamable_http
+    url: https://ennoia.slickjump.org/gradio_api/mcp/?tools=ask_comindware
+    # Optional bearer (set REMOTE_MCP_BEARER_TOKEN in .env):
+    # headers:
+    #   Authorization: "Bearer ${REMOTE_MCP_BEARER_TOKEN}"
 ```
 
 | Concern | Decision |
 |---------|----------|
 | Hot-reload | **No** in MVP — require process restart (matches `_cached_tools` lifecycle) |
-| Secrets | Env substitution only; never commit `mcp_servers.json` with secrets; bearer tokens via env → `headers` |
-| Allowlist | `CMW_MCP_ALLOWED_SERVERS` filters keys in JSON |
+| Secrets | `headers` (and other strings) may use `${ENV_NAME}`; expand at load from process env; never commit bearer tokens |
+| Registry file | `config/mcp_servers.yaml` only |
+| Allowlist | `CMW_MCP_ALLOWED_SERVERS` filters keys in YAML |
 | Collision | `tool_name_prefix=true` → `servername_toolname` |
 | URL allowlist | Optional `CMW_MCP_HTTP_ALLOWLIST` host patterns (Phase 3) — mitigates SSRF if config is operator-controlled |
 | Tool filter | Prefer `?tools=` on URL when producer exposes many endpoints; complements server-level allowlist |
@@ -211,7 +213,7 @@ flowchart TD
 | Arbitrary subprocess (stdio) | **Secondary transport** — opt-in; allowlist server names; consider **disabling stdio** on shared deployments (HTTP-only mode) |
 | SSRF / exfil (HTTP MCP) | Allowlist URLs; optional `CMW_MCP_HTTP_ALLOWLIST` host patterns; only operator-supplied Gradio MCP bases |
 | Remote Gradio MCP auth gap | Document that producer `auth=` may not cover `/gradio_api/mcp/`; require proxy tokens or `headers` in config |
-| Egress / TLS | Agent process must reach `https://example-host/…`; log connection failures without leaking tokens |
+| Egress / TLS | Agent process must reach configured MCP host(s); log connection failures without leaking tokens |
 | Secret leakage in logs | Log server name + tool name, not args; extend existing openai_compat debug discipline |
 | Tool sprawl / prompt injection | Cap tools per server; max total MCP tools; exclude sensitive native + MCP combos |
 | Supply chain | Pin `langchain-mcp-adapters` and `mcp` in `requirements.txt` after spike |
@@ -236,7 +238,7 @@ flowchart TD
 
 | Layer | Tests |
 |-------|--------|
-| **RED: config** | Parse `mcp_servers.json`; allowlist; env substitution; invalid transport |
+| **RED: config** | Parse `config/mcp_servers.yaml`; allowlist; invalid transport |
 | **RED: merge** | `get_tools()` with mocked `MultiServerMCPClient` returns fixed `BaseTool` |
 | **RED: bind** | LLM instance receives native + MCP tool names (mock LLM `bind_tools`) |
 | **RED: execute** | Streaming loop invokes MCP tool by prefixed name |
@@ -272,8 +274,8 @@ python -m pytest agent_ng/_tests/test_mcp_tools_integration.py -m integration  #
 | Phase | Scope | Size | Notes |
 |-------|--------|------|-------|
 | **0 — Spike** | Install `langchain-mcp-adapters`; connect to **local** `demo.launch(mcp_server=True)` at `/gradio_api/mcp/`; pytest subset; resolve Starlette conflict | **S** | Validate `transport: "http"` against Gradio 6.10 |
-| **1 — MVP** | `CMW_MCP_ENABLED`; **one or more HTTP** server entries (env and/or minimal JSON); merge at startup; prefix names; logging; optional `?tools=` URLs | **M** | Non-breaking default off; **no stdio in MVP** |
-| **2 — Config file + stdio** | Multi-server JSON + allowlist + env substitution; optional stdio blocks for desktop operators | **M** | stdio secondary |
+| **1 — MVP** | `CMW_MCP_ENABLED`; `config/mcp_servers.yaml` + env toggles; merge at startup; prefix names; logging; optional `?tools=` URLs | **M** | Non-breaking default off; **no stdio in MVP** |
+| **2 — stdio** | Optional stdio blocks in same YAML registry for desktop operators | **M** | stdio secondary |
 | **3 — Hardening** | Tool caps, HTTP host allowlist, integration tests, docs (auth headers, network) | **M** | |
 | **4 — Optional** | Config UI tab; per-session allowlist; selective tool import | **L** | |
 | **5 — Optional** | `mcp_server=True` producer mode for *this* app | **M** | Separate PR — inverse path |
@@ -320,16 +322,16 @@ python -m pytest agent_ng/_tests/test_mcp_tools_integration.py -m integration  #
 1. **Auth model:** Bearer in `headers` only, or also mutual TLS / reverse-proxy contract? Who issues tokens for remote Gradio producers?
 2. **Which HTTP servers first:** Comindware KB Gradio MCP, internal RAG Space, other — ordered rollout list.
 3. **Tool budget:** allow all tools from each URL or hard cap (e.g. 20 total MCP tools) given ~69 native tools already bound?
-4. **Multi-server list:** flat JSON keys vs env-only single URL for MVP?
+4. **Multi-server list:** flat YAML keys in `config/mcp_servers.yaml` (implemented) vs env-only single URL?
 5. **Producer mode:** should *this* app also expose `mcp_server=True` for other hosts? (unchanged — separate PR)
 6. **Per-session MCP:** required for multi-tenant, or deployment-level config enough?
 7. **SSE fallback:** require explicit `transport: "sse"` + `/gradio_api/mcp/sse` only when streamable HTTP fails on a given host?
 
 ---
 
-### Footnote — illustrative URL pattern only
+### Footnote — registry vs docs
 
-Some deployments use a tenant-specific Gradio MCP base with a single-tool filter, e.g. `…/gradio_api/mcp/?tools=ask_comindware`. Treat any real host as **deployment config**, not documentation — use `example-host` placeholders in committed docs per AGENTS.md security rules.
+`config/mcp_servers.yaml` may list team-agreed producer URLs (e.g. test endpoint with `?tools=ask_comindware`). Narrative docs and `.env.example` stay agnostic; do not commit bearer tokens in the tracked registry.
 
 ---
 

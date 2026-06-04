@@ -389,6 +389,7 @@ class NextGenApp:
         )
 
         try:
+            await self.llm_manager.load_mcp_tools_if_enabled()
             # Initialize session manager (creates agents on-demand per session)
             self.debug_streamer.info("Session manager ready", LogCategory.INIT)
 

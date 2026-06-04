@@ -63,6 +63,7 @@ from .token_budget import (
     count_tokens,
 )
 from .tool_deduplicator import get_deduplicator
+from .tool_invocation import ainvoke_agent_tool, tool_requires_async_invocation
 
 # LangSmith tracing
 try:
@@ -920,12 +921,11 @@ class NativeLangChainStreaming:
 
                             try:
                                 if tool_obj:
-                                    # Execute tool once with agent context
-                                    # Inject agent instance for file resolution (same as memory manager)
-                                    tool_args_with_agent = {
-                                        **safe_tool_args,
-                                        "agent": agent,
-                                    }
+                                    # Execute tool once; inject agent only for native tools
+                                    # (MCP coroutine tools JSON-serialize args — CmwAgent is invalid)
+                                    tool_args_with_agent = dict(safe_tool_args)
+                                    if not tool_requires_async_invocation(tool_obj):
+                                        tool_args_with_agent["agent"] = agent
                                     # Ensure session-bound config is visible to backend tools
                                     try:
                                         if (
@@ -943,7 +943,9 @@ class NativeLangChainStreaming:
                                         self._logger.debug(
                                             "Failed to set current session ID: %s", exc
                                         )
-                                    tool_result = tool_obj.invoke(tool_args_with_agent)
+                                    tool_result = await ainvoke_agent_tool(
+                                        tool_obj, tool_args_with_agent
+                                    )
 
                                     # Safety check for None tool_result
                                     if tool_result is None:

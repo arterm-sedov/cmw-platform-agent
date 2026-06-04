@@ -1,0 +1,8 @@
+# External MCP servers — set CMW_MCP_ENABLED=true in .env to load at startup.
+servers:
+  comindware_kb:
+    transport: streamable_http
+    url: https://ennoia.slickjump.org/gradio_api/mcp/?tools=ask_comindware
+    # Optional bearer auth (set REMOTE_MCP_BEARER_TOKEN in .env; do not commit tokens):
+    # headers:
+    #   Authorization: "Bearer ${REMOTE_MCP_BEARER_TOKEN}"

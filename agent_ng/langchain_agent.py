@@ -257,7 +257,7 @@ class CmwAgent:
                         self.llm_instance.model_name, model_config
                     )
 
-            # Initialize tools using LLM manager's cached tools
+            await self.llm_manager.load_mcp_tools_if_enabled()
             self.tools = self.llm_manager.get_tools()
 
             self.is_initialized = True
