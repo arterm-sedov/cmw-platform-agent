@@ -56,6 +56,8 @@ RUSSIAN_TRANSLATIONS = {
         - Для атрибута "Контактный телефон" в приложении "CRM", шаблон "Лиды", смени формат отображения на российский телефон.
         - Получи атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
         - Архивируй/разархивируй атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
+        - Разбери test_chart.png: что на диаграмме и три главных вывода.
+        - По записям приложения "ERP", шаблона "Контрагенты" сгруппируй по категории и сохрани инфографику platform_infographic.png.
      4. Нажмите кнопку «**Отправить**» и дождитесь ответа агента.
      5. Агент может отвечать некоторое время, особенно если требуется обращение к **Comindware Platform**.  Прогресс отображается в левой панели.
      6. По окончании работы агент выдаст сообщение «Обработка завершена» в левой панели.
@@ -281,13 +283,13 @@ RUSSIAN_TRANSLATIONS = {
         "Не выполняй изменения, ожидай моего одобрения."
     ),
     "quick_list_apps_message": (
-        "Покажи список всех приложений в Comindware Platform. Отформатируй красиво в Markdown."
+        "Покажи список всех приложений в Comindware Platform. Отформатируй красиво."
     ),
     # Query example buttons (converted from try_asking_examples)
     "quick_edit_enum": "📝 Редактировать «Список значений»",
     "quick_edit_enum_message": 'Получи атрибут типа enum "Статус" из приложения "CRM", шаблон "Лиды", затем добавь к нему новое значение "В работе" (system_name: in_progress, color: #FF9800) и обнови атрибут',
     "quick_templates_erp": "📄 Шаблоны ERP",
-    "quick_templates_erp_message": 'Покажи все шаблоны записей в приложении "ERP". Отформатируй красиво используя Markdown.',
+    "quick_templates_erp_message": 'Покажи все шаблоны записей в приложении "ERP". Отформатируй красиво.',
     "quick_attributes_contractors": "🏷️ Атрибуты контрагентов",
     "quick_attributes_contractors_message": 'Выдай список всех атрибутов шаблона "Контрагенты", приложение "ERP"',
     "quick_create_comment_attr": "💬 Создать атрибут комментария",
@@ -307,6 +309,18 @@ RUSSIAN_TRANSLATIONS = {
     "quick_what_cannot_do": "❌ Чего ты не умеешь?",
     "quick_what_cannot_do_message": "Чего ты не умеешь?",
     "quick_full_audit_message": "Дай полный аудит всех приложений, шаблонов и атрибутов в системе.",
+    "quick_analyze_image": "🖼️ Анализ изображения",
+    "quick_analyze_image_message": (
+        "Разбери файл test_chart.png: опиши, что на диаграмме, и дай три главных вывода."
+    ),
+    "quick_platform_infographic": "📊 Инфографика по данным",
+    "quick_platform_infographic_message": (
+        "С платформы возьми до 50 записей приложения YourApplicationSystemName "
+        "и шаблона YourTemplateSystemName. Сгруппируй по одному категориальному "
+        "атрибуту, сделай по этим данным инфографику, сохрани как "
+        "platform_infographic.png. "
+        "В конце — три кратких вывода."
+    ),
     # Status messages
     "processing_complete": "🎉Обработка завершена",
     "response_completed": "Ответ завершен",
@@ -409,6 +423,8 @@ ENGLISH_TRANSLATIONS = {
         - For the "Contact Phone" attribute in application "CRM", template "Leads", change the display format to Russian phone
         - Get attribute: system name "Comment", application "HR", template "Candidates"
         - Archive/unarchive attribute, system name "Comment", application "HR", template "Candidates"
+        - Analyze test_chart.png: what's on the chart and three main takeaways.
+        - From application "ERP", template "Counterparties" records, group by category and save infographic platform_infographic.png.
      4. Click **Send** and wait for the agent's response.
      5. The agent may take some time to respond, especially when accessing the **Comindware Platform**. Progress is displayed in the sidebar.
      6. When finished, the agent will show **Processing complete** message in the sidebar.
@@ -635,13 +651,13 @@ ENGLISH_TRANSLATIONS = {
         "Do NOT execute changes yet—await my approval."
     ),
     "quick_list_apps_message": (
-        "List all applications in the platform. Format nicely using Markdown."
+        "List all applications in the platform. Format nicely."
     ),
     # Query example buttons (converted from try_asking_examples)
     "quick_edit_enum": "📝 Edit Enum",
     "quick_edit_enum_message": 'Get the enum attribute "Status" from application "CRM", template "Leads", then add a new value "In Progress" (system_name: in_progress, color: #FF9800) and update the attribute',
     "quick_templates_erp": "📄 ERP Templates",
-    "quick_templates_erp_message": 'Show all record templates in the "ERP" application. Format nicely using Markdown.',
+    "quick_templates_erp_message": 'Show all record templates in the "ERP" application. Format nicely.',
     "quick_attributes_contractors": "🏷️ Contractor Attributes",
     "quick_attributes_contractors_message": 'Get a list of all attributes of the "Counterparties" template, application "ERP"',
     "quick_create_comment_attr": "💬 Create Comment Attribute",
@@ -661,6 +677,19 @@ ENGLISH_TRANSLATIONS = {
     "quick_what_cannot_do": "❌ What can't you do?",
     "quick_what_cannot_do_message": "What can't you do?",
     "quick_full_audit_message": "Give a full audit of all applications, templates and attributes in the system.",
+    "quick_analyze_image": "🖼️ Image analysis",
+    "quick_analyze_image_message": (
+        "Analyze the file test_chart.png: describe what's on the chart "
+        "and give three main takeaways."
+    ),
+    "quick_platform_infographic": "📊 Platform data infographic",
+    "quick_platform_infographic_message": (
+        "From the platform, pull up to 50 records from application "
+        "YourApplicationSystemName and template YourTemplateSystemName. "
+        "Group by one categorical attribute, build an infographic from that data, "
+        "save it as platform_infographic.png. "
+        "End with three brief takeaways."
+    ),
     # Status messages
     "processing_complete": "🎉 Processing complete",
     "response_completed": "Response completed",

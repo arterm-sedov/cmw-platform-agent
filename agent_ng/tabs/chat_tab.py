@@ -72,6 +72,8 @@ QUICK_ACTIONS_CONFIG: dict[str, str] = {
     "quick_create_attr": "quick_create_attr_message",
     "quick_edit_mask": "quick_edit_mask_message",
     "quick_archive_attr": "quick_archive_attr_message",
+    "quick_analyze_image": "quick_analyze_image_message",
+    "quick_platform_infographic": "quick_platform_infographic_message",
 }
 
 
