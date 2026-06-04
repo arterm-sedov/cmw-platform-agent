@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import sys
+import time
 from typing import Any
 
 try:
@@ -94,6 +95,16 @@ class StreamingEvent:
     event_type: str
     content: str
     metadata: dict[str, Any] = None
+
+
+def _tool_duration_seconds(tool_state: dict[str, Any] | None) -> float | None:
+    """Return elapsed tool duration for Gradio thought metadata."""
+    if not isinstance(tool_state, dict):
+        return None
+    started_at = tool_state.get("started_at")
+    if not isinstance(started_at, (int, float)):
+        return None
+    return round(max(time.perf_counter() - float(started_at), 0.0), 3)
 
 
 class NativeLangChainStreaming:
@@ -695,6 +706,7 @@ class NativeLangChainStreaming:
                 accumulated_chunk = None
                 last_chunk = None
                 tool_calls_in_progress = {}
+                emitted_tool_start_ids = set()
                 processed_tools = {}  # Track processed tools to avoid duplicates in same response
                 has_tool_calls = False
                 self._logger.debug(
@@ -826,16 +838,23 @@ class NativeLangChainStreaming:
                                     "name": tool_name,
                                     "args": "",
                                     "id": tool_call_id,
+                                    "started_at": time.perf_counter(),
                                 }
-                                # yield StreamingEvent(
-                                #     event_type="tool_start",
-                                #     content=f"\n\n2🔧 **Using tool: {tool_name}**",
-                                #     metadata={
-                                #         "tool_name": tool_name,
-                                #         "tool_call_id": tool_call_id,
-                                #         "title": f"1 🔧 Tool called: {tool_name}"
-                                #     }
-                                # )
+                                if tool_call_id not in emitted_tool_start_ids:
+                                    emitted_tool_start_ids.add(tool_call_id)
+                                    yield StreamingEvent(
+                                        event_type="tool_start",
+                                        content=self._get_tool_called_message(
+                                            tool_name, language
+                                        ),
+                                        metadata={
+                                            "tool_name": tool_name,
+                                            "tool_call_id": tool_call_id,
+                                            "title": self._get_tool_called_message(
+                                                tool_name, language
+                                            ),
+                                        },
+                                    )
 
                             if tool_call_id in tool_calls_in_progress:
                                 # Accumulate tool arguments - safety check for None
@@ -968,6 +987,9 @@ class NativeLangChainStreaming:
 
                                     # CRITICAL: Stream tool completion only ONCE per unique tool
                                     # Show duplicate count in the message but don't stream multiple times
+                                    tool_state = tool_calls_in_progress.get(
+                                        tool_call_id
+                                    )
 
                                     # Safety check for None tool_result to prevent concatenation errors
                                     safe_tool_result = (
@@ -1000,6 +1022,7 @@ class NativeLangChainStreaming:
                                         content=f"\n{self._get_call_count_message(duplicate_count, language)}\n\n{self._get_result_message(str(safe_tool_result), language)}",
                                         metadata={
                                             "tool_name": tool_name,
+                                            "tool_call_id": tool_call_id,
                                             "tool_output": str(safe_tool_result),
                                             "duplicate": duplicate_count > 1,
                                             "duplicate_count": duplicate_count,
@@ -1008,6 +1031,7 @@ class NativeLangChainStreaming:
                                             ),
                                             "file_attachment": file_att,
                                             "tool_cost": tool_cost,
+                                            "duration": _tool_duration_seconds(tool_state),
                                         },
                                     )
 
@@ -1023,18 +1047,23 @@ class NativeLangChainStreaming:
 
                                     # Cache result for duplicate tool calls
                                     tool_result_cache[tool_key] = unknown_tool_result
+                                    tool_state = tool_calls_in_progress.get(
+                                        tool_call_id
+                                    )
 
                                     yield StreamingEvent(
                                         event_type="tool_end",
                                         content=f"\n{self._get_call_count_message(duplicate_count, language)}\n\n{self._get_result_message(unknown_tool_result, language)}",
                                         metadata={
                                             "tool_name": tool_name,
+                                            "tool_call_id": tool_call_id,
                                             "tool_output": unknown_tool_result,
                                             "duplicate": duplicate_count > 1,
                                             "duplicate_count": duplicate_count,
                                             "title": self._get_tool_called_message(
                                                 tool_name, language
                                             ),
+                                            "duration": _tool_duration_seconds(tool_state),
                                         },
                                     )
 
@@ -1066,18 +1095,21 @@ class NativeLangChainStreaming:
 
                                 # Cache result for duplicate tool calls
                                 tool_result_cache[tool_key] = tool_error_result
+                                tool_state = tool_calls_in_progress.get(tool_call_id)
 
                                 yield StreamingEvent(
                                     event_type="tool_end",
                                     content=f"\n{self._get_call_count_message(duplicate_count, language)}\n\n{self._get_result_message(tool_error_result, language)}",
                                     metadata={
                                         "tool_name": tool_name,
+                                        "tool_call_id": tool_call_id,
                                         "tool_output": tool_error_result,
                                         "duplicate": duplicate_count > 1,
                                         "duplicate_count": duplicate_count,
                                         "title": self._get_tool_called_message(
                                             tool_name, language
                                         ),
+                                        "duration": _tool_duration_seconds(tool_state),
                                     },
                                 )
 

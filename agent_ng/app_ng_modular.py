@@ -109,6 +109,30 @@ except ImportError:
             return []
 
 
+try:
+    from agent_ng.chat_stream_ui import (
+        begin_turn_with_generating_answer,
+        complete_generating_answer_bubble,
+        complete_reasoning_bubble,
+        complete_tool_call_bubble,
+        short_uid,
+        update_reasoning_bubble,
+        upsert_generating_answer_bubble,
+        upsert_tool_call_bubble,
+    )
+except ImportError:
+    from .chat_stream_ui import (  # type: ignore[no-redef]
+        begin_turn_with_generating_answer,
+        complete_generating_answer_bubble,
+        complete_reasoning_bubble,
+        complete_tool_call_bubble,
+        short_uid,
+        update_reasoning_bubble,
+        upsert_generating_answer_bubble,
+        upsert_tool_call_bubble,
+    )
+
+
 # Import image URL rewriter for LLM inline image references
 from agent_ng._image_url_rewriter import rewrite_llm_inline_images
 
@@ -729,12 +753,18 @@ class NextGenApp:
             # displayed alongside LLM cost in the stats bubble.
             tool_costs_this_turn: float = 0.0
 
-            # Add user message to history
-            working_history = [
-                *history,
-                {"role": "user", "content": message},
-                {"role": "assistant", "content": ""},
-            ]
+            # User message + generating-answer bubble (first visible status UI).
+            generating_answer_id = short_uid()
+            working_history, generating_answer_id = begin_turn_with_generating_answer(
+                history,
+                message,
+                bubble_id=generating_answer_id,
+                title=format_translation("generating_answer", self.language),
+                content=format_translation(
+                    "generating_answer_subtitle", self.language
+                ),
+            )
+            generating_answer_pending = True
 
             # Get prompt token count for user message (will be displayed below assistant response)
             # History is already in Gradio 6 messages format: list[dict[str, str]]
@@ -763,6 +793,9 @@ class NextGenApp:
             streaming_error_handled = (
                 False  # Flag to track if streaming error was handled
             )
+            reasoning_bubble_id: str | None = None
+            reasoning_buffer = ""
+            # generating_answer_id / pending initialized at turn start above
 
             # print(f"🔍 DEBUG: Starting streaming for session {session_id}")
             # print(f"🔍 DEBUG: Working history length before streaming: {len(working_history)}")
@@ -815,28 +848,42 @@ class NextGenApp:
                         continue
 
                     if event_type == "thinking":
-                        # Agent is thinking - update or create assistant message
-                        if (
-                            assistant_message_index >= 0
-                            and assistant_message_index < len(working_history)
-                        ):
-                            # Update existing assistant message
-                            working_history[assistant_message_index] = {
-                                "role": "assistant",
-                                "content": content,
-                            }
-                        else:
-                            # Create new assistant message
-                            working_history.append(
-                                {"role": "assistant", "content": content}
-                            )
-                            assistant_message_index = len(working_history) - 1
+                        # UI-only thinking bubble. Agent memory is maintained
+                        # inside native_langchain_streaming.py, not Gradio history.
+                        if reasoning_bubble_id is None:
+                            reasoning_bubble_id = short_uid()
+                        reasoning_buffer += safe_string(content)
+                        update_reasoning_bubble(
+                            working_history,
+                            bubble_id=reasoning_bubble_id,
+                            content=reasoning_buffer,
+                            title=metadata.get("title", "Thinking")
+                            if metadata
+                            else "Thinking",
+                        )
                         yield working_history, ""
 
                     elif event_type == "iteration_progress":
                         # Iteration progress - update progress display in sidebar
                         # Store progress status for UI update - session-specific
                         self.session_manager.set_status(session_id, content)
+                        if (
+                            metadata
+                            and metadata.get("completed")
+                            and not generating_answer_pending
+                            and not response_content.strip()
+                        ):
+                            generating_answer_id = upsert_generating_answer_bubble(
+                                working_history,
+                                bubble_id=generating_answer_id or short_uid(),
+                                title=format_translation(
+                                    "generating_answer", self.language
+                                ),
+                                content=format_translation(
+                                    "generating_answer_subtitle", self.language
+                                ),
+                            )
+                            generating_answer_pending = True
                         # If this is an early-finish hint, unlock UI now while we wait for finalization
                         try:
                             if metadata and metadata.get("early_finish"):
@@ -851,6 +898,15 @@ class NextGenApp:
                     elif event_type == "completion":
                         # Final completion message - update progress display
                         self.session_manager.set_status(session_id, content)
+                        if generating_answer_pending:
+                            complete_generating_answer_bubble(
+                                working_history, generating_answer_id
+                            )
+                            generating_answer_pending = False
+                        if reasoning_bubble_id is not None:
+                            complete_reasoning_bubble(
+                                working_history, reasoning_bubble_id
+                            )
                         yield working_history, ""
 
                     elif event_type == "budget_update":
@@ -880,14 +936,31 @@ class NextGenApp:
                             session_debug.info(
                                 f"Turn snapshot stored for session {conversation_id} with {len(ordered)} messages"
                             )
+                        if generating_answer_pending:
+                            complete_generating_answer_bubble(
+                                working_history, generating_answer_id
+                            )
+                            generating_answer_pending = False
+                        if reasoning_bubble_id is not None:
+                            complete_reasoning_bubble(
+                                working_history, reasoning_bubble_id
+                            )
                         yield working_history, ""
 
                     elif event_type == "tool_start":
-                        # Tool is starting - immediately add to working history
+                        # Tool is starting - render one pending UI-only bubble.
+                        if generating_answer_pending:
+                            complete_generating_answer_bubble(
+                                working_history, generating_answer_id
+                            )
+                            generating_answer_pending = False
                         tool_name = (
                             metadata.get("tool_name", "unknown")
                             if metadata
                             else "unknown"
+                        )
+                        tool_call_id = (
+                            metadata.get("tool_call_id") if metadata else None
                         )
                         tool_title = (
                             metadata.get(
@@ -902,21 +975,24 @@ class NextGenApp:
                             )
                         )
 
-                        # Create tool message and immediately add to working history
-                        tool_message = {
-                            "role": "assistant",
-                            "content": content,
-                            "metadata": {"title": tool_title},
-                        }
-                        working_history.append(tool_message)
+                        upsert_tool_call_bubble(
+                            working_history,
+                            tool_name,
+                            tool_call_id,
+                            title=tool_title,
+                            content=safe_string(content) or tool_title,
+                        )
                         yield working_history, ""
 
                     elif event_type == "tool_end":
-                        # Tool completed - immediately add to working history
+                        # Tool completed - update the pending bubble in place.
                         tool_name = (
                             metadata.get("tool_name", "unknown")
                             if metadata
                             else "unknown"
+                        )
+                        tool_call_id = (
+                            metadata.get("tool_call_id") if metadata else None
                         )
                         tool_title = (
                             metadata.get(
@@ -931,13 +1007,34 @@ class NextGenApp:
                             )
                         )
 
-                        # Create tool message and immediately add to working history
-                        tool_message = {
-                            "role": "assistant",
-                            "content": content,
-                            "metadata": {"title": tool_title},
-                        }
-                        working_history.append(tool_message)
+                        complete_tool_call_bubble(
+                            working_history,
+                            tool_name=tool_name,
+                            tool_call_id=tool_call_id,
+                            content=safe_string(content),
+                            title=tool_title,
+                            metadata={
+                                key: value
+                                for key, value in {
+                                    "duration": metadata.get("duration")
+                                    if metadata
+                                    else None,
+                                    "duplicate": metadata.get("duplicate")
+                                    if metadata
+                                    else None,
+                                    "duplicate_count": metadata.get("duplicate_count")
+                                    if metadata
+                                    else None,
+                                    "tool_cost": metadata.get("tool_cost")
+                                    if metadata
+                                    else None,
+                                    "tool_output": metadata.get("tool_output")
+                                    if metadata
+                                    else None,
+                                }.items()
+                                if value is not None
+                            },
+                        )
 
                         # If the tool registered a file, append an inline
                         # preview bubble + caption directly in the chat.
@@ -963,6 +1060,11 @@ class NextGenApp:
                         # Stream content from response - ensure content is not None
                         content_to_add = safe_string(content)
                         # print(f"🔍 DEBUG: Content event - content: '{content_to_add}', length: {len(content_to_add)}")
+                        # Keep generating_answer visible while answer streams; complete at turn end.
+                        if content_to_add.strip() and reasoning_bubble_id is not None:
+                            complete_reasoning_bubble(
+                                working_history, reasoning_bubble_id
+                            )
 
                         # Only add line break when LLM starts answering after tool messages
                         if assistant_message_index < 0 and response_content == "":
@@ -1060,6 +1162,16 @@ class NextGenApp:
                         response_content
                     )
                 user_agent._pending_partial_text = None  # noqa: SLF001
+
+            if generating_answer_pending:
+                complete_generating_answer_bubble(
+                    working_history, generating_answer_id
+                )
+                generating_answer_pending = False
+            elif response_content.strip():
+                complete_generating_answer_bubble(working_history, None)
+            if reasoning_bubble_id is not None:
+                complete_reasoning_bubble(working_history, reasoning_bubble_id)
 
             # Add API token count to final response
             # Add token counts below assistant response

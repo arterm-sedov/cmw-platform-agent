@@ -335,6 +335,8 @@ RUSSIAN_TRANSLATIONS = {
     "max_iterations_warning": "⚠️ Достигнут лимит итераций ({max_iterations}), диалог может быть неполным",
     # Tool messages
     "tool_called": "🔧 Вызван инструмент: {tool_name}",
+    "generating_answer": "✨ Формирую ответ",
+    "generating_answer_subtitle": "Готовлю финальный ответ...",
     "call_count": "Количество вызовов: {total_calls}",
     "result": "**Результат:** {tool_result}",
     "tool_error": "❌ **Ошибка инструмента: {error}**",
@@ -704,6 +706,8 @@ ENGLISH_TRANSLATIONS = {
     "max_iterations_warning": "⚠️ Reached iteration limit **({max_iterations})**, conversation may be incomplete",
     # Tool messages
     "tool_called": "🔧 Tool called: {tool_name}",
+    "generating_answer": "Generating answer",
+    "generating_answer_subtitle": "Preparing the final response...",
     "call_count": "Call count: {total_calls}",
     "result": "**Result:** {tool_result}",
     "tool_error": "❌ **Tool error: {error}**",
