@@ -2,7 +2,7 @@
 .venv/**
 .venv*/**
 __pycache__/
-!logs/*.log
+logs/**
 server_config.yml
 .screencasts/
 *.mp4
@@ -23,3 +23,7 @@ docs/cmw_admin_pages.md
 .opencode/package.json
 .opencode/node_modules/
 .mypy_cache/*
+# Platform scratch: README only (instance artifacts belong in instance repo)
+docs/_scratch/*
+!docs/_scratch/README.md
+

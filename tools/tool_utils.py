@@ -9,6 +9,7 @@ from .models import (
     AttributeResult,
     CommonAttributeFields,
     CommonGetAttributeFields,
+    RefAttributeFields,
     TemplateResult,
     normalize_operation_archive_unarchive,
 )
@@ -519,12 +520,15 @@ def _apply_partial_update(endpoint: str, request_body: dict[str, Any]) -> dict[s
     - webapi/Form/{app}/... → fetches from webapi/Form/List/Template@{app}.{template}
     """
     import base64
-    import os
     import requests
 
-    base_url = os.environ.get("CMW_BASE_URL", "").rstrip("/")
-    login = os.environ.get("CMW_LOGIN", "")
-    password = os.environ.get("CMW_PASSWORD", "")
+    try:
+        cfg = requests_._load_server_config()
+        base_url = cfg.base_url.rstrip("/")
+        login = cfg.login
+        password = cfg.password
+    except Exception:
+        return request_body
 
     if not base_url or not login or not password:
         return request_body

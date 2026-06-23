@@ -9,6 +9,7 @@ from tools.tool_utils import (
     _fetch_entity,
     build_global_alias,
     execute_edit_or_create_operation,
+    execute_list_operation,
 )
 
 BUTTON_ENDPOINT = "webapi/UserCommand"
@@ -477,15 +478,7 @@ def list_buttons(
     endpoint = f"{BUTTON_ENDPOINT}/List/{template_global_alias}"
 
     result = requests_._get_request(endpoint)
-
-    if result.get("success"):
-        raw_response = result.get("raw_response")
-        if isinstance(raw_response, dict) and "response" in raw_response:
-            response_data = raw_response["response"]
-            if isinstance(response_data, list):
-                result["data"] = response_data
-
-    return result
+    return execute_list_operation(response_data=result, result_model=AttributeResult)
 
 
 class ArchiveUnarchiveButtonSchema(BaseModel):

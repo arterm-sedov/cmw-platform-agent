@@ -35,7 +35,7 @@ def unwrap_webapi_payload(raw: Any) -> Any:
 
 def extract_platform_document_id(value: Any) -> str | None:
     """
-    Return the platform id from an attribute value (used for documents, images, references).
+    Return the entity ID from an attribute value (used for documents, images, references).
 
     Accepts a plain id string, or a reference dict containing ``id`` (common CMW style).
     Generalized for use by both document and image record tools (despite the name).

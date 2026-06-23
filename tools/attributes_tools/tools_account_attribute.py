@@ -1,7 +1,7 @@
 from ..tool_utils import *
 
 
-class EditOrCreateAccountAttributeSchema(CommonAttributeFields):
+class EditOrCreateAccountAttributeSchema(RefAttributeFields):
     use_as_record_title: bool = Field(
         default=False,
         description="Set to `True` to display as a template record title."

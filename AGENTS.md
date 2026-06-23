@@ -140,6 +140,17 @@ Before considering work complete:
 - Keep sections action-oriented: each section should clearly imply a decision or next step.
 - Documentation files go to `docs/`.
 - Progress reports go to `docs/**/progress_reports/` with `YYYYMMDD_` prefix.
+
+### Where findings belong (repo boundary)
+
+| Scope | Repository | Examples |
+|-------|------------|----------|
+| **Instance-specific** | **Instance repo** (`{instance_progress_dir}`) | Migration progress JSON, harvest outputs, gap analyses, operator checklists, `docs/_scratch/` runners |
+| **Platform-generic** | **cmw-platform-agent** (this repo) | API patterns, OpenAPI shapes, `.agents/skills/cmw-platform*`, reusable browser/API workflows in `docs/` |
+
+Do **not** copy long-form instance audits into this repo; add a short generic lesson in a skill reference when it helps any tenant.
+
+**Scratch boundary:** Do **not** store instance migration harvest JSON, progress runners, or id maps under `docs/_scratch/` in **cmw-platform-agent** (see `docs/_scratch/README.md`). Instance artifacts belong under `{instance_progress_dir}/docs/_scratch/` and `{instance_progress_dir}/localization/migration_progress/`; link via `meta.harvest_path` / `meta.seed_path`.
 - Generate `YYYYMMDD` timestamps with native commands:
   - PowerShell: `Get-Date -Format "yyyyMMdd"`
   - Bash/WSL: `date +%Y%m%d`
@@ -201,6 +212,10 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 - Reanalyze changes twice for introduced issues.
 - Compact/summarize working context proactively during long sessions.
 
+### Instance progress (parent agents)
+
+**Instance-specific** batch JSON, roadmaps, harvest outputs, and operator runbooks live in the **instance repository** at `{instance_progress_dir}` (e.g. `localization/migration_progress/`, `docs/localization/`). Platform agents use skills and references in **this repo** only; read instance state from disk there — never from chat memory. Harvest/seed patterns: [record_harvest_seed.md](.agents/skills/cmw-platform/references/record_harvest_seed.md); instance schema and tenant checklists under `{instance_progress_dir}`. Progress loops: [ralph_loop_goal_autonomy.md](.agents/skills/cmw-platform/references/ralph_loop_goal_autonomy.md), [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills).
+
 ### CMW Platform Terminology
 
 **Critical:** Never expose legacy API terms to LLMs. Use human-readable terms:
@@ -214,6 +229,10 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 | property | attribute |
 | dataset | table |
 
+### CMW Platform workflow
+
+For platform tasks: consult **OpenAPI** in `cmw_open_api/` and KB MCP first, then **`tools/`** and **`.agents/skills/`**, then **browser** only when API cannot complete the job. See `.agents/skills/cmw-platform/SKILL.md` § Workflow order.
+
 ### CMW Platform Architecture
 
 **Key Concept:** Datasets, Toolbars, and Buttons are separate API entities with different endpoints:
@@ -225,6 +244,8 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 | Button | `get_button` | `edit_or_create_button` | `webapi/Button/{app}/Button@{tpl}.{button}` |
 
 **Toolbar-Dataset Link:** Toolbars link to datasets via toolbar's `IsDefaultForLists` flag.
+
+**Growing platform skills:** Reusable API and browser recipes belong in this repo (`.agents/skills/cmw-platform*` and `references/` — see [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills)). Per-instance migration progress and audits stay in `{instance_progress_dir}` — see [Where findings belong](#where-findings-belong-repo-boundary) under Documentation Guidelines.
 
 ### Key Dependencies
 

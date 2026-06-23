@@ -113,18 +113,18 @@ def get_type_by_prefix(item_id: str, type_prefixes: dict[str, list[str]]) -> str
 def get_axioms_by_predicate(object_id: str, predicate: str) -> list[str]:
     """
     Call /Base/OntologyService/GetAxiomsByPredicate to resolve property values.
-    
+
     Used for Role objects where cmw.role.aliasProperty contains an attribute ID
     that needs to be resolved to get the actual alias value.
-    
+
     Example:
         Request: {"id": "role.2", "predicate": "op.2"}
         Response: ["Администратор"]
-    
+
     Args:
         object_id: Object ID (e.g., "role.2")
         predicate: Predicate/attribute ID (e.g., "op.2")
-    
+
     Returns:
         List of values, empty list on error
     """
@@ -159,14 +159,25 @@ def get_ontology_objects(
     max_count: int = 10000,
 ) -> dict[str, Any]:
     """
-    Get all object IDs by their types for localization workflow.
+    Get entity IDs (e.g., oa.193, form.2024, lst.42, event.15199) for entities
+    within an application via the system-core ontology API.
+
+    Primary use: when you need internal entity IDs for entities that WebAPI
+    list tools (list_applications, list_templates, list_attributes, list_forms,
+    list_datasets, list_toolbars, list_buttons) do NOT return — those endpoints
+    only provide system names. Use this tool to get the actual entity IDs.
 
     Uses POST /api/public/system/Base/OntologyService/GetWithMultipleValues endpoint.
     Results are filtered by type-specific prefixes and deduplicated.
 
     Args:
         application_system_name: System name of the application
-        types: List of object types to fetch
+        types: List of object types to fetch. Available types:
+               RecordTemplate, AccountTemplate, ProcessTemplate, RoleTemplate,
+               OrgStructureTemplate, MessageTemplate, Workspace, Page,
+               Attribute, Dataset, Toolbar, Form, UserCommand, Card, Cart,
+               Trigger, Routes, Role, WidgetConfig, DesktopWidgetConfig,
+               ExportTemplate, DesktopComponent
         parameter: Parameter to search by. Default: 'alias'. For Routes use 'name'.
         min_count: Minimum number of objects per type (default: 1)
         max_count: Maximum number of objects per type (default: 10000)
@@ -491,14 +502,14 @@ def get_references(
 ) -> dict:
     """
     Get references for an object by predicate.
-    
+
     Used to verify object ownership (e.g., verify Cart belongs to a Solution).
-    
+
     Args:
         object_id: Object ID (e.g., "cart.1")
         predicate: Predicate to query (e.g., "cmw.solution.cart")
         application_system_name: Optional application system name
-    
+
     Returns:
         Dict with references, e.g., {"cmw.solution.cart": ["sln.1"]}
     """
@@ -521,7 +532,7 @@ def get_references(
         response = session.post(url, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
-        
+
         return {
             "success": True,
             "data": data,

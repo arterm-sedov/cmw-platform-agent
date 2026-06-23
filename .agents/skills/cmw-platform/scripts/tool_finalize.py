@@ -135,7 +135,7 @@ def get_server_url(output_dir: Path, app: str) -> str:
 
 def deduplicate_by_ids(entries: list) -> list:
     """Merge entries with same (aliasOriginal, type, ids).
-    
+
     Merge strategy:
     - ids: union of all non-empty ids arrays
     - displayNames: first non-empty displayNames

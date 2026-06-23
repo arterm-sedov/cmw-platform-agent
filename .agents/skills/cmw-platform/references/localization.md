@@ -427,3 +427,11 @@ Application/
 ```
 исходное название (RU);Системное имя (RU);Английское название (EN);Системное имя (EN);Исходный JSON-Path
 ```
+
+### Dataset filters with hardcoded account ids
+
+After TR→FR migration, list datasets may still filter on TR `account.N` literals. **GET** the full dataset (`get_dataset` or Web API GET), remap `filter.value` to the FR account id, then **PUT** `webapi/Dataset/{app}` — see [edit_or_create.md](edit_or_create.md) § Dataset filters. Optional unless a list view is broken on FR.
+
+### Before renaming platform accounts
+
+After a CTF or solution export, **grep the application model** (datasets, workspaces, process tasks, role members) for the login **and** for hardcoded `account.{id}` literals in filters and URLs. Usernames rarely appear in expressions; **instance-specific account ids** in dataset filters and nav links often survive import and break on another host when ids differ. Fix or re-map those artifacts on the target instance; role/group-based assignees are usually unaffected by a username change. Full tenant-specific audits belong in the **instance repository** (`{instance_progress_dir}`), not here.

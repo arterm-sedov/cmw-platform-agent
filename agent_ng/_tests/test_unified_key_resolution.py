@@ -6,9 +6,9 @@ Tests for centralized API key resolution that checks config tab override first,
 then falls back to environment variable. Reused by LLM, VL, and image generation.
 """
 
-import sys
 import os
 from pathlib import Path
+import sys
 from unittest.mock import patch
 
 project_root = Path(__file__).parent.parent
@@ -75,8 +75,7 @@ def test_get_api_key_returns_none_when_no_source():
 
 def test_get_api_key_reads_session_config():
     """Test that get_api_key reads llm_provider_api_keys from session config."""
-    from agent_ng import key_resolution
-    from agent_ng import session_manager
+    from agent_ng import key_resolution, session_manager
 
     test_session = "test_key_resolution_session"
     session_manager.set_session_config(
@@ -90,7 +89,9 @@ def test_get_api_key_reads_session_config():
             override_key=None,
             session_id=test_session,
         )
-        assert result == "session_override_key", f"Expected 'session_override_key', got '{result}'"
+        assert result == "session_override_key", (
+            f"Expected 'session_override_key', got '{result}'"
+        )
 
     session_manager.clear_session_config(test_session)
     print("✅ get_api_key reads from session config")
@@ -103,17 +104,21 @@ def test_get_provider_api_key_uses_provider_config():
 
     # Get real configs to verify the function works with actual provider config
     configs = get_default_llm_configs()
-    gemini_config = configs.get("gemini") if hasattr(configs, 'get') else None
+    gemini_config = configs.get("gemini") if hasattr(configs, "get") else None
     if gemini_config is None:
         # Try enum lookup
         from agent_ng.llm_manager import LLMProvider
+
         gemini_config = configs.get(LLMProvider.GEMINI)
 
     assert gemini_config is not None, "Gemini config should exist"
-    assert gemini_config.api_key_env == "GEMINI_KEY", f"Expected GEMINI_KEY, got {gemini_config.api_key_env}"
+    assert gemini_config.api_key_env == "GEMINI_KEY", (
+        f"Expected GEMINI_KEY, got {gemini_config.api_key_env}"
+    )
 
     # Test that the function correctly resolves the provider config
     import os
+
     test_key = "test_gemini_key_12345"
     original = os.environ.get("GEMINI_KEY")
     try:
@@ -131,11 +136,14 @@ def test_get_provider_api_key_uses_provider_config():
 
 def test_llm_manager_uses_unified_resolution():
     """Test that LLMManager._get_api_key uses get_provider_api_key"""
-    from agent_ng.llm_manager import LLMManager
     import inspect
 
+    from agent_ng.llm_manager import LLMManager
+
     source = inspect.getsource(LLMManager._get_api_key)
-    assert "get_provider_api_key" in source, "LLMManager._get_api_key doesn't use get_provider_api_key"
+    assert "get_provider_api_key" in source, (
+        "LLMManager._get_api_key doesn't use get_provider_api_key"
+    )
 
     print("✅ LLMManager uses get_provider_api_key")
 
@@ -143,10 +151,13 @@ def test_llm_manager_uses_unified_resolution():
 def test_image_engine_uses_unified_resolution():
     """Test that ImageEngine uses get_provider_api_key"""
     import inspect
+
     from agent_ng import image_engine
 
     source = inspect.getsource(image_engine.ImageEngine.__init__)
-    assert "get_provider_api_key" in source, "ImageEngine.__init__ doesn't use get_provider_api_key"
+    assert "get_provider_api_key" in source, (
+        "ImageEngine.__init__ doesn't use get_provider_api_key"
+    )
     assert '"openrouter"' in source, "ImageEngine should hardcode openrouter provider"
 
     print("✅ ImageEngine uses get_provider_api_key")
@@ -155,12 +166,43 @@ def test_image_engine_uses_unified_resolution():
 def test_gemini_vl_adapter_uses_unified_resolution():
     """Test that GeminiDirectVisionAdapter uses get_provider_api_key"""
     import inspect
+
     from agent_ng.vision_adapters import gemini_adapter
 
     source = inspect.getsource(gemini_adapter.GeminiDirectVisionAdapter.invoke)
-    assert "get_provider_api_key" in source, "GeminiDirectVisionAdapter.invoke doesn't use get_provider_api_key"
+    assert "get_provider_api_key" in source, (
+        "GeminiDirectVisionAdapter.invoke doesn't use get_provider_api_key"
+    )
 
     print("✅ GeminiDirectVisionAdapter uses get_provider_api_key")
+
+
+def test_openrouter_vl_adapter_uses_unified_resolution():
+    """Test that OpenRouterVisionAdapter.invoke uses get_provider_api_key"""
+    import inspect
+
+    from agent_ng.vision_adapters import openrouter_adapter
+
+    source = inspect.getsource(openrouter_adapter.OpenRouterVisionAdapter.invoke)
+    assert "get_provider_api_key" in source, (
+        "OpenRouterVisionAdapter.invoke doesn't use get_provider_api_key"
+    )
+
+    print("✅ OpenRouterVisionAdapter uses get_provider_api_key")
+
+
+def test_image_engine_generate_uses_unified_resolution():
+    """Test that ImageEngine.generate uses get_provider_api_key for providers."""
+    import inspect
+
+    from agent_ng import image_engine
+
+    source = inspect.getsource(image_engine.ImageEngine.generate)
+    assert "get_provider_api_key" in source, (
+        "ImageEngine.generate doesn't use get_provider_api_key"
+    )
+
+    print("✅ ImageEngine.generate uses get_provider_api_key")
 
 
 def test_all_providers_use_same_resolution():
@@ -191,6 +233,8 @@ def main():
         test_llm_manager_uses_unified_resolution,
         test_image_engine_uses_unified_resolution,
         test_gemini_vl_adapter_uses_unified_resolution,
+        test_openrouter_vl_adapter_uses_unified_resolution,
+        test_image_engine_generate_uses_unified_resolution,
         test_all_providers_use_same_resolution,
     ]
 
@@ -204,6 +248,7 @@ def main():
         except Exception as e:
             print(f"❌ {test.__name__}: {e}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 

@@ -1,3 +1,4 @@
+import json
 from typing import Any, Optional
 
 from langchain_core.tools import tool
@@ -11,6 +12,7 @@ from tools.tool_utils import (
     build_global_alias,
     execute_edit_or_create_operation,
     execute_get_operation,
+    execute_list_operation,
 )
 
 DATASET_ENDPOINT = "webapi/Dataset"
@@ -85,6 +87,26 @@ class EditOrCreateDatasetSchema(CommonDatasetFields):
             v = v.strip().lower()
             mapping = {"создать": "create", "редактировать": "edit", "create": "create", "edit": "edit"}
             return mapping.get(v, v)
+        return v
+
+    @field_validator("columns", mode="before")
+    @classmethod
+    def _parse_columns(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except (json.JSONDecodeError, TypeError) as err:
+                raise ValueError("columns must be a valid JSON object") from err
+        return v
+
+    @field_validator("sorting", "grouping", "totals", mode="before")
+    @classmethod
+    def _parse_list_fields(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except (json.JSONDecodeError, TypeError) as err:
+                raise ValueError("Value must be a valid JSON array") from err
         return v
 
     @model_validator(mode="after")
@@ -383,15 +405,5 @@ def list_datasets(
     """
     template_global_alias = f"Template@{application_system_name}.{template_system_name}"
     endpoint = f"{DATASET_ENDPOINT}/List/{template_global_alias}"
-    # Use GET for list endpoint
     result = requests_._get_request(endpoint)
-
-    if not result.get("success"):
-        return result
-
-    raw = result.get("raw_response", {})
-    return {
-        "success": True,
-        "status_code": result.get("status_code", 200),
-        "data": raw.get("response", []),
-    }
+    return execute_list_operation(response_data=result, result_model=DatasetResult)

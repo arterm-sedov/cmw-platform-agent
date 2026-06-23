@@ -34,7 +34,7 @@ class TestUnderstandAudio:
                 mock_analyze.return_value = "This audio contains speech"
 
                 result = understand_audio(
-                    file_reference=Path(audio_path).name,
+                    filename=Path(audio_path).name,
                     prompt="What's in this audio?",
                     agent=mock_agent
                 )
@@ -52,7 +52,7 @@ class TestUnderstandAudio:
         """Test analyzing audio from URL"""
         mock_agent = Mock()
 
-        with patch("tools.file_utils.FileUtils.resolve_file_reference") as mock_resolve:
+        with patch("tools.file_utils.FileUtils.resolve_filename") as mock_resolve:
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                 f.write(b"fake audio")
                 temp_path = f.name
@@ -64,7 +64,7 @@ class TestUnderstandAudio:
                     mock_analyze.return_value = "Audio analysis result"
 
                     result = understand_audio(
-                        file_reference="https://example.com/audio.mp3",
+                        filename="https://example.com/audio.mp3",
                         prompt="Transcribe this audio",
                         agent=mock_agent
                     )
@@ -81,11 +81,11 @@ class TestUnderstandAudio:
         """Test error handling when file not found"""
         mock_agent = Mock()
 
-        with patch("tools.file_utils.FileUtils.resolve_file_reference") as mock_resolve:
+        with patch("tools.file_utils.FileUtils.resolve_filename") as mock_resolve:
             mock_resolve.return_value = None
 
             result = understand_audio(
-                file_reference="nonexistent.mp3",
+                filename="nonexistent.mp3",
                 prompt="Transcribe",
                 agent=mock_agent
             )
@@ -108,7 +108,7 @@ class TestUnderstandAudio:
                 mock_analyze.return_value = "Detailed audio analysis"
 
                 result = understand_audio(
-                    file_reference=Path(audio_path).name,
+                    filename=Path(audio_path).name,
                     prompt="Analyze this audio",
                     system_prompt="You are an audio expert",
                     agent=mock_agent
@@ -136,7 +136,7 @@ class TestUnderstandAudio:
                 mock_analyze.return_value = "Audio segment analysis"
 
                 result = understand_audio(
-                    file_reference=Path(audio_path).name,
+                    filename=Path(audio_path).name,
                     prompt="What's said in this segment?",
                     start_time="00:30",
                     end_time="01:00",

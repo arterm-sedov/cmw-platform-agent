@@ -20,7 +20,7 @@ edit_or_create_numeric_attribute.invoke({
     "operation": "edit",
     "name": "New Name",
     "system_name": "Ploschad",
-    "application_system_name": "Volga",
+    "application_system_name": "{App}",
     "template_system_name": "RentLots"
     # number_decimal_places NOT provided
 })
@@ -128,3 +128,16 @@ edit_or_create_dataset.invoke({
     # Other fields omitted - will be fetched and preserved
 })
 ```
+
+## Dataset filters (account id literals and other `filter` JSON)
+
+The `edit_or_create_dataset` tool does **not** expose `filter` as a parameter. To change filter `value` (e.g. remap TR `account.168` → FR `account.5`):
+
+1. **GET first** — `get_dataset` or `GET {CMW_BASE_URL}webapi/Dataset/{app}/Dataset@{template}.{dataset}` and keep the **full** payload (columns, toolbar, paging, `filter`, `globalAlias`, …).
+2. **Edit in memory** — update only `filter.value` (or nested filter tree); preserve all other keys. For **composite** filters (`AND` + `OR` + Space→Floor branches), remap **every** stale catalog/hierarchy id in the tree — see [platform_usage_discoveries.md](platform_usage_discoveries.md#composite-list-filters-technicalsystem--spacefloor-or).
+3. **`globalAlias` on PUT** — if GET returns `globalAlias: null`, set it via `build_global_alias("Dataset", template_system_name, dataset_system_name)` before PUT (otherwise **Value cannot be null. Parameter name: key**). See [platform_usage_discoveries.md — Dataset PUT](platform_usage_discoveries.md#dataset-put-endpoint-globalalias-and-full-body).
+4. **PUT** — **`PUT {CMW_BASE_URL}webapi/Dataset/{app}`** with the merged body (same contract as `edit_or_create_dataset` internal edit path via `execute_edit_or_create_operation`). **Do not** PUT to `Dataset@{template}.{dataset}` — returns **405** on many hosts.
+
+**Do not** `POST` a partial dataset body to `webapi/Dataset/{app}` for filter edits — use **GET → merge → PUT**. Saving a copy under `cmw-platform-workspace/` before PUT is recommended (see cmw-platform skill § Save Before Edit).
+
+For name/columns/toolbar-only edits, prefer `edit_or_create_dataset` (`operation: "edit"`), which already GET-merges before PUT.

@@ -41,14 +41,14 @@ def get_domain() -> str:
 
 def navigate_to_element(json_data: dict, path_parts: list) -> tuple[dict, str, bool]:
     """Navigate through JSON by path parts.
-    
+
     path_parts = ["Root", "Rows", "$values[1]", "GlobalAlias"]
     Returns (parent_dict, key_to_update, success)
     """
     current = json_data
     parent = None
     key = None
-    
+
     for part in path_parts:
         match = re.match(r'\$?values?\[(\d+)\]', part)
         if match:
@@ -65,7 +65,7 @@ def navigate_to_element(json_data: dict, path_parts: list) -> tuple[dict, str, b
             key = part
         else:
             return None, "", False
-    
+
     return parent, key, True
 
 
@@ -89,7 +89,7 @@ def main(app: str, json_folder: str, output_dir: str, path_mode: str = "renamed"
     for obj in tr_data:
         # Get displayNames array instead of single displayName
         display_names = obj.get("displayNames", [])
-        
+
         for dn in display_names:
             display_name_new = dn.get("displayNameRenamed", "")
             if not display_name_new:
@@ -108,10 +108,10 @@ def main(app: str, json_folder: str, output_dir: str, path_mode: str = "renamed"
                 # Split into file path and internal path
                 if ".json/" not in json_path_full:
                     continue
-                    
+
                 file_part, path_part = json_path_full.split(".json/", 1)
                 file_part = file_part + ".json"
-                
+
                 ctf_path = json_path / app / file_part
                 if not ctf_path.exists():
                     continue
@@ -126,7 +126,7 @@ def main(app: str, json_folder: str, output_dir: str, path_mode: str = "renamed"
 
                 # Parse path parts
                 path_parts = path_part.split("/")
-                
+
                 # Navigate to element
                 parent, key, success = navigate_to_element(json_data, path_parts)
                 if not success or parent is None:
@@ -139,7 +139,7 @@ def main(app: str, json_folder: str, output_dir: str, path_mode: str = "renamed"
                         parent[field] = display_name_new
                         updated = True
                         break
-                
+
                 # Also check if the field is at the target level itself
                 if path_parts and path_parts[-1] in display_name_fields:
                     parent[path_parts[-1]] = display_name_new
