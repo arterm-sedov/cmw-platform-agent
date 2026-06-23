@@ -551,6 +551,7 @@ Follow Cursor’s create-skill guidance for frontmatter, description triggers, a
 | [../cmw-platform-backup-launch/SKILL.md](../cmw-platform-backup-launch/SKILL.md) | Launch existing configuration backup (API preferred; UI fallback) |
 | [references/import_export.md](references/import_export.md) | Full import/export application reference |
 | [references/ui_components.md](references/ui_components.md) | Full UI components reference: toolbars, buttons, datasets, forms |
+| [references/form_handling.md](references/form_handling.md) | Form API workflow: visible FieldComponent creation/upsert, replacement, rollback, verification |
 | [references/errors.md](references/errors.md) | Error handling playbook |
 | [references/platform_usage_discoveries.md](references/platform_usage_discoveries.md) | Agnostic FM/demo lessons: indicators, Code_calc, gap-fill, dataset PUT endpoint + `globalAlias` + composite filters, MyMaintenance USER(), MaintenanceExecution grouped lists, staff vs account assignee, StatusBoost legacy expr, ServiceRequestTypes SLA remap, PMPlans equipment seed-link, Spaces semi-empty, contract/annual-plan/inspection patterns, WorkStatus id collision, multi-list WO orchestration, location calc, maintenance/PM/SOP, `operations[]` flush |
 | [references/workflow_sequences.md](references/workflow_sequences.md) | Reusable code patterns |

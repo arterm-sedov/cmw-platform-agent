@@ -67,6 +67,33 @@ from tools.<category>.<tool_file> import <tool_function>
 - **Returns:** `{"success": bool, "status_code": int, "data": dict, "error": str|dict}`
 - **Note:** Only use on non-system buttons. System buttons (`create`, `edit`, `archive`, `delete`, `unarchive`) should not be archived.
 
+### get_form
+- **Import:** `from tools.templates_tools.tools_form import get_form`
+- **Signature:** `get_form.invoke({"application_system_name": str, "template_system_name": str, "form_system_name": str})`
+- **Returns:** `{"success": bool, "data": dict, "error": str|dict}`
+- **Note:** Verify visible forms by counting `FieldComponent` nodes in `data.root`.
+
+### list_forms
+- **Import:** `from tools.templates_tools.tools_form import list_forms`
+- **Signature:** `list_forms.invoke({"application_system_name": str, "template_system_name": str})`
+- **Returns:** `{"success": bool, "data": list, "error": str|dict}`
+
+### edit_or_create_form
+- **Import:** `from tools.templates_tools.tools_form import edit_or_create_form`
+- **Signature:** `edit_or_create_form.invoke({...})`
+- **Parameters:** `operation`, `application_system_name`, `template_system_name`, `form_system_name`, optional `name`, `form_size`, `widgets`, `replace_root`, `create_from_attributes`, `copy_from`, `verify`
+- **Behavior:** `widgets` are desired visible fields to upsert. Empty forms rebuild a root tree with `FieldComponent` nodes.
+
+### copy_form_from_template
+- **Import:** `from tools.templates_tools.tool_copy_form import copy_form_from_template`
+- **Signature:** `copy_form_from_template.invoke({...})`
+- **Behavior:** Copies a source form, rewrites source tokens, replaces the target via DELETE + POST, and verifies `FieldComponent` nodes.
+
+### create_form_from_attributes
+- **Import:** `from tools.templates_tools.tool_create_form_from_attributes import create_form_from_attributes`
+- **Signature:** `create_form_from_attributes.invoke({"application_system_name": str, "template_system_name": str, "form_system_name": "defaultForm", "form_name": str})`
+- **Behavior:** Lists attributes, excludes system/archived attributes, builds a visible form, and verifies field count.
+
 ## Attributes Tools
 
 Attribute tools are organized by type. Pattern:

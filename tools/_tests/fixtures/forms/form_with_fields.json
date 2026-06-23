@@ -1,0 +1,56 @@
+{
+  "globalAlias": {
+    "type": "Form",
+    "owner": "TargetTemplate",
+    "alias": "defaultForm"
+  },
+  "container": {
+    "type": "RecordTemplate",
+    "alias": "TargetTemplate"
+  },
+  "name": "Default form",
+  "type": "PublicForm",
+  "isDefault": true,
+  "root": {
+    "type": "VerticalLayout",
+    "rows": [
+      {
+        "type": "PanelModel",
+        "displayName": "Main information",
+        "layout": {
+          "type": "VerticalLayout",
+          "rows": [
+            {
+              "type": "LayoutModel",
+              "components": [
+                {
+                  "type": "FieldComponent",
+                  "globalAlias": {
+                    "type": "FormComponent",
+                    "owner": "defaultForm",
+                    "alias": "defaultForm_BusinessName"
+                  },
+                  "propertyPath": [
+                    {
+                      "type": "Attribute",
+                      "owner": "TargetTemplate",
+                      "alias": "BusinessName"
+                    }
+                  ],
+                  "label": {
+                    "text": {
+                      "en": "Business name",
+                      "de": "Business name",
+                      "ru": "Business name"
+                    },
+                    "hidden": false
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

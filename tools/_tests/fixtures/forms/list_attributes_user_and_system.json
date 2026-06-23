@@ -1,0 +1,30 @@
+[
+  {
+    "Attribute system name": "_processes",
+    "Attribute type": "Record",
+    "Name": "Processes",
+    "Is system": true,
+    "Archived": false
+  },
+  {
+    "Attribute system name": "id",
+    "Attribute type": "String",
+    "Name": "Identifier",
+    "Is system": true,
+    "Archived": false
+  },
+  {
+    "Attribute system name": "BusinessName",
+    "Attribute type": "String",
+    "Name": "Business name",
+    "Is system": false,
+    "Archived": false
+  },
+  {
+    "Attribute system name": "Comment",
+    "Attribute type": "String",
+    "Name": "Comment",
+    "Is system": false,
+    "Archived": false
+  }
+]

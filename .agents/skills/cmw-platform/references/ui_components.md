@@ -217,10 +217,10 @@ edit_or_create_dataset.invoke({
 - When a toolbar has `IsDefaultForLists: true`, it becomes the default for all datasets in that template
 - To make a toolbar dataset-specific, set `IsDefaultForLists: false` and link it explicitly via the dataset's `toolbar_system_name`
 
-## Edit Form Widgets
+## Forms
 
 ```python
-from tools.templates_tools.tools_form import get_form, edit_or_create_form
+from tools.templates_tools.tools_form import edit_or_create_form, get_form, list_forms
 
 form = get_form.invoke({
     "application_system_name": "<app>",
@@ -233,11 +233,21 @@ edit_or_create_form.invoke({
     "application_system_name": "<app>",
     "template_system_name": "<template>",
     "form_system_name": "<form>",
-    "widgets": [
-        {"system_name": "<widget>", "label": "<New Label>"},
-    ]
+    "widgets": {
+        "<attribute_system_name>": {"label": "<New Label>"}
+    }
 })
 ```
+
+`widgets` is a dict keyed by attribute/widget system name.
+
+For existing forms, widgets edit matching `FieldComponent` nodes. For empty forms,
+widgets create/upsert `FieldComponent` nodes by rebuilding the root tree.
+
+Never consider a form operation successful until `get_form` returns visible
+`FieldComponent` nodes with valid `propertyPath` aliases.
+
+→ See also: [form_handling.md](form_handling.md)
 
 ---
 

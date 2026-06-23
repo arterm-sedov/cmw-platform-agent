@@ -1,0 +1,56 @@
+{
+  "globalAlias": {
+    "type": "Form",
+    "owner": "SourceTemplate",
+    "alias": "defaultForm"
+  },
+  "container": {
+    "type": "RecordTemplate",
+    "alias": "SourceTemplate"
+  },
+  "name": "Source form",
+  "type": "PublicForm",
+  "isDefault": true,
+  "root": {
+    "type": "VerticalLayout",
+    "rows": [
+      {
+        "type": "PanelModel",
+        "displayName": "SourceTemplate panel",
+        "layout": {
+          "type": "VerticalLayout",
+          "rows": [
+            {
+              "type": "LayoutModel",
+              "components": [
+                {
+                  "type": "FieldComponent",
+                  "globalAlias": {
+                    "type": "FormComponent",
+                    "owner": "defaultForm",
+                    "alias": "Src_Name"
+                  },
+                  "propertyPath": [
+                    {
+                      "type": "Attribute",
+                      "owner": "SourceTemplate",
+                      "alias": "Src_Name"
+                    }
+                  ],
+                  "label": {
+                    "text": {
+                      "en": "Source name",
+                      "de": "Source name",
+                      "ru": "Source name"
+                    },
+                    "hidden": false
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

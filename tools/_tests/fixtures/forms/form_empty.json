@@ -1,0 +1,18 @@
+{
+  "globalAlias": {
+    "type": "Form",
+    "owner": "TargetTemplate",
+    "alias": "defaultForm"
+  },
+  "container": {
+    "type": "RecordTemplate",
+    "alias": "TargetTemplate"
+  },
+  "name": "Default form",
+  "type": "PublicForm",
+  "isDefault": true,
+  "root": {
+    "type": "VerticalLayout",
+    "rows": []
+  }
+}

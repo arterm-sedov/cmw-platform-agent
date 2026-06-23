@@ -6,7 +6,11 @@ and listing template attributes.
 """
 
 # Import all tool functions
+from tools.templates_tools.tool_copy_form import copy_form_from_template
 from tools.templates_tools.tool_create_edit_record import create_edit_record
+from tools.templates_tools.tool_create_form_from_attributes import (
+    create_form_from_attributes,
+)
 from tools.templates_tools.tool_get_record_values import get_record_values
 from tools.templates_tools.tool_list_attributes import list_attributes
 from tools.templates_tools.tool_list_records import list_template_records
@@ -41,7 +45,9 @@ __all__ = [
     "archive_unarchive_button",
     "attach_file_to_record_document_attribute",
     "attach_file_to_record_image_attribute",
+    "copy_form_from_template",
     "create_edit_record",
+    "create_form_from_attributes",
     "edit_or_create_button",
     "edit_or_create_dataset",
     "edit_or_create_form",

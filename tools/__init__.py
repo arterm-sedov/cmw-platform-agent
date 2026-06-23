@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from agent_ng.logging_config import setup_logging  # type: ignore[import-not-found]
+
     setup_logging()
 except Exception as exc:
     # Tools can be used standalone; ignore if agent_ng not available.
@@ -89,6 +90,8 @@ from .platform_entity_resolver import resolve_entity
 from .templates_tools import (
     # Button tools
     archive_unarchive_button,
+    copy_form_from_template,
+    create_form_from_attributes,
     edit_or_create_button,
     # Dataset tools
     edit_or_create_dataset,
@@ -115,6 +118,8 @@ __all__ = [
     "archive_or_unarchive_attribute",
     "archive_unarchive_button",
     "attributes_tools",
+    "copy_form_from_template",
+    "create_form_from_attributes",
     "delete_attribute",
     "edit_or_create_account_attribute",
     "edit_or_create_boolean_attribute",
