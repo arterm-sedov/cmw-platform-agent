@@ -32,8 +32,8 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             tool_support=True,
             force_tools=False,
             vision_support=True,  # Gemini supports vision
-            video_support=True,   # Gemini supports video
-            audio_support=True,   # Gemini supports audio
+            video_support=True,  # Gemini supports video
+            audio_support=True,  # Gemini supports audio
             models=[
                 {
                     "model": "gemini-2.5-flash",
@@ -43,7 +43,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": False,
                     "vision_support": True,
                     "video_support": True,
-                    "audio_support": True
+                    "audio_support": True,
                 },
                 {
                     "model": "gemini-2.5-pro",
@@ -53,7 +53,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": False,
                     "vision_support": True,
                     "video_support": True,
-                    "audio_support": True
+                    "audio_support": True,
                 },
                 {
                     "model": "gemini-3.1-flash-lite-preview",
@@ -63,7 +63,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": False,
                     "vision_support": True,
                     "video_support": True,
-                    "audio_support": True
+                    "audio_support": True,
                 },
                 {
                     "model": "gemini-3.1-pro-preview",
@@ -73,7 +73,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": False,
                     "vision_support": True,
                     "video_support": True,
-                    "audio_support": True
+                    "audio_support": True,
                 },
                 {
                     "model": "gemini-3-flash-preview",
@@ -83,10 +83,10 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": False,
                     "vision_support": True,
                     "video_support": True,
-                    "audio_support": True
-                }
+                    "audio_support": True,
+                },
             ],
-            enable_chunking=False
+            enable_chunking=False,
         ),
         LLMProvider.GROQ: LLMConfig(
             name="Groq",
@@ -101,24 +101,24 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "token_limit": 131072,
                     "max_tokens": 8192,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "llama-3.3-70b-versatile",
                     "token_limit": 131072,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "llama-3.3-70b-8192",
                     "token_limit": 16000,
                     "max_tokens": 4096,
                     "temperature": 0,
-                    "force_tools": True
-                }
+                    "force_tools": True,
+                },
             ],
-            enable_chunking=False
+            enable_chunking=False,
         ),
         LLMProvider.HUGGINGFACE: LLMConfig(
             name="HuggingFace",
@@ -134,7 +134,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "token_limit": 3000,
                     "max_new_tokens": 1024,
                     "do_sample": False,
-                    "temperature": 0
+                    "temperature": 0,
                 },
                 {
                     "model": "microsoft/DialoGPT-medium",
@@ -142,7 +142,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "token_limit": 1000,
                     "max_new_tokens": 512,
                     "do_sample": False,
-                    "temperature": 0
+                    "temperature": 0,
                 },
                 {
                     "model": "gpt2",
@@ -150,10 +150,10 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "token_limit": 1000,
                     "max_new_tokens": 256,
                     "do_sample": False,
-                    "temperature": 0
-                }
+                    "temperature": 0,
+                },
             ],
-            enable_chunking=True
+            enable_chunking=True,
         ),
         LLMProvider.OPENAI: LLMConfig(
             name="OpenAI-compatible",
@@ -178,8 +178,8 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
             tool_support=True,
             force_tools=False,
             vision_support=True,  # OpenRouter supports VL models
-            video_support=True,   # Some models support video
-            audio_support=True,   # Some models support audio
+            video_support=True,  # Some models support video
+            audio_support=True,  # Some models support audio
             models=[
                 {
                     "model": "anthropic/claude-sonnet-4.5",
@@ -187,7 +187,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "max_tokens": 64000,
                     "temperature": 0,
                     "force_tools": True,
-                    "vision_support": True
+                    "vision_support": True,
                 },
                 {
                     "model": "anthropic/claude-sonnet-4.6",
@@ -195,147 +195,168 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "max_tokens": 64000,
                     "temperature": 0,
                     "force_tools": True,
-                    "vision_support": True
+                    "vision_support": True,
                 },
                 {
                     "model": "deepseek/deepseek-chat-v3.1:free",
                     "token_limit": 131000,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "deepseek/deepseek-r1-0528",
                     "token_limit": 131000,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "deepseek/deepseek-v3.1-terminus",
                     "token_limit": 131000,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "deepseek/deepseek-v3.1-terminus:exacto",
                     "token_limit": 131000,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "deepseek/deepseek-v3.2-speciale",
                     "token_limit": 163840,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
+                },
+                {
+                    "model": "deepseek/deepseek-v4-pro",
+                    "token_limit": 1048576,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": False,
+                },
+                {
+                    "model": "deepseek/deepseek-v4-flash",
+                    "token_limit": 1048576,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": False,
                 },
                 {
                     "model": "google/gemma-3-flash-preview",
                     "token_limit": 1048576,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "google/gemma-3-pro-preview",
                     "token_limit": 1048576,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "google/gemma-4-31b-it:free",
                     "token_limit": 131072,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "minimax/minimax-m2.1",
                     "token_limit": 196608,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "minimax/minimax-m2.5:free",
                     "token_limit": 196608,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
+                },
+                {
+                    "model": "minimax/minimax-m3",
+                    "token_limit": 524288,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": False,
                 },
                 {
                     "model": "mistralai/codestral-2508",
                     "token_limit": 256000,
                     "max_tokens": 4096,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "moonshotai/kimi-k2-0905:exacto",
                     "token_limit": 262144,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "moonshotai/kimi-k2-thinking",
                     "token_limit": 262144,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "moonshotai/kimi-k2.5",
                     "token_limit": 262144,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "nvidia/nemotron-3-super-120b-a12b:free",
                     "token_limit": 256000,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "nvidia/nemotron-nano-9b-v2:free",
                     "token_limit": 128000,
                     "max_tokens": 4096,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "openai/gpt-5-mini",
                     "token_limit": 400000,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "openai/gpt-oss-120b:free",
                     "token_limit": 131072,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "openai/gpt-oss-120b:exacto",
                     "token_limit": 131072,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "qwen/qwen-plus-2025-07-28",
                     "token_limit": 1000000,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "qwen/qwen3.6-plus",
@@ -344,7 +365,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "temperature": 0,
                     "force_tools": True,
                     "vision_support": True,
-                    "video_support": True
+                    "video_support": True,
                 },
                 {
                     "model": "google/gemini-2.5-flash",
@@ -364,7 +385,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": True,
                     "vision_support": True,
                     "video_support": True,
-                    "audio_support": True
+                    "audio_support": True,
                 },
                 {
                     "model": "google/gemini-3.1-pro-preview",
@@ -374,7 +395,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": True,
                     "vision_support": True,
                     "video_support": True,
-                    "audio_support": True
+                    "audio_support": True,
                 },
                 {
                     "model": "google/gemini-3-flash-preview",
@@ -384,7 +405,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "force_tools": True,
                     "vision_support": True,
                     "video_support": True,
-                    "audio_support": True
+                    "audio_support": True,
                 },
                 {
                     "model": "xiaomi/mimo-v2.5",
@@ -393,8 +414,8 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "temperature": 0,
                     "force_tools": True,
                     "vision_support": False,  # OpenRouter: text-only
-                    "video_support": False,   # OpenRouter: text-only
-                    "audio_support": False    # OpenRouter: text-only
+                    "video_support": False,  # OpenRouter: text-only
+                    "audio_support": False,  # OpenRouter: text-only
                 },
                 {
                     "model": "xiaomi/mimo-v2-omni",
@@ -411,115 +432,115 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "token_limit": 262144,
                     "max_tokens": 4096,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "qwen/qwen3-coder-flash",
                     "token_limit": 128000,
                     "max_tokens": 4096,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "qwen/qwen3-coder-plus",
                     "token_limit": 128000,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "qwen/qwen3-coder:exacto",
                     "token_limit": 262144,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "qwen/qwen3-max",
                     "token_limit": 256000,
                     "max_tokens": 32768,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "x-ai/grok-4-fast",
                     "token_limit": 2000000,
                     "max_tokens": 30000,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "x-ai/grok-4-fast:free",
                     "token_limit": 2000000,
                     "max_tokens": 8192,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "x-ai/grok-4.20",
                     "token_limit": 2000000,
                     "max_tokens": 30000,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "x-ai/grok-4.20-multi-agent",
                     "token_limit": 2000000,
                     "max_tokens": 30000,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "x-ai/grok-4.1-fast",
                     "token_limit": 2000000,
                     "max_tokens": 30000,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "x-ai/grok-code-fast-1",
                     "token_limit": 256000,
                     "max_tokens": 10000,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "z-ai/glm-4.5-air:free",
                     "token_limit": 200000,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "z-ai/glm-4.6:exacto",
                     "token_limit": 200000,
                     "max_tokens": 128000,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "z-ai/glm-4.7",
                     "token_limit": 200000,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "minimax/minimax-m2.7",
                     "token_limit": 196608,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
                 {
                     "model": "z-ai/glm-5.1",
                     "token_limit": 200000,
                     "max_tokens": 65536,
                     "temperature": 0,
-                    "force_tools": True
+                    "force_tools": True,
                 },
             ],
-            enable_chunking=False
+            enable_chunking=False,
         ),
         LLMProvider.POLZA: LLMConfig(
             name="Polza.ai",
@@ -592,6 +613,30 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "video_support": True,
                     "audio_support": True,
                 },
+                {
+                    "model": "deepseek/deepseek-v4-pro",
+                    "token_limit": 1048576,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": False,
+                },
+                {
+                    "model": "deepseek/deepseek-v4-flash",
+                    "token_limit": 1048576,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": False,
+                },
+                {
+                    "model": "minimax/minimax-m3",
+                    "token_limit": 524288,
+                    "max_tokens": 65536,
+                    "temperature": 0,
+                    "force_tools": False,
+                    "vision_support": False,
+                },
             ],
             enable_chunking=True,
         ),
@@ -607,23 +652,23 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "model": "mistral-large-latest",
                     "token_limit": 32000,
                     "max_tokens": 2048,
-                    "temperature": 0
+                    "temperature": 0,
                 },
                 {
                     "model": "mistral-small-latest",
                     "token_limit": 32000,
                     "max_tokens": 2048,
-                    "temperature": 0
+                    "temperature": 0,
                 },
                 {
                     "model": "mistral-medium-latest",
                     "token_limit": 32000,
                     "max_tokens": 2048,
-                    "temperature": 0
-                }
+                    "temperature": 0,
+                },
             ],
             token_per_minute_limit=500000,
-            enable_chunking=False
+            enable_chunking=False,
         ),
         LLMProvider.GIGACHAT: LLMConfig(
             name="Sber GigaChat",
@@ -641,7 +686,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "max_tokens": 2048,
                     "temperature": 0,
                     "top_p": 0.9,
-                    "repetition_penalty": 1.0
+                    "repetition_penalty": 1.0,
                 },
                 {
                     "model": "GigaChat-2-Pro",
@@ -649,7 +694,7 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "max_tokens": 2048,
                     "temperature": 0,
                     "top_p": 0.9,
-                    "repetition_penalty": 1.0
+                    "repetition_penalty": 1.0,
                 },
                 {
                     "model": "GigaChat-2-Max",
@@ -657,9 +702,9 @@ def get_default_llm_configs() -> dict[LLMProvider, LLMConfig]:
                     "max_tokens": 2048,
                     "temperature": 0,
                     "top_p": 0.9,
-                    "repetition_penalty": 1.0
-                }
+                    "repetition_penalty": 1.0,
+                },
             ],
-            enable_chunking=False
+            enable_chunking=False,
         ),
     }

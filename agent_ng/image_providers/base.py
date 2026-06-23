@@ -23,7 +23,7 @@ class ImageRequest:
     Attributes:
         prompt: Text description of the desired image.
         config: Metadata for the target model (carries modalities,
-            ``supports_image_config`` flag, etc.).
+            ``supports_image_config`` / ``supports_polza_sizing``, etc.).
         aspect_ratio: Optional ``"W:H"`` ratio. Providers that don't
             support aspect control may ignore this.
         image_size: Optional resolution tier (e.g. ``"1K"``, ``"2K"``,

@@ -54,10 +54,12 @@ class ImageModelConfig:
         modalities: Value to send as the ``modalities`` request field.
             Multimodal models (Gemini) use ``["image", "text"]``; image-
             only models (Flux, Seedream) use ``["image"]``.
-        supports_image_config: Whether the model documents support for
-            ``image_config.aspect_ratio`` / ``image_config.image_size``
-            (OpenRouter) or ``aspect_ratio`` / ``quality`` (Polza).
-            Only Google Gemini and Seedream 4.5 image models document this.
+        supports_image_config: Whether OpenRouter accepts ``image_config``
+            (``aspect_ratio``, ``image_size``). Ignored by other providers.
+        supports_polza_sizing: Whether Polza.ai accepts ``aspect_ratio`` and
+            ``quality`` (2K/4K) on the media API. Independent of OpenRouter;
+            e.g. Flux documents sizing on Polza but not via OpenRouter
+            ``image_config``.
         max_reference_images: Maximum number of reference images the model
             accepts as input (image-to-image / editing). 0 means the model
             is text-to-image only. Callers should clip the list to this count
@@ -71,6 +73,7 @@ class ImageModelConfig:
     providers: list[str]
     modalities: list[str]
     supports_image_config: bool
+    supports_polza_sizing: bool = False
     max_reference_images: int = 0
     """Maximum number of reference images the model accepts (0 = text-to-image only)."""
     description: str = ""
@@ -120,6 +123,15 @@ _HINT_DIFFUSION_ARTISTIC = (
     "model to spell it correctly. Ignores `aspect_ratio` / "
     "`image_size` hints and uses its own default dimensions."
 )
+_HINT_FLUX_ARTISTIC = (
+    "Prefers concise, descriptive prompts listing subject, style, "
+    "colors and mood. Strong on photorealistic and richly stylized "
+    "artwork; weaker at embedded text — describe text visually "
+    "(e.g. 'bold sans-serif headline') rather than relying on the "
+    "model to spell it correctly. Supports `aspect_ratio` and "
+    "`image_size` (2K/4K); some deployments ignore those hints and "
+    "use default dimensions."
+)
 _HINT_DIFFUSION_MULTILINGUAL = (
     "Accepts either natural or keyword-style prompts. Renders "
     "multilingual text (including Cyrillic) better than most artistic "
@@ -147,6 +159,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         providers=["polza", "openrouter", "google"],
         modalities=["image", "text"],
         supports_image_config=True,
+        supports_polza_sizing=True,
         max_reference_images=8,
         provider_model_ids={"google": "gemini-2.5-flash-image"},
         price_per_generation_usd=0.039,  # Google native: $0.039/image @ 1K (official)
@@ -161,6 +174,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         providers=["polza", "openrouter", "google"],
         modalities=["image", "text"],
         supports_image_config=True,
+        supports_polza_sizing=True,
         max_reference_images=8,
         provider_model_ids={"google": "gemini-3.1-flash-image-preview"},
         price_per_generation_usd=0.067,  # Google native: $0.067/image @ 1K (official)
@@ -176,6 +190,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         providers=["polza", "openrouter", "google"],
         modalities=["image", "text"],
         supports_image_config=True,
+        supports_polza_sizing=True,
         max_reference_images=8,
         provider_model_ids={"google": "gemini-3-pro-image-preview"},
         price_per_generation_usd=0.134,  # Google native: $0.134/image @ 1K/2K (official)
@@ -205,8 +220,8 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         supports_image_config=False,
         max_reference_images=10,
         description=(
-            "Standard OpenAI image model. Polza used first to avoid "
-            "regional restrictions."
+            "Standard OpenAI image model. May be unavailable in some "
+            "regions — use an alternative when calls fail."
         ),
         prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
@@ -215,11 +230,11 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         providers=["polza", "openrouter"],
         modalities=["image", "text"],
         supports_image_config=True,
+        supports_polza_sizing=True,
         max_reference_images=1,
         description=(
             "Latest OpenAI image model. Supports 11 aspect ratios, "
-            "up to 4 images per request, and reference-image editing. "
-            "Polza used first to avoid regional restrictions."
+            "up to 4 images per request, and reference-image editing."
         ),
         prompt_style_hint=_HINT_GEMINI_STYLE,
     ),
@@ -228,26 +243,28 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         name="black-forest-labs/flux.2-flex",
         providers=["polza", "openrouter"],
         modalities=["image"],
-        supports_image_config=True,
+        supports_image_config=False,
+        supports_polza_sizing=True,
         max_reference_images=8,
         description=(
             "Fast artistic text-to-image at moderate cost. Good prompt "
             "adherence on stylized or photographic imagery."
         ),
-        prompt_style_hint=_HINT_DIFFUSION_ARTISTIC,
+        prompt_style_hint=_HINT_FLUX_ARTISTIC,
     ),
     "black-forest-labs/flux.2-pro": ImageModelConfig(
         name="black-forest-labs/flux.2-pro",
         providers=["polza", "openrouter"],
         modalities=["image"],
-        supports_image_config=True,
+        supports_image_config=False,
+        supports_polza_sizing=True,
         max_reference_images=8,
         description=(
             "Production-grade artistic text-to-image up to 4 MP. Best "
             "for photorealistic or richly stylized scenes; weaker at "
             "embedded text."
         ),
-        prompt_style_hint=_HINT_DIFFUSION_ARTISTIC,
+        prompt_style_hint=_HINT_FLUX_ARTISTIC,
     ),
     "black-forest-labs/flux.2-max": ImageModelConfig(
         name="black-forest-labs/flux.2-max",
@@ -267,11 +284,12 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         providers=["polza"],
         modalities=["image"],
         supports_image_config=True,
+        supports_polza_sizing=True,
         max_reference_images=10,
         provider_model_ids={"polza": "bytedance/seedream-5-lite"},
         description=(
-            "Seedream 5.0 Lite via Polza.ai. Generation and image-to-image "
-            "editing, 2K/3K output, up to 10 reference images."
+            "Seedream 5.0 Lite. Generation and image-to-image editing, "
+            "2K/3K output, up to 10 reference images."
         ),
         prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
     ),
@@ -280,12 +298,13 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         providers=["polza", "openrouter"],
         modalities=["image"],
         supports_image_config=True,
+        supports_polza_sizing=True,
         max_reference_images=14,
         provider_model_ids={"polza": "bytedance/seedream-4.5"},
         description=(
             "Large-canvas (2K/4K) output. Handles multilingual text "
             "(including Cyrillic) and small-text rendering better than "
-            "most text-to-image models. Polza: quality=basic(2K)/high(4K)."
+            "most text-to-image models. Supports resolution tiers 2K and 4K."
         ),
         prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
     ),
@@ -294,6 +313,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         providers=["polza"],
         modalities=["image"],
         supports_image_config=True,
+        supports_polza_sizing=True,
         max_reference_images=10,
         description=(
             "Previous-generation Seedream with 4K output and unique "
@@ -306,6 +326,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         providers=["polza"],
         modalities=["image"],
         supports_image_config=True,
+        supports_polza_sizing=True,
         max_reference_images=1,
         provider_model_ids={"polza": "bytedance/seedream"},
         description="Proven Seedream generation with solid multilingual support.",
@@ -344,8 +365,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         supports_image_config=False,
         max_reference_images=1,
         description=(
-            "Grok Imagine via Polza.ai. Photorealistic and artistic "
-            "generation from xAI, billed in RUB."
+            "Grok Imagine. Photorealistic and artistic generation from xAI."
         ),
         prompt_style_hint=_HINT_DIFFUSION_ARTISTIC,
     ),
@@ -356,8 +376,7 @@ IMAGE_MODELS: dict[str, ImageModelConfig] = {
         supports_image_config=False,
         max_reference_images=1,
         description=(
-            "Qwen VL Image via Polza.ai. Alibaba multimodal model, "
-            "billed in RUB."
+            "Qwen VL Image. Alibaba multimodal image generation model."
         ),
         prompt_style_hint=_HINT_DIFFUSION_MULTILINGUAL,
     ),

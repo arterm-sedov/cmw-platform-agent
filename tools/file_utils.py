@@ -542,9 +542,7 @@ class FileUtils:
         return None
 
     @staticmethod
-    def read_file_bytes(
-        filename: str, agent=None
-    ) -> tuple[bytes | None, str | None]:
+    def read_file_bytes(filename: str, agent=None) -> tuple[bytes | None, str | None]:
         """
         Resolve a filename to a local path and read its bytes.
 

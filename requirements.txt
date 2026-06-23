@@ -3,7 +3,7 @@ aiohappyeyeballs==2.6.1
 aiohttp==3.13.0
 aiosignal==1.4.0
 annotated-types==0.7.0
-anyio==4.11.0
+anyio==4.13.0
 arxiv==2.2.0
 asyncio-mqtt==0.16.2
 attrs==25.4.0
@@ -25,7 +25,7 @@ deprecation==2.1.0
 distro==1.9.0
 et_xmlfile==2.0.0
 eval_type_backport==0.2.2
-fastapi==0.119.0
+fastapi==0.136.1
 feedparser==6.0.12
 ffmpy==0.6.3
 filelock==3.20.0
@@ -43,8 +43,9 @@ google-auth-httplib2==0.2.0
 google-genai==1.74.0
 google-generativeai==0.8.5
 googleapis-common-protos==1.70.0
-gradio==5.49.1
-gradio_client==1.13.3
+# Pin: 6.11+ tab/lazy-mount regressions correlate with Svelte flush storms (see browser Performance).
+gradio==6.10.0
+gradio_client==2.4.0
 greenlet==3.2.4
 groovy==0.1.2
 groq==0.32.0
@@ -99,7 +100,7 @@ mdurl==0.1.2
 mistralai==1.9.11
 multidict==6.7.0
 mypy_extensions==1.1.0
-numpy==2.3.3
+numpy==2.4.4
 openai==2.33.0
 openpyxl==3.1.5
 opentelemetry-api==1.37.0
@@ -108,14 +109,14 @@ opentelemetry-exporter-otlp-proto-http==1.37.0
 opentelemetry-proto==1.37.0
 opentelemetry-sdk==1.37.0
 opentelemetry-semantic-conventions==0.58b0
-orjson==3.11.8
+orjson==3.11.9
 ormsgpack==1.12.2
 packaging==25.0
 paho-mqtt==2.1.0
-pandas==2.3.3
+pandas==3.0.2
 pathspec==0.12.1
 pgvector==0.4.1
-pillow==11.3.0
+pillow==12.2.0
 platformdirs==4.5.0
 pluggy==1.6.0
 # Optional Supabase client stack — not used by agent_ng/ or tools/ (legacy .legacy/agent_old only).
@@ -133,9 +134,9 @@ pyasn1==0.6.1
 pyasn1_modules==0.4.2
 pycodestyle==2.14.0
 pycparser==2.23
-pydantic==2.11.10
-pydantic-settings==2.11.0
-pydantic_core==2.33.2
+pydantic==2.12.4
+pydantic-settings==2.14.1
+pydantic_core>=2.27.2
 pydub==0.25.1
 pyflakes==3.4.0
 Pygments==2.19.2
@@ -147,7 +148,7 @@ pytest==8.4.2
 pytest-asyncio==1.2.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
-python-multipart==0.0.20
+python-multipart==0.0.28
 pytokens==0.1.10
 pytz==2025.2
 PyYAML==6.0.3
@@ -157,7 +158,8 @@ requests-toolbelt==1.0.0
 rich==14.2.0
 rsa==4.9.1
 ruff==0.14.0
-safehttpx==0.1.6
+# gradio 6.10.x requires safehttpx>=0.1.7,<0.2.0
+safehttpx==0.1.7
 scikit-learn==1.7.2
 scipy==1.16.2
 semantic-version==2.10.0
@@ -169,6 +171,10 @@ sniffio==1.3.1
 soupsieve==2.8
 SQLAlchemy==2.0.44
 starlette==0.48.0
+# External MCP consumer (HTTP). Required when CMW_MCP_ENABLED=true on HF Spaces.
+langchain-mcp-adapters==0.2.2
+mcp==1.27.2
+sse-starlette==2.2.1
 StrEnum==0.4.15
 tenacity==9.1.2
 threadpoolctl==3.6.0
@@ -176,7 +182,7 @@ tiktoken==0.12.0
 tokenizers==0.22.1
 tomlkit==0.13.3
 tqdm==4.67.1
-typer==0.19.2
+typer==0.25.1
 types-requests==2.32.4.20250913
 typing-inspect==0.9.0
 typing-inspection==0.4.2
@@ -185,9 +191,9 @@ tzdata==2025.2
 uritemplate==4.2.0
 urllib3==2.5.0
 uuid_utils==0.14.1
-uvicorn==0.37.0
+uvicorn==0.46.0
 websockets==15.0.1
-markitdown[docx,xlsx,pptx]
+markitdown[docx,xlsx,pptx]==0.1.5
 wheel==0.45.1
 wikipedia==1.4.0
 wrapt==1.17.3
@@ -195,3 +201,4 @@ xxhash==3.7.0
 yarl==1.22.0
 zipp==3.23.0
 zstandard==0.25.0
+

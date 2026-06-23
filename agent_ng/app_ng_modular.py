@@ -55,7 +55,11 @@ except ImportError:
     import sys
 
     sys.path.append(str(Path(__file__).parent))
-    from agent_config import config, get_language_settings, get_port_settings
+    from agent_config import (  # type: ignore[no-redef]
+        config,
+        get_language_settings,
+        get_port_settings,
+    )
 
 
 # Local imports with robust fallback handling
@@ -105,6 +109,30 @@ except ImportError:
             return []
 
 
+try:
+    from agent_ng.chat_stream_ui import (
+        begin_turn_with_generating_answer,
+        complete_generating_answer_bubble,
+        complete_reasoning_bubble,
+        complete_tool_call_bubble,
+        short_uid,
+        update_reasoning_bubble,
+        upsert_generating_answer_bubble,
+        upsert_tool_call_bubble,
+    )
+except ImportError:
+    from .chat_stream_ui import (  # type: ignore[no-redef]
+        begin_turn_with_generating_answer,
+        complete_generating_answer_bubble,
+        complete_reasoning_bubble,
+        complete_tool_call_bubble,
+        short_uid,
+        update_reasoning_bubble,
+        upsert_generating_answer_bubble,
+        upsert_tool_call_bubble,
+    )
+
+
 # Import image URL rewriter for LLM inline image references
 from agent_ng._image_url_rewriter import rewrite_llm_inline_images
 
@@ -146,7 +174,15 @@ try:
     )
 
     # from agent_ng.streaming_chat import get_chat_interface  # Module moved to .unused
-    from agent_ng.tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
+    from agent_ng.tabs import (
+        ChatTab,
+        ConfigTab,
+        DownloadsTab,
+        HomeTab,
+        LogsTab,
+        Sidebar,
+        StatsTab,
+    )
     from agent_ng.ui_manager import get_ui_manager
     from agent_ng.utils import safe_string
 
@@ -177,7 +213,15 @@ except ImportError as e1:
         )
 
         # from .streaming_chat import get_chat_interface  # Module moved to .unused
-        from .tabs import ChatTab, ConfigTab, HomeTab, LogsTab, StatsTab
+        from .tabs import (
+            ChatTab,
+            ConfigTab,
+            DownloadsTab,
+            HomeTab,
+            LogsTab,
+            Sidebar,
+            StatsTab,
+        )
         from .ui_manager import get_ui_manager
 
         _logger.info("Successfully imported all modules using relative imports")
@@ -235,12 +279,16 @@ class NextGenApp:
             )
 
         # Session Management - Clean modular approach
+        # Use the process-wide SessionManager singleton to avoid
+        # duplicate per-session initializations when multiple app
+        # instances are constructed (e.g. for language detection).
         try:
-            from .session_manager import SessionManager
+            from .session_manager import get_session_manager
         except ImportError:
             # Fallback for when running as script
-            from agent_ng.session_manager import SessionManager
-        self.session_manager = SessionManager(language)
+            from agent_ng.session_manager import get_session_manager
+
+        self.session_manager = get_session_manager(language)
 
         # Create i18n instance for the specified language
         self.i18n = create_i18n_instance()
@@ -365,6 +413,7 @@ class NextGenApp:
         )
 
         try:
+            await self.llm_manager.load_mcp_tools_if_enabled()
             # Initialize session manager (creates agents on-demand per session)
             self.debug_streamer.info("Session manager ready", LogCategory.INIT)
 
@@ -672,6 +721,11 @@ class NextGenApp:
             self.set_session_context(session_id)
             set_current_session_id(session_id)
 
+            # Reset session-level cancellation flag so a new message after stop
+            # is not immediately cancelled (different from Gradio State cancel_state
+            # which is reset by the UI pipeline).
+            self.session_manager.set_cancellation_state(session_id, False)
+
             # Debug: Check which LLM instance is being used
             if (
                 user_agent
@@ -699,14 +753,19 @@ class NextGenApp:
             # displayed alongside LLM cost in the stats bubble.
             tool_costs_this_turn: float = 0.0
 
-            # Add user message to history
-            working_history = [
-                *history,
-                {"role": "user", "content": message},
-                {"role": "assistant", "content": ""},
-            ]
+            # User message + generating-answer bubble (first visible status UI).
+            generating_answer_id = short_uid()
+            working_history, generating_answer_id = begin_turn_with_generating_answer(
+                history,
+                message,
+                bubble_id=generating_answer_id,
+                title=format_translation("generating_answer", self.language),
+                content=format_translation("generating_answer_subtitle", self.language),
+            )
+            generating_answer_pending = True
 
             # Get prompt token count for user message (will be displayed below assistant response)
+            # History is already in Gradio 6 messages format: list[dict[str, str]]
             prompt_tokens = None
             if user_agent:
                 try:
@@ -732,12 +791,38 @@ class NextGenApp:
             streaming_error_handled = (
                 False  # Flag to track if streaming error was handled
             )
+            reasoning_bubble_id: str | None = None
+            reasoning_buffer = ""
+            # generating_answer_id / pending initialized at turn start above
 
             # print(f"🔍 DEBUG: Starting streaming for session {session_id}")
             # print(f"🔍 DEBUG: Working history length before streaming: {len(working_history)}")
 
+            # Helper to check if cancellation was requested (following reference repo pattern)
+            def is_cancelled() -> bool:
+                try:
+                    cancel_state = self.session_manager.get_cancellation_state(
+                        session_id
+                    )
+                    return cancel_state is not None and cancel_state.get(
+                        "cancelled", False
+                    )
+                except Exception:
+                    return False
+
             try:
-                async for event in user_agent.stream_message(message, session_id):
+                # Pass app's language for proper i18n (iteration messages should match UI language)
+                _stream = user_agent.stream_message(
+                    message, session_id, language=self.language
+                )
+                async for event in _stream:
+                    # Check for cancellation at each iteration (following reference repo pattern)
+                    if is_cancelled():
+                        logging.getLogger(__name__).info(
+                            "Streaming cancelled during execution - stopping"
+                        )
+                        break
+
                     # Safety check for None event
                     if event is None:
                         # print("🔍 DEBUG: Received None event, skipping...")
@@ -761,28 +846,42 @@ class NextGenApp:
                         continue
 
                     if event_type == "thinking":
-                        # Agent is thinking - update or create assistant message
-                        if (
-                            assistant_message_index >= 0
-                            and assistant_message_index < len(working_history)
-                        ):
-                            # Update existing assistant message
-                            working_history[assistant_message_index] = {
-                                "role": "assistant",
-                                "content": content,
-                            }
-                        else:
-                            # Create new assistant message
-                            working_history.append(
-                                {"role": "assistant", "content": content}
-                            )
-                            assistant_message_index = len(working_history) - 1
+                        # UI-only thinking bubble. Agent memory is maintained
+                        # inside native_langchain_streaming.py, not Gradio history.
+                        if reasoning_bubble_id is None:
+                            reasoning_bubble_id = short_uid()
+                        reasoning_buffer += safe_string(content)
+                        update_reasoning_bubble(
+                            working_history,
+                            bubble_id=reasoning_bubble_id,
+                            content=reasoning_buffer,
+                            title=metadata.get("title", "Thinking")
+                            if metadata
+                            else "Thinking",
+                        )
                         yield working_history, ""
 
                     elif event_type == "iteration_progress":
                         # Iteration progress - update progress display in sidebar
                         # Store progress status for UI update - session-specific
                         self.session_manager.set_status(session_id, content)
+                        if (
+                            metadata
+                            and metadata.get("completed")
+                            and not generating_answer_pending
+                            and not response_content.strip()
+                        ):
+                            generating_answer_id = upsert_generating_answer_bubble(
+                                working_history,
+                                bubble_id=generating_answer_id or short_uid(),
+                                title=format_translation(
+                                    "generating_answer", self.language
+                                ),
+                                content=format_translation(
+                                    "generating_answer_subtitle", self.language
+                                ),
+                            )
+                            generating_answer_pending = True
                         # If this is an early-finish hint, unlock UI now while we wait for finalization
                         try:
                             if metadata and metadata.get("early_finish"):
@@ -797,7 +896,30 @@ class NextGenApp:
                     elif event_type == "completion":
                         # Final completion message - update progress display
                         self.session_manager.set_status(session_id, content)
+                        if generating_answer_pending:
+                            complete_generating_answer_bubble(
+                                working_history, generating_answer_id
+                            )
+                            generating_answer_pending = False
+                        if reasoning_bubble_id is not None:
+                            complete_reasoning_bubble(
+                                working_history, reasoning_bubble_id
+                            )
                         yield working_history, ""
+
+                    elif event_type == "budget_update":
+                        # Budget snapshot was refreshed - token budget display will update via timer
+                        # Why timer instead of immediate update?
+                        # - Budget snapshots are computed at specific "budget moments" (pre-iteration, post-tool),
+                        #   not on every streaming chunk, so updates are infrequent enough that timer is efficient
+                        # - Timer interval (UI_REFRESH_INTERVAL, typically 2-5s) ensures prompt updates
+                        #   without overwhelming the UI with too frequent updates
+                        # - To update immediately, we'd need to add token_budget_display as an output to the
+                        #   streaming generator, which would require significant refactoring of the generator signature
+                        # - Timer approach matches Gradio 5 behavior and provides good UX with minimal complexity
+                        # Continue streaming - timer will pick up the updated snapshot within 2-5 seconds
+                        yield working_history, ""
+                        continue
 
                     elif event_type == "turn_complete":
                         # Store session-aware turn snapshot for analytics/logs (non-persistent)
@@ -812,14 +934,26 @@ class NextGenApp:
                             session_debug.info(
                                 f"Turn snapshot stored for session {conversation_id} with {len(ordered)} messages"
                             )
+                        if generating_answer_pending:
+                            complete_generating_answer_bubble(
+                                working_history, generating_answer_id
+                            )
+                            generating_answer_pending = False
+                        if reasoning_bubble_id is not None:
+                            complete_reasoning_bubble(
+                                working_history, reasoning_bubble_id
+                            )
                         yield working_history, ""
 
                     elif event_type == "tool_start":
-                        # Tool is starting - immediately add to working history
+                        # generating_answer survives tool calls; cleanup at turn end only.
                         tool_name = (
                             metadata.get("tool_name", "unknown")
                             if metadata
                             else "unknown"
+                        )
+                        tool_call_id = (
+                            metadata.get("tool_call_id") if metadata else None
                         )
                         tool_title = (
                             metadata.get(
@@ -834,21 +968,24 @@ class NextGenApp:
                             )
                         )
 
-                        # Create tool message and immediately add to working history
-                        tool_message = {
-                            "role": "assistant",
-                            "content": content,
-                            "metadata": {"title": tool_title},
-                        }
-                        working_history.append(tool_message)
+                        upsert_tool_call_bubble(
+                            working_history,
+                            tool_name,
+                            tool_call_id,
+                            title=tool_title,
+                            content=safe_string(content) or tool_title,
+                        )
                         yield working_history, ""
 
                     elif event_type == "tool_end":
-                        # Tool completed - immediately add to working history
+                        # Tool completed - update the pending bubble in place.
                         tool_name = (
                             metadata.get("tool_name", "unknown")
                             if metadata
                             else "unknown"
+                        )
+                        tool_call_id = (
+                            metadata.get("tool_call_id") if metadata else None
                         )
                         tool_title = (
                             metadata.get(
@@ -863,13 +1000,34 @@ class NextGenApp:
                             )
                         )
 
-                        # Create tool message and immediately add to working history
-                        tool_message = {
-                            "role": "assistant",
-                            "content": content,
-                            "metadata": {"title": tool_title},
-                        }
-                        working_history.append(tool_message)
+                        complete_tool_call_bubble(
+                            working_history,
+                            tool_name=tool_name,
+                            tool_call_id=tool_call_id,
+                            content=safe_string(content),
+                            title=tool_title,
+                            metadata={
+                                key: value
+                                for key, value in {
+                                    "duration": metadata.get("duration")
+                                    if metadata
+                                    else None,
+                                    "duplicate": metadata.get("duplicate")
+                                    if metadata
+                                    else None,
+                                    "duplicate_count": metadata.get("duplicate_count")
+                                    if metadata
+                                    else None,
+                                    "tool_cost": metadata.get("tool_cost")
+                                    if metadata
+                                    else None,
+                                    "tool_output": metadata.get("tool_output")
+                                    if metadata
+                                    else None,
+                                }.items()
+                                if value is not None
+                            },
+                        )
 
                         # If the tool registered a file, append an inline
                         # preview bubble + caption directly in the chat.
@@ -895,6 +1053,11 @@ class NextGenApp:
                         # Stream content from response - ensure content is not None
                         content_to_add = safe_string(content)
                         # print(f"🔍 DEBUG: Content event - content: '{content_to_add}', length: {len(content_to_add)}")
+                        # Keep generating_answer visible while answer streams; complete at turn end.
+                        if content_to_add.strip() and reasoning_bubble_id is not None:
+                            complete_reasoning_bubble(
+                                working_history, reasoning_bubble_id
+                            )
 
                         # Only add line break when LLM starts answering after tool messages
                         if assistant_message_index < 0 and response_content == "":
@@ -903,13 +1066,11 @@ class NextGenApp:
                             for i in range(
                                 max(0, len(working_history) - 3), len(working_history)
                             ):
-                                if (
-                                    i >= 0
-                                    and working_history[i]
-                                    and working_history[i]
-                                    .get("metadata", {})
-                                    .get("title")
-                                ):
+                                msg = working_history[i]
+                                if not isinstance(msg, dict):
+                                    continue
+                                metadata = msg.get("metadata") or {}
+                                if isinstance(metadata, dict) and metadata.get("title"):
                                     has_recent_tool_messages = True
                                     break
 
@@ -974,6 +1135,34 @@ class NextGenApp:
                 streaming_error_handled = True
                 # print(f"🔍 DEBUG: Set streaming_error_handled to True in streaming loop")
                 # Continue with the rest of the processing even if streaming fails
+            finally:
+                _stream = locals().get("_stream")
+                if _stream is not None:
+                    try:
+                        await _stream.aclose()
+                    except Exception:
+                        pass
+
+            # Append partial text from interrupted stream so the UI
+            # shows every received chunk + the interruption marker.
+            pending = getattr(user_agent, "_pending_partial_text", None)
+            if pending:
+                response_content += pending
+                if assistant_message_index >= 0 and assistant_message_index < len(
+                    working_history
+                ):
+                    working_history[assistant_message_index]["content"] = (
+                        response_content
+                    )
+                user_agent._pending_partial_text = None  # noqa: SLF001
+
+            if generating_answer_pending:
+                complete_generating_answer_bubble(working_history, generating_answer_id)
+                generating_answer_pending = False
+            elif response_content.strip():
+                complete_generating_answer_bubble(working_history, None)
+            if reasoning_bubble_id is not None:
+                complete_reasoning_bubble(working_history, reasoning_bubble_id)
 
             # Add API token count to final response
             # Add token counts below assistant response
@@ -1252,25 +1441,14 @@ class NextGenApp:
         self._refresh_ui_after_message()
 
     def _update_status(self, request: gr.Request = None) -> str:
-        """Update status display - always session-aware"""
-        # Use stats tab for proper formatting (now always session-aware)
-        stats_tab = self.tab_instances.get("stats")
-        if stats_tab and hasattr(stats_tab, "format_stats_display"):
-            return stats_tab.format_stats_display(request)
-
-        # Final fallback
-        if self.is_ready():
-            return get_translation_key("agent_ready", self.language)
-        else:
-            return get_translation_key("agent_initializing", self.language)
+        """Update Statistics tab (same content as full stats refresh)."""
+        return self._refresh_stats(request)
 
     def _update_token_budget(self, request: gr.Request = None) -> str:
         """Update token budget display - delegates to chat tab with session awareness"""
         chat_tab = self.tab_instances.get("chat")
         if chat_tab and hasattr(chat_tab, "format_token_budget_display"):
             return chat_tab.format_token_budget_display(request)
-
-        # Fallback token budget
         return get_translation_key("token_budget_initializing", self.language)
 
     def _refresh_logs(self, request: gr.Request = None) -> str:
@@ -1315,12 +1493,13 @@ class NextGenApp:
             return True
         return False
 
-    def update_all_ui_components(self) -> tuple[str, str, str]:
-        """Update all UI components and return their values"""
-        status = self._update_status()
-        stats = self._refresh_stats()
-        logs = self._refresh_logs()
-        return status, stats, logs
+    def update_all_ui_components(
+        self, request: gr.Request = None
+    ) -> tuple[str, str, str, str]:
+        """Refresh stats block (three outputs) + logs (session-aware)."""
+        stats = self._refresh_stats(request)
+        logs = self._refresh_logs(request)
+        return stats, stats, stats, logs
 
     def trigger_ui_update(self):
         """Trigger UI update after agent initialization or message processing"""
@@ -1357,13 +1536,19 @@ class NextGenApp:
 
         # Create tab modules with error handling
         tab_modules = []
+        sidebar_for_tabs: Any = None
         try:
+            sidebar_for_tabs = Sidebar(
+                event_handlers, language=self.language, i18n_instance=self.i18n
+            )
+            sidebar_for_tabs.set_main_app(self)
+
             # Home tab first (welcome page)
             if HomeTab:
                 home_tab = HomeTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
-                home_tab.set_main_app(self)  # Set reference to main app
+                home_tab.set_main_app(self)
                 tab_modules.append(home_tab)
                 self.tab_instances["home"] = home_tab
             else:
@@ -1373,78 +1558,74 @@ class NextGenApp:
                 chat_tab = ChatTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
-                chat_tab.set_main_app(self)  # Set reference to main app
+                chat_tab.set_main_app(self)
                 tab_modules.append(chat_tab)
                 self.tab_instances["chat"] = chat_tab
             else:
                 _logger.warning("ChatTab not available")
 
-            if LogsTab:
-                logs_tab = LogsTab(
-                    event_handlers, language=self.language, i18n_instance=self.i18n
-                )
-                logs_tab.set_main_app(self)  # Pass main app reference
-                tab_modules.append(logs_tab)
-                self.tab_instances["logs"] = logs_tab
-            else:
-                _logger.warning("LogsTab not available")
-
             if StatsTab:
                 stats_tab = StatsTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
-                stats_tab.set_main_app(
-                    self
-                )  # Set reference to main app for session management
+                stats_tab.set_main_app(self)
                 tab_modules.append(stats_tab)
                 self.tab_instances["stats"] = stats_tab
             else:
                 _logger.warning("StatsTab not available")
 
-            # Config tab visibility is controlled by CMW_USE_DOTENV
-            # Show config tab when CMW_USE_DOTENV=false (default), hide when true
-            use_dotenv_flag = os.environ.get("CMW_USE_DOTENV", "true").lower() in (
-                "1",
-                "true",
-                "yes",
-            )
-            if not use_dotenv_flag and ConfigTab:
+            if DownloadsTab:
+                downloads_tab = DownloadsTab(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
+                )
+                downloads_tab.set_main_app(self)
+                tab_modules.append(downloads_tab)
+                self.tab_instances["downloads"] = downloads_tab
+            else:
+                _logger.warning("DownloadsTab not available")
+
+            # Config tab is always shown. CMW_USE_DOTENV only switches platform
+            # credentials: .env vs browser (see ConfigTab).
+            if ConfigTab:
                 config_tab = ConfigTab(
                     event_handlers, language=self.language, i18n_instance=self.i18n
                 )
                 config_tab.set_main_app(self)
+                config_tab.set_sidebar_instance(sidebar_for_tabs)
                 tab_modules.append(config_tab)
                 self.tab_instances["config"] = config_tab
             else:
-                _logger.info(
-                    "ConfigTab not shown (CMW_USE_DOTENV is true or tab unavailable)"
+                _logger.info("ConfigTab class unavailable; skipping config tab")
+
+            if LogsTab:
+                logs_tab = LogsTab(
+                    event_handlers, language=self.language, i18n_instance=self.i18n
                 )
+                logs_tab.set_main_app(self)
+                tab_modules.append(logs_tab)
+                self.tab_instances["logs"] = logs_tab
+            else:
+                _logger.warning("LogsTab not available")
         except Exception as e:
             _logger.exception("Error creating tab modules: %s", e)
             raise
 
-        # Configure queue manager BEFORE creating interface to ensure it's available to tabs
+        # Configure queue manager once on the real demo (not a throwaway temp Blocks).
         try:
             if hasattr(self, "queue_manager") and self.queue_manager:
-                _logger.info("Configuring queue manager before interface creation...")
-                _logger.debug(f"Queue manager type: {type(self.queue_manager)}")
-                _logger.debug(
-                    f"Queue manager has config: {hasattr(self.queue_manager, 'config')}"
-                )
-                # Create a temporary demo to configure the queue manager
-                with gr.Blocks() as temp_demo:
-                    pass
-                self.queue_manager.configure_queue(temp_demo)
-                _logger.info("Queue manager configured successfully")
+                _logger.info("Queue manager ready (configured on demo later)")
             else:
                 _logger.warning("Queue manager not available for configuration")
         except Exception as e:
-            _logger.warning(f"Failed to configure queue manager: {e}")
+            _logger.warning("Failed to configure queue manager: %s", e)
 
         # Use UI Manager to create interface
         try:
             demo = self.ui_manager.create_interface(
-                tab_modules, event_handlers, main_app=self
+                tab_modules,
+                event_handlers,
+                main_app=self,
+                sidebar_instance=sidebar_for_tabs,
             )
         except Exception as e:
             _logger.exception("Error creating interface: %s", e)
@@ -1562,7 +1743,10 @@ class NextGenApp:
             async def _stream():
                 nonlocal cumulative
                 try:
-                    async for event in user_agent.stream_message(question, session_id):
+                    # Pass app's language for proper i18n
+                    async for event in user_agent.stream_message(
+                        question, session_id, language=self.language
+                    ):
                         if not event:
                             continue
                         et = event.get("type")
@@ -1610,9 +1794,7 @@ class NextGenApp:
             finally:
                 thread.join(timeout=1)
 
-            # Streaming endpoint: generator yields partials; API GET will stream
-
-        # Register API endpoints using gr.api() - cleaner approach for HF Spaces
+        # Register API endpoints: streaming via hidden submit (generator SSE); ask via gr.api().
         with demo:
             _in = gr.Textbox(label="question", visible=False)
             _username = gr.Textbox(label="username", visible=False)
@@ -1620,21 +1802,33 @@ class NextGenApp:
             _base_url = gr.Textbox(label="base_url", visible=False)
             _session_id = gr.Textbox(label="session_id", type="password", visible=False)
             _out = gr.Textbox(label="answer", visible=False)
-            # _in.submit(_api_ask, inputs=[_in, _username, _password, _base_url, _session_id], outputs=_out, api_name="ask")
             _in.submit(
                 _api_ask_stream,
                 inputs=[_in, _username, _password, _base_url, _session_id],
                 outputs=_out,
                 api_name="ask_stream",
+                api_visibility="private",
             )
-
-            # Use gr.api() to register API endpoints without fake UI elements
-            gr.api(_api_ask, api_name="ask")
-            # gr.api(_api_ask_stream, api_name="ask_stream")
+            gr.api(_api_ask, api_name="ask", api_visibility="private")
 
         # Configure concurrency and queuing AFTER registering named endpoints
+        # Always initialize queue (even with minimal settings) to prevent AttributeError.
+        # Reference: ``cmw-rag/rag_engine/api/app.py`` — lightweight tails use ``queue=False``;
+        # streaming/chat handlers run on the Gradio queue via ``QueueManager.configure_queue``.
         self.queue_manager.configure_queue(demo)
 
+        # Ensure queue is initialized even if configure_queue didn't call demo.queue()
+        # This prevents AttributeError: 'NoneType' object has no attribute 'max_thread_count'
+        if demo._queue is None:
+            demo.queue(default_concurrency_limit=1, status_update_rate="auto")
+            _logger.info("Queue initialized with minimal default settings")
+
+        # Ensure thread-pool limiter is created before server starts.
+        # Gradio 6.11+ runs pre/post processing via anyio.to_thread.run_sync;
+        # a missing limiter can stall SSE-backed initialization.
+        demo.create_limiter()
+
+        # OpenAI-shaped completions on Gradio's FastAPI app (see also ``main()`` mount path).
         register_agent_completions_route(demo, self)
 
         # Consolidate all components from UI Manager (single source of truth)
@@ -1684,11 +1878,27 @@ class NextGenAppWithLanguageDetection(NextGenApp):
 
 # Global demo variable for single port architecture
 demo = None
+# Tracks UI-shaping env (home order, download prep) so cached Blocks rebuild when they change.
+_DEMO_UI_LAYOUT_SIG: str | None = None
+
+
+def _ui_layout_env_signature() -> str:
+    """Stable fingerprint for UI layout env vars (same interpreter, e.g. watch / reload)."""
+    return os.getenv("CMW_UI_DOWNLOAD_PREP_AFTER_STREAM") or ""
 
 
 def get_demo_with_language_detection():
     """Get or create the demo interface with language detection support"""
-    global demo
+    global demo, _DEMO_UI_LAYOUT_SIG
+
+    sig = _ui_layout_env_signature()
+    if demo is not None and sig != _DEMO_UI_LAYOUT_SIG:
+        _logger.info(
+            "Rebuilding demo: UI layout env changed (%r -> %r)",
+            _DEMO_UI_LAYOUT_SIG,
+            sig,
+        )
+        demo = None
 
     if demo is None:
         try:
@@ -1704,6 +1914,7 @@ def get_demo_with_language_detection():
             if not hasattr(demo, "_queue"):
                 demo._queue = None
 
+            _DEMO_UI_LAYOUT_SIG = sig
             _logger.info(f"🌐 Demo created with detected language: {detected_language}")
         except Exception as e:
             _logger.exception("Error creating demo: %s", e)
@@ -1715,6 +1926,7 @@ def get_demo_with_language_detection():
             if not hasattr(fallback_demo, "_queue"):
                 fallback_demo._queue = None
             demo = fallback_demo
+            _DEMO_UI_LAYOUT_SIG = sig
 
     return demo
 
@@ -1759,6 +1971,7 @@ def reload_demo():
     global demo
     try:
         _logger.info("Reloading demo...")
+        demo = None
         demo = get_demo_with_language_detection()
         return demo
     except Exception as e:
@@ -1871,7 +2084,10 @@ def main():
     # during reloads and multiple interface creations
     demo = initialize_demo()
 
-    _logger.info("Launching FastAPI + mounted Gradio app on port %s...", port)
+    _logger.info(
+        "Launching FastAPI + mounted Gradio on port %s with language switching...",
+        port,
+    )
     from fastapi import FastAPI
     from gradio import mount_gradio_app
     import uvicorn
@@ -1885,14 +2101,23 @@ def main():
             "Main app reference unavailable; agent completions endpoint not registered"
         )
 
+    _repo_root = Path(__file__).resolve().parent.parent
+    _theme_css = _repo_root / "resources" / "css" / "cmw_copilot_theme.css"
+    _favicon = _repo_root / "resources" / "img" / "comindware_logo.svg"
+
     app = mount_gradio_app(
         fastapi_app,
         demo,
         path="/",
         server_name="0.0.0.0",
         server_port=port,
+        footer_links=[],
+        theme=gr.themes.Soft(),
+        css_paths=[_theme_css],
+        favicon_path=str(_favicon),
+        show_error=True,
         ssr_mode=False,
-        # Keep static paths for files/resources (same intent as launch allowed_paths).
+        # Cache + theme/static assets (same intent as ``demo.launch(allowed_paths=...)``).
         allowed_paths=[
             str(Path(_GRADIO_CACHE_DIR).resolve()),
             str(_GRADIO_RESOURCES_DIR.resolve()),
@@ -1904,6 +2129,7 @@ def main():
         host="0.0.0.0",
         port=port,
         log_level="info",
+        timeout_graceful_shutdown=3,
     )
 
 

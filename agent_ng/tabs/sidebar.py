@@ -3,14 +3,14 @@ Sidebar Module for App NG
 =========================
 
 Handles the common sidebar components that are shared across all tabs.
-This module provides a unified sidebar with LLM selection, quick actions,
+This module provides a unified sidebar with LLM selection,
 status, and monitoring components.
 Supports internationalization (i18n) with Russian and English translations.
 """
 
 import logging
 import os
-from typing import Any, ClassVar, Optional
+from typing import Any
 
 import gradio as gr
 
@@ -18,70 +18,7 @@ from agent_ng.i18n_translations import get_translation_key
 from agent_ng.utils import parse_env_bool
 
 
-class QuickActionsMixin:
-    """Mixin class providing quick action methods for UI components"""
-
-    # Configuration for all quick actions - eliminates repetitive code
-    QUICK_ACTIONS_CONFIG: ClassVar[dict[str, str]] = {
-        "quick_what_can_do": "quick_what_can_do_message",
-        "quick_what_cannot_do": "quick_what_cannot_do_message",
-        "quick_list_apps": "quick_list_apps_message",
-        "quick_math": "quick_math_message",
-        "quick_code": "quick_code_message",
-        "quick_explain": "quick_explain_message",
-        "quick_full_audit": "quick_full_audit_message",
-        "quick_templates_erp": "quick_templates_erp_message",
-        "quick_attributes_contractors": "quick_attributes_contractors_message",
-        "quick_edit_date_time": "quick_edit_date_time_message",
-        "quick_create_comment_attr": "quick_create_comment_attr_message",
-        "quick_create_id_attr": "quick_create_id_attr_message",
-        "quick_edit_phone_mask": "quick_edit_phone_mask_message",
-        "quick_edit_enum": "quick_edit_enum_message",
-        "quick_get_comment_attr": "quick_get_comment_attr_message",
-        "quick_create_attr": "quick_create_attr_message",
-        "quick_edit_mask": "quick_edit_mask_message",
-        "quick_archive_attr": "quick_archive_attr_message",
-
-    }
-
-    def _get_translation(self, key: str) -> str:
-        """Get a translation for a specific key - must be implemented by the class using this mixin"""
-        error_msg = (
-            "Classes using QuickActionsMixin must implement _get_translation method"
-        )
-        raise NotImplementedError(error_msg)
-
-    def _get_quick_action_choices(self) -> list[tuple[str, str]]:
-        """Get list of quick action choices for the dropdown"""
-        choices = [("", "")]  # Empty first option to allow proper dropdown behavior
-
-        choices.extend(
-            (self._get_translation(action_key), action_key)
-            for action_key in self.QUICK_ACTIONS_CONFIG
-        )
-
-        return choices
-
-    def _handle_quick_action_dropdown(self, selected_action: str) -> str:
-        """Handle quick action dropdown selection and return appropriate message text"""
-        if not selected_action or selected_action not in self.QUICK_ACTIONS_CONFIG:
-            return ""
-
-        message_key = self.QUICK_ACTIONS_CONFIG[selected_action]
-        return self._get_translation(message_key)
-
-    def _handle_quick_action_dropdown_multimodal(
-        self, selected_action: str
-    ) -> dict[str, Any]:
-        """Handle quick action dropdown selection and return appropriate message in MultimodalValue format"""
-        if not selected_action or selected_action not in self.QUICK_ACTIONS_CONFIG:
-            return {"text": "", "files": []}
-
-        message_key = self.QUICK_ACTIONS_CONFIG[selected_action]
-        return {"text": self._get_translation(message_key), "files": []}
-
-
-class Sidebar(QuickActionsMixin):
+class Sidebar:
     """Common sidebar component for all tabs"""
 
     def __init__(
@@ -95,186 +32,186 @@ class Sidebar(QuickActionsMixin):
         self.main_app = None  # Reference to main app for accessing session manager
         self.language = language
         self.i18n = i18n_instance
+        self._llm_events_connected = False
 
-    def create_sidebar(self) -> tuple[gr.Sidebar, dict[str, Any]]:
-        """
-        Create the common sidebar with all its components.
+    def mount_llm_selection_ui(self) -> None:
+        """Create provider/model, fallback, and compression controls (Config tab)."""
+        with gr.Column(elem_classes=["model-card"]):
+            gr.Markdown(
+                f"### {self._get_translation('llm_selection_title')}",
+                elem_classes=["llm-selection-title"],
+            )
 
-        Returns:
-            Tuple of (Sidebar, components_dict)
-        """
-        logging.getLogger(__name__).info(
-            "✅ Sidebar: Creating common sidebar interface..."
-        )
+            self.components["provider_model_selector"] = gr.Dropdown(
+                choices=self._get_available_provider_model_combinations(),
+                value=self._get_current_provider_model_combination(),
+                show_label=False,
+                interactive=True,
+                allow_custom_value=True,
+                elem_classes=["provider-model-selector"],
+            )
 
-        with gr.Sidebar(open=True, width=420) as sidebar:
-            # LLM Selection section
-            with gr.Column(elem_classes=["model-card"]):
-                gr.Markdown(
-                    f"### {self._get_translation('llm_selection_title')}",
-                    elem_classes=["llm-selection-title"],
-                )
+            default_fallback_enabled = self._get_default_fallback_enabled()
+            fallback_master_on = self._fallback_master_switch_enabled()
+            default_fallback_visible = default_fallback_enabled and fallback_master_on
 
-                # Combined Provider/Model selector
-                self.components["provider_model_selector"] = gr.Dropdown(
-                    choices=self._get_available_provider_model_combinations(),
-                    value=self._get_current_provider_model_combination(),
-                    show_label=False,
-                    interactive=True,
-                    allow_custom_value=True,
-                    elem_classes=["provider-model-selector"],
-                )
+            self.components["use_fallback_model"] = gr.Checkbox(
+                label=self._get_translation("use_fallback_model_label"),
+                value=default_fallback_enabled,
+                interactive=True,
+                visible=fallback_master_on,
+            )
 
-                # Fallback model controls - per-session, initialized from env/defaults
-                default_fallback_enabled = self._get_default_fallback_enabled()
-                fallback_master_on = self._fallback_master_switch_enabled()
-                default_fallback_visible = default_fallback_enabled and fallback_master_on
+            fallback_choices: list[str] = []
+            fallback_value: str | None = None
 
-                self.components["use_fallback_model"] = gr.Checkbox(
-                    label=self._get_translation("use_fallback_model_label"),
-                    value=default_fallback_enabled,
-                    interactive=True,
-                    visible=fallback_master_on,
-                )
-
-                # Pre-populate fallback selector if enabled at startup
-                fallback_choices: list[str] = []
-                fallback_value: str | None = None
-
-                if default_fallback_visible:
-                    try:
-                        if hasattr(self, "main_app") and self.main_app and hasattr(self.main_app, "session_manager"):
-                                session_agent = (
-                                    self.main_app.session_manager.get_session_agent(
-                                        "default"
-                                    )
-                                )
-                                if session_agent:
-                                    (
-                                        fallback_choices,
-                                        fallback_value,
-                                    ) = self._build_fallback_defaults_for_agent(
-                                        session_agent
-                                    )
-                    except Exception as exc:  # pragma: no cover - defensive
-                        logging.getLogger(__name__).debug(
-                            "Failed to pre-populate fallback selector: %s", exc
+            if default_fallback_visible:
+                try:
+                    if (
+                        hasattr(self, "main_app")
+                        and self.main_app
+                        and hasattr(self.main_app, "session_manager")
+                    ):
+                        session_agent = self.main_app.session_manager.get_session_agent(
+                            "default"
                         )
+                        if session_agent:
+                            fallback_choices, fallback_value = (
+                                self._build_fallback_defaults_for_agent(session_agent)
+                            )
+                except Exception as exc:  # pragma: no cover - defensive
+                    logging.getLogger(__name__).debug(
+                        "Failed to pre-populate fallback selector: %s", exc
+                    )
 
-                self.components["fallback_model_selector"] = gr.Dropdown(
-                    choices=fallback_choices,
-                    show_label=False,
-                    value=fallback_value,
-                    interactive=True,
-                    visible=default_fallback_visible,
-                    elem_classes=["provider-model-selector"],
-                )
+            self.components["fallback_model_selector"] = gr.Dropdown(
+                choices=fallback_choices,
+                show_label=False,
+                value=fallback_value,
+                interactive=True,
+                visible=default_fallback_visible,
+                elem_classes=["provider-model-selector"],
+            )
 
-                # History compression toggle - per-session, initialized from env/defaults
-                self.components["compression_enabled"] = gr.Checkbox(
-                    label=self._get_translation("compression_enabled_label"),
-                    value=self._get_default_compression_enabled(),
-                    interactive=True,
-                )
+            self.components["compression_enabled"] = gr.Checkbox(
+                label=self._get_translation("compression_enabled_label"),
+                value=self._get_default_compression_enabled(),
+                interactive=True,
+            )
 
-            # Quick actions section - styled like LLM selection
-            with gr.Column(elem_classes=["model-card"]):
-                gr.Markdown(
-                    f"### {self._get_translation('quick_actions_title')}",
-                    elem_classes=["llm-selection-title"],
-                )
+    def mount_sidebar_body_without_llm(self) -> None:
+        """Progress + token budget (status lives in Stats tab)."""
+        with gr.Column(elem_classes=["model-card"]):
+            gr.Markdown(
+                f"### {self._get_translation('progress_title')}",
+                elem_classes=["progress-title"],
+            )
+            self.components["progress_display"] = gr.Markdown(
+                self._get_translation("progress_ready")
+            )
+            gr.Markdown(
+                f"### {self._get_translation('token_budget_title')}",
+                elem_classes=["token-budget-title"],
+            )
+            self.components["token_budget_display"] = gr.Markdown(
+                self._get_translation("token_budget_initializing")
+            )
 
-                # Single dropdown for all quick actions - styled like LLM selector
-                self.components["quick_actions_dropdown"] = gr.Dropdown(
-                    choices=self._get_quick_action_choices(),
-                    value=None,
-                    show_label=False,
-                    interactive=True,
-                    allow_custom_value=False,
-                    elem_classes=["provider-model-selector"],
-                )
+    def create_sidebar_column(self) -> dict[str, Any]:
+        """Build persistent left sidebar content (wrapped by ``gr.Sidebar`` in UIManager)."""
+        logging.getLogger(__name__).info("✅ Sidebar: Creating sidebar column...")
+        self.mount_sidebar_body_without_llm()
+        logging.getLogger(__name__).info(
+            "✅ Sidebar: Column ready with quick actions and status panels"
+        )
+        return self.components
 
-            # Status section
-            with gr.Column(elem_classes=["model-card"]):
-                # Progress indicator
-                gr.Markdown(
-                    f"### {self._get_translation('progress_title')}",
-                    elem_classes=["progress-title"],
-                )
-                self.components["progress_display"] = gr.Markdown(
-                    self._get_translation("progress_ready")
-                )
-                # Token budget indicator
-                gr.Markdown(
-                    f"### {self._get_translation('token_budget_title')}",
-                    elem_classes=["token-budget-title"],
-                )
-                self.components["token_budget_display"] = gr.Markdown(
-                    self._get_translation("token_budget_initializing")
-                )
-                # Status indicator
-                gr.Markdown(
-                    f"### {self._get_translation('status_title')}",
-                    elem_classes=["status-title"],
-                )
-                self.components["status_display"] = gr.Markdown(
-                    self._get_translation("status_initializing")
-                )
+    def create_tab(self) -> tuple[gr.TabItem, dict[str, Any]]:
+        """Legacy: full sidebar inside a tab (unused by current UI layout)."""
+        logging.getLogger(__name__).info(
+            "✅ Sidebar: Creating sidebar as tab interface (legacy)..."
+        )
 
-        # Connect sidebar event handlers
-        self._connect_sidebar_events()
+        with gr.TabItem(self._get_translation("tab_sidebar"), id="sidebar") as tab:
+            self.mount_llm_selection_ui()
+            self.mount_sidebar_body_without_llm()
+
+        self.ensure_llm_events_wired()
 
         logging.getLogger(__name__).info(
-            "✅ Sidebar: Successfully created with all components and event handlers"
+            "✅ Sidebar: Successfully created legacy tab with all components"
         )
-        return sidebar, self.components
+        return tab, self.components
+
+    def ensure_llm_events_wired(self) -> None:
+        """Wire LLM controls once they exist (may mount after sidebar column)."""
+        if self._llm_events_connected:
+            return
+        self._connect_llm_events()
+        self._llm_events_connected = True
 
     def _connect_sidebar_events(self):
-        """Connect all event handlers for the sidebar components"""
-        logging.getLogger(__name__).debug("🔗 Sidebar: Connecting event handlers...")
+        """Reserved for non-LLM wiring; LLM mounts call ``ensure_llm_events_wired``."""
+        logging.getLogger(__name__).debug("🔗 Sidebar: sidebar events hook (no-op)")
 
-        # Quick action dropdown event will be connected later after all tabs are created
-        # This is handled in the UI Manager after all components are available
+    def _connect_llm_events(self) -> None:
+        """LLM dropdown / fallback / compression handlers."""
+        logging.getLogger(__name__).debug("🔗 Sidebar: Wiring LLM event handlers...")
+        stats_block = None
+        if self.main_app and getattr(self.main_app, "ui_manager", None):
+            stats_block = self.main_app.ui_manager.get_components().get("stats_display")
 
-        # LLM selection events - now applies immediately on dropdown change
-        if (
-            "provider_model_selector" in self.components
-            and "status_display" in self.components
-        ):
-            # Wire model switch to update status, then chain token budget update
-            # (token budget needs update because context window changes with model)
-            model_switch_event = self.components["provider_model_selector"].change(
-                fn=self._apply_llm_selection_combined,
-                inputs=[self.components["provider_model_selector"]],
-                outputs=[self.components["status_display"]],
-            )
-            # Chain token budget update after model switch completes
-            # (token budget needs update because context window changes with model)
-            if (
-                "token_budget_display" in self.components
-                and hasattr(self, "event_handlers")
-            ):
-                update_token_budget_handler = self.event_handlers.get(
-                    "update_token_budget"
+        if "provider_model_selector" in self.components and stats_block is not None:
+            eh = getattr(self, "event_handlers", None) or {}
+            update_token_budget_handler = eh.get("update_token_budget")
+            token_budget_comp = self.components.get("token_budget_display")
+            refresh_stats_handler = eh.get("refresh_stats")
+            stats_detail = None
+            if self.main_app and getattr(self.main_app, "ui_manager", None):
+                stats_detail = self.main_app.ui_manager.get_components().get(
+                    "stats_display"
                 )
-                if update_token_budget_handler:
-                    model_switch_event.then(
-                        fn=update_token_budget_handler,
-                        outputs=[self.components["token_budget_display"]],
-                    )
-                    logging.getLogger(__name__).debug(
-                        "✅ Model switch wired to trigger token budget update"
-                    )
 
-        # Compression toggle events - per-session setting propagated to agent
+            if token_budget_comp and update_token_budget_handler:
+                model_switch_event = self.components["provider_model_selector"].change(
+                    fn=self._apply_llm_selection_update_stats_and_budget,
+                    inputs=[self.components["provider_model_selector"]],
+                    outputs=[stats_block, token_budget_comp],
+                    api_visibility="private",
+                )
+                logging.getLogger(__name__).debug(
+                    "✅ Model switch: stats + token budget (session agent)"
+                )
+            else:
+                model_switch_event = self.components["provider_model_selector"].change(
+                    fn=self._apply_llm_selection_update_stats_only,
+                    inputs=[self.components["provider_model_selector"]],
+                    outputs=[stats_block],
+                    api_visibility="private",
+                )
+                logging.getLogger(__name__).debug(
+                    "✅ Model switch wired to stats from session agent"
+                )
+
+            if refresh_stats_handler and stats_detail is not None:
+                model_switch_event.then(
+                    fn=refresh_stats_handler,
+                    outputs=[stats_detail],
+                    queue=False,
+                    api_visibility="private",
+                )
+                logging.getLogger(__name__).debug(
+                    "✅ Model switch wired to refresh full stats display"
+                )
+
         if "compression_enabled" in self.components:
             self.components["compression_enabled"].change(
                 fn=self._apply_compression_toggle,
                 inputs=[self.components["compression_enabled"]],
                 outputs=[],
+                api_visibility="private",
             )
 
-        # Fallback model events - per-session setting propagated to agent
         if (
             "use_fallback_model" in self.components
             and "fallback_model_selector" in self.components
@@ -283,24 +220,16 @@ class Sidebar(QuickActionsMixin):
                 fn=self._on_fallback_toggle,
                 inputs=[self.components["use_fallback_model"]],
                 outputs=[self.components["fallback_model_selector"]],
+                api_visibility="private",
             )
             self.components["fallback_model_selector"].change(
                 fn=self._apply_fallback_selection,
                 inputs=[self.components["fallback_model_selector"]],
                 outputs=[],
+                api_visibility="private",
             )
 
-        # Token budget display change event for download button visibility
-        if "token_budget_display" in self.components:
-            self.components["token_budget_display"].change(
-                fn=self._update_download_button_visibility,
-                inputs=[],
-                outputs=[],  # Output will be handled by the main app
-            )
-
-        logging.getLogger(__name__).debug(
-            "✅ Sidebar: All event handlers connected successfully"
-        )
+        logging.getLogger(__name__).debug("✅ Sidebar: LLM handlers wired")
 
     def set_main_app(self, app):
         """Set reference to main app for accessing session manager and other services"""
@@ -326,7 +255,6 @@ class Sidebar(QuickActionsMixin):
         """Get LLM selection components for UI updates"""
         return {
             "provider_model_selector": self.components.get("provider_model_selector"),
-            "quick_actions_dropdown": self.components.get("quick_actions_dropdown"),
         }
 
     def _get_translation(self, key: str) -> str:
@@ -377,7 +305,7 @@ class Sidebar(QuickActionsMixin):
                 return
 
             # Store per-session compression flag on the agent
-            setattr(session_agent, "compression_enabled", bool(enabled))
+            session_agent.compression_enabled = bool(enabled)
             logging.getLogger(__name__).debug(
                 "✅ Compression toggle set to %s for session %s",
                 enabled,
@@ -472,7 +400,7 @@ class Sidebar(QuickActionsMixin):
 
         # Persist chosen default back to agent
         if value:
-            setattr(session_agent, "fallback_model_name", value)
+            session_agent.fallback_model_name = value
 
         return choices, value
 
@@ -501,7 +429,7 @@ class Sidebar(QuickActionsMixin):
                 return gr.update(choices=choices, value=value, visible=visible)
 
             # Store per-session fallback flag on the agent
-            setattr(session_agent, "use_fallback_model", bool(enabled))
+            session_agent.use_fallback_model = bool(enabled)
 
             # If disabled or master switch off, just hide selector
             if not visible:
@@ -554,7 +482,7 @@ class Sidebar(QuickActionsMixin):
             if not session_agent:
                 return
 
-            setattr(session_agent, "fallback_model_name", model_name)
+            session_agent.fallback_model_name = model_name
             logging.getLogger(__name__).debug(
                 "✅ Fallback model set to %s for session %s", model_name, session_id
             )
@@ -606,7 +534,9 @@ class Sidebar(QuickActionsMixin):
                         token_limit = int(model.get("token_limit", 0))
                         base_value = f"{provider.title()} / {model_name}"
                         # Reuse shared formatter for model+ctx
-                        label_suffix = self._format_model_with_ctx(model_name, token_limit)
+                        label_suffix = self._format_model_with_ctx(
+                            model_name, token_limit
+                        )
                         # Replace bare model_name with formatted label_suffix for display
                         label = f"{provider.title()} / {label_suffix}"
                         combinations.append((label, base_value))
@@ -642,7 +572,11 @@ class Sidebar(QuickActionsMixin):
         self, request: gr.Request | None = None
     ) -> str:
         """Current provider/model for the active Gradio session, else env default."""
-        if request and self.main_app and getattr(self.main_app, "session_manager", None):
+        if (
+            request
+            and self.main_app
+            and getattr(self.main_app, "session_manager", None)
+        ):
             try:
                 sid = self.main_app.session_manager.get_session_id(request)
                 agent = self.main_app.session_manager.get_session_agent(sid)
@@ -708,6 +642,43 @@ class Sidebar(QuickActionsMixin):
         except Exception as e:
             print(f"Error applying LLM selection: {e}")
             return self._get_translation("llm_apply_error")
+
+    def _format_stats_display_after_llm_apply(
+        self, request: gr.Request | None = None
+    ) -> str:
+        """Session-aware stats block from Stats tab after ``update_llm_provider``."""
+        stats_tab = None
+        if self.main_app and hasattr(self.main_app, "tab_instances"):
+            stats_tab = self.main_app.tab_instances.get("stats")
+        if stats_tab and hasattr(stats_tab, "format_stats_display"):
+            return stats_tab.format_stats_display(request)
+        return ""
+
+    def _token_budget_after_llm_apply(self, request: gr.Request | None = None) -> str:
+        eh = getattr(self, "event_handlers", None) or {}
+        fn = eh.get("update_token_budget")
+        if callable(fn):
+            return fn(request)
+        return get_translation_key(
+            "token_budget_initializing", getattr(self, "language", "en")
+        )
+
+    def _apply_llm_selection_update_stats_only(
+        self, provider_model_combination: str, request: gr.Request | None = None
+    ) -> str:
+        """Apply model switch; stats show actual session (not toast text)."""
+        self._apply_llm_selection_combined(provider_model_combination, request)
+        return self._format_stats_display_after_llm_apply(request)
+
+    def _apply_llm_selection_update_stats_and_budget(
+        self, provider_model_combination: str, request: gr.Request | None = None
+    ) -> tuple[str, str]:
+        """Apply model switch and refresh stats + token budget in one event."""
+        self._apply_llm_selection_combined(provider_model_combination, request)
+        return (
+            self._format_stats_display_after_llm_apply(request),
+            self._token_budget_after_llm_apply(request),
+        )
 
     def _is_mistral_model(self, provider: str, model: str) -> bool:
         """Check if the selected model is a Mistral model"""
@@ -775,35 +746,3 @@ class Sidebar(QuickActionsMixin):
         except Exception as e:
             print(f"Error applying Mistral with clear: {e}")
             return self._get_translation("llm_apply_error")
-
-    def _get_message_input_component(self) -> gr.Textbox:
-        """Get the message input component from the main app"""
-        if hasattr(self, "main_app") and self.main_app:
-            # Try to get from UI Manager components
-            if hasattr(self.main_app, "ui_manager") and self.main_app.ui_manager:
-                components = self.main_app.ui_manager.get_components()
-                return components.get("msg")
-        return None
-
-    def connect_quick_action_dropdown(self):
-        """Connect the quick action dropdown after all components are available"""
-        if "quick_actions_dropdown" in self.components:
-            # Get the message input component from the main app
-            msg_component = self._get_message_input_component()
-            if msg_component:
-                self.components["quick_actions_dropdown"].change(
-                    fn=self._handle_quick_action_dropdown,
-                    inputs=[self.components["quick_actions_dropdown"]],
-                    outputs=[msg_component],  # Output to message input
-                )
-                logging.getLogger(__name__).debug(
-                    "✅ Sidebar: Quick action dropdown connected to message input"
-                )
-            else:
-                logging.getLogger(__name__).warning(
-                    "⚠️ Sidebar: Message input component not found for quick actions"
-                )
-
-    def _update_download_button_visibility(self):
-        """Update download button visibility - handled by main app"""
-        # This will be handled by the main app's event system

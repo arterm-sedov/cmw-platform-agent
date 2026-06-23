@@ -179,7 +179,9 @@ def _row_document_field(row: dict) -> list[Any]:
     return []
 
 
-def _direct_get_document_probes(dids: list[str], upload_names: list[str] | None) -> None:
+def _direct_get_document_probes(
+    dids: list[str], upload_names: list[str] | None
+) -> None:
     """GET ``/webapi/Document/{{id}}`` (authoritative name) and ``/Content`` (body)."""
     print("\n--- direct API: GetDocument (model) + get_document_content ---")
     for i, did in enumerate(dids):
@@ -277,7 +279,9 @@ def main() -> int:
                 "replace": i == 0,
             }
         )
-        print(f"  attach [{i}] {p.name!r} -> {ar.get('success')} {ar.get('error') or ''}")
+        print(
+            f"  attach [{i}] {p.name!r} -> {ar.get('success')} {ar.get('error') or ''}"
+        )
         if not ar.get("success"):
             return 1
 
@@ -297,12 +301,12 @@ def main() -> int:
             dids.append(eid)
     print("  document id list (platform order):", dids)
     order_newest_first = list(reversed(files))
-    _direct_get_document_probes(
-        dids, [p.name for p in order_newest_first[: len(dids)]]
-    )
+    _direct_get_document_probes(dids, [p.name for p in order_newest_first[: len(dids)]])
 
     n = min(len(dids), len(order_newest_first), 8)
-    print("\n--- fetch_record_document_file + read_text_based_file (no agent = abs path) ---")
+    print(
+        "\n--- fetch_record_document_file + read_text_based_file (no agent = abs path) ---"
+    )
     for i in range(n):
         p = order_newest_first[i]
         loc = _local_preview(p, 400)

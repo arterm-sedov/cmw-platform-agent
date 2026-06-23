@@ -67,6 +67,7 @@ if TYPE_CHECKING:
 # Helpers — build minimal mock objects that match the production interface   #
 # ---------------------------------------------------------------------------#
 
+
 def _make_agent(session_id: str = "sess-render-1") -> Any:
     """Minimal CmwAgent stub for tests that resolve file paths."""
 
@@ -113,6 +114,7 @@ def _fmt_size(num_bytes: int) -> str:
 # We test the helper function directly so we can import it without spinning up
 # the full streaming pipeline.  The function will live in a new helper module
 # ``agent_ng/_file_attachment.py`` (thin, importable by both streaming and app).
+
 
 class TestBuildFileAttachment:
     """Contracts for ``_build_file_attachment(tool_result, agent)``."""
@@ -186,6 +188,7 @@ class TestBuildFileAttachment:
 # Unit: app rendering helper                                                #
 # ---------------------------------------------------------------------------#
 
+
 class TestBuildFileBubbles:
     """Contracts for ``_build_file_bubbles(attachment)``."""
 
@@ -250,6 +253,7 @@ class TestBuildFileBubbles:
 # Integration: app_ng_modular.py rendering path                             #
 # ---------------------------------------------------------------------------#
 
+
 class TestAppRenderFileAttachment:
     """The tool_end handler in app_ng_modular.py appends file bubbles
     when metadata['file_attachment'] is present and the file exists."""
@@ -262,11 +266,13 @@ class TestAppRenderFileAttachment:
         """Simulate what app_ng_modular does for a single tool_end event."""
         history = list(working_history or [])
         # The existing accordion message (always present — regression guard)
-        history.append({
-            "role": "assistant",
-            "content": "result text",
-            "metadata": {"title": "Tool called: generate_ai_image"},
-        })
+        history.append(
+            {
+                "role": "assistant",
+                "content": "result text",
+                "metadata": {"title": "Tool called: generate_ai_image"},
+            }
+        )
         # New: append file bubbles when attachment is resolved
         history.extend(build_file_bubbles(attachment))
         return history
@@ -313,6 +319,7 @@ class TestAppRenderFileAttachment:
 # Integration: user-side file rendering (chat_tab.py mirror)               #
 # ---------------------------------------------------------------------------#
 
+
 class TestUserSideFileRendering:
     """Uploaded image files gain an inline preview bubble before the text."""
 
@@ -356,6 +363,7 @@ class TestUserSideFileRendering:
 # Unit: is_file_bubble filter                                               #
 # ---------------------------------------------------------------------------#
 
+
 class TestIsFileBubble:
     """Guards that file-bubble messages are correctly identified so callers
     (token_counter, token_budget, download-as-markdown) can skip them."""
@@ -384,6 +392,7 @@ class TestIsFileBubble:
 # ---------------------------------------------------------------------------#
 # Regression: token_counter must not pass dict content to HumanMessage     #
 # ---------------------------------------------------------------------------#
+
 
 class TestTokenCounterSkipsFileBubbles:
     """Regression guard: convert_chat_history_to_messages must skip file
@@ -429,6 +438,7 @@ class TestTokenCounterSkipsFileBubbles:
 # ---------------------------------------------------------------------------#
 # Tool cost accumulation                                                    #
 # ---------------------------------------------------------------------------#
+
 
 class TestAddToolCost:
     """TokenCounter.add_tool_cost() feeds session and conversation totals."""
@@ -485,16 +495,8 @@ class TestToolCostExtractedFromToolResult:
 
     def _extract_tool_cost(self, tool_result: Any) -> float | None:
         """Replicate the extraction logic from native_langchain_streaming.py."""
-        _raw = (
-            tool_result.get("cost")
-            if isinstance(tool_result, dict)
-            else None
-        )
-        return (
-            float(_raw)
-            if isinstance(_raw, (int, float)) and _raw > 0
-            else None
-        )
+        _raw = tool_result.get("cost") if isinstance(tool_result, dict) else None
+        return float(_raw) if isinstance(_raw, (int, float)) and _raw > 0 else None
 
     def test_image_result_cost_extracted(self) -> None:
         result = {"success": True, "generated_filename": "x.png", "cost": 0.067}

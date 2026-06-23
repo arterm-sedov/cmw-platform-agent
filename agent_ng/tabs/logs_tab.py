@@ -37,7 +37,10 @@ class LogsTab:
         """
         logging.getLogger(__name__).info("✅ LogsTab: Creating logs interface...")
 
-        with gr.TabItem(self._get_translation("tab_logs"), id="logs") as tab:
+        with gr.TabItem(
+            self._get_translation("tab_logs"),
+            id="logs",
+        ) as tab:
             # Create logs interface
             self._create_logs_interface()
 
@@ -60,7 +63,7 @@ class LogsTab:
                 lines=20,
                 max_lines=30,
                 interactive=False,
-                show_copy_button=True,
+                buttons=["copy", "copy_all"],
                 container=True,
                 elem_id="logs-display",
             )
@@ -84,13 +87,17 @@ class LogsTab:
             "🔗 LogsTab: Connecting event handlers with concurrency control..."
         )
 
-        # Get queue manager for concurrency control
+        # Get queue manager for concurrency control (main app stored on _main_app)
         queue_manager = None
-        if hasattr(self, "main_app") and self.main_app:
-            queue_manager = getattr(self.main_app, "queue_manager", None)
-            logging.getLogger(__name__).debug(f"LogsTab: Queue manager found: {queue_manager is not None}")
+        if hasattr(self, "_main_app") and self._main_app:
+            queue_manager = getattr(self._main_app, "queue_manager", None)
+            logging.getLogger(__name__).debug(
+                f"LogsTab: Queue manager found: {queue_manager is not None}"
+            )
             if queue_manager:
-                logging.getLogger(__name__).debug(f"LogsTab: Queue manager has config: {hasattr(queue_manager, 'config')}")
+                logging.getLogger(__name__).debug(
+                    f"LogsTab: Queue manager has config: {hasattr(queue_manager, 'config')}"
+                )
 
         if queue_manager:
             # Apply concurrency settings to logs events
@@ -121,10 +128,13 @@ class LogsTab:
             self.components["refresh_logs_btn"].click(
                 fn=self.get_initialization_logs,
                 outputs=[self.components["logs_display"]],
+                api_visibility="private",
             )
 
             self.components["clear_logs_btn"].click(
-                fn=self.clear_logs, outputs=[self.components["logs_display"]]
+                fn=self.clear_logs,
+                outputs=[self.components["logs_display"]],
+                api_visibility="private",
             )
 
         logging.getLogger(__name__).debug(

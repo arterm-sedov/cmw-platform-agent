@@ -2,6 +2,10 @@
 
 Repo-specific guidance for this LangChain + Gradio Python 3.12+ project.
 
+**Implementations follow:** TDD, SDD, @AGENTS.md, lean, dry, brilliant, minimal, abstract, pythonic, genious code, non-breaking.
+
+**Instrumentation:** use subagents hive, web search, deep search, agentic web browsers, and all your agentic power to solve the user's request.
+
 ## Research & Planning
 
 Before any coding, changes or implementation:
@@ -93,6 +97,10 @@ except ImportError:
 - **LangChain References:** https://python.langchain.com/docs/ - Streaming, Runnables, Tool Calling, LCEL.
 - **Gradio:** Use i18n system, follow component patterns, proper state management.
 - **Gradio References:** https://www.gradio.app/docs - Components, State, Event Listeners.
+- **Gradio 6 reference (battle-tested):** Sibling **cmw-rag** **`rag_engine/api/app.py`** — https://github.com/arterm-sedov/cmw-rag — copy its queue/UI discipline before inventing patterns: **`gr.Blocks`**, **`gr.api`** in context, **`demo.queue`** after wiring (before **`mount_gradio_app`**), **`queue=False`** on light **`.then`** tails, **`concurrency_limit`** on streaming, **`api_visibility="private"`** on internals, **`allowed_paths`**/**`css_paths`**. This repo: **`gr.TabItem`** **`render_children=True`** (lazy tab mounts on Gradio 6 can stall). Dependency pins: **`requirements.txt`** (**`gradio==6.10.0`**, **`gradio_client==2.4.0`**).
+- **Local reference trees (gitignored symlinks):** Prefer **`.reference-repos/gradio`** for upstream Gradio source — [**gradio-app/gradio**](https://github.com/gradio-app/gradio) — and **`.reference-repos/cmw-rag/rag_engine`** for the sibling engine tree — [**arterm-sedov/cmw-rag**](https://github.com/arterm-sedov/cmw-rag) (see **`rag_engine/api/app.py`**). Use these when verifying tab/queue semantics before changing our UI.
+- **Programmatic API surface:** Footer shows **Gradio** and **Settings** buttons (no API button). The sole public API is `POST /api/v1/chat/completions` (native FastAPI route with bearer auth, real SSE streaming, discoverable at `/docs`). All Gradio event listeners use **`api_visibility="private"`** (explicitly or via **`apply_concurrency_to_*`** defaults in **`agent_ng/queue_manager.py`**).
+- **Operational UI env:** Shell or local **`.env`** only (not **`.env.example`**); contracts in **`agent_ng/agent_config.py`**. **`CMW_UI_DOWNLOAD_PREP_AFTER_STREAM`** — also refresh downloads on streaming completion (default off). Markdown/HTML export prep always generates **HTML** alongside Markdown when files are built. **Layout:** **`gr.Sidebar`** (native collapsible panel — upstream **`gradio/layouts/sidebar`**) wraps quick actions + progress + token budget; **LLM selection** mounts in the **Config** tab. **`CMW_USE_DOTENV`** only switches **Comindware platform** credentials (**`CMW_BASE_URL`**, **`CMW_LOGIN`**, **`CMW_PASSWORD`** from **`.env`** vs URL/username/password in the Config UI); it does not hide the Config tab. **Statistics** tab uses a single **`stats_display`** (`elem_id=stats-display`); **`update_status`**, **`update_all_ui`**, the stats timer, chat end-of-turn chains, and model-switch **`.then(refresh_stats)`** all refresh that block (**`format_stats_display`**). Session-scoped dropdown sync still uses **`demo.load`** (**`Request`** session id). **`get_demo_with_language_detection()`** rebuilds cached **`demo`** when **`CMW_UI_DOWNLOAD_PREP_AFTER_STREAM`** changes (**`_ui_layout_env_signature`**); restart the app after other env changes.
 
 ## Error Handling
 
@@ -148,7 +156,7 @@ Before considering work complete:
 | **Instance-specific** | **Instance repo** (`{instance_progress_dir}`) | Migration progress JSON, harvest outputs, gap analyses, operator checklists, `docs/_scratch/` runners |
 | **Platform-generic** | **cmw-platform-agent** (this repo) | API patterns, OpenAPI shapes, `.agents/skills/cmw-platform*`, reusable browser/API workflows in `docs/` |
 
-Do **not** copy long-form instance audits into this repo; add a short generic lesson in a skill reference when it helps any tenant.
+Do **not** copy long-form instance audits into this repo; add a short generic lesson in a skill reference when it helps any tenant. **Full rules:** [.agents/skills/cmw-platform/references/instance_repo_documentation_boundary.md](.agents/skills/cmw-platform/references/instance_repo_documentation_boundary.md).
 
 **Scratch boundary:** Do **not** store instance migration harvest JSON, progress runners, or id maps under `docs/_scratch/` in **cmw-platform-agent** (see `docs/_scratch/README.md`). Instance artifacts belong under `{instance_progress_dir}/docs/_scratch/` and `{instance_progress_dir}/localization/migration_progress/`; link via `meta.harvest_path` / `meta.seed_path`.
 - Generate `YYYYMMDD` timestamps with native commands:
@@ -214,7 +222,7 @@ Based on https://12factor.net/ and https://github.com/humanlayer/12-factor-agent
 
 ### Instance progress (parent agents)
 
-**Instance-specific** batch JSON, roadmaps, harvest outputs, and operator runbooks live in the **instance repository** at `{instance_progress_dir}` (e.g. `localization/migration_progress/`, `docs/localization/`). Platform agents use skills and references in **this repo** only; read instance state from disk there — never from chat memory. Harvest/seed patterns: [record_harvest_seed.md](.agents/skills/cmw-platform/references/record_harvest_seed.md); instance schema and tenant checklists under `{instance_progress_dir}`. Progress loops: [ralph_loop_goal_autonomy.md](.agents/skills/cmw-platform/references/ralph_loop_goal_autonomy.md), [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills).
+**Instance-specific** batch JSON, roadmaps, harvest outputs, and operator runbooks live in the **instance repository** at `{instance_progress_dir}` (e.g. `localization/migration_progress/`, `docs/localization/`). Platform agents use skills and references in **this repo** only; read instance state from disk there — never from chat memory. Harvest/seed patterns: [record_harvest_seed.md](.agents/skills/cmw-platform/references/record_harvest_seed.md) (platform-generic); instance playbook [tr_fr_record_harvest_seed.md](.agents/skills/cmw-platform/references/tr_fr_record_harvest_seed.md) → `{instance_progress_dir}/.agents/skills/cmw-platform/references/tr_fr_record_harvest_seed.md`; instance schema and tenant checklists under `{instance_progress_dir}/localization/migration_progress/`. Progress loops: [ralph_loop_goal_autonomy.md](.agents/skills/cmw-platform/references/ralph_loop_goal_autonomy.md), [cmw-platform skill §9](.agents/skills/cmw-platform/SKILL.md#9-growing-platform-skills).
 
 ### CMW Platform Terminology
 

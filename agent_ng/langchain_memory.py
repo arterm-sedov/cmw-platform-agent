@@ -37,6 +37,17 @@ except ImportError:
     def traceable(func):
         return func
 
+try:
+    from .tool_invocation import (
+        invoke_agent_tool_blocking,
+        tool_requires_async_invocation,
+    )
+except ImportError:
+    from agent_ng.tool_invocation import (
+        invoke_agent_tool_blocking,
+        tool_requires_async_invocation,
+    )
+
 # Simple memory implementation to avoid import issues
 class ConversationBufferMemory:
     """Simple conversation buffer memory implementation"""
@@ -468,12 +479,16 @@ class LangChainConversationChain:
             if not tool_func:
                 return f"Error: Tool '{tool_name}' not found"
 
-            # Inject agent instance for file resolution if available
-            if hasattr(self, 'agent') and self.agent:
-                tool_args['agent'] = self.agent
+            # Inject agent for native file-resolution tools only (not MCP coroutine tools)
+            invoke_args = dict(tool_args)
+            if (
+                hasattr(self, "agent")
+                and self.agent
+                and not tool_requires_async_invocation(tool_func)
+            ):
+                invoke_args["agent"] = self.agent
 
-            # Execute the tool
-            result = tool_func.invoke(tool_args) if hasattr(tool_func, 'invoke') else tool_func(**tool_args)
+            result = invoke_agent_tool_blocking(tool_func, invoke_args)
 
             # Ensure result is a string
             return ensure_valid_answer(result)

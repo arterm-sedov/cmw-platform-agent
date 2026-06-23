@@ -1135,6 +1135,22 @@ class LLMManager:
         # No fallback needed - if no current instance, return 0
         return 0
 
+    def _invalidate_tools_cache(self) -> None:
+        if hasattr(self, "_cached_tools"):
+            delattr(self, "_cached_tools")
+
+    async def load_mcp_tools_if_enabled(self) -> None:
+        """Preload external MCP tools (idempotent; no-op when disabled)."""
+        try:
+            from .mcp_tools import is_mcp_enabled, preload_mcp_tools
+        except ImportError:
+            from agent_ng.mcp_tools import is_mcp_enabled, preload_mcp_tools
+
+        if not is_mcp_enabled():
+            return
+        await preload_mcp_tools()
+        self._invalidate_tools_cache()
+
     def get_tools(self) -> list[Any]:
         """Get all available tools from tools module (avoiding duplicates) - cached"""
         # Return cached tools if available
@@ -1192,6 +1208,18 @@ class LLMManager:
             self._log_initialization(
                 "Could not import tools.templates_tools module", "WARNING"
             )
+
+        try:
+            from .mcp_tools import get_cached_mcp_tools, is_mcp_enabled, merge_tools
+        except ImportError:
+            from agent_ng.mcp_tools import (
+                get_cached_mcp_tools,
+                is_mcp_enabled,
+                merge_tools,
+            )
+
+        if is_mcp_enabled():
+            tool_list = merge_tools(tool_list, get_cached_mcp_tools())
 
         # Cache the tools list
         self._cached_tools = tool_list
@@ -1290,3 +1318,17 @@ def reset_llm_manager_singleton() -> None:
     global _llm_manager
     with _manager_lock:
         _llm_manager = None
+
+
+def reset_mcp_tools_state(manager: LLMManager | None = None) -> None:
+    """Reset MCP tool cache and LLM tool cache (tests)."""
+    try:
+        from .mcp_tools import reset_mcp_tools_cache
+    except ImportError:
+        from agent_ng.mcp_tools import reset_mcp_tools_cache
+
+    reset_mcp_tools_cache()
+    if manager is not None:
+        manager._invalidate_tools_cache()
+    elif _llm_manager is not None:
+        _llm_manager._invalidate_tools_cache()

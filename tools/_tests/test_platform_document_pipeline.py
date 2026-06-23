@@ -12,12 +12,12 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from tools import requests_
-from tools.local_path_text import read_local_path_to_plain_text
 from tools.cmw_webapi import (
     extract_created_id,
     extract_platform_document_id,
     unwrap_webapi_payload,
 )
+from tools.local_path_text import read_local_path_to_plain_text
 from tools.platform_record_document import (
     SET_OBJECT_DOCUMENT,
     display_filename_for_registry,

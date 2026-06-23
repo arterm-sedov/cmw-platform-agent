@@ -26,6 +26,8 @@ RUSSIAN_TRANSLATIONS = {
     "tab_logs": "📜 Журналы",
     "tab_stats": "📊 Статистика",
     "tab_config": "⚙️ Настройки",
+    "tab_sidebar": "⚙️ Настройки и управление",
+    "tab_downloads": "📥 Загрузки",
     # Home tab content
     "welcome_title": "Добро пожаловать!",
     "welcome_description": """
@@ -40,10 +42,9 @@ RUSSIAN_TRANSLATIONS = {
     """,
     "quick_start_title": "Быстрый старт",
     "quick_start_description": """
-    1. Настройте подключение к **Comindware Platform** на вкладке «**Настройки**».
-    2. Перейдите на вкладку «**Чат**» для начала разговора.
-    3. Выберите модель в боковой панели.
-    4. Введите свой вопрос или выберите **заготовку** в левой панели и отредактируйте её, например:
+     1. Настройте подключение к **Comindware Platform** и LLM на вкладке «**Настройки**».
+     2. Перейдите на вкладку «**Чат**» для начала разговора.
+     3. Введите свой вопрос или выберите **заготовку** в левой панели и отредактируйте её, например:
         - Что ты умеешь?
         - Чего ты не умеешь?
         - Перечисли все приложения в платформе в удобном списке.
@@ -55,14 +56,14 @@ RUSSIAN_TRANSLATIONS = {
         - Для атрибута "Контактный телефон" в приложении "CRM", шаблон "Лиды", смени формат отображения на российский телефон.
         - Получи атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
         - Архивируй/разархивируй атрибут: системное имя "Комментарий", приложение "HR", шаблон "Кандидаты".
-    5. Нажмите кнопку «**Отправить**» и дождитесь ответа агента.
-    6. Агент может отвечать некоторое время, особенно если требуется обращение к **Comindware Platform**.  Прогресс отображается в левой панели.
-    7. По окончании работы агент выдаст сообщение «Обработка завершена» в левой панели.
+        - Разбери test_chart.png: что на диаграмме и три главных вывода.
+        - По записям приложения "ERP", шаблона "Контрагенты" сгруппируй по категории и сохрани инфографику platform_infographic.png.
+     4. Нажмите кнопку «**Отправить**» и дождитесь ответа агента.
+     5. Агент может отвечать некоторое время, особенно если требуется обращение к **Comindware Platform**.  Прогресс отображается в левой панели.
+     6. По окончании работы агент выдаст сообщение «Обработка завершена» в левой панели.
     """,
     # Quick actions
     "quick_actions_title": "Заготовки",
-    "quick_actions_dropdown_placeholder": "Выберите быструю команду...",
-    "quick_actions_dropdown_label": "Быстрые команды",
     # History compression
     "compression_enabled_label": "При переполнении сжимать диалог",
     "quick_list_apps": "🔎 Список всех приложений",
@@ -81,9 +82,10 @@ RUSSIAN_TRANSLATIONS = {
     "clear_button": "Очистить диалог",
     "download_button": "📥 Скачать диалог (Markdown)",
     "download_html_button": "🌐 Скачать диалог (HTML)",
+    "download_artifacts_zip_button": "📦 Скачать артефакты (ZIP)",
     "download_file_label": "Скачать Markdown",
     # LLM Selection section
-    "llm_selection_title": "Выбор LLM",
+    "llm_selection_title": "Выберите LLM",
     "provider_label": "Провайдер",
     "model_label": "Модель",
     "provider_model_label": "Провайдер / модель",
@@ -100,6 +102,7 @@ RUSSIAN_TRANSLATIONS = {
     """,
     "mistral_chat_cleared": "Чат очищен для совместимости с Mistral.",
     "mistral_switch_cancelled": "❌ Переключение на Mistral отменено",
+    "streaming_interrupted": "⚡ Ответ прерван",
     "current_provider": "Провайдер: {provider}",
     "current_model": "Модель: {model}",
     "model_pricing_label": "Цена",
@@ -120,7 +123,7 @@ RUSSIAN_TRANSLATIONS = {
     "token_usage_conversation": "Диалог: {conversation_tokens:,}",
     "token_usage_estimate": "Прогноз: {estimated_tokens:,}",
     "token_usage_last_message": "Сообщение:",
-    "token_usage_average": "Средний на сообщение: {avg_tokens:,}",
+    "token_usage_average": "Сред. сообщение: {avg_tokens:,}",
     "token_breakdown_context": "Контекст: {conv_tokens:,}",
     "token_breakdown_tools": "Инструменты: {tool_tokens:,}",
     "token_breakdown_overhead": "Накладные: {overhead_tokens:,}",
@@ -144,7 +147,7 @@ RUSSIAN_TRANSLATIONS = {
 - Среднее на сообщение: {avg_tokens:,}""",
     "token_budget_unknown": "❓ Неизвестно",
     "progress_title": "Прогресс",
-    "progress_ready": "Готов обработать ваш запрос...",
+    "progress_ready": "Готов к работе…",
     "progress_processing": "Обработка запроса...",
     # Logs tab
     "logs_title": "Журналы инициализации",
@@ -202,7 +205,13 @@ RUSSIAN_TRANSLATIONS = {
     "healthy_status": "✅ Исправен",
     "unhealthy_status": "❌ Неисправен",
     # Config tab
-    "config_title": "Подключение к Comindware Platform",
+    "config_title": "Настройте подключение к Comindware Platform",
+    "config_browser_storage_help": (
+        "**Сохранить в браузере** — применить параметры к текущему сеансу.\n\n"
+        "**Загрузить из браузера** — восстановить ранее сохранённые значения.\n\n"
+        "**Очистить хранилище браузера** — удалить сохранённые параметры и очистить поля.\n\n"
+        "Данные сохраняются в браузере и применяются только в пределах текущего сеанса."
+    ),
     "config_platform_url": "Адрес сервера",
     "config_username": "Имя пользователя",
     "config_password": "Пароль",
@@ -215,6 +224,9 @@ RUSSIAN_TRANSLATIONS = {
     "config_clear_storage_button": "🧹 Очистить хранилище браузера",
     "config_clear_success": "✅ Хранилище браузера очищено",
     "config_clear_error": "❌ Не удалось очистить хранилище браузера",
+    "config_platform_dotenv_notice": (
+        "Используется преднастроенное подключение к Comindware Platform."
+    ),
     "config_help": (
         """
         Задайте параметры подключения к **Comindware Platform**:
@@ -223,23 +235,18 @@ RUSSIAN_TRANSLATIONS = {
         например `https://your-host`.
         - **Имя пользователя** и **Пароль** — учетные данные для
         использования API. **Обычный аккаунт не будет работать.**
-        - Нажмите «**Сохранить в браузере**», чтобы применить параметры к
-        текущему сеансу.
-        - Кнопка «**Загрузить из браузера**» восстановит ранее сохранённые
-        значения.
-        - **Очистить хранилище браузера** удалит сохранённые параметры и
-          очистит поля.
-
-        Данные сохраняются в браузере и применяются только в
-        пределах текущего сеанса.
         """
     ),
     # LLM override fields
     "config_llm_section": "Подключение к LLM",
     "config_llm_provider_label": "Провайдер",
     "config_llm_api_key_label": "Ключ API",
-    "config_llm_api_keys_table_label": "Ключи API провайдеров",
-    "config_llm_empty_means_default": "Оставьте пустым, чтобы использовать настройки по умолчанию",
+    "config_llm_api_keys_table_label": "Введите ключи API провайдеров",
+    "config_llm_empty_means_default": "Оставьте пустым, чтобы использовать пробный ключ",
+    "config_llm_providers_none_message": (
+        "Нет доступных провайдеров LLM (менеджер вернул пустой список). "
+        "Проверьте ключи API в окружении и журнал сервера."
+    ),
     # Statistics labels
     "agent_status_section": "**Агент:**",
     "conversation_section": "**Диалог:**",
@@ -276,13 +283,13 @@ RUSSIAN_TRANSLATIONS = {
         "Не выполняй изменения, ожидай моего одобрения."
     ),
     "quick_list_apps_message": (
-        "Покажи список всех приложений в Comindware Platform. Отформатируй красиво в Markdown."
+        "Покажи список всех приложений в Comindware Platform. Отформатируй красиво."
     ),
     # Query example buttons (converted from try_asking_examples)
     "quick_edit_enum": "📝 Редактировать «Список значений»",
     "quick_edit_enum_message": 'Получи атрибут типа enum "Статус" из приложения "CRM", шаблон "Лиды", затем добавь к нему новое значение "В работе" (system_name: in_progress, color: #FF9800) и обнови атрибут',
     "quick_templates_erp": "📄 Шаблоны ERP",
-    "quick_templates_erp_message": 'Покажи все шаблоны записей в приложении "ERP". Отформатируй красиво используя Markdown.',
+    "quick_templates_erp_message": 'Покажи все шаблоны записей в приложении "ERP". Отформатируй красиво.',
     "quick_attributes_contractors": "🏷️ Атрибуты контрагентов",
     "quick_attributes_contractors_message": 'Выдай список всех атрибутов шаблона "Контрагенты", приложение "ERP"',
     "quick_create_comment_attr": "💬 Создать атрибут комментария",
@@ -302,6 +309,18 @@ RUSSIAN_TRANSLATIONS = {
     "quick_what_cannot_do": "❌ Чего ты не умеешь?",
     "quick_what_cannot_do_message": "Чего ты не умеешь?",
     "quick_full_audit_message": "Дай полный аудит всех приложений, шаблонов и атрибутов в системе.",
+    "quick_analyze_image": "🖼️ Анализ изображения",
+    "quick_analyze_image_message": (
+        "Разбери файл test_chart.png: опиши, что на диаграмме, и дай три главных вывода."
+    ),
+    "quick_platform_infographic": "📊 Инфографика по данным",
+    "quick_platform_infographic_message": (
+        "С платформы возьми до 50 записей приложения YourApplicationSystemName "
+        "и шаблона YourTemplateSystemName. Сгруппируй по одному категориальному "
+        "атрибуту, сделай по этим данным инфографику, сохрани как "
+        "platform_infographic.png. "
+        "В конце — три кратких вывода."
+    ),
     # Status messages
     "processing_complete": "🎉Обработка завершена",
     "response_completed": "Ответ завершен",
@@ -316,6 +335,8 @@ RUSSIAN_TRANSLATIONS = {
     "max_iterations_warning": "⚠️ Достигнут лимит итераций ({max_iterations}), диалог может быть неполным",
     # Tool messages
     "tool_called": "🔧 Вызван инструмент: {tool_name}",
+    "generating_answer": "✨ Формирую ответ",
+    "generating_answer_subtitle": "Готовлю финальный ответ...",
     "call_count": "Количество вызовов: {total_calls}",
     "result": "**Результат:** {tool_result}",
     "tool_error": "❌ **Ошибка инструмента: {error}**",
@@ -374,6 +395,8 @@ ENGLISH_TRANSLATIONS = {
     "tab_logs": "📜 Logs",
     "tab_stats": "📊 Statistics",
     "tab_config": "⚙️ Config",
+    "tab_sidebar": "⚙️ Settings & Control",
+    "tab_downloads": "📥 Downloads",
     # Home tab content
     "welcome_title": "Welcome!",
     "welcome_description": """
@@ -388,10 +411,9 @@ ENGLISH_TRANSLATIONS = {
     """,
     "quick_start_title": "Quick Start",
     "quick_start_description": """
-    1. Configure the connection to the **Comindware Platform** in the **Config** tab.
-    2. Go to the **Chat** tab to start a conversation.
-    3. Select a model in the sidebar.
-    4. Enter your question or select a **template** in the sidebar and edit it, for example:
+     1. Configure the connection to the **Comindware Platform** and LLM in the **Config** tab.
+     2. Go to the **Chat** tab to start a conversation.
+     3. Enter your question or select a **template** in the sidebar and edit it, for example:
         - What can you do?
         - What can't you do?
         - List all applications in the platform in a convenient list.
@@ -403,14 +425,14 @@ ENGLISH_TRANSLATIONS = {
         - For the "Contact Phone" attribute in application "CRM", template "Leads", change the display format to Russian phone
         - Get attribute: system name "Comment", application "HR", template "Candidates"
         - Archive/unarchive attribute, system name "Comment", application "HR", template "Candidates"
-    5. Click **Send** and wait for the agent's response.
-    6. The agent may take some time to respond, especially when accessing the **Comindware Platform**. Progress is displayed in the sidebar.
-    7. When finished, the agent will show **Processing complete** message in the sidebar.
+        - Analyze test_chart.png: what's on the chart and three main takeaways.
+        - From application "ERP", template "Counterparties" records, group by category and save infographic platform_infographic.png.
+     4. Click **Send** and wait for the agent's response.
+     5. The agent may take some time to respond, especially when accessing the **Comindware Platform**. Progress is displayed in the sidebar.
+     6. When finished, the agent will show **Processing complete** message in the sidebar.
     """,
     # Quick actions
     "quick_actions_title": "Templates",
-    "quick_actions_dropdown_placeholder": "Select a quick command...",
-    "quick_actions_dropdown_label": "Quick Commands",
     # History compression
     "compression_enabled_label": "Щn overflow сompress conversation",
     "use_fallback_model_label": "On overflow use larger model",
@@ -430,9 +452,10 @@ ENGLISH_TRANSLATIONS = {
     "clear_button": "Clear conversation",
     "download_button": "📥 Download conversation (Markdown)",
     "download_html_button": "🌐 Download conversation (HTML)",
+    "download_artifacts_zip_button": "📦 Download artifacts (ZIP)",
     "download_file_label": "Download Markdown",
     # LLM Selection section
-    "llm_selection_title": "LLM Selection",
+    "llm_selection_title": "Select LLM",
     "provider_label": "Provider",
     "model_label": "Model",
     "provider_model_label": "Provider / model",
@@ -449,6 +472,7 @@ ENGLISH_TRANSLATIONS = {
     """,
     "mistral_chat_cleared": "Chat cleared for Mistral compatibility.",
     "mistral_switch_cancelled": "❌ Mistral switching cancelled",
+    "streaming_interrupted": "⚡ Response interrupted",
     "current_provider": "Provider: {provider}",
     "current_model": "**Model:** {model}",
     "model_pricing_label": "Pricing",
@@ -551,7 +575,13 @@ ENGLISH_TRANSLATIONS = {
     "healthy_status": "✅ Healthy",
     "unhealthy_status": "❌ Unhealthy",
     # Config tab
-    "config_title": "Comindware Platform Connection",
+    "config_title": "Configure Comindware Platform Connection",
+    "config_browser_storage_help": (
+        "**Save to browser** — apply settings to the current session.\n\n"
+        "**Load from browser** — restore previously saved values.\n\n"
+        "**Clear browser storage** — delete saved settings and clear the fields.\n\n"
+        "Data is stored in the browser and applies only within the current session."
+    ),
     "config_platform_url": "Server URL",
     "config_username": "Username",
     "config_password": "Password",
@@ -564,6 +594,9 @@ ENGLISH_TRANSLATIONS = {
     "config_clear_storage_button": "🧹 Clear browser storage",
     "config_clear_success": "✅ Browser storage cleared",
     "config_clear_error": "❌ Failed to clear browser storage",
+    "config_platform_dotenv_notice": (
+        "Using the preconfigured connection to the Comindware Platform."
+    ),
     "config_help": (
         """
         Configure connection to the **Comindware Platform**:
@@ -572,20 +605,18 @@ ENGLISH_TRANSLATIONS = {
         `https://your-host`.
         - **Username** and **Password** — credentials with API access rights.
         **Regular account won't work.**
-        - Click **Save to browser** to apply settings for the current session.
-        - **Load from browser** restores previously saved values.
-        - **Clear browser storage** removes saved settings and clears the fields.
-
-        Settings are stored in the browser storage and applied within the
-        current session only.
         """
     ),
     # LLM override fields
     "config_llm_section": "LLM Connection",
     "config_llm_provider_label": "Provider",
     "config_llm_api_key_label": "API Key",
-    "config_llm_api_keys_table_label": "Provider API keys",
+    "config_llm_api_keys_table_label": "Enter provider API keys",
     "config_llm_empty_means_default": "Leave empty to use default settings",
+    "config_llm_providers_none_message": (
+        "No LLM providers available (manager returned an empty list). "
+        "Check API keys in the environment and the server log."
+    ),
     # Statistics labels
     "agent_status_section": "**Agent:**",
     "conversation_section": "**Conversation:**",
@@ -622,13 +653,13 @@ ENGLISH_TRANSLATIONS = {
         "Do NOT execute changes yet—await my approval."
     ),
     "quick_list_apps_message": (
-        "List all applications in the platform. Format nicely using Markdown."
+        "List all applications in the platform. Format nicely."
     ),
     # Query example buttons (converted from try_asking_examples)
     "quick_edit_enum": "📝 Edit Enum",
     "quick_edit_enum_message": 'Get the enum attribute "Status" from application "CRM", template "Leads", then add a new value "In Progress" (system_name: in_progress, color: #FF9800) and update the attribute',
     "quick_templates_erp": "📄 ERP Templates",
-    "quick_templates_erp_message": 'Show all record templates in the "ERP" application. Format nicely using Markdown.',
+    "quick_templates_erp_message": 'Show all record templates in the "ERP" application. Format nicely.',
     "quick_attributes_contractors": "🏷️ Contractor Attributes",
     "quick_attributes_contractors_message": 'Get a list of all attributes of the "Counterparties" template, application "ERP"',
     "quick_create_comment_attr": "💬 Create Comment Attribute",
@@ -648,6 +679,19 @@ ENGLISH_TRANSLATIONS = {
     "quick_what_cannot_do": "❌ What can't you do?",
     "quick_what_cannot_do_message": "What can't you do?",
     "quick_full_audit_message": "Give a full audit of all applications, templates and attributes in the system.",
+    "quick_analyze_image": "🖼️ Image analysis",
+    "quick_analyze_image_message": (
+        "Analyze the file test_chart.png: describe what's on the chart "
+        "and give three main takeaways."
+    ),
+    "quick_platform_infographic": "📊 Platform data infographic",
+    "quick_platform_infographic_message": (
+        "From the platform, pull up to 50 records from application "
+        "YourApplicationSystemName and template YourTemplateSystemName. "
+        "Group by one categorical attribute, build an infographic from that data, "
+        "save it as platform_infographic.png. "
+        "End with three brief takeaways."
+    ),
     # Status messages
     "processing_complete": "🎉 Processing complete",
     "response_completed": "Response completed",
@@ -662,6 +706,8 @@ ENGLISH_TRANSLATIONS = {
     "max_iterations_warning": "⚠️ Reached iteration limit **({max_iterations})**, conversation may be incomplete",
     # Tool messages
     "tool_called": "🔧 Tool called: {tool_name}",
+    "generating_answer": "Generating answer",
+    "generating_answer_subtitle": "Preparing the final response...",
     "call_count": "Call count: {total_calls}",
     "result": "**Result:** {tool_result}",
     "tool_error": "❌ **Tool error: {error}**",

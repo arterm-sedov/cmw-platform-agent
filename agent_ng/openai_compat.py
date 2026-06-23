@@ -1413,6 +1413,66 @@ def register_agent_completions_on_fastapi(fastapi_app: FastAPI, app: Any) -> Non
             agent_completions,
             methods=["POST"],
             response_model=None,
+            openapi_extra={
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["messages"],
+                                "properties": {
+                                    "model": {
+                                        "type": "string",
+                                        "description": (
+                                            "Provider/model slug, e.g. openai/gpt-4o"
+                                        ),
+                                        "example": "openai/gpt-4o",
+                                    },
+                                    "messages": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "required": ["role", "content"],
+                                            "properties": {
+                                                "role": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "system",
+                                                        "user",
+                                                        "assistant",
+                                                    ],
+                                                },
+                                                "content": {"type": "string"},
+                                            },
+                                        },
+                                        "example": [
+                                            {
+                                                "role": "user",
+                                                "content": "Hello!",
+                                            }
+                                        ],
+                                    },
+                                    "stream": {
+                                        "type": "boolean",
+                                        "default": False,
+                                        "description": "Enable SSE streaming",
+                                    },
+                                    "response_format": {
+                                        "type": "object",
+                                        "nullable": True,
+                                        "description": "Structured output JSON schema",
+                                    },
+                                },
+                            },
+                            "example": {
+                                "model": "openai/gpt-4o",
+                                "messages": [{"role": "user", "content": "Hello!"}],
+                                "stream": False,
+                            },
+                        }
+                    }
+                }
+            },
         )
 
 

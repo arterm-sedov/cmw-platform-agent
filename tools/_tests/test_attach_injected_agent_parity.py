@@ -53,7 +53,12 @@ def test_attach_file_to_record_document_receives_injected_agent_for_basename() -
     ag.register_file("upl.txt", p)
     with patch(
         "tools.templates_tools.tool_record_document.set_object_document",
-        return_value={"success": True, "status_code": 200, "error": None, "raw_response": {}},
+        return_value={
+            "success": True,
+            "status_code": 200,
+            "error": None,
+            "raw_response": {},
+        },
     ) as sdoc:
         r = attach_file_to_record_document_attribute.invoke(
             {
@@ -73,15 +78,18 @@ def test_platform_upload_uses_chat_name_not_gradio_temp_basename() -> None:
     """**fileName** follows the logical **filename**, not the on-disk **gradio_…** name."""
     ag = _make_registry_agent()
     d = tempfile.mkdtemp()
-    gradio_like = os.path.join(
-        d, "gradio_crm4r5er04_SGR_1777075419411_93d327c9.docx"
-    )
+    gradio_like = os.path.join(d, "gradio_crm4r5er04_SGR_1777075419411_93d327c9.docx")
     with open(gradio_like, "wb") as f:
         f.write(b"docx")
     ag.register_file("SGR工具链验证.docx", gradio_like)
     with patch(
         "tools.templates_tools.tool_record_document.set_object_document",
-        return_value={"success": True, "status_code": 200, "error": None, "raw_response": {}},
+        return_value={
+            "success": True,
+            "status_code": 200,
+            "error": None,
+            "raw_response": {},
+        },
     ) as sdoc:
         r = attach_file_to_record_document_attribute.invoke(
             {
@@ -112,7 +120,12 @@ def test_read_text_and_attach_parity_on_same_reference() -> None:
     assert "roundtrip line" in t, t
     with patch(
         "tools.templates_tools.tool_record_document.set_object_document",
-        return_value={"success": True, "status_code": 200, "error": None, "raw_response": {}},
+        return_value={
+            "success": True,
+            "status_code": 200,
+            "error": None,
+            "raw_response": {},
+        },
     ):
         r = attach_file_to_record_document_attribute.invoke(
             {
@@ -156,9 +169,7 @@ def test_attach_file_to_record_image_receives_injected_agent() -> None:
 def test_image_platform_upload_uses_chat_name_not_gradio_temp_basename() -> None:
     ag = _make_registry_agent()
     d = tempfile.mkdtemp()
-    gradio_like = os.path.join(
-        d, f"gradio_x_img_{os.getpid()}_abc12345.png"
-    )
+    gradio_like = os.path.join(d, f"gradio_x_img_{os.getpid()}_abc12345.png")
     with open(gradio_like, "wb") as f:
         f.write(b"\x89PNG\r\n\x1a\n")
     ag.register_file("z.png", gradio_like)
@@ -202,7 +213,12 @@ def test_attach_with_optional_user_pdf_path_if_present() -> None:
     ag.register_file(name, p)
     with patch(
         "tools.templates_tools.tool_record_document.set_object_document",
-        return_value={"success": True, "status_code": 200, "error": None, "raw_response": {}},
+        return_value={
+            "success": True,
+            "status_code": 200,
+            "error": None,
+            "raw_response": {},
+        },
     ) as sdoc:
         r = attach_file_to_record_document_attribute.invoke(
             {

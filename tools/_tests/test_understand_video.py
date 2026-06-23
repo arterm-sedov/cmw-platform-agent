@@ -1,6 +1,7 @@
 """
 Tests for understand_video tool with VisionToolManager
 """
+
 from pathlib import Path
 import sys
 import tempfile
@@ -30,17 +31,20 @@ class TestUnderstandVideo:
             mock_agent = Mock()
             mock_agent.file_registry = {Path(video_path).name: video_path}
 
-            with patch("agent_ng.vision_tool_manager.VisionToolManager.analyze_video") as mock_analyze:
+            with patch(
+                "agent_ng.vision_tool_manager.VisionToolManager.analyze_video"
+            ) as mock_analyze:
                 mock_analyze.return_value = "This video shows a person walking"
 
                 result = understand_video(
                     filename=Path(video_path).name,
                     prompt="What's happening in this video?",
-                    agent=mock_agent
+                    agent=mock_agent,
                 )
 
                 assert isinstance(result, str)
                 import json
+
                 result_data = json.loads(result)
                 assert result_data["type"] == "tool_response"
                 assert result_data["tool_name"] == "understand_video"
@@ -60,17 +64,20 @@ class TestUnderstandVideo:
             try:
                 mock_resolve.return_value = temp_path
 
-                with patch("agent_ng.vision_tool_manager.VisionToolManager.analyze_video") as mock_analyze:
+                with patch(
+                    "agent_ng.vision_tool_manager.VisionToolManager.analyze_video"
+                ) as mock_analyze:
                     mock_analyze.return_value = "Video analysis result"
 
                     result = understand_video(
                         filename="https://example.com/video.mp4",
                         prompt="Describe this video",
-                        agent=mock_agent
+                        agent=mock_agent,
                     )
 
                     assert isinstance(result, str)
                     import json
+
                     result_data = json.loads(result)
                     assert result_data["type"] == "tool_response"
 
@@ -85,12 +92,11 @@ class TestUnderstandVideo:
             mock_resolve.return_value = None
 
             result = understand_video(
-                filename="nonexistent.mp4",
-                prompt="Describe",
-                agent=mock_agent
+                filename="nonexistent.mp4", prompt="Describe", agent=mock_agent
             )
 
             import json
+
             result_data = json.loads(result)
             assert "error" in result_data
 
@@ -104,18 +110,21 @@ class TestUnderstandVideo:
             mock_agent = Mock()
             mock_agent.file_registry = {Path(video_path).name: video_path}
 
-            with patch("agent_ng.vision_tool_manager.VisionToolManager.analyze_video") as mock_analyze:
+            with patch(
+                "agent_ng.vision_tool_manager.VisionToolManager.analyze_video"
+            ) as mock_analyze:
                 mock_analyze.return_value = "Detailed video analysis"
 
                 result = understand_video(
                     filename=Path(video_path).name,
                     prompt="Analyze this video",
                     system_prompt="You are a video expert",
-                    agent=mock_agent
+                    agent=mock_agent,
                 )
 
                 assert isinstance(result, str)
                 import json
+
                 result_data = json.loads(result)
                 assert "result" in result_data
 
@@ -132,7 +141,9 @@ class TestUnderstandVideo:
             mock_agent = Mock()
             mock_agent.file_registry = {Path(video_path).name: video_path}
 
-            with patch("agent_ng.vision_tool_manager.VisionToolManager.analyze_video") as mock_analyze:
+            with patch(
+                "agent_ng.vision_tool_manager.VisionToolManager.analyze_video"
+            ) as mock_analyze:
                 mock_analyze.return_value = "Video segment analysis"
 
                 result = understand_video(
@@ -140,11 +151,12 @@ class TestUnderstandVideo:
                     prompt="What happens in this segment?",
                     start_time="00:30",
                     end_time="01:00",
-                    agent=mock_agent
+                    agent=mock_agent,
                 )
 
                 assert isinstance(result, str)
                 import json
+
                 result_data = json.loads(result)
                 assert "result" in result_data
 
@@ -159,6 +171,7 @@ class TestUnderstandVideoIntegration:
     def test_real_video_analysis(self):
         """Test with real API call (requires OPENROUTER_API_KEY)"""
         import os
+
         if not os.getenv("OPENROUTER_API_KEY"):
             pytest.skip("OPENROUTER_API_KEY not set")
 

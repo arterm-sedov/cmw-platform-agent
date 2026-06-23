@@ -11,8 +11,9 @@ Flow:
 3. On ``completed``, download the image from the CDN URL in ``data.url``.
 4. Convert ``cost_rub`` → USD using ``POLZA_RUB_TO_USD_RATE`` (default 90).
 
-Supports ``aspect_ratio`` and ``image_resolution`` (1K / 2K / 4K) for models
-that document these parameters (controlled by ``supports_image_config``).
+Supports ``aspect_ratio`` and ``quality`` (2K/4K) when
+``ImageModelConfig.supports_polza_sizing`` is set (independent of OpenRouter
+``supports_image_config``).
 """
 
 from __future__ import annotations
@@ -172,7 +173,7 @@ class PolzaProvider(ImageProvider):
     def _build_payload(self, request: ImageRequest) -> dict[str, Any]:
         model_id = request.config.provider_model_ids.get("polza", request.config.name)
         input_body: dict[str, Any] = {"prompt": request.prompt}
-        if request.config.supports_image_config:
+        if request.config.supports_polza_sizing:
             # aspect_ratio is required by Polza even when docs say it has a default.
             input_body["aspect_ratio"] = request.aspect_ratio or "1:1"
             if request.image_size:

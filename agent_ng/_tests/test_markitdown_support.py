@@ -51,16 +51,20 @@ class TestReadTextBasedFileMarkitdown:
 
         path = create_test_file(".html", html_content)
         try:
-            result = read_text_based_file.invoke({
-                "filename": path,
-                "read_html_as_markdown": True
-            })
+            result = read_text_based_file.invoke(
+                {"filename": path, "read_html_as_markdown": True}
+            )
             parsed = parse_tool_response(result)
 
             assert parsed.get("success") is True, f"Expected success, got: {parsed}"
-            assert "Hello World" in parsed.get("result", ""), "Expected markdown heading in result"
-            assert "**test**" in parsed.get("result", "") or "<strong>test</strong>" not in parsed.get("result", ""), \
+            assert "Hello World" in parsed.get("result", ""), (
+                "Expected markdown heading in result"
+            )
+            assert "**test**" in parsed.get(
+                "result", ""
+            ) or "<strong>test</strong>" not in parsed.get("result", ""), (
                 "Expected markdown formatting or converted content"
+            )
             print("✅ test_read_html_as_markdown: PASSED")
             return True
         except Exception as e:
@@ -84,15 +88,16 @@ class TestReadTextBasedFileMarkitdown:
 
         path = create_test_file(".html", html_content)
         try:
-            result = read_text_based_file.invoke({
-                "filename": path,
-                "read_html_as_markdown": False
-            })
+            result = read_text_based_file.invoke(
+                {"filename": path, "read_html_as_markdown": False}
+            )
             parsed = parse_tool_response(result)
 
             assert parsed.get("success") is True, f"Expected success, got: {parsed}"
             assert "<html>" in parsed.get("result", ""), "Expected raw HTML in result"
-            assert "raw HTML" in parsed.get("result", "").lower(), "Expected indication of raw HTML mode"
+            assert "raw HTML" in parsed.get("result", "").lower(), (
+                "Expected indication of raw HTML mode"
+            )
             print("✅ test_read_html_raw: PASSED")
             return True
         except Exception as e:
@@ -114,6 +119,7 @@ class TestReadTextBasedFileMarkitdown:
         import zipfile
 
         from tools.tools import read_text_based_file
+
         docx_path = create_test_file(".docx")
         with zipfile.ZipFile(docx_path, "w") as zf:
             # Minimal document.xml content
@@ -122,21 +128,26 @@ class TestReadTextBasedFileMarkitdown:
 <w:body><w:p><w:r><w:t>Hello from DOCX</w:t></w:r></w:p></w:body>
 </w:document>"""
             zf.writestr("word/document.xml", word_doc)
-            zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            zf.writestr(
+                "[Content_Types].xml",
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="xml" ContentType="application/xml"/>
-</Types>""")
+</Types>""",
+            )
 
         try:
-            result = read_text_based_file.invoke({
-                "filename": docx_path,
-                "read_html_as_markdown": True
-            })
+            result = read_text_based_file.invoke(
+                {"filename": docx_path, "read_html_as_markdown": True}
+            )
             parsed = parse_tool_response(result)
 
             assert parsed.get("success") is True, f"Expected success, got: {parsed}"
-            assert "DOCX" in parsed.get("result", "") or "Hello from DOCX" in parsed.get("result", ""), \
+            assert "DOCX" in parsed.get(
+                "result", ""
+            ) or "Hello from DOCX" in parsed.get("result", ""), (
                 "Expected DOCX content in result"
+            )
             print("✅ test_read_docx: PASSED")
             return True
         except Exception as e:
@@ -158,6 +169,7 @@ class TestReadTextBasedFileMarkitdown:
         import zipfile
 
         from tools.tools import read_text_based_file
+
         xlsx_path = create_test_file(".xlsx")
         with zipfile.ZipFile(xlsx_path, "w") as zf:
             # Minimal sheet1.xml content
@@ -169,21 +181,26 @@ class TestReadTextBasedFileMarkitdown:
 </sheetData>
 </worksheet>"""
             zf.writestr("xl/worksheets/sheet1.xml", sheet_xml)
-            zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            zf.writestr(
+                "[Content_Types].xml",
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="xml" ContentType="application/xml"/>
-</Types>""")
+</Types>""",
+            )
 
         try:
-            result = read_text_based_file.invoke({
-                "filename": xlsx_path,
-                "read_html_as_markdown": True
-            })
+            result = read_text_based_file.invoke(
+                {"filename": xlsx_path, "read_html_as_markdown": True}
+            )
             parsed = parse_tool_response(result)
 
             assert parsed.get("success") is True, f"Expected success, got: {parsed}"
-            assert "XLSX" in parsed.get("result", "") or "Name" in parsed.get("result", "") or "Test" in parsed.get("result", ""), \
-                "Expected XLSX content in result"
+            assert (
+                "XLSX" in parsed.get("result", "")
+                or "Name" in parsed.get("result", "")
+                or "Test" in parsed.get("result", "")
+            ), "Expected XLSX content in result"
             print("✅ test_read_xlsx: PASSED")
             return True
         except Exception as e:
@@ -205,6 +222,7 @@ class TestReadTextBasedFileMarkitdown:
         import zipfile
 
         from tools.tools import read_text_based_file
+
         pptx_path = create_test_file(".pptx")
         with zipfile.ZipFile(pptx_path, "w") as zf:
             # Minimal slide1.xml content
@@ -218,21 +236,26 @@ class TestReadTextBasedFileMarkitdown:
 </p:sld>"""
             zf.writestr("ppt/presentation.xml", slide_xml)
             zf.writestr("ppt/slides/slide1.xml", slide_content)
-            zf.writestr("[Content_Types].xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            zf.writestr(
+                "[Content_Types].xml",
+                """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="xml" ContentType="application/xml"/>
-</Types>""")
+</Types>""",
+            )
 
         try:
-            result = read_text_based_file.invoke({
-                "filename": pptx_path,
-                "read_html_as_markdown": True
-            })
+            result = read_text_based_file.invoke(
+                {"filename": pptx_path, "read_html_as_markdown": True}
+            )
             parsed = parse_tool_response(result)
 
             assert parsed.get("success") is True, f"Expected success, got: {parsed}"
-            assert "PPTX" in parsed.get("result", "") or "Hello from PPTX" in parsed.get("result", ""), \
+            assert "PPTX" in parsed.get(
+                "result", ""
+            ) or "Hello from PPTX" in parsed.get("result", ""), (
                 "Expected PPTX content in result"
+            )
             print("✅ test_read_pptx: PASSED")
             return True
         except Exception as e:
@@ -257,15 +280,16 @@ class TestReadTextBasedFileMarkitdown:
         sys.modules["markitdown"] = None
 
         try:
-            result = read_text_based_file.invoke({
-                "filename": path,
-                "read_html_as_markdown": True
-            })
+            result = read_text_based_file.invoke(
+                {"filename": path, "read_html_as_markdown": True}
+            )
             parsed = parse_tool_response(result)
 
             # Should return error about markitdown not available
-            assert "markitdown" in parsed.get("error", "").lower() or parsed.get("success") is False, \
-                f"Expected error about markitdown, got: {parsed}"
+            assert (
+                "markitdown" in parsed.get("error", "").lower()
+                or parsed.get("success") is False
+            ), f"Expected error about markitdown, got: {parsed}"
             print("✅ test_markitdown_not_available: PASSED")
             return True
         except Exception as e:

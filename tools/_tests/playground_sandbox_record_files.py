@@ -113,7 +113,9 @@ def _doc_title_hint(record_id: str, doc: str) -> str:
     m = get_document_model(did)
     if m.get("success") and isinstance(m.get("model"), dict):
         mo = m["model"]
-        reg = display_filename_for_registry(mo) or str(mo.get("title") or mo.get("name") or "")
+        reg = display_filename_for_registry(mo) or str(
+            mo.get("title") or mo.get("name") or ""
+        )
         return f"{reg} id={did[:8]}…" if reg else f"id={did[:12]}…"
     return f"id={did[:12]}…"
 

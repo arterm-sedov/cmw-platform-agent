@@ -3,6 +3,7 @@ Tests for VL-powered tools (analyze_image_ai, understand_video, understand_audio
 
 Following TDD principles - test behavior, not implementation
 """
+
 from pathlib import Path
 
 # Import the tools we'll be testing
@@ -27,6 +28,7 @@ class TestAnalyzeImageAI:
         # Create temp image
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             from PIL import Image
+
             img = Image.new("RGB", (100, 100), color="red")
             img.save(f.name)
             image_path = f.name
@@ -40,12 +42,13 @@ class TestAnalyzeImageAI:
             result = analyze_image_ai(
                 filename=Path(image_path).name,
                 prompt="What color is this image?",
-                agent=mock_agent
+                agent=mock_agent,
             )
 
             # Verify result is JSON string
             assert isinstance(result, str)
             import json
+
             result_data = json.loads(result)
 
             # Verify structure
@@ -61,9 +64,10 @@ class TestAnalyzeImageAI:
         mock_agent = Mock()
         test_url = "https://example.com/image.jpg"
 
-        with patch("tools.file_utils.FileUtils.resolve_filename") as mock_resolve, patch(
-            "agent_ng.vision_tool_manager.VisionToolManager"
-        ) as MockMgr:
+        with (
+            patch("tools.file_utils.FileUtils.resolve_filename") as mock_resolve,
+            patch("agent_ng.vision_tool_manager.VisionToolManager") as MockMgr,
+        ):
             inst = MockMgr.return_value
             inst.vl_model = "qwen/qwen3.6-plus"
             inst.analyze = Mock(return_value="ok")
@@ -78,6 +82,7 @@ class TestAnalyzeImageAI:
             assert vi.image_url == test_url
             assert vi.image_path is None
             import json
+
             result_data = json.loads(result)
             assert result_data["type"] == "tool_response"
             assert result_data.get("result") == "ok"
@@ -86,6 +91,7 @@ class TestAnalyzeImageAI:
         """Test default analysis"""
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             from PIL import Image
+
             img = Image.new("RGB", (100, 100), color="green")
             img.save(f.name)
             image_path = f.name
@@ -98,11 +104,12 @@ class TestAnalyzeImageAI:
             result = analyze_image_ai(
                 filename=Path(image_path).name,
                 prompt="Quick description",
-                agent=mock_agent
+                agent=mock_agent,
             )
 
             assert isinstance(result, str)
             import json
+
             result_data = json.loads(result)
             assert "result" in result_data
 
@@ -113,6 +120,7 @@ class TestAnalyzeImageAI:
         """Test analysis with system prompt"""
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             from PIL import Image
+
             img = Image.new("RGB", (100, 100), color="yellow")
             img.save(f.name)
             image_path = f.name
@@ -126,11 +134,12 @@ class TestAnalyzeImageAI:
                 filename=Path(image_path).name,
                 prompt="Detailed analysis",
                 system_prompt="Analyze carefully",
-                agent=mock_agent
+                agent=mock_agent,
             )
 
             assert isinstance(result, str)
             import json
+
             result_data = json.loads(result)
             assert "result" in result_data
 
@@ -146,12 +155,11 @@ class TestAnalyzeImageAI:
             mock_resolve.return_value = None
 
             result = analyze_image_ai(
-                filename="nonexistent.jpg",
-                prompt="Describe",
-                agent=mock_agent
+                filename="nonexistent.jpg", prompt="Describe", agent=mock_agent
             )
 
             import json
+
             result_data = json.loads(result)
             assert "error" in result_data
             assert "not found" in result_data["error"].lower()
@@ -168,12 +176,11 @@ class TestAnalyzeImageAI:
             mock_agent.file_registry = {Path(file_path).name: file_path}
 
             result = analyze_image_ai(
-                filename=Path(file_path).name,
-                prompt="Describe",
-                agent=mock_agent
+                filename=Path(file_path).name, prompt="Describe", agent=mock_agent
             )
 
             import json
+
             result_data = json.loads(result)
             assert "error" in result_data
 
@@ -184,6 +191,7 @@ class TestAnalyzeImageAI:
         """Test with custom system prompt"""
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
             from PIL import Image
+
             img = Image.new("RGB", (100, 100), color="purple")
             img.save(f.name)
             image_path = f.name
@@ -196,11 +204,12 @@ class TestAnalyzeImageAI:
                 filename=Path(image_path).name,
                 prompt="Describe colors",
                 system_prompt="You are a color expert",
-                agent=mock_agent
+                agent=mock_agent,
             )
 
             assert isinstance(result, str)
             import json
+
             result_data = json.loads(result)
             assert "result" in result_data
 
@@ -215,6 +224,7 @@ class TestAnalyzeImageAIIntegration:
     def test_real_image_analysis(self):
         """Test with real API call (requires OPENROUTER_API_KEY)"""
         import os
+
         if not os.getenv("OPENROUTER_API_KEY"):
             pytest.skip("OPENROUTER_API_KEY not set")
 
@@ -229,10 +239,11 @@ class TestAnalyzeImageAIIntegration:
         result = analyze_image_ai(
             filename=test_image.name,
             prompt="Describe the shapes and colors in this image",
-            agent=mock_agent
+            agent=mock_agent,
         )
 
         import json
+
         result_data = json.loads(result)
         assert result_data["type"] == "tool_response"
         assert "result" in result_data

@@ -14,6 +14,7 @@ from .logs_tab import LogsTab
 from .stats_tab import StatsTab
 from .config_tab import ConfigTab
 from .sidebar import Sidebar
+from .downloads_tab import DownloadsTab
 
 __all__ = [
     "ChatTab",
@@ -22,4 +23,5 @@ __all__ = [
     "StatsTab",
     "ConfigTab",
     "Sidebar",
+    "DownloadsTab",
 ]

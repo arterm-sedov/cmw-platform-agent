@@ -11,6 +11,7 @@ from collections.abc import Callable
 import logging
 import time
 from typing import Any, Dict, Optional, Tuple
+
 import gradio as gr
 
 
@@ -40,7 +41,10 @@ class StatsTab:
         """
         logging.getLogger(__name__).info("✅ StatsTab: Creating stats interface...")
 
-        with gr.TabItem(self._get_translation("tab_stats"), id="stats") as tab:
+        with gr.TabItem(
+            self._get_translation("tab_stats"),
+            id="stats",
+        ) as tab:
             # Create stats interface
             self._create_stats_interface()
 
@@ -55,15 +59,14 @@ class StatsTab:
     def _create_stats_interface(self):
         """Create the statistics monitoring interface"""
         # Main stats display area with card-like styling (similar to LLM selection)
-        with gr.Column(
-            scale=1,
-            min_width=400,
-            elem_classes=["stats-card"]
-        ):
-            # Create Markdown component for rich formatting
+        with gr.Column(scale=1, min_width=400, elem_classes=["stats-card"]):
+            gr.Markdown(
+                f"### {self._get_translation('status_title')}",
+                elem_classes=["llm-selection-title"],
+            )
             self.components["stats_display"] = gr.Markdown(
                 value=self._get_translation("stats_loading"),
-                elem_id="stats-display"
+                elem_id="stats-display",
             )
 
         # Control buttons row
@@ -89,16 +92,26 @@ class StatsTab:
         queue_manager = None
         if hasattr(self, "main_app") and self.main_app:
             queue_manager = getattr(self.main_app, "queue_manager", None)
-            logging.getLogger(__name__).debug(f"Queue manager found: {queue_manager is not None}")
+            logging.getLogger(__name__).debug(
+                f"Queue manager found: {queue_manager is not None}"
+            )
             if queue_manager:
-                logging.getLogger(__name__).debug(f"Queue manager has config: {hasattr(queue_manager, 'config')}")
-                logging.getLogger(__name__).debug(f"Queue manager type: {type(queue_manager)}")
+                logging.getLogger(__name__).debug(
+                    f"Queue manager has config: {hasattr(queue_manager, 'config')}"
+                )
+                logging.getLogger(__name__).debug(
+                    f"Queue manager type: {type(queue_manager)}"
+                )
             # Validate that queue manager is properly initialized
-            if queue_manager and not hasattr(queue_manager, 'config'):
-                logging.getLogger(__name__).warning("Queue manager found but not properly initialized")
+            if queue_manager and not hasattr(queue_manager, "config"):
+                logging.getLogger(__name__).warning(
+                    "Queue manager found but not properly initialized"
+                )
                 queue_manager = None
             elif queue_manager:
-                logging.getLogger(__name__).debug("Queue manager found and properly initialized")
+                logging.getLogger(__name__).debug(
+                    "Queue manager found and properly initialized"
+                )
 
         if queue_manager:
             # Apply concurrency settings to stats events
@@ -127,11 +140,15 @@ class StatsTab:
                 "⚠️ Queue manager not available - using default stats configuration"
             )
             self.components["refresh_stats_btn"].click(
-                fn=self.refresh_stats, outputs=[self.components["stats_display"]]
+                fn=self.refresh_stats,
+                outputs=[self.components["stats_display"]],
+                api_visibility="private",
             )
 
             self.components["clear_stats_btn"].click(
-                fn=self.clear_stats, outputs=[self.components["stats_display"]]
+                fn=self.clear_stats,
+                outputs=[self.components["stats_display"]],
+                api_visibility="private",
             )
 
         logging.getLogger(__name__).debug(
@@ -161,7 +178,6 @@ class StatsTab:
         from ..i18n_translations import get_translation_key
 
         return get_translation_key(key, self.language)
-
 
     def format_stats_display(self, request: gr.Request = None) -> str:
         """Format and return the complete stats display - always session-aware"""
@@ -213,24 +229,53 @@ class StatsTab:
             # Get model pricing info
             pricing_line = ""
             try:
-                model_name = stats['llm_info'].get('model_name', '')
-                provider = stats['llm_info'].get('provider', '')
+                model_name = stats["llm_info"].get("model_name", "")
+                provider = stats["llm_info"].get("provider", "")
 
-                if model_name and provider and hasattr(self, "main_app") and self.main_app:
-                    if hasattr(self.main_app, "llm_manager") and self.main_app.llm_manager:
-                        provider_config = self.main_app.llm_manager.get_provider_config(provider)
+                if (
+                    model_name
+                    and provider
+                    and hasattr(self, "main_app")
+                    and self.main_app
+                ):
+                    if (
+                        hasattr(self.main_app, "llm_manager")
+                        and self.main_app.llm_manager
+                    ):
+                        provider_config = self.main_app.llm_manager.get_provider_config(
+                            provider
+                        )
                         if provider_config and provider_config.models:
                             for model_config in provider_config.models:
                                 if model_config.get("model") == model_name:
-                                    prompt_price = model_config.get("prompt_price_per_1k")
-                                    completion_price = model_config.get("completion_price_per_1k")
-                                    if prompt_price is not None or completion_price is not None:
+                                    prompt_price = model_config.get(
+                                        "prompt_price_per_1k"
+                                    )
+                                    completion_price = model_config.get(
+                                        "completion_price_per_1k"
+                                    )
+                                    if (
+                                        prompt_price is not None
+                                        or completion_price is not None
+                                    ):
                                         # Format as per 1M tokens (multiply by 1000)
-                                        prompt_per_m = (prompt_price * 1000) if prompt_price else None
-                                        completion_per_m = (completion_price * 1000) if completion_price else None
+                                        prompt_per_m = (
+                                            (prompt_price * 1000)
+                                            if prompt_price
+                                            else None
+                                        )
+                                        completion_per_m = (
+                                            (completion_price * 1000)
+                                            if completion_price
+                                            else None
+                                        )
 
-                                        if prompt_per_m is not None and completion_per_m is not None:
+                                        if (
+                                            prompt_per_m is not None
+                                            and completion_per_m is not None
+                                        ):
                                             from agent_ng.utils import format_cost
+
                                             pricing_line = (
                                                 f"\n- {self._get_translation('model_pricing_input_label')}: "
                                                 f"{format_cost(prompt_per_m)}/M\n"
@@ -240,6 +285,7 @@ class StatsTab:
                                         break
             except Exception as exc:
                 import logging
+
                 logging.getLogger(__name__).debug(
                     "Failed to get model pricing for stats: %s", exc
                 )
@@ -262,7 +308,6 @@ class StatsTab:
             )
         except Exception as e:
             return f"{self._get_translation('error_loading_stats')}: {str(e)}"
-
 
     # Stats handler methods
     def refresh_stats(self, request: gr.Request = None) -> str:

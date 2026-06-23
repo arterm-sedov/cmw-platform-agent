@@ -414,6 +414,92 @@ class TestImageConfigForwarding:
         assert payload["image_config"] == {"aspect_ratio": "1:1"}
 
 
+class TestPolzaSizingForwarding:
+    """Polza aspect_ratio/quality use supports_polza_sizing, not image_config."""
+
+    _POLZA_POST = "agent_ng.image_providers.polza.requests.post"
+    _POLZA_GET = "agent_ng.image_providers.polza.requests.get"
+
+    @pytest.fixture(autouse=True)
+    def _restore_polza_factory(self) -> None:
+        """Earlier tests may unregister Polza; ensure the real adapter is available."""
+        from agent_ng.image_providers.polza import PolzaProvider
+        from agent_ng.image_providers.registry import register_provider
+
+        register_provider("polza", PolzaProvider)
+
+    @staticmethod
+    def _polza_mocks() -> tuple[MagicMock, MagicMock, MagicMock]:
+        submit_resp = MagicMock(spec=requests.Response)
+        submit_resp.ok = True
+        submit_resp.json.return_value = {
+            "id": "aig_test",
+            "status": "completed",
+            "model": "black-forest-labs/flux.2-pro",
+            "data": {"url": "https://s3.polza.ai/out.png"},
+            "usage": {"cost_rub": 1.0},
+        }
+        img_resp = MagicMock(spec=requests.Response)
+        img_resp.ok = True
+        img_resp.content = _PNG_1PX_BYTES
+        img_resp.headers = {"Content-Type": "image/png"}
+        return submit_resp, img_resp, submit_resp
+
+    def test_flux_aspect_ratio_on_polza_when_or_flag_false(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "polza")
+        monkeypatch.setenv("POLZA_API_KEY", "sk-test")
+        submit_resp, img_resp, _ = self._polza_mocks()
+        engine = ImageEngine()
+        with (
+            patch(self._POLZA_POST, return_value=submit_resp) as polza_post,
+            patch(self._POLZA_GET, return_value=img_resp),
+        ):
+            engine.generate(
+                "a cat",
+                model="black-forest-labs/flux.2-pro",
+                aspect_ratio="16:9",
+                image_size="2K",
+            )
+
+        inp = polza_post.call_args.kwargs["json"]["input"]
+        assert inp["aspect_ratio"] == "16:9"
+        assert inp["quality"] == "basic"
+
+    def test_polza_sizing_omitted_when_flag_false(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("IMAGE_GEN_PROVIDER", "polza")
+        monkeypatch.setenv("POLZA_API_KEY", "sk-test")
+        submit_resp = MagicMock(spec=requests.Response)
+        submit_resp.ok = True
+        submit_resp.json.return_value = {
+            "id": "aig_grok",
+            "status": "completed",
+            "data": {"url": "https://s3.polza.ai/out.png"},
+            "usage": {"cost_rub": 1.0},
+        }
+        img_resp = MagicMock(spec=requests.Response)
+        img_resp.ok = True
+        img_resp.content = _PNG_1PX_BYTES
+        img_resp.headers = {"Content-Type": "image/png"}
+        engine = ImageEngine()
+        with (
+            patch(self._POLZA_POST, return_value=submit_resp) as polza_post,
+            patch(self._POLZA_GET, return_value=img_resp),
+        ):
+            engine.generate(
+                "a cat",
+                model="x-ai/grok-imagine",
+                aspect_ratio="16:9",
+            )
+
+        inp = polza_post.call_args.kwargs["json"]["input"]
+        assert "aspect_ratio" not in inp
+        assert "quality" not in inp
+
+
 class TestErrorHandling:
     @pytest.fixture(autouse=True)
     def _use_openrouter(self, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -20,7 +20,7 @@
     Path to PowerShell activate script. Default: .\.venv\Scripts\Activate.ps1
 
 .PARAMETER LogPath
-    Fallback log file path when LOG_FILE environment variable is not set. Default: cmw-agent.log
+    Fallback log file path when LOG_FILE environment variable is not set. Default: logs/cmw-agent.log
 
 .PARAMETER PidPath
     Path to the PID file. Default: cmw-agent.pid
@@ -85,7 +85,7 @@ param (
 
     [string]$VenvPath = ".\.venv\Scripts\Activate.ps1",
 
-    [string]$LogPath = "cmw-agent.log",
+    [string]$LogPath = "logs/cmw-agent.log",
 
     [string]$PidFilePath = "cmw-agent.pid",
 
