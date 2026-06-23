@@ -32,22 +32,29 @@ APP_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(APP_DIR))
 
 
-EXPRESSION_KEYS = {"Expression", "Code", "ValueExpression", "ValidationScript", "Calculation", "DefaultExpression"}
+EXPRESSION_KEYS = {
+    # Original
+    "Expression", "Code", "ValueExpression", "ValidationScript", "Calculation", "DefaultExpression",
+    # User requested
+    "ValueFilterExpression", "ConditionExpression", "QueryRule",
+    # Found in analysis (with aliases)
+    "ReferenceExpression", "SystemFilterExpression", "InstanceFilterExpression", "ConditionRule",
+    # Additional from full scan (added for safety)
+    "FilterExpression", "ConditionName", "Condition", "Rule"
+}
 
 
-def scan_file(json_file, aliases_list, regexes, extract_dir):
+def scan_file(json_file, aliases_set, extract_dir):
     """Scan a single file for dangerous aliases.
-    Returns: dict of {alias: [{"jsonPathOriginal": path, "jsonPathRenamed": "", "expressionOriginal": text, "expressionRenamed": ""}]}
+    Returns: list of {"expressionOriginal": text, "aliases": [alias1, alias2], "jsonPath": path}
     """
-    result = {}
-    json_file_str = str(json_file)
+    result = []
 
     try:
         content = json_file.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return result
 
-    # Check if file has expression keywords
     if not any(kw in content for kw in EXPRESSION_KEYS):
         return result
 
@@ -56,33 +63,40 @@ def scan_file(json_file, aliases_list, regexes, extract_dir):
     except json.JSONDecodeError:
         return result
 
-    # Get relative CTF path (relative to extract_dir to include app folder prefix)
     rel_path = str(json_file.relative_to(extract_dir))
 
+    def find_all_aliases_in_expression(expression_text, aliases_set):
+        """Find all aliases used in an expression text."""
+        found = set()
+        for alias in aliases_set:
+            escaped_alias = re.escape(alias)
+            patterns = [
+                rf"\${escaped_alias}\b",
+                rf"->{escaped_alias}\b",
+                rf"\b{escaped_alias}->",
+                rf'"{escaped_alias}"',
+                rf'\("{escaped_alias}"',
+                rf'\(.*?"{escaped_alias}"',
+                rf".->{escaped_alias}\b",
+                rf".->{escaped_alias}->",
+            ]
+            if any(re.search(p, expression_text) for p in patterns):
+                found.add(alias)
+        return list(found)
+
     def scan_expressions(obj, path=""):
-        """Recursively scan for expression fields containing aliases."""
+        """Recursively scan for expression fields and find all aliases."""
         if isinstance(obj, dict):
             for key, value in obj.items():
                 current_path = f"{path}.{key}" if path else key
                 if key in EXPRESSION_KEYS and isinstance(value, str):
-                    # Check each alias with regex patterns for precise matching
-                    for alias in aliases_list:
-                        escaped_alias = re.escape(alias)
-                        patterns = [
-                            rf'\${escaped_alias}\b',    # $alias - variable
-                            rf'->{escaped_alias}\b',    # ->alias - method call
-                            rf'\b{escaped_alias}->',    # alias-> - object as target
-                            rf'"{escaped_alias}"',      # "alias" - string literal
-                        ]
-                        if any(re.search(p, value) for p in patterns):
-                            if alias not in result:
-                                result[alias] = []
-                            result[alias].append({
-                                "jsonPathOriginal": f"{rel_path}#{current_path}",
-                                "jsonPathRenamed": "",
-                                "expressionOriginal": value,
-                                "expressionRenamed": "",
-                            })
+                    found_aliases = find_all_aliases_in_expression(value, aliases_set)
+                    if found_aliases:
+                        result.append({
+                            "expressionOriginal": value,
+                            "aliases": found_aliases,
+                            "jsonPath": f"{rel_path}#{current_path}",
+                        })
                 scan_expressions(value, current_path)
         elif isinstance(obj, list):
             for i, item in enumerate(obj):
@@ -99,7 +113,7 @@ def save_state(output_dir: Path, app: str, phase: str, processed_count: int, dan
         "phase": phase,
         "processed_count": processed_count,
         "dangerous_aliases": list(dangerous),
-        "expressions_count": sum(len(v) for v in all_expressions.values()),
+        "expressions_count": len(all_expressions),
     }
     with open(state_file, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2)
@@ -231,10 +245,11 @@ def main():
     print(f"Phase 2: Scanning {len(files_with_expressions)} files (starting from {start_index})...")
 
     aliases_list = sorted(all_aliases.keys())
+    aliases_set = set(all_aliases.keys())
     phase2_start = time.time()
 
-    # Results: {alias: [{"jsonPathOriginal": path, "expressionOriginal": text}]}
-    all_expressions = {}
+    # Results: list of expressions with found aliases
+    all_expressions = []
     dangerous = set()
     processed = 0
 
@@ -247,41 +262,23 @@ def main():
                     prev_data = json.load(f)
                 
                 # Fast path: just copy previous dangerous and expressions directly
-                # No need to re-match - trust the previous results
                 dangerous = set(prev_data.get("dangerous_aliases", []))
                 
-                # Reconstruct all_expressions from previous expressions
-                for expr in prev_data.get("expressions", []):
-                    # Try to find the alias from the expression text
-                    # This is slower but necessary to know which alias each expression belongs to
-                    expr_text = expr.get("expressionOriginal", "")
-                    alias = None
-                    # Quick check - if expression contains $, try to extract alias
-                    if '$' in expr_text:
-                        for a in verified_aliases:
-                            if f'${a}' in expr_text or f'"{a}"' in expr_text or f'->{a}' in expr_text:
-                                alias = a
-                                break
-                    if alias:
-                        if alias not in all_expressions:
-                            all_expressions[alias] = []
-                        all_expressions[alias].append(expr)
+                # Load expressions - new format already has aliases field
+                all_expressions = prev_data.get("expressions", [])
                 
                 print(f"  Loaded previous results: {len(dangerous)} dangerous aliases, {len(all_expressions)} expressions")
             except Exception as e:
                 print(f"  ERROR: Could not load previous results: {e}")
                 # Reset to empty - will process from beginning
                 dangerous = set()
-                all_expressions = {}
+                all_expressions = []
 
     def process_batch(batch):
-        batch_results = {}
+        batch_results = []
         for f in batch:
-            result = scan_file(f, aliases_list, None, extract_dir)
-            for alias, expr_list in result.items():
-                if alias not in batch_results:
-                    batch_results[alias] = []
-                batch_results[alias].extend(expr_list)
+            result = scan_file(f, aliases_set, extract_dir)
+            batch_results.extend(result)
         return batch_results
 
     batch_size = args.batch_size
@@ -290,14 +287,24 @@ def main():
 
     print(f"  Processing {total_to_process} files in batches of {batch_size}")
 
-    def _save_incremental(dangerous_set, expressions_dict):
+    def _save_incremental(dangerous_set, expressions_list):
         """Save dangerous_aliases.json incrementally after each file."""
         dangerous_file = output_dir / f"{args.app}_dangerous_aliases.json"
+        
+        # Build simple list of expressions with aliases array
+        output_expressions = []
+        for expr in expressions_list:
+            output_expressions.append({
+                "expressionOriginal": expr.get("expressionOriginal", ""),
+                "aliases": expr.get("aliases", []),
+                "jsonPaths": expr.get("jsonPaths", [expr.get("jsonPath", "")]),
+            })
+        
         incremental_data = {
             "app": args.app,
             "dangerous_aliases": sorted(list(dangerous_set)),
-            "expressions": [],
-            "match_count": sum(len(v) for v in expressions_dict.values()),
+            "expressions": output_expressions,
+            "match_count": len(expressions_list),
             "files_with_expressions": len(files_with_expressions),
             "files_scanned": len(files_with_expressions),
             "scanned_at": datetime.now().isoformat(),
@@ -305,14 +312,6 @@ def main():
             "phase2_time_seconds": time.time() - phase2_start,
             "incremental": True,
         }
-        for alias in sorted(expressions_dict.keys()):
-            for expr in expressions_dict[alias]:
-                incremental_data["expressions"].append({
-                    "jsonPathOriginal": expr["jsonPathOriginal"],
-                    "jsonPathRenamed": "",
-                    "expressionOriginal": expr["expressionOriginal"],
-                    "expressionRenamed": "",
-                })
         with open(dangerous_file, "w", encoding="utf-8") as f:
             json.dump(incremental_data, f, indent=2, ensure_ascii=False)
 
@@ -325,11 +324,12 @@ def main():
         for f in batch:
             result = process_batch([f])
             
-            for alias, expr_list in result.items():
-                if alias not in all_expressions:
-                    all_expressions[alias] = []
-                all_expressions[alias].extend(expr_list)
-                dangerous.add(alias)
+            # result is now a list of expressions, each with "aliases" field
+            for expr_result in result:
+                all_expressions.append(expr_result)
+                # Add all found aliases to dangerous set
+                for alias in expr_result.get("aliases", []):
+                    dangerous.add(alias)
             
             # Save state after each file for resume capability
             processed += 1
@@ -343,54 +343,13 @@ def main():
     phase2_elapsed = time.time() - phase2_start
     print(f"  Scan complete ({phase2_elapsed:.1f}s)")
 
-    # Build output with verified status
-    dangerous_list = []
-    for alias in sorted(dangerous):
-        dangerous_list.append({
-            "alias": alias,
-            "type": all_aliases.get(alias, {}).get("type", "Unknown"),
-            "verified": all_aliases.get(alias, {}).get("verified", False),
-        })
-
-    output_data = {
-        "app": args.app,
-        "dangerous_aliases": dangerous_list,
-        "expressions": [],
-        "match_count": sum(len(v) for v in all_expressions.values()),
-        "files_with_expressions": len(files_with_expressions),
-        "files_scanned": len(files_with_expressions),
-        "scanned_at": datetime.now().isoformat(),
-        "phase1_time_seconds": phase1_elapsed,
-        "phase2_time_seconds": phase2_elapsed,
-        "total_aliases": len(all_aliases),
-        "verified_count": len(verified_aliases),
-    }
-
-    # Add expressions to output with alias and verified status
-    for alias in sorted(all_expressions.keys()):
-        is_verified = all_aliases.get(alias, {}).get("verified", False)
-        alias_type = all_aliases.get(alias, {}).get("type", "Unknown")
-        for expr in all_expressions[alias]:
-            output_data["expressions"].append({
-                "alias": alias,
-                "alias_type": alias_type,
-                "verified": is_verified,
-                "jsonPathOriginal": expr["jsonPathOriginal"],
-                "jsonPathRenamed": "",
-                "expressionOriginal": expr["expressionOriginal"],
-                "expressionRenamed": "",
-            })
-
-    output_file = output_dir / f"{args.app}_dangerous_aliases.json"
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(output_data, f, indent=2, ensure_ascii=False)
+    # Final save - use incremental format (already has correct structure)
+    _save_incremental(dangerous, all_expressions)
 
     print(f"\n=== Dangerous Aliases Found ===")
     print(f"Dangerous aliases: {len(dangerous)}")
-    print(f"  Verified: {sum(1 for d in dangerous_list if d['verified'])}")
-    print(f"  Non-verified: {sum(1 for d in dangerous_list if not d['verified'])}")
-    print(f"Expression matches: {output_data['match_count']}")
-    print(f"Output: {output_file}")
+    print(f"Expression matches: {len(all_expressions)}")
+    print(f"Output: {output_dir / f'{args.app}_dangerous_aliases.json'}")
 
     return 0
 

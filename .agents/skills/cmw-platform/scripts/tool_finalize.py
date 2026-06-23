@@ -29,6 +29,10 @@ PATTERNS = [
     r"->" + r"{alias}\b",  # ->alias - method call
     r"{alias}" + r"->",    # alias-> - object as target
     r'"' + r"{alias}" + r'"',  # "alias" - string literal
+    r'\("' + r"{alias}" + r'"',  # Prolog: ("alias" ...)
+    r'\(.*?"' + r"{alias}" + r'"',  # Prolog: (... "alias")
+    r'.->' + r"{alias}" + r'\b',  # text->alias (db->Uborkipomescheniy)
+    r'.->' + r"{alias}" + r'->',  # ->alias-> (chain reference)
 ]
 
 
@@ -100,11 +104,13 @@ def extract_template_from_path(path: str) -> str:
 
 def match_expressions_to_entry(entry_paths: list, dangerous_expressions: list, alias: str = None) -> list:
     """Match expressions to an entry based on alias usage.
-    Only includes expressions where alias is actually used ($alias, ->alias, alias->, "alias").
+    Checks if alias is in the aliases list of the expression.
     """
     matched = []
     for expr in dangerous_expressions:
-        if alias and not alias_used_in_expression(alias, expr.get("expressionOriginal", "")):
+        expr_aliases = expr.get("aliases", [])
+        # Check if alias is in the list of aliases for this expression
+        if alias and alias not in expr_aliases:
             continue
         matched.append(expr)
     return matched
@@ -164,11 +170,28 @@ def deduplicate_by_ids(entries: list) -> list:
                 if path not in existing_paths:
                     existing.setdefault("jsonPathOriginal", []).append(path)
 
-            existing_expr = {e.get("jsonPathOriginal", "") for e in existing.get("expressions", [])}
+            # Support both old format (jsonPathOriginal string) and new format (jsonPaths list)
+            existing_expr_paths = set()
+            for e in existing.get("expressions", []):
+                old_path = e.get("jsonPathOriginal", "")
+                new_paths = e.get("jsonPaths", [])
+                if old_path:
+                    existing_expr_paths.add(old_path)
+                existing_expr_paths.update(new_paths)
+            
             for expr in obj.get("expressions", []):
-                key_expr = expr.get("jsonPathOriginal", "")
-                if key_expr and key_expr not in existing_expr:
+                # Get path(s) from expression - support both formats
+                old_path = expr.get("jsonPathOriginal", "")
+                new_paths = expr.get("jsonPaths", [])
+                
+                # Check if this expression already exists
+                paths_to_check = [old_path] if old_path else []
+                paths_to_check.extend(new_paths)
+                
+                expr_key = old_path or (new_paths[0] if new_paths else "")
+                if expr_key and expr_key not in existing_expr_paths:
                     existing.setdefault("expressions", []).append(expr)
+                    existing_expr_paths.add(expr_key)
 
     return list(dedup_map.values())
 
